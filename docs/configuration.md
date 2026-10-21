@@ -605,6 +605,14 @@ Supported editor settings:
   gate for local Ollama inline completions. It defaults to `false`.
 - `tua.completion.multiToken.maxSuggestions`: maximum validated multi-token
   suggestions appended to completion results.
+- `tua.completion.inline.enabled`: enables experimental deterministic inline
+  ghost text. It defaults to `false`.
+- `tua.completion.inline.sources.semantic`: enables unique source-only
+  statement snippets for deterministic inline completion. It defaults to
+  `true`, but has no effect while the parent feature is disabled.
+- `tua.completion.inline.sources.currentFile`: enables conservative
+  single-line recall from repeated lines in the active document. It defaults
+  to `true`, but has no effect while the parent feature is disabled.
 - `tua.completion.ollama.endpoint`: machine-scoped loopback endpoint; defaults
   to `http://127.0.0.1:11434`.
 - `tua.completion.ollama.model`: machine-scoped model name; defaults to

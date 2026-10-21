@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
 use super::backends::{
-    Backend, Candidate, CurrentFileCommonPrefix, CurrentFileRecall, RecallOptions, Request,
+    Backend, Candidate, CurrentFileCommonPrefix, CurrentFileRecall, Phase1, RecallOptions, Request,
     Semantic,
 };
 use super::dataset::{self, ManifestSet, SetRole};
@@ -344,12 +344,20 @@ fn an_open_menu_only_allows_suggestions_extending_its_selection() {
         score: 1.0,
     };
     let document = "local p = ve";
-    assert!(
-        extends_selection(candidate.clone(), Some("vector"), document, document.len()).is_some()
-    );
+    let selected = |text: &str| MenuSelection {
+        text: text.to_owned(),
+        typed_prefix: "ve".to_owned(),
+    };
     assert!(extends_selection(
         candidate.clone(),
-        Some("velocity"),
+        Some(&selected("vector")),
+        document,
+        document.len()
+    )
+    .is_some());
+    assert!(extends_selection(
+        candidate.clone(),
+        Some(&selected("velocity")),
         document,
         document.len()
     )
@@ -504,6 +512,21 @@ fn thresholds_for(set: &str, backend: &str, languages: &[&str]) -> Thresholds {
 }
 
 #[test]
+fn quality_gates_ignore_the_cold_validation_distribution() {
+    let mut report = gate_report(&[("holdout", SetRole::Holdout)], 4);
+    report.sets[0].inline_validation = InlineValidationReport {
+        candidate_attempts: 10,
+        two_parse_candidates: 10,
+        parses_per_candidate_attempt: 2.0,
+        ..InlineValidationReport::default()
+    };
+
+    let gates = check_gates(&report, &thresholds_for("holdout", "phase1", &["tua"]));
+    assert_eq!(gates.len(), 4);
+    assert!(gates.iter().all(|gate| !gate.check.contains("parse")));
+}
+
+#[test]
 fn gates_check_every_limit_on_gate_sets_only() {
     let report = gate_report(&[("holdout", SetRole::Holdout), ("tune", SetRole::Tune)], 4);
     let gates = check_gates(&report, &thresholds_for("holdout", "phase1", &["tua"]));
@@ -591,6 +614,42 @@ fn gate_sets_check_only_their_configured_languages() {
     assert!(!gates
         .iter()
         .any(|gate| gate.check == "no eligible requests in this language"));
+}
+
+#[test]
+fn aggregate_phase_gate_fails_closed_for_missing_pending_or_evidence_free_items() {
+    let mut artifact = PhaseGateArtifact {
+        version: 1,
+        prerequisites: PHASE1_REQUIRED_PREREQUISITES
+            .into_iter()
+            .map(|name| {
+                (
+                    name.to_owned(),
+                    PhaseGatePrerequisite {
+                        passed: true,
+                        evidence: "artifact.json".to_owned(),
+                    },
+                )
+            })
+            .collect(),
+    };
+    assert!(check_phase_gate(&artifact).is_empty());
+    artifact.prerequisites.remove("menu_replay");
+    artifact
+        .prerequisites
+        .get_mut("scheduler_cache_hit")
+        .expect("scheduler prerequisite")
+        .passed = false;
+    artifact
+        .prerequisites
+        .get_mut("completion_performance")
+        .expect("performance prerequisite")
+        .evidence
+        .clear();
+    let failures = check_phase_gate(&artifact).join("\n");
+    assert!(failures.contains("missing prerequisite `menu_replay`"));
+    assert!(failures.contains("scheduler_cache_hit` is not passed"));
+    assert!(failures.contains("completion_performance` has no evidence"));
 }
 
 #[test]

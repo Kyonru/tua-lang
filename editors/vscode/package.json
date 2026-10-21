@@ -419,6 +419,21 @@
           "default": false,
           "description": "Explicit opt-in gate for local model-backed inline completions. When enabled, bounded source context is sent to the configured loopback Ollama server."
         },
+        "tua.completion.inline.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable deterministic local inline completions from Tua's semantic snippets and source patterns."
+        },
+        "tua.completion.inline.sources.semantic": {
+          "type": "boolean",
+          "default": true,
+          "description": "Use Tua's unique source-only statement snippets for local inline completion."
+        },
+        "tua.completion.inline.sources.currentFile": {
+          "type": "boolean",
+          "default": true,
+          "description": "Use repeated lines from the current file for local inline completion."
+        },
         "tua.completion.ollama.endpoint": {
           "type": "string",
           "default": "http://127.0.0.1:11434",

@@ -8,6 +8,42 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Added
 
+- Experimental deterministic inline completion can now suggest one locally
+  validated ghost-text item from Tua's existing statement snippets or repeated
+  lines in the current file. It is opt-in through
+  `tua.completion.inline.enabled`; semantic snippets and current-file recall
+  have separate source switches. Requests are debounced, version-bound,
+  and cancellable. After the 65 ms debounce, the extension gives the local
+  backend 250 ms to respond; expiry cancels the linked request and abstains
+  without falling through to Ollama. Candidate generation and validation use a
+  10 ms core deadline, including a pre-parse check that abstains when the
+  remaining budget is insufficient; queue, protocol, and end-to-end latency are
+  measured separately. The deterministic query never builds an analysis
+  snapshot, runs the checker, reads another project file, contacts a network
+  service, or persists source patterns. The unified VS Code provider tries the
+  deterministic backend first when it is
+  enabled and uses the separately opted-in loopback Ollama backend only when
+  that backend is disabled, returns no candidate, or is unsupported by an
+  older server. Transient local cancellation, stale-document, and capacity
+  failures abstain instead of starting model work. This first phase has no
+  project corpus, cross-project history, n-gram generation, or multiline
+  recall. Disabled and malformed requests do not enter the speculative queue;
+  a panicking speculative request returns an internal error without killing
+  the worker, and newest-wins cancellation suppresses superseded results.
+- Developer-only menu replay capture can record the real VS Code
+  `selectedCompletionInfo` state for Phase 1 evaluation. It is inactive unless
+  both `TUA_INLINE_REPLAY_ROOT` and `TUA_INLINE_REPLAY_CAPTURE` are set, accepts
+  records only while `tua.completion.inline.enabled` is on, accepts only files
+  below that dataset root, and writes local JSONL containing
+  dataset-relative paths, normalized source hashes, positions, document
+  versions, edit delays, menu state, and the selected completion text and range
+  when present. Selected text can retain source-derived names, so captures
+  should be treated as potentially sensitive local evaluation data. CRLF
+  documents hash the evaluator's canonical LF scenarios. The offline evaluator
+  ingests it with `--menu-replay`, matches
+  the edited-document hash and position to an exact evaluation scenario,
+  rejects invalid records, reports unmatched edits, and splits Phase 1 results
+  by real menu-open and menu-closed state. Nothing is uploaded.
 - An offline evaluator for local inline completion (Phase 0 of the local
   inline-completion plan) measures candidate sources against real projects
   before any of them ships: precision, characters saved, wrong characters,
@@ -20,6 +56,17 @@ language or editor behavior, and migration notes call out those changes.
   Phase 1 source configuration. The evaluator can require repeated support for
   full line-recall continuations while limiting one-off matches to a single
   token, allowing precision and coverage to be tuned independently.
+- The representative LSP profile now emits schema-version-2 deterministic
+  inline measurements: queue, worker-execution, and core-backend spans;
+  scheduler-dispatch-to-response latency; client-observed request age
+  after edits; cache and validation parse counters; and first diagnostics
+  publication after an edit. Separate configurable budgets fail the profile on
+  core/backend cost, server or end-to-end stalls, or diagnostics freshness
+  without conflating those measurements with the offline evaluator's
+  backend-only latency. The aggregate Phase 1 target runs representative
+  fixtures with independent strict 10 ms limits for dispatch-to-response
+  latency, worker execution, and core/backend work plus a 1,500 ms contended
+  request-age ceiling before it checks every recorded phase prerequisite.
 - A `VectorLength` standard lint rule (`TL4060`) warns when `#` is applied to a
   built-in `Vec2`. With LuaJIT's JIT off, as in LÖVE on Apple Silicon by
   default, vectors are plain tables and `#v` is `0`; the warning names the

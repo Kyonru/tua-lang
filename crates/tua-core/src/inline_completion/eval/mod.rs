@@ -15,6 +15,7 @@
 pub mod backends;
 pub mod dataset;
 pub mod metrics;
+pub mod replay;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
@@ -24,7 +25,7 @@ use serde::{Deserialize, Serialize};
 
 use self::backends::{
     Backend, Candidate, CurrentFileCommonPrefix, CurrentFileRecall, Noop, Phase1, Phase1Config,
-    RecallOptions, RecallVariant, Request, Semantic,
+    ProductionPhase1, ProductionRequest, RecallOptions, RecallVariant, Request, Semantic,
 };
 use self::dataset::{DuplicateReport, EvalFile, EvalProject, EvalSet, SetRole};
 use self::metrics::{
@@ -64,6 +65,9 @@ pub struct EvalOptions {
     pub phase1: Phase1Config,
     /// Keep one record per evaluated suggestion in the report.
     pub keep_records: bool,
+    /// Real VS Code menu selections captured locally against frozen dataset
+    /// files. Matching entries replace the synthetic menu state.
+    pub menu_replay: Option<replay::MenuReplay>,
 }
 
 impl Default for EvalOptions {
@@ -78,6 +82,7 @@ impl Default for EvalOptions {
             recall: RecallOptions::default(),
             phase1: Phase1Config::default(),
             keep_records: false,
+            menu_replay: None,
         }
     }
 }
@@ -118,6 +123,8 @@ pub enum PrefixKind {
     Partial3,
     /// One character short of the end of a word longer than four characters.
     PartialNear,
+    /// A real editor position included from a menu-state replay.
+    Captured,
 }
 
 impl PrefixKind {
@@ -128,6 +135,7 @@ impl PrefixKind {
             Self::Partial2 => "partial-2",
             Self::Partial3 => "partial-3",
             Self::PartialNear => "partial-near",
+            Self::Captured => "captured",
         }
     }
 }
@@ -220,6 +228,60 @@ pub struct MemoryReport {
 }
 
 #[derive(Clone, Debug, Default, Serialize)]
+pub struct InlineValidationReport {
+    /// `cold` means menu simulation and evaluator warm-up cannot populate the
+    /// production host's current-source analysis cache.
+    pub cache_state: String,
+    pub requests: usize,
+    pub cache_peek_hits: usize,
+    pub cache_peek_misses: usize,
+    pub candidate_attempts: usize,
+    pub candidate_parses: usize,
+    pub baseline_parses: usize,
+    pub zero_parse_candidates: usize,
+    pub one_parse_candidates: usize,
+    pub two_parse_candidates: usize,
+    pub edited_parse_sufficient: usize,
+    pub candidates_returned: usize,
+    pub returned_after_zero_parses: usize,
+    pub returned_after_one_parse: usize,
+    pub returned_after_two_parses: usize,
+    pub parses_per_request: f64,
+    pub parses_per_candidate_attempt: f64,
+    pub edited_parse_sufficiency_rate: f64,
+}
+
+impl InlineValidationReport {
+    fn add(&mut self, stats: &crate::AnalysisCacheStats) {
+        self.requests += stats.inline_completion_requests;
+        self.cache_peek_hits += stats.inline_cache_peek_hits;
+        self.cache_peek_misses += stats.inline_cache_peek_misses;
+        self.candidate_attempts += stats.inline_validation_attempts;
+        self.candidate_parses += stats.inline_candidate_parses;
+        self.baseline_parses += stats.inline_baseline_parses;
+        self.edited_parse_sufficient += stats.inline_edited_parse_sufficient;
+        self.candidates_returned += stats.inline_candidates_returned;
+        self.returned_after_zero_parses += stats.inline_returned_after_zero_parses;
+        self.returned_after_one_parse += stats.inline_returned_after_one_parse;
+        self.returned_after_two_parses += stats.inline_returned_after_two_parses;
+    }
+
+    fn finish(&mut self) {
+        self.zero_parse_candidates = self
+            .candidate_attempts
+            .saturating_sub(self.candidate_parses);
+        self.two_parse_candidates = self.baseline_parses;
+        self.one_parse_candidates = self.candidate_parses.saturating_sub(self.baseline_parses);
+        self.parses_per_request =
+            (self.candidate_parses + self.baseline_parses) as f64 / self.requests.max(1) as f64;
+        self.parses_per_candidate_attempt = (self.candidate_parses + self.baseline_parses) as f64
+            / self.candidate_attempts.max(1) as f64;
+        self.edited_parse_sufficiency_rate =
+            self.edited_parse_sufficient as f64 / self.candidate_parses.max(1) as f64;
+    }
+}
+
+#[derive(Clone, Debug, Default, Serialize)]
 pub struct SetReport {
     pub name: String,
     pub role: Option<SetRole>,
@@ -231,9 +293,12 @@ pub struct SetReport {
     pub abstain_positions: usize,
     pub ineligible_positions: usize,
     pub phase1: Phase1Config,
+    /// Exploratory configuration used by the `phase1-prototype` backend.
+    pub phase1_prototype: Phase1Config,
     pub backends: BTreeMap<String, BackendReport>,
     pub warmup_by_language: BTreeMap<String, WarmupReport>,
     pub parse_by_language: BTreeMap<String, ParseReport>,
+    pub inline_validation: InlineValidationReport,
     pub memory: Vec<(String, MemoryReport)>,
     pub records: Vec<Record>,
 }
@@ -243,6 +308,7 @@ pub struct EvalReport {
     pub duplicates: DuplicateReport,
     pub recall_options: Option<RecallOptions>,
     pub sets: Vec<SetReport>,
+    pub menu_replay: Option<replay::MenuReplayReport>,
 }
 
 impl EvalReport {
@@ -308,15 +374,21 @@ pub fn evaluate(
         Box::new(Phase1 {
             config: options.phase1.clone(),
         }),
+        Box::new(ProductionPhase1 {
+            semantic: true,
+            current_file: true,
+        }),
     ];
 
+    let reports = sets
+        .iter()
+        .map(|set| evaluate_set(set, &backends, options))
+        .collect();
     EvalReport {
         duplicates,
         recall_options: Some(options.recall),
-        sets: sets
-            .iter()
-            .map(|set| evaluate_set(set, &backends, options))
-            .collect(),
+        sets: reports,
+        menu_replay: options.menu_replay.as_ref().map(replay::MenuReplay::report),
     }
 }
 
@@ -425,9 +497,11 @@ fn evaluate_set(set: &EvalSet, backends: &[Box<dyn Backend>], options: &EvalOpti
         name: set.name.clone(),
         role: Some(set.role),
         projects: set.projects.len(),
-        phase1: options.phase1.clone(),
+        phase1: Phase1Config::production(),
+        phase1_prototype: options.phase1.clone(),
         ..SetReport::default()
     };
+    report.inline_validation.cache_state = "cold".to_owned();
     let mut accumulators = backends
         .iter()
         .map(|_| BackendAccumulator::default())
@@ -448,11 +522,13 @@ fn evaluate_set(set: &EvalSet, backends: &[Box<dyn Backend>], options: &EvalOpti
         }
 
         let (mut host, memory) = load_host(project, options);
+        let mut facts_host = source_host(project);
         report.memory.push((project.name.clone(), memory));
 
         for file in &project.files {
             evaluate_file(
                 &mut host,
+                &mut facts_host,
                 project,
                 file,
                 backends,
@@ -462,6 +538,7 @@ fn evaluate_set(set: &EvalSet, backends: &[Box<dyn Backend>], options: &EvalOpti
                 &mut report,
             );
         }
+        report.inline_validation.add(&host.cache_stats());
     }
 
     report.backends = backends
@@ -505,6 +582,7 @@ fn evaluate_set(set: &EvalSet, backends: &[Box<dyn Backend>], options: &EvalOpti
             )
         })
         .collect();
+    report.inline_validation.finish();
 
     report
 }
@@ -512,13 +590,7 @@ fn evaluate_set(set: &EvalSet, backends: &[Box<dyn Backend>], options: &EvalOpti
 fn load_host(project: &EvalProject, options: &EvalOptions) -> (AnalysisHost, MemoryReport) {
     let allocated = || options.allocated_bytes.map_or(0, |current| current());
     let before_load_bytes = allocated();
-    let mut host = AnalysisHost::with_config(project.config.clone());
-    host.set_source_roots(project.source_roots.iter().cloned());
-    host.set_output_roots(project.output_roots.iter().cloned());
-    host.set_asset_roots(project.asset_roots.iter().cloned());
-    for file in &project.files {
-        host.set_file_with_kind(&file.path, file.source.clone(), file.kind);
-    }
+    let host = source_host(project);
     let after_files_bytes = allocated();
     // Representative project loading: a full snapshot, as the language server
     // builds for diagnostics.
@@ -534,6 +606,17 @@ fn load_host(project: &EvalProject, options: &EvalOptions) -> (AnalysisHost, Mem
             snapshot_delta_bytes: after_snapshot_bytes.saturating_sub(after_files_bytes),
         },
     )
+}
+
+fn source_host(project: &EvalProject) -> AnalysisHost {
+    let mut host = AnalysisHost::with_config(project.config.clone());
+    host.set_source_roots(project.source_roots.iter().cloned());
+    host.set_output_roots(project.output_roots.iter().cloned());
+    host.set_asset_roots(project.asset_roots.iter().cloned());
+    for file in &project.files {
+        host.set_file_with_kind(&file.path, file.source.clone(), file.kind);
+    }
+    host
 }
 
 /// A position in a file, with the text the author wrote after it.
@@ -552,7 +635,14 @@ struct Position {
 struct DocumentFacts {
     declared_callbacks: Option<BTreeSet<String>>,
     parses: Option<bool>,
-    selected: Option<String>,
+    selected: Option<MenuSelection>,
+    menu_replayed: bool,
+}
+
+#[derive(Clone)]
+struct MenuSelection {
+    text: String,
+    typed_prefix: String,
 }
 
 impl DocumentFacts {
@@ -568,6 +658,7 @@ impl DocumentFacts {
 #[allow(clippy::too_many_arguments)]
 fn evaluate_file(
     host: &mut AnalysisHost,
+    facts_host: &mut AnalysisHost,
     project: &EvalProject,
     file: &EvalFile,
     backends: &[Box<dyn Backend>],
@@ -577,11 +668,14 @@ fn evaluate_file(
     report: &mut SetReport,
 ) {
     let source = file.source.replace("\r\n", "\n");
-    let (positions, ineligible) = sample_positions(&source, options.max_positions_per_file);
+    let (mut positions, ineligible) = sample_positions(&source, options.max_positions_per_file);
+    if let Some(replay) = &options.menu_replay {
+        add_replay_positions(&mut positions, &source, &file.path, replay);
+    }
     report.ineligible_positions += ineligible;
     let include_ecs = project.config.ecs.enabled;
     let file_label = dataset::display_name(&file.path);
-    let analyze = options.measure_warmup || options.simulate_menu;
+    let analyze = options.measure_warmup || options.simulate_menu || options.menu_replay.is_some();
 
     for position in &positions {
         let remainder = &source[position.offset..position.line_end];
@@ -631,9 +725,12 @@ fn evaluate_file(
             if !suffix_allows_inline(&suffix) {
                 continue;
             }
+            // The production backend must always observe this scenario's
+            // source, even when menu and warm-up measurement are disabled.
+            host.open_document_with_kind(&file.path, document.clone(), file.kind);
             let facts = if analyze {
                 document_facts(
-                    host,
+                    facts_host,
                     file,
                     &document,
                     source_position,
@@ -664,9 +761,11 @@ fn evaluate_file(
                 abstain,
                 language: file.language(),
                 scenario: scenario.label(),
-                menu: match menu {
-                    MenuState::Closed => "closed",
-                    MenuState::Open => "open",
+                menu: match (facts.menu_replayed, menu) {
+                    (false, MenuState::Closed) => "closed",
+                    (false, MenuState::Open) => "open",
+                    (true, MenuState::Closed) => "replay-closed",
+                    (true, MenuState::Open) => "replay-open",
                 },
                 context: context.label(),
                 prefix: position.prefix.label(),
@@ -676,14 +775,21 @@ fn evaluate_file(
 
             for (backend, accumulator) in backends.iter().zip(accumulators.iter_mut()) {
                 let started = Instant::now();
-                let raw = backend.suggest(&request);
+                let raw = backend.suggest_with_host(
+                    &request,
+                    &ProductionRequest {
+                        host,
+                        path: &file.path,
+                        position: source_position,
+                    },
+                );
                 let latency_ns = started.elapsed().as_nanos() as u64;
                 let candidate = raw
                     .and_then(|candidate| agree_with_suffix(candidate, &suffix))
                     .and_then(|candidate| {
                         extends_selection(
                             candidate,
-                            facts.selected.as_deref(),
+                            facts.selected.as_ref(),
                             &document,
                             position.offset,
                         )
@@ -715,8 +821,9 @@ fn evaluate_file(
 
     if analyze {
         // Closing returns the file to its on-disk text for later files.
-        host.close_document(&file.path);
+        facts_host.close_document(&file.path);
     }
+    host.close_document(&file.path);
 }
 
 /// Opens `document` as the current revision, warms it, and reads what a
@@ -733,6 +840,8 @@ fn document_facts(
     options: &EvalOptions,
     warmup: Option<&mut WarmupAccumulator>,
 ) -> DocumentFacts {
+    // Menu completion and warm-up analysis run on an isolated host. They must
+    // not make the production inline query artificially warm.
     host.open_document_with_kind(&file.path, document.to_owned(), file.kind);
     let started = Instant::now();
     host.warm_file(&file.path, AnalysisWarmPriority::High);
@@ -742,14 +851,38 @@ fn document_facts(
         warmup.durations_ns.push(elapsed);
         warmup.with_facts += usize::from(declared_callbacks.is_some());
     }
-    let selected = (options.simulate_menu && context.menu_may_be_open())
-        .then(|| menu_selection(host, &file.path, position, document, offset))
-        .flatten();
+    let replay = options
+        .menu_replay
+        .as_ref()
+        .and_then(|replay| replay.get(&file.path, document, position));
+    let menu_replayed = replay.is_some();
+    let selected = replay.map_or_else(
+        || {
+            (options.simulate_menu && context.menu_may_be_open())
+                .then(|| menu_selection(host, &file.path, position, document, offset))
+                .flatten()
+                .map(|text| MenuSelection {
+                    text,
+                    typed_prefix: word_before(document, offset).to_owned(),
+                })
+        },
+        |state| {
+            if state.menu_open {
+                state
+                    .selected_text
+                    .zip(state.selected_prefix)
+                    .map(|(text, typed_prefix)| MenuSelection { text, typed_prefix })
+            } else {
+                None
+            }
+        },
+    );
 
     DocumentFacts {
         parses: host.peek_current_source_parses(&file.path),
         declared_callbacks,
         selected,
+        menu_replayed,
     }
 }
 
@@ -822,6 +955,33 @@ fn sample_positions(source: &str, limit: usize) -> (Vec<Position>, usize) {
     }
 
     (positions, ineligible)
+}
+
+fn add_replay_positions(
+    positions: &mut Vec<Position>,
+    source: &str,
+    path: &Path,
+    replay: &replay::MenuReplay,
+) {
+    for (position, offset) in replay.positions_for(path, source) {
+        if positions.iter().any(|sample| sample.offset == offset)
+            || cursor_context(source, offset).is_none()
+        {
+            continue;
+        }
+        let line_start = source[..offset].rfind('\n').map_or(0, |index| index + 1);
+        let line_end = source[offset..]
+            .find('\n')
+            .map_or(source.len(), |relative| offset + relative);
+        positions.push(Position {
+            offset,
+            line_index: position.line.saturating_sub(1),
+            line_start,
+            line_end,
+            prefix: PrefixKind::Captured,
+        });
+    }
+    positions.sort_by_key(|position| position.offset);
 }
 
 /// Byte offsets inside a word where a user is still typing it, with their
@@ -907,16 +1067,15 @@ fn closes_outer_brackets(text: &str) -> usize {
 /// replaced word plus the suggestion starts with the selected item's text.
 fn extends_selection(
     candidate: Candidate,
-    selected: Option<&str>,
-    document: &str,
-    offset: usize,
+    selected: Option<&MenuSelection>,
+    _document: &str,
+    _offset: usize,
 ) -> Option<Candidate> {
     let Some(selected) = selected else {
         return Some(candidate);
     };
-    let word = word_before(document, offset);
-    let full = format!("{word}{}", candidate.text);
-    full.starts_with(selected).then_some(candidate)
+    let full = format!("{}{}", selected.typed_prefix, candidate.text);
+    full.starts_with(&selected.text).then_some(candidate)
 }
 
 /// The item VS Code would select in the open suggestion menu: the first menu
@@ -1129,7 +1288,7 @@ pub struct LanguageThresholds {
     pub max_incorrect_chars_per_eligible: Option<f64>,
     pub max_wrong_to_saved_ratio: Option<f64>,
     pub min_chars_saved_per_eligible: Option<f64>,
-    pub max_latency_p95_ms: Option<f64>,
+    pub max_backend_latency_p95_ms: Option<f64>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -1140,6 +1299,62 @@ pub struct GateResult {
     pub actual: f64,
     pub limit: f64,
     pub passed: bool,
+}
+
+pub const PHASE1_REQUIRED_PREREQUISITES: [&str; 10] = [
+    "heldout_quality",
+    "external_quality",
+    "menu_replay",
+    "completion_performance",
+    "inline_server_performance",
+    "inline_client_no_stall",
+    "inline_client_responsiveness",
+    "diagnostics_freshness",
+    "scheduler_cache_hit",
+    "validation_parse_distribution",
+];
+
+/// Aggregate release decision. Quality thresholds are only one prerequisite;
+/// this artifact prevents a successful dataset gate from being mistaken for
+/// permission to enable or advance the whole phase.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct PhaseGateArtifact {
+    pub version: u32,
+    pub prerequisites: BTreeMap<String, PhaseGatePrerequisite>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct PhaseGatePrerequisite {
+    pub passed: bool,
+    pub evidence: String,
+}
+
+pub fn check_phase_gate(artifact: &PhaseGateArtifact) -> Vec<String> {
+    let mut failures = Vec::new();
+    if artifact.version != 1 {
+        failures.push(format!(
+            "unsupported phase-gate version {}",
+            artifact.version
+        ));
+    }
+    for name in PHASE1_REQUIRED_PREREQUISITES {
+        match artifact.prerequisites.get(name) {
+            None => failures.push(format!("missing prerequisite `{name}`")),
+            Some(item) if item.evidence.trim().is_empty() => {
+                failures.push(format!("prerequisite `{name}` has no evidence"));
+            }
+            Some(item) if !item.passed => {
+                failures.push(format!(
+                    "prerequisite `{name}` is not passed: {}",
+                    item.evidence
+                ));
+            }
+            Some(_) => {}
+        }
+    }
+    failures
 }
 
 /// Checks every gate set (held-out and external) against the thresholds.
@@ -1189,7 +1404,7 @@ pub fn check_gates(report: &EvalReport, thresholds: &Thresholds) -> Vec<GateResu
                 fail(&set.name, language, "no eligible requests in this language");
                 continue;
             };
-            let latency_ms = summary.latency_us.p95 / 1_000.0;
+            let latency_ms = summary.backend_latency_us.p95 / 1_000.0;
             let limited = [
                 (
                     "min_suggestions",
@@ -1228,9 +1443,9 @@ pub fn check_gates(report: &EvalReport, thresholds: &Thresholds) -> Vec<GateResu
                     true,
                 ),
                 (
-                    "max_latency_p95_ms",
+                    "max_backend_latency_p95_ms",
                     latency_ms,
-                    limits.max_latency_p95_ms,
+                    limits.max_backend_latency_p95_ms,
                     false,
                 ),
             ];

@@ -26,6 +26,32 @@ async function runCompletionTests() {
     "Tua quick suggestions should have no extension-added delay",
   );
 
+  const inlineConfiguration = vscode.workspace.getConfiguration("tua", document);
+  await inlineConfiguration.update(
+    "completion.inline.enabled",
+    true,
+    vscode.ConfigurationTarget.Workspace,
+  );
+  const beforeInline = eventSequence();
+  await vscode.commands.executeCommand("editor.action.inlineSuggest.trigger");
+  const inlineRequest = await waitForEvent(
+    (event) =>
+      event.type === "inline-completion.request" &&
+      event.uri === document.uri.toString() &&
+      event.documentVersion === document.version,
+    "a version-bound local inline-completion request",
+    beforeInline,
+  );
+  assert.deepEqual(inlineRequest.position, {
+    character: editor.selection.active.character,
+    line: editor.selection.active.line,
+  });
+  await inlineConfiguration.update(
+    "completion.inline.enabled",
+    false,
+    vscode.ConfigurationTarget.Workspace,
+  );
+
   const insertion = document.lineAt(document.lineCount - 1).range.end;
   editor.selection = new vscode.Selection(insertion, insertion);
   const beforeTyping = eventSequence();

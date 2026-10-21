@@ -856,9 +856,11 @@ fn textual_containing_class(source: &str, position: SourcePosition) -> Option<St
     classes.last().map(|(name, _)| name.clone())
 }
 
-type DiagnosticSignature = (Option<u16>, String, bool, usize, usize, usize, usize);
+pub(crate) type DiagnosticSignature = (Option<u16>, String, bool, usize, usize, usize, usize);
 
-fn baseline_error_multiset(diagnostics: Vec<Diagnostic>) -> BTreeMap<DiagnosticSignature, usize> {
+pub(crate) fn baseline_error_multiset(
+    diagnostics: Vec<Diagnostic>,
+) -> BTreeMap<DiagnosticSignature, usize> {
     let mut errors = BTreeMap::new();
     for diagnostic in diagnostics
         .into_iter()
@@ -879,7 +881,7 @@ fn baseline_error_multiset(diagnostics: Vec<Diagnostic>) -> BTreeMap<DiagnosticS
     errors
 }
 
-fn candidate_error_multiset(
+pub(crate) fn candidate_error_multiset(
     diagnostics: Vec<Diagnostic>,
     insertion_start: SourcePosition,
     insertion: &str,

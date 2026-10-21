@@ -1,12 +1,14 @@
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::AtomicBool;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use serde_json::{json, Value};
 use tua_core::{
-    AnalysisCacheStats, AssistKind, ModelCompletionRejectionReason,
-    ModelCompletionValidationRequest, ProjectModel, RenameEdit, SourcePosition, SourceSpan,
-    DEFAULT_MODEL_CONTEXT_BYTES, MAX_MODEL_CONTEXT_BYTES,
+    AnalysisCacheStats, AssistKind, InlineCompletionBudget, InlineCompletionOptions,
+    ModelCompletionRejectionReason, ModelCompletionValidationRequest, PreparedInlineCompletion,
+    ProjectModel, RenameEdit, SourcePosition, SourceSpan, DEFAULT_MODEL_CONTEXT_BYTES,
+    MAX_MODEL_CONTEXT_BYTES,
 };
 
 use super::configuration::WorkspaceSettings;
@@ -18,14 +20,15 @@ use super::protocol::{
     lsp_diagnostic_from_core, lsp_document_highlight_from_core, lsp_document_link_from_core,
     lsp_document_symbol_from_core, lsp_ecs_graph_from_core, lsp_folding_range_from_core,
     lsp_full_document_text_edit, lsp_hover_from_core, lsp_inlay_hint_from_core,
-    lsp_inspector_items_from_core, lsp_location_from_core, lsp_module_dependency_graph_from_core,
-    lsp_object_pool_graph_from_core, lsp_prepare_rename_from_core, lsp_range,
-    lsp_reference_location, lsp_resolved_completion_item, lsp_resolved_reference_code_lens,
-    lsp_selection_range_from_core, lsp_semantic_token_data_from_core, lsp_semantic_token_delta,
-    lsp_semantic_tokens, lsp_semantic_tokens_from_core, lsp_signal_graph_from_core,
-    lsp_signature_help_from_core, lsp_source_range, lsp_text_edit, lsp_type_explanation_from_core,
-    lsp_workspace_edit, lsp_workspace_symbol_from_core, publish_diagnostics, response,
-    source_position_from_lsp, workspace_diagnostic_refresh_request, SourceRange,
+    lsp_inline_completion_from_core, lsp_inspector_items_from_core, lsp_location_from_core,
+    lsp_module_dependency_graph_from_core, lsp_object_pool_graph_from_core,
+    lsp_prepare_rename_from_core, lsp_range, lsp_reference_location, lsp_resolved_completion_item,
+    lsp_resolved_reference_code_lens, lsp_selection_range_from_core,
+    lsp_semantic_token_data_from_core, lsp_semantic_token_delta, lsp_semantic_tokens,
+    lsp_semantic_tokens_from_core, lsp_signal_graph_from_core, lsp_signature_help_from_core,
+    lsp_source_range, lsp_text_edit, lsp_type_explanation_from_core, lsp_workspace_edit,
+    lsp_workspace_symbol_from_core, publish_diagnostics, response, source_position_from_lsp,
+    workspace_diagnostic_refresh_request, SourceRange,
 };
 use super::request_registry::{NotificationKind, RequestKind};
 use super::uri::{
@@ -38,6 +41,7 @@ use super::{
 
 const TRACE_LOG_SUMMARY_THRESHOLD: usize = 8;
 const ACTIVE_EDIT_BACKGROUND_REQUEST_COOLDOWN: Duration = Duration::from_millis(1500);
+const LOCAL_INLINE_COMPLETION_BUDGET: Duration = Duration::from_millis(10);
 
 struct DocumentRequest<'a> {
     params: &'a Value,
@@ -54,6 +58,15 @@ pub(super) struct RequestTrace {
     started: Option<Instant>,
 }
 
+pub(super) struct LocalInlineCompletionWork {
+    prepared: Option<PreparedInlineCompletion>,
+    position: Option<SourcePosition>,
+    lsp_position: Option<Value>,
+    options: InlineCompletionOptions,
+    selected_completion: Option<Value>,
+    document_version: Option<i64>,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct FileRename {
     old_path: PathBuf,
@@ -65,6 +78,77 @@ impl<'a> DocumentRequest<'a> {
         self.params
             .get("position")
             .and_then(source_position_from_lsp)
+    }
+}
+
+impl LocalInlineCompletionWork {
+    fn empty(document_version: Option<i64>) -> Self {
+        Self {
+            prepared: None,
+            position: None,
+            lsp_position: None,
+            options: InlineCompletionOptions::default(),
+            selected_completion: None,
+            document_version,
+        }
+    }
+
+    pub(super) fn execute(self, cancelled: &AtomicBool) -> Value {
+        let _worker_profile = tua_core::profile::span("lsp.request tua/localInlineCompletion");
+        let (Some(prepared), Some(position), Some(lsp_position)) =
+            (self.prepared, self.position, self.lsp_position)
+        else {
+            return empty_local_inline_completion(self.document_version);
+        };
+        let source = prepared.source();
+        let budget = InlineCompletionBudget::new(LOCAL_INLINE_COMPLETION_BUDGET);
+        let candidates = {
+            let _profile = tua_core::profile::span("inline.request.core");
+            prepared.complete(position, &self.options, &budget, cancelled)
+        };
+        let items = candidates
+            .into_iter()
+            .filter_map(|mut candidate| {
+                let range = if let Some(selected) = self.selected_completion.as_ref() {
+                    if candidate.range.start != position || candidate.range.end != position {
+                        return None;
+                    }
+                    let selected_text = selected.get("text")?.as_str()?;
+                    let selected_range = selected.get("range")?;
+                    let selected_start = selected_range.get("start")?;
+                    let selected_end = selected_range.get("end")?;
+                    if !selected_completion_range_ends_at_cursor(
+                        selected_start,
+                        selected_end,
+                        &lsp_position,
+                    ) {
+                        return None;
+                    }
+                    let start = exact_byte_offset_from_lsp_position(source, selected_start)?;
+                    let cursor = exact_byte_offset_from_lsp_position(source, &lsp_position)?;
+                    let end = exact_byte_offset_from_lsp_position(source, selected_end)?;
+                    if start > cursor || end != cursor {
+                        return None;
+                    }
+                    let replacement =
+                        format!("{}{}", &source[start..cursor], candidate.insert_text);
+                    if replacement == selected_text || !replacement.starts_with(selected_text) {
+                        return None;
+                    }
+                    candidate.insert_text = replacement;
+                    selected_range.clone()
+                } else {
+                    lsp_range_for_source(source, candidate.range)
+                };
+
+                Some(lsp_inline_completion_from_core(candidate, range))
+            })
+            .collect::<Vec<_>>();
+
+        json!({
+            "documentVersion": self.document_version,
+            "items": items
+        })
     }
 }
 
@@ -182,6 +266,15 @@ impl LspServer {
     }
 
     pub(super) fn execute_request(&mut self, message: Value, method: &str) -> Value {
+        self.execute_request_with_cancellation(message, method, &AtomicBool::new(false))
+    }
+
+    pub(super) fn execute_request_with_cancellation(
+        &mut self,
+        message: Value,
+        method: &str,
+        cancelled: &AtomicBool,
+    ) -> Value {
         let _profile = tua_core::profile::span(format!("lsp.request {method}"));
         let id = message.get("id").cloned().unwrap_or(Value::Null);
 
@@ -258,6 +351,10 @@ impl LspServer {
             RequestKind::ResetCompletionStats => {
                 response(id, self.reset_completion_stats_response())
             }
+            RequestKind::LocalInlineCompletion => response(
+                id,
+                self.local_inline_completion_response(&message, cancelled),
+            ),
             RequestKind::InlineCompletionContext => {
                 response(id, self.inline_completion_context_response(&message))
             }
@@ -1492,6 +1589,25 @@ impl LspServer {
                 "hits": stats.completion_context_hits,
                 "misses": stats.completion_context_misses
             },
+            "inlineCompletion": {
+                "requests": stats.inline_completion_requests,
+                "cachePeek": hit_miss(stats.inline_cache_peek_hits, stats.inline_cache_peek_misses),
+                "candidateAttempts": stats.inline_validation_attempts,
+                "candidateParses": stats.inline_candidate_parses,
+                "baselineParses": stats.inline_baseline_parses,
+                "candidateParseDistribution": inline_parse_distribution(&stats),
+                "returnedParseDistribution": inline_returned_parse_distribution(&stats),
+                "editedParseSufficient": stats.inline_edited_parse_sufficient,
+                "candidatesReturned": stats.inline_candidates_returned,
+                "parsesPerRequest": ratio(
+                    stats.inline_candidate_parses + stats.inline_baseline_parses,
+                    stats.inline_completion_requests
+                ),
+                "editedParseSufficiencyRate": ratio(
+                    stats.inline_edited_parse_sufficient,
+                    stats.inline_candidate_parses
+                )
+            },
             "workspaceWarm": {
                 "discovered": self.workspace_warm.files_discovered,
                 "warmed": self.workspace_warm.warmed.len(),
@@ -1568,6 +1684,28 @@ impl LspServer {
                 "completionContext": hit_miss(
                     stats.completion_context_hits,
                     stats.completion_context_misses
+                ),
+                "inlineCurrentFile": hit_miss(
+                    stats.inline_cache_peek_hits,
+                    stats.inline_cache_peek_misses
+                )
+            },
+            "inlineCompletion": {
+                "requests": stats.inline_completion_requests,
+                "candidateAttempts": stats.inline_validation_attempts,
+                "candidateParses": stats.inline_candidate_parses,
+                "baselineParses": stats.inline_baseline_parses,
+                "candidateParseDistribution": inline_parse_distribution(&stats),
+                "returnedParseDistribution": inline_returned_parse_distribution(&stats),
+                "editedParseSufficient": stats.inline_edited_parse_sufficient,
+                "candidatesReturned": stats.inline_candidates_returned,
+                "parsesPerRequest": ratio(
+                    stats.inline_candidate_parses + stats.inline_baseline_parses,
+                    stats.inline_completion_requests
+                ),
+                "editedParseSufficiencyRate": ratio(
+                    stats.inline_edited_parse_sufficient,
+                    stats.inline_candidate_parses
                 )
             },
             "staleResults": {
@@ -1750,6 +1888,53 @@ impl LspServer {
             "maxCompletionLines": context.max_completion_lines,
             "range": inline_request_range(request.params)
         })
+    }
+
+    pub(super) fn prepare_local_inline_completion(
+        &self,
+        message: &Value,
+    ) -> LocalInlineCompletionWork {
+        let Some(request) = self.document_request(message) else {
+            return LocalInlineCompletionWork::empty(None);
+        };
+        let current_version = self.document_versions.get(request.uri).copied();
+        if !self.settings.inline_completion_enabled()
+            || requested_document_version(request.params) != current_version
+        {
+            return LocalInlineCompletionWork::empty(current_version);
+        }
+        let Some(prepared) = self.analysis.prepare_local_inline_completion(&request.path) else {
+            return LocalInlineCompletionWork::empty(current_version);
+        };
+        let Some(position) = request
+            .params
+            .get("position")
+            .and_then(|position| model_completion_position(prepared.source(), position))
+        else {
+            return LocalInlineCompletionWork::empty(current_version);
+        };
+        let options = InlineCompletionOptions {
+            semantic: self.settings.inline_semantic_enabled(),
+            current_file: self.settings.inline_current_file_enabled(),
+        };
+
+        LocalInlineCompletionWork {
+            prepared: Some(prepared),
+            position: Some(position),
+            lsp_position: request.params.get("position").cloned(),
+            options,
+            selected_completion: request.params.get("selectedCompletion").cloned(),
+            document_version: current_version,
+        }
+    }
+
+    pub(super) fn local_inline_completion_is_enabled(&self) -> bool {
+        self.settings.inline_completion_enabled()
+    }
+
+    fn local_inline_completion_response(&self, message: &Value, cancelled: &AtomicBool) -> Value {
+        self.prepare_local_inline_completion(message)
+            .execute(cancelled)
     }
 
     fn validate_inline_completion_response(&self, message: &Value) -> Value {
@@ -2410,6 +2595,62 @@ fn requested_document_version(params: &Value) -> Option<i64> {
     params.get("documentVersion").and_then(Value::as_i64)
 }
 
+fn selected_completion_range_ends_at_cursor(start: &Value, end: &Value, cursor: &Value) -> bool {
+    let Some(start_line) = start.get("line").and_then(Value::as_u64) else {
+        return false;
+    };
+    let Some(start_character) = start.get("character").and_then(Value::as_u64) else {
+        return false;
+    };
+    let Some(end_line) = end.get("line").and_then(Value::as_u64) else {
+        return false;
+    };
+    let Some(end_character) = end.get("character").and_then(Value::as_u64) else {
+        return false;
+    };
+    let Some(cursor_line) = cursor.get("line").and_then(Value::as_u64) else {
+        return false;
+    };
+    let Some(cursor_character) = cursor.get("character").and_then(Value::as_u64) else {
+        return false;
+    };
+
+    start_line == cursor_line
+        && end_line == cursor_line
+        && start_character <= cursor_character
+        && end_character == cursor_character
+}
+
+fn empty_local_inline_completion(document_version: Option<i64>) -> Value {
+    json!({
+        "documentVersion": document_version,
+        "items": []
+    })
+}
+
+fn lsp_range_for_source(source: &str, span: SourceSpan) -> Value {
+    json!({
+        "start": lsp_position_for_source(source, span.start),
+        "end": lsp_position_for_source(source, span.end)
+    })
+}
+
+fn lsp_position_for_source(source: &str, position: SourcePosition) -> Value {
+    let line_index = position.line.saturating_sub(1);
+    let scalar_column = position.column.saturating_sub(1);
+    let line = source.lines().nth(line_index).unwrap_or("");
+    let character = line
+        .chars()
+        .take(scalar_column)
+        .map(char::len_utf16)
+        .sum::<usize>();
+
+    json!({
+        "line": line_index,
+        "character": character
+    })
+}
+
 fn model_completion_position(source: &str, lsp_position: &Value) -> Option<SourcePosition> {
     let line = lsp_position.get("line")?.as_u64()? as usize;
     let offset = byte_offset_from_lsp_position(source, lsp_position)?;
@@ -2696,6 +2937,42 @@ fn percentage(numerator: usize, denominator: usize) -> f64 {
     let percent = (numerator as f64 / denominator as f64) * 100.0;
 
     (percent * 10.0).round() / 10.0
+}
+
+fn ratio(numerator: usize, denominator: usize) -> f64 {
+    if denominator == 0 {
+        0.0
+    } else {
+        numerator as f64 / denominator as f64
+    }
+}
+
+fn inline_parse_distribution(stats: &AnalysisCacheStats) -> Value {
+    json!({
+        "zero": stats
+            .inline_validation_attempts
+            .saturating_sub(stats.inline_candidate_parses),
+        "one": stats
+            .inline_candidate_parses
+            .saturating_sub(stats.inline_baseline_parses),
+        "two": stats.inline_baseline_parses,
+        "parsesPerAttempt": ratio(
+            stats.inline_candidate_parses + stats.inline_baseline_parses,
+            stats.inline_validation_attempts
+        )
+    })
+}
+
+fn inline_returned_parse_distribution(stats: &AnalysisCacheStats) -> Value {
+    json!({
+        "zero": stats.inline_returned_after_zero_parses,
+        "one": stats.inline_returned_after_one_parse,
+        "two": stats.inline_returned_after_two_parses,
+        "atMostOneRate": ratio(
+            stats.inline_returned_after_zero_parses + stats.inline_returned_after_one_parse,
+            stats.inline_candidates_returned
+        )
+    })
 }
 
 fn latency_summary(samples: &VecDeque<RequestLatencySample>) -> Value {
@@ -3281,6 +3558,23 @@ fn byte_offset_from_lsp_position(source: &str, position: &Value) -> Option<usize
     }
 
     (target_line == source.lines().count()).then_some(source.len())
+}
+
+fn exact_byte_offset_from_lsp_position(source: &str, position: &Value) -> Option<usize> {
+    let target_line = position.get("line")?.as_u64()? as usize;
+    let target_character = position.get("character")?.as_u64()? as usize;
+    let offset = byte_offset_from_lsp_position(source, position)?;
+    let actual_line = source[..offset]
+        .bytes()
+        .filter(|byte| *byte == b'\n')
+        .count();
+    if actual_line != target_line {
+        return None;
+    }
+    let line_start = source[..offset].rfind('\n').map_or(0, |index| index + 1);
+    let actual_character = source[line_start..offset].encode_utf16().count();
+
+    (actual_character == target_character).then_some(offset)
 }
 
 fn line_without_ending(line: &str) -> &str {

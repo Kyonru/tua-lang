@@ -74,6 +74,14 @@ pub(super) struct EcsOverrides {
 pub(super) struct CompletionOverrides {
     pub(super) sequence_ranking: CompletionSequenceRankingOverrides,
     pub(super) multi_token: CompletionMultiTokenOverrides,
+    pub(super) inline: InlineCompletionOverrides,
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub(super) struct InlineCompletionOverrides {
+    pub(super) enabled: Option<bool>,
+    pub(super) semantic: Option<bool>,
+    pub(super) current_file: Option<bool>,
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -201,6 +209,18 @@ impl WorkspaceSettings {
 
         self.completion.multi_token.apply(&mut config);
         config
+    }
+
+    pub(super) fn inline_completion_enabled(&self) -> bool {
+        self.completion.inline.enabled.unwrap_or(false)
+    }
+
+    pub(super) fn inline_semantic_enabled(&self) -> bool {
+        self.completion.inline.semantic.unwrap_or(true)
+    }
+
+    pub(super) fn inline_current_file_enabled(&self) -> bool {
+        self.completion.inline.current_file.unwrap_or(true)
     }
 }
 
@@ -449,10 +469,28 @@ impl CompletionOverrides {
         let multi_token = settings
             .get("multiToken")
             .or_else(|| settings.get("multi_token"));
+        let inline = settings.get("inline");
 
         Self {
             sequence_ranking: CompletionSequenceRankingOverrides::from_settings(sequence_ranking),
             multi_token: CompletionMultiTokenOverrides::from_settings(multi_token),
+            inline: InlineCompletionOverrides::from_settings(inline),
+        }
+    }
+}
+
+impl InlineCompletionOverrides {
+    fn from_settings(value: Option<&Value>) -> Self {
+        let Some(settings) = value.and_then(Value::as_object) else {
+            return Self::default();
+        };
+        let sources = settings.get("sources").and_then(Value::as_object);
+
+        Self {
+            enabled: bool_setting(settings, "enabled", "enabled"),
+            semantic: sources.and_then(|sources| bool_setting(sources, "semantic", "semantic")),
+            current_file: sources
+                .and_then(|sources| bool_setting(sources, "current_file", "currentFile")),
         }
     }
 }
@@ -706,4 +744,41 @@ fn normalized_path(path: &Path) -> String {
         .map(|component| component.as_os_str().to_string_lossy())
         .collect::<Vec<_>>()
         .join("/")
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::WorkspaceSettings;
+
+    #[test]
+    fn inline_completion_settings_are_disabled_by_default_and_parse_sources() {
+        let defaults = WorkspaceSettings::default();
+        assert!(!defaults.inline_completion_enabled());
+        assert!(defaults.inline_semantic_enabled());
+        assert!(defaults.inline_current_file_enabled());
+
+        let settings = WorkspaceSettings::from_did_change_configuration(&json!({
+            "params": {
+                "settings": {
+                    "tua": {
+                        "completion": {
+                            "inline": {
+                                "enabled": true,
+                                "sources": {
+                                    "semantic": false,
+                                    "currentFile": false
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }));
+
+        assert!(settings.inline_completion_enabled());
+        assert!(!settings.inline_semantic_enabled());
+        assert!(!settings.inline_current_file_enabled());
+    }
 }

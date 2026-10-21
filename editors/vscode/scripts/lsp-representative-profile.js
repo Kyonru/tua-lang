@@ -9,6 +9,7 @@ const {
   delay,
   pathToFileURL,
   positionAfter,
+  profileSpans,
   resolveCommand,
   statsForValues,
 } = require("./lsp-profile-common");
@@ -42,6 +43,27 @@ const completionP95BudgetMs = numberEnv(
   "TUA_REPRESENTATIVE_COMPLETION_P95_BUDGET_MS",
   10000,
 );
+const inlineServerP95BudgetMs = numberEnv(
+  "TUA_REPRESENTATIVE_INLINE_SERVER_P95_BUDGET_MS",
+  10000,
+);
+const inlineWorkerP95BudgetMs = numberEnv(
+  "TUA_REPRESENTATIVE_INLINE_WORKER_P95_BUDGET_MS",
+  20,
+);
+const inlineBackendP95BudgetMs = numberEnv(
+  "TUA_REPRESENTATIVE_INLINE_BACKEND_P95_BUDGET_MS",
+  20,
+);
+const inlineEndToEndP95BudgetMs = numberEnv(
+  "TUA_REPRESENTATIVE_INLINE_E2E_P95_BUDGET_MS",
+  10000,
+);
+const diagnosticsP95BudgetMs = numberEnv(
+  "TUA_REPRESENTATIVE_DIAGNOSTICS_P95_BUDGET_MS",
+  10000,
+);
+const minimumReturnedAtMostOneParseRate = 0.5;
 
 (async () => {
   const manifest = generateRepresentativeFixtures(fixtureRoot, fixtureNames);
@@ -64,7 +86,7 @@ const completionP95BudgetMs = numberEnv(
   }
 
   const report = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     command,
     configuration: {
       coldRepeat,
@@ -77,6 +99,12 @@ const completionP95BudgetMs = numberEnv(
     },
     thresholds: {
       completionP95BudgetMs,
+      inlineServerP95BudgetMs,
+      inlineWorkerP95BudgetMs,
+      inlineBackendP95BudgetMs,
+      inlineEndToEndP95BudgetMs,
+      diagnosticsP95BudgetMs,
+      minimumReturnedAtMostOneParseRate,
       maximumStaleResults: 0,
       maximumValidationFailures: 0,
     },
@@ -123,6 +151,8 @@ async function profileFixture(root, fixture) {
   const session = await openSession(root);
   let contention;
   let cacheStats;
+  let health;
+  let inlineProfile;
   let workspaceWarm;
 
   try {
@@ -148,6 +178,8 @@ async function profileFixture(root, fixture) {
     contention = await profileContention(session.client, session.main);
     validationFailures.contentionCompletion += contention.validationFailures;
     cacheStats = await session.client.request("tua/cacheStats", null);
+    health = await session.client.request("tua/health", null);
+    inlineProfile = inlineProfileStats(session.client.stderr);
   } finally {
     await closeSession(session.client);
   }
@@ -170,12 +202,27 @@ async function profileFixture(root, fixture) {
     ),
     requestAge: {
       completionAfterChange: statsForValues(contention.completionRequestAges),
+      inlineAfterChange: statsForValues(contention.inlineSuccessfulRequestAges),
+      inlineAllAfterChange: statsForValues(contention.inlineRequestAges),
+      diagnosticsAfterChange: statsForValues(contention.diagnosticsRequestAges),
       background: statsForValues(contention.backgroundRequestAges),
     },
     cache: {
       hitRates: cacheHitRates(cacheStats),
       raw: cacheStats,
     },
+    inlineCompletion: {
+      responses: contention.inlineResponses,
+      requestErrors: contention.inlineRequestErrors,
+      nonEmptyResponses: contention.inlineNonEmptyResponses,
+      profile: inlineProfile,
+      serverRequest: methodLatency(health, "tua/localInlineCompletion"),
+      counters: cacheStats.inlineCompletion || null,
+    },
+    diagnostics: {
+      firstPublishAfterChange: statsForValues(contention.diagnosticsRequestAges),
+    },
+    health,
     workspaceWarm,
     contention: {
       rounds: contentionRepeat,
@@ -190,6 +237,9 @@ async function profileFixture(root, fixture) {
       resultsAfterChange: contention.resultsAfterChange,
       staleResultCount: contention.staleResultCount,
       freshCompletionCount: contention.freshCompletionCount,
+      validDocumentCompletionCount: contention.validDocumentCompletionCount,
+      invalidDocumentCompletionCount: contention.invalidDocumentCompletionCount,
+      invalidDocumentCompletionSuccesses: contention.invalidDocumentCompletionSuccesses,
     },
     validationFailures: {
       byRequest: validationFailures,
@@ -235,7 +285,10 @@ async function waitForWorkspaceWarm(client) {
 
 async function openSession(root) {
   const client = new LspClient(command, root, {
-    env: process.env,
+    env: {
+      ...process.env,
+      TUA_PROFILE: process.env.TUA_PROFILE || "1",
+    },
     requestTimeoutMs,
   });
   const mainPath = path.join(root, "src", "main.tua");
@@ -257,6 +310,15 @@ async function openSession(root) {
     workspaceFolders: [{ uri: pathToFileURL(root).href, name: path.basename(root) }],
   });
   client.notify("initialized", {});
+  client.notify("workspace/didChangeConfiguration", {
+    settings: {
+      tua: {
+        completion: {
+          inline: { enabled: true },
+        },
+      },
+    },
+  });
 
   client.notify("textDocument/didOpen", {
     textDocument: {
@@ -343,6 +405,9 @@ async function timedRequest(client, request) {
 
 async function profileContention(client, main) {
   const completionRequestAges = [];
+  const inlineRequestAges = [];
+  const inlineSuccessfulRequestAges = [];
+  const diagnosticsRequestAges = [];
   const backgroundRequestAges = [];
   let currentText = main.text;
   let version = main.version;
@@ -353,36 +418,78 @@ async function profileContention(client, main) {
   let resultsAfterChange = 0;
   let staleResultCount = 0;
   let freshCompletionCount = 0;
+  let validDocumentCompletionCount = 0;
+  let invalidDocumentCompletionCount = 0;
+  let invalidDocumentCompletionSuccesses = 0;
   let validationFailures = 0;
+  let inlineResponses = 0;
+  let inlineRequestErrors = 0;
+  let inlineNonEmptyResponses = 0;
 
   for (let round = 0; round < contentionRepeat; round += 1) {
     const background = [];
     const sourceLines = currentText.split("\n").length;
+    const preEditBackground = Math.min(backgroundBurst, 8);
 
-    for (let index = 0; index < backgroundBurst; index += 1) {
-      const startLine = index % Math.max(1, Math.min(sourceLines - 1, backgroundBurst));
+    const startBackground = (index, lineCount, sentBeforeChange) => {
+      const startLine = index % Math.max(1, Math.min(lineCount - 1, backgroundBurst));
       const handle = client.startRequest("textDocument/inlayHint", {
         textDocument: { uri: main.uri },
         range: {
           start: { line: startLine, character: 0 },
-          end: { line: sourceLines + 1, character: 0 },
+          end: { line: lineCount + 1, character: 0 },
         },
       });
 
-      background.push(observeRequest(handle));
+      background.push({ response: observeRequest(handle), sentBeforeChange });
+    };
+    for (let index = 0; index < preEditBackground; index += 1) {
+      startBackground(index, sourceLines, true);
     }
-    backgroundRequests += background.length;
 
     await delay(contentionDelayMs);
 
     version += 1;
     const probe = `profile_contention_probe_${String(round + 1).padStart(2, "0")}`;
-    currentText = `${main.text}\nlocal ${probe} = profile_primary.label\n`;
+    const diagnosticProbe = `profile_missing_diagnostic_${String(round + 1).padStart(2, "0")}`;
+    const invalidProbe = `profile_invalid_syntax_${String(round + 1).padStart(2, "0")}`;
+    const temporarilyInvalid = round === 0;
+    const inlineComplete = "print(profile_primary, profile_primary)";
+    const inlinePartialPrefix = "print(profile_primary, profile_pri";
+    const inlinePartial = `${inlinePartialPrefix})`;
+    const invalidLine = temporarilyInvalid ? `local ${invalidProbe} = )\n` : "";
+    currentText = insertBeforeReturn(
+      main.text,
+      `local ${probe} = profile_primary.label\n` +
+        `print(${diagnosticProbe})\n` +
+        invalidLine +
+        `${inlineComplete}\n${inlineComplete}\n${inlinePartial}\n`,
+    );
+    const invalidLineIndex = temporarilyInvalid
+      ? lineIndexContaining(currentText, invalidProbe)
+      : undefined;
+    client.clearDiagnostics();
+    const changedAt = process.hrtime.bigint();
+    const diagnostics = client
+      .waitForDiagnostics(main.uri, {
+        timeoutMs: Math.min(requestTimeoutMs, 10000),
+        predicate: (message) =>
+          diagnosticsContain(message, diagnosticProbe) ||
+          (temporarilyInvalid && diagnosticsTouchLine(message, invalidLineIndex)),
+      })
+      .then(() => elapsedMs(changedAt, process.hrtime.bigint()));
     client.notify("textDocument/didChange", {
       textDocument: { uri: main.uri, version },
       contentChanges: [{ text: currentText }],
     });
 
+    const inline = observeRequest(
+      client.startRequest("tua/localInlineCompletion", {
+        textDocument: { uri: main.uri },
+        position: positionAfterLast(currentText, inlinePartialPrefix),
+        documentVersion: version,
+      }),
+    );
     const completion = observeRequest(
       client.startRequest("textDocument/completion", {
         textDocument: { uri: main.uri },
@@ -390,19 +497,50 @@ async function profileContention(client, main) {
         context: { triggerKind: 1 },
       }),
     );
-    const fresh = await completion;
+    const changedSourceLines = currentText.split("\n").length;
+    for (let index = preEditBackground; index < backgroundBurst; index += 1) {
+      startBackground(index, changedSourceLines, false);
+    }
+    backgroundRequests += background.length;
+    const [fresh, inlineResult, diagnosticsAge] = await Promise.all([
+      completion,
+      inline,
+      diagnostics,
+    ]);
+    diagnosticsRequestAges.push(diagnosticsAge);
     const items = completionItems(fresh.message.result);
     const freshCompletion = !fresh.message.error && items.some((item) => item.label === "label");
 
     completionRequestAges.push(fresh.ageMs);
     freshCompletionCount += Number(freshCompletion);
-    validationFailures += Number(!freshCompletion);
+    if (temporarilyInvalid) {
+      invalidDocumentCompletionCount += 1;
+      invalidDocumentCompletionSuccesses += Number(freshCompletion);
+    } else {
+      validDocumentCompletionCount += 1;
+      validationFailures += Number(!freshCompletion);
+    }
+    inlineRequestAges.push(inlineResult.ageMs);
+    if (!inlineResult.message.error) {
+      inlineSuccessfulRequestAges.push(inlineResult.ageMs);
+    }
+    inlineResponses += 1;
+    inlineRequestErrors += Number(Boolean(inlineResult.message.error));
+    inlineNonEmptyResponses += Number(
+      Array.isArray(inlineResult.message.result?.items) &&
+        inlineResult.message.result.items.length > 0,
+    );
 
     // A response received before the new-version completion may have already
     // left the server before it processed didChange. The validated completion
     // is the protocol barrier that proves the change has been observed.
-    const responses = await Promise.all(background);
-    for (const response of responses) {
+    const responses = await Promise.all(
+      background.map(async ({ response, sentBeforeChange }) => ({
+        response: await response,
+        sentBeforeChange,
+      })),
+    );
+    for (const { response, sentBeforeChange } of responses) {
       backgroundRequestAges.push(response.ageMs);
 
       const code = response.message.error?.code;
@@ -414,7 +552,11 @@ async function profileContention(client, main) {
         cancelledRequests += 1;
       }
 
-      if (response.message.result !== undefined && response.receivedAt > fresh.receivedAt) {
+      if (
+        sentBeforeChange &&
+        response.message.result !== undefined &&
+        response.receivedAt > fresh.receivedAt
+      ) {
         resultsAfterChange += 1;
         staleResultCount += 1;
       }
@@ -423,6 +565,9 @@ async function profileContention(client, main) {
 
   return {
     completionRequestAges,
+    inlineRequestAges,
+    inlineSuccessfulRequestAges,
+    diagnosticsRequestAges,
     backgroundRequestAges,
     backgroundRequests,
     cancelledRequests,
@@ -431,8 +576,102 @@ async function profileContention(client, main) {
     resultsAfterChange,
     staleResultCount,
     freshCompletionCount,
+    validDocumentCompletionCount,
+    invalidDocumentCompletionCount,
+    invalidDocumentCompletionSuccesses,
     validationFailures,
+    inlineResponses,
+    inlineRequestErrors,
+    inlineNonEmptyResponses,
   };
+}
+
+function insertBeforeReturn(source, insertion) {
+  const returnStart = source.lastIndexOf("\nreturn {");
+
+  if (returnStart === -1) {
+    return `${source}\n${insertion}`;
+  }
+
+  return `${source.slice(0, returnStart + 1)}${insertion}${source.slice(returnStart + 1)}`;
+}
+
+function positionAfterLast(source, needle) {
+  const offset = source.lastIndexOf(needle);
+  if (offset === -1) {
+    throw new Error(`needle not found in source: ${needle}`);
+  }
+  const before = source.slice(0, offset + needle.length);
+  const lines = before.split("\n");
+
+  return {
+    line: lines.length - 1,
+    character: lines[lines.length - 1].length,
+  };
+}
+
+function lineIndexContaining(source, needle) {
+  return source.slice(0, source.indexOf(needle)).split("\n").length - 1;
+}
+
+function diagnosticsContain(message, text) {
+  return (message?.params?.diagnostics || []).some((diagnostic) =>
+    JSON.stringify(diagnostic).includes(text),
+  );
+}
+
+function diagnosticsTouchLine(message, line) {
+  return (message?.params?.diagnostics || []).some(
+    (diagnostic) => diagnostic?.range?.start?.line === line,
+  );
+}
+
+function inlineProfileStats(stderr) {
+  const exact = (name) =>
+    statsForValues(
+      profileSpans(stderr, name)
+        .filter((span) => span.name === name)
+        .map((span) => span.elapsedMs),
+    );
+
+  const coordinatorActive = {};
+  for (const span of profileSpans(stderr, "inline.coordinator.active")) {
+    const values = coordinatorActive[span.name] || [];
+    values.push(span.elapsedMs);
+    coordinatorActive[span.name] = values;
+  }
+  const coordinatorFinish = {};
+  for (const span of profileSpans(stderr, "inline.coordinator.finish")) {
+    const values = coordinatorFinish[span.name] || [];
+    values.push(span.elapsedMs);
+    coordinatorFinish[span.name] = values;
+  }
+
+  return {
+    queue: exact("lsp.queue tua/localInlineCompletion"),
+    preparation: exact("inline.request.prepare"),
+    workerExecution: exact("lsp.request tua/localInlineCompletion"),
+    coreBackend: exact("inline.request.core"),
+    semantic: exact("inline.semantic"),
+    recall: exact("inline.recall"),
+    validation: exact("inline.validate"),
+    coordinatorActive: Object.fromEntries(
+      Object.entries(coordinatorActive).map(([name, values]) => [name, statsForValues(values)]),
+    ),
+    coordinatorFinish: Object.fromEntries(
+      Object.entries(coordinatorFinish).map(([name, values]) => [name, statsForValues(values)]),
+    ),
+  };
+}
+
+function methodLatency(health, method) {
+  return (
+    health?.latency?.methods?.find((candidate) => candidate.method === method) || {
+      count: 0,
+      p95Ms: 0,
+      maxMs: 0,
+    }
+  );
 }
 
 function observeRequest(handle) {
@@ -482,20 +721,23 @@ function validResult(label, result) {
 }
 
 function cacheHitRates(stats) {
-  return Object.fromEntries(
-    [
-      "parse",
-      "hir",
-      "scope",
-      "typeEnvironment",
-      "diagnostics",
-      "moduleExports",
-      "requireEdges",
-      "symbolIndex",
-      "usageIndex",
-      "completionContext",
-    ].map((name) => [name, cacheHitRate(stats[name])]),
-  );
+  return {
+    ...Object.fromEntries(
+      [
+        "parse",
+        "hir",
+        "scope",
+        "typeEnvironment",
+        "diagnostics",
+        "moduleExports",
+        "requireEdges",
+        "symbolIndex",
+        "usageIndex",
+        "completionContext",
+      ].map((name) => [name, cacheHitRate(stats[name])]),
+    ),
+    inlineCurrentFile: cacheHitRate(stats.inlineCompletion?.cachePeek),
+  };
 }
 
 function regressionFailures(report) {
@@ -504,6 +746,11 @@ function regressionFailures(report) {
   for (const fixture of report.fixtures) {
     const warmCompletionP95 = fixture.latency.completion.warm.p95Ms;
     const contentionCompletionP95 = fixture.requestAge.completionAfterChange.p95Ms;
+    const inlineEndToEndP95 = fixture.requestAge.inlineAfterChange.p95Ms;
+    const inlineServerP95 = fixture.inlineCompletion.serverRequest.p95Ms;
+    const inlineWorkerP95 = fixture.inlineCompletion.profile.workerExecution.p95Ms;
+    const inlineBackendP95 = fixture.inlineCompletion.profile.coreBackend.p95Ms;
+    const diagnosticsP95 = fixture.diagnostics.firstPublishAfterChange.p95Ms;
 
     if (warmCompletionP95 > report.thresholds.completionP95BudgetMs) {
       failures.push(
@@ -518,10 +765,116 @@ function regressionFailures(report) {
           `${report.thresholds.completionP95BudgetMs}ms`,
       );
     }
+    if (inlineEndToEndP95 > report.thresholds.inlineEndToEndP95BudgetMs) {
+      failures.push(
+        `${fixture.name}: inline end-to-end p95 ${inlineEndToEndP95.toFixed(2)}ms exceeds ` +
+          `${report.thresholds.inlineEndToEndP95BudgetMs}ms`,
+      );
+    }
+    if (inlineServerP95 > report.thresholds.inlineServerP95BudgetMs) {
+      failures.push(
+        `${fixture.name}: inline server/request p95 ${inlineServerP95.toFixed(2)}ms exceeds ` +
+          `${report.thresholds.inlineServerP95BudgetMs}ms`,
+      );
+    }
+    if (inlineBackendP95 > report.thresholds.inlineBackendP95BudgetMs) {
+      failures.push(
+        `${fixture.name}: inline core/backend p95 ${inlineBackendP95.toFixed(2)}ms exceeds ` +
+          `${report.thresholds.inlineBackendP95BudgetMs}ms`,
+      );
+    }
+    if (inlineWorkerP95 > report.thresholds.inlineWorkerP95BudgetMs) {
+      failures.push(
+        `${fixture.name}: inline worker execution p95 ${inlineWorkerP95.toFixed(2)}ms exceeds ` +
+          `${report.thresholds.inlineWorkerP95BudgetMs}ms`,
+      );
+    }
+    if (diagnosticsP95 > report.thresholds.diagnosticsP95BudgetMs) {
+      failures.push(
+        `${fixture.name}: first diagnostics p95 ${diagnosticsP95.toFixed(2)}ms exceeds ` +
+          `${report.thresholds.diagnosticsP95BudgetMs}ms`,
+      );
+    }
+    if (fixture.inlineCompletion.requestErrors !== 0) {
+      failures.push(
+        `${fixture.name}: ${fixture.inlineCompletion.requestErrors} inline request(s) failed`,
+      );
+    }
+    if (
+      fixture.inlineCompletion.serverRequest.count !== fixture.inlineCompletion.responses ||
+      fixture.inlineCompletion.profile.queue.runs !== fixture.inlineCompletion.responses ||
+      fixture.inlineCompletion.profile.preparation.runs !==
+        fixture.inlineCompletion.responses ||
+      fixture.inlineCompletion.profile.workerExecution.runs !== fixture.inlineCompletion.responses ||
+      fixture.inlineCompletion.profile.coreBackend.runs !== fixture.inlineCompletion.responses
+    ) {
+      failures.push(
+        `${fixture.name}: inline profile spans did not cover every request ` +
+          `(responses ${fixture.inlineCompletion.responses}, server ` +
+          `${fixture.inlineCompletion.serverRequest.count}, queue ` +
+          `${fixture.inlineCompletion.profile.queue.runs}, prepare ` +
+          `${fixture.inlineCompletion.profile.preparation.runs}, worker ` +
+          `${fixture.inlineCompletion.profile.workerExecution.runs}, core ` +
+          `${fixture.inlineCompletion.profile.coreBackend.runs})`,
+      );
+    }
+    const inlineCounters = fixture.inlineCompletion.counters;
+    if (!inlineCounters || Number(inlineCounters.requests || 0) === 0) {
+      failures.push(`${fixture.name}: no inline completion reached the core backend`);
+    } else {
+      const distribution = inlineCounters.candidateParseDistribution || {};
+      const distributed =
+        Number(distribution.zero || 0) +
+        Number(distribution.one || 0) +
+        Number(distribution.two || 0);
+      if (distributed !== Number(inlineCounters.candidateAttempts || 0)) {
+        failures.push(
+          `${fixture.name}: inline parse distribution does not match candidate attempts`,
+        );
+      }
+      const peek = inlineCounters.cachePeek || {};
+      if (Number(peek.hits || 0) + Number(peek.misses || 0) === 0) {
+        failures.push(`${fixture.name}: inline cache-peek counters were not observed`);
+      }
+      const returned = inlineCounters.returnedParseDistribution || {};
+      const returnedZero = Number(returned.zero || 0);
+      const returnedOne = Number(returned.one || 0);
+      const returnedTwo = Number(returned.two || 0);
+      const returnedTotal = returnedZero + returnedOne + returnedTwo;
+      if (returnedTotal !== Number(inlineCounters.candidatesReturned || 0)) {
+        failures.push(
+          `${fixture.name}: returned parse distribution does not match returned candidates`,
+        );
+      }
+      if (returnedZero !== 0) {
+        failures.push(`${fixture.name}: ${returnedZero} candidate(s) returned without parsing`);
+      }
+      if (returnedTotal > 0) {
+        const atMostOneRate = (returnedZero + returnedOne) / returnedTotal;
+        if (atMostOneRate < report.thresholds.minimumReturnedAtMostOneParseRate) {
+          failures.push(
+            `${fixture.name}: only ${(atMostOneRate * 100).toFixed(1)}% of returned candidates ` +
+              `used at most one parse`,
+          );
+        }
+        if (returnedTwo === 0) {
+          failures.push(
+            `${fixture.name}: temporarily-invalid scenario did not exercise a returned ` +
+              `two-parse candidate`,
+          );
+        }
+      }
+    }
     if (fixture.contention.staleResultCount > report.thresholds.maximumStaleResults) {
       failures.push(
         `${fixture.name}: observed ${fixture.contention.staleResultCount} stale background results`,
       );
+    }
+    if (fixture.contention.invalidDocumentCompletionCount === 0) {
+      failures.push(`${fixture.name}: temporarily-invalid contention round was not exercised`);
+    }
+    if (fixture.contention.validDocumentCompletionCount === 0) {
+      failures.push(`${fixture.name}: no valid-document contention completion was checked`);
     }
     if (fixture.validationFailures.total > report.thresholds.maximumValidationFailures) {
       failures.push(
@@ -556,6 +909,20 @@ function printFixture(fixture) {
       `${fixture.requestAge.completionAfterChange.p95Ms.toFixed(2)}ms  ` +
       `cancelled ${fixture.contention.cancelledRequests}/` +
       `${fixture.contention.backgroundRequests}  stale ${fixture.contention.staleResultCount}`,
+  );
+  console.log(
+    `inline e2e p95 ${fixture.requestAge.inlineAfterChange.p95Ms.toFixed(2)}ms  ` +
+      `queue p95 ${fixture.inlineCompletion.profile.queue.p95Ms.toFixed(3)}ms  ` +
+      `prepare p95 ${fixture.inlineCompletion.profile.preparation.p95Ms.toFixed(3)}ms  ` +
+      `server/request p95 ${fixture.inlineCompletion.serverRequest.p95Ms.toFixed(2)}ms  ` +
+      `worker p95 ${fixture.inlineCompletion.profile.workerExecution.p95Ms.toFixed(3)}ms  ` +
+      `core p95 ${fixture.inlineCompletion.profile.coreBackend.p95Ms.toFixed(3)}ms`,
+  );
+  console.log(
+    `diagnostics after edit p95 ` +
+      `${fixture.diagnostics.firstPublishAfterChange.p95Ms.toFixed(2)}ms  ` +
+      `inline non-empty ${fixture.inlineCompletion.nonEmptyResponses}/` +
+      `${fixture.inlineCompletion.responses}`,
   );
   console.log(
     `workspace warm ${fixture.workspaceWarm.completed ? "complete" : "incomplete"} in ` +

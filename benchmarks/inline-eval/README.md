@@ -2,7 +2,8 @@
 
 Phase 0 of [`better-autocompletion.md`](../../better-autocompletion.md): an
 offline evaluator that measures candidate sources for local inline completion
-before any of them ships. It lives behind the `test-fixture` feature in
+before their default or source scope expands. It lives behind the
+`test-fixture` feature in
 `tua_core::inline_completion::eval`, with a command-line front end in
 `crates/tua-core/examples/inline_eval.rs`.
 
@@ -11,19 +12,62 @@ make inline-eval            # tuning sets -> target/tua-speed/inline-eval-tune.j
 make inline-eval-smoke      # committed fixtures, compared with smoke/expected.json (CI)
 make inline-eval-holdout    # held-out gate, checked against thresholds.toml
 make inline-eval-external   # fetch pinned third-party projects, then gate on them
+make inline-eval-phase-gate # aggregate decision; fails while any prerequisite is pending
 
 # Ad-hoc paths: directories are projects, files stand alone.
 cargo run -p tua-core --features test-fixture --example inline_eval -- examples/features --json
 ```
 
+`make representative-phase1-gate` first records the full seven-fixture
+scheduler/server matrix with independent strict 10 ms limits for
+dispatch-to-response latency, worker execution, and core/backend work, plus a
+1,500 ms p95 ceiling for client-observed contended request age, in
+`target/tua-speed/representative-phase1-gate.json`. It is a dependency of
+`make inline-eval-phase-gate`, which then checks every prerequisite and its
+evidence in `phase1-gate.toml`; a passing quality dataset alone is insufficient.
+
 `--records` keeps every suggestion in the JSON report. `--min-prefix`,
 `--min-support`, `--min-full-prefix-support`, `--dominance`,
 `--recall-variant unique|common-prefix`, and `--contexts open-paren,comma,...`
-configure the candidate `phase1` backend while tuning. The full-prefix support
+configure the exploratory `phase1-prototype` backend while tuning. The shipping
+`phase1` backend always runs the exact host query and its fixed production
+policy. The full-prefix support
 threshold lets a single matching line offer only its first token while repeated
 patterns can offer their whole common continuation. `--no-menu` and
 `--no-warmup` skip the analysis-backed measurements for a faster run, and
 `--max-positions 0` evaluates every position.
+
+`--menu-replay FILE` replaces simulated menu selection with explicitly enabled
+local JSONL captured from the VS Code provider. Start the extension host with both
+`TUA_INLINE_REPLAY_ROOT` set to the manifest's dataset root and
+`TUA_INLINE_REPLAY_CAPTURE` set to a fresh local JSONL path. Capture is inactive
+when either variable is absent, ignores files outside the canonical root, and
+never uploads data. Enable `tua.completion.inline.enabled` as well: capture
+observes the Phase 1 provider after its normal debounce and stays idle when the
+feature is off. It stores a relative path, SHA-256 hash of the edited in-memory
+document (with CRLF normalized to LF, matching evaluator scenarios), zero-based
+UTF-16 position/range, document version, elapsed time
+since an observed edit, menu-open state, and the selected completion text when
+present; it does not store the document body, absolute URI, wall-clock time, or
+inline result.
+
+The relative path reveals part of the dataset layout, and selected completion
+text can contain source-derived identifiers or literals. Treat the capture as
+potentially sensitive local evaluation data: keep it out of version control and
+delete it when the replay is no longer needed. Tua does not upload it.
+
+To replay real typing against known truth, leave the fixture unsaved, delete
+the rest of a code line from a sampled cursor, and type it back. The resulting
+in-memory document matches the evaluator's `edit` scenario; editor-inserted
+closing delimiters may match `auto-close`. The evaluator applies a record only
+when its edited-document hash, cursor, and selection range match a generated
+scenario exactly. It rejects malformed entries, unknown files, invalid UTF-16
+positions, and positions that fail core eligibility, and counts valid records
+that match no scenario as unmatched. Matched events use the real selected item
+instead of `menu_selection`; reports retain separate `replay-open` and
+`replay-closed` results. Use replay capture only with tuning data while choosing
+behavior. It does not authorize inspecting a gate set before its configuration
+and thresholds are frozen.
 
 ## Datasets
 
@@ -58,8 +102,29 @@ Rules that keep the gates honest:
   external names only Lua limits.
 - **Report languages separately.** Tua and Lua results are summarized and
   gated independently, so the larger Lua corpus can't hide weak Tua results.
+- **A quality gate is not phase acceptance.** `phase1-gate.toml` records the
+  separate held-out/external quality, real menu replay, menu-completion
+  performance, strict inline-server performance, client no-stall and
+  responsiveness evidence, diagnostics freshness, scheduler cache-hit, and
+  parse-distribution evidence. The 1,500 ms no-stall ceiling does not satisfy
+  the pending interactive-responsiveness prerequisite. The extension separately
+  cancels and abstains after a local backend waits 250 ms beyond its 65 ms
+  debounce; that client protection and the synthetic contention gate measure
+  different boundaries.
+  Its checker fails on missing, pending, or evidence-free prerequisites.
 - **Results stay local.** Reports go to `target/tua-speed/`; don't commit
   machine-specific numbers.
+
+The offline `phase1` backend is intentionally cold. Its validation
+zero/one/two-parse distribution diagnoses worst-case cost and is report-only;
+`check_gates` does not mix it into held-out or external quality acceptance.
+The aggregate validation prerequisite is decided from the representative LSP
+run under real scheduling. That prerequisite requires complete counter
+coverage, no two-parse scheduled attempts, and at most one parse for every
+returned candidate. A zero-parse cancellation or deadline expiration is a safe
+abstention, not a returned completion. Candidate-attempt and returned-candidate
+parse distributions are reported separately; returned counts use request-local
+parse counts, so concurrent requests cannot distort them.
 
 `scripts/fetch-inline-eval-projects.js` checks out each external project at its
 pinned commit into `target/inline-eval/external/`, then verifies the commit ID,
@@ -98,8 +163,8 @@ cursor on that line and asks every backend for one suggestion.
   word, and the first such item is the selection. With the menu open, a
   suggestion counts only if the typed word plus the suggestion starts with the
   selected item's text, as VS Code requires. Real VS Code matching is fuzzy
-  and sorts differently, so this is a rough model until extension replays
-  replace it.
+  and sorts differently, so this remains a rough model when no validated
+  `--menu-replay` capture is supplied.
 
 ### Backends
 
@@ -111,11 +176,10 @@ cursor on that line and asks every backend for one suggestion.
   same file that start with the normalized line prefix.
 - `current-file-prefix`: the part every matching continuation agrees on, cut
   back to a whole token.
-- `phase1`: the candidate Phase 1 order, enabled semantic sources first and
-  then recall. By default it is the plan's starting hypothesis (`current-file`,
-  every context); the thresholds' required `[phase1]` table pins the recall
-  variant, context allowlist, callback/snippet sources, and their prefix
-  requirements for quality-gate runs.
+- `phase1-prototype`: configurable source ordering and recall policy for tuning.
+- `phase1`: the exact shipping host query, including budget, cancellation,
+  suffix handling, parse-delta validation, and the fixed production policy.
+  A gate rejects a `[phase1]` table that does not match that policy.
 
 ### Metrics
 
@@ -146,7 +210,7 @@ Rates ending in `/el` divide by eligible requests and precisions divide by
 suggestions. Per-source rates also divide by every eligible request, so they
 add up to the backend's. Every summary is broken down by language, scenario,
 menu state, cursor context, prefix kind, project, document state (whether the
-document parsed when the request fired), and source, with latency
+document parsed when the request fired), and source, with backend-only latency
 percentiles and a precision/coverage curve over each backend's scores.
 
 The report also measures:

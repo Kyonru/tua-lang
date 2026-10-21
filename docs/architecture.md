@@ -369,6 +369,45 @@ and versions. The VS Code extension owns loopback Ollama transport and
 ghost-text lifecycle, so ordinary compiler completion remains deterministic and
 model-independent.
 
+Deterministic inline completion uses a separate host-level query. Core owns
+eligibility, source-only statement snippets, current-file recall, ranking, and
+parse-only validation. The Phase 1 query reads the current VFS document and may
+peek at an exactly matching cached file, but it never constructs a snapshot or
+runs project analysis. The LSP supplies configuration, a fixed deadline, and a
+cancellation flag, converts protocol ranges, and schedules requests as
+non-interactive newest-wins work on a single speculative worker. That lane
+keeps at most one queued request per document and replaces it in place, so
+cancelled keystroke bursts cannot grow an unbounded queue or occupy the menu
+completion workers. The coordinator prepares an owned source query without
+parsing, then gives the worker a bounded priority window for returning it. An
+already-completed workspace warm-up may wait for that window, but edits,
+cancellation, menu completion, and ordinary completed requests do not. VS Code
+owns the single debounced inline provider and tries deterministic results before
+the optional Ollama path. After its 65 ms debounce, the provider bounds the
+local request to 250 ms with a linked cancellation token; timeout is a transient
+abstention rather than an Ollama fallback trigger.
+Disabled or malformed local requests never enter the speculative queue, and a
+panic in candidate generation is contained to that request so the worker can
+serve the next keystroke.
+Project-wide patterns will require an immutable versioned corpus; mutable
+pattern state must not be shared through `AnalysisSnapshot`.
+
+Developer menu-state replay follows the same boundary. When two explicit
+environment variables configure a local capture and deterministic inline
+completion is enabled, the extension records normalized edited-document hashes,
+dataset-relative paths, UTF-16 positions, document versions, edit delays, menu
+state, and the selected completion text/range when present. The relative path
+exposes part of the dataset layout, and selected text can retain source-derived
+identifiers or literals, so the JSONL is potentially sensitive local evaluation
+data even though it omits the document body and absolute URI. The extension
+normalizes CRLF to LF before hashing, matching the evaluator's canonical
+scenario text. Core generates the evaluator's
+known-truth scenario documents and applies a record only when its hash and
+position match one exactly. This allows real unsaved edits without storing the
+document body while preventing menu state from being applied to a different
+document. No production request path
+reads a capture file, and no capture is uploaded.
+
 ## Change Workflows
 
 ### Add Or Change Language Behavior

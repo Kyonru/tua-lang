@@ -1,19 +1,20 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, VecDeque};
 use std::io;
 use std::panic::{self, AssertUnwindSafe};
 #[cfg(test)]
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Sender, SyncSender};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
+use std::time::Instant;
 
 use serde_json::json;
 use serde_json::Value;
 
 use super::analysis::AnalysisHost;
-use super::handlers::RequestTrace;
-use super::protocol::error_response;
+use super::handlers::{LocalInlineCompletionWork, RequestTrace};
+use super::protocol::{error_response, response};
 use super::{
     method_is_background_refresh, LspServer, PendingDiagnostics, SharedReceivedInputState,
     WorkspaceWarmWork,
@@ -29,6 +30,7 @@ pub(super) const MAX_PENDING_REQUESTS: usize = 256;
 const MAX_NON_INTERACTIVE_JOBS: usize = MAX_IN_FLIGHT_JOBS * 3 / 4;
 const MAX_INTERNAL_BACKGROUND_JOBS: usize = MAX_IN_FLIGHT_JOBS / 2;
 const MAX_JOBS_WHILE_DISPATCHING_INTERNAL_BACKGROUND: usize = MAX_IN_FLIGHT_JOBS - 1;
+const SPECULATIVE_PRIORITY_WINDOW: std::time::Duration = std::time::Duration::from_millis(10);
 
 #[cfg(test)]
 static TEST_SLOW_EXECUTIONS: AtomicUsize = AtomicUsize::new(0);
@@ -36,14 +38,18 @@ static TEST_SLOW_EXECUTIONS: AtomicUsize = AtomicUsize::new(0);
 pub(super) enum ServerEvent {
     Input(io::Result<Option<Value>>),
     RequestFinished(Box<WorkerResult>),
+    SpeculativeReady,
 }
 
 pub(super) struct RequestScheduler {
     foreground_tx: Sender<WorkerJob>,
     background_tx: Sender<WorkerJob>,
+    speculative_lane: SpeculativeLane,
     jobs: BTreeMap<u64, InFlightJob>,
     request_jobs: BTreeMap<String, u64>,
     coalesced_jobs: BTreeMap<String, u64>,
+    newest_wins_jobs: BTreeMap<String, u64>,
+    speculative_priority_until: Option<Instant>,
     received_input: SharedReceivedInputState,
     next_job_id: u64,
 }
@@ -54,6 +60,25 @@ pub(super) struct WorkerResult {
     warm_result: Option<WorkspaceWarmResult>,
 }
 
+impl WorkerResult {
+    pub(super) fn is_workspace_warm(&self) -> bool {
+        self.warm_result.is_some()
+    }
+
+    #[cfg(test)]
+    pub(super) fn test_result(job_id: u64, workspace_warm: bool) -> Self {
+        Self {
+            job_id,
+            response: json!({"jsonrpc": "2.0", "id": job_id, "result": null}),
+            warm_result: workspace_warm.then(|| WorkspaceWarmResult {
+                work: WorkspaceWarmWork::Snapshot { revision: 0 },
+                analysis: None,
+                succeeded: false,
+            }),
+        }
+    }
+}
+
 struct WorkspaceWarmResult {
     work: WorkspaceWarmWork,
     analysis: Option<AnalysisHost>,
@@ -62,7 +87,9 @@ struct WorkspaceWarmResult {
 
 struct WorkerJob {
     job_id: u64,
-    server: LspServer,
+    queued_at: Option<Instant>,
+    server: Option<LspServer>,
+    local_inline: Option<LocalInlineCompletionWork>,
     message: Value,
     method: String,
     cancelled: Arc<AtomicBool>,
@@ -75,6 +102,7 @@ struct InFlightJob {
     generation: Option<u64>,
     cancelled: Arc<AtomicBool>,
     coalesce_key: Option<String>,
+    newest_wins_key: Option<String>,
     waiters: Vec<RequestWaiter>,
     slow_diagnostics: Option<(String, PendingDiagnostics)>,
     warm_work: Option<WorkspaceWarmWork>,
@@ -87,20 +115,41 @@ struct RequestWaiter {
     cancelled: bool,
 }
 
+struct SpeculativeLane {
+    state: Arc<SpeculativeLaneState>,
+    results: mpsc::Receiver<WorkerResult>,
+}
+
+struct SpeculativeLaneState {
+    queue: Mutex<SpeculativeQueue>,
+    ready: Condvar,
+}
+
+#[derive(Default)]
+struct SpeculativeQueue {
+    order: VecDeque<String>,
+    jobs: BTreeMap<String, WorkerJob>,
+    stopped: bool,
+}
+
 impl RequestScheduler {
     pub(super) fn new(
         event_tx: SyncSender<ServerEvent>,
         received_input: SharedReceivedInputState,
     ) -> Self {
         let foreground_tx = spawn_worker_lane("foreground", 2, event_tx.clone());
-        let background_tx = spawn_worker_lane("background", 1, event_tx);
+        let background_tx = spawn_worker_lane("background", 1, event_tx.clone());
+        let speculative_lane = spawn_speculative_lane(event_tx);
 
         Self {
             foreground_tx,
             background_tx,
+            speculative_lane,
             jobs: BTreeMap::new(),
             request_jobs: BTreeMap::new(),
             coalesced_jobs: BTreeMap::new(),
+            newest_wins_jobs: BTreeMap::new(),
+            speculative_priority_until: None,
             received_input,
             next_job_id: 0,
         }
@@ -127,9 +176,20 @@ impl RequestScheduler {
                 .and_then(|uri| server.document_versions.get(uri).copied())
         });
         let background = request_runs_in_background(&method);
-        let non_interactive = background || method == "textDocument/inlayHint";
+        let speculative = method == "tua/localInlineCompletion";
+        if speculative && uri.is_none() {
+            return vec![error_response(
+                id,
+                -32602,
+                "inline completion requires a text document URI".to_owned(),
+            )];
+        }
+        let non_interactive = background || method == "textDocument/inlayHint" || speculative;
         let coalesce_key = ((background || method == "textDocument/inlayHint") && uri.is_some())
             .then(|| coalesce_key(&method, &message, generation));
+        let newest_wins_key = speculative
+            .then(|| uri.as_ref().map(|uri| format!("{method}:{uri}")))
+            .flatten();
         let (mut outbound, trace) = server.begin_request_trace(&message, &method);
 
         if self.request_jobs.contains_key(&request_key) {
@@ -139,6 +199,23 @@ impl RequestScheduler {
                 "request id is already in flight".to_owned(),
             ));
             return outbound;
+        }
+
+        if speculative && !server.local_inline_completion_is_enabled() {
+            let response = response(
+                id,
+                json!({
+                    "documentVersion": document_version,
+                    "items": []
+                }),
+            );
+            outbound.extend(server.finish_request_trace(trace, &response));
+            outbound.push(response);
+            return outbound;
+        }
+
+        if let Some(key) = newest_wins_key.as_deref() {
+            outbound.extend(self.cancel_superseded_request(key));
         }
         if self.request_jobs.len() >= MAX_PENDING_REQUESTS {
             outbound.push(error_response(
@@ -183,9 +260,15 @@ impl RequestScheduler {
         self.next_job_id = self.next_job_id.saturating_add(1);
         let job_id = self.next_job_id;
         let cancelled = Arc::new(AtomicBool::new(false));
+        let local_inline = speculative.then(|| {
+            let _profile = tua_core::profile::span("inline.request.prepare");
+            server.prepare_local_inline_completion(&message)
+        });
         let worker = WorkerJob {
             job_id,
-            server: server.clone(),
+            server: (!speculative).then(|| server.clone()),
+            local_inline,
+            queued_at: tua_core::profile::enabled().then(Instant::now),
             message,
             method,
             cancelled: Arc::clone(&cancelled),
@@ -197,6 +280,7 @@ impl RequestScheduler {
             generation,
             cancelled,
             coalesce_key: coalesce_key.clone(),
+            newest_wins_key: newest_wins_key.clone(),
             waiters: vec![RequestWaiter {
                 id: id.clone(),
                 trace,
@@ -211,12 +295,23 @@ impl RequestScheduler {
         if let Some(key) = coalesce_key {
             self.coalesced_jobs.insert(key, job_id);
         }
+        if let Some(key) = newest_wins_key.clone() {
+            self.newest_wins_jobs.insert(key, job_id);
+            self.speculative_priority_until = Some(Instant::now() + SPECULATIVE_PRIORITY_WINDOW);
+        }
         self.jobs.insert(job_id, in_flight);
 
-        let send_result = if background {
-            self.background_tx.send(worker)
+        let send_result = if speculative {
+            let key = newest_wins_key.expect("inline completion should have a newest-wins key");
+            self.speculative_lane.enqueue(key, worker).map(|replaced| {
+                if let Some(replaced) = replaced {
+                    debug_assert!(!self.jobs.contains_key(&replaced.job_id));
+                }
+            })
+        } else if background {
+            self.background_tx.send(worker).map_err(|_| ())
         } else {
-            self.foreground_tx.send(worker)
+            self.foreground_tx.send(worker).map_err(|_| ())
         };
 
         if send_result.is_err() {
@@ -259,7 +354,9 @@ impl RequestScheduler {
         });
         let worker = WorkerJob {
             job_id,
-            server: server.clone(),
+            server: Some(server.clone()),
+            local_inline: None,
+            queued_at: tua_core::profile::enabled().then(Instant::now),
             message,
             method: INTERNAL_SLOW_DIAGNOSTICS.to_owned(),
             cancelled: Arc::clone(&cancelled),
@@ -273,6 +370,7 @@ impl RequestScheduler {
                 generation: Some(pending.generation),
                 cancelled,
                 coalesce_key: None,
+                newest_wins_key: None,
                 waiters: Vec::new(),
                 slow_diagnostics: Some((uri.clone(), pending)),
                 warm_work: None,
@@ -300,7 +398,9 @@ impl RequestScheduler {
         let cancelled = Arc::new(AtomicBool::new(false));
         let worker = WorkerJob {
             job_id,
-            server: server.clone(),
+            server: Some(server.clone()),
+            local_inline: None,
+            queued_at: tua_core::profile::enabled().then(Instant::now),
             message: Value::Null,
             method: INTERNAL_WORKSPACE_WARM.to_owned(),
             cancelled: Arc::clone(&cancelled),
@@ -315,6 +415,7 @@ impl RequestScheduler {
                 generation: None,
                 cancelled,
                 coalesce_key: None,
+                newest_wins_key: None,
                 waiters: Vec::new(),
                 slow_diagnostics: None,
                 warm_work: Some(work),
@@ -419,9 +520,23 @@ impl RequestScheduler {
     }
 
     pub(super) fn finish(&mut self, server: &mut LspServer, result: WorkerResult) -> Vec<Value> {
+        let speculative_active = self.has_speculative_in_flight();
         let Some(job) = self.remove_job(result.job_id) else {
             return Vec::new();
         };
+        let finish_kind = if job.warm_work.is_some() {
+            "workspaceWarm"
+        } else if job.slow_diagnostics.is_some() {
+            "slowDiagnostics"
+        } else if job.newest_wins_key.is_some() {
+            "inline"
+        } else {
+            "request"
+        };
+        let _finish_profile = (tua_core::profile::enabled()
+            && speculative_active
+            && finish_kind != "inline")
+            .then(|| tua_core::profile::span(format!("inline.coordinator.finish {finish_kind}")));
         if let Some(warm_result) = result.warm_result {
             return server.finish_workspace_warm(
                 &warm_result.work,
@@ -492,6 +607,26 @@ impl RequestScheduler {
         self.jobs.len()
     }
 
+    #[cfg(test)]
+    pub(super) fn speculative_pending_count(&self) -> usize {
+        self.speculative_lane.pending_count()
+    }
+
+    pub(super) fn take_speculative_results(&self) -> Vec<WorkerResult> {
+        self.speculative_lane.results.try_iter().collect()
+    }
+
+    pub(super) fn speculative_has_priority(&self, now: Instant) -> bool {
+        !self.newest_wins_jobs.is_empty()
+            && self
+                .speculative_priority_until
+                .is_some_and(|deadline| now < deadline)
+    }
+
+    pub(super) fn has_speculative_in_flight(&self) -> bool {
+        !self.newest_wins_jobs.is_empty()
+    }
+
     fn internal_background_job_count(&self) -> usize {
         self.jobs
             .values()
@@ -516,11 +651,39 @@ impl RequestScheduler {
         matches!(versions.get(uri), Some(version) if *version != Some(document_version))
     }
 
+    fn cancel_superseded_request(&mut self, key: &str) -> Vec<Value> {
+        let Some(job_id) = self.newest_wins_jobs.remove(key) else {
+            return Vec::new();
+        };
+        let Some(job) = self.remove_job(job_id) else {
+            return Vec::new();
+        };
+
+        job.cancelled.store(true, Ordering::Release);
+        job.waiters
+            .into_iter()
+            .filter(|waiter| !waiter.cancelled)
+            .map(|waiter| {
+                self.request_jobs.remove(&request_id_key(&waiter.id));
+                error_response(
+                    waiter.id,
+                    REQUEST_CANCELLED,
+                    "request superseded by a newer inline completion".to_owned(),
+                )
+            })
+            .collect()
+    }
+
     fn remove_job(&mut self, job_id: u64) -> Option<InFlightJob> {
         let job = self.jobs.remove(&job_id)?;
         if let Some(key) = &job.coalesce_key {
             if self.coalesced_jobs.get(key) == Some(&job_id) {
                 self.coalesced_jobs.remove(key);
+            }
+        }
+        if let Some(key) = &job.newest_wins_key {
+            if self.newest_wins_jobs.get(key) == Some(&job_id) {
+                self.newest_wins_jobs.remove(key);
             }
         }
 
@@ -551,80 +714,8 @@ fn spawn_worker_lane(
                 let Ok(job) = job else {
                     break;
                 };
-                let WorkerJob {
-                    job_id,
-                    mut server,
-                    message,
-                    method,
-                    cancelled,
-                    warm_work,
-                } = job;
-                let (response, warm_result) = if let Some(work) = warm_work {
-                    let succeeded = if cancelled.load(Ordering::Acquire) {
-                        false
-                    } else {
-                        panic::catch_unwind(AssertUnwindSafe(|| match &work {
-                            WorkspaceWarmWork::Files { files, .. } => {
-                                let mut completed = true;
-                                for (path, priority) in files {
-                                    if cancelled.load(Ordering::Acquire) {
-                                        completed = false;
-                                        break;
-                                    }
-                                    let _ = server.analysis.warm_file(path, *priority);
-                                }
-                                completed
-                            }
-                            WorkspaceWarmWork::Snapshot { .. } => {
-                                let _ = server
-                                    .analysis
-                                    .snapshot(&server.workspace_folders, &server.settings);
-                                true
-                            }
-                        }))
-                        .unwrap_or(false)
-                    };
-                    let analysis =
-                        matches!(work, WorkspaceWarmWork::Files { .. }).then_some(server.analysis);
-
-                    (
-                        Value::Null,
-                        Some(WorkspaceWarmResult {
-                            work,
-                            analysis,
-                            succeeded,
-                        }),
-                    )
-                } else if cancelled.load(Ordering::Acquire) {
-                    (
-                        error_response(
-                            Value::Null,
-                            REQUEST_CANCELLED,
-                            "request cancelled".to_owned(),
-                        ),
-                        None,
-                    )
-                } else {
-                    let response = panic::catch_unwind(AssertUnwindSafe(|| {
-                        execute_worker_request(&mut server, message, &method)
-                    }))
-                    .unwrap_or_else(|_| {
-                        error_response(
-                            Value::Null,
-                            -32603,
-                            "language server request worker panicked".to_owned(),
-                        )
-                    });
-
-                    (response, None)
-                };
-
-                let event = ServerEvent::RequestFinished(Box::new(WorkerResult {
-                    job_id,
-                    response,
-                    warm_result,
-                }));
-                let _ = event_tx.send(event);
+                let result = run_worker_job(job);
+                let _ = event_tx.send(ServerEvent::RequestFinished(Box::new(result)));
             })
             .expect("language server request worker should start");
     }
@@ -632,7 +723,204 @@ fn spawn_worker_lane(
     tx
 }
 
-fn execute_worker_request(server: &mut LspServer, message: Value, method: &str) -> Value {
+impl SpeculativeLane {
+    fn enqueue(&self, key: String, job: WorkerJob) -> Result<Option<WorkerJob>, ()> {
+        let mut queue = self
+            .state
+            .queue
+            .lock()
+            .expect("speculative worker queue lock poisoned");
+        if queue.stopped {
+            return Err(());
+        }
+
+        let replaced = queue.jobs.insert(key.clone(), job);
+        if replaced.is_none() {
+            queue.order.push_back(key);
+        }
+        self.state.ready.notify_one();
+
+        Ok(replaced)
+    }
+
+    #[cfg(test)]
+    fn pending_count(&self) -> usize {
+        self.state
+            .queue
+            .lock()
+            .expect("speculative worker queue lock poisoned")
+            .jobs
+            .len()
+    }
+}
+
+impl Drop for SpeculativeLane {
+    fn drop(&mut self) {
+        let mut queue = self
+            .state
+            .queue
+            .lock()
+            .expect("speculative worker queue lock poisoned");
+        queue.stopped = true;
+        self.state.ready.notify_all();
+    }
+}
+
+fn spawn_speculative_lane(event_tx: SyncSender<ServerEvent>) -> SpeculativeLane {
+    let state = Arc::new(SpeculativeLaneState {
+        queue: Mutex::new(SpeculativeQueue::default()),
+        ready: Condvar::new(),
+    });
+    let worker_state = Arc::clone(&state);
+    let (result_tx, results) = mpsc::channel();
+
+    thread::Builder::new()
+        .name("tua-lsp-speculative-0".to_owned())
+        .stack_size(REQUEST_WORKER_STACK_BYTES)
+        .spawn(move || loop {
+            let job = {
+                let mut queue = worker_state
+                    .queue
+                    .lock()
+                    .expect("speculative worker queue lock poisoned");
+                while queue.order.is_empty() && !queue.stopped {
+                    queue = worker_state
+                        .ready
+                        .wait(queue)
+                        .expect("speculative worker queue lock poisoned");
+                }
+                if queue.stopped {
+                    break;
+                }
+                let key = queue
+                    .order
+                    .pop_front()
+                    .expect("non-empty speculative queue should have a key");
+                queue
+                    .jobs
+                    .remove(&key)
+                    .expect("speculative queue key should have a job")
+            };
+
+            if result_tx.send(run_worker_job(job)).is_err() {
+                break;
+            }
+            let _ = event_tx.send(ServerEvent::SpeculativeReady);
+        })
+        .expect("speculative request worker should start");
+
+    SpeculativeLane { state, results }
+}
+
+fn run_worker_job(job: WorkerJob) -> WorkerResult {
+    let WorkerJob {
+        job_id,
+        queued_at,
+        mut server,
+        local_inline,
+        message,
+        method,
+        cancelled,
+        warm_work,
+    } = job;
+    if let Some(queued_at) = queued_at {
+        tua_core::profile::record_duration(format!("lsp.queue {method}"), queued_at.elapsed());
+    }
+    let (response_value, warm_result) = if let Some(work) = warm_work {
+        let worker_server = server
+            .take()
+            .expect("workspace warm job should carry a server clone");
+        let succeeded = if cancelled.load(Ordering::Acquire) {
+            false
+        } else {
+            panic::catch_unwind(AssertUnwindSafe(|| match &work {
+                WorkspaceWarmWork::Files { files, .. } => {
+                    let mut completed = true;
+                    for (path, priority) in files {
+                        if cancelled.load(Ordering::Acquire) {
+                            completed = false;
+                            break;
+                        }
+                        let _ = worker_server.analysis.warm_file(path, *priority);
+                    }
+                    completed
+                }
+                WorkspaceWarmWork::Snapshot { .. } => {
+                    let _ = worker_server
+                        .analysis
+                        .snapshot(&worker_server.workspace_folders, &worker_server.settings);
+                    true
+                }
+            }))
+            .unwrap_or(false)
+        };
+        let analysis =
+            matches!(work, WorkspaceWarmWork::Files { .. }).then_some(worker_server.analysis);
+
+        (
+            Value::Null,
+            Some(WorkspaceWarmResult {
+                work,
+                analysis,
+                succeeded,
+            }),
+        )
+    } else if cancelled.load(Ordering::Acquire) {
+        (
+            error_response(
+                Value::Null,
+                REQUEST_CANCELLED,
+                "request cancelled".to_owned(),
+            ),
+            None,
+        )
+    } else if let Some(work) = local_inline {
+        let id = message.get("id").cloned().unwrap_or(Value::Null);
+        let response = panic::catch_unwind(AssertUnwindSafe(|| {
+            #[cfg(test)]
+            run_speculative_test_controls(&message);
+            work.execute(&cancelled)
+        }))
+        .map(|result| response(id, result))
+        .unwrap_or_else(|_| {
+            error_response(
+                Value::Null,
+                -32603,
+                "language server speculative request worker panicked".to_owned(),
+            )
+        });
+        (response, None)
+    } else {
+        let server = server
+            .as_mut()
+            .expect("ordinary worker job should carry a server clone");
+        let response = panic::catch_unwind(AssertUnwindSafe(|| {
+            execute_worker_request(server, message, &method, &cancelled)
+        }))
+        .unwrap_or_else(|_| {
+            error_response(
+                Value::Null,
+                -32603,
+                "language server request worker panicked".to_owned(),
+            )
+        });
+
+        (response, None)
+    };
+
+    WorkerResult {
+        job_id,
+        response: response_value,
+        warm_result,
+    }
+}
+
+fn execute_worker_request(
+    server: &mut LspServer,
+    message: Value,
+    method: &str,
+    cancelled: &AtomicBool,
+) -> Value {
     if method == INTERNAL_SLOW_DIAGNOSTICS {
         let id = message.get("id").cloned().unwrap_or(Value::Null);
         let diagnostics = document_uri(&message)
@@ -660,7 +948,25 @@ fn execute_worker_request(server: &mut LspServer, message: Value, method: &str) 
         });
     }
 
-    server.execute_request(message, method)
+    server.execute_request_with_cancellation(message, method, cancelled)
+}
+
+#[cfg(test)]
+fn run_speculative_test_controls(message: &Value) {
+    let params = message.get("params");
+    if params
+        .and_then(|params| params.get("testPanic"))
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+    {
+        panic!("requested speculative worker test panic");
+    }
+    if let Some(delay_ms) = params
+        .and_then(|params| params.get("testDelayMs"))
+        .and_then(Value::as_u64)
+    {
+        thread::sleep(std::time::Duration::from_millis(delay_ms));
+    }
 }
 
 fn request_runs_in_background(method: &str) -> bool {

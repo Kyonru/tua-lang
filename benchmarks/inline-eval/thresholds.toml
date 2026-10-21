@@ -2,12 +2,13 @@
 # or external evaluation, then run each gate once. Changing it after seeing
 # gate results spends the held-out data.
 #
-# FROZEN CANDIDATE: the limits were chosen before held-out data, and the Phase
-# 1 configuration below was selected on the tuning set. On that set, both
-# languages exceed 0.72 correct-prefix precision, stay below 0.35 wrong/saved,
-# save at least 0.14 characters per eligible position, and produce at least
-# 136 suggestions. Commit this file before running either quality gate; do not
-# change it after seeing gate results.
+# PROVISIONAL, UNSPENT CANDIDATE: the held-out and external sets have not been
+# run. The exact production backend on the tuning set currently reaches 0.823
+# Lua / 0.707 Tua correct-prefix precision and 0.236 / 0.094 characters saved
+# per eligible position. Tua is therefore still below the 0.10 quality floor;
+# these limits are not a claim that Phase 1 passes. Commit/freeze the final
+# candidate before running either quality gate, then do not change it after
+# seeing those results.
 #
 # Each gate set names the languages that dataset is intended to measure. A
 # missing set, backend, configured language, eligible request, minimum number
@@ -16,9 +17,8 @@
 # The backend that has to pass.
 backend = "phase1"
 
-# The exact Phase 1 configuration evaluated by quality gates. These values are
-# still provisional and must be frozen from the tuning set before either gate
-# is run.
+# The exact Phase 1 configuration evaluated by quality gates. These values
+# must match the shipping policy. The evaluator rejects a mismatched table.
 [phase1]
 recall_variant = "common-prefix"
 contexts = ["open-paren", "comma", "operator", "whitespace", "statement-prefix", "identifier", "other"]
@@ -41,12 +41,12 @@ min_correct_prefix_precision = 0.60
 max_wrong_to_saved_ratio = 1.0
 # A floor on usefulness, averaged over every eligible request.
 min_chars_saved_per_eligible = 0.10
-# Server-side time for one request.
-max_latency_p95_ms = 10.0
+# Core backend time for one request; server/request latency is gated separately.
+max_backend_latency_p95_ms = 10.0
 
 [sets.external.languages.lua]
 min_suggestions = 100
 min_correct_prefix_precision = 0.60
 max_wrong_to_saved_ratio = 1.0
 min_chars_saved_per_eligible = 0.10
-max_latency_p95_ms = 10.0
+max_backend_latency_p95_ms = 10.0

@@ -423,6 +423,146 @@
     "phase1": {
       "overall": {
         "eligible": 2053,
+        "suggested": 214,
+        "exact": 14,
+        "template_match": 38,
+        "correct_prefix": 185,
+        "first_token": 186,
+        "first_three_tokens": 0,
+        "chars_saved": 488,
+        "incorrect_chars": 80
+      },
+      "abstain": {
+        "eligible": 132,
+        "suggested": 0,
+        "exact": 0,
+        "template_match": 0,
+        "correct_prefix": 0,
+        "first_token": 0,
+        "first_three_tokens": 0,
+        "chars_saved": 0,
+        "incorrect_chars": 0
+      },
+      "by_language": {
+        "lua": {
+          "eligible": 1039,
+          "suggested": 144,
+          "exact": 9,
+          "template_match": 27,
+          "correct_prefix": 132,
+          "first_token": 136,
+          "first_three_tokens": 0,
+          "chars_saved": 343,
+          "incorrect_chars": 19
+        },
+        "tua": {
+          "eligible": 1014,
+          "suggested": 70,
+          "exact": 5,
+          "template_match": 11,
+          "correct_prefix": 53,
+          "first_token": 50,
+          "first_three_tokens": 0,
+          "chars_saved": 145,
+          "incorrect_chars": 61
+        }
+      },
+      "by_scenario": {
+        "auto-close": {
+          "eligible": 151,
+          "suggested": 8,
+          "exact": 2,
+          "template_match": 2,
+          "correct_prefix": 8,
+          "first_token": 8,
+          "first_three_tokens": 0,
+          "chars_saved": 14,
+          "incorrect_chars": 0
+        },
+        "cut": {
+          "eligible": 951,
+          "suggested": 81,
+          "exact": 1,
+          "template_match": 16,
+          "correct_prefix": 68,
+          "first_token": 68,
+          "first_three_tokens": 0,
+          "chars_saved": 187,
+          "incorrect_chars": 9
+        },
+        "edit": {
+          "eligible": 951,
+          "suggested": 125,
+          "exact": 11,
+          "template_match": 20,
+          "correct_prefix": 109,
+          "first_token": 110,
+          "first_three_tokens": 0,
+          "chars_saved": 287,
+          "incorrect_chars": 71
+        }
+      },
+      "by_prefix": {
+        "partial-1": {
+          "eligible": 385,
+          "suggested": 30,
+          "exact": 1,
+          "template_match": 1,
+          "correct_prefix": 26,
+          "first_token": 26,
+          "first_three_tokens": 0,
+          "chars_saved": 100,
+          "incorrect_chars": 22
+        },
+        "partial-2": {
+          "eligible": 344,
+          "suggested": 36,
+          "exact": 3,
+          "template_match": 3,
+          "correct_prefix": 32,
+          "first_token": 32,
+          "first_three_tokens": 0,
+          "chars_saved": 90,
+          "incorrect_chars": 22
+        },
+        "partial-3": {
+          "eligible": 286,
+          "suggested": 49,
+          "exact": 3,
+          "template_match": 11,
+          "correct_prefix": 45,
+          "first_token": 45,
+          "first_three_tokens": 0,
+          "chars_saved": 131,
+          "incorrect_chars": 22
+        },
+        "partial-near": {
+          "eligible": 203,
+          "suggested": 32,
+          "exact": 0,
+          "template_match": 8,
+          "correct_prefix": 29,
+          "first_token": 30,
+          "first_three_tokens": 0,
+          "chars_saved": 42,
+          "incorrect_chars": 5
+        },
+        "token-end": {
+          "eligible": 835,
+          "suggested": 67,
+          "exact": 7,
+          "template_match": 15,
+          "correct_prefix": 53,
+          "first_token": 53,
+          "first_three_tokens": 0,
+          "chars_saved": 125,
+          "incorrect_chars": 9
+        }
+      }
+    },
+    "phase1-prototype": {
+      "overall": {
+        "eligible": 2053,
         "suggested": 311,
         "exact": 140,
         "template_match": 180,

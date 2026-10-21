@@ -76,6 +76,12 @@ From there you can:
   labels, and literals.
 - Zero-delay quick suggestions for Tua files using VS Code's normal completion
   flow.
+- Opt-in deterministic ghost text from unique statement snippets and
+  conservative repeated-line patterns in the current file. It stays local,
+  runs before the separately opted-in Ollama fallback, and does not build a
+  project corpus or use cross-project history in this first phase. A local
+  request that has not answered within 250 ms after the 65 ms debounce is
+  cancelled and does not start Ollama.
 - Hover, completion, signature help, definition, references, rename, document
   symbols, workspace symbols, document highlight, call hierarchy, code lenses,
   and range/full/delta semantic tokens.
@@ -201,6 +207,13 @@ Important VS Code settings:
 - `tua.completion.sequenceRanking.enabled` and
   `tua.completion.multiToken.enabled`: experimental completion lanes controlled
   together by `Tua: Toggle Experimental Completions`.
+- `tua.completion.inline.enabled`: opts into experimental deterministic inline
+  completion. `tua.completion.inline.sources.semantic` and
+  `tua.completion.inline.sources.currentFile` independently control its two
+  Phase 1 sources.
+- `tua.completion.multiToken.allowModelIntegration`: separately opts into the
+  loopback Ollama fallback. Deterministic completion runs first when both are
+  enabled.
 
 Project behavior still comes primarily from `tua.toml`, and the extension
 attaches to that file directly for configuration authoring.

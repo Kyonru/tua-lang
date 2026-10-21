@@ -11,8 +11,12 @@ const {
   loopbackGenerateUrl,
   touchCache,
 } = require("./ollama-client");
+const { createInlineReplayCapture } = require("./inline-replay-capture");
 
 const STATS_KEY = "tua.ollamaCompletionStats.v1";
+const LOCAL_INLINE_METHOD = "tua/localInlineCompletion";
+const DEBOUNCE_MS = 65;
+const LOCAL_REQUEST_TIMEOUT_MS = 250;
 const EMPTY_STATS = Object.freeze({
   requests: 0,
   cancellations: 0,
@@ -24,17 +28,25 @@ const EMPTY_STATS = Object.freeze({
   acceptedCharacters: 0,
 });
 
-function registerOllamaCompletion(options) {
-  const controller = new OllamaCompletionController(options);
+function registerInlineCompletion(options) {
+  const controller = new InlineCompletionController(options);
   controller.register();
   return controller;
 }
 
-class OllamaCompletionController {
+class InlineCompletionController {
   constructor(options) {
     this.context = options.context;
     this.getClient = options.getClient;
     this.appendOutputLine = options.appendOutputLine;
+    this.localRequestTimeoutMs =
+      options.localRequestTimeoutMs ?? LOCAL_REQUEST_TIMEOUT_MS;
+    this.scheduleLocalTimeout = options.scheduleLocalTimeout || setTimeout;
+    this.clearLocalTimeout = options.clearLocalTimeout || clearTimeout;
+    this.replayCapture = createInlineReplayCapture({
+      appendOutputLine: this.appendOutputLine,
+      env: options.env,
+    });
     this.inFlight = undefined;
     this.sequence = 0;
     this.cache = new Map();
@@ -57,16 +69,20 @@ class OllamaCompletionController {
             this.provide(document, position, completionContext, token),
         },
       ),
-      vscode.workspace.onDidChangeTextDocument(() => this.cancel("edit")),
+      vscode.workspace.onDidChangeTextDocument((event) => {
+        this.replayCapture?.noteEdit(event.document);
+        this.cancel("edit");
+      }),
       vscode.window.onDidChangeTextEditorSelection(() => this.cancel("cursor")),
       vscode.workspace.onDidChangeConfiguration((event) => {
         if (
+          event.affectsConfiguration("tua.completion.inline") ||
           event.affectsConfiguration("tua.completion.multiToken.allowModelIntegration") ||
           event.affectsConfiguration("tua.completion.ollama")
         ) {
           this.cache.clear();
           this.cancel("configuration");
-          this.updateStatus(this.enabled() ? "ready" : "disabled");
+          this.updateStatus(this.modelEnabled() ? "ready" : "disabled");
         }
       }),
       vscode.commands.registerCommand(COMMANDS.toggleOllamaCompletions, () => this.toggle()),
@@ -79,12 +95,17 @@ class OllamaCompletionController {
 
   dispose() {
     this.cancel("dispose");
+    this.replayCapture?.dispose();
     for (const disposable of this.disposables.splice(0)) {
       disposable.dispose();
     }
   }
 
-  enabled() {
+  localEnabled() {
+    return vscode.workspace.getConfiguration("tua").get("completion.inline.enabled", false);
+  }
+
+  modelEnabled() {
     return vscode.workspace
       .getConfiguration("tua")
       .get("completion.multiToken.allowModelIntegration", false);
@@ -110,15 +131,190 @@ class OllamaCompletionController {
 
   async provide(document, position, completionContext, token) {
     if (
-      !this.enabled() ||
+      (!this.localEnabled() && !this.modelEnabled()) ||
       !this.getClient() ||
-      vscode.window.activeTextEditor?.selections?.length !== 1 ||
-      completionContext.selectedCompletionInfo
+      vscode.window.activeTextEditor?.selections?.length !== 1
     ) {
-      this.updateStatus(this.enabled() ? "ready" : "disabled");
+      this.updateStatus(this.modelEnabled() ? "ready" : "disabled");
       return undefined;
     }
 
+    this.cancel("newer_request");
+    const requestId = ++this.sequence;
+    const tokenSource = new vscode.CancellationTokenSource();
+    const abortController = new AbortController();
+    this.inFlight = { abortController, requestId, tokenSource };
+    const cancellation = token.onCancellationRequested(() => {
+      if (this.inFlight?.requestId === requestId) {
+        this.cancel("provider");
+      }
+    });
+    const requestedVersion = document.version;
+
+    try {
+      if (!(await this.debounce(requestId, tokenSource.token))) {
+        return undefined;
+      }
+
+      if (this.localEnabled()) {
+        this.replayCapture?.record(document, position, completionContext);
+        const local = await this.provideLocalWithinTimeout(
+          document,
+          position,
+          completionContext,
+          requestedVersion,
+          requestId,
+          tokenSource.token,
+        );
+        if (local.status === "candidate") {
+          return [local.item];
+        }
+        if (local.status === "transient") {
+          return undefined;
+        }
+      }
+
+      if (
+        !this.modelEnabled() ||
+        completionContext.selectedCompletionInfo ||
+        !this.requestIsCurrent(document, requestedVersion, requestId, tokenSource.token)
+      ) {
+        return undefined;
+      }
+
+      const ollama = await this.provideOllama(
+        document,
+        position,
+        requestedVersion,
+        requestId,
+        tokenSource.token,
+        abortController,
+      );
+      return ollama ? [ollama] : undefined;
+    } catch (error) {
+      if (isSilentLocalError(error)) {
+        return undefined;
+      }
+      this.appendOutputLine?.(`Tua inline completion unavailable: ${formatError(error)}`);
+      return undefined;
+    } finally {
+      cancellation.dispose();
+      tokenSource.dispose();
+      if (this.inFlight?.requestId === requestId) {
+        this.inFlight = undefined;
+      }
+    }
+  }
+
+  async provideLocalWithinTimeout(
+    document,
+    position,
+    completionContext,
+    requestedVersion,
+    requestId,
+    parentToken,
+  ) {
+    const tokenSource = new vscode.CancellationTokenSource();
+    let abstain;
+    const abstention = new Promise((resolve) => {
+      abstain = () => resolve({ status: "transient" });
+    });
+    const cancel = () => {
+      tokenSource.cancel();
+      abstain();
+    };
+    const parentCancellation = parentToken.onCancellationRequested(cancel);
+    const timeout = this.scheduleLocalTimeout(cancel, this.localRequestTimeoutMs);
+
+    try {
+      if (parentToken.isCancellationRequested) {
+        cancel();
+      }
+      return await Promise.race([
+        this.provideLocal(
+          document,
+          position,
+          completionContext,
+          requestedVersion,
+          requestId,
+          tokenSource.token,
+        ),
+        abstention,
+      ]);
+    } finally {
+      this.clearLocalTimeout(timeout);
+      parentCancellation.dispose();
+      tokenSource.dispose();
+    }
+  }
+
+  async provideLocal(
+    document,
+    position,
+    completionContext,
+    requestedVersion,
+    requestId,
+    token,
+  ) {
+    const params = {
+      textDocument: { uri: document.uri.toString() },
+      position: { line: position.line, character: position.character },
+      documentVersion: requestedVersion,
+    };
+    const selected = completionContext.selectedCompletionInfo;
+    if (selected) {
+      params.selectedCompletion = {
+        text: selected.text,
+        range: protocolRange(selected.range),
+      };
+    }
+
+    let response;
+    try {
+      response = await this.getClient().sendRequest(LOCAL_INLINE_METHOD, params, token);
+    } catch (error) {
+      const status = localErrorStatus(error);
+      if (status) {
+        return { status };
+      }
+      throw error;
+    }
+
+    if (!response) {
+      return { status: "empty" };
+    }
+    if (
+      response.documentVersion !== requestedVersion ||
+      !this.requestIsCurrent(document, requestedVersion, requestId, token)
+    ) {
+      return { status: "transient" };
+    }
+
+    const candidate = Array.isArray(response.items) ? response.items[0] : undefined;
+    if (!candidate?.insertText || !candidate.range) {
+      return { status: "empty" };
+    }
+    if (
+      selected &&
+      (candidate.insertText === selected.text || !candidate.insertText.startsWith(selected.text))
+    ) {
+      return { status: "empty" };
+    }
+
+    return {
+      status: "candidate",
+      item: this.inlineItem(candidate.insertText, candidate.range, candidate.isSnippet, false),
+    };
+  }
+
+  async provideOllama(
+    document,
+    position,
+    requestedVersion,
+    requestId,
+    token,
+    abortController,
+  ) {
     const config = this.configuration();
     let endpoint;
     try {
@@ -128,18 +324,12 @@ class OllamaCompletionController {
       return undefined;
     }
 
-    this.cancel("newer_request");
-    const requestId = ++this.sequence;
-    const abortController = new AbortController();
-    this.inFlight = { abortController, requestId };
-    const cancellation = token.onCancellationRequested(() => this.cancel("provider"));
     let phase = "language_server";
-
     try {
       const params = {
         textDocument: { uri: document.uri.toString() },
-        position,
-        documentVersion: document.version,
+        position: { line: position.line, character: position.character },
+        documentVersion: requestedVersion,
         contextBytes: Math.min(config.contextTokens * 3, 32 * 1024),
       };
       const semanticContext = await this.getClient().sendRequest(
@@ -149,16 +339,15 @@ class OllamaCompletionController {
       );
       if (
         !semanticContext ||
-        semanticContext.documentVersion !== document.version ||
-        requestId !== this.sequence ||
-        token.isCancellationRequested
+        semanticContext.documentVersion !== requestedVersion ||
+        !this.requestIsCurrent(document, requestedVersion, requestId, token)
       ) {
         return undefined;
       }
 
       const cacheKey = JSON.stringify([
         document.uri.toString(),
-        document.version,
+        requestedVersion,
         position.line,
         position.character,
         semanticContext.contextId,
@@ -168,29 +357,34 @@ class OllamaCompletionController {
       if (cached) {
         touchCache(this.cache, cacheKey, cached);
         await this.incrementStat("shownSuggestions");
-        return this.inlineItem(cached.insertText, cached.range);
+        return this.inlineItem(cached.insertText, cached.range, false, true);
       }
 
       await this.incrementStat("requests");
       this.updateStatus("loading");
       phase = "ollama";
-      const response = await generate(endpoint, {
-        model: config.model,
-        prompt: semanticContext.prompt,
-        suffix: semanticContext.suffix,
-        stream: false,
-        keep_alive: config.keepAlive,
-        options: {
-          temperature: 0.1,
-          top_p: 0.9,
-          num_ctx: config.contextTokens,
-          num_predict: generationTokenBudget(
-            config.maxTokens,
-            semanticContext.completionScope,
-          ),
-          stop: STOP_TOKENS,
+      const response = await generate(
+        endpoint,
+        {
+          model: config.model,
+          prompt: semanticContext.prompt,
+          suffix: semanticContext.suffix,
+          stream: false,
+          keep_alive: config.keepAlive,
+          options: {
+            temperature: 0.1,
+            top_p: 0.9,
+            num_ctx: config.contextTokens,
+            num_predict: generationTokenBudget(
+              config.maxTokens,
+              semanticContext.completionScope,
+            ),
+            stop: STOP_TOKENS,
+          },
         },
-      }, config.timeoutMs, abortController.signal);
+        config.timeoutMs,
+        abortController.signal,
+      );
 
       const candidate = typeof response.response === "string" ? response.response : "";
       if (!candidate) {
@@ -215,7 +409,8 @@ class OllamaCompletionController {
       if (
         validation?.status !== "accepted" ||
         !validation.insertText ||
-        validation.documentVersion !== document.version
+        validation.documentVersion !== requestedVersion ||
+        !this.requestIsCurrent(document, requestedVersion, requestId, token)
       ) {
         await this.incrementStat("validationRejections");
         this.updateStatus("rejected", validation?.reason || "validation rejected");
@@ -226,11 +421,11 @@ class OllamaCompletionController {
       touchCache(this.cache, cacheKey, value);
       await this.incrementStat("shownSuggestions");
       this.updateStatus("ready");
-      return this.inlineItem(value.insertText, value.range);
+      return this.inlineItem(value.insertText, value.range, false, true);
     } catch (error) {
       if (isCancellationError(error)) {
         await this.incrementStat("cancellations");
-        this.updateStatus(this.enabled() ? "ready" : "disabled");
+        this.updateStatus(this.modelEnabled() ? "ready" : "disabled");
         return undefined;
       }
       if (phase === "language_server") {
@@ -248,17 +443,40 @@ class OllamaCompletionController {
       }
       this.updateStatus("missing_server", formatError(error));
       return undefined;
-    } finally {
-      cancellation.dispose();
-      if (this.inFlight?.requestId === requestId) {
-        this.inFlight = undefined;
-      }
     }
   }
 
-  inlineItem(insertText, range) {
+  requestIsCurrent(document, requestedVersion, requestId, token) {
+    return (
+      requestId === this.sequence &&
+      document.version === requestedVersion &&
+      !token.isCancellationRequested
+    );
+  }
+
+  debounce(requestId, token) {
+    return new Promise((resolve) => {
+      const finish = (ready) => {
+        if (this.inFlight?.requestId === requestId) {
+          this.inFlight.finishDebounce = undefined;
+          this.inFlight.debounceTimer = undefined;
+        }
+        resolve(ready);
+      };
+      const timer = setTimeout(
+        () => finish(requestId === this.sequence && !token.isCancellationRequested),
+        DEBOUNCE_MS,
+      );
+      if (this.inFlight?.requestId === requestId) {
+        this.inFlight.debounceTimer = timer;
+        this.inFlight.finishDebounce = finish;
+      }
+    });
+  }
+
+  inlineItem(insertText, range, isSnippet, recordOllamaAcceptance) {
     const item = new vscode.InlineCompletionItem(
-      insertText,
+      isSnippet ? new vscode.SnippetString(insertText) : insertText,
       new vscode.Range(
         range.start.line,
         range.start.character,
@@ -266,17 +484,19 @@ class OllamaCompletionController {
         range.end.character,
       ),
     );
-    item.command = {
-      command: COMMANDS.ollamaCompletionAccepted,
-      title: "Record Tua local completion acceptance",
-      arguments: [insertText.length],
-    };
+    if (recordOllamaAcceptance) {
+      item.command = {
+        command: COMMANDS.ollamaCompletionAccepted,
+        title: "Record Tua local completion acceptance",
+        arguments: [insertText.length],
+      };
+    }
     return item;
   }
 
   async toggle() {
     const configuration = vscode.workspace.getConfiguration("tua");
-    const enabled = this.enabled();
+    const enabled = this.modelEnabled();
     if (!enabled) {
       const consent = await vscode.window.showWarningMessage(
         "Enable local Ollama completions? Tua will send bounded source excerpts and semantic type context to the loopback Ollama server configured on this machine. No source is recorded in Tua completion statistics.",
@@ -331,7 +551,7 @@ class OllamaCompletionController {
       vscode.window.showInformationMessage(`Ollama model ${config.model} is warm and ready.`);
     } catch (error) {
       if (isCancellationError(error)) {
-        this.updateStatus(this.enabled() ? "ready" : "disabled");
+        this.updateStatus(this.modelEnabled() ? "ready" : "disabled");
         return;
       }
       if (error?.statusCode === 404) {
@@ -354,7 +574,12 @@ class OllamaCompletionController {
     if (!this.inFlight) {
       return;
     }
-    this.inFlight.abortController.abort();
+    this.inFlight.tokenSource?.cancel();
+    this.inFlight.abortController?.abort();
+    if (this.inFlight.debounceTimer) {
+      clearTimeout(this.inFlight.debounceTimer);
+      this.inFlight.finishDebounce?.(false);
+    }
     this.inFlight = undefined;
   }
 
@@ -438,7 +663,39 @@ class OllamaCompletionController {
   }
 }
 
+function protocolRange(range) {
+  return {
+    start: { line: range.start.line, character: range.start.character },
+    end: { line: range.end.line, character: range.end.character },
+  };
+}
+
+function isSilentLocalError(error) {
+  return localErrorStatus(error) !== undefined;
+}
+
+function localErrorStatus(error) {
+  const code = Number(error?.code);
+  const message = String(error?.message || "");
+  if (code === -32601) {
+    return "unsupported";
+  }
+  if (
+    isCancellationError(error) ||
+    code === -32802 ||
+    (code === -32000 && /capacity exceeded/i.test(message))
+  ) {
+    return "transient";
+  }
+  return undefined;
+}
+
 module.exports = {
+  DEBOUNCE_MS,
   EMPTY_STATS,
-  registerOllamaCompletion,
+  InlineCompletionController,
+  LOCAL_REQUEST_TIMEOUT_MS,
+  isSilentLocalError,
+  protocolRange,
+  registerInlineCompletion,
 };

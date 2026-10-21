@@ -222,6 +222,15 @@ representative-benchmark-smoke: representative-benchmark-test ## Gate completion
 	TUA_REPRESENTATIVE_PROFILE_OUT=$${TUA_REPRESENTATIVE_PROFILE_OUT:-target/tua-speed/representative-profile-smoke.json} \
 	node editors/vscode/scripts/lsp-representative-profile.js $(RELEASE_TUA)
 
+.PHONY: representative-phase1-gate
+representative-phase1-gate: ## Run the representative Phase 1 inline gate with strict internal and end-to-end latency budgets.
+	TUA_REPRESENTATIVE_INLINE_SERVER_P95_BUDGET_MS=10 \
+	TUA_REPRESENTATIVE_INLINE_WORKER_P95_BUDGET_MS=10 \
+	TUA_REPRESENTATIVE_INLINE_BACKEND_P95_BUDGET_MS=10 \
+	TUA_REPRESENTATIVE_INLINE_E2E_P95_BUDGET_MS=1500 \
+	TUA_REPRESENTATIVE_PROFILE_OUT=target/tua-speed/representative-phase1-gate.json \
+	$(MAKE) profile-representative
+
 .PHONY: profile-examples
 profile-examples: ## Profile CLI and LSP speed across every bundled example project.
 	$(CARGO) build --release --package tua-cli
@@ -281,6 +290,14 @@ inline-eval-smoke: ## Check the inline-completion evaluator against its committe
 .PHONY: inline-eval-smoke-update
 inline-eval-smoke-update: ## Rewrite the inline-completion smoke expectations after an intended change.
 	$(INLINE_EVAL_DEBUG) --manifest $(INLINE_EVAL_MANIFEST) --set smoke --max-positions 0 --write-expected $(INLINE_EVAL_SMOKE_EXPECTED)
+
+.PHONY: inline-eval-phase-gate-check
+inline-eval-phase-gate-check: ## Check recorded Phase 1 prerequisites without refreshing expensive evidence.
+	$(INLINE_EVAL_DEBUG) --check-phase-gate benchmarks/inline-eval/phase1-gate.toml
+
+.PHONY: inline-eval-phase-gate
+inline-eval-phase-gate: representative-phase1-gate ## Refresh performance evidence, then check all Phase 1 prerequisites.
+	$(MAKE) inline-eval-phase-gate-check
 
 .PHONY: inline-eval-holdout
 inline-eval-holdout: ## Gate inline completion on the held-out Tua projects and frozen fixtures against committed thresholds.

@@ -124,6 +124,20 @@ pub fn span_for_path(name: &'static str, path: &std::path::Path) -> ProfileSpan 
     span(format!("{name} {}", path.display()))
 }
 
+/// Records work whose start time is owned by another subsystem, such as time
+/// spent waiting in a scheduler queue.
+pub fn record_duration(name: impl AsRef<str>, duration: Duration) {
+    if !enabled() {
+        return;
+    }
+
+    eprintln!(
+        "[tua-profile] {} {:.3}ms",
+        name.as_ref(),
+        duration.as_secs_f64() * 1000.0
+    );
+}
+
 pub fn diagnostics_trace_enabled() -> bool {
     static ENABLED: OnceLock<bool> = OnceLock::new();
 

@@ -641,7 +641,7 @@ function requestCacheStats() {
 
 async function resetCompletionStats() {
   try {
-    await editorDevex?.ollamaCompletion?.resetStats();
+    await editorDevex?.inlineCompletion?.resetStats();
     const result = client
       ? await client.sendRequest("tua/resetCompletionStats")
       : { removedFiles: 0 };
@@ -792,7 +792,7 @@ function debugInfoText() {
     lines.push(`Last server error: ${currentServerInfo.error}`);
   }
   lines.push(
-    `Local Ollama completion counters: ${editorDevex?.ollamaCompletion?.debugInfo() || "{}"}`,
+    `Local Ollama completion counters: ${editorDevex?.inlineCompletion?.debugInfo() || "{}"}`,
   );
 
   return lines.join("\n");

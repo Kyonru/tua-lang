@@ -115,11 +115,14 @@ platform, so extension installs do not download a server at activation time.
 It provides compiler-backed Tua editing, LOVE-aware completion and diagnostics,
 generated Lua inspection, project commands for running or debugging LOVE, and
 source-linked explorers for assets, audio, modules, signals, state machines,
-ECS, and object pools.
+ECS, and object pools. Experimental deterministic ghost text can be enabled for
+source-only statement snippets and conservative current-file recall; it stays
+local, reads no pattern database, and is off by default.
 
-Experimental local Ollama ghost-text completion is opt-in and compiler
-validated before display. Trusted local tools can also explicitly start the
-read-only `tua api --stdio` JSON-RPC session or `tua mcp --stdio`; neither
+When deterministic ghost text is enabled, the extension tries it before
+experimental local Ollama completion. Ollama remains a separate opt-in and is
+compiler validated before display. Trusted local tools can also explicitly
+start the read-only `tua api --stdio` JSON-RPC session or `tua mcp --stdio`; neither
 service opens a network socket or starts automatically.
 
 ## Learn More

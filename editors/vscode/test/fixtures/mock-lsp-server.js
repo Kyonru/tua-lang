@@ -104,6 +104,9 @@ function handleMessage(message) {
     case "textDocument/completion":
       complete(message);
       return;
+    case "tua/localInlineCompletion":
+      localInlineCompletion(message);
+      return;
     case "textDocument/hover":
       hover(message);
       return;
@@ -279,6 +282,21 @@ function complete(message) {
       ],
     });
   }, delayMs);
+}
+
+function localInlineCompletion(message) {
+  const context = requestContext(message);
+  log({
+    type: "inline-completion.request",
+    ...context,
+    documentVersion: message.params.documentVersion,
+    id: message.id,
+    selectedCompletion: message.params.selectedCompletion,
+  });
+  respond(message.id, {
+    documentVersion: context.docVersion,
+    items: [],
+  });
 }
 
 function hover(message) {

@@ -2,11 +2,15 @@
 //! prototypes of the Phase 1 sources, following its rules, so Phase 0 can
 //! decide source order and thresholds before anything ships.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
+use std::path::Path;
+use std::sync::atomic::AtomicBool;
+use std::time::Duration;
 
 use serde::Serialize;
 
-use super::super::eligibility::{strip_trailing_comment, word_before, CursorContext};
+use super::super::eligibility::CursorContext;
+pub use super::super::recall::RecallOptions;
 
 /// One inline-completion request, as the editor would make it.
 pub struct Request<'a> {
@@ -36,6 +40,20 @@ pub struct Candidate {
 pub trait Backend {
     fn name(&self) -> &'static str;
     fn suggest(&self, request: &Request<'_>) -> Option<Candidate>;
+
+    fn suggest_with_host(
+        &self,
+        request: &Request<'_>,
+        _production: &ProductionRequest<'_>,
+    ) -> Option<Candidate> {
+        self.suggest(request)
+    }
+}
+
+pub struct ProductionRequest<'a> {
+    pub host: &'a crate::AnalysisHost,
+    pub path: &'a Path,
+    pub position: crate::SourcePosition,
 }
 
 pub struct Noop;
@@ -65,30 +83,15 @@ impl Backend for Semantic {
 }
 
 fn statement_snippet(request: &Request<'_>, min_prefix_chars: usize) -> Option<Candidate> {
-    if request.context != CursorContext::StatementPrefix {
-        return None;
-    }
-    let typed = word_before(request.document, request.offset);
-    if typed.chars().count() < min_prefix_chars {
-        return None;
-    }
-    let matches = crate::completion::syntax_snippet_completions(typed, request.include_ecs)
-        .into_iter()
-        .filter_map(|completion| {
-            let text = completion.insert_text?;
-            // Ghost text can only continue what is typed, so the snippet must
-            // start with the typed word. Aliases such as `lfn` don't.
-            text.strip_prefix(typed)
-                .filter(|rest| !rest.is_empty())
-                .map(str::to_owned)
-        })
-        .collect::<Vec<_>>();
-
-    let [text] = matches.as_slice() else {
-        return None;
-    };
+    let text = super::super::semantic::statement_snippet(
+        request.document,
+        request.offset,
+        request.context,
+        request.include_ecs,
+        min_prefix_chars,
+    )?;
     Some(Candidate {
-        text: text.clone(),
+        text,
         is_snippet: true,
         source: "snippet",
         score: 1.0,
@@ -128,35 +131,6 @@ fn love_callback(request: &Request<'_>) -> Option<Candidate> {
     })
 }
 
-#[derive(Clone, Copy, Debug, Serialize)]
-pub struct RecallOptions {
-    /// Non-whitespace characters required before the cursor on its line.
-    pub min_prefix_chars: usize,
-    /// How many times more often the most common continuation must occur than
-    /// the next one, when several continuations match.
-    pub dominance_ratio: f64,
-    /// Minimum number of matching source lines required before recall may
-    /// offer their continuation.
-    pub min_support: usize,
-    /// Minimum support required to offer more than the first token in the
-    /// common continuation. Low-support recall stays useful but conservative.
-    pub min_full_prefix_support: usize,
-    /// Documents larger than this are not scanned.
-    pub max_document_bytes: usize,
-}
-
-impl Default for RecallOptions {
-    fn default() -> Self {
-        Self {
-            min_prefix_chars: 6,
-            dominance_ratio: 2.0,
-            min_support: 1,
-            min_full_prefix_support: 1,
-            max_document_bytes: 256 * 1024,
-        }
-    }
-}
-
 /// Current-file recall: other lines of the same document whose normalized
 /// text starts with the normalized line prefix, continued with their original
 /// text up to the end of the line.
@@ -170,22 +144,17 @@ impl Backend for CurrentFileRecall {
     }
 
     fn suggest(&self, request: &Request<'_>) -> Option<Candidate> {
-        let continuations = self.continuations(request)?;
-        let (best, best_count) = *continuations.first()?;
-        let runner_up = continuations.get(1).map_or(0, |(_, count)| *count);
-        if runner_up > 0 && (best_count as f64) < self.options.dominance_ratio * runner_up as f64 {
-            return None;
-        }
-        let total = continuations.iter().map(|(_, count)| count).sum::<usize>();
-        if total < self.options.min_support {
-            return None;
-        }
-
+        let suggestion = super::super::recall::unique(
+            request.document,
+            request.offset,
+            request.line_index,
+            self.options,
+        )?;
         Some(Candidate {
-            text: best.to_owned(),
+            text: suggestion.text,
             is_snippet: false,
             source: "current-file",
-            score: best_count as f64 / total as f64,
+            score: suggestion.score,
         })
     }
 }
@@ -203,134 +172,19 @@ impl Backend for CurrentFileCommonPrefix {
     }
 
     fn suggest(&self, request: &Request<'_>) -> Option<Candidate> {
-        let continuations = self.recall.continuations(request)?;
-        let (first, _) = *continuations.first()?;
-        let mut common = first.len();
-        for (continuation, _) in &continuations[1..] {
-            common = first
-                .char_indices()
-                .zip(continuation.chars())
-                .find(|((_, left), right)| left != right)
-                .map_or(common.min(continuation.len()), |((index, _), _)| {
-                    index.min(common)
-                });
-        }
-        let mut prefix = &first[..common];
-        // Don't stop inside a word that some continuation goes on with.
-        let continues_word = continuations.iter().any(|(continuation, _)| {
-            continuation[prefix.len()..]
-                .chars()
-                .next()
-                .is_some_and(super::super::eligibility::is_identifier_char)
-        });
-        if continues_word {
-            prefix = prefix.trim_end_matches(super::super::eligibility::is_identifier_char);
-        }
-        let mut prefix = prefix.trim_end();
-        if prefix.is_empty() {
-            return None;
-        }
-        let support = continuations.iter().map(|(_, count)| count).sum::<usize>();
-        if support < self.recall.options.min_support {
-            return None;
-        }
-        if support < self.recall.options.min_full_prefix_support {
-            let token = super::metrics::tokens(prefix).into_iter().next()?;
-            let end = prefix.find(token)? + token.len();
-            prefix = &prefix[..end];
-        }
-
+        let suggestion = super::super::recall::common_prefix(
+            request.document,
+            request.offset,
+            request.line_index,
+            self.recall.options,
+        )?;
         Some(Candidate {
-            text: prefix.to_owned(),
+            text: suggestion.text,
             is_snippet: false,
             source: "current-file-prefix",
-            score: support as f64,
+            score: suggestion.score,
         })
     }
-}
-
-impl CurrentFileRecall {
-    /// Matching continuations with their counts, most common first.
-    fn continuations<'r>(&self, request: &Request<'r>) -> Option<Vec<(&'r str, usize)>> {
-        if request.document.len() > self.options.max_document_bytes {
-            return None;
-        }
-        let line_start = request.document[..request.offset]
-            .rfind('\n')
-            .map_or(0, |index| index + 1);
-        let prefix = &request.document[line_start..request.offset];
-        let (normalized_prefix, _) = normalize(prefix.trim_start());
-        let significant = normalized_prefix
-            .chars()
-            .filter(|c| !c.is_whitespace())
-            .count();
-        if significant < self.options.min_prefix_chars {
-            return None;
-        }
-        // A trailing space in the prefix must match a space in the line, so
-        // `local x ` doesn't match `local xs`.
-        let mut continuations = BTreeMap::<&str, usize>::new();
-        for (index, line) in request.document.split('\n').enumerate() {
-            if index == request.line_index {
-                continue;
-            }
-            let line = line.strip_suffix('\r').unwrap_or(line);
-            let Some(continuation) = continuation_after(line, &normalized_prefix) else {
-                continue;
-            };
-            let continuation = strip_trailing_comment(continuation);
-            if !continuation.is_empty() {
-                *continuations.entry(continuation).or_default() += 1;
-            }
-        }
-
-        let mut ranked = continuations.into_iter().collect::<Vec<_>>();
-        ranked.sort_by(|left, right| right.1.cmp(&left.1).then(left.0.cmp(right.0)));
-        Some(ranked)
-    }
-}
-
-/// Collapses each whitespace run to one space, returning the normalized text
-/// and, for every normalized byte, the original byte offset it came from.
-fn normalize(text: &str) -> (String, Vec<usize>) {
-    let mut normalized = String::with_capacity(text.len());
-    let mut origins = Vec::with_capacity(text.len());
-    let mut in_space = false;
-    for (offset, character) in text.char_indices() {
-        if character.is_whitespace() {
-            if !in_space {
-                normalized.push(' ');
-                origins.push(offset);
-            }
-            in_space = true;
-        } else {
-            in_space = false;
-            let start = normalized.len();
-            normalized.push(character);
-            origins.extend(std::iter::repeat_n(offset, normalized.len() - start));
-        }
-    }
-    (normalized, origins)
-}
-
-/// The original text of `line` after its part that normalizes to `prefix`.
-fn continuation_after<'line>(line: &'line str, prefix: &str) -> Option<&'line str> {
-    let indent = line.len() - line.trim_start().len();
-    let body = &line[indent..];
-    let (normalized, origins) = normalize(body);
-    if !normalized.starts_with(prefix) || normalized.len() == prefix.len() {
-        return None;
-    }
-    // The continuation starts at the original byte of the first normalized
-    // character after the prefix. A prefix ending inside a whitespace run
-    // resumes after that run.
-    let mut start = origins[prefix.len()];
-    if prefix.ends_with(' ') {
-        start += body[start..].len() - body[start..].trim_start().len();
-    }
-    // A prefix ending mid-word must not match a longer word unless the line
-    // continues that same word, which `starts_with` already guarantees.
-    Some(&body[start..])
 }
 
 /// Which current-file recall rule the Phase 1 candidate uses.
@@ -346,7 +200,7 @@ pub enum RecallVariant {
 
 /// The configuration of the candidate Phase 1 source order, which a
 /// thresholds file can pin so a gate run evaluates exactly what was approved.
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct Phase1Config {
     pub recall_variant: RecallVariant,
     /// When set, suggestions are offered only in these cursor contexts.
@@ -370,6 +224,30 @@ impl Default for Phase1Config {
     }
 }
 
+impl Phase1Config {
+    /// The policy compiled into the shipping Phase 1 host query. Gate files
+    /// must name this exact policy; exploratory tuning uses the separately
+    /// labelled `phase1-prototype` backend.
+    pub fn production() -> Self {
+        Self {
+            recall_variant: RecallVariant::CommonPrefix,
+            contexts: Some(BTreeSet::from([
+                CursorContext::OpenParen,
+                CursorContext::Comma,
+                CursorContext::Operator,
+                CursorContext::Whitespace,
+                CursorContext::StatementPrefix,
+                CursorContext::Identifier,
+                CursorContext::Other,
+            ])),
+            recall: RecallOptions::phase1(),
+            love_callbacks: false,
+            statement_snippets: true,
+            snippet_min_prefix_chars: 3,
+        }
+    }
+}
+
 /// The candidate Phase 1 order: semantic sources win in their exact contexts,
 /// and current-file recall answers everywhere else. The default is the
 /// plan's starting hypothesis.
@@ -379,7 +257,7 @@ pub struct Phase1 {
 
 impl Backend for Phase1 {
     fn name(&self) -> &'static str {
-        "phase1"
+        "phase1-prototype"
     }
 
     fn suggest(&self, request: &Request<'_>) -> Option<Candidate> {
@@ -407,6 +285,51 @@ impl Backend for Phase1 {
             .or_else(|| match self.config.recall_variant {
                 RecallVariant::Unique => recall.suggest(request),
                 RecallVariant::CommonPrefix => CurrentFileCommonPrefix { recall }.suggest(request),
+            })
+    }
+}
+
+/// The exact shipping Phase 1 host query, including its validation and core
+/// deadline. Quality gates use this backend rather than the raw source
+/// prototypes above; queue and protocol latency are measured separately.
+pub struct ProductionPhase1 {
+    pub semantic: bool,
+    pub current_file: bool,
+}
+
+impl Backend for ProductionPhase1 {
+    fn name(&self) -> &'static str {
+        "phase1"
+    }
+
+    fn suggest(&self, _request: &Request<'_>) -> Option<Candidate> {
+        None
+    }
+
+    fn suggest_with_host(
+        &self,
+        _request: &Request<'_>,
+        production: &ProductionRequest<'_>,
+    ) -> Option<Candidate> {
+        production
+            .host
+            .local_inline_completion(
+                production.path,
+                production.position,
+                &crate::InlineCompletionOptions {
+                    semantic: self.semantic,
+                    current_file: self.current_file,
+                },
+                &crate::InlineCompletionBudget::new(Duration::from_millis(10)),
+                &AtomicBool::new(false),
+            )
+            .into_iter()
+            .next()
+            .map(|candidate| Candidate {
+                text: candidate.insert_text,
+                is_snippet: candidate.is_snippet,
+                source: candidate.source.as_str(),
+                score: candidate.score.0,
             })
     }
 }

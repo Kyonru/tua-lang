@@ -62,6 +62,8 @@ fn allocated_bytes() -> usize {
 const USAGE: &str =
     "usage: inline_eval [paths...] [--manifest FILE] [--set NAME]... [--json] [--out FILE]
   [--records] [--max-positions N] [--no-menu] [--no-warmup] [--thresholds FILE]
+  [--menu-replay FILE]
+  [--check-phase-gate FILE]
   [--check-expected FILE] [--write-expected FILE] [--min-prefix N] [--min-support N]
   [--min-full-prefix-support N] [--dominance R]
   [--recall-variant unique|common-prefix] [--contexts LABEL,LABEL,...]
@@ -80,6 +82,8 @@ struct Arguments {
     thresholds: Option<PathBuf>,
     check_expected: Option<PathBuf>,
     write_expected: Option<PathBuf>,
+    menu_replay: Option<PathBuf>,
+    phase_gate: Option<PathBuf>,
     options: EvalOptions,
 }
 
@@ -93,6 +97,8 @@ fn parse_arguments() -> Result<Arguments, String> {
         thresholds: None,
         check_expected: None,
         write_expected: None,
+        menu_replay: None,
+        phase_gate: None,
         options: EvalOptions {
             allocated_bytes: Some(allocated_bytes),
             ..EvalOptions::default()
@@ -113,6 +119,10 @@ fn parse_arguments() -> Result<Arguments, String> {
             }
             "--write-expected" => {
                 arguments.write_expected = Some(value("--write-expected")?.into())
+            }
+            "--menu-replay" => arguments.menu_replay = Some(value("--menu-replay")?.into()),
+            "--check-phase-gate" => {
+                arguments.phase_gate = Some(value("--check-phase-gate")?.into())
             }
             "--no-menu" => arguments.options.simulate_menu = false,
             "--no-warmup" => arguments.options.measure_warmup = false,
@@ -159,7 +169,8 @@ fn parse_arguments() -> Result<Arguments, String> {
             path => arguments.paths.push(path.into()),
         }
     }
-    if arguments.manifest.is_none() && arguments.paths.is_empty() {
+    if arguments.manifest.is_none() && arguments.paths.is_empty() && arguments.phase_gate.is_none()
+    {
         return Err(USAGE.to_owned());
     }
     arguments.options.phase1.recall = arguments.options.recall;
@@ -178,6 +189,14 @@ fn main() -> ExitCode {
 
 fn run() -> Result<ExitCode, String> {
     let mut arguments = parse_arguments()?;
+    if arguments.manifest.is_none() && arguments.paths.is_empty() {
+        return check_phase_gate_file(
+            arguments
+                .phase_gate
+                .as_deref()
+                .expect("argument parsing requires a phase gate in standalone mode"),
+        );
+    }
     let mut selected = Vec::<(String, ManifestSet)>::new();
 
     if let Some(path) = &arguments.manifest {
@@ -239,11 +258,23 @@ fn run() -> Result<ExitCode, String> {
         .as_ref()
         .and_then(|thresholds| thresholds.phase1.as_ref())
     {
-        arguments.options.phase1 = pinned.config()?;
-        eprintln!("inline_eval: evaluating the phase1 configuration pinned in the thresholds file");
+        let pinned = pinned.config()?;
+        if pinned != eval::backends::Phase1Config::production() {
+            return Err(
+                "the thresholds [phase1] table does not match the shipping Phase 1 policy"
+                    .to_owned(),
+            );
+        }
+        arguments.options.phase1 = pinned;
+        eprintln!(
+            "inline_eval: evaluating the shipping phase1 policy pinned in the thresholds file"
+        );
     }
 
     let (sets, duplicates) = dataset::load_sets(selected)?;
+    if let Some(path) = &arguments.menu_replay {
+        arguments.options.menu_replay = Some(eval::replay::MenuReplay::load(path, &sets)?);
+    }
     let report = eval::evaluate(&sets, duplicates, &arguments.options);
 
     if arguments.json {
@@ -309,11 +340,32 @@ fn run() -> Result<ExitCode, String> {
         }
     }
 
+    if let Some(path) = &arguments.phase_gate {
+        failed |= check_phase_gate_file(path)? != ExitCode::SUCCESS;
+    }
+
     Ok(if failed {
         ExitCode::from(1)
     } else {
         ExitCode::SUCCESS
     })
+}
+
+fn check_phase_gate_file(path: &Path) -> Result<ExitCode, String> {
+    let text = fs::read_to_string(path)
+        .map_err(|error| format!("cannot read {}: {error}", path.display()))?;
+    let artifact: eval::PhaseGateArtifact =
+        toml::from_str(&text).map_err(|error| format!("{}: {error}", path.display()))?;
+    let failures = eval::check_phase_gate(&artifact);
+    if failures.is_empty() {
+        eprintln!("inline_eval: aggregate Phase 1 gate passes");
+        Ok(ExitCode::SUCCESS)
+    } else {
+        for failure in failures {
+            eprintln!("phase gate FAIL: {failure}");
+        }
+        Ok(ExitCode::from(1))
+    }
 }
 
 fn load_thresholds(path: &Path) -> Result<Thresholds, String> {
@@ -337,6 +389,20 @@ fn print_summary(report: &eval::EvalReport) {
         println!(
             "dropped {} duplicate file(s)",
             report.duplicates.dropped.len()
+        );
+    }
+    if let Some(replay) = &report.menu_replay {
+        println!(
+            "menu replay: {}/{} accepted, {} matched, {} unmatched, {} superseded (schema {}, path {}, position {}, ineligible {} rejected)",
+            replay.accepted,
+            replay.records,
+            replay.matched,
+            replay.unmatched,
+            replay.superseded,
+            replay.rejected_schema,
+            replay.rejected_path,
+            replay.rejected_position,
+            replay.rejected_ineligible,
         );
     }
     for set in &report.sets {
@@ -378,7 +444,7 @@ fn print_summary(report: &eval::EvalReport) {
                 summary.incorrect_chars_per_eligible,
                 summary.wrong_to_saved_ratio,
                 backend.abstain.suggestions_per_eligible,
-                summary.latency_us.p95,
+                summary.backend_latency_us.p95,
             );
         }
         for (language, warmup) in &set.warmup_by_language {
@@ -408,6 +474,25 @@ fn print_summary(report: &eval::EvalReport) {
                 parse.recommended_max_bytes
             );
         }
+        let validation = &set.inline_validation;
+        println!(
+            "phase1 production ({}): {} requests, {:.3} parses/request; {} candidate attempts: {} zero-, {} one-, {} two-parse ({:.3} parses/attempt); edited parse sufficient {:.0}%, cache peek {}/{} hits, {} candidates returned ({} after zero, {} after one, {} after two parses)",
+            validation.cache_state,
+            validation.requests,
+            validation.parses_per_request,
+            validation.candidate_attempts,
+            validation.zero_parse_candidates,
+            validation.one_parse_candidates,
+            validation.two_parse_candidates,
+            validation.parses_per_candidate_attempt,
+            validation.edited_parse_sufficiency_rate * 100.0,
+            validation.cache_peek_hits,
+            validation.cache_peek_hits + validation.cache_peek_misses,
+            validation.candidates_returned,
+            validation.returned_after_zero_parses,
+            validation.returned_after_one_parse,
+            validation.returned_after_two_parses,
+        );
         let largest = set
             .memory
             .iter()

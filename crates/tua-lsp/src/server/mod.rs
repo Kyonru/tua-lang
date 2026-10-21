@@ -60,6 +60,7 @@ pub(crate) fn run(reader: impl Read + Send + 'static, writer: impl Write) -> io:
     let received_input = SharedReceivedInputState::default();
     let mut scheduler = RequestScheduler::new(event_tx.clone(), Arc::clone(&received_input));
     let mut pending_messages = VecDeque::new();
+    let mut deferred_workspace_warm_results = VecDeque::new();
     let mut reader_closed = false;
 
     let reader_input = Arc::clone(&received_input);
@@ -90,6 +91,51 @@ pub(crate) fn run(reader: impl Read + Send + 'static, writer: impl Write) -> io:
     });
 
     loop {
+        drain_speculative_results(&mut server, &mut scheduler, &mut writer)?;
+
+        if scheduler.speculative_has_priority(Instant::now())
+            && (pending_messages.is_empty()
+                || pending_messages
+                    .iter()
+                    .all(message_can_wait_for_speculative_result))
+        {
+            match event_rx.recv_timeout(Duration::from_millis(1)) {
+                Ok(event) => {
+                    if let Some(event) =
+                        defer_workspace_warm_result(event, &mut deferred_workspace_warm_results)
+                    {
+                        process_server_event(
+                            event,
+                            &mut server,
+                            &mut scheduler,
+                            &mut pending_messages,
+                            &mut reader_closed,
+                            &mut writer,
+                        )?;
+                    }
+                }
+                Err(RecvTimeoutError::Timeout) => {}
+                Err(RecvTimeoutError::Disconnected) => reader_closed = true,
+            }
+            continue;
+        }
+
+        if let Some(result) = take_deferred_workspace_warm_result(
+            &mut deferred_workspace_warm_results,
+            scheduler.speculative_has_priority(Instant::now()),
+            pending_messages.is_empty(),
+        ) {
+            process_server_event(
+                ServerEvent::RequestFinished(result),
+                &mut server,
+                &mut scheduler,
+                &mut pending_messages,
+                &mut reader_closed,
+                &mut writer,
+            )?;
+            continue;
+        }
+
         if pending_messages.is_empty()
             && !reader_closed
             && !server.shutdown_requested
@@ -191,6 +237,15 @@ pub(crate) fn run(reader: impl Read + Send + 'static, writer: impl Write) -> io:
             .and_then(Value::as_str)
             .unwrap_or_default()
             .to_owned();
+        let _speculative_bypass_profile =
+            (tua_core::profile::enabled() && scheduler.has_speculative_in_flight()).then(|| {
+                let state = if scheduler.speculative_has_priority(Instant::now()) {
+                    "priority"
+                } else {
+                    "expired"
+                };
+                tua_core::profile::span(format!("inline.coordinator.active {state} {method}"))
+            });
         let request = message.get("id").is_some();
         let received_document_version = take_received_request_version(&message, &received_input);
         let changed_uri = (method == "textDocument/didChange")
@@ -305,6 +360,8 @@ fn process_server_event(
     reader_closed: &mut bool,
     writer: &mut impl Write,
 ) -> io::Result<()> {
+    drain_speculative_results(server, scheduler, writer)?;
+
     match event {
         ServerEvent::Input(event) => match event? {
             Some(message) => pending_messages.push_back(message),
@@ -315,9 +372,47 @@ fn process_server_event(
                 write_message(writer, &message)?;
             }
         }
+        ServerEvent::SpeculativeReady => {}
     }
 
     Ok(())
+}
+
+fn drain_speculative_results(
+    server: &mut LspServer,
+    scheduler: &mut RequestScheduler,
+    writer: &mut impl Write,
+) -> io::Result<()> {
+    for result in scheduler.take_speculative_results() {
+        for message in scheduler.finish(server, result) {
+            write_message(writer, &message)?;
+        }
+    }
+
+    Ok(())
+}
+
+fn defer_workspace_warm_result(
+    event: ServerEvent,
+    deferred: &mut VecDeque<Box<scheduler::WorkerResult>>,
+) -> Option<ServerEvent> {
+    match event {
+        ServerEvent::RequestFinished(result) if result.is_workspace_warm() => {
+            deferred.push_back(result);
+            None
+        }
+        event => Some(event),
+    }
+}
+
+fn take_deferred_workspace_warm_result(
+    deferred: &mut VecDeque<Box<scheduler::WorkerResult>>,
+    speculative_has_priority: bool,
+    coordinator_idle: bool,
+) -> Option<Box<scheduler::WorkerResult>> {
+    (!speculative_has_priority && coordinator_idle)
+        .then(|| deferred.pop_front())
+        .flatten()
 }
 
 fn document_uri_from_message(message: &Value) -> Option<&str> {
@@ -731,7 +826,8 @@ fn message_interactive_priority(message: &Value) -> Option<u8> {
         | "textDocument/formatting"
         | "textDocument/rangeFormatting"
         | "textDocument/onTypeFormatting"
-        | "tua/projectLayout" => Some(2),
+        | "tua/projectLayout"
+        | "tua/localInlineCompletion" => Some(2),
         "textDocument/hover" | "textDocument/documentHighlight" | "textDocument/inlayHint" => {
             Some(3)
         }
@@ -746,6 +842,16 @@ fn message_is_yieldable_background(message: &Value) -> bool {
     };
 
     method == "$/cancelRequest" || method_is_background_refresh(method)
+}
+
+fn message_can_wait_for_speculative_result(message: &Value) -> bool {
+    if message.get("method").and_then(Value::as_str) == Some("$/cancelRequest") {
+        return false;
+    }
+    match message_interactive_priority(message) {
+        Some(priority) => priority > 2,
+        None => message_is_yieldable_background(message),
+    }
 }
 
 fn method_is_background_refresh(method: &str) -> bool {

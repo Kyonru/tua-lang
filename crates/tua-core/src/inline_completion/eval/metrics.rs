@@ -251,7 +251,9 @@ pub struct Summary {
     /// Incorrect characters offered for every character saved, with at least
     /// one saved character in the denominator.
     pub wrong_to_saved_ratio: f64,
-    pub latency_us: Percentiles,
+    /// Time spent inside the candidate backend itself. It excludes evaluator
+    /// scenario setup, menu filtering, suffix agreement, and scoring.
+    pub backend_latency_us: Percentiles,
     #[serde(skip)]
     latencies_ns: Vec<u64>,
 }
@@ -296,7 +298,7 @@ impl Summary {
         self.chars_saved_per_eligible = self.chars_saved as f64 / eligible;
         self.incorrect_chars_per_eligible = self.incorrect_chars as f64 / eligible;
         self.wrong_to_saved_ratio = self.incorrect_chars as f64 / self.chars_saved.max(1) as f64;
-        self.latency_us = Percentiles::of_ns(&mut self.latencies_ns);
+        self.backend_latency_us = Percentiles::of_ns(&mut self.latencies_ns);
         self
     }
 

@@ -1,5 +1,30 @@
 use super::*;
 
+fn enable_scheduled_local_inline_completion(server: &mut LspServer) {
+    let _ = server.handle_message(did_change_configuration(json!({
+        "completion": {"inline": {"enabled": true}}
+    })));
+}
+
+fn wait_for_speculative_results(
+    scheduler: &RequestScheduler,
+    expected: usize,
+) -> Vec<scheduler::WorkerResult> {
+    let deadline = Instant::now() + Duration::from_secs(5);
+    let mut results = Vec::new();
+    loop {
+        results.extend(scheduler.take_speculative_results());
+        if results.len() >= expected {
+            return results;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "speculative worker should return before the test deadline"
+        );
+        std::thread::yield_now();
+    }
+}
+
 #[test]
 fn scheduler_rejects_requests_beyond_the_in_flight_job_limit() {
     let mut server = LspServer::default();
@@ -128,6 +153,371 @@ fn non_interactive_bursts_reserve_capacity_for_interactive_requests() {
         None,
     );
     assert!(output.iter().all(|message| message.get("error").is_none()));
+}
+
+#[test]
+fn newer_local_inline_request_cancels_the_older_request_for_the_same_document() {
+    let uri = "file:///tmp/newest-inline.tua";
+    let mut server = LspServer::default();
+    let _ = server.handle_message(did_open(uri, "local value = 1\n"));
+    enable_scheduled_local_inline_completion(&mut server);
+    let (event_tx, _event_rx) = std::sync::mpsc::sync_channel(EVENT_QUEUE_CAPACITY);
+    let mut scheduler = RequestScheduler::new(event_tx, SharedReceivedInputState::default());
+    let request = |id, delay_ms| {
+        json!({
+            "jsonrpc": "2.0",
+            "id": id,
+            "method": "tua/localInlineCompletion",
+            "params": {
+                "textDocument": {"uri": uri},
+                "position": {"line": 0, "character": 15},
+                "documentVersion": 1,
+                "testDelayMs": delay_ms
+            }
+        })
+    };
+
+    assert!(scheduler
+        .dispatch(&mut server, request(1, 100), Some(1))
+        .iter()
+        .all(|message| message.get("error").is_none()));
+    let deadline = Instant::now() + Duration::from_millis(100);
+    while scheduler.speculative_pending_count() != 0 {
+        assert!(Instant::now() < deadline, "the first request should start");
+        std::thread::yield_now();
+    }
+    let output = scheduler.dispatch(&mut server, request(2, 0), Some(1));
+
+    assert_eq!(response_with_id(&output, 1)["error"]["code"], -32800);
+    assert_eq!(scheduler.in_flight_count(), 1);
+
+    let mut results = wait_for_speculative_results(&scheduler, 2).into_iter();
+    let old = results.next().expect("superseded physical result");
+    assert!(
+        scheduler.finish(&mut server, old).is_empty(),
+        "the superseded worker result must stay suppressed"
+    );
+    let latest = results.next().expect("latest physical result");
+    let output = scheduler.finish(&mut server, latest);
+    assert!(response_with_id(&output, 2).get("error").is_none());
+    assert_eq!(scheduler.in_flight_count(), 0);
+}
+
+#[test]
+fn malformed_local_inline_request_returns_invalid_params_without_queuing() {
+    let mut server = LspServer::default();
+    enable_scheduled_local_inline_completion(&mut server);
+    let (event_tx, _event_rx) = std::sync::mpsc::sync_channel(EVENT_QUEUE_CAPACITY);
+    let mut scheduler = RequestScheduler::new(event_tx, SharedReceivedInputState::default());
+    let output = scheduler.dispatch(
+        &mut server,
+        json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tua/localInlineCompletion",
+            "params": {"position": {"line": 0, "character": 0}}
+        }),
+        None,
+    );
+
+    assert_eq!(response_with_id(&output, 1)["error"]["code"], -32602);
+    assert_eq!(scheduler.in_flight_count(), 0);
+    assert_eq!(scheduler.speculative_pending_count(), 0);
+}
+
+#[test]
+fn disabled_local_inline_request_returns_without_queuing() {
+    let uri = "file:///tmp/disabled-inline.tua";
+    let mut server = LspServer::default();
+    let _ = server.handle_message(did_open(uri, "local value = 1\n"));
+    let (event_tx, _event_rx) = std::sync::mpsc::sync_channel(EVENT_QUEUE_CAPACITY);
+    let mut scheduler = RequestScheduler::new(event_tx, SharedReceivedInputState::default());
+    let output = scheduler.dispatch(
+        &mut server,
+        json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tua/localInlineCompletion",
+            "params": {
+                "textDocument": {"uri": uri},
+                "position": {"line": 0, "character": 15},
+                "documentVersion": 1
+            }
+        }),
+        Some(1),
+    );
+
+    assert_eq!(response_with_id(&output, 1)["result"]["items"], json!([]));
+    assert_eq!(scheduler.in_flight_count(), 0);
+    assert_eq!(scheduler.speculative_pending_count(), 0);
+}
+
+#[test]
+fn speculative_worker_survives_a_panicking_request() {
+    let uri = "file:///tmp/panicking-inline.tua";
+    let mut server = LspServer::default();
+    let _ = server.handle_message(did_open(uri, "local value = 1\n"));
+    enable_scheduled_local_inline_completion(&mut server);
+    let (event_tx, _event_rx) = std::sync::mpsc::sync_channel(EVENT_QUEUE_CAPACITY);
+    let mut scheduler = RequestScheduler::new(event_tx, SharedReceivedInputState::default());
+    let request = |id, test_panic| {
+        json!({
+            "jsonrpc": "2.0",
+            "id": id,
+            "method": "tua/localInlineCompletion",
+            "params": {
+                "textDocument": {"uri": uri},
+                "position": {"line": 0, "character": 15},
+                "documentVersion": 1,
+                "testPanic": test_panic
+            }
+        })
+    };
+
+    assert!(scheduler
+        .dispatch(&mut server, request(1, true), Some(1))
+        .iter()
+        .all(|message| message.get("error").is_none()));
+    let panicked = wait_for_speculative_results(&scheduler, 1)
+        .pop()
+        .expect("panicking request result");
+    let output = scheduler.finish(&mut server, panicked);
+    assert_eq!(response_with_id(&output, 1)["error"]["code"], -32603);
+
+    assert!(scheduler
+        .dispatch(&mut server, request(2, false), Some(1))
+        .iter()
+        .all(|message| message.get("error").is_none()));
+    let survived = wait_for_speculative_results(&scheduler, 1)
+        .pop()
+        .expect("surviving request result");
+    let output = scheduler.finish(&mut server, survived);
+    assert!(response_with_id(&output, 2).get("error").is_none());
+}
+
+#[test]
+fn newest_inline_bursts_remain_bounded_until_cancelled_workers_finish() {
+    let uri = "file:///tmp/newest-inline-burst.tua";
+    let mut server = LspServer::default();
+    let _ = server.handle_message(did_open(uri, "local value = 1\n"));
+    enable_scheduled_local_inline_completion(&mut server);
+    let (event_tx, _event_rx) = std::sync::mpsc::sync_channel(EVENT_QUEUE_CAPACITY);
+    let mut scheduler = RequestScheduler::new(event_tx, SharedReceivedInputState::default());
+    let request = |id| {
+        json!({
+            "jsonrpc": "2.0",
+            "id": id,
+            "method": "tua/localInlineCompletion",
+            "params": {
+                "textDocument": {"uri": uri},
+                "position": {"line": 0, "character": 15},
+                "documentVersion": 1,
+                "testDelayMs": 100
+            }
+        })
+    };
+    let burst = crate::server::scheduler::MAX_IN_FLIGHT_JOBS * 3;
+
+    for id in 0..burst {
+        let output = scheduler.dispatch(&mut server, request(id), Some(1));
+        assert!(output.iter().all(|message| {
+            message.get("error").is_none() || message["error"]["code"] == -32800
+        }));
+        assert!(
+            scheduler.in_flight_count() <= 1,
+            "only the latest speculative request should remain accounted, got {}",
+            scheduler.in_flight_count()
+        );
+        assert!(scheduler.speculative_pending_count() <= 1);
+    }
+}
+
+#[test]
+fn local_inline_requests_respect_non_interactive_capacity() {
+    let mut server = LspServer::default();
+    enable_scheduled_local_inline_completion(&mut server);
+    let (event_tx, _event_rx) = std::sync::mpsc::sync_channel(EVENT_QUEUE_CAPACITY);
+    let mut scheduler = RequestScheduler::new(event_tx, SharedReceivedInputState::default());
+    let request = |id: usize| {
+        json!({
+            "jsonrpc": "2.0",
+            "id": id,
+            "method": "tua/localInlineCompletion",
+            "params": {
+                "textDocument": {"uri": format!("file:///tmp/inline-capacity-{id}.tua")},
+                "position": {"line": 0, "character": 0},
+                "documentVersion": 1
+            }
+        })
+    };
+
+    for id in 0..(crate::server::scheduler::MAX_IN_FLIGHT_JOBS * 3 / 4) {
+        assert!(scheduler
+            .dispatch(&mut server, request(id), Some(1))
+            .iter()
+            .all(|message| message.get("error").is_none()));
+    }
+    let rejected_id = crate::server::scheduler::MAX_IN_FLIGHT_JOBS;
+    let output = scheduler.dispatch(&mut server, request(rejected_id), Some(1));
+    assert_eq!(
+        response_with_id(&output, rejected_id as u64)["error"]["code"],
+        -32000
+    );
+}
+
+#[test]
+fn local_inline_completion_yields_to_menu_completion() {
+    let uri = "file:///tmp/inline-priority.tua";
+    let source = "local value = 1\n";
+    let inline = json!({
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "tua/localInlineCompletion",
+        "params": {
+            "textDocument": {"uri": uri},
+            "position": {"line": 0, "character": 15},
+            "documentVersion": 1
+        }
+    });
+    let mut messages = std::collections::VecDeque::from([
+        inline,
+        invoked_completion_request(3, uri, source, "value"),
+    ]);
+
+    assert_eq!(
+        pop_next_pending_message(&mut messages).unwrap()["method"],
+        "textDocument/completion"
+    );
+    assert_eq!(
+        pop_next_pending_message(&mut messages).unwrap()["method"],
+        "tua/localInlineCompletion"
+    );
+}
+
+#[test]
+fn speculative_result_barrier_never_holds_edits_or_menu_completion() {
+    let uri = "file:///tmp/speculative-priority.tua";
+    let source = "local value = 1\n";
+
+    assert!(message_can_wait_for_speculative_result(
+        &inlay_hint_request(1, uri, 0, 0, 1, 0,)
+    ));
+    assert!(!message_can_wait_for_speculative_result(&did_change(
+        uri, source, 2,
+    )));
+    assert!(!message_can_wait_for_speculative_result(
+        &invoked_completion_request(2, uri, source, "value")
+    ));
+    assert!(!message_can_wait_for_speculative_result(&json!({
+        "jsonrpc": "2.0",
+        "method": "$/cancelRequest",
+        "params": {"id": 2}
+    })));
+}
+
+#[test]
+fn speculative_result_barrier_expires_without_a_worker_result() {
+    let uri = "file:///tmp/speculative-timeout.tua";
+    let mut server = LspServer::default();
+    let _ = server.handle_message(did_open(uri, "local value = 1\n"));
+    enable_scheduled_local_inline_completion(&mut server);
+    let (event_tx, _event_rx) = std::sync::mpsc::sync_channel(EVENT_QUEUE_CAPACITY);
+    let mut scheduler = RequestScheduler::new(event_tx, SharedReceivedInputState::default());
+    let request = json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tua/localInlineCompletion",
+        "params": {
+            "textDocument": {"uri": uri},
+            "position": {"line": 0, "character": 15},
+            "documentVersion": 1,
+            "testDelayMs": 100
+        }
+    });
+
+    assert!(scheduler
+        .dispatch(&mut server, request, Some(1))
+        .iter()
+        .all(|message| message.get("error").is_none()));
+    assert!(scheduler.speculative_has_priority(Instant::now()));
+    std::thread::sleep(Duration::from_millis(15));
+    assert!(!scheduler.speculative_has_priority(Instant::now()));
+}
+
+#[test]
+fn speculative_barrier_defers_only_workspace_warm_adoption() {
+    let mut deferred = VecDeque::new();
+    let request =
+        ServerEvent::RequestFinished(Box::new(scheduler::WorkerResult::test_result(1, false)));
+    assert!(defer_workspace_warm_result(request, &mut deferred).is_some());
+    assert!(
+        deferred.is_empty(),
+        "ordinary request results stay responsive"
+    );
+
+    let warm =
+        ServerEvent::RequestFinished(Box::new(scheduler::WorkerResult::test_result(2, true)));
+    assert!(defer_workspace_warm_result(warm, &mut deferred).is_none());
+    assert_eq!(deferred.len(), 1);
+    assert!(take_deferred_workspace_warm_result(&mut deferred, true, true).is_none());
+    assert_eq!(
+        deferred.len(),
+        1,
+        "the bounded priority window keeps warm adoption deferred"
+    );
+    assert!(take_deferred_workspace_warm_result(&mut deferred, false, true).is_some());
+    assert!(
+        deferred.is_empty(),
+        "idle coordinator drains deferred warm adoption"
+    );
+}
+
+#[test]
+fn speculative_result_mailbox_bypasses_a_saturated_event_queue() {
+    let uri = "file:///tmp/speculative-saturated-events.tua";
+    let mut server = LspServer::default();
+    let _ = server.handle_message(did_open(uri, "local value = 1\n"));
+    enable_scheduled_local_inline_completion(&mut server);
+    let (event_tx, event_rx) = std::sync::mpsc::sync_channel(EVENT_QUEUE_CAPACITY);
+    let event_fill = event_tx.clone();
+    let mut scheduler = RequestScheduler::new(event_tx, SharedReceivedInputState::default());
+    for id in 0..EVENT_QUEUE_CAPACITY {
+        event_fill
+            .try_send(ServerEvent::Input(Ok(Some(json!({
+                "jsonrpc": "2.0",
+                "id": 1000 + id,
+                "method": "tua/unknown"
+            })))))
+            .expect("fixture should fill the event queue exactly");
+    }
+    let request = json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tua/localInlineCompletion",
+        "params": {
+            "textDocument": {"uri": uri},
+            "position": {"line": 0, "character": 15},
+            "documentVersion": 1
+        }
+    });
+    assert!(scheduler
+        .dispatch(&mut server, request, Some(1))
+        .iter()
+        .all(|message| message.get("error").is_none()));
+
+    let deadline = Instant::now() + Duration::from_millis(100);
+    let result = loop {
+        if let Some(result) = scheduler.take_speculative_results().into_iter().next() {
+            break result;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "speculative result was not published"
+        );
+        std::thread::yield_now();
+    };
+    assert_eq!(scheduler.finish(&mut server, result)[0]["id"], 1);
+    drop(event_rx);
 }
 
 #[test]
@@ -410,7 +800,7 @@ fn request_worker_survives_a_large_incomplete_lua_block() {
                     .expect("large incomplete request should finish")
                 {
                     ServerEvent::RequestFinished(result) => break result,
-                    ServerEvent::Input(_) => continue,
+                    ServerEvent::Input(_) | ServerEvent::SpeculativeReady => continue,
                 }
             };
 
@@ -886,7 +1276,7 @@ fn received_document_version_rejects_a_result_before_did_change_is_processed() {
             .expect("worker result")
         {
             ServerEvent::RequestFinished(result) => break result,
-            ServerEvent::Input(_) => continue,
+            ServerEvent::Input(_) | ServerEvent::SpeculativeReady => continue,
         }
     };
     let output = scheduler.finish(&mut server, *result);

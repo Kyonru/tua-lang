@@ -175,6 +175,50 @@ directions. See [Input](input.md).
     server, then asks Tua to validate the candidate in a cloned analysis host.
     Normal completion-menu results never go through Ollama.
 
+### Deterministic Local Inline Completion
+
+Set `tua.completion.inline.enabled` to `true` to try deterministic ghost text
+without a model. It is experimental and off by default. The first phase has
+two independently configurable sources:
+
+- `tua.completion.inline.sources.semantic` reuses unique, source-only statement
+  snippets after at least three prefix characters;
+- `tua.completion.inline.sources.currentFile` recalls conservative
+  continuations from other lines in the active file while preserving their
+  original spelling and layout.
+
+Current-file recall excludes the line being edited, requires a meaningful
+prefix, and stops at the end of the line. A continuation supported by only one
+other line is shortened to its first token; longer common prefixes require at
+least two supporting lines. Recall is currently suppressed in assignment and
+member-access contexts, where the tuning data was substantially less precise.
+Semantic statement snippets may contain their normal block body, but the
+pattern-recall source is single-line.
+
+The server checks cursor eligibility, suffix compatibility, cancellation, and
+parse safety before returning at most one item. Candidate generation and
+validation use a 10 ms core deadline; before starting a non-interruptible parse,
+Tua checks that the remaining budget is sufficient and otherwise abstains.
+Queue, protocol, and end-to-end request latency are measured separately. This
+path reads the current in-memory document only. It does not build an analysis
+snapshot, run type checking, scan other project files, read a pattern database,
+or persist source text. LÖVE callback ghost text, project-wide retrieval,
+bundled patterns, statistical prediction, and multi-line pattern recall are not
+part of this phase.
+
+The extension waits 65 ms before requesting ghost text, then gives the local
+backend 250 ms to respond. That request uses a linked cancellation token, so a
+timeout, edit, cursor movement, provider cancellation, or newer request cancels
+the local work and returns no suggestion. The extension also rejects responses
+for an older document version. When the completion menu has a selected item,
+deterministic ghost text is shown only when it extends that item. When enabled,
+the local backend runs first; the separately opted-in Ollama backend runs only
+if local completion is
+disabled, returns no candidate, or is unavailable on an older server. A
+timed-out, cancelled, stale, capacity-limited, or otherwise transient local
+request abstains instead of starting model work. Neither deterministic source
+sends code over the network.
+
 ### Local Ollama Inline Completion
 
 Install Ollama separately, then pull the default model:
@@ -191,10 +235,11 @@ The first release accepts unauthenticated `http://` endpoints only on
 `localhost`, `127.0.0.0/8`, or IPv6 loopback. It keeps one Ollama request in
 flight and cancels it on edits, cursor movement, configuration changes,
 provider cancellation, or a newer request. Requests are skipped in comments,
-strings, multi-cursor sessions, and while a normal completion item is selected.
-These expected cancellations and document-version races are counted locally
-but do not produce warnings. Completion status distinguishes Tua language-server
-availability from Ollama transport, missing-model, and timeout failures.
+strings, multi-cursor sessions, and while a normal completion item is selected;
+the deterministic backend may still extend that selected item. These expected
+cancellations and document-version races are counted locally but do not produce
+warnings. Completion status distinguishes Tua language-server availability
+from Ollama transport, missing-model, and timeout failures.
 
 Tua classifies each request as a local or function completion. Local expression
 and statement candidates remain bounded to eight lines and 1 KiB. Inside an
@@ -503,6 +548,7 @@ contain a value.
 | `tua.ecs.enabled` | Enable or disable built-in ECS analysis; enabled by default |
 | `tua.completion.sequenceRanking.*` | Configure experimental contextual completion ranking |
 | `tua.completion.multiToken.*` | Configure experimental validated multi-token suggestions |
+| `tua.completion.inline.*` | Configure experimental deterministic inline completion and its Phase 1 sources |
 | `tua.fileAssociations` | Index additional glob patterns as Tua or Lua source |
 | `tua.ignoredPaths` | Exclude matching paths from indexing and diagnostics |
 | `tua.requirePathSeparator` | Suggest module paths with `.` or `/` separators |
@@ -549,6 +595,7 @@ The bundled VS Code extension also uses version-matched Tua requests:
 | `tua/cacheStats` | Analysis cache and workspace-warming counters |
 | `tua/health` | Server revision, queue, cache, stale-result, and latency health |
 | `tua/resetCompletionStats` | Clear local adaptive completion statistics |
+| `tua/localInlineCompletion` | Return a version-bound deterministic inline-completion candidate from enabled local sources |
 
 `tua/setTrace` updates runtime trace configuration. These requests are an
 extension integration surface rather than a general stable external API; keep

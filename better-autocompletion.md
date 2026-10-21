@@ -3,9 +3,10 @@
 ## Context
 
 Tua's menu completion already covers scope, types, LÖVE APIs, paths, snippets,
-and adaptive ranking. Ghost-text completion currently comes only from Ollama,
-while `multitoken.rs` contributes a small number of hardcoded multi-token menu
-items.
+and adaptive ranking. The implemented first phase adds opt-in deterministic
+ghost text from source-only statement snippets and current-file recall; Ollama
+remains the optional model fallback. `multitoken.rs` still contributes a small
+number of hardcoded multi-token menu items.
 
 The goal is deterministic inline completion that uses existing semantic
 knowledge and patterns from the user's code, with no AI service required.
@@ -67,15 +68,12 @@ generation.
   Project-wide facts arrive only through the immutable, version-checked corpus
   introduced in Phase 2, so results never depend on whether a **project**
   snapshot happens to be cached.
-- Current-file semantic candidates do depend on timing, by design. `didChange`
-  queues a high-priority warm-up of the edited file, but `adopt_warmed_file`
-  adopts the result only if the revision hasn't moved since. During continuous
-  typing it usually has, so `peek_current_analysis_file` may miss, and the
-  candidates that need parsed facts (LÖVE callbacks) may be withheld until
-  typing pauses. Given the same source and the same current-file cache state,
-  results are deterministic. Source-only candidates (statement snippets,
-  current-file recall) never depend on cache state. Phase 0 measures how often
-  the lookup hits.
+- Phase 1 candidate generation is source-only, so statement snippets and
+  current-file recall do not depend on cache warm-up timing. Parse-only
+  validation may reuse an exactly matching cached parse as its error baseline;
+  a miss never causes semantic analysis or a snapshot build. Any future
+  candidate that needs parsed facts must be justified by measured cache-hit
+  behavior and remain safe when the lookup misses.
 - It may perform a bounded source-kind parse for validation. This builds the
   complete syntax model but not the checker, linter, type environment, or
   project indexes. The common case is a single parse.
@@ -104,7 +102,10 @@ generation.
 Record baselines on a clean `main`:
 
 - Menu completion p50/p95 using `make profile-completion`
-- Representative contention using `make profile-representative`
+- Representative contention using `make profile-representative`, including
+  inline queue, worker-execution, scheduler-dispatch-to-response server/request,
+  core-backend, client-observed request-age, parse-counter, and
+  first-diagnostics-after-edit measurements
 - Diagnostics freshness using `make editor-regression-smoke`
 - Large-source behavior using `make profile-large-tables`
 - Complete syntax-parse throughput and p95 latency for each source kind
@@ -176,6 +177,18 @@ cargo run -p tua-core \
   - Uses small, committed, deterministic fixtures.
   - Runs under `benchmark-smoke` and CI.
   - Requires no network access.
+- `make representative-phase1-gate`
+  - Runs the full representative fixture matrix with independent strict 10 ms
+    budgets for scheduler-dispatch-to-response latency, worker execution,
+    and core/backend work, plus a 1,500 ms p95 ceiling for client-observed
+    contended request age.
+  - Writes `target/tua-speed/representative-phase1-gate.json`.
+- `make inline-eval-phase-gate`
+  - Runs `representative-phase1-gate`, then checks the fail-closed aggregate
+    artifact covering every Phase 1 prerequisite.
+- `make inline-eval-phase-gate-check`
+  - Checks the recorded aggregate artifact without rerunning the expensive
+    representative fixture matrix.
 - `make inline-eval-external`
   - Downloads pinned third-party projects into `target/`.
   - Verifies commit IDs and checksums.
@@ -184,6 +197,27 @@ cargo run -p tua-core \
 
 The external dataset and the held-out Tua sets are the quality gates for phase
 approval. Ordinary CI never downloads anything.
+
+Passing those dataset gates is necessary but not sufficient for Phase 1
+acceptance. `benchmarks/inline-eval/phase1-gate.toml` is the fail-closed
+aggregate decision: held-out and external quality, representative menu replay,
+completion performance, internal inline performance, client no-stall and
+responsiveness evidence, diagnostics freshness, real-scheduler cache behavior,
+and the validation parse distribution must each be passed with evidence. Run
+`make inline-eval-phase-gate`; a missing, pending, or evidence-free prerequisite
+fails.
+
+The evaluator's production backend deliberately starts cold, so its
+zero/one/two-parse distribution is a report-only diagnostic worst case; it is
+not part of held-out or external quality acceptance. The aggregate validation
+prerequisite instead uses the representative LSP run to measure the production
+request under real scheduling. It may be
+marked passed only when counters cover every attempt and returned candidate,
+no candidate returns without a successful parse, a temporarily-invalid edit
+exercises the two-parse baseline-comparison path, and at least half of returned
+candidates use at most one parse. A zero-parse cancellation or deadline
+abstention is safe and is reported rather than treated as a returned
+completion.
 
 ### Scenarios
 
@@ -246,11 +280,12 @@ Report:
 - Characters saved per eligible position
 - Incorrect characters offered per eligible position
 - Precision/coverage curves
-- p50/p95/p99 latency
+- p50/p95/p99 backend-only latency (candidate generation/validation, excluding
+  evaluator setup, menu filtering, and scoring)
 - Index build time
 - Memory in bytes
 - Parses per request (target: one in the common case)
-- How often `peek_current_analysis_file` hits at request time, during replayed
+- How often the exact-current-source cache peek hits at request time, during replayed
   continuous typing and after pauses of 150 ms, 300 ms, and 1 s. This decides
   whether candidates that need parsed facts are worth shipping in Phase 1.
 - Results by source
@@ -269,12 +304,44 @@ The harness must compare:
 
 ## Phase 1: Minimal vertical slice
 
+> **Implementation status (2026-10-21): implemented, experimental, gate
+> pending.** The core host query, source-only statement snippets,
+> tuning-selected common-prefix current-file recall, parse-only validation,
+> custom LSP request, newest-wins scheduling, configuration, unified VS Code
+> provider, and focused tests are present in the working implementation.
+> Following the Phase 0 evidence, LÖVE callback ghost text was not included;
+> snippets require three typed characters, assignment and member contexts are
+> excluded from recall, a one-line match is limited to its first token, and a
+> full common prefix requires two supporting lines. The feature remains off by
+> default. Menu-completion performance, the strict inline server gate,
+> real-scheduler cache behavior, and validation parse distribution pass. The
+> held-out quality gate, diagnostics baseline comparison, and representative
+> real menu-state replay have not been claimed as passed. Client-observed
+> contention remains as high as 869.41 ms, so the separate responsiveness
+> prerequisite is also pending even though the 1,500 ms no-stall gate passes.
+> Phase 2 must not ship merely because the implementation exists.
+
+The representative profiler now emits schema-version-2 queue, worker,
+scheduler-dispatch-to-response server/request, core, end-to-end request-age,
+inline-counter, and diagnostics-freshness measurements. That instrumentation
+makes the remaining performance gates measurable. The strict seven-fixture
+server/worker/backend and client no-stall gates pass; the aggregate Phase 1
+gate remains pending on responsiveness, quality, menu replay, and
+diagnostics-baseline evidence.
+
 Implement only:
 
 - Narrow semantic snippets
 - Current-file, single-line recall
 
-No project index, bundled corpus, n-grams, database, or multiline completion.
+Existing deterministic semantic snippets may retain their authored multiline
+body so the Phase 1 semantic source is useful. This is a narrow exception for
+the shared snippet catalog, not general multiline generation: recalled or
+learned candidates remain single-line, and Phase 1 does not expose a
+`maxLines` setting. General multiline completion remains gated in Phase 4.
+
+No project index, bundled corpus, n-grams, database, or general multiline
+completion.
 
 ### Core API
 
@@ -310,17 +377,19 @@ Use "score," not "confidence," until calibration exists.
 
 ### Cached lookup that never builds
 
-Add an internal lookup that never builds, such as:
+Use narrow internal lookups that never build:
 
 ```rust
-AnalysisHost::peek_current_analysis_file(path)
+AnalysisHost::current_analysis_cache_matches(path)
+AnalysisHost::peek_current_parse_errors(path)
 ```
 
 Its contract:
 
 - Read the current VFS source.
 - Look in `AnalysisQueryCache::files`.
-- Return a cached file only when path, kind, and source match.
+- Report a hit, or clone only the cached parse-error vector, when path, kind,
+  and source match. Do not clone the full `AnalysisFile` on the request path.
 - Never call `cached_file`.
 - Never parse, rebuild, or update cache statistics.
 - Remain crate-private.
@@ -359,8 +428,8 @@ Instead:
   facts. It returns canonical callback IDs and is used by both menu and inline
   completion; do not infer declarations from workspace-symbol labels or fuzzy
   symbol-index matches.
-- Suppress callbacks already declared in the active file using
-  `peek_current_analysis_file`.
+- Suppress callbacks already declared in the active file using a narrow cached
+  declaration-facts lookup (Phase 1 ultimately dropped this source).
 - Require a unique prefix match after `function love.`.
 - If the current-file lookup misses, return nothing, because even active-file
   duplicates can't be ruled out safely.
@@ -460,7 +529,8 @@ Reject candidates that:
 - Contain unresolved placeholders
 - Produce incompatible bracket or delimiter structure
 - Conflict with the existing line suffix
-- Exceed one line
+- Exceed one line, unless they are deterministic snippets from the existing
+  semantic snippet catalog
 
 #### Stage 2: deciding whether to parse
 
@@ -486,7 +556,7 @@ run the checker or build project analysis.
    the common case while typing, because the document is usually invalid until
    the current line is finished.
 3. If it has errors, get the **baseline** (the errors before the edit):
-   - Use the cached `file.parsed` when `peek_current_analysis_file` hits.
+   - Use the narrow cached parse-error vector when the exact-source peek hits.
    - Otherwise do one source-kind baseline parse, if Stage 2 still allows it.
 4. Compare the two with the diagnostic multiset and position-mapping helpers
    from model completion, made `pub(crate)`.
@@ -564,19 +634,30 @@ can be added later.
 
 ### Scheduling
 
-Initially use the existing foreground workers.
+Use one dedicated speculative worker. Representative contention measurements
+showed that sharing the foreground workers kept core/backend work below 2 ms
+but raised dispatch-to-response latency above the 10 ms Phase 1 gate.
 
 - Give local inline completion lower coordinator priority than menu completion.
 - Mark it non-interactive for capacity accounting.
 - Implement newest-wins cancellation per URI.
+- Keep at most one queued request per URI in the speculative lane; replace a
+  queued superseded request instead of accumulating cancelled work.
+- Prepare an owned source query on the coordinator without parsing or building
+  analysis, and run all generation and validation on the speculative worker.
+- Give core candidate generation and validation a 10 ms deadline. Check the
+  remaining budget before each non-interruptible parse and abstain when there
+  is not enough time. Queue, dispatch-to-response request, and client-observed
+  end-to-end latency remain separate measured budgets. During the speculative
+  worker's bounded priority window, only completed workspace-warm adoption is
+  deferred; edits, cancellation, menu completion, and ordinary completed
+  requests bypass it.
 - Pass the scheduler's cancellation flag into the core query.
 - Check cancellation between stages and inside long scans.
 - Keep cancelling requests for documents that have been edited.
 
 Newest-wins is distinct from the existing coalescing: a newer request cancels
 the older job instead of joining it as another waiter.
-
-Do not add a speculative worker lane unless contention measurements justify it.
 
 ### Extension
 
@@ -585,14 +666,18 @@ Refactor `ollama-completion.js` into one `inline-completion.js` controller.
 The provider:
 
 - Debounces approximately 50-75 ms.
+- After the debounce, bounds the local backend request to 250 ms with a linked
+  cancellation token. Timeout is a transient abstention and never starts the
+  Ollama fallback.
 - Cancels on edits and cursor movement.
 - Rejects stale document versions.
 - Sends the selected completion's text and range when present.
 - Tries the local backend first.
-- Calls Ollama only when local completion returns nothing and model integration
-  is enabled.
+- Calls Ollama only when local completion returns no candidate or the server
+  does not support the local request, and model integration is enabled.
 - Uses `SnippetString` for snippet candidates.
-- Treats cancellation, `ContentModified`, and capacity errors as empty results.
+- Treats cancellation, `ContentModified`, and capacity errors as transient
+  abstentions that do not start Ollama work.
 - Deduplicates candidates equivalent to the selected menu item.
 - Preserves current Ollama status and statistics behavior.
 
@@ -625,6 +710,17 @@ measurements. Each one must exist before its gate is checked.
   correct the simulation, and report menu-open and menu-closed results from
   the replays. Required before the Phase 1 gate, because those results are
   reported separately.
+  The developer-only local JSONL capture and evaluator ingestion are now
+  implemented behind `TUA_INLINE_REPLAY_ROOT` plus
+  `TUA_INLINE_REPLAY_CAPTURE`; `--menu-replay` applies a record only when its
+  edited-document hash, cursor, and selection range match a generated scenario
+  exactly, then validates core eligibility. Records retain the dataset-relative
+  path and selected completion text/range when present; selected text can carry
+  source-derived names, so capture files are potentially sensitive local
+  evaluation data and must not be committed. Capture normalizes CRLF to the
+  evaluator's canonical LF before hashing. Valid but unrelated edits are
+  reported as unmatched. Actual tuning-set replay results are still required
+  before the gate can be claimed as passed.
 - **Parses per request.** There is nothing to count until parse-only
   validation exists. Once it does, the evaluator reports parses per request
   and how often the edited text alone was enough. The Phase 1 gate's "common-case
@@ -632,7 +728,7 @@ measurements. Each one must exist before its gate is checked.
 - **Warm-up hit rate under real scheduling.** Phase 0 compares each warm-up's
   duration with the request delay. That's an upper bound: it assumes the
   warm-up starts at the keystroke and never waits behind other work. Measure
-  `peek_current_analysis_file` hits inside the language server, with real
+  exact-current-source cache-peek hits inside the language server, with real
   scheduling and the newest-wins cancellation, before relying on any
   candidate that needs parsed facts.
 - **Cold, partial, and warm index states.** These describe the Phase 2 project
@@ -681,23 +777,40 @@ precision from 0.28 to 0.53. It still misses the provisional 1.0 and 0.60
 limits, so this is evidence to improve or narrow the backend—not permission to
 weaken the gates or inspect held-out results.
 
-Requiring two supporting lines made long recall precise but left the Tua slice
-below its coverage floor. The selected tuning candidate therefore keeps full
-common-prefix continuations at support two or higher and limits a one-line
-match to its first token. On the tuning set this reaches 0.80 correct-prefix
-precision overall, with 0.21 wrong characters per character saved. Split by
-language, Lua reaches 0.82 precision, 0.19 wrong/saved, and 0.38 characters
-saved per eligible position; Tua reaches 0.73, 0.35, and 0.15 respectively.
-Both produce more than 100 suggestions. These measurements select the frozen
-candidate but do not predict held-out performance.
+Requiring two supporting lines makes long recall precise, but leaves the Tua
+slice below its coverage floor. The current candidate keeps full common-prefix
+continuations at support two or higher and limits a one-line match to its
+first token. On the tuning set this reaches 0.80 correct-prefix precision
+overall, with 0.24 wrong characters per character saved. Split by language,
+Lua reaches 0.82 precision, 0.21 wrong/saved, and 0.236 characters saved per
+eligible position; Tua reaches 0.71, 0.41, and 0.094 respectively. Broadening
+assignment/member recall, allowing full one-line continuations, two-letter
+snippet exceptions, and ambiguous snippet common-prefix fallback were all
+tested only on tuning data and rejected. The candidate remains below the
+provisional Tua usefulness floor, so Phase 1 is quality-blocked and no
+held-out or external quality gate has been run.
 
 ### Phase 1 gate
 
 Proceed only if:
 
 - Menu completion stays within its existing 5% tolerance.
-- Diagnostics freshness does not noticeably regress.
-- Inline server p95 meets the target set in Phase 0, initially at most 10 ms.
+- Diagnostics freshness meets the representative profile's configured
+  first-publication-after-edit budget.
+- Offline core/backend p95 meets the committed evaluator threshold (10 ms in
+  the frozen candidate), and representative inline core/backend,
+  worker-execution, scheduler-dispatch-to-response server/request, and
+  client-observed end-to-end p95 meet their independently configured budgets. The
+  representative defaults are 20 ms each for worker and core/backend work and
+  broad 10,000 ms stall ceilings for server/request and end-to-end request
+  age; those broad ceilings are not UX targets. `make
+  representative-phase1-gate` tightens the dispatch-to-response, worker, and
+  core/backend limits to 10 ms and client-observed contended request age to
+  a 1,500 ms stall ceiling before the aggregate phase-gate check runs. That
+  request-age ceiling catches coordinator/transport stalls; it is not UX
+  acceptance for a suggestion that arrives that late. The extension's separate
+  250 ms local-request timeout protects interactive responsiveness after its
+  65 ms debounce; it is not replaced by the synthetic 1,500 ms gate.
 - Current-file recall adds measurable characters saved per eligible position.
 - Held-out precision meets the committed thresholds, separately for:
   - the Tua held-out projects plus the frozen holdout fixtures
@@ -706,9 +819,18 @@ Proceed only if:
   absent.
 - No inline query builds semantic analysis or a snapshot.
 - Common-case validation needs one parse.
+- The representative gate includes a temporarily-invalid edit: it must exercise
+  a successful two-parse baseline comparison, no candidate may return after
+  zero parses, and at least half of returned candidates must use at most one
+  parse.
 - Callback candidates ship only if the measured lookup hit rate during typing
   lets them add measurable characters saved. Otherwise Phase 1 ships without
   them.
+
+This is an aggregate gate. The held-out evaluator checks quality and
+backend-only latency; it cannot by itself pass the menu-completion,
+representative server/end-to-end latency, diagnostics-freshness, real-menu
+replay, cache-hit, or parse-distribution prerequisites above.
 
 ---
 
@@ -1085,7 +1207,8 @@ Only after preceding gates:
 - Use a neutral prior or log-odds adjustment.
 - Do not multiply directly by `(accepted + 1) / (returned + 2)`.
 - Add standard `textDocument/inlineCompletion` support.
-- Add a speculative worker lane only if measured contention requires it.
+- Revisit speculative-lane sizing only if later contention measurements show
+  the single-worker/latest-queued design is insufficient.
 - Feed pattern information into menu ranking only if menu benchmarks improve.
 - Consider `editor.suggest.preview` as a separate UX change.
 - Deprecate old multi-token settings only after replacement stability.
@@ -1190,7 +1313,8 @@ Phase 3 adds tokenizer, predictor, and renderer modules, but only if the Phase
 
 - `analysis/host.rs`
   - `local_inline_completion`
-  - `peek_current_analysis_file` (never builds)
+  - narrow exact-source cache match and parse-error peeks (never build and do
+    not clone the full analysis file)
 - `analysis/database.rs`
   - Crate-private peek into `files`
   - (Phase 2) Split `module_links_tua_source` (`module_link/mod.rs`) into the
@@ -1256,15 +1380,10 @@ Test:
 - String and comment rejection
 - Agreement with existing text after the cursor
 - Source-only snippets when the semantic cache misses
-- Callback duplicates suppressed when declared in the current file
-- Phase 1 callback results are identical regardless of whether a project
-  snapshot happens to be cached
-- With the same source and the same current-file cache state, results are
-  identical. Source-only candidates are identical whether the lookup hits or
-  misses.
-- Declared callbacks are identified by the shared exact declaration query, not
-  by fuzzy or display-name symbol lookup
-- No callback suggested when the current-file semantic cache misses
+- Phase 1 never produces callback ghost text and source-only candidates are
+  identical whether the current-file cache hits or misses
+- (Phase 2) Callback duplicates are suppressed using the shared exact
+  declaration query, not fuzzy or display-name symbol lookup
 - Inline queries build nothing: rebuild counters (`record_file_rebuild`) are
   unchanged and the snapshot cache revision doesn't move
 - Size check before parsing
@@ -1352,13 +1471,13 @@ make ci-check
 
 In `examples/love-tua`:
 
-- Recall after `(`, `,`, `=`, operators, and whitespace
+- Recall after `(`, `,`, operators, whitespace, statement prefixes, and
+  identifiers
+- No recall in the intentionally excluded assignment and member-access
+  contexts
 - Extend a selected menu item
-- Suggest missing callbacks after `function love.`
-- Suppress callbacks already declared in the same file
-- Confirm Phase 1 callback results do not change when the snapshot cache warms
-- In Phase 2, always suppress callbacks declared in another current project
-  file
+- In Phase 2, suggest missing callbacks and suppress callbacks declared in any
+  current project file
 - No suggestions in comments or strings
 - No duplicated closing delimiters
 - Correct behavior during invalid edits

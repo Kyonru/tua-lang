@@ -7,13 +7,13 @@ use tua_core::{
     CodeLensReferenceTarget, CodeLensTarget, Completion, CompletionKind, Definition, Diagnostic,
     DiagnosticCode, DiagnosticSeverity, DocumentHighlight, DocumentHighlightKind, DocumentSymbol,
     DocumentSymbolKind, EcsAccessKind, EcsComponentUse, EcsGraph, EcsInsightKind, EcsQueryKind,
-    FoldingRange, FoldingRangeKind, Hover, InlayHint, InlayHintKind, InspectorItem,
-    ModuleDependencyGraph, ModuleExportOrigin, ModuleLink, ModuleSpecifierKind, ObjectPoolGraph,
-    ObjectPoolInsightKind, ObjectPoolOperationKind, Reference, RenameEdit, RenameTarget,
-    RequireResolution, SelectionRange, SemanticToken, SemanticTokenKind, SemanticTokenModifier,
-    SignalGraph, SignalGraphCallRole, SignalGraphParameter, SignatureHelp, SignatureInformation,
-    SourcePosition, SourceSpan, TextEdit, TypeExplanation, TypeExplanationStepKind,
-    WorkspaceSymbol, WorkspaceSymbolKind,
+    FoldingRange, FoldingRangeKind, Hover, InlayHint, InlayHintKind, InlineCompletionCandidate,
+    InspectorItem, ModuleDependencyGraph, ModuleExportOrigin, ModuleLink, ModuleSpecifierKind,
+    ObjectPoolGraph, ObjectPoolInsightKind, ObjectPoolOperationKind, Reference, RenameEdit,
+    RenameTarget, RequireResolution, SelectionRange, SemanticToken, SemanticTokenKind,
+    SemanticTokenModifier, SignalGraph, SignalGraphCallRole, SignalGraphParameter, SignatureHelp,
+    SignatureInformation, SourcePosition, SourceSpan, TextEdit, TypeExplanation,
+    TypeExplanationStepKind, WorkspaceSymbol, WorkspaceSymbolKind,
 };
 
 use super::analysis::{
@@ -1509,6 +1509,20 @@ pub(super) fn lsp_range(span: SourceSpan) -> Value {
             "line": span.end.line.saturating_sub(1),
             "character": span.end.column.saturating_sub(1)
         }
+    })
+}
+
+pub(super) fn lsp_inline_completion_from_core(
+    candidate: InlineCompletionCandidate,
+    range: Value,
+) -> Value {
+    json!({
+        "insertText": candidate.insert_text,
+        "isSnippet": candidate.is_snippet,
+        "range": range,
+        "source": candidate.source.as_str(),
+        "score": candidate.score.0,
+        "patternId": candidate.pattern_id.map(|pattern| pattern.0)
     })
 }
 

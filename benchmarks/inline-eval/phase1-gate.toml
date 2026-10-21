@@ -1,0 +1,44 @@
+# Aggregate Phase 1 acceptance state. A dataset quality gate passing is not
+# enough to advance or enable the feature. Update a prerequisite to `passed =
+# true` only with a reproducible local artifact or committed CI result.
+version = 1
+
+[prerequisites.heldout_quality]
+passed = false
+evidence = "not run; frozen held-out data remains unspent"
+
+[prerequisites.external_quality]
+passed = false
+evidence = "not run; frozen external data remains unspent"
+
+[prerequisites.menu_replay]
+passed = false
+evidence = "capture/replay works, but a representative tuning-set typing replay is still required"
+
+[prerequisites.completion_performance]
+passed = true
+evidence = "the complete 2026-10-21 Phase 1 diff records completion p95 6.05 ms against the clean-main allowance of 6.62 ms (5% or 1 ms, whichever is larger); completion-context cache hit rate remained 98.5%"
+
+[prerequisites.inline_server_performance]
+passed = true
+evidence = "the full 2026-10-21 target/tua-speed/representative-phase1-gate.json records dispatch-to-response p95 0-7 ms, worker p95 0.236-7.371 ms, and core/backend p95 0.225-1.208 ms across all seven fixtures within each strict 10 ms budget"
+
+[prerequisites.inline_client_no_stall]
+passed = true
+evidence = "the full 2026-10-21 target/tua-speed/representative-phase1-gate.json records client-observed contended request-age p95 of 56.10, 359.28, 35.26, 869.41, 35.79, 12.41, and 11.19 ms, all within the 1,500 ms stall ceiling"
+
+[prerequisites.inline_client_responsiveness]
+passed = false
+evidence = "client-observed contended request-age reaches 869.41 ms on project-1000; the extension now abstains after 250 ms, but representative editor replay must verify that protection before responsive ghost text is claimed"
+
+[prerequisites.diagnostics_freshness]
+passed = false
+evidence = "target/tua-speed/representative-phase1-gate.json records content-bound diagnostic publication for a distinctive per-revision probe in all seven fixtures (p95 5.65-884.50 ms), but the complete Phase 1 diff still needs a baseline comparison"
+
+[prerequisites.scheduler_cache_hit]
+passed = true
+evidence = "target/tua-speed/representative-phase1-gate.json records 0 cache-peek hits and 21 misses under real scheduling; Phase 1 therefore excludes callbacks and other cache-dependent candidates instead of relying on unavailable cached analysis"
+
+[prerequisites.validation_parse_distribution]
+passed = true
+evidence = "the full 2026-10-21 representative report records four returning fixtures with returned-after-parse counts 0/2/1 (zero/one/two), 66.7% at most one parse, and the temporarily-invalid two-parse path; three capped large-file fixtures safely returned nothing"

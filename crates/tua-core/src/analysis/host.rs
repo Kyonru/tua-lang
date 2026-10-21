@@ -708,6 +708,50 @@ impl AnalysisHost {
 
         stats.completion_context_hits = completion_stats.hits;
         stats.completion_context_misses = completion_stats.misses;
+        stats.inline_completion_requests = self
+            .inline_completion_stats
+            .requests
+            .load(std::sync::atomic::Ordering::Relaxed);
+        stats.inline_cache_peek_hits = self
+            .inline_completion_stats
+            .cache_peek_hits
+            .load(std::sync::atomic::Ordering::Relaxed);
+        stats.inline_cache_peek_misses = self
+            .inline_completion_stats
+            .cache_peek_misses
+            .load(std::sync::atomic::Ordering::Relaxed);
+        stats.inline_validation_attempts = self
+            .inline_completion_stats
+            .validation_attempts
+            .load(std::sync::atomic::Ordering::Relaxed);
+        stats.inline_candidate_parses = self
+            .inline_completion_stats
+            .candidate_parses
+            .load(std::sync::atomic::Ordering::Relaxed);
+        stats.inline_baseline_parses = self
+            .inline_completion_stats
+            .baseline_parses
+            .load(std::sync::atomic::Ordering::Relaxed);
+        stats.inline_edited_parse_sufficient = self
+            .inline_completion_stats
+            .edited_parse_sufficient
+            .load(std::sync::atomic::Ordering::Relaxed);
+        stats.inline_candidates_returned = self
+            .inline_completion_stats
+            .candidates_returned
+            .load(std::sync::atomic::Ordering::Relaxed);
+        stats.inline_returned_after_zero_parses = self
+            .inline_completion_stats
+            .returned_after_zero_parses
+            .load(std::sync::atomic::Ordering::Relaxed);
+        stats.inline_returned_after_one_parse = self
+            .inline_completion_stats
+            .returned_after_one_parse
+            .load(std::sync::atomic::Ordering::Relaxed);
+        stats.inline_returned_after_two_parses = self
+            .inline_completion_stats
+            .returned_after_two_parses
+            .load(std::sync::atomic::Ordering::Relaxed);
 
         stats
     }
@@ -1071,8 +1115,8 @@ impl AnalysisHost {
     /// The cached analysis for `path`, only when it was built from exactly the
     /// current VFS source and kind. Never parses, builds, or records cache
     /// statistics, so inline completion can use parsed facts when a warm-up
-    /// already produced them without ever paying for a build itself. Only the
-    /// Phase 0 evaluator calls it until inline completion ships.
+    /// already produced them without ever paying for a build itself. Local
+    /// evaluator uses it to measure opportunistically available parse facts.
     #[cfg(any(test, feature = "test-fixture"))]
     fn peek_current_analysis_file(&self, path: &Path) -> Option<AnalysisFile> {
         let path = normalize_path(path);
@@ -1082,6 +1126,26 @@ impl AnalysisHost {
         let cached = cache.files.get(&path)?;
 
         (cached.source == source && cached.kind == kind).then(|| cached.file.clone())
+    }
+
+    fn peek_current_parse_errors(&self, path: &Path) -> Option<Vec<Diagnostic>> {
+        let path = normalize_path(path);
+        let source = self.vfs.source(&path)?;
+        let kind = self.vfs.kind(&path).map(analysis_source_kind)?;
+        let cache = self.cache.borrow();
+        let cached = cache.files.get(&path)?;
+        if cached.source != source || cached.kind != kind {
+            return None;
+        }
+        Some(
+            cached
+                .file
+                .parsed
+                .as_ref()
+                .err()
+                .cloned()
+                .unwrap_or_default(),
+        )
     }
 
     /// Whether the current source parsed, from the cache only. `None` when the
@@ -1113,6 +1177,53 @@ impl AnalysisHost {
                 .map(str::to_owned)
                 .collect(),
         )
+    }
+
+    /// Capture the immutable, source-local inputs for inline completion. This
+    /// never builds analysis or takes a snapshot; cached parse errors are used
+    /// only when an exact current-source entry already exists.
+    pub fn prepare_local_inline_completion(
+        &self,
+        path: impl AsRef<Path>,
+    ) -> Option<crate::PreparedInlineCompletion> {
+        let path = normalize_path(path.as_ref());
+        let source = self.vfs.source(&path)?.to_owned();
+        let kind = self.vfs.kind(&path).map(analysis_source_kind)?;
+        let baseline_parse_errors = self.peek_current_parse_errors(&path);
+        self.inline_completion_stats
+            .requests
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let counter = if baseline_parse_errors.is_some() {
+            &self.inline_completion_stats.cache_peek_hits
+        } else {
+            &self.inline_completion_stats.cache_peek_misses
+        };
+        counter.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
+        Some(crate::PreparedInlineCompletion {
+            path,
+            source,
+            kind,
+            include_ecs: self.config.ecs.enabled,
+            baseline_parse_errors,
+            stats: std::sync::Arc::clone(&self.inline_completion_stats),
+        })
+    }
+
+    /// Convenience form of [`Self::prepare_local_inline_completion`] for
+    /// callers that already execute directly on the host.
+    pub fn local_inline_completion(
+        &self,
+        path: impl AsRef<Path>,
+        position: SourcePosition,
+        options: &crate::InlineCompletionOptions,
+        budget: &crate::InlineCompletionBudget,
+        cancelled: &std::sync::atomic::AtomicBool,
+    ) -> Vec<crate::InlineCompletionCandidate> {
+        let Some(prepared) = self.prepare_local_inline_completion(path) else {
+            return Vec::new();
+        };
+        prepared.complete(position, options, budget, cancelled)
     }
 
     fn current_analysis_file(&self, path: &Path) -> Option<AnalysisFile> {

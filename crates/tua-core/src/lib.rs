@@ -156,6 +156,10 @@ pub use ide_db::{
     SymbolIndex, SymbolIndexEntry, SymbolIndexExport, SymbolIndexId, SymbolIndexKind,
 };
 pub use inlay_hint::{inlay_hints_parsed_source, inlay_hints_tua_source, InlayHint, InlayHintKind};
+pub use inline_completion::{
+    InlineCompletionBudget, InlineCompletionCandidate, InlineCompletionOptions,
+    InlineCompletionScore, InlineCompletionSource, PatternId, PreparedInlineCompletion,
+};
 pub use inspector::{
     InspectorItem, SpriteAnimationInspection, SpriteAssetInspection, SpriteFrameInspection,
     SpriteSheetInspection, StateMachineInspection, StateMachineStateInspection,

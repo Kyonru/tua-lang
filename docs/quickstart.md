@@ -97,12 +97,17 @@ These commands are useful immediately:
   parameter-only, and disabled hints.
 - **Tua: Toggle Experimental Completions** enables or disables contextual
   sequence ranking and multi-token suggestions for the current workspace.
+- Set `tua.completion.inline.enabled` to `true` to try experimental
+  deterministic ghost text from source-only statement snippets and repeated
+  lines in the current file. It is separate from the experimental-completions
+  command and remains off by default.
 - **Tua: Focus Output** opens server, build, and runtime logs.
 
 !!! info "Experimental completions are opt-in"
     Experimental completion features are off by default. The toggle changes
     only their two top-level feature gates; advanced and future
-    model-integration policy settings remain untouched.
+    model-integration policy settings and deterministic inline completion
+    remain untouched.
 
 ## 5. Know The Project Model
 

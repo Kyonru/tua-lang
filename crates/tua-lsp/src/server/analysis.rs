@@ -11,9 +11,10 @@ use tua_core::{
     CompletionAdaptiveStats, Diagnostic, DocumentHighlight, DocumentSymbol, FoldingRange,
     FormatOptions, InlayHint, InspectorItem, ModelCompletionContext, ModelCompletionValidation,
     ModelCompletionValidationRequest, ModuleDependencyGraph, ModuleLink, ModuleSpecifierKind,
-    ProjectModel, ProjectModelOptions, ProjectWorkspace, Reference, RenameEdit, RenameTarget,
-    SelectionRange, SemanticToken, SignalGraph, SignatureHelp, SourcePosition, SourceSpan,
-    TextEdit, TypeExplanation, VfsSourceKind, WorkspaceSymbol, CONFIG_FILE,
+    PreparedInlineCompletion, ProjectModel, ProjectModelOptions, ProjectWorkspace, Reference,
+    RenameEdit, RenameTarget, SelectionRange, SemanticToken, SignalGraph, SignatureHelp,
+    SourcePosition, SourceSpan, TextEdit, TypeExplanation, VfsSourceKind, WorkspaceSymbol,
+    CONFIG_FILE,
 };
 
 use super::auto_import::{
@@ -84,6 +85,13 @@ struct OpenDocument {
 }
 
 impl AnalysisHost {
+    pub(super) fn prepare_local_inline_completion(
+        &self,
+        path: &Path,
+    ) -> Option<PreparedInlineCompletion> {
+        self.core.prepare_local_inline_completion(path)
+    }
+
     pub(super) fn snapshot(
         &self,
         workspace_folders: &[PathBuf],

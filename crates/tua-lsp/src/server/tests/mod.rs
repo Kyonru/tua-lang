@@ -20,6 +20,7 @@ mod ecs_graph;
 mod formatting;
 mod hover;
 mod inlay_hints;
+mod inline_completion;
 mod inspector;
 mod model_completion;
 mod module_graph;

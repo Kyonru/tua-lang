@@ -117,7 +117,10 @@ class LspClient {
   waitForDiagnostics(uri, options = {}) {
     const timeoutMs = options.timeoutMs || 2000;
     const allowTimeout = Boolean(options.allowTimeout);
-    const existingIndex = this.diagnostics.findIndex((message) => diagnosticUri(message) === uri);
+    const predicate = options.predicate || (() => true);
+    const existingIndex = this.diagnostics.findIndex(
+      (message) => diagnosticUri(message) === uri && predicate(message),
+    );
 
     if (existingIndex !== -1) {
       const [message] = this.diagnostics.splice(existingIndex, 1);
@@ -128,6 +131,7 @@ class LspClient {
     return new Promise((resolve, reject) => {
       const waiter = {
         uri,
+        predicate,
         resolve,
         reject,
         allowTimeout,
@@ -197,7 +201,9 @@ class LspClient {
 
   handleDiagnostics(message) {
     const uri = diagnosticUri(message);
-    const waiter = this.diagnosticWaiters.find((item) => item.uri === uri);
+    const waiter = this.diagnosticWaiters.find(
+      (item) => item.uri === uri && item.predicate(message),
+    );
 
     if (!waiter) {
       this.diagnostics.push(message);

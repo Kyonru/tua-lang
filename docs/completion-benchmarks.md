@@ -37,9 +37,86 @@ make profile-completion
 Run `make representative-benchmark-smoke` when the change affects snapshots,
 caching, scheduling, project indexing, cancellation, or watched files.
 
-Local inline completion is evaluated offline before it ships. The datasets,
-the held-out and external gates, and every metric definition are described in
+Experimental local inline completion is evaluated offline before its default
+or source scope expands. The datasets, the held-out and external gates, and
+every metric definition are described in
 [`benchmarks/inline-eval/README.md`](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/inline-eval/README.md).
+
+The implemented Phase 1 path is still opt-in. It contains source-only statement
+snippets and conservative current-file recall, not the later project corpus or
+statistical predictor. Its implementation landing does not mean the held-out,
+latency, diagnostics-freshness, real-menu-replay, or parse-count gates have
+passed. Run those gates only with the frozen backend configuration described by
+the evaluator; do not tune after inspecting held-out results.
+
+### Capture Real VS Code Menu State
+
+The evaluator's default menu model is only an approximation of VS Code's fuzzy
+selection and sort order. A developer can explicitly capture the menu state
+that VS Code exposes to the inline provider:
+
+```bash
+TUA_INLINE_REPLAY_ROOT=/absolute/path/to/dataset/root \
+TUA_INLINE_REPLAY_CAPTURE=/absolute/path/to/menu-replay.jsonl \
+code --new-window /absolute/path/to/dataset/root
+```
+
+Set both variables before starting the VS Code process that hosts the Tua
+extension. Capture has no setting or background telemetry path and is entirely
+inactive when either variable is absent. It accepts only file documents whose
+canonical path is below `TUA_INLINE_REPLAY_ROOT` and appends schema-versioned
+JSONL to `TUA_INLINE_REPLAY_CAPTURE`. Also enable
+`tua.completion.inline.enabled`; capture observes the same debounced provider
+requests as the Phase 1 feature and does not run when that feature is off.
+
+The capture does not store document text, an absolute URI, a wall-clock
+timestamp, or inline-completion results. Each event contains the
+manifest-root-relative path, SHA-256 source hash, zero-based UTF-16 position,
+document version, elapsed time since an observed edit, whether the menu was
+open, and the selected completion text/range when present. CRLF is normalized
+to LF before hashing so Windows editor documents match the evaluator's
+canonical scenarios. The selected text is necessary to reproduce VS Code's
+extension rule. The file stays local and Tua never uploads it.
+
+The relative path still reveals part of the dataset layout, and selected
+completion text can retain source-derived identifiers or literals. Treat the
+JSONL as potentially sensitive local evaluation data: keep it out of version
+control and delete it when it is no longer needed.
+
+Replay a tuning capture with:
+
+```bash
+cargo run -p tua-core --features test-fixture --example inline_eval -- \
+  --manifest benchmarks/inline-eval/manifest.toml --set tune \
+  --menu-replay /absolute/path/to/menu-replay.jsonl \
+  --out target/tua-speed/inline-eval-menu-replay.json
+```
+
+For a useful typing replay, work in a tuning fixture without saving changes:
+delete the rest of one code line from a sampled cursor, then type that text
+back. This produces the evaluator's `edit` scenario; editor-inserted closing
+delimiters can produce its `auto-close` scenario. Arbitrary edits are safe to
+capture but normally remain unmatched because the evaluator has no known truth
+for them.
+
+The evaluator loads the declared dataset and regenerates each known-truth
+scenario. A record is applied only when its edited-document hash, UTF-16 cursor
+position, and selection range match that exact scenario. Malformed,
+outside-dataset, out-of-bounds, and ineligible events are rejected; valid
+events that match no scenario are counted as unmatched instead of silently
+being treated as menu evidence. Use a fresh output file for a new session
+because capture is append-only. A capture is measurement input, not a new
+tuning set: do not use held-out or external projects to adjust thresholds.
+
+VS Code does not expose a stable public command for executing an inline
+completion provider and inspecting its returned items. The extension-host test
+therefore verifies that the real provider sends a version-bound local request;
+unit tests cover item and snippet conversion, selected-menu ranges, fallback,
+cancellation, and stale responses; and the real-server Rust tests cover the
+request/response contract and returned recall text. Automating
+`editor.action.inlineSuggest.trigger` followed by a timed UI commit would test
+editor focus and animation timing more than the protocol, so it is intentionally
+kept out of the release gate.
 
 ## Prerequisites
 
@@ -204,7 +281,7 @@ The default report is
 | --- | --- | --- |
 | Cold | A fresh server handles one request. | Startup, discovery, initial parsing, and first-query cost. |
 | Warm | One server repeats completion, hover, definition, and whole-document inlay hints. | Cache reuse and steady-state latency. |
-| Contended | Background inlay requests start, the document changes, then completion is requested immediately. | Cancellation, revision freshness, stale-result rejection, and interactive scheduling. |
+| Contended | Background inlay requests start, the document changes, then menu completion, deterministic inline completion, and diagnostics are observed. | Cancellation, revision freshness, stale-result rejection, interactive scheduling, inline queue/server cost, and diagnostics freshness. |
 
 Only `main.tua` is opened. Other project files must be discovered through the
 normal project model, so the profile exercises realistic indexing rather than
@@ -213,11 +290,82 @@ pre-opening every provider.
 The harness fails when:
 
 - warm or contended completion p95 exceeds the configured budget;
+- successful inline request age, scheduler-dispatch-to-response p95,
+  worker-execution p95, or core/backend p95 exceeds its configured budget;
+- the first diagnostics publication after an edit exceeds its configured
+  budget;
+- an inline request fails, its queue/server/core spans do not cover every
+  response, or its parse/cache counters are internally inconsistent;
 - any stale result is observed after a document change;
 - a semantic result validation fails.
 
 Cancellation rate is informational. A low rate can mean background requests
 finished before cancellation was necessary; it is not itself a failure.
+
+### Representative Report Schema
+
+Representative reports use schema version 2. The latency fields deliberately
+measure different boundaries:
+
+| Field | Boundary |
+| --- | --- |
+| `inlineCompletion.profile.coreBackend` | Time inside `AnalysisHost::local_inline_completion`: candidate generation and validation only. This is closest to the offline evaluator's backend latency. |
+| `inlineCompletion.profile.workerExecution` | The outer `lsp.request` span on the worker: request validation, protocol conversion, the core backend, and response construction. |
+| `inlineCompletion.profile.queue` | Time between scheduler dispatch and a worker receiving the request. |
+| `inlineCompletion.serverRequest` | Scheduler-dispatch-to-response method latency, measured after the coordinator selects the request. It covers speculative scheduling and result adoption but excludes time already spent waiting in the coordinator's input queue. |
+| `requestAge.inlineAfterChange` | Client-observed age from sending a contended request after an edit through receiving a successful response. It includes queueing, server work, and protocol transport. `inlineAllAfterChange` also includes error responses. |
+| `diagnostics.firstPublishAfterChange` | Time from `didChange` to a diagnostics publication containing that revision's distinctive probe. Older queued publications cannot satisfy the sample. |
+
+`inlineCompletion.profile` also reports the semantic, recall, and validation
+subspans. `inlineCompletion.counters` is the server's cache-stat snapshot,
+including requests, exact-source cache peeks, candidate attempts, zero/one/two
+parse distribution, returned-after-zero/one/two-parse distribution,
+edited-parse sufficiency, and returned candidates. The
+profile fails closed when server/request samples and queue, worker, or core
+spans do not cover every inline response, when no request reaches the core, or
+when the parse distribution does not equal the candidate-attempt count.
+
+This representative profile is one part of Phase 1 acceptance, not a substitute
+for the offline quality gates. Overall acceptance also requires the committed
+held-out and external precision/utility thresholds, the menu-completion baseline
+comparison, real menu-state replay, diagnostics freshness, no semantic-analysis
+or snapshot build on the inline path, and an acceptable validation parse
+distribution. Passing `make inline-eval-holdout` or
+`make inline-eval-external` alone therefore does not pass Phase 1.
+
+The offline production backend intentionally has a cold analysis cache. Its
+parse distribution is useful for diagnosing worst-case validation cost, but
+it is report-only and does not affect held-out or external quality gates. The aggregate
+validation prerequisite uses the representative LSP counters instead. Its
+temporarily-invalid edit exercises the baseline comparison and two-parse path;
+no candidate may return without parsing, and at least half of returned
+candidates must use at most one parse. Zero-parse cancelled or expired attempts
+are safe abstentions and remain visible in the report.
+
+`make representative-phase1-gate` runs the full representative fixture matrix
+with independent strict 10 ms limits for dispatch-to-response server/request
+latency, worker execution, and core/backend work, plus a 1,500 ms p95 ceiling
+for client-observed contended request age, and
+writes `target/tua-speed/representative-phase1-gate.json`. It leaves the broad
+completion and diagnostics stall ceilings in place. The
+1,500 ms request-age bound is a contention stall ceiling, not a claim that
+one-second ghost text is acceptable interactive UX. Independently, the VS Code
+provider cancels and abstains when its local backend has not answered within
+250 ms after the 65 ms debounce; that client responsiveness protection is not
+replaced by the synthetic no-stall ceiling. The
+first contention round intentionally leaves the document temporarily invalid
+to exercise baseline-plus-candidate parsing. Later rounds use valid documents;
+only those valid rounds gate semantic menu-completion correctness. The invalid
+round's menu result is recorded separately because incomplete syntax can
+legitimately suppress semantic candidates.
+aggregate `make inline-eval-phase-gate` target depends on that representative
+run, then validates every prerequisite and its evidence in
+`benchmarks/inline-eval/phase1-gate.toml`; missing, pending, or evidence-free
+items still fail. Server/request latency starts at scheduler dispatch; the
+separate client request-age metric includes coordinator input waiting and
+transport, so a fast backend alone cannot pass both gates. Use
+`make inline-eval-phase-gate-check` for the cheap
+fail-closed status check without refreshing the representative measurements.
 
 ### Smoke Versus Full Profile
 
@@ -263,6 +411,11 @@ baseline.
 | `TUA_REPRESENTATIVE_BACKGROUND_BURST` | Background requests started before each edit. |
 | `TUA_REPRESENTATIVE_CONTENTION_DELAY_MS` | Delay before changing the document during contention. |
 | `TUA_REPRESENTATIVE_COMPLETION_P95_BUDGET_MS` | Warm and contended completion failure budget; defaults to 10,000 ms, while the shared-runner trend workflow uses 30,000 ms. |
+| `TUA_REPRESENTATIVE_INLINE_SERVER_P95_BUDGET_MS` | Scheduler-dispatch-to-response inline p95 budget; defaults to 10,000 ms. It does not include time waiting for coordinator selection. |
+| `TUA_REPRESENTATIVE_INLINE_WORKER_P95_BUDGET_MS` | Inline worker-execution p95 budget for the outer `lsp.request` span; defaults to 20 ms. |
+| `TUA_REPRESENTATIVE_INLINE_BACKEND_P95_BUDGET_MS` | Inline core/backend p95 budget for `inline.request.core`; defaults to 20 ms. |
+| `TUA_REPRESENTATIVE_INLINE_E2E_P95_BUDGET_MS` | Successful contended inline request-age p95 budget, including queue and transport; defaults to 10,000 ms. This broad default catches stalls and is not a UX target. |
+| `TUA_REPRESENTATIVE_DIAGNOSTICS_P95_BUDGET_MS` | First diagnostics publication after an edit p95 budget; defaults to 10,000 ms. |
 | `TUA_REPRESENTATIVE_PROFILE_OUT` | JSON report path. |
 | `TUA_LSP_REQUEST_TIMEOUT_MS` | Per-request timeout. |
 | `TUA_REPRESENTATIVE_WARM_TIMEOUT_MS` | Maximum wait for every discovered file and the project snapshot to finish warming; defaults to 120 seconds. |
