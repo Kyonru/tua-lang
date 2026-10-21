@@ -26,6 +26,7 @@ pub mod hir;
 pub mod hover;
 pub mod ide_db;
 pub mod inlay_hint;
+pub mod inline_completion;
 mod inline_ignore;
 mod input;
 pub mod inspector;

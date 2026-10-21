@@ -17,6 +17,10 @@ path = "src/lib.rs"
 default = []
 test-fixture = []
 
+[[example]]
+name = "inline_eval"
+required-features = ["test-fixture"]
+
 [dependencies]
 full_moon = { version = "2.2.0", features = ["luau"] }
 serde = { version = "1.0.228", features = ["derive"] }

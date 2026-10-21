@@ -8,6 +8,16 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Added
 
+- An offline evaluator for local inline completion (Phase 0 of the local
+  inline-completion plan) measures candidate sources against real projects
+  before any of them ships: precision, characters saved, wrong characters,
+  latency, complete-parse cost, warm-up cache hit rates, and memory, by
+  language, scenario, menu state, cursor context, and source.
+  `make inline-eval` runs the tuning sets, `make inline-eval-smoke` gates CI on
+  committed fixtures, and `make inline-eval-holdout` and
+  `make inline-eval-external` check held-out and pinned third-party projects
+  against committed, dataset-specific language thresholds and an exact pinned
+  Phase 1 source configuration.
 - A `VectorLength` standard lint rule (`TL4060`) warns when `#` is applied to a
   built-in `Vec2`. With LuaJIT's JIT off, as in LÖVE on Apple Silicon by
   default, vectors are plain tables and `#v` is `0`; the warning names the
@@ -26,6 +36,13 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Changed
 
+- `TL1004` now explains the common case of a method called with `.` instead of
+  `:`. When a dot call is short of arguments, the method's first parameter is
+  `self`, and the receiver can be passed as that `self`, as with
+  `ship.steer(1)` on an instance from another module, the message ends with the
+  colon call to use, such as ``call it as `ship:steer(...)` ``. The class
+  example in the language guide uses the colon form, which stays correct when
+  a class moves to another module.
 - The bundled state-machine runtime now rejects unavailable events before
   building callback arguments, precomputes event-specific callback and async
   state keys once per transition closure, and caches per-state callback names.
@@ -123,6 +140,23 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- `tua check`, builds, and the language server no longer overflow the stack on
+  an unannotated Lua function that reassigns a parameter from its own method
+  call, such as `str = str:gsub(...)`. Name inference resolved the receiver
+  through the assignment it belonged to without bound, so any project with the
+  bundled `anim8.lua` in its source tree crashed. An assignment's value is now
+  evaluated as of just before the assignment, as in Lua, so a reassigned Lua
+  value such as `n = n + 1` also keeps its type instead of becoming unknown.
+  Multi-assignments evaluate every right-hand value against the bindings from
+  before the whole statement, preserving Lua's swap semantics.
+- Typed calls nested inside a dynamic call's arguments are now checked. For
+  example, `print(add(1))` reports `TL1004` when `add` requires two arguments,
+  just as a statement-level `add(1)` does.
+- Typing an unclosed parameter list, such as `local function f(` above
+  existing code, no longer collapses the following lines during parsing. The
+  default-value eraser replaced their newlines with spaces, which shifted
+  diagnostic positions in release builds and failed an internal assertion in
+  debug builds.
 - Hover now preserves project-inferred types for locals copied from required
   module fields. For example, `local flow = Globals.flow` now shows the same
   derived `StateMachine` type used by completion instead of the fast

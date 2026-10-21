@@ -1354,11 +1354,18 @@ impl<'a> Checker<'a> {
         }
 
         let Some(callee) = self.infer_call_target(function_call) else {
+            self.check_dynamic_call_argument_expressions(function_call);
             return Vec::new();
         };
 
         match callee {
-            Callable::Any => vec![Type::Any],
+            Callable::Any => {
+                // A dynamic outer call still evaluates its argument
+                // expressions. Check nested calls there even though the
+                // outer signature provides no argument contract.
+                self.check_dynamic_call_argument_expressions(function_call);
+                vec![Type::Any]
+            }
             Callable::Function(function) => {
                 self.check_call_arguments(function_call, &function);
 
@@ -1389,6 +1396,14 @@ impl<'a> Checker<'a> {
             }
             Callable::ExternalFunction(function) => {
                 self.check_external_call_arguments(function_call, &function)
+            }
+        }
+    }
+
+    fn check_dynamic_call_argument_expressions(&mut self, function_call: &FunctionCall) {
+        for argument in call_arguments(function_call).unwrap_or_default() {
+            if let CallArgument::Expression(expression) = argument {
+                self.infer_expression(expression);
             }
         }
     }
@@ -1679,16 +1694,53 @@ impl<'a> Checker<'a> {
         }
     }
 
+    /// A hint for a method called with `.` where its receiver isn't passed:
+    /// `ship.steer(1)` across a module boundary leaves `self` unfilled. It is
+    /// offered only when the method's first parameter is `self` and the
+    /// receiver's known type can be passed as that `self`, so following the
+    /// hint never trades one error for another.
+    fn missing_self_hint(
+        &self,
+        function_call: &FunctionCall,
+        function: &FunctionType,
+        found: usize,
+    ) -> Option<String> {
+        let dot_call = dot_method_call(function_call)?;
+        let self_parameter = function
+            .parameters
+            .first()
+            .filter(|parameter| parameter.name.as_deref() == Some("self"))?;
+        if dot_call.receiver.is_empty() || found >= function.required_parameter_count {
+            return None;
+        }
+        let receiver_parts = &dot_call.parts[..dot_call.parts.len() - 1];
+        let receiver = self.resolve_field_chain_type(receiver_parts)?;
+        if matches!(receiver, Type::Any)
+            || !self.context.is_assignable(&receiver, &self_parameter.ty)
+        {
+            return None;
+        }
+
+        Some(format!(
+            "; `{}` takes `self`, so call it as `{}:{}(...)`",
+            dot_call.method, dot_call.receiver, dot_call.method
+        ))
+    }
+
     fn check_call_arguments(&mut self, function_call: &FunctionCall, function: &FunctionType) {
         let arguments = self.call_arguments_for_function(function_call);
 
         if arguments.len() < function.required_parameter_count {
-            self.diagnostics.push(argument_count_diagnostic(
+            let mut diagnostic = argument_count_diagnostic(
                 &self.parsed.path,
                 function_call,
                 function.required_parameter_count,
                 arguments.len(),
-            ));
+            );
+            if let Some(hint) = self.missing_self_hint(function_call, function, arguments.len()) {
+                diagnostic.message.push_str(&hint);
+            }
+            self.diagnostics.push(diagnostic);
             return;
         }
 

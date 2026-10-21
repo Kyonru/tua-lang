@@ -1,0 +1,100 @@
+-- Frozen held-out fixture for inline-completion evaluation.
+-- Written before any threshold tuning; do not edit or use it for tuning.
+
+type Input = {
+  left: boolean,
+  right: boolean,
+  up: boolean,
+  down: boolean,
+  fire: boolean,
+}
+
+local SPEED = 180
+local FIRE_DELAY = 0.15
+
+open class Ship {
+  x: number
+  y: number
+  vx: number = 0
+  vy: number = 0
+  health: number = 3
+
+  init(x: number, y: number) {
+    self.x = x
+    self.y = y
+  }
+
+  update(dt: number) {
+    self.x += self.vx * dt
+    self.y += self.vy * dt
+  }
+
+  draw() {
+    love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.circle("fill", self.x, self.y, 8)
+  }
+}
+
+final class Player extends Ship {
+  cooldown: number = 0
+  score: number = 0
+
+  init(x: number, y: number) {
+    super(x, y)
+  }
+
+  steer(input: Input) {
+    self.vx = 0
+    self.vy = 0
+    if input.left then
+      self.vx = self.vx - SPEED
+    end
+    if input.right then
+      self.vx = self.vx + SPEED
+    end
+    if input.up then
+      self.vy = self.vy - SPEED
+    end
+    if input.down then
+      self.vy = self.vy + SPEED
+    end
+  }
+
+  override update(dt: number) {
+    self.x += self.vx * dt
+    self.y += self.vy * dt
+    self.x = math.max(0, math.min(love.graphics.getWidth(), self.x))
+    self.y = math.max(0, math.min(love.graphics.getHeight(), self.y))
+    self.cooldown = math.max(0, self.cooldown - dt)
+  }
+
+  canFire(): boolean {
+    return self.cooldown <= 0
+  }
+
+  fired() {
+    self.cooldown = FIRE_DELAY
+  }
+
+  override draw() {
+    love.graphics.setColor(0.4, 0.8, 1, 1)
+    love.graphics.circle("fill", self.x, self.y, 10)
+    love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.print("score " .. self.score, 10, 10)
+  }
+}
+
+local function readInput(): Input
+  return {
+    left = love.keyboard.isDown("left") or love.keyboard.isDown("a"),
+    right = love.keyboard.isDown("right") or love.keyboard.isDown("d"),
+    up = love.keyboard.isDown("up") or love.keyboard.isDown("w"),
+    down = love.keyboard.isDown("down") or love.keyboard.isDown("s"),
+    fire = love.keyboard.isDown("space"),
+  }
+end
+
+return {
+  Player = Player,
+  readInput = readInput,
+}

@@ -75,6 +75,30 @@ fn snapshot_prefers_open_document_over_file_contents() {
 }
 
 #[test]
+fn a_lua_parameter_reassigned_from_its_own_method_call_does_not_recurse() {
+    // `s = s:gsub(...)` in an unannotated Lua function made name inference
+    // resolve `s` through its own assignment until the stack overflowed, so
+    // `tua check` crashed on projects that vendor anim8.lua.
+    let module = PathBuf::from("src/strings.lua");
+    let main = PathBuf::from("src/main.tua");
+    let mut host = AnalysisHost::new();
+
+    host.set_source_roots([PathBuf::from("src")]);
+    host.set_file(
+        &module,
+        "local function trim(str)\n  str = str:gsub('%s', '')\n  str = str:upper()\n  return str\nend\nreturn trim\n",
+    );
+    host.set_file(
+        &main,
+        "local trim = require(\"strings\")\nprint(trim(\" a \"))\n",
+    );
+
+    let snapshot = host.snapshot();
+    assert!(snapshot.pipeline_diagnostics(&main).is_empty());
+    let _ = snapshot.pipeline_diagnostics(&module);
+}
+
+#[test]
 fn pipeline_diagnostics_reject_luau_syntax_at_the_parse_boundary() {
     let path = PathBuf::from("src/main.tua");
     let mut host = AnalysisHost::new();

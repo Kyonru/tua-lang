@@ -734,6 +734,18 @@ fn push_function_header_with_erased_parameter_defaults(
     index
 }
 
+/// While a parameter default is being erased, every character becomes a space
+/// except newlines. A default can run to the end of the file when the
+/// parameter list is still unclosed while typing, and keeping its newlines
+/// preserves the line count that source mappings rely on.
+fn erased_unless_newline(erasing: bool, character: char) -> char {
+    if erasing && character != '\n' {
+        ' '
+    } else {
+        character
+    }
+}
+
 fn push_parameter_list_with_erased_defaults(
     chars: &[char],
     mut index: usize,
@@ -749,7 +761,7 @@ fn push_parameter_list_with_erased_defaults(
         let character = chars[index];
 
         if let Some(quote) = string_quote {
-            output.push(if erasing_default { ' ' } else { character });
+            output.push(erased_unless_newline(erasing_default, character));
             index += 1;
 
             if escaped {
@@ -764,11 +776,11 @@ fn push_parameter_list_with_erased_defaults(
         }
 
         if long_string {
-            output.push(if erasing_default { ' ' } else { character });
+            output.push(erased_unless_newline(erasing_default, character));
 
             if character == ']' && chars.get(index + 1) == Some(&']') {
                 index += 1;
-                output.push(if erasing_default { ' ' } else { chars[index] });
+                output.push(erased_unless_newline(erasing_default, chars[index]));
                 long_string = false;
             }
 
@@ -778,16 +790,16 @@ fn push_parameter_list_with_erased_defaults(
 
         if character == '"' || character == '\'' {
             string_quote = Some(character);
-            output.push(if erasing_default { ' ' } else { character });
+            output.push(erased_unless_newline(erasing_default, character));
             index += 1;
             continue;
         }
 
         if character == '[' && chars.get(index + 1) == Some(&'[') {
             long_string = true;
-            output.push(if erasing_default { ' ' } else { character });
+            output.push(erased_unless_newline(erasing_default, character));
             index += 1;
-            output.push(if erasing_default { ' ' } else { chars[index] });
+            output.push(erased_unless_newline(erasing_default, chars[index]));
             index += 1;
             continue;
         }
@@ -802,7 +814,7 @@ fn push_parameter_list_with_erased_defaults(
         match character {
             '(' | '{' | '[' => {
                 depth += 1;
-                output.push(if erasing_default { ' ' } else { character });
+                output.push(erased_unless_newline(erasing_default, character));
                 index += 1;
             }
             ')' if depth == 0 => {
@@ -811,7 +823,7 @@ fn push_parameter_list_with_erased_defaults(
             }
             ')' | '}' | ']' => {
                 depth = depth.saturating_sub(1);
-                output.push(if erasing_default { ' ' } else { character });
+                output.push(erased_unless_newline(erasing_default, character));
                 index += 1;
             }
             ',' if depth == 0 => {
@@ -825,7 +837,7 @@ fn push_parameter_list_with_erased_defaults(
                 index += 1;
             }
             _ => {
-                output.push(if erasing_default { ' ' } else { character });
+                output.push(erased_unless_newline(erasing_default, character));
                 index += 1;
             }
         }

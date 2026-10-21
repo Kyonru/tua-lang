@@ -1,0 +1,42 @@
+-- Frozen held-out fixture for inline-completion evaluation.
+-- Written before any threshold tuning; do not edit or use it for tuning.
+
+local playerModule = require("player")
+local enemies = require("enemies")
+local hud = require("hud")
+
+local player = playerModule.Player.new(400, 500)
+local paused = false
+
+function love.load()
+  love.graphics.setBackgroundColor(0.05, 0.05, 0.1)
+  enemies.spawnWave(3)
+  hud.pushMessage("wave 1")
+end
+
+function love.update(dt: number)
+  if paused then
+    return
+  end
+  player:steer(playerModule.readInput())
+  player:update(dt)
+  enemies.updateEnemies(dt)
+  hud.updateHud(dt)
+end
+
+function love.draw()
+  enemies.drawEnemies()
+  player:draw()
+  hud.drawHud(player.health, 3, player.score)
+  if paused then
+    love.graphics.print("paused", love.graphics.getWidth() / 2 - 20, love.graphics.getHeight() / 2)
+  end
+end
+
+function love.keypressed(key: string)
+  if key == "escape" then
+    love.event.quit()
+  elseif key == "p" then
+    paused = not paused
+  end
+end

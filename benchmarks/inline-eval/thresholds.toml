@@ -1,0 +1,46 @@
+# Phase 1 acceptance criteria. Commit this file before running any held-out
+# or external evaluation, then run each gate once. Changing it after seeing
+# gate results spends the held-out data.
+#
+# PROVISIONAL: these are starting values chosen without held-out data. Set
+# them on the tuning set (`make inline-eval`), record why here, and commit.
+#
+# Each gate set names the languages that dataset is intended to measure. A
+# missing set, backend, configured language, eligible request, minimum number
+# of suggestions, or language limit fails.
+
+# The backend that has to pass.
+backend = "phase1"
+
+# The exact Phase 1 configuration evaluated by quality gates. These values are
+# still provisional and must be frozen from the tuning set before either gate
+# is run.
+[phase1]
+recall_variant = "common-prefix"
+contexts = ["open-paren", "comma", "operator", "whitespace", "statement-prefix", "identifier", "other"]
+min_prefix_chars = 6
+dominance_ratio = 2.0
+love_callbacks = false
+statement_snippets = true
+snippet_min_prefix_chars = 3
+
+[sets.holdout.languages.tua]
+# Enough suggestions for a meaningful verdict: at about 100, a measured
+# precision is accurate to roughly +/-10 points.
+min_suggestions = 100
+# Of the suggestions shown, the share that are right as far as they go.
+min_correct_prefix_precision = 0.60
+# Characters a user deletes for every character a suggestion saves; above 1,
+# the source costs more typing than it saves.
+max_wrong_to_saved_ratio = 1.0
+# A floor on usefulness, averaged over every eligible request.
+min_chars_saved_per_eligible = 0.10
+# Server-side time for one request.
+max_latency_p95_ms = 10.0
+
+[sets.external.languages.lua]
+min_suggestions = 100
+min_correct_prefix_precision = 0.60
+max_wrong_to_saved_ratio = 1.0
+min_chars_saved_per_eligible = 0.10
+max_latency_p95_ms = 10.0

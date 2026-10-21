@@ -1,4 +1,4 @@
-use std::cell::OnceCell;
+use std::cell::{OnceCell, RefCell};
 use std::collections::{BTreeMap, BTreeSet};
 
 use full_moon::ast::{
@@ -36,6 +36,12 @@ pub(crate) struct SemanticModel<'a> {
     parsed: &'a ParsedSource,
     environment: &'a TypeEnvironment,
     shadowed_names: OnceCell<BTreeSet<String>>,
+    /// Names being resolved right now, by line, column, and an exact interned
+    /// name identity. Some paths re-enter name inference without carrying the
+    /// depth, so a value that depends on itself would otherwise recurse until
+    /// the stack overflows.
+    resolving_names: RefCell<BTreeSet<(usize, usize, usize)>>,
+    resolution_name_ids: RefCell<BTreeMap<String, usize>>,
 }
 
 pub(crate) struct LocalInitializerInference {
@@ -94,6 +100,8 @@ impl<'a> SemanticModel<'a> {
             parsed,
             environment,
             shadowed_names: OnceCell::new(),
+            resolving_names: RefCell::new(BTreeSet::new()),
+            resolution_name_ids: RefCell::new(BTreeMap::new()),
         }
     }
 
@@ -132,7 +140,7 @@ impl<'a> SemanticModel<'a> {
         let ty = match local.expression {
             Some(expression) => self.type_of_expression_return_at_depth(
                 expression,
-                local.span.start,
+                local.evaluation_position,
                 local.return_index,
                 0,
             )?,
@@ -155,7 +163,7 @@ impl<'a> SemanticModel<'a> {
             }
             Some(expression) => self.type_of_expression_return_at_depth(
                 expression,
-                local.span.start,
+                local.evaluation_position,
                 local.return_index,
                 0,
             )?,
@@ -681,7 +689,33 @@ impl<'a> SemanticModel<'a> {
         if depth >= MAX_SEMANTIC_INFERENCE_DEPTH {
             return None;
         }
+        // A request that is already in progress has no answer yet; the
+        // caller falls back to other sources, as at the depth limit.
+        let name_id = {
+            let mut ids = self.resolution_name_ids.borrow_mut();
+            if let Some(id) = ids.get(name) {
+                *id
+            } else {
+                let id = ids.len();
+                ids.insert(name.to_owned(), id);
+                id
+            }
+        };
+        let key = (position.line, position.column, name_id);
+        if !self.resolving_names.borrow_mut().insert(key) {
+            return None;
+        }
+        let ty = self.resolve_name_without_narrowing(name, position, depth);
+        self.resolving_names.borrow_mut().remove(&key);
+        ty
+    }
 
+    fn resolve_name_without_narrowing(
+        &self,
+        name: &str,
+        position: SourcePosition,
+        depth: usize,
+    ) -> Option<Type> {
         let ty = self
             .class_self_type_at_position(name, position)
             .or_else(|| self.environment.local(name).cloned())
@@ -702,7 +736,7 @@ impl<'a> SemanticModel<'a> {
                 let ty = match local.expression {
                     Some(expression) => self.type_of_expression_return_at_depth(
                         expression,
-                        local.span.start,
+                        local.evaluation_position,
                         local.return_index,
                         depth + 1,
                     )?,
@@ -1692,6 +1726,7 @@ impl<'a> SemanticModel<'a> {
 #[derive(Clone, Copy, Debug)]
 struct LocalAssignmentValue<'a> {
     span: SourceSpan,
+    evaluation_position: SourcePosition,
     expression: Option<&'a Expression>,
     return_index: usize,
 }
@@ -1949,6 +1984,16 @@ fn local_assignment_value_in_block<'a>(
         .max_by_key(|candidate| position_key(candidate.span.start))
 }
 
+/// Where every value in an assignment is evaluated: just before the whole
+/// statement, so all right-hand expressions see the bindings from before any
+/// target is assigned, as in Lua.
+fn value_position(statement: SourcePosition) -> SourcePosition {
+    SourcePosition {
+        line: statement.line,
+        column: statement.column.saturating_sub(1),
+    }
+}
+
 fn collect_local_assignment_values<'a>(
     block: &'a ast::Block,
     name: &str,
@@ -1966,6 +2011,7 @@ fn collect_local_assignment_values<'a>(
             continue;
         }
 
+        let evaluation_position = value_position(node_start(stmt));
         match stmt {
             ast::Stmt::Assignment(assignment) if include_reassignments => {
                 let expressions = assignment.expressions().iter().collect::<Vec<_>>();
@@ -1988,6 +2034,7 @@ fn collect_local_assignment_values<'a>(
 
                     candidates.push(LocalAssignmentValue {
                         span,
+                        evaluation_position,
                         expression,
                         return_index,
                     });
@@ -2013,6 +2060,7 @@ fn collect_local_assignment_values<'a>(
 
                     candidates.push(LocalAssignmentValue {
                         span,
+                        evaluation_position,
                         expression,
                         return_index,
                     });
@@ -2902,4 +2950,51 @@ fn position_key(position: SourcePosition) -> (usize, usize) {
 
 fn token_text(token: &full_moon::tokenizer::TokenReference) -> String {
     token.token().to_string().trim().to_owned()
+}
+
+#[cfg(test)]
+mod reassignment_tests {
+    use super::*;
+
+    fn lua_type_at(source: &str, name: &str, line: usize, column: usize) -> Option<Type> {
+        let parsed = crate::parse_lua_source("src/strings.lua", source).expect("lua parses");
+        let environment = crate::types::build_type_environment(&parsed).expect("environment");
+        SemanticModel::new(&parsed, &environment)
+            .type_of_name(name, SourcePosition { line, column })
+    }
+
+    #[test]
+    fn a_reassignment_value_sees_the_binding_from_before_it() {
+        // The right-hand side of `n = n + 1` is the earlier `n`, so the
+        // reassigned value keeps its type instead of becoming unknown.
+        assert_eq!(
+            lua_type_at("local n = 1\nn = n + 1\nreturn n\n", "n", 3, 8),
+            Some(Type::number())
+        );
+        assert_eq!(
+            lua_type_at("local s = \"a\"\ns = s .. \"b\"\nreturn s\n", "s", 3, 8),
+            Some(Type::string())
+        );
+    }
+
+    #[test]
+    fn every_value_in_a_multi_assignment_sees_the_old_bindings() {
+        let source = "local x = 1\nlocal y = \"a\"\nx, y = y, x\nreturn x, y\n";
+        assert_eq!(
+            lua_type_at(source, "x", 4, 8),
+            Some(Type::string()),
+            "the first target takes the old value of y"
+        );
+        assert_eq!(
+            lua_type_at(source, "y", 4, 11),
+            Some(Type::number()),
+            "the second target takes the old value of x"
+        );
+    }
+
+    #[test]
+    fn a_self_dependent_parameter_reassignment_terminates() {
+        let source = "local function f(str)\n  str = str:upper()\n  return str\nend\nreturn f\n";
+        let _ = lua_type_at(source, "str", 3, 10);
+    }
 }

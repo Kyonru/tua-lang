@@ -1,0 +1,57 @@
+# Inline-completion evaluation datasets (Phase 0 of better-autocompletion.md).
+#
+# The split is by project, never by file, and was recorded here before any
+# threshold tuning. No path may appear in two sets; the evaluator rejects
+# overlaps and drops files whose content already appears in a set with higher
+# priority (holdout, external, smoke, then tune).
+version = 1
+# Set paths are relative to the repository root.
+root = "../.."
+
+[sets.tune]
+role = "tune"
+description = "Tua tuning projects plus Lua tuning data, used while developing and tuning thresholds."
+projects = [
+  "examples/love-full",
+  "examples/features",
+  "examples/project-model",
+  "examples/love-minimal",
+]
+files = [
+  "vendor/runtime/anim8.lua",
+  "vendor/runtime/baton.lua",
+  "vendor/runtime/brinevector.lua",
+  "vendor/runtime/tuaaudio.lua",
+  "vendor/runtime/tuaecs.lua",
+  "vendor/runtime/tuaobjectpool.lua",
+  "vendor/runtime/tuasignal.lua",
+  "vendor/runtime/tuasprite.lua",
+  "vendor/runtime/tuastatemachine.lua",
+  "vendor/runtime/tuastore.lua",
+]
+
+[sets.holdout]
+role = "holdout"
+description = "Held-out Tua projects and frozen fixtures: the provisional Tua precision gate. Never tune on these."
+projects = [
+  "examples/love-tua",
+  "examples/audio-system",
+  "benchmarks/inline-eval/holdout",
+]
+exclude = ["/generated/"]
+
+[sets.smoke]
+role = "smoke"
+description = "Small committed fixtures for CI; results are pinned in smoke/expected.json."
+projects = ["benchmarks/inline-eval/smoke"]
+
+[sets.external]
+role = "external"
+description = "Pinned third-party LOVE projects: the external Lua test set. Fetch with `make inline-eval-external`."
+projects = [
+  "target/inline-eval/external/snkrx",
+  "target/inline-eval/external/arkanoid-tutorial",
+  "target/inline-eval/external/gravity-wars",
+  "target/inline-eval/external/quadtastic",
+  "target/inline-eval/external/slab",
+]

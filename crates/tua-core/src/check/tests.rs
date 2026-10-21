@@ -2814,6 +2814,28 @@ add(1)
 }
 
 #[test]
+fn rejects_argument_count_mismatch_nested_in_a_dynamic_call() {
+    let diagnostics = check_tua_source(
+        "src/combat.tua",
+        r#"
+local function add(left: number, right: number): number
+  return left + right
+end
+
+print(add(1))
+"#,
+    )
+    .expect_err("the nested call should still be checked");
+
+    assert_eq!(diagnostics.len(), 1, "{diagnostics:#?}");
+    assert_eq!(
+        diagnostics[0].code,
+        Some(DiagnosticCode::TYPE_ARGUMENT_COUNT)
+    );
+    assert_eq!(diagnostics[0].line, 6);
+}
+
+#[test]
 fn rejects_function_call_argument_type_mismatch() {
     let diagnostics = check_tua_source(
         "src/combat.tua",
@@ -3993,4 +4015,62 @@ end
         .collect::<Vec<_>>();
     assert_eq!(mismatches.len(), 1, "{diagnostics:#?}");
     assert_eq!(mismatches[0].line, 11);
+}
+
+#[test]
+fn a_dot_call_missing_self_suggests_the_colon_form() {
+    let diagnostics = check_tua_source(
+        "src/main.tua",
+        r#"type Ship = {
+  x: number,
+  steer: (self: Ship, dx: number) -> nil,
+  move: (dx: number, dy: number) -> nil,
+}
+type API = { run: (self: number) -> nil }
+
+local function make(): Ship
+  return {
+    x = 0,
+    steer = function(self: Ship, dx: number) self.x += dx end,
+    move = function(dx: number, dy: number) end,
+  }
+end
+
+local ship = make()
+local api: API = { run = function(self: number) end }
+ship.steer(1)
+ship.steer()
+ship:steer(1)
+ship.steer(ship, 1)
+ship.move(1)
+api.run()
+"#,
+    )
+    .expect_err("missing arguments should fail checking");
+    let counts = diagnostics
+        .iter()
+        .filter(|item| item.code == Some(DiagnosticCode::TYPE_ARGUMENT_COUNT))
+        .map(|item| (item.line, item.message.as_str()))
+        .collect::<Vec<_>>();
+
+    let hint = "; `steer` takes `self`, so call it as `ship:steer(...)`";
+    assert_eq!(
+        counts,
+        vec![
+            (
+                18,
+                &*format!("argument count mismatch: expected 2, found 1{hint}")
+            ),
+            (
+                19,
+                &*format!("argument count mismatch: expected 2, found 0{hint}")
+            ),
+            // Not a method mistake: `move` has no `self`.
+            (22, "argument count mismatch: expected 2, found 1"),
+            // `api` can't be passed as `self: number`, so `api:run()` would be
+            // another error; no hint.
+            (23, "argument count mismatch: expected 1, found 0"),
+        ],
+        "{diagnostics:#?}"
+    );
 }

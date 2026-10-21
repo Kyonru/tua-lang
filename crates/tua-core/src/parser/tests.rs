@@ -186,6 +186,21 @@ local actors: Actor[][] = {}
 }
 
 #[test]
+fn an_unclosed_parameter_list_keeps_every_line_while_typing() {
+    // Typing `local function f(` above existing code leaves the parameter list
+    // open to the end of the file, so the default-value eraser reaches every
+    // following line. It must keep their newlines.
+    let source = "local function f(\n  local t = { x = 1 }\nend\nreturn f\n";
+    let normalized = normalize_tua_source(source);
+
+    assert_eq!(
+        normalized.parser_source.lines().count(),
+        source.lines().count()
+    );
+    assert!(parse_tua_source("src/main.tua", source).is_err());
+}
+
+#[test]
 fn normalized_source_erases_enum_blocks_for_luau_parser() {
     let normalized = normalize_tua_source(
         r#"enum FilterMode

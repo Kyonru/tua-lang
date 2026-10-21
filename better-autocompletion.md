@@ -228,7 +228,12 @@ sets must be built deliberately:
   must not hide weak Tua coverage.
 
 Commit thresholds and acceptance criteria before looking at any held-out
-results.
+results. Thresholds are scoped to dataset and language: the holdout gate names
+Tua limits, while the external gate names Lua limits. A dataset must fail when
+one of its configured languages is absent, but it must not require a language
+that dataset was never intended to contain. The committed Phase 1 table also
+pins semantic-source switches and the minimum snippet prefix, not only recall
+settings.
 
 ### Metrics
 
@@ -604,6 +609,76 @@ tua.completion.inline.sources.currentFile = true
 ```
 
 Do not expose `maxLines`, project, or bundled-corpus settings yet.
+
+### Carried over from Phase 0
+
+The Phase 0 evaluator (`benchmarks/inline-eval/`) shipped without these
+measurements. Each one must exist before its gate is checked.
+
+- **Menu-state replays in the extension.** Phase 0 simulates the suggestion
+  menu in core: it counts the menu as open after a word or a `.`/`:` trigger
+  when a menu item continues the typed word, and selects the first such item.
+  Record real typing sessions in the extension instead (local only, opt-in,
+  never uploaded), capturing when the menu is open and what it has selected at
+  each eligible position. Replay them through the evaluator to confirm or
+  correct the simulation, and report menu-open and menu-closed results from
+  the replays. Required before the Phase 1 gate, because those results are
+  reported separately.
+- **Parses per request.** There is nothing to count until parse-only
+  validation exists. Once it does, the evaluator reports parses per request
+  and how often the edited text alone was enough. The Phase 1 gate's "common-case
+  validation needs one parse" is checked against this number.
+- **Warm-up hit rate under real scheduling.** Phase 0 compares each warm-up's
+  duration with the request delay. That's an upper bound: it assumes the
+  warm-up starts at the keystroke and never waits behind other work. Measure
+  `peek_current_analysis_file` hits inside the language server, with real
+  scheduling and the newest-wins cancellation, before relying on any
+  candidate that needs parsed facts.
+- **Cold, partial, and warm index states.** These describe the Phase 2 project
+  corpus, so Phase 1 has nothing to vary. Keep the breakdown in the evaluator's
+  report format, and fill it in when the Phase 2 backend exists; the Phase 2
+  gate compares those states.
+- **Phase 2 evaluator work.** These measure project retrieval, so they arrive
+  with its backend:
+  - index build time;
+  - the target file held out from project retrieval, and callback suppression
+    from another project file;
+  - near-duplicate weighting. De-duplication is exact, but staged tutorials
+    such as the external `arkanoid-tutorial` (about three quarters of the
+    external `.lua` files) repeat almost the same code. Cluster near-identical
+    files, keep representative checkpoints, and gate on per-project (macro)
+    results as well as pooled ones.
+- **Completion-latency comparisons.** `make profile-completion` accepts a
+  regression of the larger of 5% and 1 ms, which on a 5 ms baseline is about
+  18%. A single run's p95 is also noisy. Check the Phase 1 gate's 5% tolerance
+  by alternating the baseline and candidate binaries over several rounds on the
+  same fixture and comparing medians.
+
+### Findings from the Phase 0 tuning run
+
+The Phase 0 evaluator's first runs on the tuning set suggest these Phase 1
+design changes. Check them again on the tuning set before freezing
+`benchmarks/inline-eval/thresholds.toml`.
+
+- **Drop LÖVE callback suggestions from Phase 1.** A half-typed
+  `function love.upd` line never parses and has no recovered parse, so the
+  "cached facts only" rule never offers a callback. Most requests arrive while
+  the document doesn't parse at all.
+- **Require a few typed characters for statement snippets.** Snippets offered
+  after one typed character are rarely right; after three, they usually are.
+- **Prefer common-prefix recall.** Offering only what every matching line
+  agrees on is right as far as it goes far more often than offering a unique
+  full continuation, and it saves more typing.
+- **Gate on correct-prefix precision and the wrong-to-saved ratio,** not exact
+  match, and consider a context allowlist: recall after `=` and after `.`/`:`
+  is much weaker than elsewhere.
+
+The first pinned candidate (common-prefix recall, no callback source, a
+three-character snippet minimum, and the initial context allowlist) improved
+the tuning-set wrong-to-saved ratio from 3.53 to 2.17 and correct-prefix
+precision from 0.28 to 0.53. It still misses the provisional 1.0 and 0.60
+limits, so this is evidence to improve or narrow the backend—not permission to
+weaken the gates or inspect held-out results.
 
 ### Phase 1 gate
 

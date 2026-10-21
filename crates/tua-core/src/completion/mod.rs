@@ -906,7 +906,7 @@ fn rank_completions_for_context(
     }
 }
 
-fn syntax_snippet_completions(prefix: &str, include_ecs: bool) -> Vec<Completion> {
+pub(crate) fn syntax_snippet_completions(prefix: &str, include_ecs: bool) -> Vec<Completion> {
     [
         (
             "local",

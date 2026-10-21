@@ -1,0 +1,80 @@
+-- Frozen held-out fixture for inline-completion evaluation.
+-- Written before any threshold tuning; do not edit or use it for tuning.
+
+type Enemy = {
+  x: number,
+  y: number,
+  speed: number,
+  health: number,
+  alive: boolean,
+}
+
+local enemies: Enemy[] = {}
+local spawnTimer = 0
+local spawnInterval = 1.2
+
+local function spawnEnemy(x: number, y: number, speed: number)
+  local enemy: Enemy = { x = x, y = y, speed = speed, health = 2, alive = true }
+  table.insert(enemies, enemy)
+  return enemy
+end
+
+local function spawnWave(count: number)
+  local width = love.graphics.getWidth()
+  for index = 1, count do
+    local x = width * index / (count + 1)
+    spawnEnemy(x, -20, 60 + index * 10)
+  end
+end
+
+local function updateEnemies(dt: number)
+  spawnTimer = spawnTimer + dt
+  if spawnTimer >= spawnInterval then
+    spawnTimer = spawnTimer - spawnInterval
+    spawnWave(4)
+  end
+
+  for index = #enemies, 1, -1 do
+    local enemy = enemies[index]
+    enemy.y = enemy.y + enemy.speed * dt
+    if enemy.y > love.graphics.getHeight() + 20 then
+      enemy.alive = false
+    end
+    if not enemy.alive then
+      table.remove(enemies, index)
+    end
+  end
+end
+
+local function hitEnemy(enemy: Enemy, damage: number): boolean
+  enemy.health = enemy.health - damage
+  if enemy.health <= 0 then
+    enemy.alive = false
+    return true
+  end
+  return false
+end
+
+local function drawEnemies()
+  love.graphics.setColor(1, 0.3, 0.3, 1)
+  for _, enemy in ipairs(enemies) do
+    love.graphics.rectangle("fill", enemy.x - 8, enemy.y - 8, 16, 16)
+  end
+  love.graphics.setColor(1, 1, 1, 1)
+end
+
+local function clearEnemies()
+  for index = #enemies, 1, -1 do
+    table.remove(enemies, index)
+  end
+  spawnTimer = 0
+end
+
+return {
+  enemies = enemies,
+  spawnWave = spawnWave,
+  updateEnemies = updateEnemies,
+  hitEnemy = hitEnemy,
+  drawEnemies = drawEnemies,
+  clearEnemies = clearEnemies,
+}

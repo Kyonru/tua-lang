@@ -67,7 +67,7 @@ valid unless it is listed below.
 | `TL1001` | A referenced type name is unknown in the current scope. | Always enabled. |
 | `TL1002` | A type alias or class-backed type name is declared more than once. | Always enabled. |
 | `TL1003` | A value is not assignable to its declared or inferred type contract. | Always enabled. |
-| `TL1004` | A statically known function call has the wrong argument count. | Always enabled for core typed calls. |
+| `TL1004` | A statically known function call has the wrong argument count. A `.` call missing only `self` names the `:` call to use. | Always enabled for core typed calls. |
 | `TL1005` | A comparison is provably impossible because the operand types do not overlap. | Always enabled; warning. |
 | `TL1006` | LuaDoc declarations conflict while building one type environment. | Always enabled. |
 | `TL1007` | A runtime `is` check cannot be represented safely for the requested type. | Always enabled. |

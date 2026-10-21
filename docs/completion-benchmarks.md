@@ -23,7 +23,8 @@ Use Tua's benchmark targets to answer three different questions:
 | Is normal completion slower? | `make profile-completion` | End-to-end completion latency, resolve latency, ranking overhead, and cache behavior on the medium fixture. |
 | Are results fresh under load? | `make representative-benchmark-smoke` | CI-sized cold, warm, and contended requests with stale-result and semantic validation gates. |
 | How does scale affect the LSP? | `make profile-representative` | Full 1,000/5,000-line and 100/1,000-file profiles. |
-| Do all benchmark lanes still work? | `make benchmark-smoke` | Ranking correctness, bundled-example timing, and representative completion freshness. |
+| Would local inline completion help? | `make inline-eval` | Offline precision, characters saved, latency, parse cost, and warm-up hit rates for candidate inline sources on the tuning projects. |
+| Do all benchmark lanes still work? | `make benchmark-smoke` | Ranking correctness, bundled-example timing, representative completion freshness, and the inline-evaluation smoke fixtures. |
 | Do I need every performance report? | `make profile-all` | General LSP, completion, examples, and representative-scale profiles. |
 
 For a completion implementation change, start with:
@@ -35,6 +36,10 @@ make profile-completion
 
 Run `make representative-benchmark-smoke` when the change affects snapshots,
 caching, scheduling, project indexing, cancellation, or watched files.
+
+Local inline completion is evaluated offline before it ships. The datasets,
+the held-out and external gates, and every metric definition are described in
+[`benchmarks/inline-eval/README.md`](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/inline-eval/README.md).
 
 ## Prerequisites
 

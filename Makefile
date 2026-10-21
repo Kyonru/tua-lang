@@ -264,8 +264,35 @@ profile-examples-smoke: ## Run one quick examples speed profiling pass.
 	$(CARGO) build --release --package tua-cli
 	TUA_SPEED_WARMUP=0 TUA_SPEED_REPEAT=1 TUA_SPEED_OUT=$${TUA_SPEED_OUT:-target/tua-speed/examples-profile-smoke.json} node scripts/profile-examples.js $(RELEASE_TUA)
 
+INLINE_EVAL_MANIFEST := benchmarks/inline-eval/manifest.toml
+INLINE_EVAL_THRESHOLDS := benchmarks/inline-eval/thresholds.toml
+INLINE_EVAL_SMOKE_EXPECTED := benchmarks/inline-eval/smoke/expected.json
+INLINE_EVAL := $(CARGO) run --quiet --release --package tua-core --features test-fixture --example inline_eval --
+INLINE_EVAL_DEBUG := $(CARGO) run --quiet --package tua-core --features test-fixture --example inline_eval --
+
+.PHONY: inline-eval
+inline-eval: ## Evaluate local inline-completion sources on the tuning sets (writes target/tua-speed/inline-eval-tune.json).
+	$(INLINE_EVAL) --manifest $(INLINE_EVAL_MANIFEST) --set tune --out target/tua-speed/inline-eval-tune.json
+
+.PHONY: inline-eval-smoke
+inline-eval-smoke: ## Check the inline-completion evaluator against its committed smoke expectations (offline).
+	$(INLINE_EVAL_DEBUG) --manifest $(INLINE_EVAL_MANIFEST) --set smoke --max-positions 0 --check-expected $(INLINE_EVAL_SMOKE_EXPECTED)
+
+.PHONY: inline-eval-smoke-update
+inline-eval-smoke-update: ## Rewrite the inline-completion smoke expectations after an intended change.
+	$(INLINE_EVAL_DEBUG) --manifest $(INLINE_EVAL_MANIFEST) --set smoke --max-positions 0 --write-expected $(INLINE_EVAL_SMOKE_EXPECTED)
+
+.PHONY: inline-eval-holdout
+inline-eval-holdout: ## Gate inline completion on the held-out Tua projects and frozen fixtures against committed thresholds.
+	$(INLINE_EVAL) --manifest $(INLINE_EVAL_MANIFEST) --set holdout --thresholds $(INLINE_EVAL_THRESHOLDS) --out target/tua-speed/inline-eval-holdout.json
+
+.PHONY: inline-eval-external
+inline-eval-external: ## Fetch pinned third-party LOVE projects and gate inline completion on them (needs network; not in CI).
+	node scripts/fetch-inline-eval-projects.js
+	$(INLINE_EVAL) --manifest $(INLINE_EVAL_MANIFEST) --set external --thresholds $(INLINE_EVAL_THRESHOLDS) --out target/tua-speed/inline-eval-external.json
+
 .PHONY: benchmark-smoke
-benchmark-smoke: completion-ranking-smoke profile-examples-smoke representative-benchmark-smoke ## Exercise deterministic ranking, timing, and completion-freshness gates.
+benchmark-smoke: completion-ranking-smoke profile-examples-smoke representative-benchmark-smoke inline-eval-smoke ## Exercise deterministic ranking, timing, completion-freshness, and inline-evaluation gates.
 
 .PHONY: profile-all
 profile-all: profile-lsp profile-completion profile-examples profile-representative ## Run all LSP, completion, representative, and bundled-example profiles.

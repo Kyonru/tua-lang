@@ -53,14 +53,21 @@ pub(crate) fn declaration_suffix(label: &str, body: &str) -> Option<String> {
     Some(format!("{label}({parameters})\n{body}end"))
 }
 
-pub(crate) fn missing_core_declarations(parsed: &ParsedSource) -> Vec<String> {
-    let declared = parsed
+/// Canonical names of the LÖVE callbacks a file declares as top-level
+/// `love.<callback>` functions, from its parsed declaration facts. Menu and
+/// inline completion share this exact query instead of matching symbol labels.
+pub(crate) fn declared_love_callbacks(parsed: &ParsedSource) -> BTreeSet<&str> {
+    parsed
         .function_annotations
         .iter()
         .filter_map(|function| function.name.as_deref())
         .filter_map(|name| name.strip_prefix("love."))
         .filter(|label| item(label).is_some())
-        .collect::<BTreeSet<_>>();
+        .collect()
+}
+
+pub(crate) fn missing_core_declarations(parsed: &ParsedSource) -> Vec<String> {
+    let declared = declared_love_callbacks(parsed);
 
     CORE_CALLBACKS
         .iter()

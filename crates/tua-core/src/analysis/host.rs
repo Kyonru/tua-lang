@@ -1068,6 +1068,53 @@ impl AnalysisHost {
         index
     }
 
+    /// The cached analysis for `path`, only when it was built from exactly the
+    /// current VFS source and kind. Never parses, builds, or records cache
+    /// statistics, so inline completion can use parsed facts when a warm-up
+    /// already produced them without ever paying for a build itself. Only the
+    /// Phase 0 evaluator calls it until inline completion ships.
+    #[cfg(any(test, feature = "test-fixture"))]
+    fn peek_current_analysis_file(&self, path: &Path) -> Option<AnalysisFile> {
+        let path = normalize_path(path);
+        let source = self.vfs.source(&path)?;
+        let kind = analysis_source_kind(self.vfs.kind(&path)?);
+        let cache = self.cache.borrow();
+        let cached = cache.files.get(&path)?;
+
+        (cached.source == source && cached.kind == kind).then(|| cached.file.clone())
+    }
+
+    /// Whether the current source parsed, from the cache only. `None` when the
+    /// cache has no entry for the current source.
+    #[cfg(any(test, feature = "test-fixture"))]
+    pub(crate) fn peek_current_source_parses(&self, path: impl AsRef<Path>) -> Option<bool> {
+        self.peek_current_analysis_file(path.as_ref())
+            .map(|file| file.parsed.is_ok())
+    }
+
+    /// LÖVE callbacks declared in the current file, from cached parsed facts
+    /// only. `None` means the cache has no entry for the current source, so
+    /// duplicates cannot be ruled out. A file whose current source does not
+    /// parse uses its recovered (degraded) parse when one exists.
+    #[cfg(any(test, feature = "test-fixture"))]
+    pub(crate) fn peek_declared_love_callbacks(
+        &self,
+        path: impl AsRef<Path>,
+    ) -> Option<BTreeSet<String>> {
+        let file = self.peek_current_analysis_file(path.as_ref())?;
+        let parsed = match &file.parsed {
+            Ok(parsed) => parsed,
+            Err(_) => &file.degraded_semantics.as_ref()?.parsed,
+        };
+
+        Some(
+            crate::love_callback::declared_love_callbacks(parsed)
+                .into_iter()
+                .map(str::to_owned)
+                .collect(),
+        )
+    }
+
     fn current_analysis_file(&self, path: &Path) -> Option<AnalysisFile> {
         let path = normalize_path(path);
         let _profile = profile::span_for_path("analysis.current_file", &path);

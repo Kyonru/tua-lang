@@ -664,7 +664,7 @@ final class Particle extends Entity {
 }
 
 local particle = Particle.new(10, 20)
-particle.update(0.016)
+particle:update(0.016)
 ```
 
 `class` is final by default; `open class` is required for inheritance.
@@ -740,7 +740,9 @@ instances can lower to direct local function calls; non-final calls keep normal
 virtual dispatch. Locally inferred native class instances accept both
 `instance.method(...)` and `instance:method(...)`; use Lua's colon form for
 instances obtained through module or dynamic boundaries so the receiver is
-explicit in the emitted Lua.
+explicit in the emitted Lua. A dot call there would run without `self`, and
+`TL1004` reports it with the colon call to use instead. Writing the colon form
+everywhere keeps code correct when a class moves to another module.
 
 ## Functions, Parameters, And Returns
 

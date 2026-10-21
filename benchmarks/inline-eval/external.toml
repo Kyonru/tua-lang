@@ -1,0 +1,45 @@
+# Pinned third-party LOVE projects for the external Lua/LOVE test set.
+# `scripts/fetch-inline-eval-projects.js` checks out each commit into
+# target/inline-eval/external/<name>, verifies the commit ID, the license file,
+# and a SHA-256 digest of the evaluated .lua files, and never runs in ordinary
+# CI. Every project is MIT-licensed.
+
+[[project]]
+name = "snkrx"
+url = "https://github.com/a327ex/SNKRX"
+commit = "6b93a64d694d59472375467648868ae4521d6706"
+license = "MIT"
+license_file = "LICENSE"
+content_sha256 = "47f4d6304e4187a503349aee4f66f137bb41f8e4d412974c63302a720dde9577"
+
+[[project]]
+name = "arkanoid-tutorial"
+url = "https://github.com/noooway/love2d_arkanoid_tutorial"
+commit = "a45067a9024b304310522e31d72316f4f2bc3452"
+license = "MIT"
+license_file = "LICENSE"
+content_sha256 = "adb3ba0e311ce44474057d1dbc5e7fec089a302d4eaf1a757bf19ba34d75c851"
+
+[[project]]
+name = "gravity-wars"
+url = "https://github.com/whyboris/Gravity-Wars"
+commit = "e66964fc33a37cc8d2a824ec4fad255d38c0d54f"
+license = "MIT"
+license_file = "LICENSE"
+content_sha256 = "da621e4051f566565ab1638cbbeb0e35e64abc828d2112fe8f943269638c6a33"
+
+[[project]]
+name = "quadtastic"
+url = "https://github.com/25A0/Quadtastic"
+commit = "f5d994c31d3fdfb7c65412aebcbf990d946f8aa8"
+license = "MIT"
+license_file = "LICENSE.txt"
+content_sha256 = "d4268703c7f4d18c282e7c063049c855df6ec013638c37416968dd69b03711cd"
+
+[[project]]
+name = "slab"
+url = "https://github.com/flamendless/Slab"
+commit = "e696052474a695b93e8d73731b464d9d208a397a"
+license = "MIT"
+license_file = "LICENSE"
+content_sha256 = "5994a535d876939a07bceb70895034f152f6c82ec02e7cae8e77d0db6be9c608"

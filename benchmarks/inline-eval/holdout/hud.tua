@@ -1,0 +1,59 @@
+-- Frozen held-out fixture for inline-completion evaluation.
+-- Written before any threshold tuning; do not edit or use it for tuning.
+
+local messages: string[] = {}
+
+local hud = {
+  font = love.graphics.newFont(14),
+  messages = messages,
+  flash = 0,
+}
+
+local function pushMessage(text: string)
+  table.insert(hud.messages, 1, text)
+  if #hud.messages > 4 then
+    table.remove(hud.messages)
+  end
+end
+
+local function drawBar(x: number, y: number, width: number, value: number, maximum: number)
+  local filled = width * math.max(0, math.min(1, value / maximum))
+  love.graphics.setColor(0.2, 0.2, 0.2, 1)
+  love.graphics.rectangle("fill", x, y, width, 8)
+  love.graphics.setColor(0.3, 0.9, 0.4, 1)
+  love.graphics.rectangle("fill", x, y, filled, 8)
+  love.graphics.setColor(1, 1, 1, 1)
+  love.graphics.rectangle("line", x, y, width, 8)
+end
+
+local function drawMessages(x: number, y: number)
+  love.graphics.setFont(hud.font)
+  for index, message in ipairs(hud.messages) do
+    local alpha = 1 - (index - 1) * 0.2
+    love.graphics.setColor(1, 1, 1, alpha)
+    love.graphics.print(message, x, y + (index - 1) * 18)
+  end
+  love.graphics.setColor(1, 1, 1, 1)
+end
+
+local function drawHud(health: number, maxHealth: number, score: number)
+  drawBar(10, 30, 120, health, maxHealth)
+  love.graphics.setFont(hud.font)
+  love.graphics.print("score " .. score, 10, 44)
+  drawMessages(10, 70)
+  if hud.flash > 0 then
+    love.graphics.setColor(1, 0, 0, hud.flash)
+    love.graphics.rectangle("fill", 0, 0, love.graphics.getWidth(), love.graphics.getHeight())
+    love.graphics.setColor(1, 1, 1, 1)
+  end
+end
+
+local function updateHud(dt: number)
+  hud.flash = math.max(0, hud.flash - dt * 2)
+end
+
+return {
+  pushMessage = pushMessage,
+  drawHud = drawHud,
+  updateHud = updateHud,
+}
