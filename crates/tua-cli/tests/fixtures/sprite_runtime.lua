@@ -150,6 +150,21 @@ do
   assert(math.abs(edited.totalDuration - 0.6) < 1e-12)
 end
 
+-- Batching resolves trimmed-frame origins exactly as direct draw does.
+do
+  local drawCalls = {}
+  local leaf = sheet("trimmed-batch", drawCalls)
+  leaf.frameMetadata = {
+    idle = { { originX = 8, originY = 9, trimX = 2, trimY = 3 } },
+  }
+  local player = sprite.new(leaf)
+  local added
+  player:addToBatch({ add = function(_, ...) added = { ... } end }, 1, 2)
+  player:draw(1, 2)
+  assert(added[7] == 6 and added[8] == 6)
+  assert(drawCalls[1][8] == added[7] and drawCalls[1][9] == added[8])
+end
+
 -- A parent retains the graphics stack, while its leaf child uses the direct
 -- path inside that inherited transform.
 do

@@ -192,20 +192,26 @@ function SpritePlayer:update(dt)
   syncAnimation(self)
 end
 
-function SpritePlayer:draw(x, y, rotation, scaleX, scaleY, originX, originY, shearX, shearY)
-  if self.animation == nil then return end
-  local origin = self.sheet.origins[self.name] or self.sheet.origin or ZERO_ORIGIN
+-- Resolves the registration point for the current frame: explicit origins win,
+-- then per-frame metadata (shifted by its trim), then the animation or sheet
+-- origin. `draw` and `addToBatch` share it so both place frames identically.
+local function resolveOrigin(self, originX, originY)
   local animationMetadata = self.sheet.frameMetadata and self.sheet.frameMetadata[self.name]
   local frameMetadata = animationMetadata and animationMetadata[self.animation.position]
   if frameMetadata then
     if originX == nil then originX = frameMetadata.originX end
     if originY == nil then originY = frameMetadata.originY end
-    originX = originX - frameMetadata.trimX
-    originY = originY - frameMetadata.trimY
-  else
-    if originX == nil then originX = origin.x end
-    if originY == nil then originY = origin.y end
+    return originX - frameMetadata.trimX, originY - frameMetadata.trimY
   end
+  local origin = self.sheet.origins[self.name] or self.sheet.origin or ZERO_ORIGIN
+  if originX == nil then originX = origin.x end
+  if originY == nil then originY = origin.y end
+  return originX, originY
+end
+
+function SpritePlayer:draw(x, y, rotation, scaleX, scaleY, originX, originY, shearX, shearY)
+  if self.animation == nil then return end
+  originX, originY = resolveOrigin(self, originX, originY)
   scaleX = scaleX or 1
   scaleY = scaleY or scaleX
   local orderedChildren = self.orderedChildren
@@ -249,19 +255,7 @@ function SpritePlayer:addToBatch(batch, x, y, rotation, scaleX, scaleY, originX,
   if self.orderedChildren ~= nil then
     error("sprite players with nested children cannot be added to a SpriteBatch", 2)
   end
-
-  local origin = self.sheet.origins[self.name] or self.sheet.origin or ZERO_ORIGIN
-  local animationMetadata = self.sheet.frameMetadata and self.sheet.frameMetadata[self.name]
-  local frameMetadata = animationMetadata and animationMetadata[self.animation.position]
-  if frameMetadata then
-    if originX == nil then originX = frameMetadata.originX end
-    if originY == nil then originY = frameMetadata.originY end
-    originX = originX - frameMetadata.trimX
-    originY = originY - frameMetadata.trimY
-  else
-    if originX == nil then originX = origin.x end
-    if originY == nil then originY = origin.y end
-  end
+  originX, originY = resolveOrigin(self, originX, originY)
 
   local frame, drawX, drawY, drawRotation, drawScaleX, drawScaleY, drawOriginX, drawOriginY, drawShearX, drawShearY =
     self.animation:getFrameInfo(
