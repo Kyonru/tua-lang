@@ -183,6 +183,44 @@ no portable visitation order, so a query does not promise whether those new
 matches run in the same iteration. Component values cannot be `nil`; removing a
 component is expressed explicitly with `world:remove`.
 
+## ECS API
+
+### Module
+
+| Function | Behavior |
+| --- | --- |
+| `ecs.component(name, schema?)` | Create a component type. `name` must be a non-empty string and is used in errors and the ECS Explorer. `schema` maps field names to type names, such as `{ x = "number" }`, and gives the component's values their static type. |
+| `ecs.world()` | Create an empty world. |
+| `ecs.system(world, components, update)` | Create a system over `world:query(components)`. Each `system:update(dt)` calls `update(entity, value1, value2, ..., dt)` for every matching entity, with values in `components` order. |
+
+### World
+
+| Method | Behavior |
+| --- | --- |
+| `create()` | Return a new entity ID. IDs are never reused within a world, even after `clear()`. |
+| `destroy(entity)` | Remove the entity and all of its components. Destroying an unknown or already destroyed entity does nothing. |
+| `add(entity, component, value)` | Attach `value`, replacing any existing value of that component, and return it. Raises an error for a destroyed entity or a `nil` value. |
+| `get(entity, component)` | Return the entity's value for `component`, or `nil`. |
+| `has(entity, component)` | Return `true` when the entity has `component`. |
+| `remove(entity, component)` | Detach the component and return the removed value, or `nil` if it wasn't attached. |
+| `query(components)` | Return a reusable query over entities that have every listed component. The list must contain at least one component. |
+| `clear()` | Destroy every entity and component value, stopping any query that is iterating. |
+
+### Queries And Systems
+
+| Member | Behavior |
+| --- | --- |
+| `query:each(visit)` | Call `visit(entity, value1, value2, ...)` for every matching entity. |
+| `query:count()` | Return the number of matching entities. It visits every match, so cache the result if you need it several times per frame. |
+| `system:update(dt)` | Run the system's callback over its query, passing `dt` last. |
+| `system.enabled` | Set to `false` to make `update` do nothing, for example while the game is paused. |
+| `system.query` | The system's query, for `each` or `count` outside the update. |
+
+Iteration starts from the query's least-populated component, so a query
+over `{ Position, Boss }` only visits entities that have `Boss`. Entities are
+visited in no particular order. If order matters, such as for draw layering,
+collect the entities first and sort them.
+
 ## Runtime Overrides
 
 The built-in runtime is the default profile:

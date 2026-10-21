@@ -101,6 +101,115 @@ Pass `position`, `velocity`, `direction`, `attenuation`, `cone`, or `relative`
 to `play`. LÖVE positional playback only works for mono sources. The built-in
 analyzer reports stereo files so this mistake is visible before runtime.
 
+A voice uses the effect named in `play`'s `effect` option, then the cue's
+`effect`, then the nearest bus up the parent chain that sets one.
+
+## Audio API
+
+### System
+
+| Method | Behavior |
+| --- | --- |
+| `update(dt)` | Advance fades, the music clock, beat and bar events, and finished analysis jobs. Call it once per frame. |
+| `play(cue, options?)` | Start a voice. Returns `voice, "started"`, `voice, "stolen"`, or `nil, "rejected"`. |
+| `pauseBus(bus, fade?)` | Pause every active voice on `bus` and its child buses. Returns `false` for an unknown bus. |
+| `resumeBus(bus, fade?)` | Resume the paused voices on `bus` and its child buses. |
+| `stopBus(bus, fade?)` | Stop every active voice on `bus` and its child buses and return how many were stopped. |
+| `setBusVolume(bus, volume, fade?)` | Set a bus volume from 0 to 1, optionally fading. |
+| `setBusMuted(bus, muted)` | Mute or unmute a bus without changing its volume. |
+| `setMusicState(scene, transition?)` | Switch music scenes. Returns `"started"`, `"scheduled"` (waiting for the next beat or bar), `"analysis-pending"`, or `"unknown-state"`. |
+| `setMusicLayer(layer, volume, fade?)` | Fade one layer of the current scene. Returns `false` when no such layer is playing. |
+| `setListenerPosition(x, y, z)` | Move the listener for positional audio. |
+| `setListenerVelocity(x, y, z)` | Set the listener's velocity, for Doppler effects. |
+| `setListenerOrientation(fx, fy, fz, ux, uy, uz)` | Set the listener's forward and up vectors. |
+| `on(event, listener)`, `once(event, listener)` | Listen for an [audio event](#events) and return a function that removes the listener. |
+| `off(remove)` | Call a removal function returned by `on` or `once`. |
+| `subscribe(listener)` | Run `listener(state, previous)` when the active-voice count or music state changes, where `state` is `{ activeVoices, musicState }`. Returns an unsubscribe function. |
+| `snapshot()` | Return a detached table of voice counts, effective bus gains, fades, music state, analysis status, and started, stolen, and rejected totals, for debugging overlays. |
+| `requestAnalysis(path, options?)` | Analyze a file at runtime; see [Cached Audio Analysis](#cached-audio-analysis). |
+
+Every `fade` argument accepts seconds or
+`{ duration = 0.25, curve = "smoothstep" }`.
+
+### Play Options
+
+`play`'s options override the cue's settings for one voice:
+
+| Option | Meaning |
+| --- | --- |
+| `volume` | Voice volume from 0 to 1, multiplied by the cue and bus gains. |
+| `pitch` | Playback rate; `1` is normal. |
+| `priority` | Used when a limit forces a voice to be stolen. |
+| `looping` | Loop the source. |
+| `fadeIn` | Fade in from silence. |
+| `effect` | Name of a configured effect. |
+| `position`, `velocity`, `direction` | `{ x, y, z }` or `{ x = ..., y = ..., z = ... }` for positional sources. |
+| `relative` | Position the source relative to the listener. |
+| `attenuation` | `{ reference, maximum }` distances. |
+| `cone` | `{ innerAngle, outerAngle, outerVolume }`. |
+
+### Voices
+
+`play` returns a voice handle. Once the voice ends or is stopped, stolen, or
+released by `stopBus`, its handle goes stale: every method returns `false` and
+`status()` returns `"released"`. Voices are pooled, so this guarantees an old
+handle can never control a newer sound that reused its record.
+
+| Method | Behavior |
+| --- | --- |
+| `pause(fade?)` | Fade out, then pause. |
+| `resume(fade?)` | Resume from silence, fading back to the voice volume. |
+| `stop(fade?)` | Fade out, then stop and release the voice. |
+| `fadeTo(volume, fade?)` | Change the voice volume over time. |
+| `setVolume(volume)` | Change the voice volume immediately, cancelling any fade. |
+| `setPitch(pitch)` | Change the playback rate. |
+| `setPosition(x, y, z)` | Move a positional voice. |
+| `isPlaying()` | Return `true` while the source is playing. |
+| `status()` | Return `"playing"`, `"paused"`, `"stopping"`, `"ended"`, or `"released"`. |
+
+```tua
+local engine = audio:play("engine", { looping = true, volume = 0 })
+if engine then
+  engine:fadeTo(0.8, 0.5)
+end
+
+function stopEngine()
+  if engine then
+    engine:stop(0.25)
+  end
+end
+```
+
+### Events
+
+`on` and `once` are typed for these events and their payload tables:
+
+| Event | Payload |
+| --- | --- |
+| `voiceStarted` | `cue`, `voice`, `result` (`"started"` or `"stolen"`), `priority` |
+| `voiceStolen` | `cue`, `stolenCue`, `priority`, `stolenPriority` |
+| `voiceRejected` | `cue`, `reason` (`"unknown-cue"` or `"voice-limit"`), and `priority` for a voice-limit rejection |
+| `voiceEnded` | `cue`, `voice`, `reason` (`"ended"`, `"stopped"`, `"bus-stopped"`, or `"stolen"`) |
+| `fadeComplete` | `bus` for a bus fade, or `cue` and `voice` for a voice fade |
+| `busChanged` | `bus`, `volume`, `muted` |
+| `musicTransitionScheduled` | `state`, `quantize` |
+| `musicTransitionStarted`, `musicTransitionCompleted` | `state` |
+| `beat` | `state`, `beat`, `position` (seconds) |
+| `bar` | `state`, `bar`, `position` (seconds) |
+| `effectUnsupported` | `effect`, `reason` (`"platform"` or `"rejected"`) |
+| `analysisReady` | `path`, `analysis`, and `cached = true` when read from the cache |
+| `analysisFailed` | `path`, `reason` |
+
+```tua
+-- Pulse the HUD on every bar of the current music scene.
+local stopPulse = audio:on("bar", function(event)
+  hud.pulse = 1
+end)
+
+-- Later, when the HUD is removed:
+audio:off(stopPulse)
+```
+
 ## Cached Audio Analysis
 
 ### Built-In Analyzer

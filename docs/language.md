@@ -75,12 +75,13 @@ that final invariant.
   methods, and inheritance.
 - [Asset loaders](#asset-loaders): typed image, sound, music, font, shader,
   canvas, quad, sprite-batch, and particle helpers.
-- [Sprite sheets and anim8](#sprite-sheets-and-anim8): frame geometry,
-  animation ranges, durations, and loop callbacks.
-- [Vectors](#vectors): built-in `Vec2` and the `vec2(...)` constructor.
+- [Sprites and animation](sprites.md): sprite sheets, players, markers,
+  nested clips, and batching.
+- [Vectors and game math](vectors.md): built-in `Vec2`, fused vector
+  arithmetic, and the `math` game helpers.
 - [LOVE methods and callbacks](#love-methods-and-callbacks): colon-call
   guidance, callback snippets, diagnostics, and fixes.
-- [Signals](#signals): typed event names, payloads, navigation, and the Signal
+- [Signals](signals.md): typed event buses, payloads, patterns, and the Signal
   Graph.
 - [State stores](#state-stores): explicit shared state with inferred reads,
   updates, and subscriptions.
@@ -283,11 +284,10 @@ local faded = love.math.rgba(40, 80, 255, 128)
 ```
 
 The complete set is `tau`, `clamp`, `lerp`, `inverseLerp`, `remap`, `sign`,
-`round`, `smoothstep`, `rgb`, and `rgba`. The color helpers divide each 0-255
-component by 255 and return an array-like table ready to unpack into LOVE color
-APIs. Each helper receives a guarded Lua definition only in a generated file
-that references it, so ordinary `math` usage adds no output and an existing
-field with the same name is preserved.
+`round`, `smoothstep`, `rgb`, and `rgba`. Each helper adds a small guarded Lua
+definition only to a generated file that uses it. See
+[Game Math Helpers](vectors.md#game-math-helpers) for every signature and
+usage examples.
 
 ### Helper Overview
 
@@ -379,24 +379,13 @@ the bundled signal and store runtimes.
 
 ### Signals
 
-`SignalBus` completions include `on`, `once`, `declare`, `emit`,
-`off`, `clear`, `has`, `listeners`, and Hump-style aliases such as `register`
-and `remove`. In the first string argument of those event-name methods, the
-language server suggests known event names from existing `SignalBus` calls,
-preferring the same bus, same file, typed declarations, nearby calls, and
-project usage before weaker matches. Typed listener callbacks and
-`declare(name, function(...) end)` schema callbacks define event payload
-signatures for `emit` signature help and type checking. Hover, definition,
-references, and rename on event strings use that same bus-aware index.
-Conflicting typed schemas report `TL5005`; untyped listeners and unresolved
-dynamic buses keep `emit` permissive. At runtime, `declare` validates the event
-name and optional handler shape, then returns the handler or bus without
-registering a listener. Emission uses a stable listener version: subscriptions
-added or removed by a handler apply to nested and later emits, while the active
-emit finishes the version it started with.
-`Tua: Show Signal Graph` visualizes those indexed events across files, filters
-by bus/file/listener/emitter, shows conflicting schemas, and can create a typed
-listener or no-op declaration from known payloads.
+`signal()` creates an explicit event bus with `on`, `once`, `emit`, `off`,
+`declare`, and pattern methods. Typed handlers and `declare` schemas define
+each event's payload, so `emit` gets signature help and type checking, and
+event-name strings complete, navigate, and rename across files. Conflicting
+schemas report `TL5005`. Builds lower the helper to the bundled `tuasignal.lua`
+runtime. See [Signals](signals.md) for the full API, handler removal,
+emitting inside handlers, pattern methods, and the Signal Graph.
 
 ### State Stores
 
@@ -901,232 +890,39 @@ can provide dimensions, while audio duration is left unknown.
 
 ### Sprite Sheets And Anim8
 
-`spriteSheet({...})` validates a local sprite image and lowers named animations
-to the bundled anim8 runtime. Grid and animation coordinates are zero-based in
-Tua; lowering converts them to anim8's one-based selectors:
+`spriteSheet({...})` validates a local sprite image, frame grid, and named
+animations, and lowers them to the bundled anim8 runtime. Grid coordinates and
+marker frames are zero-based in the configuration. `sheet:player("idle")`
+creates a lightweight player with checked animation and marker names, speed
+control, manual seeking, nested clips, and `SpriteBatch` insertion. Players
+share their sheet's read-only animation arrays, so creating them is cheap.
 
 ```tua
-local background = spriteSheet({
-  image = "assets/images/spritesheet_stall.png",
-  frame = { width = 256, height = 256, left = 2, top = 4, border = 1 },
-  origin = { x = 128, y = 256 },
-  animations = {
-    orange = { column = 1, row = 0, durations = 1 },
-    blue = { from = 0, to = 3, row = 1, fps = 8, onLoop = "pauseAtEnd" },
-    green = {
-      frames = {
-        { from = 0, to = 3, row = 2 },
-        { from = 0, to = 1, row = 3 },
-      },
-      frame = { width = 128, height = 64, left = 8, top = 16, border = 2 },
-      origin = { x = 64, y = 64 },
-      durations = { 0.1, 0.5, 0.1, 0.1, 0.1, 0.1 },
-      markers = {
-        { frame = 1, name = "step" },
-      },
-      metadata = {
-        { origin = { x = 64, y = 64 }, trimX = 0, trimY = 0, sourceWidth = 128, sourceHeight = 64 },
-        { origin = { x = 66, y = 62 }, trimX = 2, trimY = 3, sourceWidth = 132, sourceHeight = 68 },
-        { origin = { x = 64, y = 64 }, sourceWidth = 128, sourceHeight = 64 },
-        { origin = { x = 64, y = 64 }, sourceWidth = 128, sourceHeight = 64 },
-        { origin = { x = 64, y = 64 }, sourceWidth = 128, sourceHeight = 64 },
-        { origin = { x = 64, y = 64 }, sourceWidth = 128, sourceHeight = 64 },
-      },
-      onLoop = function(animation, loops)
-        if loops > 1 then
-          animation:pause()
-        end
-      end,
-    },
-  },
-})
-```
-
-`frame.width` and `frame.height` define the default grid cell. `left` and `top`
-move the grid's source-image offset, while `border` represents spacing around
-adjacent cells. `origin.x` and `origin.y` are the registration point used when
-a `SpritePlayer` draws the frame; an animation may override the sheet origin.
-An animation may provide its own `frame` when a sheet contains regions with
-different cell sizes or origins. Use `column` for one cell, or `from`/`to` for
-an inclusive column range; `row` defaults to `0`. Use ordered `frames` ranges
-when one animation crosses grid rows. `frames` cannot be combined with the
-top-level `column`, `from`, `to`, or `row` selectors.
-
-`fps` is shorthand for a uniform `1 / fps` duration. `durations` accepts the
-same number or table passed to `anim8.newAnimation`, including individual
-values such as `{ 0.1, 0.5, 0.1 }` and ranges such as
-`{ ['3-5'] = 0.2 }`. `onLoop` accepts an animation method string such as
-`"pauseAtEnd"` or a function receiving `(animation, loops)`. The older
-`loop = false` form remains supported as shorthand for `onLoop =
-"pauseAtEnd"`, but it cannot be combined with `onLoop`.
-
-Static animation keys derive the exact runtime animation map and animation-name
-union. Create an independent controller with `sheet:player("idle")`. Each
-controller owns its playback state (timer, frame, status, and flips) but shares
-the sheet's read-only frame, duration, and interval arrays with every other
-player, so creating players stays cheap; don't edit those arrays in place.
-Use `player.speed` to change one player's timing (negative values play
-backward), and rebuild an animation with `anim8.newAnimation` rather than
-editing its `durations`, since its intervals are computed only on
-construction. When one player genuinely needs its own arrays, give it a private
-copy and restart that animation so the player switches to the copy (a player
-keeps its current animation until it selects one again):
-
-```lua
-player.animations.run = player.animations.run:clone()
-player:play("run", true)
-```
-
-The controller checks and completes names for `play`, `gotoAndPlay`, and
-`gotoAndStop`; supports `stop`, `resume`, `update`, `seek`, and `seekFrame`;
-and draws with the configured registration point. Manual seeking lets movement
-code drive a run or roll pose from distance instead of elapsed time.
-
-`markers` attach named events to zero-based, animation-local frame indexes.
-`player:on("step", callback)` and `player:off("step")` check and complete those
-names. Normal playback emits every crossed marker, including across loops and
-large updates. Direct seeking is silent unless its optional `emitMarkers`
-argument is `true`.
-
-Optional `metadata` preserves one record per animation frame. `origin` is the
-frame's registration point, `trimX`/`trimY` place the trimmed atlas rectangle
-inside its untrimmed frame, and `sourceWidth`/`sourceHeight` retain that
-untrimmed size. The player compensates the draw origin for trim offsets, and
-the VS Code preview reconstructs the untrimmed canvas. When `metadata` is
-present, its entry count must match the animation's resolved frame count.
-
-Completion inside the nested configuration suggests sheet, frame, and
-animation, range, origin, and marker fields, inserts their value shapes, and completes common `onLoop`
-method strings. Hover uses those same nested schemas, including the `loops`
-callback parameter, and fixed fields navigate to generated schema definitions.
-A runtime access such as `background.animations.green` is typed as
-`SpriteAnimation`, completes known animation keys, and navigates to the `green`
-entry in the source configuration. The compiler rejects conflicting selector,
-timing, marker, and loop forms before emitting anim8 and `tuasprite` calls.
-Both runtimes are emitted only when required and project-provided replacements
-are never overwritten.
-
-Sheets may optionally compose previously declared sheets as nested clips:
-
-```tua
--- Hat is another spriteSheet declared above.
-local player = spriteSheet({
-  image = "assets/player.png",
+local Hero = spriteSheet({
+  image = "assets/hero.png",
   frame = { width = 32, height = 32 },
-  animations = { idle = { column = 0, fps = 1 } },
-  children = {
-    hat = { sheet = Hat, initial = "idle", x = 4, y = -8 },
+  animations = {
+    idle = { from = 0, to = 3, row = 0, fps = 6 },
+    run = { from = 0, to = 7, row = 1, fps = 12 },
   },
 })
 
-local controller = player:player("idle")
-controller:child("hat"):gotoAndPlay("idle", 1)
+local hero = Hero:player("idle")
+hero:play("run")
 ```
 
-Child names are checked and completed. Child players update recursively and
-draw through parent-local translation, rotation, and scale. This is a small
-declarative display tree. Game-state logic and arbitrary animation behavior
-remain ordinary Tua/Lua code.
-
-For large groups of leaf sprites that share one sheet image, add their current
-frames to a `SpriteBatch` explicitly. This preserves normal draw ordering by
-leaving batching under the caller's control:
-
-```tua
-type EnemyDraw = { player: SpritePlayer, x: number, y: number }
-local enemies: { EnemyDraw } = {}
-local enemyBatch = spriteBatch(Enemy.image, 1000)
-
-function love.draw()
-  enemyBatch:clear()
-  for _, enemy in ipairs(enemies) do
-    enemy.player:addToBatch(enemyBatch, enemy.x, enemy.y)
-  end
-  love.graphics.draw(enemyBatch)
-end
-```
-
-`addToBatch` uses the player's current frame, registration point, trim metadata,
-flip state, and transform, and returns the batch entry index. It returns `nil`
-when no animation is selected. Players with nested children cannot be batched
-as one entry because a child may use another image; draw those normally or
-batch each leaf separately.
+See [Sprites And Animation](sprites.md) for frame geometry, timing, the player
+API, markers, trimmed frames, nested clips, batching, and sharing.
 
 ### Vectors
 
-`Vec2` is a built-in table-shaped type for common position and velocity code.
-The constructor has signature `function vec2(x: number, y: number): Vec2`.
-Fields `position.x` and `position.y` complete and hover as `number`. Tua also
-models common BrineVector properties and operations such as `length`,
-`normalized`, `dot`, `rotated`, and vector arithmetic. BrineVector uses
-LuaJIT/FFI when appropriate and falls back to table vectors on platforms where
-that is a better runtime choice.
-
-BrineVector allocates a new vector for every operator. When Tua knows the
-operand types, it emits a whole `Vec2` expression as one constructor call:
-
-```tua
-position += velocity * dt
-```
-
-```lua
-position = __tua_vec2(position.x + velocity.x * dt, position.y + velocity.y * dt)
-```
-
-The results are identical, including floating-point rounding, but the
-expression allocates once instead of once per operator. This matters most when
-LuaJIT's JIT compiler is off, as in LOVE on Apple Silicon: a `p + v * dt` update
-over 10,000 vectors runs about 2.7 times faster and creates half the garbage.
-With the JIT on, LuaJIT already removes the temporary vectors and timings are
-unchanged.
-
-Fusion applies to `+`, `-`, unary `-`, `*` by a number or another `Vec2`, `/` by
-a nonzero number literal, and the matching compound assignments. Operands may be
-bare names, number expressions made from bare names and literals, or
-`vec2(...)` calls with such arguments.
-
-Field and index reads such as `self.pos` or `positions[i]` are also fused when
-the `Vec2` expression is the whole right-hand side of an assignment, compound
-assignment, `local` declaration, or `return`. Lua may run an `__index`
-metamethod on every read, so each read is bound to a local once, in the order
-Lua would evaluate it, and the components use that local:
-
-```tua
-self.pos += self.vel * dt
-```
-
-```lua
-do local __tua_self_pos = self.pos; local __tua_self_vel = self.vel; self.pos = __tua_vec2(__tua_self_pos.x + __tua_self_vel.x * dt, __tua_self_pos.y + __tua_self_vel.y * dt) end
-```
-
-The assignment target must be a name, or a name with one field or key, such as
-`self.pos` or `positions[i]`. A deeper target like `world.player.pos`, a `local`
-whose right-hand side mentions its own name, and a `Vec2` expression nested
-inside a larger one, such as a call argument, keep BrineVector's operators.
-
-Two observable trade-offs come with these generated locals:
-
-- Runtime errors name the generated local. If `self.pos` is unexpectedly `nil`,
-  for example, Lua reports an attempt to index local `__tua_self_pos`; the name
-  identifies the source field that supplied the invalid value.
-- Every field and index operand is read before component arithmetic begins. If
-  an earlier BrineVector operation would have failed, getters for later
-  operands have already run. This is observable only when those reads execute
-  side effects through `__index`.
-
-Expressions with a comment inside them, function calls, or division by a
-variable are also left unchanged. Comments before or after the expression are
-fine.
-
-The built-in `Vec2` is nominal at assignment boundaries: create one with
-`vec2(x, y)` rather than assigning an ordinary `{ x, y }` table. This keeps its
-static operator semantics aligned with the BrineVector value used at runtime. A
-project that declares its own `type Vec2` keeps that alias structural.
-
-Fusion uses the project-aware type environment during project builds. A file
-does not need to spell `vec2` or `Vec2` itself: values inferred from a required
-Tua or annotated Lua module are optimized when their resolved type is the
-built-in vector type.
+`Vec2` is a built-in nominal vector type for positions and velocities, created
+with `vec2(x, y)` and backed by BrineVector at runtime. Tua checks its fields,
+computed properties such as `length` and `normalized`, its methods, and its
+operators, and compiles whole vector expressions such as
+`position += velocity * dt` into one constructor call, so they allocate once.
+See [Vectors And Game Math](vectors.md) for the full API, fused-arithmetic
+rules and trade-offs, and FFI versus table vectors.
 
 ### LOVE Methods And Callbacks
 

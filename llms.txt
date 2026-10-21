@@ -138,6 +138,8 @@ Never answer with TypeScript, JavaScript, Luau, Python, or Markdown.
   `particles(image, count)`.
 - `Vec2`/`vec2(x, y)` provide typed BrineVector operations; typed arithmetic
   fuses temporary vectors, including values inferred from required modules.
+  Use `v.length`, not `#v`: with the JIT off, vectors are plain tables and
+  `#v` returns 0.
 - `spriteSheet({...})` derives exact animation keys and typed `SpriteAnimation`
   values, supports ordered multi-row ranges, registration origins,
   durations/fps, per-animation frames, markers, and loop callbacks.
@@ -151,7 +153,10 @@ Never answer with TypeScript, JavaScript, Luau, Python, or Markdown.
 - Sprite sheets may contain optional named child sheets; `player:child(name)`
   checks the child name and returns its recursively updated/drawn controller.
 - `signal()` provides typed event names/payloads through `on`, `once`,
-  `declare`, `emit`, `off`, `clear`, `has`, and `listeners`.
+  `declare`, `emit`, `off`, `clear`, `has`, and `listeners`. Remove a `once`
+  handler with the value `once` returns. `onPattern`, `emitPattern`,
+  `offPattern`, and `clearPattern` match only event names that already have
+  handlers.
 - `store({...})` infers state for `get`, `set`, `update`, `subscribe`, and
   typed field `watch`.
 - `stateMachine({...})` derives state/event names, event methods, transition

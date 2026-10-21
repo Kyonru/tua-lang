@@ -42,6 +42,9 @@ flowchart LR
 | Model data and share type-safe module APIs | [Typing In Tua](typing.md) |
 | Generate typed modules from source assets | [Asset Pipelines](asset-pipelines.md) |
 | Look up syntax or a specific feature | [Language Guide](language.md) |
+| Animate sprites from a sprite sheet | [Sprites And Animation](sprites.md) |
+| Move things with vectors, interpolation, and colors | [Vectors And Game Math](vectors.md) |
+| Decouple game systems with typed events | [Signals](signals.md) |
 | Define typed keyboard, mouse, or gamepad controls | [Input](input.md) |
 | Build a managed LÖVE audio graph | [Audio Systems](audio.md) |
 | Check exact compiler and toolchain behavior | [Language and Toolchain Reference](specification.md) |
@@ -131,10 +134,11 @@ distributed with the rest of the project.
 - [Asset Pipelines](asset-pipelines.md) covers cached external importers,
   generated modules, and structured asset diagnostics.
 - [Examples](examples.md) explains the bundled feature tour and LOVE projects.
-- [State Stores](stores.md), [State Machines](state-machines.md),
-  [Entity Component Systems](ecs.md), [Object Pooling](object-pooling.md), and
-  [Audio Systems](audio.md)
-  document Tua's opt-in game helpers.
+- [Sprites And Animation](sprites.md), [Vectors And Game Math](vectors.md),
+  [Signals](signals.md), [State Stores](stores.md),
+  [State Machines](state-machines.md), [Entity Component Systems](ecs.md),
+  [Object Pooling](object-pooling.md), and [Audio Systems](audio.md) document
+  Tua's opt-in game helpers.
 
 ### Configure And Use The Toolchain
 
