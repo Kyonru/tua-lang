@@ -42,6 +42,10 @@ local imprecise = 9007199254740993
 local chained = 1 < value < 3
 local negated = not value == 2
 
+-- VectorLength (TL4060): `#` is 0 when vectors are plain tables; use `.length`.
+local velocity = vec2(3, 4)
+local speed = #velocity
+
 return {
   unknownType = unknownType,
   formatted = formatted,
@@ -51,4 +55,5 @@ return {
   imprecise = imprecise,
   chained = chained,
   negated = negated,
+  speed = speed,
 }

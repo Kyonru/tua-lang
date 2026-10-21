@@ -786,6 +786,53 @@ player.setFilter("nearest")
 }
 
 #[test]
+fn rewrites_vector_hash_length_to_the_length_property() {
+    let parsed = parse_tua_source(
+        "src/main.tua",
+        r#"
+local v = vec2(3, 4)
+local a = #v
+local b = #-v
+"#,
+    )
+    .expect("source should parse");
+    let diagnostics = diagnostics(&parsed, DiagnosticsConfig::default());
+
+    for (line, title, new_text, span) in [
+        (3, "Use `v.length`", "v.length", (11, 13)),
+        (4, "Use `(-v).length`", "(-v).length", (11, 14)),
+    ] {
+        let actions = code_actions_parsed_source(
+            &parsed,
+            &diagnostics,
+            range(line, 11),
+            std::path::Path::new("src"),
+            "tua",
+        );
+        let action = actions
+            .iter()
+            .find(|action| action.title == title)
+            .unwrap_or_else(|| panic!("missing {title}: {actions:#?}"));
+        let edit = &action.edit.changes[&std::path::PathBuf::from("src/main.tua")][0];
+
+        assert_eq!(edit.new_text, new_text);
+        assert_eq!(
+            edit.span,
+            SourceSpan {
+                start: SourcePosition {
+                    line,
+                    column: span.0
+                },
+                end: SourcePosition {
+                    line,
+                    column: span.1
+                },
+            }
+        );
+    }
+}
+
+#[test]
 fn rewrites_love_constructors_to_asset_helpers() {
     let parsed = parse_tua_source(
         "src/main.tua",

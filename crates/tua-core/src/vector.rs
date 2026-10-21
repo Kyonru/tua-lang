@@ -29,6 +29,23 @@ pub(crate) fn is_constructor(name: &str) -> bool {
     name == CONSTRUCTOR_NAME
 }
 
+/// The `.length` form of `#operand`, for the `TL4060` message and quick fix.
+/// Returns `None` when the operand spans lines or contains a comment, where a
+/// textual rewrite could change its meaning.
+pub(crate) fn length_replacement(operand: &str) -> Option<String> {
+    let operand = operand.trim();
+    if operand.is_empty() || operand.contains('\n') || operand.contains("--") {
+        return None;
+    }
+
+    // `.length` binds tighter than unary minus, so `#-v` becomes `(-v).length`.
+    Some(if operand.starts_with('-') {
+        format!("({operand}).length")
+    } else {
+        format!("{operand}.length")
+    })
+}
+
 pub(crate) const fn detail() -> &'static str {
     "function vec2(x: number, y: number): Vec2"
 }

@@ -111,7 +111,9 @@ The compound forms `+=`, `-=`, `*=`, and `/=` work too.
     `#v` returns the length only when BrineVector uses LuaJIT's FFI. With the
     JIT off, as in LÖVE on Apple Silicon by default, vectors are plain tables,
     and LuaJIT ignores `__len` on tables, so `#v` returns `0`. `v.length` gives
-    the right answer in both modes.
+    the right answer in both modes. The standard lint rules report `#v` as
+    [`TL4060`](linter.md#rules), and the editor offers `v.length` as a quick
+    fix.
 
 ### FFI And Table Vectors
 

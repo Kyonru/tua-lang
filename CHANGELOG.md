@@ -8,6 +8,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Added
 
+- A `VectorLength` standard lint rule (`TL4060`) warns when `#` is applied to a
+  built-in `Vec2`. With LuaJIT's JIT off, as in LÖVE on Apple Silicon by
+  default, vectors are plain tables and `#v` is `0`; the warning names the
+  replacement, such as `v.length`, and the editor offers it as a quick fix.
 - Leaf sprite players can add their current frame and complete transform to a
   caller-owned `SpriteBatch` with `addToBatch`, enabling explicit bulk drawing
   without changing normal draw order or nested-sprite behavior.

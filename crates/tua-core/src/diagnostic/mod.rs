@@ -118,6 +118,7 @@ impl DiagnosticCode {
     pub const LINT_CLASS_PARENT_CONSTRUCTOR: Self = Self(4057);
     pub const LINT_CLASS_VIRTUAL_CALL_IN_INIT: Self = Self(4058);
     pub const LINT_CLASS_REDUNDANT_INHERITED_FIELD: Self = Self(4059);
+    pub const LINT_VECTOR_LENGTH: Self = Self(4060);
     pub const DOMAIN_ECS_COMPONENT_VALUE: Self = Self(5002);
     pub const DOMAIN_ECS_QUERY: Self = Self(5003);
     pub const DOMAIN_SPRITE: Self = Self(5004);
@@ -237,6 +238,7 @@ impl DiagnosticCode {
                 | Self::LINT_CLASS_PARENT_CONSTRUCTOR
                 | Self::LINT_CLASS_VIRTUAL_CALL_IN_INIT
                 | Self::LINT_CLASS_REDUNDANT_INHERITED_FIELD
+                | Self::LINT_VECTOR_LENGTH
                 | Self::DOMAIN_ECS_COMPONENT_VALUE
                 | Self::DOMAIN_ECS_QUERY
                 | Self::DOMAIN_SPRITE

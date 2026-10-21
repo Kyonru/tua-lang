@@ -281,6 +281,7 @@ impl Visitor for LintRuleVisitor<'_> {
         } = expression
         {
             self.check_table_indexer(expression, operand, TableIndexerUse::Length);
+            self.check_vector_length(expression, operand);
         }
 
         match expression {
@@ -669,6 +670,31 @@ impl LintRuleVisitor<'_> {
             DiagnosticCode::LINT_TABLE_OPERATION,
             message,
         );
+    }
+
+    /// BrineVector backs `Vec2` with FFI structs only when LuaJIT's JIT is on
+    /// at its first `require`. Otherwise vectors are plain tables, and LuaJIT
+    /// ignores `__len` on tables, so `#v` is 0 instead of the vector's length.
+    fn check_vector_length(&mut self, expression: &Expression, operand: &Expression) {
+        let Some(ty) = self
+            .semantic
+            .type_of_expression_return(operand, node_position(operand), 0)
+        else {
+            return;
+        };
+        if self.environment.resolve_aliases(&ty) != crate::vector::vec2_type() {
+            return;
+        }
+
+        let operand_text = operand.to_string();
+        let operand_text = operand_text.trim();
+        let message = match crate::vector::length_replacement(operand_text) {
+            Some(replacement) => format!(
+                "`#{operand_text}` is 0 when LuaJIT's JIT is off, because vectors are then plain tables; use `{replacement}` instead"
+            ),
+            None => "`#` on a Vec2 is 0 when LuaJIT's JIT is off, because vectors are then plain tables; use `.length` instead".to_owned(),
+        };
+        self.push_node(expression, DiagnosticCode::LINT_VECTOR_LENGTH, message);
     }
 
     fn push(&mut self, position: SourcePosition, code: DiagnosticCode, message: impl Into<String>) {

@@ -244,6 +244,11 @@ fn diagnostic_quick_fix_actions(
                     actions.push(action);
                 }
             }
+            Some(DiagnosticCode::LINT_VECTOR_LENGTH) => {
+                if let Some(action) = use_vector_length_action(parsed, diagnostic) {
+                    actions.push(action);
+                }
+            }
             Some(DiagnosticCode::DOMAIN_LOVE_CALLBACK) => {
                 if let Some(action) = rename_love_callback_action(parsed, diagnostic) {
                     actions.push(action);
@@ -870,6 +875,31 @@ fn use_colon_method_call_action(parsed: &ParsedSource, diagnostic: &Diagnostic) 
                     end: method_start,
                 },
                 new_text: ":".to_owned(),
+            },
+        ),
+    })
+}
+
+fn use_vector_length_action(parsed: &ParsedSource, diagnostic: &Diagnostic) -> Option<Assist> {
+    let span = SourceSpan {
+        start: diagnostic_position(diagnostic),
+        end: SourcePosition {
+            line: diagnostic.end_line,
+            column: diagnostic.end_column,
+        },
+    };
+    let current = source_text_for_span(&parsed.source, span)?;
+    let replacement = crate::vector::length_replacement(current.strip_prefix('#')?)?;
+
+    Some(Assist {
+        title: format!("Use `{replacement}`"),
+        kind: AssistKind::QuickFix,
+        edit: edit_for(
+            parsed.path.clone(),
+            TextEdit {
+                path: parsed.path.clone(),
+                span,
+                new_text: replacement,
             },
         ),
     })

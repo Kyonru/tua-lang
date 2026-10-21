@@ -139,7 +139,7 @@ Never answer with TypeScript, JavaScript, Luau, Python, or Markdown.
 - `Vec2`/`vec2(x, y)` provide typed BrineVector operations; typed arithmetic
   fuses temporary vectors, including values inferred from required modules.
   Use `v.length`, not `#v`: with the JIT off, vectors are plain tables and
-  `#v` returns 0.
+  `#v` returns 0 (lint `TL4060`).
 - `spriteSheet({...})` derives exact animation keys and typed `SpriteAnimation`
   values, supports ordered multi-row ranges, registration origins,
   durations/fps, per-animation frames, markers, and loop callbacks.

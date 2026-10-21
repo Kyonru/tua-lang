@@ -1397,6 +1397,65 @@ table.insert(items, string.find("hello", "h"))
 }
 
 #[test]
+fn vector_length_reports_hash_on_builtin_vec2_values() {
+    let diagnostics = check_standard_rules_source(
+        r#"
+local v = vec2(3, 4)
+local player = { pos = vec2(1, 2) }
+print(#v, #player.pos, #vec2(5, 12), #-v, #(v + v), v.length)
+"#,
+    );
+    let warnings = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_VECTOR_LENGTH))
+        .collect::<Vec<_>>();
+    let messages = warnings
+        .iter()
+        .map(|diagnostic| diagnostic.message.as_str())
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        messages,
+        vec![
+            "`#v` is 0 when LuaJIT's JIT is off, because vectors are then plain tables; use `v.length` instead",
+            "`#player.pos` is 0 when LuaJIT's JIT is off, because vectors are then plain tables; use `player.pos.length` instead",
+            "`#vec2(5, 12)` is 0 when LuaJIT's JIT is off, because vectors are then plain tables; use `vec2(5, 12).length` instead",
+            "`#-v` is 0 when LuaJIT's JIT is off, because vectors are then plain tables; use `(-v).length` instead",
+            "`#(v + v)` is 0 when LuaJIT's JIT is off, because vectors are then plain tables; use `(v + v).length` instead",
+        ],
+        "{diagnostics:#?}"
+    );
+    assert!(warnings
+        .iter()
+        .all(|diagnostic| diagnostic.severity == crate::DiagnosticSeverity::Warning));
+    assert_eq!(
+        (warnings[0].line, warnings[0].column, warnings[0].end_column),
+        (4, 7, 9),
+        "the warning should cover the whole `#v` expression"
+    );
+}
+
+#[test]
+fn vector_length_ignores_arrays_strings_and_project_vec2_aliases() {
+    let diagnostics = check_standard_rules_source(
+        r#"
+type Vec2 = { x: number, y: number }
+
+local p: Vec2 = { x = 1, y = 2 }
+local list: number[] = { p.x, p.y }
+print(#list, #"text")
+"#,
+    );
+
+    assert!(
+        diagnostics
+            .iter()
+            .all(|diagnostic| diagnostic.code != Some(DiagnosticCode::LINT_VECTOR_LENGTH)),
+        "{diagnostics:#?}"
+    );
+}
+
+#[test]
 fn table_operations_require_resolved_lua_builtins() {
     let diagnostics = check_standard_rules_source(
         r#"

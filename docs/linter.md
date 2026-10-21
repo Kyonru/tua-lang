@@ -60,6 +60,7 @@ share an existing Tua code because they are the same analysis.
 | `CommentDirective` | `TL4049` |
 | `IntegerParsing` | `TL4050` |
 | `ComparisonPrecedence` | `TL4051` |
+| `VectorLength` | `TL4060` |
 
 `UnknownGlobal` considers plain global assignments and simple global function
 declarations anywhere in the current Tua file to be definitions, regardless of
@@ -191,6 +192,14 @@ the explicit Lua form `minimum <= value and value <= maximum`. The complete
 expression is highlighted. Comparing two explicitly negated values, such as
 `not left == not right`, remains a valid intentional boolean comparison, and
 parentheses silence the warning when the original grouping is deliberate.
+
+`VectorLength` reports `#` applied to a built-in `Vec2`, such as `#velocity`.
+BrineVector uses FFI structs only when LuaJIT's JIT compiler is on; otherwise
+vectors are plain tables, and LuaJIT ignores `__len` on tables, so `#velocity`
+is `0` instead of the vector's length. The warning names the replacement, such
+as `velocity.length` or `(-velocity).length`, and the editor offers it as a
+quick fix. A project that declares its own `type Vec2` is not affected. See
+[Vectors](vectors.md#operators).
 
 `TableLiteral` compares literal keys by their LuaJIT runtime value, so escaped
 strings and signed numeric spellings cannot hide a duplicate. It also reports

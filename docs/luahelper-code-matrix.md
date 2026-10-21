@@ -170,6 +170,7 @@ enforced separately with `tua fmt --check`.
 | `TL4057` | An explicit child constructor can return without calling its parent constructor. | `rules` |
 | `TL4058` | An open class constructor directly calls an overridable method on `self`. | `rules` |
 | `TL4059` | A type-only child field declaration redundantly repeats an inherited field contract. | `rules` |
+| `TL4060` | `#` is applied to a built-in `Vec2`, which is `0` when vectors are plain tables; use `.length`. | `rules` |
 
 Configuration keys in this table live under `[diagnostics]` unless they start
 with `jit.`. VS Code can override matching diagnostic settings for the running
