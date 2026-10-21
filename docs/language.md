@@ -1021,6 +1021,57 @@ models common BrineVector properties and operations such as `length`,
 LuaJIT/FFI when appropriate and falls back to table vectors on platforms where
 that is a better runtime choice.
 
+BrineVector allocates a new vector for every operator. When Tua knows the
+operand types, it emits a whole `Vec2` expression as one constructor call:
+
+```tua
+position += velocity * dt
+```
+
+```lua
+position = __tua_vec2(position.x + velocity.x * dt, position.y + velocity.y * dt)
+```
+
+The results are identical, including floating-point rounding, but the
+expression allocates once instead of once per operator. This matters most when
+LuaJIT's JIT compiler is off, as in LOVE on Apple Silicon: a `p + v * dt` update
+over 10,000 vectors runs about 2.7 times faster and creates half the garbage.
+With the JIT on, LuaJIT already removes the temporary vectors and timings are
+unchanged.
+
+Fusion applies to `+`, `-`, unary `-`, `*` by a number or another `Vec2`, `/` by
+a nonzero number literal, and the matching compound assignments. Operands may be
+bare names, number expressions made from bare names and literals, or
+`vec2(...)` calls with such arguments.
+
+Field and index reads such as `self.pos` or `positions[i]` are also fused when
+the `Vec2` expression is the whole right-hand side of an assignment, compound
+assignment, `local` declaration, or `return`. Lua may run an `__index`
+metamethod on every read, so each read is bound to a local once, in the order
+Lua would evaluate it, and the components use that local:
+
+```tua
+self.pos += self.vel * dt
+```
+
+```lua
+do local __tua_self_pos = self.pos; local __tua_self_vel = self.vel; self.pos = __tua_vec2(__tua_self_pos.x + __tua_self_vel.x * dt, __tua_self_pos.y + __tua_self_vel.y * dt) end
+```
+
+The assignment target must be a name, or a name with one field or key, such as
+`self.pos` or `positions[i]`. A deeper target like `world.player.pos`, a `local`
+whose right-hand side mentions its own name, and a `Vec2` expression nested
+inside a larger one, such as a call argument, keep BrineVector's operators.
+
+Expressions with a comment inside them, function calls, or division by a
+variable are also left unchanged. Comments before or after the expression are
+fine.
+
+The built-in `Vec2` is nominal at assignment boundaries: create one with
+`vec2(x, y)` rather than assigning an ordinary `{ x, y }` table. This keeps its
+static operator semantics aligned with the BrineVector value used at runtime. A
+project that declares its own `type Vec2` keeps that alias structural.
+
 ### LOVE Methods And Callbacks
 
 Prefer `:` for LOVE object methods. These methods usually need `self`, and Lua
@@ -1126,6 +1177,13 @@ Emitted Lua:
 score = score + 5
 player.hp = player.hp - amount
 ```
+
+The right-hand side keeps its grouping, so `x *= a + b` emits
+`x = x * (a + b)`.
+
+When the target's type defines the operator through a metatable, the
+right-hand side is checked against that operator. For a `Vec2`,
+`velocity *= 0.98` is valid and `velocity += 2` is an error.
 
 Complex left-hand sides such as calls and computed indexes are rejected.
 

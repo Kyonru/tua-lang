@@ -39,9 +39,47 @@ language or editor behavior, and migration notes call out those changes.
   creates roughly 2.3 MB of temporary tables per update. These figures are
   platform- and workload-specific. `make profile-ecs-love` compares against
   the latest release tag by default, or a selected `ECS_BASE_REF`.
+- `Vec2` arithmetic whose operand types are known now emits as one
+  constructor call instead of one BrineVector allocation per operator, with
+  identical results including floating-point rounding. Fusion covers `+`, `-`,
+  unary `-`, `*` by a number or `Vec2`, `/` by a nonzero number literal, and the
+  matching compound assignments, when every repeated operand is a bare name,
+  number expression, or `vec2(...)` call. Field and index reads such as
+  `self.pos` and `positions[i]` are fused too when the expression is the whole
+  right-hand side of an assignment, compound assignment, `local`, or `return`:
+  each read is bound to a local exactly once, in evaluation order, inside a
+  `do ... end` block. Comments inside the expression, deeper assignment
+  targets, and anything else that may have observable evaluation keep
+  BrineVector's operators. On macOS arm64 with LOVE 11.5.0 and the JIT
+  disabled, `positions[i] = positions[i] + velocities[i] * dt` over 10,000
+  vectors ran about 2.6× faster with half the garbage,
+  `body.pos += body.vel * dt` about 2.3× faster, and a projectile step with
+  three operators about 3.8× faster. With the JIT enabled, LuaJIT already
+  removes the temporary vectors, and timings were unchanged. These figures are
+  platform- and workload-specific.
 
 ### Fixed
 
+- Names followed by a comment on the same line, or preceded by a comment on
+  the line above, now keep their types. Several analysis helpers read a token
+  together with its surrounding comments, so `local sum = price + tax -- note`
+  followed by `return sum` reported `TL1003: expected number, found nil`.
+- A compound assignment after a comment line no longer copies that comment
+  into its right-hand side (`x = -- comment` followed by `x + 1`).
+- Compound assignments keep a binary right-hand side grouped: `x *= a + b` now
+  emits `x = x * (a + b)` instead of `x = x * a + b`.
+- Compound assignments on a type with an arithmetic metamethod now check the
+  right-hand side against that operator, so `velocity *= 0.98` on a `Vec2` is
+  accepted and keeps the `Vec2` type, while `velocity += 2` is still rejected.
+- Unary minus on a `Vec2` now has type `Vec2`, using a new `__unm` metatable
+  fact, instead of an unknown type.
+- `Vec2` multiplication and division now reject operands other than a number or
+  another `Vec2`, including `2 / velocity`, which BrineVector rejects at
+  runtime. Plain `{ x, y }` tables no longer satisfy the built-in nominal
+  `Vec2`; a project that declares its own `type Vec2` keeps it structural.
+- Arithmetic metamethod operands are checked positionally, as Lua calls them:
+  when the right operand supplies the metamethod, the left operand is checked
+  against its first parameter.
 - ECS query mutation now remains deterministic when `world:clear()` is called
   from a callback, and `world:add` rejects `nil` component values before they
   can corrupt component-store counts.

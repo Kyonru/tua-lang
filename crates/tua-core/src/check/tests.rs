@@ -1029,6 +1029,130 @@ score += "two"
 }
 
 #[test]
+fn vec2_compound_assignments_check_the_operator_operand() {
+    check_tua_source(
+        "src/vector-compound.tua",
+        r#"
+local velocity = vec2(1, 2)
+velocity *= 0.98
+velocity /= 2
+velocity += vec2(0, 1)
+velocity -= -velocity
+local stillVector: Vec2 = velocity
+local x: number = stillVector.x
+"#,
+    )
+    .expect("Vec2 compound assignments should follow BrineVector's operators");
+
+    let diagnostics = check_tua_source(
+        "src/vector-compound.tua",
+        r#"
+local velocity = vec2(1, 2)
+velocity += 2
+"#,
+    )
+    .expect_err("adding a number to a Vec2 should still be rejected");
+
+    assert_single_mismatch(&diagnostics, "expected Vec2, found number");
+
+    for assignment in [r#"velocity *= "bad""#, "velocity /= false"] {
+        let diagnostics = check_tua_source(
+            "src/vector-compound.tua",
+            format!("local velocity = vec2(1, 2)\n{assignment}\n"),
+        )
+        .expect_err("Vec2 multiplication and division reject unsupported operands");
+
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.code == Some(DiagnosticCode::TYPE_MISMATCH)),
+            "expected a type mismatch for {assignment}: {diagnostics:#?}"
+        );
+    }
+}
+
+#[test]
+fn trailing_comments_do_not_hide_local_types() {
+    check_tua_source(
+        "src/trailing-comment.tua",
+        r#"
+local function total(price: number, tax: number): number
+  local sum = price + tax -- before rounding
+  -- keep the cents
+  sum = sum * 1
+  return sum
+end
+"#,
+    )
+    .expect("comments next to names should not change their types");
+}
+
+#[test]
+fn vec2_rejects_plain_structural_tables() {
+    let diagnostics = check_tua_source(
+        "src/vector-identity.tua",
+        r#"
+local position: Vec2 = { x = 1, y = 2 }
+"#,
+    )
+    .expect_err("Vec2 values must be created by the runtime constructor");
+
+    assert_single_mismatch(&diagnostics, "expected Vec2");
+}
+
+#[test]
+fn a_declared_vec2_alias_stays_structural() {
+    check_tua_source(
+        "src/vector-alias.tua",
+        r#"
+type Vec2 = {
+  x: number,
+  y: number,
+}
+
+local position: Vec2 = { x = 1, y = 2 }
+"#,
+    )
+    .expect("a project's own Vec2 alias should accept plain tables");
+}
+
+#[test]
+fn vec2_binary_operators_check_the_other_operand() {
+    check_tua_source(
+        "src/vector-binary.tua",
+        r#"
+local velocity = vec2(1, 2)
+local scaled = velocity * 2
+local reverseScaled = 2 * velocity
+local product = velocity * vec2(3, 4)
+local quotient = velocity / vec2(3, 4)
+"#,
+    )
+    .expect("Vec2 binary operators should accept BrineVector's operand set");
+
+    for expression in [
+        r#"velocity * "bad""#,
+        r#""bad" * velocity"#,
+        "velocity / false",
+        "2 / velocity",
+        "2 + velocity",
+    ] {
+        let diagnostics = check_tua_source(
+            "src/vector-binary.tua",
+            format!("local velocity = vec2(1, 2)\nlocal broken = {expression}\n"),
+        )
+        .expect_err("Vec2 operators reject unsupported operands");
+
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.code == Some(DiagnosticCode::TYPE_MISMATCH)),
+            "expected a type mismatch for {expression}: {diagnostics:#?}"
+        );
+    }
+}
+
+#[test]
 fn ordinary_lua_inferred_locals_remain_permissive_without_annotations() {
     let parsed = crate::parse_lua_source(
         "src/legacy.lua",

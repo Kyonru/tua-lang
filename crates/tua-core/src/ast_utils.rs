@@ -4,7 +4,7 @@ use full_moon::ast::{
 use full_moon::tokenizer::TokenReference;
 
 pub(crate) fn token_text(token: &TokenReference) -> String {
-    token.to_string().trim().to_owned()
+    token.token().to_string().trim().to_owned()
 }
 
 pub(crate) fn assignment_expression_for_local<'a>(

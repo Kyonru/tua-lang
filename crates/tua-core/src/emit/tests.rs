@@ -1023,6 +1023,302 @@ local offset = __tua_vec2(player.x + 4, math.max(0, player.y))
 }
 
 #[test]
+fn snapshot_fuses_vec2_arithmetic_into_one_constructor_call() {
+    let emitted = emit_tua_source(
+        "src/vector-fusion.tua",
+        r#"
+local function step(p: Vec2, v: Vec2, g: Vec2, dt: number, k: number)
+  local a = p + v * dt
+  local b = -(p - v) * 2
+  local c = p + (v + g)
+  local d = (p * v) / 2
+  local e = 0.5 * dt * v
+  local f = vec2(1, 2) * k
+  local h = p - -v
+  local items = { p + g, positions[i] + velocities[i] * dt }
+  p += v * dt
+  p *= k + 1
+  return a, b, c, d, e, f, h, items, p
+end
+"#,
+    )
+    .expect("fusible Vec2 arithmetic should emit");
+
+    assert_eq!(
+        emitted,
+        r#"local __tua_vec2 = require("brinevector")
+local function step(p, v, g, dt, k)
+  local a = __tua_vec2(p.x + v.x * dt, p.y + v.y * dt)
+  local b = __tua_vec2(-(p.x - v.x) * 2, -(p.y - v.y) * 2)
+  local c = __tua_vec2(p.x + (v.x + g.x), p.y + (v.y + g.y))
+  local d = __tua_vec2(p.x * v.x / 2, p.y * v.y / 2)
+  local e = __tua_vec2(v.x * (0.5 * dt), v.y * (0.5 * dt))
+  local f = __tua_vec2(1 * k, 2 * k)
+  local h = __tua_vec2(p.x - -v.x, p.y - -v.y)
+  local items = { __tua_vec2(p.x + g.x, p.y + g.y), positions[i] + velocities[i] * dt }
+  p = __tua_vec2(p.x + v.x * dt, p.y + v.y * dt)
+  p = __tua_vec2(p.x * (k + 1), p.y * (k + 1))
+  return a, b, c, d, e, f, h, items, p
+end
+"#
+    );
+}
+
+#[test]
+fn snapshot_keeps_vec2_field_and_index_reads_single_evaluation() {
+    let emitted = emit_tua_source(
+        "src/vector-fields.tua",
+        r#"
+local positions: Vec2[] = {}
+local velocities: Vec2[] = {}
+
+class Body {
+  pos: Vec2
+  vel: Vec2
+
+  init() {
+    self.pos = vec2(0, 0)
+    self.vel = vec2(1, 1)
+  }
+
+  update(dt: number) {
+    self.pos += self.vel * dt
+  }
+}
+
+local function move(dt: number)
+  for i = 1, #positions do
+    positions[i] = positions[i] + velocities[i] * dt
+  end
+end
+"#,
+    )
+    .expect("typed Vec2 reads should emit");
+
+    // Each field and index read is bound to a local once, in evaluation
+    // order, and only the locals are read per component.
+    assert!(
+        emitted.contains(
+            "do local __tua_self_pos = self.pos; local __tua_self_vel = self.vel; \
+             self.pos = __tua_vec2(__tua_self_pos.x + __tua_self_vel.x * dt, \
+             __tua_self_pos.y + __tua_self_vel.y * dt) end"
+        ),
+        "unexpected class-field emission:\n{emitted}"
+    );
+    assert!(
+        emitted.contains(
+            "do local __tua_positions_i = positions[i]; local __tua_velocities_i = velocities[i]; \
+             positions[i] = __tua_vec2(__tua_positions_i.x + __tua_velocities_i.x * dt, \
+             __tua_positions_i.y + __tua_velocities_i.y * dt) end"
+        ),
+        "unexpected indexed emission:\n{emitted}"
+    );
+    assert!(!emitted.contains("self.pos.x"));
+    assert!(!emitted.contains("positions[i].x"));
+    assert_eq!(emitted.matches("= self.vel").count(), 1);
+    assert_eq!(emitted.matches("= velocities[i]").count(), 1);
+}
+
+#[test]
+fn snapshot_hoists_vec2_reads_in_whole_statement_forms() {
+    let emitted = emit_tua_source(
+        "src/vector-hoisting.tua",
+        r#"
+type Body = {
+  pos: Vec2,
+  vel: Vec2,
+  speed: number,
+}
+
+local function step(body: Body, dt: number, offset: Vec2): Vec2
+  body.vel += offset * dt
+  body.pos = body.pos + body.vel * (body.speed * dt);
+  local predicted = body.pos + body.vel * dt -- predicted position
+  local offset = offset + body.pos
+  return body.pos + predicted + offset
+end
+"#,
+    )
+    .expect("statement-level Vec2 fusion should emit");
+
+    assert_eq!(
+        emitted,
+        r#"local __tua_vec2 = require("brinevector")
+local function step(body, dt, offset)
+  do local __tua_body_vel = body.vel; body.vel = __tua_vec2(__tua_body_vel.x + offset.x * dt, __tua_body_vel.y + offset.y * dt) end
+  do local __tua_body_pos = body.pos; local __tua_body_vel = body.vel; local __tua_body_speed = body.speed; body.pos = __tua_vec2(__tua_body_pos.x + __tua_body_vel.x * (__tua_body_speed * dt), __tua_body_pos.y + __tua_body_vel.y * (__tua_body_speed * dt)) end;
+  local predicted; do local __tua_body_pos = body.pos; local __tua_body_vel = body.vel; predicted = __tua_vec2(__tua_body_pos.x + __tua_body_vel.x * dt, __tua_body_pos.y + __tua_body_vel.y * dt) end -- predicted position
+  local offset = offset + body.pos
+  do local __tua_body_pos = body.pos; return __tua_vec2(__tua_body_pos.x + predicted.x + offset.x, __tua_body_pos.y + predicted.y + offset.y) end
+end
+"#
+    );
+}
+
+#[test]
+fn snapshot_keeps_vec2_reads_that_cannot_be_hoisted() {
+    let emitted = emit_tua_source(
+        "src/vector-not-hoisted.tua",
+        r#"
+type Body = {
+  pos: Vec2,
+  vel: Vec2,
+}
+
+local function keep(body: Body, deep: { inner: Body }, offset: Vec2, dt: number)
+  deep.inner.pos = deep.inner.pos + body.vel * dt
+  print((body.pos + body.vel).x)
+  body.pos = body.pos + -- explain
+    body.vel
+  local position = body.pos + body.vel:rotated(dt)
+end
+"#,
+    )
+    .expect("unhoistable Vec2 arithmetic should emit");
+
+    assert_eq!(
+        emitted,
+        r#"local function keep(body, deep, offset, dt)
+  deep.inner.pos = deep.inner.pos + body.vel * dt
+  print((body.pos + body.vel).x)
+  body.pos = body.pos + -- explain
+    body.vel
+  local position = body.pos + body.vel:rotated(dt)
+end
+"#
+    );
+}
+
+#[test]
+fn snapshot_keeps_comments_inside_unfused_vec2_expressions() {
+    let emitted = emit_tua_source(
+        "src/vector-comments.tua",
+        r#"
+local function add(p: Vec2, v: Vec2): Vec2
+  return p + -- preserve this explanation
+    v
+end
+"#,
+    )
+    .expect("commented Vec2 arithmetic should emit");
+
+    assert!(emitted.contains("p + -- preserve this explanation\n    v"));
+    assert!(!emitted.contains("__tua_vec2(p.x + v.x"));
+}
+
+#[test]
+fn snapshot_fuses_vec2_arithmetic_next_to_comments() {
+    let emitted = emit_tua_source(
+        "src/vector-adjacent-comments.tua",
+        r#"
+local function step(p: Vec2, v: Vec2, dt: number): Vec2
+  p = p + v * dt -- integrate velocity
+  -- advance the position
+  p += v * dt
+  p += v * dt -- trailing note
+  return p
+end
+"#,
+    )
+    .expect("Vec2 arithmetic beside comments should emit");
+
+    assert_eq!(
+        emitted,
+        r#"local __tua_vec2 = require("brinevector")
+local function step(p, v, dt)
+  p = __tua_vec2(p.x + v.x * dt, p.y + v.y * dt) -- integrate velocity
+  -- advance the position
+  p = __tua_vec2(p.x + v.x * dt, p.y + v.y * dt)
+  p = __tua_vec2(p.x + v.x * dt, p.y + v.y * dt) -- trailing note
+  return p
+end
+"#
+    );
+}
+
+#[test]
+fn compound_assignment_keeps_a_preceding_comment_in_place() {
+    let emitted = emit_tua_source(
+        "src/compound-comment.tua",
+        r#"
+local x = 1
+-- bump the counter
+x += 1
+"#,
+    )
+    .expect("commented compound assignment should emit");
+
+    assert_eq!(emitted, "local x = 1\n-- bump the counter\nx = x + 1\n");
+}
+
+#[test]
+fn snapshot_keeps_vec2_operators_that_cannot_be_fused_safely() {
+    let emitted = emit_tua_source(
+        "src/vector-kept.tua",
+        r#"
+local function offset(): Vec2
+  return vec2(1, 1)
+end
+
+local function keep(p: Vec2, v: Vec2, n: number, unknown: any, dt: number)
+  local call = offset() + v * dt
+  local divided = p / n
+  local zero = p / 0
+  local dynamic = p + unknown
+  print(p.normalized * 2)
+  local scalar = n * 2 + 1
+  return call, divided, zero, dynamic, scalar
+end
+"#,
+    )
+    .expect("unfusible Vec2 arithmetic should emit");
+
+    assert_eq!(
+        emitted,
+        r#"local __tua_vec2 = require("brinevector")
+local function offset()
+  return __tua_vec2(1, 1)
+end
+
+local function keep(p, v, n, unknown, dt)
+  local call = offset() + __tua_vec2(v.x * dt, v.y * dt)
+  local divided = p / n
+  local zero = p / 0
+  local dynamic = p + unknown
+  print(p.normalized * 2)
+  local scalar = n * 2 + 1
+  return call, divided, zero, dynamic, scalar
+end
+"#
+    );
+}
+
+#[test]
+fn compound_assignment_keeps_binary_right_hand_side_grouped() {
+    let emitted = emit_tua_source(
+        "src/compound-grouping.tua",
+        r#"
+local x = 2
+x *= 3 + 4
+x -= a - b
+x /= 2 * 2 -- keep the comment
+x += -1
+"#,
+    )
+    .expect("compound assignments should emit");
+
+    assert_eq!(
+        emitted,
+        r#"local x = 2
+x = x * (3 + 4)
+x = x - (a - b)
+x = x / (2 * 2) -- keep the comment
+x = x + -1
+"#
+    );
+}
+
+#[test]
 fn snapshot_emits_only_used_game_math_helpers() {
     let emitted = emit_tua_source(
         "src/game_math.tua",

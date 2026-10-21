@@ -191,6 +191,15 @@ impl TypeEnvironment {
             context.insert_nominal_alias(class);
         }
 
+        // `Vec2` is a runtime BrineVector value, not merely any table with x
+        // and y fields. Keeping the built-in alias nominal prevents a plain
+        // structural table from acquiring operator semantics that it will not
+        // have in emitted Lua. A file that declares its own `type Vec2` keeps
+        // that alias structural.
+        if self.aliases.get(crate::vector::TYPE_NAME) == Some(&crate::vector::vec2_type()) {
+            context.insert_nominal_alias(crate::vector::TYPE_NAME);
+        }
+
         for (class, parent) in &self.class_parents {
             context.insert_nominal_alias_supertype(class, parent);
         }
@@ -3330,6 +3339,10 @@ fn infer_unary_operator_type(
         ast::UnOp::Minus(_) => {
             if is_number_type(aliases, operand) {
                 Some(Type::number())
+            } else if let Some(function) =
+                resolve_metatable_facts_from_map(aliases, operand).and_then(|facts| facts.unm)
+            {
+                Some(metamethod_return_or(&function, operand.clone()))
             } else if matches!(operand, Type::Any) {
                 Some(Type::Any)
             } else {
@@ -3754,7 +3767,7 @@ fn expression_is_number(expression: &Expression) -> bool {
 }
 
 fn token_text(token: &full_moon::tokenizer::TokenReference) -> String {
-    token.to_string().trim().to_owned()
+    token.token().to_string().trim().to_owned()
 }
 
 fn unquote_string(value: &str) -> String {

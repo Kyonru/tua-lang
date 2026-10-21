@@ -134,5 +134,5 @@ fn string_literal_value(expression: &Expression) -> Option<String> {
 }
 
 fn token_text(token: &full_moon::tokenizer::TokenReference) -> String {
-    token.to_string().trim().to_owned()
+    token.token().to_string().trim().to_owned()
 }

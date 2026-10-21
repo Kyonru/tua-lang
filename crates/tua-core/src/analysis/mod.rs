@@ -858,7 +858,7 @@ fn is_project_global_reference(resolution: &ScopeResolution) -> bool {
 }
 
 fn token_text(token: &TokenReference) -> String {
-    token.to_string().trim().to_owned()
+    token.token().to_string().trim().to_owned()
 }
 
 fn project_local_field_chain_type(

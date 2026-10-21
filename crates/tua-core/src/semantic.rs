@@ -2692,6 +2692,10 @@ fn infer_unary_operator_type(
         ast::UnOp::Minus(_) => {
             if is_number_type(environment, operand) {
                 Some(Type::number())
+            } else if let Some(function) =
+                resolve_metatable_facts(environment, operand).and_then(|facts| facts.unm)
+            {
+                Some(metamethod_return_or(&function, operand.clone()))
             } else if matches!(operand, Type::Any) {
                 Some(Type::Any)
             } else {
@@ -2886,5 +2890,5 @@ fn position_key(position: SourcePosition) -> (usize, usize) {
 }
 
 fn token_text(token: &full_moon::tokenizer::TokenReference) -> String {
-    token.to_string().trim().to_owned()
+    token.token().to_string().trim().to_owned()
 }

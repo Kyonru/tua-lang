@@ -1229,7 +1229,7 @@ fn string_literal_value(token: &TokenReference) -> Option<String> {
 }
 
 fn token_text(token: &TokenReference) -> String {
-    token.to_string().trim().to_owned()
+    token.token().to_string().trim().to_owned()
 }
 
 fn node_span(node: &impl Node) -> Option<SourceSpan> {

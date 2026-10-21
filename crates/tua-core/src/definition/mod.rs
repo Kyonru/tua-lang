@@ -1035,7 +1035,7 @@ fn node_span(node: &impl Node) -> Option<SourceSpan> {
 }
 
 fn token_text(token: &full_moon::tokenizer::TokenReference) -> String {
-    token.to_string().trim().to_owned()
+    token.token().to_string().trim().to_owned()
 }
 
 fn unquote_string(value: &str) -> String {

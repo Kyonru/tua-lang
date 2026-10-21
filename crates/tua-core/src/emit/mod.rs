@@ -17,6 +17,7 @@ use crate::{
 };
 
 pub(crate) mod lowering;
+mod vec2_fusion;
 
 pub use lowering::{LoweringKind, LuaEmission, LuaLineProvenance};
 
@@ -132,7 +133,12 @@ fn emit_lua_artifact_with_mode_and_import_resolver(
     ecs_enabled: bool,
 ) -> Result<LuaEmission, Vec<Diagnostic>> {
     let mut diagnostics = Vec::new();
-    let ast = erase_ast(&parsed.path, parsed.ast.clone(), &mut diagnostics);
+    // Emission features that need semantic facts share one environment build.
+    // In particular, Vec2 fusion must not add another whole-file analysis pass
+    // before runtime `is` lowering performs the same work.
+    let (environment, _) = build_type_environment_with_diagnostics(parsed);
+    let ast = vec2_fusion::fuse_vec2_arithmetic(parsed, &environment, parsed.ast.clone());
+    let ast = erase_ast(&parsed.path, ast, &mut diagnostics);
 
     if diagnostics.is_empty() {
         let mut document = lowering::LoweringDocument::from_erased_ast(&ast, parsed);
@@ -146,7 +152,7 @@ fn emit_lua_artifact_with_mode_and_import_resolver(
         let operations = lower_import_call_operations(&document, parsed, import_resolver)?;
         apply_lowering_operations(&mut document, operations, parsed)?;
 
-        let operations = lower_runtime_type_check_operations(&document, parsed)?;
+        let operations = lower_runtime_type_check_operations(&document, parsed, &environment)?;
         apply_lowering_operations(&mut document, operations, parsed)?;
 
         let operations = lower_class_method_call_operations(&document, parsed);
@@ -251,10 +257,10 @@ fn apply_lowering_operations(
 fn lower_runtime_type_check_operations(
     document: &lowering::LoweringDocument,
     parsed: &ParsedSource,
+    environment: &TypeEnvironment,
 ) -> Result<Vec<lowering::LoweringOperation>, Vec<Diagnostic>> {
     let output = document.code();
-    let (environment, _) = build_type_environment_with_diagnostics(parsed);
-    let semantic = SemanticModel::new(parsed, &environment);
+    let semantic = SemanticModel::new(parsed, environment);
     let runtime_check_sites = runtime_type_check_sites(parsed);
     let mut runtime_check_site_index = 0usize;
     let mut operations = Vec::new();
@@ -284,7 +290,7 @@ fn lower_runtime_type_check_operations(
                     &output,
                     argument_start,
                     parsed,
-                    &environment,
+                    environment,
                     &semantic,
                     runtime_check_sites.get(runtime_check_site_index).copied(),
                     document.source_span_at(index).start,
@@ -1397,29 +1403,55 @@ fn lower_compound_assignment_operations(
     let mut collector = CompoundAssignmentCollector::default();
     collector.visit_ast(&ast);
 
+    let byte_range = |node: &dyn full_moon::node::Node| {
+        let (start, end) = node.range()?;
+        let start =
+            crate::source_text::byte_for_position(&output, SourcePosition::from_full_moon(start))?;
+        let end =
+            crate::source_text::byte_for_position(&output, SourcePosition::from_full_moon(end))?;
+        Some(start..end)
+    };
+
     collector
         .assignments
         .into_iter()
         .filter_map(|assignment| {
             let binary_operator = compound_binary_operator(assignment.compound_operator())?;
-            let token = assignment.compound_operator().token();
-            let (start, end) = full_moon::node::Node::range(token)?;
-            let start = crate::source_text::byte_for_position(
-                &output,
-                SourcePosition::from_full_moon(start),
-            )?;
-            let end = crate::source_text::byte_for_position(
-                &output,
-                SourcePosition::from_full_moon(end),
-            )?;
+            let operator = byte_range(assignment.compound_operator().token())?;
+            // A comment on the line above the statement is the target's leading
+            // trivia; it stays where it is instead of being copied into the
+            // right-hand side.
             let lhs = assignment.lhs().to_string();
-
-            Some(document.operation(
+            let leading = full_moon::node::Node::tokens(assignment.lhs())
+                .min_by_key(|token| token.token().start_position().bytes())
+                .map(|first| first.leading_trivia().map(ToString::to_string).collect())
+                .unwrap_or_else(String::new);
+            let lhs = lhs.strip_prefix(leading.as_str()).unwrap_or(&lhs);
+            let mut operations = vec![document.operation(
                 LoweringKind::CompoundAssignment,
-                start..end,
+                operator,
                 format!("= {} {binary_operator}", lhs.trim()),
-            ))
+            )];
+
+            // `x *= a + b` means `x = x * (a + b)`, so a binary right-hand
+            // side keeps its grouping.
+            if matches!(assignment.rhs(), Expression::BinaryOperator { .. }) {
+                let rhs = byte_range(assignment.rhs())?;
+                operations.push(document.operation(
+                    LoweringKind::CompoundAssignment,
+                    rhs.start..rhs.start,
+                    "(",
+                ));
+                operations.push(document.operation(
+                    LoweringKind::CompoundAssignment,
+                    rhs.end..rhs.end,
+                    ")",
+                ));
+            }
+
+            Some(operations)
         })
+        .flatten()
         .collect()
 }
 

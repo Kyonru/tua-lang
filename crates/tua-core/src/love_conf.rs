@@ -144,5 +144,5 @@ fn span_contains(span: SourceSpan, position: SourcePosition) -> bool {
 }
 
 fn token_text(token: &TokenReference) -> String {
-    token.to_string().trim().to_owned()
+    token.token().to_string().trim().to_owned()
 }

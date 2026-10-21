@@ -56,8 +56,21 @@ fn brinevector_metatable_facts() -> MetatableFacts {
             [vec2.clone(), vec2.clone()],
             vec2.clone(),
         )),
-        mul: Some(FunctionType::new([vec2.clone(), Type::Any], vec2.clone())),
-        div: Some(FunctionType::new([vec2.clone(), Type::Any], vec2.clone())),
+        // Parameters are positional (`lhs`, `rhs`). BrineVector's `__mul`
+        // swaps a leading number, so either side may be a number; `__div`
+        // requires a vector on the left.
+        mul: Some(FunctionType::new(
+            [
+                Type::union([number.clone(), vec2.clone()]),
+                Type::union([number.clone(), vec2.clone()]),
+            ],
+            vec2.clone(),
+        )),
+        div: Some(FunctionType::new(
+            [vec2.clone(), Type::union([number.clone(), vec2.clone()])],
+            vec2.clone(),
+        )),
+        unm: Some(FunctionType::new([vec2.clone()], vec2.clone())),
         eq: Some(FunctionType::new(
             [vec2.clone(), vec2.clone()],
             boolean.clone(),

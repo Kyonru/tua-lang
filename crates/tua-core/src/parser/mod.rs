@@ -1833,7 +1833,7 @@ fn node_span(node: &impl Node) -> Option<SourceSpan> {
 }
 
 fn token_text(token: &full_moon::tokenizer::TokenReference) -> String {
-    token.to_string().trim().to_owned()
+    token.token().to_string().trim().to_owned()
 }
 
 fn parser_error_to_diagnostic(path: &Path, error: full_moon::Error) -> Diagnostic {

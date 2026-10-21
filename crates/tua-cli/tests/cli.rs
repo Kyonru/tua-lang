@@ -1276,6 +1276,161 @@ fn audio_runtime_priority_fades_pooling_and_snapshots() {
 }
 
 #[test]
+fn fused_vec2_arithmetic_matches_brinevector_results() {
+    let temp = TempDir::new("vec2-fusion-runtime");
+
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).expect("failed to write config");
+    fs::create_dir_all(temp.path().join("src")).expect("failed to create source");
+    fs::write(
+        temp.path().join("src/fused.tua"),
+        r#"local function cases(p: Vec2, v: Vec2, g: Vec2, dt: number, k: number)
+  local moved = p
+  moved += v * dt
+  local scaled = vec2(p.x, p.y)
+  scaled *= k + 1
+  local halved = v
+  halved /= 2
+  return {
+    p + v * dt,
+    -(p - v) * 2,
+    p + (v + g),
+    (p * v) / 2,
+    0.5 * dt * v,
+    vec2(1, 2) * k,
+    p - -v,
+    p + v * dt + g * (0.5 * dt * dt),
+    v * k / 4,
+    moved,
+    scaled,
+    halved,
+  }
+end
+
+return { cases = cases }
+"#,
+    )
+    .expect("failed to write source");
+
+    let output = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tua build");
+    assert!(
+        output.status.success(),
+        "stdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let emitted =
+        fs::read_to_string(temp.path().join("build/fused.lua")).expect("failed to read output");
+    assert!(
+        emitted.contains("__tua_vec2(p.x + v.x * dt, p.y + v.y * dt)"),
+        "expected fused Vec2 arithmetic:\n{emitted}"
+    );
+    assert!(
+        !emitted.contains("v * dt"),
+        "every expression should be fused:\n{emitted}"
+    );
+
+    if Command::new("lua").arg("-v").output().is_err() {
+        return;
+    }
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let output = Command::new("lua")
+        .arg(root.join("crates/tua-cli/tests/fixtures/vec2_fusion_check.lua"))
+        .arg(temp.path().join("build"))
+        .output()
+        .expect("failed to run Vec2 fusion fixture");
+    assert!(
+        output.status.success(),
+        "stdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+fn hoisted_vec2_reads_happen_once_and_match_brinevector() {
+    let temp = TempDir::new("vec2-hoisting-runtime");
+
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).expect("failed to write config");
+    fs::create_dir_all(temp.path().join("src")).expect("failed to create source");
+    fs::write(
+        temp.path().join("src/hoisted.tua"),
+        r#"type Body = {
+  pos: Vec2,
+  vel: Vec2,
+  speed: number,
+}
+
+local function integrate(body: Body, dt: number)
+  body.pos += body.vel * dt
+end
+
+local function advance(positions: Vec2[], velocities: Vec2[], i: number, dt: number)
+  positions[i] = positions[i] + velocities[i] * dt
+end
+
+local function predict(body: Body, dt: number): Vec2
+  local predicted = body.pos + body.vel * (body.speed * dt)
+  return predicted
+end
+
+local function offset(body: Body, extra: Vec2): Vec2
+  return -body.pos + extra * 2
+end
+
+return { integrate = integrate, advance = advance, predict = predict, offset = offset }
+"#,
+    )
+    .expect("failed to write source");
+
+    let output = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tua build");
+    assert!(
+        output.status.success(),
+        "stdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let emitted =
+        fs::read_to_string(temp.path().join("build/hoisted.lua")).expect("failed to read output");
+    for expected in [
+        "local __tua_body_pos = body.pos; local __tua_body_vel = body.vel; body.pos = __tua_vec2(",
+        "local __tua_positions_i = positions[i]; local __tua_velocities_i = velocities[i]; positions[i] = __tua_vec2(",
+        "local predicted; do local __tua_body_pos = body.pos;",
+        "do local __tua_body_pos = body.pos; return __tua_vec2(-__tua_body_pos.x + extra.x * 2,",
+    ] {
+        assert!(
+            emitted.contains(expected),
+            "expected `{expected}` in:\n{emitted}"
+        );
+    }
+
+    if Command::new("lua").arg("-v").output().is_err() {
+        return;
+    }
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let output = Command::new("lua")
+        .arg(root.join("crates/tua-cli/tests/fixtures/vec2_hoisting_check.lua"))
+        .arg(temp.path().join("build"))
+        .output()
+        .expect("failed to run Vec2 hoisting fixture");
+    assert!(
+        output.status.success(),
+        "stdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
 fn ecs_runtime_iteration_semantics_and_allocations() {
     let Ok(lua) = Command::new("lua").arg("-v").output() else {
         return;

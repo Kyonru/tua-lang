@@ -452,7 +452,7 @@ fn position_key(position: SourcePosition) -> (usize, usize) {
 }
 
 fn token_text(token: &full_moon::tokenizer::TokenReference) -> String {
-    token.to_string().trim().to_owned()
+    token.token().to_string().trim().to_owned()
 }
 
 #[cfg(test)]

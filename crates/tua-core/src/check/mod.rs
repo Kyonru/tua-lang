@@ -632,11 +632,31 @@ impl<'a> Checker<'a> {
             self.check_unknown_class_assignment_member(assignment.lhs());
         }
 
+        // `target op= rhs` means `target = target op rhs`. When the target's
+        // metatable defines the operator, check the right-hand side against
+        // the metamethod's operand and record its result, so `v *= 2` on a
+        // Vec2 is accepted and keeps `v` a Vec2.
+        let metamethod = target.as_ref().and_then(|target| {
+            let name = compound_metamethod_name(assignment.compound_operator())?;
+            self.resolve_metatable_facts(target)?
+                .metamethod(name)
+                .cloned()
+        });
+        let operand = metamethod
+            .as_ref()
+            .and_then(|function| function.parameters.get(1))
+            .map(|parameter| parameter.ty.clone());
+
         if let (Some(source), Some(target)) = (&source, &target) {
-            self.check_inferred_expression_assignable_at(assignment.rhs(), source, target, None);
+            let expected = operand.as_ref().unwrap_or(target);
+            self.check_inferred_expression_assignable_at(assignment.rhs(), source, expected, None);
         }
 
-        self.record_assignment_type(assignment.lhs(), source, target, assignment.rhs());
+        let result = match (&metamethod, &target) {
+            (Some(function), Some(target)) => Some(metamethod_return_or(function, target.clone())),
+            _ => source,
+        };
+        self.record_assignment_type(assignment.lhs(), result, target, assignment.rhs());
     }
 
     fn record_assignment_type(
@@ -1095,6 +1115,8 @@ impl<'a> Checker<'a> {
             Expression::BinaryOperator { lhs, binop, rhs } => {
                 let left = self.infer_expression(lhs)?;
                 let right = self.infer_expression(rhs)?;
+
+                self.check_binary_metamethod_operand(lhs, binop, rhs, &left, &right);
 
                 self.infer_binary_operator_type(binop, &left, &right)
             }
@@ -2396,6 +2418,48 @@ impl<'a> Checker<'a> {
         None
     }
 
+    fn check_binary_metamethod_operand(
+        &mut self,
+        lhs: &Expression,
+        binop: &ast::BinOp,
+        rhs: &Expression,
+        left: &Type,
+        right: &Type,
+    ) {
+        let Some(name) = arithmetic_metamethod_name(binop) else {
+            return;
+        };
+
+        // Lua uses the left operand's metamethod when it has one and the
+        // right operand's otherwise, but always calls it as `mm(lhs, rhs)`.
+        // The operand that supplied the metamethod satisfies its own
+        // contract, so check the other one against its positional parameter:
+        // `2 * v` passes BrineVector's `__mul(number | Vec2, ...)`, while
+        // `2 / v` fails `__div(Vec2, ...)` as it does at runtime.
+        let (function, operand, operand_type, parameter) = if let Some(function) = self
+            .resolve_metatable_facts(left)
+            .and_then(|facts| facts.metamethod(name).cloned())
+        {
+            (function, rhs, right, 1)
+        } else if let Some(function) = self
+            .resolve_metatable_facts(right)
+            .and_then(|facts| facts.metamethod(name).cloned())
+        {
+            (function, lhs, left, 0)
+        } else {
+            return;
+        };
+
+        let Some(expected) = function
+            .parameters
+            .get(parameter)
+            .map(|parameter| &parameter.ty)
+        else {
+            return;
+        };
+        self.check_inferred_expression_assignable_at(operand, operand_type, expected, None);
+    }
+
     fn infer_unary_operator_type(&self, unop: &ast::UnOp, operand: &Type) -> Option<Type> {
         match unop {
             ast::UnOp::Hash(_) => {
@@ -2415,6 +2479,11 @@ impl<'a> Checker<'a> {
             ast::UnOp::Minus(_) => {
                 if self.is_number_type(operand) {
                     Some(Type::number())
+                } else if let Some(function) = self
+                    .resolve_metatable_facts(operand)
+                    .and_then(|facts| facts.unm)
+                {
+                    Some(metamethod_return_or(&function, operand.clone()))
                 } else if matches!(operand, Type::Any) {
                     Some(Type::Any)
                 } else {
@@ -3241,6 +3310,16 @@ fn metamethod_return_or(function: &FunctionType, fallback: Type) -> Type {
     }
 }
 
+fn compound_metamethod_name(operator: &ast::CompoundOp) -> Option<&'static str> {
+    match operator {
+        ast::CompoundOp::PlusEqual(_) => Some("__add"),
+        ast::CompoundOp::MinusEqual(_) => Some("__sub"),
+        ast::CompoundOp::StarEqual(_) => Some("__mul"),
+        ast::CompoundOp::SlashEqual(_) => Some("__div"),
+        _ => None,
+    }
+}
+
 fn arithmetic_metamethod_name(binop: &ast::BinOp) -> Option<&'static str> {
     match binop {
         ast::BinOp::Plus(_) => Some("__add"),
@@ -3788,7 +3867,7 @@ fn node_span(node: &impl Node) -> Option<SourceSpan> {
 }
 
 fn token_text(token: &full_moon::tokenizer::TokenReference) -> String {
-    token.to_string().trim().to_owned()
+    token.token().to_string().trim().to_owned()
 }
 
 #[cfg(test)]
