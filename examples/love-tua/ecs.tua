@@ -1,0 +1,42 @@
+import type Shared from "./types"
+
+-- Built-in ECS keeps the player data-oriented and gives the movement callback
+-- the exact component shapes requested by the system.
+local PositionComponent = ecs.component("Position", { x = "number", y = "number" })
+local VelocityComponent = ecs.component("Velocity", { x = "number", y = "number" })
+local RotationComponent = ecs.component("Rotation", { r = "number"})
+local world = ecs.world()
+local player = world:create()
+
+world:add(player, PositionComponent, { x = 360, y = 390 })
+world:add(player, VelocityComponent, { x = 0, y = 0 })
+world:add(player, RotationComponent, { r = 0 })
+
+local movement = ecs.system(
+  world,
+  { PositionComponent, VelocityComponent, RotationComponent},
+  function(
+    _,
+    position: Shared.Position,
+    velocity: Shared.Velocity,
+    rotation: Shared.Rotation,
+    dt: number
+    )
+    position.x = math.max(18, math.min(702, position.x + velocity.x * dt))
+    position.y = math.max(18, math.min(462, position.y + velocity.y * dt))
+
+    -- Face the movement direction, keeping the angle when stopped.
+    if velocity.x ~= 0 or velocity.y ~= 0 then
+      rotation.r = math.atan2(velocity.y, velocity.x)
+    end
+  end
+)
+
+return {
+  movement = movement,
+  world = world,
+  player = player,
+  VelocityComponent = VelocityComponent,
+  PositionComponent = PositionComponent,
+  RotationComponent = RotationComponent
+}

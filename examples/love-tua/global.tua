@@ -1,0 +1,44 @@
+import type Shared from "./types"
+
+-- Object pooling makes projectile reuse explicit without losing Bullet types.
+local bullets = objectPool({
+  create = function(): Shared.Bullet
+    return { x = 0, y = 0, dx = 0, dy = 0, active = false }
+  end,
+  reset = function(bullet: Shared.Bullet)
+    bullet.x = 0
+    bullet.y = 0
+    bullet.dx = 0
+    bullet.dy = 0
+    bullet.active = false
+  end,
+  initial = 48,
+})
+
+local activeBullets: Shared.Bullet[] = {}
+
+-- The store owns observable run data instead of spreading globals through the
+-- callbacks. Its shape is inferred from this table.
+local game = store({
+  score = 0,
+  shots = 0,
+  wave = 1,
+})
+
+-- State and event strings become checked unions and generated methods.
+local flow = stateMachine({
+  initial = "playing",
+  events = {
+    { name = "pause", from = "playing", to = "paused" },
+    { name = "resume", from = "paused", to = "playing" },
+    { name = "finish", from = { "playing", "paused" }, to = "gameover" },
+    { name = "restart", from = "gameover", to = "playing" },
+  },
+})
+
+return {
+  game = game,
+  flow = flow,
+  bullets = bullets,
+  activeBullets = activeBullets,
+}

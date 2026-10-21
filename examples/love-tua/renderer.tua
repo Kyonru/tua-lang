@@ -1,0 +1,70 @@
+local Globals = require('global')
+local ECS = require('ecs')
+local patterns = require("patterns")
+
+local world = ECS.world
+local activeBullets = Globals.activeBullets
+local bullets = Globals.bullets
+
+local function drawPlayer()
+  local position = world:get(ECS.player, ECS.PositionComponent)
+  local rotation = world:get(ECS.player, ECS.RotationComponent)
+
+  love.graphics.push()
+  love.graphics.translate(position.x, position.y)
+  love.graphics.rotate(rotation.r + math.pi / 2)
+
+  love.graphics.setColor(0.42, 0.86, 0.78, 1)
+  love.graphics.polygon(
+    "fill",
+    0, -12,
+    -9, 10,
+    9, 10
+  )
+
+  love.graphics.pop()
+end
+
+local function updateBullets(dt: number)
+  for index = #activeBullets, 1, -1 do
+    local bullet = activeBullets[index]
+    bullet.x += bullet.dx * dt
+    bullet.y += bullet.dy * dt
+
+    if bullet.x < -20 or bullet.x > 740 or bullet.y < -20 or bullet.y > 500 then
+      bullets:release(bullet)
+      table.remove(activeBullets, index)
+    end
+  end
+end
+
+local function spawnRing()
+  local position = world:get(ECS.player, ECS.PositionComponent)
+  local wave = patterns.ring(8, 110)
+
+  for _, shot in ipairs(wave) do
+    local bullet = bullets:acquire()
+    bullet.x = position.x
+    bullet.y = position.y - 14
+    bullet.dx = shot.dx
+    bullet.dy = shot.dy
+    bullet.active = true
+    activeBullets[#activeBullets + 1] = bullet
+  end
+
+  return wave
+end
+
+local function drawBullets()
+  for _, bullet in ipairs(activeBullets) do
+    love.graphics.setColor(0.98, 0.66, 0.38, 1)
+    love.graphics.circle("fill", bullet.x, bullet.y, 3)
+  end
+end
+
+return {
+  drawPlayer = drawPlayer,
+  drawBullets = drawBullets,
+  spawnRing = spawnRing,
+  updateBullets = updateBullets
+}

@@ -456,7 +456,10 @@ local function setVectorLabel(tableValue: MetaVector, key: "label", value: strin
 end
 
 local vectorA = { x = 10, y = 20 }
-local vectorB = { x = 5, y = 15 }
+-- Metamethod operands are checked against the handler's parameters, and a
+-- field supplied only by an __index function does not satisfy them, so the
+-- right-hand operand carries its own length.
+local vectorB = { x = 5, y = 15, length = 0 }
 local vectorMetatable = {
   __add = combineVector,
   __sub = combineVector,

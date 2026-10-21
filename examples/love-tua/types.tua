@@ -1,0 +1,27 @@
+export type Position = {
+  x: number,
+  y: number,
+}
+
+export type Velocity = {
+  x: number,
+  y: number,
+}
+
+export type Rotation = {
+  r: number
+}
+
+export type Bullet = {
+  x: number,
+  y: number,
+  dx: number,
+  dy: number,
+  active: boolean,
+}
+
+export type GameState = {
+  score: number,
+  shots: number,
+  wave: number,
+}
