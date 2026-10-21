@@ -47,7 +47,7 @@ flowchart LR
 | Decouple game systems with typed events | [Signals](signals.md) |
 | Define typed keyboard, mouse, or gamepad controls | [Input](input.md) |
 | Build a managed LÖVE audio graph | [Audio Systems](audio.md) |
-| Check exact compiler and toolchain behavior | [Language and Toolchain Reference](specification.md) |
+| Look up commands, build output, and diagnostics | [CLI](cli.md) and [Diagnostic Codes](luahelper-code-matrix.md) |
 
 ## From Tua To Lua
 

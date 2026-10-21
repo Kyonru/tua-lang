@@ -10,7 +10,7 @@ Produce a trustworthy map of risk, not a large undifferentiated issue list.
 ## Audit Shape
 
 - Establish the audit scope and current repository state before judging it.
-- Read `README.md`, `ROADMAP.md`, `docs/specification.md`, workspace manifests,
+- Read `README.md`, `ROADMAP.md`, `docs/language.md`, workspace manifests,
   CI configuration, and the architecture documentation relevant to the scope.
 - Verify which checks gate trusted integration and releases; the existence of a
   Make target or test suite is not evidence that it gates either path. Tua

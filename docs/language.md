@@ -1056,3 +1056,16 @@ conservative:
 Annotations are most useful at module boundaries, constructors, returned
 module tables, and LOVE-facing asset or object code. Highly dynamic glue can
 remain ordinary Lua or use an explicit `any` boundary.
+
+Tua is source-to-source tooling for Lua 5.1 syntax, LuaJIT, and LOVE 11.x. It
+deliberately does not provide:
+
+- a new Lua VM or a Lua 5.2+ output target;
+- whole-program optimization or minification;
+- execution of project code to discover types;
+- a bundled Lua debugger, VM, or runtime profiler;
+- an executable third-party plugin registry;
+- completion that requires a network connection;
+- full compatibility with other Lua language servers or typed Lua dialects.
+
+Pre-1.0 releases follow the migration policy in [Releases](releases.md).

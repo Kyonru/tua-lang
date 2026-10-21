@@ -9,8 +9,8 @@ server provide different transports and lifecycles, but both read the same
 project model, semantic data, diagnostics, and generated Lua from `tua-core`.
 
 This page documents the current implementation boundaries for contributors.
-For language behavior, see the
-[Language and Toolchain Reference](specification.md).
+For language behavior, see [Language](language.md) and
+[Typing In Tua](typing.md).
 
 !!! warning "Keep semantics in shared analysis"
     A CLI command, LSP handler, or VS Code feature must not recreate parser,
@@ -433,7 +433,8 @@ change, include the relevant integration test and run `make diff-check`.
 
 ## Related Guides
 
-- [Language and Toolchain Reference](specification.md)
+- [Language](language.md)
+- [Typing In Tua](typing.md)
 - [Configuration](configuration.md)
 - [Lua Interoperability](lua-interop.md)
 - [Diagnostics](luahelper-code-matrix.md)

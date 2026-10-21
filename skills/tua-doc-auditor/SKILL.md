@@ -10,8 +10,10 @@ feature, or copy an example that no longer represents the product.
 
 ## Sources Of Truth
 
-- Start with `docs/specification.md` for the language contract.
-- Treat a mismatch among the normative specification, implementation, and tests
+- Start with the focused pages under `docs/` (`language.md`, `typing.md`,
+  `cli.md`, `lsp.md`, `linter.md`, and the feature pages); each owns the
+  contract for its topic.
+- Treat a mismatch among the documented contract, implementation, and tests
   as a three-way discrepancy. Route suspected compiler defects through
   `tua-language-auditor`; never rewrite the contract merely to match unverified
   behavior.

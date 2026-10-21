@@ -23,6 +23,13 @@ tua lsp
 speaks JSON-RPC/LSP on stdout, so clients must not treat it as an interactive
 terminal command.
 
+!!! info "Everything runs locally"
+    The server and extension send no source code or completion-learning data
+    off your machine. Completion is computed locally, and the
+    model-integration setting does not enable any network-backed provider.
+    Model-based inline completion is opt-in and uses a model running on your
+    own machine through [Ollama](#local-ollama-inline-completion).
+
 ## Find A Feature
 
 | Goal | Feature |

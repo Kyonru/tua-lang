@@ -4,8 +4,8 @@ This repository-level file tracks pending product and engineering priorities.
 It is an internal planning aid, not documentation of current behavior or a
 release commitment.
 
-Current user-facing behavior belongs in `docs/specification.md` and the focused
-language, tooling, and workflow pages under `docs/`. Completed work belongs in
+Current user-facing behavior belongs in the focused language, tooling, and
+workflow pages under `docs/`. Completed work belongs in
 `CHANGELOG.md` or Git history.
 
 ## Now

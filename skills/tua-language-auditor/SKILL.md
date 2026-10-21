@@ -10,8 +10,8 @@ reject valid programs, or make editor results disagree with builds.
 
 ## Contract And Oracles
 
-- Treat `docs/specification.md` and focused language docs as the stated
-  contract, but verify claims against implementation and tests.
+- Treat the focused language docs (`docs/language.md`, `docs/typing.md`, and
+  the feature pages) as the stated contract, but verify claims against implementation and tests.
 - Read `docs/architecture.md` for implementation invariants. Use `ROADMAP.md`
   to prioritize findings, never as evidence of current behavior.
 - Treat emitted Lua behavior under the supported Lua/LuaJIT and LOVE targets as

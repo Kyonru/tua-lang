@@ -10,7 +10,9 @@ separate docs request when the implementation changed.
 
 ## Check These Surfaces
 
-- `docs/specification.md` for the canonical language/toolchain contract.
+- The focused pages under `docs/` (`language.md`, `typing.md`, `cli.md`,
+  `lsp.md`, `linter.md`, and the feature pages), which together hold the
+  language and toolchain contract; each topic has one owning page.
 - `ROADMAP.md` for pending repository priorities.
 - Focused pages under `docs/` for current language, editor, CLI, configuration,
   and workflow behavior.
@@ -35,10 +37,10 @@ separate docs request when the implementation changed.
   README summaries.
 - If CLI output, config keys, diagnostics, or LSP capabilities changed, update
   the matching reference page.
-- If the spec contract changed, update `docs/specification.md` before or with
-  user-facing docs.
-- If implementation changes current support, update `docs/specification.md`
-  and the focused feature page. Update the diagnostic-code reference when
+- If the language or toolchain contract changed, update the page that owns
+  that topic in the same work.
+- If implementation changes current support, update the focused feature page.
+  Update the diagnostic-code reference when
   codes, severity behavior, settings, or fixes change.
 - If product priorities change, update the relevant outcome in root
   `ROADMAP.md`. Do not add planning matrices to the public docs site.

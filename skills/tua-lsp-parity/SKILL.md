@@ -16,7 +16,7 @@ Use mature editors as references without copying their entire scope.
 
 ## Before Implementing
 
-- Check `docs/lsp.md`, `docs/specification.md`, and root `ROADMAP.md` when the
+- Check `docs/lsp.md`, `docs/language.md`, and root `ROADMAP.md` when the
   work affects a current priority.
 - Identify the semantic source of truth before changing protocol output.
 - Prefer core query tests before LSP JSON tests.

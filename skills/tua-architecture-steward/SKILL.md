@@ -10,8 +10,8 @@ not to reshuffle code for its own sake.
 
 ## First Checks
 
-- Read current priorities in root `ROADMAP.md`, current behavior in
-  `docs/specification.md` and focused feature docs, and the architecture guide.
+- Read current priorities in root `ROADMAP.md`, current behavior in the
+  focused docs under `docs/`, and the architecture guide.
 - Inspect the current implementation before proposing new modules.
 - Identify whether the request is a local bug, a missing shared abstraction, or
   a project-model gap.

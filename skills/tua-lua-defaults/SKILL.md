@@ -30,7 +30,7 @@ Before adding a Lua-facing feature, check the useful behavior from:
 
 - LuaHelper/LuaLS annotation patterns;
 - rust-analyzer navigation/completion patterns;
-- existing Tua docs: `docs/lua-interop.md`, `docs/specification.md`, and
+- existing Tua docs: `docs/lua-interop.md`, `docs/language.md`, and
   `docs/lsp.md`;
 - current priorities in root `ROADMAP.md` and boundaries in
   `docs/architecture.md`.

@@ -6,7 +6,7 @@ configuration, CLI, editor, LOVE, asset, and troubleshooting questions:
 <https://kyonru.github.io/tua-lang/>
 
 Useful references include the [installation guide](docs/installation.md),
-[CLI reference](docs/cli.md), [language specification](docs/specification.md),
+[CLI reference](docs/cli.md), [language guide](docs/language.md),
 [language-server guide](docs/lsp.md), and [examples guide](docs/examples.md).
 
 ## Ask For Help

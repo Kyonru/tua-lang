@@ -220,6 +220,20 @@ pending = 10
 Use an annotation when an empty table, `nil`, or another broad initializer does
 not contain enough information to express the intended contract.
 
+When a value fails its contract somewhere inside a table, dictionary, tuple,
+or callback, `TL1003` names the path to the failing part and its two leaf
+types instead of printing both complete outer types:
+
+```tua
+type Enemy = { name: string, stats: { hp: number } }
+
+local boss: Enemy = { name = "Hydra", stats = { hp = "lots" } }
+-- TL1003: type mismatch at stats.hp: expected number, found string
+```
+
+For a table literal, the diagnostic points at the deepest source value Tua can
+identify, here `"lots"`.
+
 ## Narrowing
 
 Nil checks narrow optional values inside the guarded branch:
