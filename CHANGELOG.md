@@ -19,6 +19,11 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Changed
 
+- Leaf sprites now pass their transform directly to anim8, avoiding redundant
+  graphics push, translate, rotate, scale, shear, and pop calls. Nested sprites
+  retain the graphics-stack path so children continue to inherit their parent
+  transform. Fallback tables for custom, incomplete sheet structures are also
+  reused, while compiler-generated sheets continue to provide their own.
 - The bundled object-pool runtime now uses an explicit free-stack count and one
   identity-state table instead of Lua's table-length search plus separate
   ownership and activity maps. Warmed acquire/release cycles remain

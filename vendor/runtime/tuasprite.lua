@@ -4,6 +4,9 @@
 local SpritePlayer = {}
 SpritePlayer.__index = SpritePlayer
 
+local EMPTY_CHILD_ORDER = {}
+local ZERO_ORIGIN = { x = 0, y = 0 }
+
 local function clamp(value, minimum, maximum)
   return math.max(minimum, math.min(maximum, value))
 end
@@ -117,7 +120,7 @@ function SpritePlayer:seek(progress, emitMarkers)
 end
 
 function SpritePlayer:update(dt)
-  for _, name in ipairs(self.sheet.childOrder or {}) do
+  for _, name in ipairs(self.sheet.childOrder or EMPTY_CHILD_ORDER) do
     self.children[name].player:update(dt)
   end
   local animation = self.animation
@@ -184,7 +187,7 @@ end
 
 function SpritePlayer:draw(x, y, rotation, scaleX, scaleY, originX, originY, shearX, shearY)
   if self.animation == nil then return end
-  local origin = self.sheet.origins[self.name] or self.sheet.origin or { x = 0, y = 0 }
+  local origin = self.sheet.origins[self.name] or self.sheet.origin or ZERO_ORIGIN
   local animationMetadata = self.sheet.frameMetadata and self.sheet.frameMetadata[self.name]
   local frameMetadata = animationMetadata and animationMetadata[self.animation.position]
   if frameMetadata then
@@ -198,13 +201,30 @@ function SpritePlayer:draw(x, y, rotation, scaleX, scaleY, originX, originY, she
   end
   scaleX = scaleX or 1
   scaleY = scaleY or scaleX
+  local childOrder = self.sheet.childOrder or EMPTY_CHILD_ORDER
+  if childOrder[1] == nil then
+    self.animation:draw(
+      self.sheet.image,
+      x or 0,
+      y or 0,
+      rotation or 0,
+      scaleX,
+      scaleY,
+      originX,
+      originY,
+      shearX or 0,
+      shearY or 0
+    )
+    return
+  end
+
   love.graphics.push()
   love.graphics.translate(x or 0, y or 0)
   love.graphics.rotate(rotation or 0)
   love.graphics.scale(scaleX, scaleY)
   love.graphics.shear(shearX or 0, shearY or 0)
   self.animation:draw(self.sheet.image, 0, 0, 0, 1, 1, originX, originY)
-  for _, name in ipairs(self.sheet.childOrder or {}) do
+  for _, name in ipairs(childOrder) do
     local child = self.children[name]
     child.player:draw(
       child.x,
@@ -258,7 +278,7 @@ local function new(sheet, initial)
     children = {},
   }, SpritePlayer)
 
-  for _, name in ipairs(sheet.childOrder or {}) do
+  for _, name in ipairs(sheet.childOrder or EMPTY_CHILD_ORDER) do
     local child = sheet.children[name]
     self.children[name] = {
       player = new(child.sheet, child.initial),
