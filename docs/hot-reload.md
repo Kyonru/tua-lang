@@ -22,6 +22,10 @@ dev: sent reload 2 to the game
 [tua dev] reloaded enemy
 ```
 
+In VS Code, run **Tua: Run LOVE Project With Hot Reload**, or use its flame
+button in a Tua editor's title bar. It runs `tua dev` in a task with the
+`tua.love.command` executable.
+
 `tua dev` looks for `love` on `PATH`, then `/Applications/love.app` on macOS.
 Set `TUA_LOVE` or pass `--love PATH` to use another executable. Closing the
 game ends `tua dev`.

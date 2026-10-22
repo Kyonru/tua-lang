@@ -24,6 +24,8 @@ const COMMANDS = {
   runLoveProject: "tua.runLoveProject",
   debugLoveProject: "tua.debugLoveProject",
   restartLoveProject: "tua.restartLoveProject",
+  runLoveProjectWithHotReload: "tua.runLoveProjectWithHotReload",
+  packageGame: "tua.packageGame",
   copyQualifiedName: "tua.copyQualifiedName",
   showWorkspaceSymbolsByModule: "tua.showWorkspaceSymbolsByModule",
   showHoverReferences: "tua.hover.references",

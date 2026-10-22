@@ -19,6 +19,10 @@ packaged dist/my-game.love (184.2 KiB)
 
 Packages go to `dist/` in the project root. Add `dist/` to `.gitignore`.
 
+In VS Code, **Tua: Package Game...** asks which package to build and runs the
+same command in a task. For fused builds it uses `tua.love.windowsRuntime` or
+`tua.love.macosApp`, and asks for the runtime when the setting is empty.
+
 ## What Goes In
 
 The archive holds the build output directory: generated Lua, copied assets,

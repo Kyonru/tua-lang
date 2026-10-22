@@ -109,6 +109,9 @@ From there you can:
   tasks. Runtime `print(...)`, stdout, and stderr are mirrored into both the
   task terminal and the `tua` output channel, and emitted Lua traceback lines
   are mapped back to original Tua files when source maps are enabled.
+- `Tua: Run LOVE Project With Hot Reload` runs `tua dev`, so saved changes
+  reload into the running game, and `Tua: Package Game...` builds a `.love`,
+  fused Windows, or fused macOS package with `tua package`.
 - `Tua: Debug LOVE Project` bridges generated Lua to the optional
   [Second Local Lua Debugger](https://marketplace.visualstudio.com/items?itemName=ismoh-games.second-local-lua-debugger-vscode)
   extension. Breakpoints stay in `.tua`; stepping, variables, watches,
@@ -148,6 +151,8 @@ From there you can:
 - `Tua: Run LOVE Project`
 - `Tua: Debug LOVE Project`
 - `Tua: Restart LOVE Project`
+- `Tua: Run LOVE Project With Hot Reload`
+- `Tua: Package Game...`
 - `Tua: Focus Output`
 - `Tua: Open Generated Lua Beside Tua`
 - `Tua: Jump Between Tua and Generated Lua`

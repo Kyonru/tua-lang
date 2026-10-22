@@ -95,6 +95,11 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Added
 
+- Added the VS Code commands **Tua: Run LOVE Project With Hot Reload**, which
+  runs `tua dev` in a task, and **Tua: Package Game...**, which builds a
+  `.love`, fused Windows, or fused macOS package. The new
+  `tua.love.windowsRuntime` and `tua.love.macosApp` settings hold the LOVE
+  runtimes used for fused builds; when empty, the command asks for one.
 - Added `tua dev`, which watches and rebuilds like `tua watch`, starts LOVE on
   the output, and hot reloads the running game. Changed modules are swapped
   into their existing tables so game state survives, `main` and `conf`

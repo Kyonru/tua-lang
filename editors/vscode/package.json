@@ -24,7 +24,9 @@
       "description": "Tua uses only its bundled language server in Restricted Mode. Trust the workspace before using custom executables or running LOVE.",
       "restrictedConfigurations": [
         "tua.server.path",
-        "tua.love.command"
+        "tua.love.command",
+        "tua.love.windowsRuntime",
+        "tua.love.macosApp"
       ]
     }
   },
@@ -81,6 +83,18 @@
           "type": "string",
           "default": "love",
           "description": "Path to the LOVE executable used by Tua: Run LOVE Project and Tua: Debug LOVE Project. The default uses love on PATH and falls back to common platform installs when available."
+        },
+        "tua.love.windowsRuntime": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "description": "Folder of the extracted 64-bit LOVE for Windows (containing love.exe) used by Tua: Package Game to build a fused Windows game. When empty, the command asks for it."
+        },
+        "tua.love.macosApp": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "description": "Path to love.app used by Tua: Package Game to build a fused macOS game. When empty, /Applications/love.app is used if present, otherwise the command asks for it."
         },
         "tua.trace.server": {
           "type": "string",
@@ -636,6 +650,18 @@
         "icon": "$(debug-alt)"
       },
       {
+        "command": "tua.runLoveProjectWithHotReload",
+        "title": "Run LOVE Project With Hot Reload",
+        "category": "Tua",
+        "icon": "$(flame)"
+      },
+      {
+        "command": "tua.packageGame",
+        "title": "Package Game...",
+        "category": "Tua",
+        "icon": "$(package)"
+      },
+      {
         "command": "tua.restartLoveProject",
         "title": "Restart LOVE Project",
         "category": "Tua",
@@ -823,6 +849,11 @@
           "group": "navigation@49"
         },
         {
+          "command": "tua.runLoveProjectWithHotReload",
+          "when": "editorLangId == tua",
+          "group": "navigation@48"
+        },
+        {
           "command": "tua.restartLoveProject",
           "when": "editorLangId == tua",
           "group": "navigation@50"
@@ -873,6 +904,14 @@
         },
         {
           "command": "tua.debugLoveProject",
+          "when": "workspaceFolderCount > 0"
+        },
+        {
+          "command": "tua.runLoveProjectWithHotReload",
+          "when": "workspaceFolderCount > 0"
+        },
+        {
+          "command": "tua.packageGame",
           "when": "workspaceFolderCount > 0"
         },
         {

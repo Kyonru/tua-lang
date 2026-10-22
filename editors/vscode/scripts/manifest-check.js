@@ -56,6 +56,8 @@ const expected = [
   "tua.runLoveProject",
   "tua.debugLoveProject",
   "tua.restartLoveProject",
+  "tua.runLoveProjectWithHotReload",
+  "tua.packageGame",
   "tua.copyQualifiedName",
   "tua.showWorkspaceSymbolsByModule",
   "tua.hover.references",
@@ -206,6 +208,7 @@ for (const command of [
   "tua.runLoveProject",
   "tua.debugLoveProject",
   "tua.restartLoveProject",
+  "tua.runLoveProjectWithHotReload",
 ]) {
   if (!editorTitle.some((item) => item.command === command && item.when === "editorLangId == tua")) {
     console.error(`LOVE editor title command should be scoped to Tua editors: ${command}`);

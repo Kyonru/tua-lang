@@ -545,6 +545,13 @@ tracked task. `print(...)`, stdout, stderr, and mapped runtime traceback
 locations appear in the task terminal and the `tua` output channel. Configure a
 non-standard LOVE executable with `tua.love.command`.
 
+**Tua: Run LOVE Project With Hot Reload** runs [`tua dev`](hot-reload.md) in
+a task: the game reloads changed modules each time you save. **Tua: Package
+Game...** asks for a `.love`, Windows, or macOS build and runs
+[`tua package`](packaging.md). Fused builds use the LOVE runtime in
+`tua.love.windowsRuntime` or `tua.love.macosApp`; when that is empty, the
+command asks for it and can remember the choice.
+
 **Tua: Debug LOVE Project** provides source-mapped LOVE debugging through an
 external Lua adapter. See [Debugging](debugging.md) for setup, runtime behavior,
 and launch guidance.
@@ -561,6 +568,8 @@ Open the command palette and type **Tua**. The most useful commands are:
 | **Tua: Open Generated Lua Beside Tua** | Rebuild and inspect emitted Lua for the active source |
 | **Tua: Jump Between Tua and Generated Lua** | Navigate through the generated source map |
 | **Tua: Run LOVE Project** / **Restart LOVE Project** | Build and run LOVE in a VS Code task |
+| **Tua: Run LOVE Project With Hot Reload** | Run the game and reload code changes while it plays |
+| **Tua: Package Game...** | Build a `.love`, fused Windows, or fused macOS package |
 | **Tua: Debug LOVE Project** | Build and debug generated Lua with breakpoints mapped to Tua |
 | **Tua: Workspace Symbols by Module** | Browse compiler symbols grouped by module |
 | **Tua: Why Is This Module Included?** | Show the active module's shortest root-to-module path |
@@ -586,6 +595,8 @@ contain a value.
 | --- | --- |
 | `tua.server.path` | Select the `tua` executable used by the extension |
 | `tua.love.command` | Select the LOVE executable used by run tasks |
+| `tua.love.windowsRuntime` | Extracted LOVE for Windows folder used for fused Windows packages |
+| `tua.love.macosApp` | `love.app` used for fused macOS packages |
 | `tua.trace.server` | Show `off`, `messages`, or `verbose` protocol traces |
 | `tua.log.verbosity` | Show `off`, `error`, `info`, `debug`, or `trace` server logs |
 | `tua.format.*` | Override formatter settings from `tua.toml` |
