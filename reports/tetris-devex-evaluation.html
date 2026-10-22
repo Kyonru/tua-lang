@@ -99,7 +99,7 @@
     <div class="metrics">
       <div class="metric"><strong>3</strong><span>independent persona trials</span></div>
       <div class="metric"><strong>3/3</strong><span>games built and ran in LOVE</span></div>
-      <div class="metric"><strong>8</strong><span>trial-driven fixes landed</span></div>
+      <div class="metric"><strong>9</strong><span>trial-driven fixes landed</span></div>
       <div class="metric"><strong>0</strong><span>temporary games committed</span></div>
     </div>
   </section>
@@ -156,6 +156,7 @@
       <article class="finding fixed"><h3 class="status-fixed">Fixed · named multi-return annotations</h3><p>A named function annotated with <code>(string, number)</code> now describes two Lua return slots instead of one tuple-valued result. Checker and signature-help tests cover the contract.</p></article>
       <article class="finding fixed"><h3 class="status-fixed">Fixed · namespace declaration aliases in arrays</h3><p>Array literals returned as <code>Types.Point[]</code> from a <code>.d.tua</code> namespace import now resolve their element record before structural checking. The fix also trims normalized type references before project lookup.</p></article>
       <article class="finding fixed"><h3 class="status-fixed">Fixed · module constructor contracts</h3><p>Selected imported return aliases and nested literal unions now survive module export inference and checker-local binding. Hover, completion, and diagnostics consequently agree on the constructor's declared record.</p></article>
+      <article class="finding fixed"><h3 class="status-fixed">Fixed · indexed literal-union contracts</h3><p>Indexing an annotated <code>PieceKind[]</code> now retains the imported literal-union item contract in an unannotated local, eliminating the final static workaround in the typed Tetris trial.</p></article>
       <article class="finding fixed"><h3 class="status-fixed">Fixed · honest tuple documentation</h3><p>Native <code>[T, U]</code> syntax is not supported by the current parser. The docs now describe it as LuaCATS interop syntax and use native records or arrays in Tua examples.</p></article>
       <article class="finding fixed"><h3 class="status-fixed">Fixed · multiline LSP trial positions</h3><p>The profiling helper previously added a multiline snippet's total length to its first line. Correct absolute-offset conversion proved that DrawMode completion returns <code>fill</code> and signature help selects parameter 1 after the first comma.</p></article>
     </div>
@@ -166,7 +167,6 @@
     <div class="findings">
       <article class="finding open"><h3 class="status-open">Priority · mutable nilable state narrowing</h3><p>Natural game state such as <code>Piece | nil</code> remains awkward when a mutable outer/module variable is guarded and then used. The checker is conservative, but the documentation and diagnostic recovery path should explain the boundary; safe same-scope cases deserve a dedicated semantic design.</p></article>
       <article class="finding open"><h3 class="status-open">Priority · LuaCATS imported aliases</h3><p>Generated annotations can refer to names such as <code>Types.Game</code> without emitting a declaration that downstream Lua tooling can resolve. A declaration companion or stable canonical names are needed before annotation preservation is complete.</p></article>
-      <article class="finding open"><h3 class="status-open">Priority · indexed literal-union locals</h3><p>Reading an annotated <code>PieceKind[]</code> into an unannotated local can still widen the item to <code>string</code>. An explicit <code>local kind: PieceKind</code> works, but inference should retain an authoritative container element contract without making ordinary literal locals overly rigid.</p></article>
       <article class="finding open"><h3 class="status-open">Priority · transient project diagnostics</h3><p>Sequentially opening related files can briefly publish a stale type mismatch before the project revision settles. The final state is correct, but editor adoption should avoid visible red-squiggle flashes.</p></article>
       <article class="finding policy"><h3>Policy decision · writes to unknown record fields</h3><p><code>game.socre = 10</code> remains legal on a structurally annotated table under Tua's gradual mutation policy. A high-confidence opt-in lint could catch this without redefining table openness.</p></article>
       <article class="finding policy"><h3>Minor · CLI discoverability and generated configuration</h3><p><code>tua init --help</code> does not provide contextual subcommand help, and generated diagnostics flags can look contradictory to a newcomer. These are low-risk usability improvements.</p></article>
