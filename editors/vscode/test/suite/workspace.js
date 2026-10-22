@@ -121,11 +121,17 @@ async function testOpenGeneratedLuaBesideSource() {
     "tua.jumpBetweenSourceAndGenerated",
   );
   assert.equal(openedSourcePath, sourcePath);
+  let mappedSourceEditor;
   await waitUntil(
-    () => vscode.window.activeTextEditor?.document.uri.fsPath === sourcePath,
-    "the generated-to-source jump to update the active editor",
+    () => {
+      mappedSourceEditor = vscode.window.visibleTextEditors.find(
+        (candidate) => candidate.document.uri.fsPath === sourcePath,
+      );
+      return Boolean(mappedSourceEditor);
+    },
+    "the generated-to-source jump to reveal the source editor",
   );
-  assert.equal(vscode.window.activeTextEditor?.selection.active.line, 1);
+  assert.equal(mappedSourceEditor.selection.active.line, 1);
 
   await closeActiveEditor();
   await closeActiveEditor();

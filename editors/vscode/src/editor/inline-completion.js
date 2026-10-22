@@ -15,7 +15,8 @@ const { createInlineReplayCapture } = require("./inline-replay-capture");
 
 const STATS_KEY = "tua.ollamaCompletionStats.v2";
 const LEGACY_STATS_KEY = "tua.ollamaCompletionStats.v1";
-const LOCAL_STATS_KEY = "tua.localInlineCompletionStats.v1";
+const LOCAL_STATS_KEY = "tua.localInlineCompletionStats.v2";
+const LEGACY_LOCAL_STATS_KEY = "tua.localInlineCompletionStats.v1";
 const LOCAL_INLINE_METHOD = "tua/localInlineCompletion";
 const DEBOUNCE_MS = 65;
 const LOCAL_REQUEST_TIMEOUT_MS = 250;
@@ -35,6 +36,10 @@ const EMPTY_LOCAL_STATS = Object.freeze({
   semanticAccepted: 0,
   currentFileReturned: 0,
   currentFileAccepted: 0,
+  projectReturned: 0,
+  projectAccepted: 0,
+  projectStatisticalReturned: 0,
+  projectStatisticalAccepted: 0,
 });
 
 function registerInlineCompletion(options) {
@@ -62,13 +67,24 @@ class InlineCompletionController {
     this.sequence = 0;
     this.cache = new Map();
     this.disposables = [];
-    this.localCounters = normalizedLocalStats(
-      this.context.workspaceState.get(LOCAL_STATS_KEY) || {},
-    );
+    const storedLocalStats = this.context.workspaceState.get(LOCAL_STATS_KEY);
+    const legacyLocalStats = storedLocalStats
+      ? undefined
+      : this.context.workspaceState.get(LEGACY_LOCAL_STATS_KEY);
+    this.localCounters = normalizedLocalStats(storedLocalStats || legacyLocalStats || {});
     this.ollamaCounters = loadOllamaStats(this.context.workspaceState);
     this.localStatsDirty = false;
     this.localStatsTimer = undefined;
-    this.localCounterWrite = Promise.resolve();
+    this.localCounterWrite = legacyLocalStats
+      ? this.context.workspaceState
+        .update(LOCAL_STATS_KEY, { ...this.localCounters })
+        .then(() => this.context.workspaceState.update(LEGACY_LOCAL_STATS_KEY, undefined))
+        .catch((error) => {
+          this.appendOutputLine?.(
+            `Could not migrate Tua inline completion counters: ${formatError(error)}`,
+          );
+        })
+      : Promise.resolve();
     this.status = vscode.languages.createLanguageStatusItem(
       "tua.inlineCompletions",
       STATUS_SELECTOR,
@@ -152,6 +168,19 @@ class InlineCompletionController {
       contextTokens: configuration.get("completion.ollama.contextTokens", 4096),
       maxTokens: configuration.get("completion.ollama.maxTokens", 256),
     };
+  }
+
+  deterministicSourceLabels() {
+    const configuration = vscode.workspace.getConfiguration("tua");
+    const sources = [
+      ["completion.inline.sources.semantic", true, "Semantic"],
+      ["completion.inline.sources.currentFile", true, "Current file"],
+      ["completion.inline.sources.project", false, "Project"],
+      ["completion.inline.sources.statistical", false, "Project statistical"],
+    ];
+    return sources
+      .filter(([key, fallback]) => configuration.get(key, fallback))
+      .map(([, , label]) => label);
   }
 
   async provide(document, position, completionContext, token) {
@@ -717,6 +746,7 @@ class InlineCompletionController {
     await this.context.workspaceState.update(STATS_KEY, { ...this.ollamaCounters });
     await this.context.workspaceState.update(LEGACY_STATS_KEY, undefined);
     await this.context.workspaceState.update(LOCAL_STATS_KEY, { ...EMPTY_LOCAL_STATS });
+    await this.context.workspaceState.update(LEGACY_LOCAL_STATS_KEY, undefined);
   }
 
   debugInfo() {
@@ -729,6 +759,7 @@ class InlineCompletionController {
   updateStatus(state, detail) {
     const config = this.configuration();
     const mode = this.inlineMode();
+    const deterministicSources = this.deterministicSourceLabels();
     this.status.busy = state === "loading";
     this.status.severity =
       state === "missing_server" ||
@@ -741,12 +772,12 @@ class InlineCompletionController {
     this.status.command = statusCommand(mode, state);
 
     const labels = {
-      disabled: configuredStatus(mode, config),
+      disabled: configuredStatus(mode, config, deterministicSources),
       loading: [
         `$(sync~spin) Tua inline: ${mode === "both" ? "Local + Ollama" : "Ollama"} loading`,
         `Loading ${config.model}.`,
       ],
-      ready: configuredStatus(mode, config),
+      ready: configuredStatus(mode, config, deterministicSources),
       language_server: [
         "$(warning) Tua completion unavailable",
         "The Tua language server is unavailable.",
@@ -796,12 +827,15 @@ class InlineCompletionController {
   }
 }
 
-function configuredStatus(mode, config) {
+function configuredStatus(mode, config, deterministicSources) {
+  const sources = deterministicSources.length > 0
+    ? deterministicSources.join(", ")
+    : "none";
   switch (mode) {
     case "local":
       return [
         "$(check) Tua inline: Local",
-        "Deterministic local inline completion is enabled; Ollama is off.",
+        `Enabled deterministic sources: ${sources}. Ollama is off.`,
       ];
     case "ollama":
       return [
@@ -811,7 +845,7 @@ function configuredStatus(mode, config) {
     case "both":
       return [
         "$(check) Tua inline: Local + Ollama",
-        `Deterministic local completion runs first; ${config.model} is the fallback.`,
+        `Enabled deterministic sources: ${sources}. ${config.model} is the fallback.`,
       ];
     default:
       return [
@@ -853,6 +887,10 @@ function normalizedLocalStats(stats) {
     semanticAccepted: numericCounter(stats.semanticAccepted),
     currentFileReturned: numericCounter(stats.currentFileReturned),
     currentFileAccepted: numericCounter(stats.currentFileAccepted),
+    projectReturned: numericCounter(stats.projectReturned),
+    projectAccepted: numericCounter(stats.projectAccepted),
+    projectStatisticalReturned: numericCounter(stats.projectStatisticalReturned),
+    projectStatisticalAccepted: numericCounter(stats.projectStatisticalAccepted),
   };
 }
 
@@ -884,6 +922,12 @@ function localCounterName(source, suffix) {
   }
   if (source === "currentFile") {
     return `currentFile${suffix}`;
+  }
+  if (source === "project") {
+    return `project${suffix}`;
+  }
+  if (source === "projectStatistical") {
+    return `projectStatistical${suffix}`;
   }
   return undefined;
 }

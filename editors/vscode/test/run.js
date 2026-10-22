@@ -40,6 +40,7 @@ async function main() {
       extensionTestsPath,
       extensionTestsEnv: {
         TUA_SERVER_PATH: serverPath,
+        TUA_EXTENSION_TEST_API: "1",
         TUA_TEST_FIXTURES: JSON.stringify(fixtures),
         TUA_TEST_LSP_LOG: logPath,
       },

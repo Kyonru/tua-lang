@@ -76,6 +76,29 @@ async function activate(context) {
   debugLog(`${DEBUG_LSP_ENV}=1 enabled; verbose extension/LSP trace is active.`);
 
   await startLanguageServer();
+  return integrationTestApi();
+}
+
+function integrationTestApi() {
+  if (process.env.TUA_EXTENSION_TEST_API !== "1") {
+    return undefined;
+  }
+
+  return {
+    async requestInlineCompletion(document, position) {
+      const cancellation = new vscode.CancellationTokenSource();
+      try {
+        return await editorDevex.inlineCompletion.provide(
+          document,
+          position,
+          { triggerKind: vscode.InlineCompletionTriggerKind.Invoke },
+          cancellation.token,
+        );
+      } finally {
+        cancellation.dispose();
+      }
+    },
+  };
 }
 
 async function registerProjectContext() {
@@ -241,7 +264,13 @@ async function startLanguageServer() {
     run: serverExecutable(serverCommand, cwd),
     debug: serverExecutable(serverCommand, cwd),
   };
-  const initializationOptions = traceConfiguration();
+  const initializationOptions = {
+    ...traceConfiguration(),
+    // The extension owns one combined deterministic/Ollama provider. Asking
+    // vscode-languageclient to register the standard provider too would issue
+    // competing requests for every keystroke.
+    combinedInlineCompletionProvider: true,
+  };
 
   debugLog(
     `language client initialization options: trace.server=${initializationOptions.trace.server} logVerbosity=${initializationOptions.logVerbosity}`,

@@ -166,6 +166,19 @@ if (
   process.exit(1);
 }
 
+const configurationProperties = manifest.contributes?.configuration?.properties || {};
+for (const setting of ["tua.completion.inline.sources.statistical"]) {
+  const contribution = configurationProperties[setting];
+  if (contribution?.type !== "boolean" || contribution.default !== false) {
+    console.error(`${setting} must remain an explicit default-off experiment.`);
+    process.exit(1);
+  }
+  if (!/experimental|experimentally/i.test(contribution.description || "")) {
+    console.error(`${setting} must be described as experimental.`);
+    process.exit(1);
+  }
+}
+
 const languages = manifest.contributes?.languages || [];
 const tuaLanguage = languages.find((language) => language.id === "tua");
 if (!tuaLanguage) {

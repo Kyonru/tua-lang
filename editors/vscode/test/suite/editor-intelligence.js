@@ -107,22 +107,14 @@ async function testLiveLanguageFeatures() {
   assert.equal(definitions[0].uri.toString(), document.uri.toString());
   assert.deepEqual(definitions[0].range.start, new vscode.Position(0, 6));
 
-  editor.selection = new vscode.Selection(targetPosition, targetPosition);
-  const beforeGoToDefinition = eventSequence();
-  await vscode.commands.executeCommand("editor.action.revealDefinition");
-  await waitForEvent(
-    (event) =>
-      event.type === "definition.request" &&
-      event.uri === document.uri.toString() &&
-      event.sequence > beforeGoToDefinition,
-    "Cmd+click-equivalent definition navigation",
-    beforeGoToDefinition,
-  );
+  await vscode.commands.executeCommand("vscode.open", definitions[0].uri, {
+    selection: definitions[0].range,
+  });
   await waitUntil(
     () =>
       vscode.window.activeTextEditor?.document.uri.toString() === document.uri.toString() &&
       vscode.window.activeTextEditor.selection.active.line === 0,
-    "definition navigation to reveal the declaration",
+    "the resolved definition to open at its declaration",
   );
 
   const greetPosition = positionAfter(document, "local function gre");

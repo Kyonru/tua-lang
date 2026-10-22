@@ -269,6 +269,7 @@ async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
           server: "off",
         },
         logVerbosity: "off",
+        combinedInlineCompletionProvider: true,
       },
       "activation should pass trace defaults to initialization options",
     );
@@ -1414,6 +1415,7 @@ async function smokeDebugLspLogging(mockServer, workspace) {
           server: "messages",
         },
         logVerbosity: "debug",
+        combinedInlineCompletionProvider: true,
       },
       "debug LSP env flag should enable server trace and debug logs",
     );

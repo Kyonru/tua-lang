@@ -137,7 +137,11 @@ stable test build.
     macOS with a LOVE installation that passes your platform's trust checks.
     **Run Extension (All Examples)** and **Run Extension (Debug Server)** remain
     useful for interactive debugger testing because those profiles keep
-    debugger dependencies enabled.
+    debugger dependencies enabled. Every Extension Host profile runs the
+    `Build Extension (Debug)` task first, producing an unminified `dist` bundle
+    with source maps, so JavaScript breakpoints follow the code that actually
+    runs. Debug and release server profiles also select `tua.exe` automatically
+    on Windows.
 
 Build a VSIX with the current platform's Tua server binary:
 

@@ -147,6 +147,15 @@ test("deterministic completion status names the configured backend mode", () => 
   settings.set("completion.inline.enabled", true);
   const local = makeController(async () => undefined);
   assert.match(local.status.text, /inline: Local$/);
+  assert.match(local.status.detail, /Semantic, Current file/);
+
+  settings.set("completion.inline.sources.project", true);
+  settings.set("completion.inline.sources.statistical", true);
+  local.updateStatus("ready");
+  assert.match(
+    local.status.detail,
+    /Semantic, Current file, Project, Project statistical/,
+  );
 
   settings.set("completion.inline.enabled", false);
   settings.set("completion.multiToken.allowModelIntegration", true);
@@ -177,24 +186,22 @@ test("local toggle changes only deterministic completion for the workspace", asy
   assert.equal(settings.has("completion.multiToken.allowModelIntegration"), false);
 });
 
-test("local counters record returned and accepted semantic and current-file items only", async () => {
+test("local counters record every deterministic source without storing completion text", async () => {
   settings.set("completion.inline.enabled", true);
   const state = memento();
-  const sources = ["semantic", "currentFile"];
+  const sources = ["semantic", "currentFile", "project", "projectStatistical"];
   const controller = makeController(
     async () => localResponse("update(dt)", false, sources.shift()),
     [],
     { context: { workspaceState: state } },
   );
 
-  const [semantic] = await controller.provide(document(), position(), {}, token());
-  assert.equal(semantic.command.command, "tua.completion.localInlineAccepted");
-  assert.deepEqual(semantic.command.arguments, ["semantic"]);
-  await controller.recordLocalAcceptance("semantic");
-
-  const [currentFile] = await controller.provide(document(), position(), {}, token());
-  assert.deepEqual(currentFile.command.arguments, ["currentFile"]);
-  await controller.recordLocalAcceptance("currentFile");
+  for (const source of ["semantic", "currentFile", "project", "projectStatistical"]) {
+    const [item] = await controller.provide(document(), position(), {}, token());
+    assert.equal(item.command.command, "tua.completion.localInlineAccepted");
+    assert.deepEqual(item.command.arguments, [source]);
+    await controller.recordLocalAcceptance(source);
+  }
   await controller.flushLocalStats();
 
   assert.deepEqual(JSON.parse(controller.debugInfo()).deterministic, {
@@ -202,6 +209,10 @@ test("local counters record returned and accepted semantic and current-file item
     semanticAccepted: 1,
     currentFileReturned: 1,
     currentFileAccepted: 1,
+    projectReturned: 1,
+    projectAccepted: 1,
+    projectStatisticalReturned: 1,
+    projectStatisticalAccepted: 1,
   });
   assert.equal(
     JSON.stringify([...state.values.entries()]).includes("update(dt)"),
@@ -234,6 +245,10 @@ test("local counter persistence batches many returned items into one update", as
     semanticAccepted: 0,
     currentFileReturned: 1,
     currentFileAccepted: 0,
+    projectReturned: 0,
+    projectAccepted: 0,
+    projectStatisticalReturned: 0,
+    projectStatisticalAccepted: 0,
   });
 });
 
@@ -259,7 +274,7 @@ test("acceptance followed by reset cannot replay a stale delayed snapshot", asyn
   await controller.flushLocalStats();
 
   const localUpdates = state.updateCalls.filter(
-    (entry) => entry.key === "tua.localInlineCompletionStats.v1",
+    (entry) => entry.key === "tua.localInlineCompletionStats.v2",
   );
   assert.equal(localUpdates.length, 1);
   assert.deepEqual(localUpdates[0].value, {
@@ -267,6 +282,10 @@ test("acceptance followed by reset cannot replay a stale delayed snapshot", asyn
     semanticAccepted: 0,
     currentFileReturned: 0,
     currentFileAccepted: 0,
+    projectReturned: 0,
+    projectAccepted: 0,
+    projectStatisticalReturned: 0,
+    projectStatisticalAccepted: 0,
   });
   assert.equal(state.values.has("tua.ollamaCompletionStats.v1"), false);
   assert.deepEqual(state.values.get("tua.ollamaCompletionStats.v2"), {
@@ -280,9 +299,10 @@ test("acceptance followed by reset cannot replay a stale delayed snapshot", asyn
     acceptedCharacters: 0,
   });
   assert.deepEqual(
-    state.values.get("tua.localInlineCompletionStats.v1"),
+    state.values.get("tua.localInlineCompletionStats.v2"),
     localUpdates[0].value,
   );
+  assert.equal(state.values.has("tua.localInlineCompletionStats.v1"), false);
 });
 
 test("dispose flushes a pending local counter batch", async () => {
@@ -332,7 +352,7 @@ test("legacy Ollama shown counts migrate to returned counts without leaking the 
   );
 });
 
-test("stored local counters allowlist finite nonnegative numeric fields", () => {
+test("stored local counters migrate from v1 to v2 and allowlist numeric fields", async () => {
   const timers = fakeStatsTimers();
   const state = memento({
     "tua.localInlineCompletionStats.v1": {
@@ -341,20 +361,31 @@ test("stored local counters allowlist finite nonnegative numeric fields", () => 
       currentFileReturned: "7",
       currentFileAccepted: -2,
       sourceText: "must not escape",
-      projectReturned: 99,
+      projectReturned: 3,
+      projectAccepted: Number.POSITIVE_INFINITY,
+      projectStatisticalReturned: 2,
+      projectStatisticalAccepted: 1,
     },
   });
   const controller = makeController(async () => undefined, [], {
     context: { workspaceState: state },
     ...timers.options,
   });
+  await controller.localCounterWrite;
 
-  assert.deepEqual(JSON.parse(controller.debugInfo()).deterministic, {
+  const expected = {
     semanticReturned: 4,
     semanticAccepted: 0,
     currentFileReturned: 0,
     currentFileAccepted: 0,
-  });
+    projectReturned: 3,
+    projectAccepted: 0,
+    projectStatisticalReturned: 2,
+    projectStatisticalAccepted: 1,
+  };
+  assert.deepEqual(JSON.parse(controller.debugInfo()).deterministic, expected);
+  assert.deepEqual(state.values.get("tua.localInlineCompletionStats.v2"), expected);
+  assert.equal(state.values.has("tua.localInlineCompletionStats.v1"), false);
   controller.incrementLocalCounter("semanticReturned");
   assert.equal(controller.localCounters.semanticReturned, 5);
   assert.equal(timers.pending.size, 1);

@@ -16,6 +16,9 @@ workflow pages under `docs/`. Completed work belongs in
 - Keep CLI, server, extension, changelog, and migration notes synchronized.
 - Use representative completion and editor-contention profiles as release
   gates.
+- Collect independent real-project evidence for deterministic inline
+  completion before enabling it by default; keep exact project retrieval
+  parked and the sparse statistical fallback explicitly opt-in until then.
 - Fix correctness or responsiveness regressions before expanding language
   syntax.
 

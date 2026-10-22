@@ -100,7 +100,10 @@ These commands are useful immediately:
 - Set `tua.completion.inline.enabled` to `true` to try experimental
   deterministic ghost text from source-only statement snippets and repeated
   lines in the current file. It is separate from the experimental-completions
-  command and remains off by default.
+  command and remains off by default. To test the stricter Tua-only project
+  predictor as a fallback, also enable
+  `tua.completion.inline.sources.statistical`; that source is experimental and
+  independently off by default.
 - **Tua: Focus Output** opens server, build, and runtime logs.
 
 !!! info "Experimental completions are opt-in"

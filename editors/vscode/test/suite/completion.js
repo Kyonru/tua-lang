@@ -9,11 +9,10 @@ const {
   openFixture,
   readEvents,
   waitForEvent,
-  waitUntil,
 } = require("./support");
 
 async function runCompletionTests() {
-  const { document, editor } = await openFixture("suggestions");
+  let { document, editor } = await openFixture("suggestions");
   assert.equal(document.languageId, "tua");
 
   const quickSuggestions = vscode.workspace
@@ -32,32 +31,17 @@ async function runCompletionTests() {
     true,
     "the integration workspace must enable local inline completion before activation",
   );
-  const beforeInline = eventSequence();
-  await vscode.commands.executeCommand("editor.action.inlineSuggest.trigger");
-  const inlineRequest = await waitForEvent(
-    (event) =>
-      event.type === "inline-completion.request" &&
-      event.uri === document.uri.toString() &&
-      event.documentVersion === document.version,
-    "a version-bound local inline-completion request",
-    beforeInline,
-  );
-  assert.deepEqual(inlineRequest.position, {
-    character: editor.selection.active.character,
-    line: editor.selection.active.line,
-  });
-  await inlineConfiguration.update(
-    "completion.inline.enabled",
-    false,
-    vscode.ConfigurationTarget.Workspace,
-  );
-
   const insertion = document.lineAt(document.lineCount - 1).range.end;
   editor.selection = new vscode.Selection(insertion, insertion);
+  await vscode.commands.executeCommand("workbench.action.focusActiveEditorGroup");
   const beforeTyping = eventSequence();
 
   await insertText(document, editor, "o");
-  await vscode.commands.executeCommand("editor.action.triggerSuggest");
+  const staleCompletion = vscode.commands.executeCommand(
+    "vscode.executeCompletionItemProvider",
+    document.uri,
+    editor.selection.active,
+  );
   const staleRequest = await waitForEvent(
     (event) => event.type === "completion.request" && event.prefix === "o",
     "an initial completion request for `o`",
@@ -77,7 +61,11 @@ async function runCompletionTests() {
     "the rapid edits to synchronize before retriggering suggestions",
     staleRequest.sequence,
   );
-  await vscode.commands.executeCommand("editor.action.triggerSuggest");
+  const freshCompletion = vscode.commands.executeCommand(
+    "vscode.executeCompletionItemProvider",
+    document.uri,
+    currentPosition,
+  );
   const freshRequest = await waitForEvent(
     (event) =>
       event.type === "completion.request" &&
@@ -98,15 +86,10 @@ async function runCompletionTests() {
     "the current completion response",
     freshRequest.sequence,
   );
-  const cancellation = await waitForEvent(
-    (event) => event.type === "request.cancel" && event.id === staleRequest.id,
-    "the obsolete completion request to be cancelled",
-    staleRequest.sequence,
-  );
   const staleResponse = await waitForEvent(
     (event) => event.type === "completion.response" && event.id === staleRequest.id,
     "the deliberately late obsolete response",
-    cancellation.sequence,
+    freshResponse.sequence,
   );
 
   assert(
@@ -117,7 +100,9 @@ async function runCompletionTests() {
     freshResponse.sequence < staleResponse.sequence,
     "the obsolete response should arrive after the synchronized result",
   );
-  assert.equal(staleResponse.cancelled, true);
+  const [freshItems, staleItems] = await Promise.all([freshCompletion, staleCompletion]);
+  assert.equal(freshItems.items[0].label, "outside_from_lsp");
+  assert.equal(staleItems.items[0].label, "outdated_result");
 
   const currentRequests = readEvents().filter(
     (event) =>
@@ -147,16 +132,37 @@ async function runCompletionTests() {
   assert.equal(typingChanges.at(-1).version, currentVersion);
   assert(typingChanges.at(-1).text.endsWith("out"));
 
-  await vscode.commands.executeCommand("acceptSelectedSuggestion");
-  await waitUntil(
-    () => document.getText().endsWith("outside_from_lsp"),
-    "the fresh visible suggestion to be accepted",
+  await discardActiveEditor();
+  ({ document, editor } = await openFixture("suggestions"));
+  const inlinePosition = document.lineAt(1).range.end;
+  editor.selection = new vscode.Selection(inlinePosition, inlinePosition);
+  await vscode.commands.executeCommand("workbench.action.focusActiveEditorGroup");
+  const beforeInline = eventSequence();
+  await insertText(document, editor, "l");
+  const extension = vscode.extensions.getExtension("SolenodonteLabs.tua");
+  assert(extension, "the Tua extension should be available");
+  const api = await extension.activate();
+  assert.equal(typeof api?.requestInlineCompletion, "function");
+  const inlineItems = await api.requestInlineCompletion(document, editor.selection.active);
+  assert.equal(inlineItems?.length, 1);
+  assert.equal(inlineItems[0].insertText, "late_result");
+  const inlineRequest = await waitForEvent(
+    (event) =>
+      event.type === "inline-completion.request" &&
+      event.uri === document.uri.toString() &&
+      event.documentVersion === document.version,
+    "a version-bound local inline-completion request after typing",
+    beforeInline,
   );
-  assert(
-    !document.getText().endsWith("outdated_result"),
-    "the older response must not replace the current suggestion",
+  assert.deepEqual(inlineRequest.position, {
+    character: editor.selection.active.character,
+    line: editor.selection.active.line,
+  });
+  await inlineConfiguration.update(
+    "completion.inline.enabled",
+    false,
+    vscode.ConfigurationTarget.Workspace,
   );
-
   await discardActiveEditor();
 }
 

@@ -184,14 +184,17 @@ directions. See [Input](input.md).
 Run **Tua: Toggle Deterministic Inline Completions**, or set
 `tua.completion.inline.enabled` to `true`, to try deterministic ghost text
 without a model. The command changes only that workspace gate. The feature is
-experimental and off by default. The public extension configuration has two
+experimental and off by default. The public extension configuration has three
 independently configurable sources:
 
 - `tua.completion.inline.sources.semantic` reuses unique, source-only statement
   snippets after at least three prefix characters;
 - `tua.completion.inline.sources.currentFile` recalls conservative
   continuations from other lines in the active file while preserving their
-  original spelling and layout.
+  original spelling and layout;
+- `tua.completion.inline.sources.statistical` opts into the experimental,
+  Tua-only project statistical fallback. It remains off by default and runs
+  only after deterministic sources abstain.
 
 Current-file recall excludes the line being edited, requires a meaningful
 prefix, and stops at the end of the line. A continuation supported by only one
@@ -214,11 +217,24 @@ Queue, protocol, and end-to-end request latency are measured separately. With
 these public Phase 1 sources, the path reads the current in-memory document
 only. It does not build an analysis snapshot, run type checking, scan other
 project files, read a pattern database, or persist source text. Project-wide
-retrieval exists only as a hidden, default-off Phase 2 integration experiment;
-the extension does not contribute its internal source switch, and it has not
-passed held-out, external, or aggregate phase gates. Bundled patterns,
-statistical prediction, and multi-line pattern recall are not production
-sources.
+exact retrieval exists only as a hidden, default-off Phase 2 integration
+experiment; the extension does not contribute its internal source switch, and
+it added no candidates at its safe tuning policy. The optional statistical
+source reuses that immutable corpus, requires two distinct files to support
+each predicted token, keeps uncommon literals non-generatable, and abstains
+without cached semantic scope facts. It is available for explicit testing,
+not quality-approved or enabled by default. Bundled patterns and multi-line
+pattern recall are not production sources.
+
+Tua serves the same bounded core query through its metadata-rich
+`tua/localInlineCompletion` request and standard LSP 3.18
+`textDocument/inlineCompletion`. The standard response omits internal source,
+score, and pattern metadata; snippet candidates use LSP `StringValue` snippet
+encoding. Both requests share the speculative newest-wins lane, cancellation,
+validation, and stale-document rejection. Standalone clients are advertised
+the standard capability. The Tua VS Code extension declares that it owns the
+combined deterministic/Ollama provider, so the server suppresses standard
+provider registration for that client and avoids duplicate requests.
 
 The extension waits 65 ms before requesting ghost text, then gives the local
 backend 250 ms to respond. That request uses a linked cancellation token, so a
@@ -230,15 +246,17 @@ the local backend runs first; the separately opted-in Ollama backend runs only
 if local completion is
 disabled, returns no candidate, or is unavailable on an older server. A
 timed-out, cancelled, stale, capacity-limited, or otherwise transient local
-request abstains instead of starting model work. Neither deterministic source
-sends code over the network.
+request abstains instead of starting model work. No deterministic source sends
+code over the network.
 
 The inline-completion language status uses neutral backend names: `Local`,
 `Ollama`, `Local + Ollama`, or `off`. Deterministic counters are likewise kept
-separate by source as `semanticReturned`/`semanticAccepted` and
-`currentFileReturned`/`currentFileAccepted`. "Returned" means an item was
-returned to VS Code; it does not claim that the item was visible. These
-counters store no completion text and do not feed ranking or candidate
+separate by source as `semanticReturned`/`semanticAccepted`,
+`currentFileReturned`/`currentFileAccepted`,
+`projectReturned`/`projectAccepted`, and
+`projectStatisticalReturned`/`projectStatisticalAccepted`. "Returned" means an
+item was returned to VS Code; it does not claim that the item was visible.
+These counters store no completion text and do not feed ranking or candidate
 generation.
 
 ### Local Ollama Inline Completion

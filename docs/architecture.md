@@ -421,9 +421,31 @@ available through `tua/cacheStats` and `tua/health`.
 The bounded request path uses the currently tuned policy only after semantic
 and current-file sources abstain: comma, operator, and other contexts, at least
 six non-whitespace prefix characters, and at least two supporting matches from
-outside the active file and directory. Same-directory and bundled-corpus
-evidence are not used. This integration has not passed held-out, external, or
-aggregate phase gates and is not a public completion capability.
+a directly required module. Unrelated project, same-directory, and
+bundled-corpus evidence are not used. This integration has not passed held-out,
+external, or aggregate phase gates and is not a public completion capability.
+
+The Phase 3 statistical experiment reuses the same immutable corpus and
+background build/adopt lifecycle rather than creating another index or worker.
+It adds bounded token-count tables for Tua files when the statistical source is
+explicitly enabled. Those tables share Phase 2's capped corpus, which also keeps
+original line continuations for exact retrieval, but no second full source
+buffer is retained. Query-side identifier slots come from compact scope facts
+captured by normal analysis warm-up; a cold or stale scope causes
+abstention. Each generated token needs evidence from at least two distinct
+files, and decoding is bounded by file, byte, candidate, beam, token, deadline,
+and cancellation limits before entering the same suffix and parse-delta
+validator as exact sources. The extension exposes this source as an explicit
+default-off experiment because tuning evidence is promising but too sparse for
+quality approval.
+
+The custom and standard inline-completion protocols are adapters over this one
+core path. `tua/localInlineCompletion` carries Tua source metadata for the VS
+Code extension's local counters; `textDocument/inlineCompletion` returns the
+portable LSP shape. Both are routed through the same speculative newest-wins
+queue. During initialization, the Tua VS Code extension declares its combined
+provider and the server omits `inlineCompletionProvider` for that client;
+standalone clients still receive the standard capability.
 
 Developer menu-state replay follows the same boundary. When two explicit
 environment variables configure a local capture and deterministic inline

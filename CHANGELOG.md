@@ -8,6 +8,12 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- VS Code Extension Host launch profiles now build the executed extension
+  bundle before launch, emit source maps for JavaScript breakpoints, and select
+  `tua.exe` for debug/release server profiles on Windows. A launch-config smoke
+  check prevents missing tasks, stale `src` out-file mappings, and broken
+  platform server paths from returning.
+
 - Fixed the inline-completion evaluator loading manifest project directories
   through a file-oriented config search. Configured source and output roots are
   now honored, so generated Lua no longer leaks into tuning corpora or
@@ -37,9 +43,37 @@ language or editor behavior, and migration notes call out those changes.
 - Phase 2 project retrieval is parked. With corrected tuning data it adds no
   suggestion over Phase 1, so its held-out data stays unspent and its code
   stays behind the hidden switch, doing no work while disabled. The plan
-  records what would unpark it and when to remove it instead.
+  records what would unpark it and when to remove it instead. Its production
+  evaluator now resolves modules with the real loaded project model, matching
+  the LSP, and the conservative candidate keeps directly required modules even
+  when they share the active file's directory. Required-module evidence is
+  reported separately and cannot be diluted by unrelated project matches.
 
 ### Added
+
+- Added a production-safe, default-off Phase 3 statistical inline-completion
+  source for Tua. It reuses the immutable project corpus and speculative
+  request lane, adds bounded token tables and compact scope facts alongside
+  Phase 2's capped original-line retrieval entries without retaining another
+  full source buffer,
+  requires two distinct files to support each predicted token, and passes
+  candidates through the existing deadline, cancellation, VFS freshness,
+  suffix, and parse-delta checks. The extension exposes it as the explicitly
+  experimental `tua.completion.inline.sources.statistical` setting. Corrected
+  tune-only production-path evidence improves combined correct-prefix
+  precision from 0.728 to 0.740 with zero incorrect statistical characters,
+  but only about 13 scenario suggestions, so it remains off by default and no
+  held-out or external set was spent.
+- Added standard LSP 3.18 `textDocument/inlineCompletion` support as an adapter
+  over the same core query and newest-wins speculative lane used by Tua's
+  custom request. Standard clients receive portable ranges and snippet
+  `StringValue`s without internal source or ranking metadata. The Tua VS Code
+  extension declares its combined local/Ollama provider during initialization,
+  so the server suppresses duplicate standard-provider registration for that
+  client. The VS Code
+  status now lists enabled deterministic sources, and local observational
+  counters migrate to v2 with separate project-statistical returned/accepted
+  counts; they store no source text and do not affect ranking.
 
 - Added a reproducible Phase 1 diagnostic-freshness comparison for
   deterministic inline completion. The representative harness can run a
@@ -48,8 +82,9 @@ language or editor behavior, and migration notes call out those changes.
   asymmetric internal profiling, and gates pooled p95 latency from 100
   content-bound edits per fixture. The comparator fails closed on fixture,
   workload, sample-count, or inline-coverage drift.
-- Added an evaluator-only Phase 3 n-gram experiment behind tua-core's
-  `test-fixture` feature. It uses immutable target-file-held-out models,
+- Added the original Phase 3 evaluator experiment behind tua-core's
+  `test-fixture` feature. Its raw and held-out model machinery remains
+  evaluator-only and uses immutable target-file-held-out models,
   collision-free token keys, alpha-renamed identifier slots, bounded
   Jelinek-Mercer decoding, and a tested token renderer under explicit source,
   context, memory, cancellation, and deadline limits. New tuning and smoke Make
@@ -62,10 +97,12 @@ language or editor behavior, and migration notes call out those changes.
   gain, regressions, and latency before any frozen data is read. The checker is
   wired into the future gate branch and rejects eligible enabled-language data
   without a matching contract. The command accepts only named
-  manifest tune/smoke sets and hard-refuses held-out, external, and ad-hoc paths;
-  no statistical predictor is compiled into production, the LSP, or the VS
-  Code extension. A separate committed synthetic smoke set now crosses the
-  pinned confidence filter and runs under `benchmark-smoke`; its Make check
+  manifest tune/smoke sets and hard-refuses held-out, external, and ad-hoc paths.
+  The default-off production source described above reuses the model primitives
+  through the bounded host query instead of compiling the evaluator's held-out
+  views into the LSP or extension. A separate committed synthetic smoke set now
+  crosses the pinned confidence filter and runs under `benchmark-smoke`; its
+  Make check
   and a focused assertion fail if the filtered source becomes a no-op or if
   any synthetic suggestion stops being an exact continuation, without
   changing the Phase 1 smoke baseline.

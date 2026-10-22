@@ -10,6 +10,14 @@
       "problemMatcher": []
     },
     {
+      "label": "Build Extension (Debug)",
+      "group": "build",
+      "type": "npm",
+      "script": "build:dev",
+      "path": "editors/vscode/",
+      "problemMatcher": []
+    },
+    {
       "label": "Package Extension",
       "group": "build",
       "type": "shell",
@@ -73,25 +81,31 @@
     },
     {
       "label": "Build Server and Check Extension",
+      "dependsOrder": "sequence",
       "dependsOn": [
-        "Build Server",
-        "Check Extension"
+        "Check Extension",
+        "Build Extension (Debug)",
+        "Build Server"
       ],
       "problemMatcher": "$rustc"
     },
     {
       "label": "Build Server (Release) and Check Extension",
+      "dependsOrder": "sequence",
       "dependsOn": [
-        "Build Server (Release)",
-        "Check Extension"
+        "Check Extension",
+        "Build Extension (Debug)",
+        "Build Server (Release)"
       ],
       "problemMatcher": "$rustc"
     },
     {
       "label": "Stage Extension Server and Check Extension",
+      "dependsOrder": "sequence",
       "dependsOn": [
-        "Stage Extension Server",
-        "Check Extension"
+        "Check Extension",
+        "Build Extension (Debug)",
+        "Stage Extension Server"
       ],
       "problemMatcher": "$rustc"
     }

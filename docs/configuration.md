@@ -618,6 +618,12 @@ Supported editor settings:
 - `tua.completion.inline.sources.currentFile`: enables conservative
   single-line recall from repeated lines in the active document. It defaults
   to `true`, but has no effect while the parent feature is disabled.
+- `tua.completion.inline.sources.statistical`: enables the experimental,
+  Tua-only project statistical fallback after semantic and current-file
+  sources abstain. It defaults to `false`. The predictor requires cached scope
+  facts and support from at least two distinct project files, stays within the
+  immutable in-memory corpus and request budget, and is not quality-approved
+  or enabled by default.
 - `tua.completion.ollama.endpoint`: machine-scoped loopback endpoint; defaults
   to `http://127.0.0.1:11434`.
 - `tua.completion.ollama.model`: machine-scoped model name; defaults to
@@ -648,6 +654,7 @@ feature is off, the command enables both; if both are on, it disables both.
 Advanced multi-token and model-integration policy settings are not changed.
 Use **Tua: Toggle Deterministic Inline Completions** to switch only
 `tua.completion.inline.enabled` for the current workspace. The command leaves
-the semantic/current-file source choices and Ollama policy unchanged.
+the semantic, current-file, and statistical source choices and Ollama policy
+unchanged.
 Use **Tua: Toggle Local Ollama Completions** for the separate model-integration
 gate and consent flow.

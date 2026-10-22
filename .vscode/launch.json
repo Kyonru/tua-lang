@@ -12,12 +12,18 @@
         "SolenodonteLabs.tua:debug",
         "${workspaceFolder}/examples"
       ],
-      "outFiles": ["${workspaceFolder}/editors/vscode/src/**/*.js"],
+      "outFiles": ["${workspaceFolder}/editors/vscode/dist/**/*.js"],
       "preLaunchTask": "Build Server and Check Extension",
       "skipFiles": ["<node_internals>/**/*.js"],
       "env": {
         "TUA_SERVER_PATH": "${workspaceFolder}/target/debug/tua",
         "TUA_DEBUG_LSP": "1"
+      },
+      "windows": {
+        "env": {
+          "TUA_SERVER_PATH": "${workspaceFolder}/target/debug/tua.exe",
+          "TUA_DEBUG_LSP": "1"
+        }
       }
     },
     {
@@ -32,11 +38,16 @@
         "SolenodonteLabs.tua:debug",
         "${workspaceFolder}/examples/features"
       ],
-      "outFiles": ["${workspaceFolder}/editors/vscode/src/**/*.js"],
+      "outFiles": ["${workspaceFolder}/editors/vscode/dist/**/*.js"],
       "preLaunchTask": "Build Server and Check Extension",
       "skipFiles": ["<node_internals>/**/*.js"],
       "env": {
         "TUA_SERVER_PATH": "${workspaceFolder}/target/debug/tua"
+      },
+      "windows": {
+        "env": {
+          "TUA_SERVER_PATH": "${workspaceFolder}/target/debug/tua.exe"
+        }
       }
     },
     {
@@ -51,7 +62,7 @@
         "SolenodonteLabs.tua:debug",
         "${workspaceFolder}/examples/features"
       ],
-      "outFiles": ["${workspaceFolder}/editors/vscode/src/**/*.js"],
+      "outFiles": ["${workspaceFolder}/editors/vscode/dist/**/*.js"],
       "preLaunchTask": "Stage Extension Server and Check Extension",
       "skipFiles": ["<node_internals>/**/*.js"]
     },
@@ -66,11 +77,16 @@
         "SolenodonteLabs.tua:debug",
         "${workspaceFolder}/examples/love-full"
       ],
-      "outFiles": ["${workspaceFolder}/editors/vscode/src/**/*.js"],
+      "outFiles": ["${workspaceFolder}/editors/vscode/dist/**/*.js"],
       "preLaunchTask": "Build Server and Check Extension",
       "skipFiles": ["<node_internals>/**/*.js"],
       "env": {
         "TUA_SERVER_PATH": "${workspaceFolder}/target/debug/tua"
+      },
+      "windows": {
+        "env": {
+          "TUA_SERVER_PATH": "${workspaceFolder}/target/debug/tua.exe"
+        }
       }
     },
     {
@@ -85,11 +101,16 @@
         "SolenodonteLabs.tua:debug",
         "${workspaceFolder}/examples/love-full"
       ],
-      "outFiles": ["${workspaceFolder}/editors/vscode/src/**/*.js"],
+      "outFiles": ["${workspaceFolder}/editors/vscode/dist/**/*.js"],
       "preLaunchTask": "Build Server (Release) and Check Extension",
       "skipFiles": ["<node_internals>/**/*.js"],
       "env": {
         "TUA_SERVER_PATH": "${workspaceFolder}/target/release/tua"
+      },
+      "windows": {
+        "env": {
+          "TUA_SERVER_PATH": "${workspaceFolder}/target/release/tua.exe"
+        }
       }
     },
     {
@@ -104,7 +125,7 @@
         "SolenodonteLabs.tua:debug",
         "${workspaceFolder}/examples/love-full"
       ],
-      "outFiles": ["${workspaceFolder}/editors/vscode/src/**/*.js"],
+      "outFiles": ["${workspaceFolder}/editors/vscode/dist/**/*.js"],
       "preLaunchTask": "Stage Extension Server and Check Extension",
       "skipFiles": ["<node_internals>/**/*.js"]
     },
@@ -121,11 +142,16 @@
         "SolenodonteLabs.tua:debug",
         "${workspaceFolder}/examples/love-full"
       ],
-      "outFiles": ["${workspaceFolder}/editors/vscode/src/**/*.js"],
+      "outFiles": ["${workspaceFolder}/editors/vscode/dist/**/*.js"],
       "preLaunchTask": "Build Server (Release) and Check Extension",
       "skipFiles": ["<node_internals>/**/*.js"],
       "env": {
         "TUA_SERVER_PATH": "${workspaceFolder}/target/release/tua"
+      },
+      "windows": {
+        "env": {
+          "TUA_SERVER_PATH": "${workspaceFolder}/target/release/tua.exe"
+        }
       }
     },
     {
