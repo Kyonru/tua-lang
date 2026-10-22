@@ -120,6 +120,12 @@ impl DiagnosticCode {
     pub const LINT_NEWLINE_CALL: Self = Self(4061);
     pub const LINT_NEWFIELD_CALL: Self = Self(4062);
     pub const LINT_UNSCOPED_GLOBAL_WRITE: Self = Self(4063);
+    pub const LINT_CONSTANT_IDENTITY: Self = Self(4064);
+    pub const LINT_IDENTICAL_BRANCHES: Self = Self(4065);
+    pub const LINT_EMPTY_BLOCK: Self = Self(4066);
+    pub const LINT_SINGLE_ITERATION_LOOP: Self = Self(4067);
+    pub const LINT_CANONICAL_MODULE_SPELLING: Self = Self(4069);
+    pub const LINT_MUST_USE_RESULT: Self = Self(4068);
     pub const DOMAIN_ECS_COMPONENT_VALUE: Self = Self(5002);
     pub const DOMAIN_ECS_QUERY: Self = Self(5003);
     pub const DOMAIN_SPRITE: Self = Self(5004);
@@ -241,6 +247,12 @@ impl DiagnosticCode {
                 | Self::LINT_NEWLINE_CALL
                 | Self::LINT_NEWFIELD_CALL
                 | Self::LINT_UNSCOPED_GLOBAL_WRITE
+                | Self::LINT_CONSTANT_IDENTITY
+                | Self::LINT_IDENTICAL_BRANCHES
+                | Self::LINT_EMPTY_BLOCK
+                | Self::LINT_SINGLE_ITERATION_LOOP
+                | Self::LINT_CANONICAL_MODULE_SPELLING
+                | Self::LINT_MUST_USE_RESULT
                 | Self::DOMAIN_ECS_COMPONENT_VALUE
                 | Self::DOMAIN_ECS_QUERY
                 | Self::DOMAIN_SPRITE

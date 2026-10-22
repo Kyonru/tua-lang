@@ -105,6 +105,156 @@ print(value, sameLine, callbacks)
 }
 
 #[test]
+fn constant_identity_comparison_reports_distinct_tables_and_functions() {
+    let diagnostics = check_standard_rules_source(
+        r#"local tableEqual = ({}) == ({})
+local functionsDiffer = (function() end) ~= (function() end)
+
+local shared = {}
+local same = shared == shared
+local callback = function() end
+local sameCallback = callback == callback
+print(tableEqual, functionsDiffer, same, sameCallback)
+"#,
+    );
+    let messages = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_CONSTANT_IDENTITY))
+        .map(|diagnostic| diagnostic.message.as_str())
+        .collect::<Vec<_>>();
+
+    assert_eq!(messages.len(), 2, "{diagnostics:#?}");
+    assert!(messages
+        .iter()
+        .any(|message| message.ends_with("always false")));
+    assert!(messages
+        .iter()
+        .any(|message| message.ends_with("always true")));
+}
+
+#[test]
+fn identical_branch_rule_compares_runtime_tokens_and_skips_elseif_chains() {
+    let diagnostics = check_standard_rules_source(
+        r#"if ready then
+  print("same")
+else
+  -- formatting and comments do not change the branch
+  print( "same" )
+end
+
+if ready then
+  print("first")
+elseif fallback then
+  print("other")
+else
+  print("first")
+end
+
+if ready then
+  print("left")
+else
+  print("right")
+end
+"#,
+    );
+
+    assert_eq!(
+        count_code(&diagnostics, DiagnosticCode::LINT_IDENTICAL_BRANCHES),
+        1,
+        "{diagnostics:#?}"
+    );
+}
+
+#[test]
+fn empty_block_rule_reports_unexplained_control_flow_and_named_functions() {
+    let diagnostics = check_standard_rules_source(
+        r#"if ready then
+end
+
+while ready do
+end
+
+for index = 1, 2 do
+end
+
+local function missingImplementation()
+end
+
+if ready then
+  -- deliberately reserved branch
+end
+
+local function documentedStub()
+  -- implemented by the host
+end
+
+local function noop()
+end
+
+function love.load()
+end
+
+local callback = function()
+end
+print(callback)
+"#,
+    );
+    let messages = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_EMPTY_BLOCK))
+        .map(|diagnostic| diagnostic.message.as_str())
+        .collect::<Vec<_>>();
+
+    assert_eq!(messages.len(), 4, "{diagnostics:#?}");
+    assert!(messages
+        .iter()
+        .any(|message| message.starts_with("if branch")));
+    assert!(messages
+        .iter()
+        .any(|message| message.starts_with("while loop")));
+    assert!(messages
+        .iter()
+        .any(|message| message.starts_with("for loop")));
+    assert!(messages
+        .iter()
+        .any(|message| message.contains("missingImplementation")));
+}
+
+#[test]
+fn first_iteration_rule_requires_unconditional_termination() {
+    let diagnostics = check_standard_rules_source(
+        r#"local function run(ready: boolean)
+  while ready do
+    break
+  end
+
+  repeat
+    if ready then
+      return
+    else
+      break
+    end
+  until false
+
+  for index = 1, 10 do
+    if ready then
+      break
+    end
+    print(index)
+  end
+end
+run(true)
+"#,
+    );
+
+    assert_eq!(
+        count_code(&diagnostics, DiagnosticCode::LINT_SINGLE_ITERATION_LOOP),
+        2,
+        "{diagnostics:#?}"
+    );
+}
+
+#[test]
 fn unscoped_global_write_reports_only_new_module_globals_in_tua() {
     let diagnostics = check_tua_source_with_diagnostics_config(
         "src/main.tua",

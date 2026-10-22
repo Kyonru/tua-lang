@@ -25,6 +25,22 @@ pub(super) fn lint<'a>(
     scope: &ScopeMap,
     environment: &'a TypeEnvironment,
 ) -> Vec<Diagnostic> {
+    let generated_class_function_names = parsed
+        .class_declarations
+        .iter()
+        .flat_map(|class| {
+            class
+                .init
+                .iter()
+                .map(|_| format!("{}_init", class.name))
+                .chain(
+                    class
+                        .methods
+                        .iter()
+                        .map(|method| format!("{}_{}", class.name, method.name)),
+                )
+        })
+        .collect();
     let terminating_builtin_references = scope
         .references()
         .iter()
@@ -58,6 +74,7 @@ pub(super) fn lint<'a>(
         multiline_table_depth: 0,
         newfield_call_boundaries: BTreeSet::new(),
         function_names: Vec::new(),
+        generated_class_function_names,
         terminating_builtin_references,
         lua_builtin_references,
     };
@@ -74,6 +91,7 @@ struct LintRuleVisitor<'a> {
     multiline_table_depth: usize,
     newfield_call_boundaries: BTreeSet<(usize, usize)>,
     function_names: Vec<Option<String>>,
+    generated_class_function_names: BTreeSet<String>,
     terminating_builtin_references: BTreeSet<(usize, usize)>,
     lua_builtin_references: BTreeSet<(usize, usize)>,
 }
@@ -119,6 +137,46 @@ impl Visitor for LintRuleVisitor<'_> {
         self.check_statement_layout(block);
         self.check_unreachable_code(block);
         self.check_duplicate_functions(block);
+    }
+
+    fn visit_if(&mut self, statement: &ast::If) {
+        if statement.else_if().is_none()
+            && statement.else_block().is_some_and(|else_block| {
+                blocks_have_identical_tokens(statement.block(), else_block)
+            })
+        {
+            self.push(
+                node_position(statement),
+                DiagnosticCode::LINT_IDENTICAL_BRANCHES,
+                "`then` and `else` branches contain identical code",
+            );
+        }
+
+        if block_is_empty(statement.block()) {
+            self.push_empty_block(statement, "if branch");
+        }
+        if let Some(else_ifs) = statement.else_if() {
+            for else_if in else_ifs {
+                if block_is_empty(else_if.block()) {
+                    self.push_empty_block(else_if, "elseif branch");
+                }
+            }
+        }
+        if statement.else_block().is_some_and(block_is_empty) {
+            self.push_empty_block(statement, "else branch");
+        }
+    }
+
+    fn visit_while(&mut self, statement: &ast::While) {
+        self.check_loop_block(statement, statement.block(), "while loop");
+    }
+
+    fn visit_repeat(&mut self, statement: &ast::Repeat) {
+        self.check_loop_block(statement, statement.block(), "repeat loop");
+    }
+
+    fn visit_generic_for(&mut self, statement: &ast::GenericFor) {
+        self.check_loop_block(statement, statement.block(), "for loop");
     }
 
     fn visit_stmt(&mut self, statement: &Stmt) {
@@ -207,6 +265,8 @@ impl Visitor for LintRuleVisitor<'_> {
     }
 
     fn visit_numeric_for(&mut self, numeric_for: &ast::NumericFor) {
+        self.check_loop_block(numeric_for, numeric_for.block(), "for loop");
+
         if numeric_for.step().is_some() {
             return;
         }
@@ -249,6 +309,20 @@ impl Visitor for LintRuleVisitor<'_> {
     }
 
     fn visit_function_body(&mut self, body: &ast::FunctionBody) {
+        if let Some(name) = self.function_names.last().and_then(Option::as_deref) {
+            if block_is_empty(body.block())
+                && !node_has_comment(body)
+                && !deliberate_empty_function_name(name)
+                && !self.generated_class_function_names.contains(name)
+            {
+                self.push(
+                    node_position(body),
+                    DiagnosticCode::LINT_EMPTY_BLOCK,
+                    format!("function `{name}` has an empty body; add a comment if this is a deliberate stub"),
+                );
+            }
+        }
+
         let Some(value_return) = first_valued_return(body.block()) else {
             return;
         };
@@ -321,6 +395,21 @@ impl Visitor for LintRuleVisitor<'_> {
 
         match expression {
             Expression::BinaryOperator { lhs, binop, rhs } => {
+                if matches!(binop, ast::BinOp::TwoEqual(_) | ast::BinOp::TildeEqual(_))
+                    && reference_identity_literal(lhs)
+                    && reference_identity_literal(rhs)
+                {
+                    let equal = matches!(binop, ast::BinOp::TwoEqual(_));
+                    self.push_node(
+                        expression,
+                        DiagnosticCode::LINT_CONSTANT_IDENTITY,
+                        format!(
+                            "separately created tables or functions have distinct identity, so this comparison is always {}",
+                            if equal { "false" } else { "true" }
+                        ),
+                    );
+                }
+
                 let misleading_alternative = if matches!(binop, ast::BinOp::Or(_)) {
                     match unparenthesized_expression(lhs) {
                         Expression::BinaryOperator {
@@ -382,6 +471,33 @@ impl Visitor for LintRuleVisitor<'_> {
 }
 
 impl LintRuleVisitor<'_> {
+    fn push_empty_block(&mut self, origin: &impl Node, label: &str) {
+        if node_has_comment(origin) {
+            return;
+        }
+
+        self.push(
+            node_position(origin),
+            DiagnosticCode::LINT_EMPTY_BLOCK,
+            format!("{label} is empty; add a comment if it is intentionally blank"),
+        );
+    }
+
+    fn check_loop_block(&mut self, origin: &impl Node, block: &ast::Block, label: &str) {
+        if block_is_empty(block) {
+            self.push_empty_block(origin, label);
+            return;
+        }
+
+        if block_termination(block, &self.terminating_builtin_references).is_some() {
+            self.push(
+                node_position(origin),
+                DiagnosticCode::LINT_SINGLE_ITERATION_LOOP,
+                format!("{label} always stops during its first iteration"),
+            );
+        }
+    }
+
     fn check_statement_layout(&mut self, block: &ast::Block) {
         let statements = block.stmts_with_semicolon().collect::<Vec<_>>();
 
@@ -1084,6 +1200,49 @@ fn unparenthesized_expression(expression: &Expression) -> &Expression {
         Expression::TypeAssertion { expression, .. } => unparenthesized_expression(expression),
         _ => expression,
     }
+}
+
+fn reference_identity_literal(expression: &Expression) -> bool {
+    match expression {
+        Expression::Parentheses { expression, .. }
+        | Expression::TypeAssertion { expression, .. } => reference_identity_literal(expression),
+        Expression::Function(_) | Expression::TableConstructor(_) => true,
+        _ => false,
+    }
+}
+
+fn block_is_empty(block: &ast::Block) -> bool {
+    block.stmts().next().is_none() && block.last_stmt().is_none()
+}
+
+fn blocks_have_identical_tokens(left: &ast::Block, right: &ast::Block) -> bool {
+    if block_is_empty(left) || block_is_empty(right) {
+        return false;
+    }
+
+    left.tokens()
+        .map(|token| token.token().to_string())
+        .eq(right.tokens().map(|token| token.token().to_string()))
+}
+
+fn node_has_comment(node: &impl Node) -> bool {
+    let is_comment = |token: &full_moon::tokenizer::Token| {
+        matches!(
+            token.token_type(),
+            TokenType::SingleLineComment { .. } | TokenType::MultiLineComment { .. }
+        )
+    };
+
+    node.tokens().any(|token| {
+        token.leading_trivia().any(is_comment) || token.trailing_trivia().any(is_comment)
+    })
+}
+
+fn deliberate_empty_function_name(name: &str) -> bool {
+    let leaf = name.rsplit(['.', ':']).next().unwrap_or(name);
+    name.starts_with("love.")
+        || leaf.starts_with('_')
+        || matches!(leaf.to_ascii_lowercase().as_str(), "noop" | "no_op")
 }
 
 fn false_or_nil_literal(expression: &Expression) -> Option<&'static str> {

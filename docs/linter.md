@@ -104,6 +104,27 @@ variant, where a missing comma can silently turn adjacent-looking fields into
 one call. The editor offers `;` or `,` separator fixes when they are safe to
 place; both diagnostics always offer the standard exact-code suppression.
 
+`ConstantIdentity` reports equality and inequality comparisons between two
+fresh table or function literals. Lua compares those values by reference, so
+separately created values cannot have the same identity. Comparisons through
+variables remain permissive because the values may share a reference.
+
+`IdenticalBranches` reports a direct `if`/`else` whose non-empty branches have
+the same runtime tokens. Comments and presentation whitespace do not hide the
+duplicate behavior. Chains containing `elseif` remain permissive until the
+linter can compare their complete control flow without misleading advice.
+
+`EmptyBlock` reports empty `if`, `elseif`, `else`, and loop bodies, plus empty
+named functions. A comment anywhere in the construct records that the empty
+body is deliberate. Anonymous callbacks, LOVE callbacks, underscore-prefixed
+functions, class methods, and functions named `noop` or `no_op` are also
+treated as deliberate stubs.
+
+`SingleIterationLoop` reports a non-empty loop whose body unconditionally
+returns, breaks, or calls a resolved terminating builtin during its first
+iteration. Conditional exits and loops with a reachable continuing path remain
+valid.
+
 `BuiltinGlobalWrite` reports direct assignments, compound assignments, and
 simple global function declarations that overwrite protected Lua 5.1/LuaJIT,
 LOVE, or Tua helper globals. It resolves lexical bindings first, so assigning a
