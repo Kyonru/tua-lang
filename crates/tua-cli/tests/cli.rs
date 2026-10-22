@@ -3813,7 +3813,7 @@ fn lint_strict_keeps_direct_call_only_function_guidance_opt_in() {
     fs::create_dir_all(temp.path().join("src")).expect("failed to create source");
     fs::write(
         temp.path().join("src/main.tua"),
-        "local function callback()\nend\nprint(callback)\n",
+        "local function callback()\n  return true\nend\nprint(callback)\n",
     )
     .expect("failed to write source");
 
