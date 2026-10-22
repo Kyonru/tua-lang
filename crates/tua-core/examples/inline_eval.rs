@@ -307,6 +307,20 @@ fn run() -> Result<ExitCode, String> {
         arguments.options.phase2_tuning = pinned;
         eprintln!("inline_eval: evaluating the pinned Phase 2 tuning policy");
     }
+    if arguments.options.phase3_ngram {
+        let pinned = thresholds
+            .as_ref()
+            .and_then(|thresholds| thresholds.phase3.as_ref())
+            .ok_or_else(|| "--phase3-ngram needs --thresholds with a [phase3] table".to_owned())?
+            .config()?;
+        if pinned != eval::backends::Phase3TuningConfig::pinned() {
+            return Err(
+                "the thresholds [phase3] table does not match the pinned tuning policy".to_owned(),
+            );
+        }
+        arguments.options.phase3_tuning = pinned;
+        eprintln!("inline_eval: evaluating the pinned Phase 3 tuning policy");
+    }
 
     let (sets, duplicates) = dataset::load_sets(selected)?;
     if let Some(path) = &arguments.menu_replay {
@@ -376,6 +390,25 @@ fn run() -> Result<ExitCode, String> {
                 );
             }
         }
+        if arguments.options.phase3_ngram {
+            for gate in eval::check_phase3_gates(&report, thresholds) {
+                let verdict = if gate.passed { "pass" } else { "FAIL" };
+                failed |= !gate.passed;
+                let scope = [gate.set.as_str(), gate.language.as_str()]
+                    .into_iter()
+                    .filter(|part| !part.is_empty())
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                if gate.check.contains(' ') {
+                    eprintln!("phase3 gate {verdict}: {scope}: {}", gate.check);
+                } else {
+                    eprintln!(
+                        "phase3 gate {verdict}: {scope} {} = {:.3} (limit {:.3})",
+                        gate.check, gate.actual, gate.limit
+                    );
+                }
+            }
+        }
     }
 
     if let Some(path) = &arguments.phase_gate {
@@ -393,8 +426,12 @@ fn ensure_phase2_sets_are_tuning_only(
     enabled: bool,
     roles: impl IntoIterator<Item = SetRole>,
 ) -> Result<(), String> {
-    if enabled && roles.into_iter().any(SetRole::is_gate) {
-        Err("--phase2-retrieval is tuning-only and refuses held-out or external sets".to_owned())
+    if enabled
+        && roles
+            .into_iter()
+            .any(|role| !matches!(role, SetRole::Tune | SetRole::Smoke))
+    {
+        Err("--phase2-retrieval accepts only manifest tune or smoke sets".to_owned())
     } else {
         Ok(())
     }
@@ -404,8 +441,12 @@ fn ensure_phase3_sets_are_tuning_only(
     enabled: bool,
     roles: impl IntoIterator<Item = SetRole>,
 ) -> Result<(), String> {
-    if enabled && roles.into_iter().any(SetRole::is_gate) {
-        Err("--phase3-ngram is tuning/smoke-only and refuses held-out or external sets".to_owned())
+    if enabled
+        && roles
+            .into_iter()
+            .any(|role| !matches!(role, SetRole::Tune | SetRole::Smoke))
+    {
+        Err("--phase3-ngram accepts only manifest tune or smoke sets".to_owned())
     } else {
         Ok(())
     }
@@ -434,6 +475,12 @@ fn require_correct_backends(
                     totals.overall.correct_prefix, totals.overall.suggested
                 ));
             }
+            if totals.overall.exact != totals.overall.suggested {
+                return Err(format!(
+                    "backend `{name}` produced only {}/{} exact suggestions for set `{set}`",
+                    totals.overall.exact, totals.overall.suggested
+                ));
+            }
         }
     }
     Ok(())
@@ -447,6 +494,8 @@ mod tests {
     fn phase2_retrieval_refuses_gate_roles_even_with_thresholds() {
         assert!(ensure_phase2_sets_are_tuning_only(true, [SetRole::Tune]).is_ok());
         assert!(ensure_phase2_sets_are_tuning_only(false, [SetRole::Holdout]).is_ok());
+        assert!(ensure_phase2_sets_are_tuning_only(true, [SetRole::Smoke]).is_ok());
+        assert!(ensure_phase2_sets_are_tuning_only(true, [SetRole::Adhoc]).is_err());
         assert!(ensure_phase2_sets_are_tuning_only(true, [SetRole::Holdout]).is_err());
         assert!(ensure_phase2_sets_are_tuning_only(true, [SetRole::External]).is_err());
     }
@@ -456,6 +505,7 @@ mod tests {
         assert!(ensure_phase3_sets_are_tuning_only(true, [SetRole::Tune]).is_ok());
         assert!(ensure_phase3_sets_are_tuning_only(true, [SetRole::Smoke]).is_ok());
         assert!(ensure_phase3_sets_are_tuning_only(false, [SetRole::Holdout]).is_ok());
+        assert!(ensure_phase3_sets_are_tuning_only(true, [SetRole::Adhoc]).is_err());
         assert!(ensure_phase3_sets_are_tuning_only(true, [SetRole::Holdout]).is_err());
         assert!(ensure_phase3_sets_are_tuning_only(true, [SetRole::External]).is_err());
     }
@@ -492,6 +542,16 @@ mod tests {
             .unwrap()
             .overall
             .correct_prefix = 1;
+        assert!(require_correct_backends(&results, &required)
+            .unwrap_err()
+            .contains("produced only 0/1 exact suggestions"));
+        results
+            .get_mut("phase3-smoke")
+            .unwrap()
+            .get_mut("phase3-ngram")
+            .unwrap()
+            .overall
+            .exact = 1;
         assert!(require_correct_backends(&results, &required).is_ok());
         assert!(require_correct_backends(&results, &["missing".to_owned()])
             .unwrap_err()

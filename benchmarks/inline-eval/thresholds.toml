@@ -5,7 +5,7 @@
 # PROVISIONAL, UNSPENT CANDIDATE: the held-out and external sets have not been
 # run. After sampling the configured whitespace context and excluding blank
 # snippet literals, the exact production backend on the tuning set reaches
-# 0.777 Lua / 0.621 Tua correct-prefix precision and 0.173 / 0.078 characters saved
+# 0.771 Lua / 0.695 Tua correct-prefix precision and 0.304 / 0.093 characters saved
 # per eligible position. Tua is therefore still below the 0.10 quality floor;
 # these limits are not a claim that Phase 1 passes. Commit/freeze the final
 # candidate before running either quality gate, then do not change it after
@@ -40,6 +40,24 @@ contexts = ["comma", "operator", "other"]
 min_prefix_chars = 6
 min_support = 2
 min_full_prefix_support = 2
+
+# Frozen candidate for a future Phase 3 comparison. The evaluator still
+# refuses held-out and external Phase 3 runs; this table makes the policy and
+# its paired Phase 2-versus-combined decision reviewable before data is spent.
+[phase3]
+enabled_languages = ["tua"]
+contexts = ["assignment", "other"]
+min_score = 0.85
+
+[phase3.sets.holdout.languages.tua]
+min_independent_suggestions = 100
+min_incremental_correct_prefix_precision = 0.80
+max_incremental_wrong_to_saved_ratio = 0.50
+min_incremental_chars_saved_per_eligible = 0.01
+min_combined_chars_saved_delta_per_eligible = 0.01
+max_combined_wrong_to_saved_ratio_delta = 0.0
+max_combined_correct_prefix_precision_drop = 0.02
+max_combined_backend_latency_p95_ms = 10.0
 
 [sets.holdout.languages.tua]
 # Enough suggestions for a meaningful verdict: at about 100, a measured

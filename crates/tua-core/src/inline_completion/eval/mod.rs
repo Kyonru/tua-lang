@@ -28,8 +28,8 @@ use serde::{Deserialize, Serialize};
 use self::backends::{
     Backend, BundledExactRetrieval, Candidate, CurrentFileCommonPrefix, CurrentFileRecall, Noop,
     Phase1, Phase1Config, Phase2Tuning, Phase2TuningConfig, Phase3Ngram, Phase3NgramFallback,
-    Phase3TuningConfig, ProductionPhase1, ProductionRequest, ProjectExactRetrieval, RecallOptions,
-    RecallVariant, Request, Semantic,
+    Phase3NgramIncremental, Phase3TuningConfig, ProductionPhase1, ProductionRequest,
+    ProjectExactRetrieval, RecallOptions, RecallVariant, Request, Semantic,
 };
 use self::dataset::{DuplicateReport, EvalFile, EvalProject, EvalSet, SetRole};
 use self::metrics::{
@@ -215,6 +215,9 @@ pub struct BackendReport {
     pub by_tier: Breakdown,
     /// Project corpus availability: cold, partial, complete, or not-applicable.
     pub by_index_state: Breakdown,
+    /// Unique original cursor positions that produced a suggestion, grouped
+    /// by language. Cut, edit, auto-close, and menu variants count once.
+    pub independent_suggestions_by_language: BTreeMap<String, usize>,
     /// Requests at the end of a line, where the right answer is no
     /// suggestion. Every suggestion here is wrong.
     pub abstain: Summary,
@@ -413,12 +416,18 @@ pub fn evaluate(
     options: &EvalOptions,
 ) -> EvalReport {
     assert!(
-        !options.phase2_retrieval || sets.iter().all(|set| !set.role.is_gate()),
-        "Phase 2 retrieval is tuning-only and must not inspect held-out or external sets"
+        !options.phase2_retrieval
+            || sets
+                .iter()
+                .all(|set| matches!(set.role, SetRole::Tune | SetRole::Smoke)),
+        "Phase 2 retrieval accepts only manifest tune or smoke sets"
     );
     assert!(
-        !options.phase3_ngram || sets.iter().all(|set| !set.role.is_gate()),
-        "Phase 3 n-grams are tuning-only and must not inspect held-out or external sets"
+        !options.phase3_ngram
+            || sets
+                .iter()
+                .all(|set| matches!(set.role, SetRole::Tune | SetRole::Smoke)),
+        "Phase 3 n-grams accept only manifest tune or smoke sets"
     );
     let mut backends: Vec<Box<dyn Backend>> = vec![
         Box::new(Noop),
@@ -465,8 +474,12 @@ pub fn evaluate(
         backends.push(Box::new(Phase3Ngram {
             config: Some(options.phase3_tuning.clone()),
         }));
+        backends.push(Box::new(Phase3NgramIncremental {
+            phase2: options.phase2_tuning.clone(),
+            ngram: options.phase3_tuning.clone(),
+        }));
         backends.push(Box::new(Phase3NgramFallback {
-            phase2: Phase2TuningConfig::pinned(),
+            phase2: options.phase2_tuning.clone(),
             ngram: options.phase3_tuning.clone(),
         }));
     }
@@ -498,6 +511,7 @@ struct BackendAccumulator {
     by_index_state: Breakdown,
     abstain: Summary,
     scored: Vec<Scored>,
+    independent_suggestions: BTreeMap<String, BTreeSet<(String, String, usize)>>,
 }
 
 impl BackendAccumulator {
@@ -530,6 +544,14 @@ impl BackendAccumulator {
                 .add(outcome, latency_ns);
         }
         if let (Some(candidate), Some(outcome)) = (candidate, outcome) {
+            self.independent_suggestions
+                .entry(keys.language.to_owned())
+                .or_default()
+                .insert((
+                    keys.project.to_owned(),
+                    keys.file.to_owned(),
+                    keys.original_offset,
+                ));
             self.by_source
                 .entry(candidate.source.to_owned())
                 .or_default()
@@ -577,6 +599,11 @@ impl BackendAccumulator {
                 .map(|(key, summary)| (key, summary.rebase(eligible).finish()))
                 .collect(),
             by_index_state: finish(self.by_index_state),
+            independent_suggestions_by_language: self
+                .independent_suggestions
+                .into_iter()
+                .map(|(language, positions)| (language, positions.len()))
+                .collect(),
             abstain: self.abstain.finish(),
         }
     }
@@ -591,6 +618,8 @@ struct Keys<'a> {
     prefix: &'a str,
     document: &'a str,
     project: &'a str,
+    file: &'a str,
+    original_offset: usize,
 }
 
 #[derive(Default)]
@@ -943,6 +972,8 @@ fn evaluate_file(
                 prefix: position.prefix.label(),
                 document: facts.document_label(),
                 project: &project.name,
+                file: &file_label,
+                original_offset: position.offset,
             };
 
             for (backend, accumulator) in backends.iter().zip(accumulators.iter_mut()) {
@@ -1392,9 +1423,217 @@ pub struct Thresholds {
     /// release gate and is consumed only with `--phase2-retrieval`.
     #[serde(default)]
     pub phase2_tuning: Option<Phase2TuningThresholds>,
+    /// Frozen Phase 3 policy and its paired Phase 2-versus-combined gate.
+    /// The CLI can validate this contract while statistical evaluation of
+    /// held-out data remains categorically disabled.
+    #[serde(default)]
+    pub phase3: Option<Phase3Thresholds>,
     /// Acceptance criteria keyed by manifest set name. Each gate names only
     /// the languages that the corresponding dataset is intended to measure.
     pub sets: BTreeMap<String, GateSetThresholds>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct Phase3Thresholds {
+    pub enabled_languages: Vec<String>,
+    pub contexts: Vec<String>,
+    pub min_score: f64,
+    pub sets: BTreeMap<String, Phase3GateSetThresholds>,
+}
+
+impl Phase3Thresholds {
+    pub fn config(&self) -> Result<Phase3TuningConfig, String> {
+        if self.enabled_languages.is_empty() {
+            return Err("phase3 enabled_languages must not be empty".to_owned());
+        }
+        let enabled_languages = self
+            .enabled_languages
+            .iter()
+            .map(|language| match language.as_str() {
+                "lua" | "tua" => Ok(language.clone()),
+                _ => Err(format!(
+                    "unknown Phase 3 language `{language}`; expected lua or tua"
+                )),
+            })
+            .collect::<Result<BTreeSet<_>, _>>()?;
+        if enabled_languages.len() != self.enabled_languages.len() {
+            return Err("phase3 enabled_languages must not contain duplicates".to_owned());
+        }
+        if self.contexts.is_empty() {
+            return Err("phase3 contexts must not be empty".to_owned());
+        }
+        if !self.min_score.is_finite() || !(0.0..=1.0).contains(&self.min_score) {
+            return Err("phase3 min_score must be finite and between 0 and 1".to_owned());
+        }
+        let contexts = parse_contexts(self.contexts.iter().map(String::as_str))?;
+        if contexts.len() != self.contexts.len() {
+            return Err("phase3 contexts must not contain duplicates".to_owned());
+        }
+        let configured_languages = self
+            .sets
+            .values()
+            .flat_map(|set| set.languages.keys().cloned())
+            .collect::<BTreeSet<_>>();
+        if configured_languages != enabled_languages {
+            return Err(format!(
+                "phase3 enabled_languages {:?} must exactly match gate languages {:?}",
+                enabled_languages, configured_languages
+            ));
+        }
+        for (set, thresholds) in &self.sets {
+            if thresholds.languages.is_empty() {
+                return Err(format!("phase3 gate set `{set}` names no languages"));
+            }
+            for (language, limits) in &thresholds.languages {
+                limits.validate(set, language)?;
+            }
+        }
+        Ok(Phase3TuningConfig {
+            enabled_languages,
+            contexts,
+            min_score: self.min_score,
+        })
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct Phase3GateSetThresholds {
+    pub languages: BTreeMap<String, Phase3LanguageThresholds>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct Phase3LanguageThresholds {
+    pub min_independent_suggestions: Option<usize>,
+    pub min_incremental_correct_prefix_precision: Option<f64>,
+    pub max_incremental_wrong_to_saved_ratio: Option<f64>,
+    pub min_incremental_chars_saved_per_eligible: Option<f64>,
+    pub min_combined_chars_saved_delta_per_eligible: Option<f64>,
+    pub max_combined_wrong_to_saved_ratio_delta: Option<f64>,
+    pub max_combined_correct_prefix_precision_drop: Option<f64>,
+    pub max_combined_backend_latency_p95_ms: Option<f64>,
+}
+
+impl Phase3LanguageThresholds {
+    fn validate(&self, set: &str, language: &str) -> Result<(), String> {
+        let missing = [
+            (
+                "min_independent_suggestions",
+                self.min_independent_suggestions.is_none(),
+            ),
+            (
+                "min_incremental_correct_prefix_precision",
+                self.min_incremental_correct_prefix_precision.is_none(),
+            ),
+            (
+                "max_incremental_wrong_to_saved_ratio",
+                self.max_incremental_wrong_to_saved_ratio.is_none(),
+            ),
+            (
+                "min_incremental_chars_saved_per_eligible",
+                self.min_incremental_chars_saved_per_eligible.is_none(),
+            ),
+            (
+                "min_combined_chars_saved_delta_per_eligible",
+                self.min_combined_chars_saved_delta_per_eligible.is_none(),
+            ),
+            (
+                "max_combined_wrong_to_saved_ratio_delta",
+                self.max_combined_wrong_to_saved_ratio_delta.is_none(),
+            ),
+            (
+                "max_combined_correct_prefix_precision_drop",
+                self.max_combined_correct_prefix_precision_drop.is_none(),
+            ),
+            (
+                "max_combined_backend_latency_p95_ms",
+                self.max_combined_backend_latency_p95_ms.is_none(),
+            ),
+        ]
+        .into_iter()
+        .filter_map(|(name, missing)| missing.then_some(name))
+        .collect::<Vec<_>>();
+        if !missing.is_empty() {
+            return Err(format!(
+                "phase3 gate `{set}` language `{language}` is missing limits: {}",
+                missing.join(", ")
+            ));
+        }
+        if self
+            .min_independent_suggestions
+            .is_some_and(|minimum| minimum == 0)
+        {
+            return Err(format!(
+                "phase3 gate `{set}` language `{language}` min_independent_suggestions must be positive"
+            ));
+        }
+        let bounded = [
+            (
+                "min_incremental_correct_prefix_precision",
+                self.min_incremental_correct_prefix_precision,
+                true,
+            ),
+            (
+                "max_incremental_wrong_to_saved_ratio",
+                self.max_incremental_wrong_to_saved_ratio,
+                false,
+            ),
+            (
+                "min_incremental_chars_saved_per_eligible",
+                self.min_incremental_chars_saved_per_eligible,
+                false,
+            ),
+            (
+                "max_combined_backend_latency_p95_ms",
+                self.max_combined_backend_latency_p95_ms,
+                false,
+            ),
+        ];
+        for (name, value, unit_interval) in bounded {
+            let value = value.expect("missing values returned above");
+            if !value.is_finite() || value < 0.0 {
+                return Err(format!(
+                    "phase3 gate `{set}` language `{language}` {name} must be finite and non-negative"
+                ));
+            }
+            if unit_interval && value > 1.0 {
+                return Err(format!(
+                    "phase3 gate `{set}` language `{language}` {name} must be at most 1"
+                ));
+            }
+        }
+        for (name, value) in [
+            (
+                "min_combined_chars_saved_delta_per_eligible",
+                self.min_combined_chars_saved_delta_per_eligible,
+            ),
+            (
+                "max_combined_wrong_to_saved_ratio_delta",
+                self.max_combined_wrong_to_saved_ratio_delta,
+            ),
+            (
+                "max_combined_correct_prefix_precision_drop",
+                self.max_combined_correct_prefix_precision_drop,
+            ),
+        ] {
+            if !value.expect("missing values returned above").is_finite() {
+                return Err(format!(
+                    "phase3 gate `{set}` language `{language}` {name} must be finite"
+                ));
+            }
+        }
+        let precision_drop = self
+            .max_combined_correct_prefix_precision_drop
+            .expect("missing values returned above");
+        if !(-1.0..=1.0).contains(&precision_drop) {
+            return Err(format!(
+                "phase3 gate `{set}` language `{language}` max_combined_correct_prefix_precision_drop must be between -1 and 1"
+            ));
+        }
+        Ok(())
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -1686,6 +1925,223 @@ pub fn check_gates(report: &EvalReport, thresholds: &Thresholds) -> Vec<GateResu
         }
     }
     results.extend(checks);
+    results
+}
+
+pub const PHASE3_BASELINE_BACKEND: &str = "phase2-tuning-phase1-plus-project-common-prefix";
+pub const PHASE3_INCREMENTAL_BACKEND: &str = "phase3-ngram-incremental";
+pub const PHASE3_COMBINED_BACKEND: &str = "phase3-phase2-plus-ngram-fallback";
+
+/// Checks the frozen Phase 3 policy against paired Phase 2 and combined
+/// reports. The CLI still refuses to produce such a report from held-out or
+/// external data; this checker exists so the contract can be reviewed and
+/// unit-tested before either frozen dataset is spent.
+pub fn check_phase3_gates(report: &EvalReport, thresholds: &Thresholds) -> Vec<GateResult> {
+    let failure = |set: &str, language: &str, check: &'static str| GateResult {
+        set: set.to_owned(),
+        language: language.to_owned(),
+        check,
+        actual: 0.0,
+        limit: 0.0,
+        passed: false,
+    };
+    let mut results = Vec::new();
+    let Some(phase3) = thresholds.phase3.as_ref() else {
+        results.push(failure("", "", "phase3 thresholds are missing"));
+        return results;
+    };
+    let config = match phase3.config() {
+        Ok(config) => config,
+        Err(_) => {
+            results.push(failure("", "", "phase3 thresholds are invalid"));
+            return results;
+        }
+    };
+    let gate_sets = report
+        .sets
+        .iter()
+        .filter(|set| set.role.is_some_and(SetRole::is_gate))
+        .collect::<Vec<_>>();
+    if gate_sets.is_empty() {
+        results.push(failure("", "", "no gate set was evaluated"));
+        return results;
+    }
+    let evaluated_names = gate_sets
+        .iter()
+        .map(|set| set.name.as_str())
+        .collect::<BTreeSet<_>>();
+    for required in phase3.sets.keys() {
+        if !evaluated_names.contains(required.as_str()) {
+            results.push(failure(
+                required,
+                "",
+                "the configured Phase 3 gate set was not evaluated",
+            ));
+        }
+    }
+
+    for set in gate_sets {
+        let Some(set_thresholds) = phase3.sets.get(&set.name) else {
+            let has_enabled_eligible = config.enabled_languages.iter().any(|language| {
+                set.backends.values().any(|backend| {
+                    backend
+                        .by_language
+                        .get(language)
+                        .is_some_and(|summary| summary.eligible > 0)
+                })
+            });
+            if has_enabled_eligible {
+                results.push(failure(
+                    &set.name,
+                    "",
+                    "the gate set has eligible Phase 3 languages but no thresholds",
+                ));
+            }
+            continue;
+        };
+        let Some(baseline) = set.backends.get(PHASE3_BASELINE_BACKEND) else {
+            results.push(failure(
+                &set.name,
+                "",
+                "the Phase 2 baseline backend was not evaluated",
+            ));
+            continue;
+        };
+        let Some(incremental) = set.backends.get(PHASE3_INCREMENTAL_BACKEND) else {
+            results.push(failure(
+                &set.name,
+                "",
+                "the incremental Phase 3 backend was not evaluated",
+            ));
+            continue;
+        };
+        let Some(combined) = set.backends.get(PHASE3_COMBINED_BACKEND) else {
+            results.push(failure(
+                &set.name,
+                "",
+                "the combined Phase 3 backend was not evaluated",
+            ));
+            continue;
+        };
+
+        for (language, limits) in &set_thresholds.languages {
+            let Some(baseline) = baseline
+                .by_language
+                .get(language)
+                .filter(|summary| summary.eligible > 0)
+            else {
+                results.push(failure(
+                    &set.name,
+                    language,
+                    "the Phase 2 baseline has no eligible requests",
+                ));
+                continue;
+            };
+            let Some(incremental) = incremental
+                .by_language
+                .get(language)
+                .filter(|summary| summary.eligible > 0)
+            else {
+                results.push(failure(
+                    &set.name,
+                    language,
+                    "the incremental Phase 3 backend has no eligible requests",
+                ));
+                continue;
+            };
+            let Some(combined) = combined
+                .by_language
+                .get(language)
+                .filter(|summary| summary.eligible > 0)
+            else {
+                results.push(failure(
+                    &set.name,
+                    language,
+                    "the combined Phase 3 backend has no eligible requests",
+                ));
+                continue;
+            };
+            let independent = set
+                .backends
+                .get(PHASE3_INCREMENTAL_BACKEND)
+                .and_then(|backend| backend.independent_suggestions_by_language.get(language))
+                .copied()
+                .unwrap_or(0) as f64;
+            let checks = [
+                (
+                    "min_independent_suggestions",
+                    independent,
+                    limits.min_independent_suggestions.map(|limit| limit as f64),
+                    true,
+                ),
+                (
+                    "min_incremental_correct_prefix_precision",
+                    incremental.correct_prefix_precision,
+                    limits.min_incremental_correct_prefix_precision,
+                    true,
+                ),
+                (
+                    "max_incremental_wrong_to_saved_ratio",
+                    incremental.wrong_to_saved_ratio,
+                    limits.max_incremental_wrong_to_saved_ratio,
+                    false,
+                ),
+                (
+                    "min_incremental_chars_saved_per_eligible",
+                    incremental.chars_saved_per_eligible,
+                    limits.min_incremental_chars_saved_per_eligible,
+                    true,
+                ),
+                (
+                    "min_combined_chars_saved_delta_per_eligible",
+                    combined.chars_saved_per_eligible - baseline.chars_saved_per_eligible,
+                    limits.min_combined_chars_saved_delta_per_eligible,
+                    true,
+                ),
+                (
+                    "max_combined_wrong_to_saved_ratio_delta",
+                    combined.wrong_to_saved_ratio - baseline.wrong_to_saved_ratio,
+                    limits.max_combined_wrong_to_saved_ratio_delta,
+                    false,
+                ),
+                (
+                    "max_combined_correct_prefix_precision_drop",
+                    baseline.correct_prefix_precision - combined.correct_prefix_precision,
+                    limits.max_combined_correct_prefix_precision_drop,
+                    false,
+                ),
+                (
+                    "max_combined_backend_latency_p95_ms",
+                    combined.backend_latency_us.p95 / 1_000.0,
+                    limits.max_combined_backend_latency_p95_ms,
+                    false,
+                ),
+            ];
+            for (check, actual, limit, minimum) in checks {
+                let Some(limit) = limit else {
+                    results.push(failure(
+                        &set.name,
+                        language,
+                        "the Phase 3 language is missing limits",
+                    ));
+                    break;
+                };
+                results.push(GateResult {
+                    set: set.name.clone(),
+                    language: language.clone(),
+                    check,
+                    actual,
+                    limit,
+                    passed: actual.is_finite()
+                        && if minimum {
+                            actual >= limit
+                        } else {
+                            actual <= limit
+                        },
+                });
+            }
+        }
+    }
     results
 }
 

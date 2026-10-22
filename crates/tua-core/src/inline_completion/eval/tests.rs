@@ -613,6 +613,7 @@ fn thresholds_for(set: &str, backend: &str, languages: &[&str]) -> Thresholds {
         backend: backend.to_owned(),
         phase1: None,
         phase2_tuning: None,
+        phase3: None,
         sets: BTreeMap::from([(
             set.to_owned(),
             GateSetThresholds {
@@ -634,6 +635,233 @@ fn thresholds_for(set: &str, backend: &str, languages: &[&str]) -> Thresholds {
             },
         )]),
     }
+}
+
+fn phase3_language_thresholds() -> Phase3LanguageThresholds {
+    Phase3LanguageThresholds {
+        min_independent_suggestions: Some(1),
+        min_incremental_correct_prefix_precision: Some(0.8),
+        max_incremental_wrong_to_saved_ratio: Some(0.5),
+        min_incremental_chars_saved_per_eligible: Some(0.5),
+        min_combined_chars_saved_delta_per_eligible: Some(0.5),
+        max_combined_wrong_to_saved_ratio_delta: Some(0.0),
+        max_combined_correct_prefix_precision_drop: Some(0.0),
+        max_combined_backend_latency_p95_ms: Some(10.0),
+    }
+}
+
+fn phase3_thresholds() -> Thresholds {
+    let mut thresholds = thresholds_for("holdout", "phase1", &["tua"]);
+    thresholds.phase3 = Some(Phase3Thresholds {
+        enabled_languages: vec!["tua".to_owned()],
+        contexts: vec!["assignment".to_owned(), "other".to_owned()],
+        min_score: 0.85,
+        sets: BTreeMap::from([(
+            "holdout".to_owned(),
+            Phase3GateSetThresholds {
+                languages: BTreeMap::from([("tua".to_owned(), phase3_language_thresholds())]),
+            },
+        )]),
+    });
+    thresholds
+}
+
+fn finished_summary(eligible: usize, suggestions: usize) -> metrics::Summary {
+    let mut summary = metrics::Summary::default();
+    for index in 0..eligible {
+        summary.add(
+            (index < suggestions).then_some(metrics::Outcome {
+                exact: true,
+                template_match: true,
+                correct_prefix: true,
+                first_token: true,
+                first_three_tokens: false,
+                chars_saved: 4,
+                incorrect_chars: 0,
+            }),
+            1_000,
+        );
+    }
+    summary.finish()
+}
+
+#[test]
+fn phase3_policy_is_pinned_and_fails_closed_when_malformed() {
+    let mut thresholds = phase3_thresholds();
+    assert_eq!(
+        thresholds.phase3.as_ref().unwrap().config().unwrap(),
+        Phase3TuningConfig::pinned()
+    );
+    assert!(Phase3TuningConfig::pinned().allows("tua", CursorContext::Other, 0.85));
+    assert!(!Phase3TuningConfig::pinned().allows("lua", CursorContext::Other, 1.0));
+
+    let phase3 = thresholds.phase3.as_mut().unwrap();
+    phase3.enabled_languages.clear();
+    assert!(phase3.config().unwrap_err().contains("must not be empty"));
+    phase3.enabled_languages = vec!["javascript".to_owned()];
+    assert!(phase3
+        .config()
+        .unwrap_err()
+        .contains("unknown Phase 3 language"));
+    phase3.enabled_languages = vec!["tua".to_owned()];
+    phase3.contexts.clear();
+    assert!(phase3
+        .config()
+        .unwrap_err()
+        .contains("contexts must not be empty"));
+    phase3.contexts = vec!["other".to_owned(), "other".to_owned()];
+    assert!(phase3
+        .config()
+        .unwrap_err()
+        .contains("contexts must not contain duplicates"));
+    phase3.contexts = vec!["other".to_owned()];
+    phase3.min_score = f64::NAN;
+    assert!(phase3
+        .config()
+        .unwrap_err()
+        .contains("min_score must be finite"));
+    phase3.min_score = 0.85;
+    phase3.enabled_languages = vec!["tua".to_owned(), "lua".to_owned()];
+    assert!(phase3.config().unwrap_err().contains("must exactly match"));
+    phase3.enabled_languages = vec!["tua".to_owned()];
+    phase3
+        .sets
+        .get_mut("holdout")
+        .unwrap()
+        .languages
+        .get_mut("tua")
+        .unwrap()
+        .min_independent_suggestions = Some(0);
+    assert!(phase3.config().unwrap_err().contains("must be positive"));
+    phase3
+        .sets
+        .get_mut("holdout")
+        .unwrap()
+        .languages
+        .get_mut("tua")
+        .unwrap()
+        .min_independent_suggestions = None;
+    assert!(phase3.config().unwrap_err().contains("missing limits"));
+}
+
+#[test]
+fn phase3_gate_pairs_incremental_quality_with_combined_regressions() {
+    let language = |summary| BTreeMap::from([("tua".to_owned(), summary)]);
+    let mut incremental = BackendReport {
+        by_language: language(finished_summary(4, 1)),
+        ..BackendReport::default()
+    };
+    incremental
+        .independent_suggestions_by_language
+        .insert("tua".to_owned(), 1);
+    let report = EvalReport {
+        sets: vec![SetReport {
+            name: "holdout".to_owned(),
+            role: Some(SetRole::Holdout),
+            backends: BTreeMap::from([
+                (
+                    PHASE3_BASELINE_BACKEND.to_owned(),
+                    BackendReport {
+                        by_language: language(finished_summary(4, 2)),
+                        ..BackendReport::default()
+                    },
+                ),
+                (PHASE3_INCREMENTAL_BACKEND.to_owned(), incremental),
+                (
+                    PHASE3_COMBINED_BACKEND.to_owned(),
+                    BackendReport {
+                        by_language: language(finished_summary(4, 3)),
+                        ..BackendReport::default()
+                    },
+                ),
+            ]),
+            ..SetReport::default()
+        }],
+        ..EvalReport::default()
+    };
+    let checks = check_phase3_gates(&report, &phase3_thresholds());
+    assert_eq!(checks.len(), 8);
+    assert!(checks.iter().all(|check| check.passed));
+
+    let wrong_set = EvalReport {
+        sets: vec![SetReport {
+            name: "external".to_owned(),
+            role: Some(SetRole::External),
+            backends: BTreeMap::from([(
+                PHASE3_BASELINE_BACKEND.to_owned(),
+                BackendReport {
+                    by_language: language(finished_summary(4, 2)),
+                    ..BackendReport::default()
+                },
+            )]),
+            ..SetReport::default()
+        }],
+        ..EvalReport::default()
+    };
+    let wrong_set_failures = check_phase3_gates(&wrong_set, &phase3_thresholds());
+    assert!(wrong_set_failures
+        .iter()
+        .any(|result| result.check == "the configured Phase 3 gate set was not evaluated"));
+    assert!(wrong_set_failures.iter().any(|result| {
+        result.check == "the gate set has eligible Phase 3 languages but no thresholds"
+    }));
+
+    let mut missing = report.clone();
+    missing.sets[0].backends.remove(PHASE3_INCREMENTAL_BACKEND);
+    assert_eq!(
+        check_phase3_gates(&missing, &phase3_thresholds())[0].check,
+        "the incremental Phase 3 backend was not evaluated"
+    );
+
+    let mut nonfinite = report;
+    nonfinite.sets[0]
+        .backends
+        .get_mut(PHASE3_COMBINED_BACKEND)
+        .unwrap()
+        .by_language
+        .get_mut("tua")
+        .unwrap()
+        .chars_saved_per_eligible = f64::NAN;
+    assert!(
+        check_phase3_gates(&nonfinite, &phase3_thresholds())
+            .iter()
+            .any(|check| !check.passed
+                && check.check == "min_combined_chars_saved_delta_per_eligible")
+    );
+}
+
+#[test]
+fn independent_suggestions_collapse_scenarios_at_one_cursor() {
+    let mut accumulator = BackendAccumulator::default();
+    let mut keys = Keys {
+        abstain: false,
+        language: "tua",
+        scenario: "cut",
+        menu: "closed",
+        context: "other",
+        prefix: "token-end",
+        document: "parses",
+        project: "project",
+        file: "main.tua",
+        original_offset: 10,
+    };
+    let candidate = Candidate {
+        text: " value".to_owned(),
+        is_snippet: false,
+        source: "project-ngram",
+        score: 0.9,
+        tier: Some("project"),
+    };
+    let outcome = score(" value", false, " value");
+    accumulator.add(&keys, Some(&candidate), Some(outcome), 1, "complete");
+    keys.scenario = "edit";
+    accumulator.add(&keys, Some(&candidate), Some(outcome), 1, "complete");
+    keys.original_offset = 20;
+    accumulator.add(&keys, Some(&candidate), Some(outcome), 1, "complete");
+    assert_eq!(
+        accumulator.finish().independent_suggestions_by_language["tua"],
+        2
+    );
 }
 
 #[test]
@@ -789,6 +1017,8 @@ fn per_source_rates_divide_by_every_eligible_request() {
         prefix: "token-end",
         document: "parses",
         project: "p",
+        file: "main.tua",
+        original_offset: 1,
     };
     let candidate = Candidate {
         text: "x".to_owned(),
@@ -891,7 +1121,7 @@ fn phase2_retrieval_reports_holdouts_states_tiers_and_index_costs() {
 }
 
 #[test]
-#[should_panic(expected = "Phase 2 retrieval is tuning-only")]
+#[should_panic(expected = "Phase 2 retrieval accepts only manifest tune or smoke sets")]
 fn phase2_retrieval_cannot_evaluate_gate_sets_through_the_core_api() {
     evaluate(
         &[EvalSet {
@@ -908,12 +1138,46 @@ fn phase2_retrieval_cannot_evaluate_gate_sets_through_the_core_api() {
 }
 
 #[test]
-#[should_panic(expected = "Phase 3 n-grams are tuning-only")]
+#[should_panic(expected = "Phase 2 retrieval accepts only manifest tune or smoke sets")]
+fn experimental_retrieval_cannot_evaluate_ad_hoc_paths_through_the_core_api() {
+    evaluate(
+        &[EvalSet {
+            name: "adhoc".to_owned(),
+            role: SetRole::Adhoc,
+            projects: vec![],
+        }],
+        DuplicateReport::default(),
+        &EvalOptions {
+            phase2_retrieval: true,
+            ..EvalOptions::default()
+        },
+    );
+}
+
+#[test]
+#[should_panic(expected = "Phase 3 n-grams accept only manifest tune or smoke sets")]
 fn phase3_ngram_cannot_evaluate_gate_sets_through_the_core_api() {
     evaluate(
         &[EvalSet {
             name: "external".to_owned(),
             role: SetRole::External,
+            projects: vec![],
+        }],
+        DuplicateReport::default(),
+        &EvalOptions {
+            phase3_ngram: true,
+            ..EvalOptions::default()
+        },
+    );
+}
+
+#[test]
+#[should_panic(expected = "Phase 3 n-grams accept only manifest tune or smoke sets")]
+fn phase3_ngram_cannot_evaluate_ad_hoc_paths_through_the_core_api() {
+    evaluate(
+        &[EvalSet {
+            name: "adhoc".to_owned(),
+            role: SetRole::Adhoc,
             projects: vec![],
         }],
         DuplicateReport::default(),
@@ -967,6 +1231,7 @@ fn phase3_reports_model_costs_and_both_experimental_backends() {
     assert_eq!(set.ngram_indexes.len(), 1);
     assert!(set.ngram_indexes[0].1.approximate_bytes > 0);
     assert!(set.backends.contains_key("phase3-ngram"));
+    assert!(set.backends.contains_key("phase3-ngram-incremental"));
     assert!(set
         .backends
         .contains_key("phase3-phase2-plus-ngram-fallback"));

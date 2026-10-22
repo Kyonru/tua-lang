@@ -312,8 +312,8 @@ The harness must compare:
 
 ## Phase 1: Minimal vertical slice
 
-> **Implementation status (2026-10-21): implemented, experimental, gate
-> pending only on the frozen quality gates.** The core host query, source-only statement snippets,
+> **Implementation status (2026-10-22): implemented, experimental, not ready
+> for the frozen quality gates.** The core host query, source-only statement snippets,
 > tuning-selected common-prefix current-file recall, parse-only validation,
 > custom LSP request, newest-wins scheduling, configuration, unified VS Code
 > provider, and focused tests are present in the working implementation.
@@ -323,7 +323,9 @@ The harness must compare:
 > full common prefix requires two supporting lines. The feature remains off by
 > default. Menu-completion performance, the strict inline server gate,
 > real-scheduler cache behavior, and validation parse distribution pass. The
-> held-out and external quality gates have not been run. The real menu-state
+> held-out and external quality gates have not been run. Corrected tuning data
+> still leaves Tua below the committed usefulness floor, so the candidate must
+> improve and be frozen before either quality dataset is opened. The real menu-state
 > replay and linked client-timeout cancellation checks pass. The same-machine,
 > 100-sample-per-fixture diagnostics
 > comparison against pre-Phase-1 commit `65cb4a6` passes all seven fixtures.
@@ -337,7 +339,8 @@ scheduler-dispatch-to-response server/request, core, end-to-end request-age,
 inline-counter, and diagnostics-freshness measurements. That instrumentation
 makes the remaining performance gates measurable. The strict seven-fixture
 server/worker/backend and client no-stall gates pass; the aggregate Phase 1
-gate remains pending only on the frozen held-out and external quality checks.
+gate remains blocked on tuning usefulness and the still-unrun frozen held-out
+and external quality checks.
 
 Implement only:
 
@@ -825,6 +828,14 @@ tested only on tuning data and rejected. The candidate remains below the
 provisional Tua usefulness floor, so Phase 1 is quality-blocked and no
 held-out or external quality gate has been run.
 
+After correcting project-root loading, one final production-path retune tested
+a four-character minimum while excluding the weak whitespace context. It
+raised Tua correct-prefix precision to 0.745 but saved only 0.094 characters
+per eligible position, still below the 0.10 floor; wrong-to-saved was 0.556.
+The experiment was reverted and the six-character policy remains unchanged.
+Further tuning on the same projects would risk fitting the tuning corpus rather
+than improving user experience.
+
 ### Phase 1 gate
 
 Proceed only if:
@@ -1295,9 +1306,23 @@ post-query filter. Source, context, model-memory, file-count, deadline, and
 cancellation limits all fail closed.
 
 `make inline-eval-phase3` and `make inline-eval-phase3-smoke` are the only
-entry points. The flag hard-refuses held-out and external roles in both the CLI
-and core API. No statistical code is connected to AnalysisHost, the LSP, or the
-extension.
+entry points. The flag accepts only named manifest tuning and smoke sets; it
+hard-refuses held-out, external, and ad-hoc paths in both the CLI and core API.
+No statistical code is connected to AnalysisHost, the LSP, or the extension.
+
+The candidate policy is now explicit in the thresholds file: Tua only,
+assignment and `other` contexts, score at least 0.85. An incremental backend
+reports only n-gram suggestions made after Phase 2 abstains, while the combined
+backend measures their product effect. Reports count independent suggestion
+positions by project, file, and original byte offset, so cut, edit, auto-close,
+menu, and parse-state variants cannot inflate the minimum evidence count. A
+fail-closed Phase 3 checker requires incremental precision, wrong-to-saved,
+utility, and independent-suggestion floors, then compares Phase 2 and the
+combined backend for utility gain, precision and wrong-to-saved regression,
+and latency. The checker and policy parser are unit-tested and wired into the
+CLI's gate branch so a future authorized run cannot silently bypass them, but
+the CLI still categorically refuses to produce a Phase 3 gate report until
+that run is explicitly authorized.
 
 Tune-only results show why the raw model must not ship: it reaches only 0.100
 correct-prefix precision and offers 26.14 wrong characters for each character
@@ -1319,15 +1344,17 @@ set, so project retrieval has no current quality evidence despite its completed
 production-path architecture.
 
 A separate synthetic smoke set now crosses the pinned confidence filter: it
-currently produces two filtered suggestions, both exact correct continuations
-with no incorrect characters. Its Make check and a focused assertion fail if
-the source silently becomes a no-op or if any suggestion stops being a correct
-prefix. Its repeated training pattern is constructed for that plumbing
+currently produces two filtered suggestions at one independent cursor, both
+exact correct continuations with no incorrect characters. Its Make check and
+a focused assertion fail if the source silently becomes a no-op or if any
+suggestion stops being exact. Its repeated training pattern is constructed for that plumbing
 invariant, so it does not corroborate general quality. The small tuning gain
-may be overfit and is not an approval to ship. The Phase 3 configuration must
-be reviewed and frozen before either gate dataset is used; until that happens,
-the production decision remains unchanged and exact retrieval is the last
-implemented source.
+may be overfit and is not an approval to ship. The Phase 3 policy and
+provisional gate limits are now reviewable, but their configured minimum of 100
+independent suggestions intentionally exceeds the tuning set's 11. Neither
+gate dataset may be used until the candidate has broader evidence and an
+explicit authorization; the production decision remains unchanged and exact
+retrieval is the last implemented source.
 
 ---
 

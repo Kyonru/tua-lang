@@ -101,7 +101,8 @@ table pins the exploratory combined candidate.
 
 `--phase3-ngram` implies Phase 2 retrieval and adds an evaluator-only
 order-six Jelinek-Mercer model. Both the CLI and the core evaluator reject this
-flag for held-out and external roles, even when a thresholds file is supplied.
+flag for held-out, external, and ad-hoc paths, even when a thresholds file is
+supplied; only named manifest tuning and smoke sets are accepted.
 The model keeps immutable per-file counts so the target file and near-copy
 siblings are excluded before prediction, caps each input at 256 KiB, each file
 at 100,000 contexts, and each per-target query view at an estimated 16 MiB,
@@ -109,9 +110,11 @@ and fails closed on its 10 ms deadline or cancellation. Evaluator-only storage
 for all held-out views is estimated and reported separately. It
 never predicts an unseen identifier, uncommon number, or string literal.
 `phase3-ngram-raw` exposes the unfiltered experiment;
-`phase3-ngram` is the pinned tune-only candidate (assignment and `other`
-contexts, score at least 0.85), and
-`phase3-phase2-plus-ngram-fallback` asks the Phase 2 candidate first.
+`phase3-ngram` is the pinned tune-only candidate (Tua, assignment and `other`
+contexts, score at least 0.85), `phase3-ngram-incremental` reports only its
+suggestions after Phase 2 abstains, and `phase3-phase2-plus-ngram-fallback`
+reports their combined product behavior. Independent suggestion counts collapse
+all scenarios at the same project, file, and original cursor.
 
 After correcting project-root loading so configured generated output is not
 part of the tuning corpus, the filtered fallback raises saved characters per
@@ -122,15 +125,30 @@ requests, saves 0.013 characters per eligible request, and has 0.913
 correct-prefix precision. The raw predictor is not usable (`0.100`
 correct-prefix precision and `26.14` wrong characters per character saved).
 The dedicated synthetic Phase 3 smoke set currently produces two filtered
-suggestions, both exact correct continuations with no incorrect characters.
+suggestions at one independent cursor, both exact correct continuations with no
+incorrect characters.
 The Make target and a focused core assertion fail if the pinned source silently
-becomes a no-op or if any suggestion stops being a correct prefix. The repeated
+becomes a no-op or if any suggestion stops being exact. The repeated
 training pattern is deliberately constructed to cross the confidence filter,
 so this proves only end-to-end wiring, target-file exclusion, and deterministic
 correctness on that controlled pattern. It is not quality corroboration. The
 tune-only gains may be overfit; they are not release approval. No Phase 3
 held-out or external set has been read, and no n-gram code is compiled into
 production, the LSP, or the extension.
+
+`thresholds.toml` also records the provisional Phase 3 gate contract without
+running it. It requires at least 100 independent Tua suggestions, checks the
+incremental source's precision, wrong-to-saved ratio, and utility, and compares
+the Phase 2 baseline with the combined backend for utility gain, precision and
+wrong-to-saved regressions, and latency. Configuration validation fails closed
+for unknown or uncovered languages, unknown or empty contexts, invalid scores,
+missing limits, missing backends, absent eligible requests, and non-finite
+metrics. The CLI validates and applies this policy on tune/smoke; it continues
+to refuse actual gate-role Phase 3 evaluation pending explicit authorization.
+The paired checker is already wired into the CLI's gate branch, and fails when
+an evaluated gate has eligible Tua requests but no Phase 3 contract, so lifting
+that categorical refusal later cannot accidentally turn the limits into inert
+configuration.
 
 The report keeps `same-directory` and `project` as separate standalone tiers.
 The clearly named `phase2-tuning-phase1-plus-project-common-prefix` backend
@@ -147,6 +165,12 @@ both save `0.149` characters per eligible position, have `0.728`
 correct-prefix precision, and offer `0.395` wrong characters per character
 saved. Phase 2 therefore remains an architectural experiment without tuning
 evidence of utility; no held-out or external result has been read.
+
+The last Phase 1 production-path retune lowered the recall prefix from six to
+four characters and removed whitespace contexts. Tua precision rose to
+`0.745`, but saved characters per eligible position reached only `0.094`
+against the `0.10` floor (`0.556` wrong/saved). The experiment was reverted;
+the committed six-character policy remains provisional and quality-blocked.
 
 `--menu-replay FILE` replaces simulated menu selection with explicitly enabled
 local JSONL captured from the VS Code provider. Start the extension host with both
@@ -195,6 +219,7 @@ with the highest-priority role: holdout, then external, smoke, and tune.
 | `tune` | Tuning | `love-full`, `features`, `project-model`, `love-minimal`, and the bundled runtime `.lua` files |
 | `holdout` | Gate | `love-tua`, `audio-system` (minus generated output), and the frozen fixtures in `holdout/` |
 | `smoke` | CI | `smoke/`, pinned in `smoke/expected.json` |
+| `phase3-smoke` | CI | Synthetic repeated-pattern fixtures that prove the pinned n-gram source remains live and exact |
 | `external` | Gate | Pinned MIT-licensed LÖVE projects from `external.toml` |
 
 Rules that keep the gates honest:

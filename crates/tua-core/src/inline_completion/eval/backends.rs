@@ -42,6 +42,7 @@ pub struct Request<'a> {
 /// by `EvalNgramIndex`, including for edit and auto-close scenarios.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct Phase3TuningConfig {
+    pub enabled_languages: BTreeSet<String>,
     pub contexts: BTreeSet<CursorContext>,
     pub min_score: f64,
 }
@@ -49,9 +50,16 @@ pub struct Phase3TuningConfig {
 impl Phase3TuningConfig {
     pub fn pinned() -> Self {
         Self {
+            enabled_languages: BTreeSet::from(["tua".to_owned()]),
             contexts: BTreeSet::from([CursorContext::Assignment, CursorContext::Other]),
             min_score: 0.85,
         }
+    }
+
+    pub fn allows(&self, language: &str, context: CursorContext, score: f64) -> bool {
+        self.enabled_languages.contains(language)
+            && self.contexts.contains(&context)
+            && score >= self.min_score
     }
 }
 
@@ -75,11 +83,10 @@ impl Backend for Phase3Ngram {
     }
 
     fn suggest(&self, request: &Request<'_>) -> Option<Candidate> {
-        if self
-            .config
-            .as_ref()
-            .is_some_and(|config| !config.contexts.contains(&request.context))
-        {
+        if self.config.as_ref().is_some_and(|config| {
+            !config.enabled_languages.contains(request.language)
+                || !config.contexts.contains(&request.context)
+        }) {
             return None;
         }
         let prediction = request.ngram_index?.predict(
@@ -90,11 +97,9 @@ impl Backend for Phase3Ngram {
             Duration::from_millis(10),
             &AtomicBool::new(false),
         )?;
-        if self
-            .config
-            .as_ref()
-            .is_some_and(|config| prediction.score < config.min_score)
-        {
+        if self.config.as_ref().is_some_and(|config| {
+            !config.allows(request.language, request.context, prediction.score)
+        }) {
             return None;
         }
         Some(Candidate {
@@ -104,6 +109,54 @@ impl Backend for Phase3Ngram {
             score: prediction.score,
             tier: Some("project"),
         })
+    }
+}
+
+/// Only the statistical suggestions that Phase 3 adds after the exact Phase 2
+/// candidate abstains. This keeps Phase 3 precision and coverage measurable
+/// without crediting it for the baseline's suggestions.
+pub struct Phase3NgramIncremental {
+    pub phase2: Phase2TuningConfig,
+    pub ngram: Phase3TuningConfig,
+}
+
+impl Backend for Phase3NgramIncremental {
+    fn name(&self) -> &'static str {
+        "phase3-ngram-incremental"
+    }
+
+    fn suggest(&self, request: &Request<'_>) -> Option<Candidate> {
+        if (Phase2Tuning {
+            config: self.phase2.clone(),
+        })
+        .suggest(request)
+        .is_some()
+        {
+            return None;
+        }
+        Phase3Ngram {
+            config: Some(self.ngram.clone()),
+        }
+        .suggest(request)
+    }
+
+    fn suggest_with_host(
+        &self,
+        request: &Request<'_>,
+        production: &ProductionRequest<'_>,
+    ) -> Option<Candidate> {
+        if (Phase2Tuning {
+            config: self.phase2.clone(),
+        })
+        .suggest_with_host(request, production)
+        .is_some()
+        {
+            return None;
+        }
+        Phase3Ngram {
+            config: Some(self.ngram.clone()),
+        }
+        .suggest(request)
     }
 }
 

@@ -28,13 +28,21 @@ language or editor behavior, and migration notes call out those changes.
   collision-free token keys, alpha-renamed identifier slots, bounded
   Jelinek-Mercer decoding, and a tested token renderer under explicit source,
   context, memory, cancellation, and deadline limits. New tuning and smoke Make
-  targets compare the raw predictor, a pinned high-confidence candidate, and a
-  Phase 2-first fallback. The command hard-refuses held-out and external sets;
+  targets compare the raw predictor, a pinned Tua-only high-confidence
+  candidate, its incremental contribution after Phase 2 abstains, and a Phase
+  2-first fallback. Reports add independent cursor counts that collapse
+  scenario variants for the minimum evidence floor while leaving quality
+  metrics scenario-weighted. A fail-closed, paired Phase 2-versus-combined gate
+  contract now pins languages, contexts, score, incremental quality, utility
+  gain, regressions, and latency before any frozen data is read. The checker is
+  wired into the future gate branch and rejects eligible enabled-language data
+  without a matching contract. The command accepts only named
+  manifest tune/smoke sets and hard-refuses held-out, external, and ad-hoc paths;
   no statistical predictor is compiled into production, the LSP, or the VS
   Code extension. A separate committed synthetic smoke set now crosses the
   pinned confidence filter and runs under `benchmark-smoke`; its Make check
   and a focused assertion fail if the filtered source becomes a no-op or if
-  any synthetic suggestion stops being a correct continuation, without
+  any synthetic suggestion stops being an exact continuation, without
   changing the Phase 1 smoke baseline.
 
 - VS Code now exposes **Tua: Toggle Deterministic Inline Completions** for the
