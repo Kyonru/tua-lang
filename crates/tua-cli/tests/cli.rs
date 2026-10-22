@@ -502,6 +502,45 @@ return { make = make }
 }
 
 #[test]
+fn check_keeps_literal_parameter_contracts_across_module_boundaries() {
+    let temp = TempDir::new("check-module-literal-params");
+
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).expect("failed to write config");
+    fs::create_dir_all(temp.path().join("src")).expect("failed to create source");
+    fs::write(
+        temp.path().join("src/main.tua"),
+        "local Easing = require(\"easing\")\n\nEasing.set(\"linear\")\nEasing.set(\"bounce\")\n",
+    )
+    .expect("failed to write main source");
+    fs::write(
+        temp.path().join("src/easing.lua"),
+        r#"---@alias EasingName "linear" | "quadout"
+
+---@param name EasingName
+local function set(name) end
+
+return { set = set }
+"#,
+    )
+    .expect("failed to write Lua module");
+
+    let output = tua()
+        .arg("check")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tua check");
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be valid UTF-8");
+
+    assert!(!stderr.contains("main.tua:3:"), "{stderr}");
+    assert!(
+        stderr.contains("main.tua:4:12 error TL1003")
+            && stderr.contains("expected \"linear\" | \"quadout\", found \"bounce\""),
+        "{stderr}"
+    );
+}
+
+#[test]
 fn check_enables_standard_lints_by_default() {
     let temp = TempDir::new("check-default-lints");
 

@@ -78,16 +78,13 @@ pub(crate) fn widen_inferred_type(ty: &Type) -> Type {
     match ty {
         Type::StringLiteral(_) => Type::string(),
         Type::Union(types) => Type::union(types.iter().map(widen_inferred_type)),
+        // Parameter types are never inferred from values: a literal there
+        // is an annotated contract such as `---@param mode "fill" | "line"`,
+        // and widening it would accept arguments the contract rejects.
         Type::Function(function) => Type::Function(FunctionType::new_signature(
-            function
-                .parameters
-                .iter()
-                .map(|parameter| FunctionParameter {
-                    name: parameter.name.clone(),
-                    ty: widen_inferred_type(&parameter.ty),
-                }),
+            function.parameters.iter().cloned(),
             function.required_parameter_count,
-            function.vararg_type.as_deref().map(widen_inferred_type),
+            function.vararg_type.as_deref().cloned(),
             function
                 .return_types_or_any()
                 .iter()

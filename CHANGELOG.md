@@ -8,6 +8,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Literal parameter types such as `---@param mode "fill" | "line"` now keep
+  their contract when the function is used from another module. Inferred
+  widening previously turned them into `string`, so a misspelled mode passed
+  checking.
 - Fixed method calls on the result of a required module function, such as
   `tween.to(box, 1, { x = 10 }):ease("quadout")`, reporting a false argument
   count error. The checker treated the inner `to(...)` as a `:` call and
