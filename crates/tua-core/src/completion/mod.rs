@@ -2353,9 +2353,15 @@ fn collect_table_fields_inner(
     match resolve_aliases(environment, ty, 0) {
         Type::Table(table) => collect_shape_fields(environment, &table, fields),
         Type::Union(types) => {
-            for ty in types {
-                collect_table_fields_inner(environment, &ty, fields, depth + 1);
+            let union = Type::Union(types.clone());
+            let mut candidates = BTreeMap::new();
+            for ty in &types {
+                collect_table_fields_inner(environment, ty, &mut candidates, depth + 1);
             }
+            candidates.retain(|name, _| {
+                crate::semantic::resolve_table_field_type(environment, &union, name).is_some()
+            });
+            fields.extend(candidates);
         }
         Type::Any
         | Type::Alias(_)

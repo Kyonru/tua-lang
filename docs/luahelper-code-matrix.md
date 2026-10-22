@@ -72,6 +72,9 @@ valid unless it is listed below.
 | `TL1006` | LuaDoc declarations conflict while building one type environment. | Always enabled. |
 | `TL1007` | A runtime `is` check cannot be represented safely for the requested type. | Always enabled. |
 | `TL1008` | A class declaration, member syntax, inheritance relation, field initialization, override, constructor, or member access violates class rules. | Always enabled. |
+| `TL1009` | An imported type collides with another visible type name. | Always enabled. |
+| `TL1010` | Imported type aliases form a cycle. | Always enabled. |
+| `TL1011` | A field, index, method, or call operation is not supported by every member of a union. Narrow the value before using the operation. | Always enabled. |
 
 `TL1003` is the general type-contract error used for annotated assignments,
 stable inferred locals, fields, arguments, returns, and compatible container

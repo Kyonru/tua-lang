@@ -26,7 +26,7 @@ use crate::parser::{parse_tua_source, ParsedLanguage, ParsedSource, SourcePositi
 use crate::profile::{self, DiagnosticsTraceCategory};
 use crate::runtime_type;
 use crate::scope::{scope_map_parsed_source_with_globals, ScopeGlobalKind, ScopeResolution};
-use crate::semantic::SemanticModel;
+use crate::semantic::{resolve_index_type, resolve_table_field_type, SemanticModel};
 use crate::semantic_domains::{BuiltinConstructor, BuiltinDomain, BuiltinDomainRegistry};
 use crate::types::{
     build_type_environment_with_domain_registry, deduplicate_inferred_types,
@@ -606,7 +606,7 @@ impl<'a> Checker<'a> {
         for suffix in suffixes.iter().take(suffixes.len().saturating_sub(1)) {
             current = match suffix {
                 Suffix::Index(Index::Dot { name, .. }) => {
-                    match self.resolve_table_field_type(&current, &token_text(name)) {
+                    match resolve_table_field_type(self.environment, &current, &token_text(name)) {
                         Some(ty) => ty,
                         None => return false,
                     }
@@ -1319,7 +1319,13 @@ impl<'a> Checker<'a> {
             match suffix {
                 Suffix::Index(Index::Dot { name, .. }) => {
                     let field = token_text(name);
-                    let Some(next) = self.resolve_table_field_type(&current, &field) else {
+                    let Some(next) = resolve_table_field_type(self.environment, &current, &field)
+                    else {
+                        self.report_unsafe_union_operation(
+                            name,
+                            &current,
+                            &format!("access field `{field}` on"),
+                        );
                         self.report_unknown_class_member(name, &current, &field);
                         return None;
                     };
@@ -1327,7 +1333,11 @@ impl<'a> Checker<'a> {
                 }
                 Suffix::Index(Index::Brackets { expression, .. }) => {
                     let key = self.index_key_type(expression)?;
-                    current = resolve_index_type(self.environment, &current, &key)?;
+                    let Some(next) = resolve_index_type(self.environment, &current, &key) else {
+                        self.report_unsafe_union_operation(expression, &current, "index");
+                        return None;
+                    };
+                    current = next;
                 }
                 _ => return None,
             }
@@ -1371,6 +1381,31 @@ impl<'a> Checker<'a> {
             format!("unknown member `{field}` on class `{class_name}`"),
         )
         .with_code(DiagnosticCode::TYPE_CLASS);
+
+        if !self.diagnostics.iter().any(|existing| {
+            existing.line == diagnostic.line
+                && existing.column == diagnostic.column
+                && existing.message == diagnostic.message
+        }) {
+            self.diagnostics.push(diagnostic);
+        }
+    }
+
+    fn report_unsafe_union_operation(&mut self, node: &impl Node, ty: &Type, operation: &str) {
+        if !matches!(resolve_aliases(ty, self.environment, 0), Type::Union(_)) {
+            return;
+        }
+
+        let position = node_span(node)
+            .map(|span| span.start)
+            .unwrap_or_else(|| node_position(node));
+        let diagnostic = Diagnostic::error(
+            &self.parsed.path,
+            position.line,
+            position.column,
+            format!("cannot {operation} union type `{ty}`; narrow it to a supported member first"),
+        )
+        .with_code(DiagnosticCode::TYPE_UNSAFE_UNION_OPERATION);
 
         if !self.diagnostics.iter().any(|existing| {
             existing.line == diagnostic.line
@@ -1435,9 +1470,9 @@ impl<'a> Checker<'a> {
         let mut current = first.into_iter().next();
         for suffix in rest {
             current = match suffix {
-                Suffix::Index(Index::Dot { name, .. }) => {
-                    current.and_then(|ty| self.resolve_table_field_type(&ty, &token_text(name)))
-                }
+                Suffix::Index(Index::Dot { name, .. }) => current.and_then(|ty| {
+                    resolve_table_field_type(self.environment, &ty, &token_text(name))
+                }),
                 Suffix::Call(call) => self.check_chained_call(suffix, call, current),
                 _ => None,
             };
@@ -1464,14 +1499,15 @@ impl<'a> Checker<'a> {
         let mut arguments = function_args_call_arguments(args);
 
         let callable = match (&receiver, &method) {
-            (Some(receiver), Some(method)) => self
-                .resolve_table_field_type(receiver, method)
-                .and_then(|ty| callable_from_type(&ty, self.environment))
-                .or_else(|| {
-                    lua_type_field_item(self.environment, receiver, method)
-                        .and_then(external_function_type_from_lua_item)
-                        .map(Callable::ExternalFunction)
-                }),
+            (Some(receiver), Some(method)) => {
+                resolve_table_field_type(self.environment, receiver, method)
+                    .and_then(|ty| callable_from_type(&ty, self.environment))
+                    .or_else(|| {
+                        lua_type_field_item(self.environment, receiver, method)
+                            .and_then(external_function_type_from_lua_item)
+                            .map(Callable::ExternalFunction)
+                    })
+            }
             (None, None) => current
                 .as_ref()
                 .and_then(|ty| callable_from_type(ty, self.environment)),
@@ -1519,6 +1555,7 @@ impl<'a> Checker<'a> {
         }
 
         let Some(callee) = self.infer_call_target(function_call) else {
+            self.report_unsafe_union_call_target(function_call);
             self.check_dynamic_call_argument_expressions(function_call);
             return Vec::new();
         };
@@ -1562,6 +1599,67 @@ impl<'a> Checker<'a> {
             Callable::ExternalFunction(function) => {
                 self.check_external_call_arguments(function_call, &function)
             }
+        }
+    }
+
+    fn report_unsafe_union_call_target(&mut self, function_call: &FunctionCall) {
+        let Some(mut current) = (match function_call.prefix() {
+            Prefix::Name(name) => self.infer_named_value(&token_text(name)),
+            Prefix::Expression(expression) => self.infer_expression(expression),
+            _ => None,
+        }) else {
+            return;
+        };
+
+        for suffix in function_call.suffixes() {
+            match suffix {
+                Suffix::Index(Index::Dot { name, .. }) => {
+                    let field = token_text(name);
+                    let Some(next) = resolve_table_field_type(self.environment, &current, &field)
+                    else {
+                        self.report_unsafe_union_operation(
+                            name,
+                            &current,
+                            &format!("access field `{field}` on"),
+                        );
+                        return;
+                    };
+                    current = next;
+                }
+                Suffix::Index(Index::Brackets { expression, .. }) => {
+                    let Some(key) = self.index_key_type(expression) else {
+                        return;
+                    };
+                    let Some(next) = resolve_index_type(self.environment, &current, &key) else {
+                        self.report_unsafe_union_operation(expression, &current, "index");
+                        return;
+                    };
+                    current = next;
+                }
+                Suffix::Call(Call::MethodCall(method)) => {
+                    let field = token_text(method.name());
+                    let Some(next) = resolve_table_field_type(self.environment, &current, &field)
+                    else {
+                        self.report_unsafe_union_operation(
+                            method.name(),
+                            &current,
+                            &format!("access method `{field}` on"),
+                        );
+                        return;
+                    };
+                    current = next;
+                    break;
+                }
+                Suffix::Call(Call::AnonymousCall(_)) => break,
+                _ => return,
+            }
+        }
+
+        if matches!(
+            resolve_aliases(&current, self.environment, 0),
+            Type::Union(_)
+        ) {
+            self.report_unsafe_union_operation(function_call, &current, "call");
         }
     }
 
@@ -2468,7 +2566,7 @@ impl<'a> Checker<'a> {
         let (root, fields) = parts.split_first()?;
         let local_type = self.infer_named_value(root).and_then(|mut current| {
             for field in fields {
-                current = self.resolve_table_field_type(&current, field)?;
+                current = resolve_table_field_type(self.environment, &current, field)?;
             }
 
             Some(current)
@@ -2496,28 +2594,6 @@ impl<'a> Checker<'a> {
                     .iter()
                     .filter_map(|ty| self.resolve_direct_table_field_type(ty, field))
                     .collect::<Vec<_>>();
-
-                match resolved.len() {
-                    0 => None,
-                    1 => resolved.into_iter().next(),
-                    _ => Some(Type::union(resolved)),
-                }
-            }
-            _ => None,
-        }
-    }
-
-    fn resolve_table_field_type(&self, ty: &Type, field: &str) -> Option<Type> {
-        match resolve_aliases(ty, self.environment, 0) {
-            Type::Table(table) => table.semantic_field(field).map(|field| field.ty.clone()),
-            Type::Union(types) => {
-                let mut resolved = Vec::new();
-
-                for ty in types {
-                    if let Some(field_type) = self.resolve_table_field_type(&ty, field) {
-                        resolved.push(field_type);
-                    }
-                }
 
                 match resolved.len() {
                     0 => None,
@@ -3587,9 +3663,15 @@ fn callable_from_type(ty: &Type, environment: &TypeEnvironment) -> Option<Callab
             .metatable_facts()
             .and_then(|facts| facts.call.clone())
             .map(|function| Callable::Function(call_metamethod_type(function))),
-        Type::Union(types) => types
-            .iter()
-            .find_map(|ty| callable_from_type(ty, environment)),
+        Type::Union(types) => {
+            let mut members = types.iter().map(|ty| resolve_aliases(ty, environment, 0));
+            let first = members.next()?;
+
+            members
+                .all(|member| member == first)
+                .then(|| callable_from_type(&first, environment))
+                .flatten()
+        }
         _ => None,
     }
 }
@@ -3649,38 +3731,6 @@ fn comparison_metamethod_name(binop: &ast::BinOp) -> Option<&'static str> {
 fn resolve_aliases(ty: &Type, environment: &TypeEnvironment, depth: usize) -> Type {
     let _ = depth;
     environment.resolve_aliases(ty)
-}
-
-fn resolve_index_type(
-    environment: &TypeEnvironment,
-    collection: &Type,
-    key: &Type,
-) -> Option<Type> {
-    match resolve_aliases(collection, environment, 0) {
-        Type::Array(item) => is_number_like(key).then_some(*item),
-        Type::Tuple(items) => is_number_like(key).then(|| union_types(items)),
-        Type::Dictionary {
-            key: dict_key,
-            value,
-        } => key_accepts_index(&dict_key, key).then_some(*value),
-        Type::Table(table) => match key {
-            Type::StringLiteral(value) => table.semantic_field(value).map(|field| field.ty.clone()),
-            Type::Primitive(crate::PrimitiveType::String) => {
-                union_types_optional(table.semantic_fields().into_values().map(|field| field.ty))
-            }
-            _ => None,
-        },
-        Type::Union(types) => union_types_optional(
-            types
-                .iter()
-                .filter_map(|ty| resolve_index_type(environment, ty, key)),
-        ),
-        Type::Any
-        | Type::Alias(_)
-        | Type::Function(_)
-        | Type::Primitive(_)
-        | Type::StringLiteral(_) => None,
-    }
 }
 
 fn array_element_type(environment: &TypeEnvironment, ty: &Type) -> Option<Type> {
@@ -3814,29 +3864,6 @@ fn union_types_optional(types: impl IntoIterator<Item = Type>) -> Option<Type> {
     let types = types.into_iter().collect::<Vec<_>>();
 
     (!types.is_empty()).then(|| union_types(types))
-}
-
-fn is_number_like(ty: &Type) -> bool {
-    matches!(ty, Type::Primitive(crate::PrimitiveType::Number))
-}
-
-fn key_accepts_index(expected: &Type, actual: &Type) -> bool {
-    match (expected, actual) {
-        (Type::Any, _) | (_, Type::Any) => true,
-        (
-            Type::Primitive(crate::PrimitiveType::String),
-            Type::Primitive(crate::PrimitiveType::String),
-        )
-        | (Type::Primitive(crate::PrimitiveType::String), Type::StringLiteral(_))
-        | (
-            Type::Primitive(crate::PrimitiveType::Number),
-            Type::Primitive(crate::PrimitiveType::Number),
-        ) => true,
-        (Type::StringLiteral(expected), Type::StringLiteral(actual)) => expected == actual,
-        (Type::Union(types), actual) => types.iter().any(|ty| key_accepts_index(ty, actual)),
-        (expected, Type::Union(types)) => types.iter().any(|ty| key_accepts_index(expected, ty)),
-        _ => false,
-    }
 }
 
 fn iterator_call(function_call: &FunctionCall) -> Option<(String, &Expression)> {

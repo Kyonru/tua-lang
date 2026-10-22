@@ -4089,6 +4089,66 @@ end
 }
 
 #[test]
+fn rejects_operations_not_supported_by_every_union_member() {
+    let diagnostics = check_tua_source(
+        "src/union_operations.tua",
+        r#"type Player = { x: number }
+type Either = { x: number } | { y: number }
+
+local player: Player | nil = nil
+print(player.x)
+
+local either: Either = { y = 1 }
+print(either.x)
+
+local values: number[] | nil = nil
+print(values[1])
+
+local callable: ((number) -> number) | nil = nil
+print(callable(1))
+"#,
+    )
+    .expect_err("unsafe union operations should require narrowing");
+
+    let unsafe_operations = diagnostics
+        .iter()
+        .filter(|item| item.code == Some(DiagnosticCode::TYPE_UNSAFE_UNION_OPERATION))
+        .collect::<Vec<_>>();
+    assert_eq!(unsafe_operations.len(), 4, "{diagnostics:#?}");
+    assert!(unsafe_operations
+        .iter()
+        .any(|item| item.message.contains("field `x`")));
+    assert!(unsafe_operations
+        .iter()
+        .any(|item| item.message.contains("index")));
+    assert!(unsafe_operations
+        .iter()
+        .any(|item| item.message.contains("call")));
+}
+
+#[test]
+fn narrowing_makes_union_field_index_method_and_call_operations_safe() {
+    check_tua_source(
+        "src/narrowed_union_operations.tua",
+        r#"type Counter = { value: number, bump: (self: Counter) -> number }
+
+local counter: Counter | nil = nil
+if counter then
+  print(counter.value)
+  print(counter["value"])
+  print(counter:bump())
+end
+
+local callable: ((number) -> number) | nil = nil
+if callable then
+  print(callable(1))
+end
+"#,
+    )
+    .expect("narrowed union operations should remain valid");
+}
+
+#[test]
 fn truthiness_narrowing_does_not_reach_the_else_branch() {
     let diagnostics = check_tua_source(
         "src/narrowing.tua",
@@ -4109,7 +4169,7 @@ end
     .expect_err("the else branch keeps the nilable type");
     let mismatches = diagnostics
         .iter()
-        .filter(|item| item.code == Some(DiagnosticCode::TYPE_MISMATCH))
+        .filter(|item| item.code == Some(DiagnosticCode::TYPE_UNSAFE_UNION_OPERATION))
         .collect::<Vec<_>>();
     assert_eq!(mismatches.len(), 1, "{diagnostics:#?}");
     assert_eq!(mismatches[0].line, 11);

@@ -8,6 +8,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Field, index, method, and call operations on unions now require every union
+  member to support the operation. Unsafe access such as `Player | nil` field
+  reads and calls now report `TL1011`; control-flow narrowing keeps valid
+  guarded access working.
 - Hot-reloaded module functions now keep referring to the preserved module
   table. Conventional `local M = {}; function M.update() ... end; return M`
   modules previously received the new function bodies, but those functions

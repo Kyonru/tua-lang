@@ -909,8 +909,8 @@ fn project_table_field_type(ty: &Type, field: &str) -> Option<Type> {
         Type::Union(types) => {
             let fields = types
                 .iter()
-                .filter_map(|ty| project_table_field_type(ty, field))
-                .collect::<Vec<_>>();
+                .map(|ty| project_table_field_type(ty, field))
+                .collect::<Option<Vec<_>>>()?;
 
             match fields.len() {
                 0 => None,

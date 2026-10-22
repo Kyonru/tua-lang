@@ -1766,21 +1766,13 @@ pub(crate) fn resolve_table_field_type(
 ) -> Option<Type> {
     match resolve_aliases(environment, ty, 0) {
         Type::Table(table) => table.semantic_field(field).map(|field| field.ty.clone()),
-        Type::Union(types) => {
-            let mut resolved = Vec::new();
-
-            for ty in types {
-                if let Some(field_type) = resolve_table_field_type(environment, &ty, field) {
-                    resolved.push(field_type);
-                }
+        Type::Union(types) => resolve_union_operation(types, |ty| {
+            if matches!(resolve_aliases(environment, ty, 0), Type::Any) {
+                Some(Type::Any)
+            } else {
+                resolve_table_field_type(environment, ty, field)
             }
-
-            match resolved.len() {
-                0 => None,
-                1 => resolved.into_iter().next(),
-                _ => Some(Type::union(resolved)),
-            }
-        }
+        }),
         _ => None,
     }
 }
@@ -1804,16 +1796,36 @@ pub(crate) fn resolve_index_type(
             }
             _ => None,
         },
-        Type::Union(types) => union_types_optional(
-            types
-                .iter()
-                .filter_map(|ty| resolve_index_type(environment, ty, key)),
-        ),
+        Type::Union(types) => resolve_union_operation(types, |ty| {
+            if matches!(resolve_aliases(environment, ty, 0), Type::Any) {
+                Some(Type::Any)
+            } else {
+                resolve_index_type(environment, ty, key)
+            }
+        }),
         Type::Any
         | Type::Alias(_)
         | Type::Function(_)
         | Type::Primitive(_)
         | Type::StringLiteral(_) => None,
+    }
+}
+
+/// Resolve an operation on a union only when every member supports it.
+///
+/// Silently dropping unsupported members makes expressions such as
+/// `({ x: number } | nil).x` appear safe. Keeping this rule next to the shared
+/// field and index resolvers ensures checker and editor queries agree.
+fn resolve_union_operation(
+    types: Vec<Type>,
+    mut resolve: impl FnMut(&Type) -> Option<Type>,
+) -> Option<Type> {
+    let resolved = types.iter().map(&mut resolve).collect::<Option<Vec<_>>>()?;
+
+    match resolved.len() {
+        0 => None,
+        1 => resolved.into_iter().next(),
+        _ => Some(Type::union(resolved)),
     }
 }
 
@@ -2849,9 +2861,16 @@ fn call_metamethod_function(environment: &TypeEnvironment, ty: &Type) -> Option<
 
             Some(function)
         }),
-        Type::Union(types) => types
-            .iter()
-            .find_map(|ty| call_metamethod_function(environment, ty)),
+        Type::Union(types) => {
+            let mut functions = types
+                .iter()
+                .map(|ty| call_metamethod_function(environment, ty));
+            let first = functions.next()??;
+
+            functions
+                .all(|function| function.as_ref() == Some(&first))
+                .then_some(first)
+        }
         Type::Any
         | Type::Alias(_)
         | Type::Primitive(_)
@@ -3023,5 +3042,30 @@ mod reassignment_tests {
     fn a_self_dependent_parameter_reassignment_terminates() {
         let source = "local function f(str)\n  str = str:upper()\n  return str\nend\nreturn f\n";
         let _ = lua_type_at(source, "str", 3, 10);
+    }
+
+    #[test]
+    fn shared_access_resolvers_require_every_union_member() {
+        let parsed = crate::parse_tua_source("src/empty.tua", "").expect("empty source parses");
+        let environment = crate::types::build_type_environment(&parsed).expect("environment");
+        let with_x = Type::table([("x", TableField::required(Type::number()))]);
+        let without_x = Type::table([("y", TableField::required(Type::number()))]);
+
+        assert_eq!(
+            resolve_table_field_type(&environment, &Type::union([with_x.clone(), without_x]), "x"),
+            None
+        );
+        assert_eq!(
+            resolve_table_field_type(&environment, &Type::union([with_x, Type::nil()]), "x"),
+            None
+        );
+        assert_eq!(
+            resolve_index_type(
+                &environment,
+                &Type::union([Type::array(Type::number()), Type::nil()]),
+                &Type::number()
+            ),
+            None
+        );
     }
 }

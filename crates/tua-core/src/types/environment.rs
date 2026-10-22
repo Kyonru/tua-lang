@@ -3599,13 +3599,10 @@ fn resolve_table_field_type_from_map(
             .semantic_field(field)
             .map(|field| resolve_aliases_from_map(aliases, &field.ty, 0)),
         Type::Union(types) => {
-            let mut resolved = Vec::new();
-
-            for ty in types {
-                if let Some(field_type) = resolve_table_field_type_from_map(aliases, &ty, field) {
-                    resolved.push(field_type);
-                }
-            }
+            let resolved = types
+                .iter()
+                .map(|ty| resolve_table_field_type_from_map(aliases, ty, field))
+                .collect::<Option<Vec<_>>>()?;
 
             match resolved.len() {
                 0 => None,
@@ -3644,7 +3641,8 @@ fn resolve_index_type_from_map(
         Type::Union(types) => union_types_optional(
             types
                 .iter()
-                .filter_map(|ty| resolve_index_type_from_map(aliases, ty, key)),
+                .map(|ty| resolve_index_type_from_map(aliases, ty, key))
+                .collect::<Option<Vec<_>>>()?,
         ),
         Type::Any
         | Type::Alias(_)

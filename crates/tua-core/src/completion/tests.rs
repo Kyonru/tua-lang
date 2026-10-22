@@ -22,6 +22,22 @@ local typed: Pl = nil
 "#;
 
 #[test]
+fn union_field_completion_only_offers_members_supported_by_every_variant() {
+    let source = r#"type Left = { common: number, left: string }
+type Right = { common: number, right: boolean }
+local value: Left | Right = { common = 1, left = "yes" }
+value.
+"#;
+    let completions = complete_tua_source("src/main.tua", source, position_after(source, "value."))
+        .expect("union member completion should succeed");
+    let labels = labels(&completions);
+
+    assert!(labels.contains(&"common".to_owned()), "{labels:?}");
+    assert!(!labels.contains(&"left".to_owned()), "{labels:?}");
+    assert!(!labels.contains(&"right".to_owned()), "{labels:?}");
+}
+
+#[test]
 fn completes_builtin_ecs_module_and_documented_members() {
     let identifier = complete_tua_source(
         "src/main.tua",

@@ -48,6 +48,7 @@ impl DiagnosticCode {
     pub const TYPE_CLASS: Self = Self(1008);
     pub const TYPE_IMPORT_COLLISION: Self = Self(1009);
     pub const TYPE_IMPORT_CYCLE: Self = Self(1010);
+    pub const TYPE_UNSAFE_UNION_OPERATION: Self = Self(1011);
     pub const LOWERING_COMPOUND_ASSIGNMENT: Self = Self(2001);
     pub const EMIT_IO: Self = Self(2002);
     pub const EMIT_OUTPUT_COLLISION: Self = Self(2003);
@@ -169,6 +170,7 @@ impl DiagnosticCode {
                 | Self::TYPE_CLASS
                 | Self::TYPE_IMPORT_COLLISION
                 | Self::TYPE_IMPORT_CYCLE
+                | Self::TYPE_UNSAFE_UNION_OPERATION
                 | Self::LOWERING_COMPOUND_ASSIGNMENT
                 | Self::EMIT_IO
                 | Self::EMIT_OUTPUT_COLLISION

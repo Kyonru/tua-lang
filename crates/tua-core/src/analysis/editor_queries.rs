@@ -331,14 +331,14 @@ impl AnalysisSnapshot {
         {
             Type::Table(table) => table.semantic_field(field).map(|field| field.ty.clone()),
             Type::Union(types) => {
-                let mut fields = types
+                let fields = types
                     .iter()
-                    .filter_map(|ty| self.field_type_for_type(source_path, ty, field))
-                    .collect::<Vec<_>>();
+                    .map(|ty| self.field_type_for_type(source_path, ty, field))
+                    .collect::<Option<Vec<_>>>()?;
 
                 match fields.len() {
                     0 => None,
-                    1 => fields.pop(),
+                    1 => fields.into_iter().next(),
                     _ => Some(Type::union(fields)),
                 }
             }
