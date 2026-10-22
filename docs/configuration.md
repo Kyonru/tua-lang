@@ -606,7 +606,10 @@ Supported editor settings:
 - `tua.completion.multiToken.maxSuggestions`: maximum validated multi-token
   suggestions appended to completion results.
 - `tua.completion.inline.enabled`: enables experimental deterministic inline
-  ghost text. It defaults to `false`. Files larger than about 6.8 KB of Tua or
+  ghost text. It defaults to `false`. Independently of this setting, the
+  extension sets `editor.suggest.preview` to `true` for Tua files, so a
+  selected menu item is previewed and can be extended; override it in a
+  `"[tua]"` settings block. Files larger than about 6.8 KB of Tua or
   31 KB of Lua receive no suggestions, because validation could not fit the
   request budget.
 - `tua.completion.inline.sources.semantic`: enables unique source-only

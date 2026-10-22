@@ -226,6 +226,13 @@ deterministic backend, `semanticReturned`/`semanticAccepted` and
 `currentFileReturned`/`currentFileAccepted` mean items returned to VS Code and
 items accepted by the user; they do not affect ranking.
 
+The extension also changes a few VS Code editor defaults for Tua files only,
+whether or not inline completion is enabled: suggestions appear immediately in
+code and strings (`editor.quickSuggestions`, `editor.quickSuggestionsDelay`),
+semantic highlighting is on, and `editor.suggest.preview` is `true`, so the
+selected menu item is previewed in the editor. Override any of them in a
+`"[tua]"` block in your settings.
+
 Project behavior still comes primarily from `tua.toml`, and the extension
 attaches to that file directly for configuration authoring.
 
