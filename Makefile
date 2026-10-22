@@ -371,7 +371,7 @@ build-example: ## Build one example project. Override with EXAMPLE=examples/love
 	cd $(EXAMPLE) && $(TUA) build
 
 .PHONY: build-examples
-build-examples: build-love-minimal build-love-full build-love-tua build-audio-system build-features build-project-model ## Compile all bundled examples.
+build-examples: build-love-minimal build-love-full build-love-tua build-audio-system build-features build-project-model build-starfall ## Compile all bundled examples.
 
 .PHONY: build-love-minimal
 build-love-minimal: ## Compile examples/love-minimal to Lua.
@@ -380,6 +380,22 @@ build-love-minimal: ## Compile examples/love-minimal to Lua.
 .PHONY: build-love-full
 build-love-full: ## Compile examples/love-full to Lua.
 	cd examples/love-full && $(TUA) build
+
+.PHONY: check-starfall
+check-starfall: ## Check the Starfall game example.
+	cd examples/starfall && $(TUA) check
+
+.PHONY: build-starfall
+build-starfall: ## Compile the Starfall game example.
+	cd examples/starfall && $(TUA) build
+
+.PHONY: run-starfall
+run-starfall: build-starfall ## Build and play Starfall.
+	$(LOVE) examples/starfall/build
+
+.PHONY: smoke-starfall
+smoke-starfall: build-starfall ## Play a scripted Starfall round in LOVE and quit.
+	$(LOVE) examples/starfall/build --smoke
 
 .PHONY: check-love-tua
 check-love-tua: ## Check the mixed Tua/Lua bullet-hell example.

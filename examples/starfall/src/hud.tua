@@ -1,0 +1,64 @@
+-- Screen-space text, animated with the built-in tween module.
+local M = {
+  title = { alpha = 0, y = 150 },
+  score = { scale = 1 },
+  banner = { alpha = 0 },
+  bannerText = "",
+}
+
+function M.showTitle()
+  M.title.alpha, M.title.y = 0, 150
+  tween.to(M.title, 0.8, { alpha = 1, y = 190 }):ease("backout")
+end
+
+function M.hideTitle()
+  tween.to(M.title, 0.25, { alpha = 0 })
+end
+
+function M.bump()
+  M.score.scale = 1.6
+  tween.to(M.score, 0.35, { scale = 1 }):ease("elasticout")
+end
+
+function M.flash(text: string)
+  M.bannerText = text
+  M.banner.alpha = 1
+  tween.to(M.banner, 1.5, { alpha = 0 }):ease("quadin"):delay(0.8)
+end
+
+function M.draw(state: string, score: number, best: number)
+  local width = love.graphics.getWidth()
+  love.graphics.setColor(1, 1, 1, M.title.alpha)
+  love.graphics.printf("STARFALL", 0, M.title.y, width, "center", 0, 1, 1)
+  if state == "title" then
+    love.graphics.printf(
+      "Collect stars. Dodge meteors.\nPress Enter or A to start.",
+      0,
+      M.title.y + 60,
+      width,
+      "center"
+    )
+  elseif state == "over" then
+    love.graphics.printf(
+      "Game over. Press Enter or A to play again.",
+      0,
+      M.title.y + 60,
+      width,
+      "center"
+    )
+  end
+
+  if state ~= "title" then
+    love.graphics.setColor(1, 1, 1)
+    local scale = M.score.scale
+    love.graphics.print("Score " .. score, 20, 16, 0, scale, scale)
+    love.graphics.print("Best " .. best, 20, 44)
+  end
+
+  if M.banner.alpha > 0 then
+    love.graphics.setColor(1, 0.9, 0.4, M.banner.alpha)
+    love.graphics.printf(M.bannerText, 0, 80, width, "center")
+  end
+end
+
+return M

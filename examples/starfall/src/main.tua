@@ -1,0 +1,108 @@
+-- Starfall: a small Tua + LOVE game using the built-in Camera, tween, input,
+-- state machine, and object pool helpers.
+local hud = require("hud")
+local player = require("player")
+local save = require("save")
+local world = require("world")
+
+local camera = Camera.new({
+  style = "topdown",
+  smoothing = 6,
+  lead = 0.25,
+  bounds = { x = 0, y = 0, w = world.width, h = world.height },
+})
+
+local game = {
+  score = 0,
+  best = 0,
+}
+local smokeFrames: number? = nil
+
+local scene = stateMachine({
+  initial = "title",
+  events = {
+    { name = "play", from = { "title", "over" }, to = "playing" },
+    { name = "crash", from = "playing", to = "over" },
+  },
+  callbacks = {
+    onenterplaying = function()
+      game.score = 0
+      world.reset()
+      player.reset(world.width / 2, world.height / 2)
+      camera:lookAt(player.x, player.y)
+      hud.hideTitle()
+    end,
+    onenterover = function()
+      camera:shake(0.8)
+      if game.score > game.best then
+        game.best = game.score
+        save.store(game.best)
+        hud.flash("New best: " .. game.best)
+      end
+      hud.showTitle()
+    end,
+  },
+})
+
+function love.load(args: string[])
+  game.best = save.load()
+  world.reset()
+  player.reset(world.width / 2, world.height / 2)
+  camera:lookAt(player.x, player.y)
+  hud.showTitle()
+
+  -- `love build --smoke` plays a scripted round and quits, for CI.
+  for _, value in ipairs(args) do
+    if value == "--smoke" then
+      smokeFrames = 0
+      player.setAutopilot(function(time: number): Vec2
+        return vec2(math.cos(time), math.sin(time * 0.7))
+      end)
+      scene:play()
+    end
+  end
+end
+
+function love.update(dt: number)
+  tween.update(dt)
+
+  if scene.current == "playing" then
+    player.update(dt, world.width, world.height)
+    world.update(dt, player.x, player.y, game.score)
+    if world.collect(player.x, player.y, player.radius) then
+      game.score += 1
+      hud.bump()
+      camera:shake(0.15)
+    end
+    if world.hits(player.x, player.y, player.radius) then
+      scene:crash()
+    end
+  elseif player.startPressed() then
+    scene:play()
+  else
+    player.update(0, world.width, world.height)
+  end
+
+  camera:follow(player.x, player.y)
+  camera:update(dt)
+
+  if smokeFrames then
+    smokeFrames += 1
+    if smokeFrames >= 240 then
+      local summary = "starfall smoke: scene=%s score=%d meteors=%d camera=%.0f,%.0f"
+      print(summary:format(scene.current, game.score, #world.meteors, camera.x, camera.y))
+      love.event.quit()
+    end
+  end
+end
+
+function love.draw()
+  love.graphics.clear(0.05, 0.06, 0.12)
+  camera:draw(function()
+    world.draw()
+    if scene.current ~= "title" then
+      player.draw()
+    end
+  end)
+  hud.draw(scene.current, game.score, game.best)
+end

@@ -1,0 +1,6 @@
+function love.conf(t: any)
+  t.identity = "starfall"
+  t.window.title = "Starfall"
+  t.window.width = 960
+  t.window.height = 540
+end

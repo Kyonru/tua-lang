@@ -1,0 +1,15 @@
+-- High score persistence in LOVE's save directory.
+local FILE = "highscore.txt"
+
+local M = {}
+
+function M.load(): number
+  local contents = love.filesystem.read(FILE)
+  return tonumber(contents) or 0
+end
+
+function M.store(score: number)
+  love.filesystem.write(FILE, tostring(score))
+end
+
+return M

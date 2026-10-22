@@ -98,6 +98,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Added
 
+- Added `examples/starfall`, a small complete game that uses the built-in
+  `Camera` and `tween` modules with `input`, `stateMachine`, `objectPool`,
+  and `vec2`, and is set up for `tua dev` and `tua package`.
+  `make smoke-starfall` plays a scripted round in LOVE and quits.
 - Added the VS Code commands **Tua: Run LOVE Project With Hot Reload**, which
   runs `tua dev` in a task, and **Tua: Package Game...**, which builds a
   `.love`, fused Windows, or fused macOS package. The new

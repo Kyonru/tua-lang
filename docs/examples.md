@@ -87,6 +87,24 @@ the runnable project under the ignored `build/` directory. Because the example
 is self-contained, it participates in the default example build and benchmark
 suites without network setup.
 
+## `examples/starfall`
+
+A small complete game: collect stars and dodge meteors in a world larger than
+the screen, with title, play, and game-over scenes and a saved high score. It
+uses the built-in [`Camera`](camera.md) and [`tween`](tweening.md) modules with
+`input`, `stateMachine`, `objectPool`, and `vec2`.
+
+```bash
+make run-starfall
+cd examples/starfall && tua dev
+cd examples/starfall && tua package
+```
+
+`tua dev` plays it with [hot reload](hot-reload.md), and `tua package` writes
+`dist/starfall.love` (see [Packaging Games](packaging.md)). `make
+smoke-starfall` plays a scripted round and quits, which exercises the whole
+game in LOVE without input.
+
 ## `examples/audio-system`
 
 A self-contained LOVE audio project demonstrating typed buses, sound-effect

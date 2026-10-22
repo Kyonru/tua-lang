@@ -1,0 +1,132 @@
+-- The play field: stars to collect and pooled meteors to dodge.
+import type { Meteor, Star } from "types"
+
+local WIDTH = 2400
+local HEIGHT = 1600
+local STAR_COUNT = 12
+
+local stars: Star[] = {}
+local activeMeteors: Meteor[] = {}
+
+local M = {
+  width = WIDTH,
+  height = HEIGHT,
+  stars = stars,
+  meteors = activeMeteors,
+  spawnTimer = 0,
+}
+
+local meteors = objectPool({
+  create = function(): Meteor
+    return { x = 0, y = 0, vx = 0, vy = 0, radius = 0, active = false }
+  end,
+  reset = function(meteor: Meteor)
+    meteor.active = false
+  end,
+  initial = 32,
+})
+
+local function placeStar(star: Star)
+  star.x = love.math.random(40, WIDTH - 40)
+  star.y = love.math.random(40, HEIGHT - 40)
+  star.spin = love.math.random() * math.pi * 2
+end
+
+function M.reset()
+  for _, meteor in ipairs(M.meteors) do
+    meteors:release(meteor)
+  end
+  M.meteors = {}
+  M.stars = {}
+  for _ = 1, STAR_COUNT do
+    local star: Star = { x = 0, y = 0, spin = 0 }
+    placeStar(star)
+    table.insert(M.stars, star)
+  end
+  M.spawnTimer = 0
+end
+
+local function spawnMeteor(targetX: number, targetY: number)
+  local meteor = meteors:acquire()
+  local angle = love.math.random() * math.pi * 2
+  meteor.x = targetX + math.cos(angle) * 700
+  meteor.y = targetY + math.sin(angle) * 700
+  local speed = love.math.random(120, 220)
+  local dx, dy = targetX - meteor.x, targetY - meteor.y
+  local length = math.sqrt(dx * dx + dy * dy)
+  meteor.vx = dx / length * speed
+  meteor.vy = dy / length * speed
+  meteor.radius = love.math.random(14, 30)
+  meteor.active = true
+  table.insert(M.meteors, meteor)
+end
+
+-- Advance meteors and spawn more as the score grows.
+function M.update(dt: number, playerX: number, playerY: number, score: number)
+  M.spawnTimer -= dt
+  if M.spawnTimer <= 0 then
+    spawnMeteor(playerX, playerY)
+    M.spawnTimer = math.max(0.25, 1.2 - score * 0.03)
+  end
+
+  for index = #M.meteors, 1, -1 do
+    local meteor = M.meteors[index]
+    meteor.x += meteor.vx * dt
+    meteor.y += meteor.vy * dt
+    local far = math.abs(meteor.x - playerX) > 1200 or math.abs(meteor.y - playerY) > 1200
+    if far then
+      meteors:release(meteor)
+      table.remove(M.meteors, index)
+    end
+  end
+
+  for _, star in ipairs(M.stars) do
+    star.spin += dt * 2
+  end
+end
+
+-- The star touching the point, if any, moved to a new place. Returns
+-- whether one was collected.
+function M.collect(x: number, y: number, radius: number): boolean
+  for _, star in ipairs(M.stars) do
+    local dx, dy = star.x - x, star.y - y
+    if dx * dx + dy * dy < (radius + 14) ^ 2 then
+      placeStar(star)
+      return true
+    end
+  end
+  return false
+end
+
+function M.hits(x: number, y: number, radius: number): boolean
+  for _, meteor in ipairs(M.meteors) do
+    local dx, dy = meteor.x - x, meteor.y - y
+    if dx * dx + dy * dy < (radius + meteor.radius) ^ 2 then
+      return true
+    end
+  end
+  return false
+end
+
+function M.draw()
+  love.graphics.setColor(0.15, 0.17, 0.3)
+  for x = 0, WIDTH, 80 do
+    love.graphics.line(x, 0, x, HEIGHT)
+  end
+  for y = 0, HEIGHT, 80 do
+    love.graphics.line(0, y, WIDTH, y)
+  end
+
+  love.graphics.setColor(1, 0.85, 0.3)
+  for _, star in ipairs(M.stars) do
+    local size = 10 + math.sin(star.spin) * 3
+    love.graphics.circle("fill", star.x, star.y, size, 5)
+  end
+
+  love.graphics.setColor(0.75, 0.45, 0.35)
+  for _, meteor in ipairs(M.meteors) do
+    love.graphics.circle("fill", meteor.x, meteor.y, meteor.radius)
+  end
+end
+
+return M

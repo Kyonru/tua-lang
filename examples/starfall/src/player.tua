@@ -1,0 +1,71 @@
+-- The ship: smooth movement from keyboard or gamepad.
+local SPEED = 320
+local ACCELERATION = 8
+
+local controls = input({
+  controls = {
+    left = { "key:left", "key:a", "axis:leftx-" },
+    right = { "key:right", "key:d", "axis:leftx+" },
+    up = { "key:up", "key:w", "axis:lefty-" },
+    down = { "key:down", "key:s", "axis:lefty+" },
+    start = { "key:return", "key:space", "button:a" },
+  },
+  pairs = {
+    move = { "left", "right", "up", "down" },
+  },
+  joystick = love.joystick.getJoysticks()[1],
+})
+
+local M = {
+  x = 0,
+  y = 0,
+  vx = 0,
+  vy = 0,
+  radius = 14,
+  time = 0,
+}
+
+-- Scripted input for the automated smoke run.
+type Steer = (time: number) -> Vec2
+local autopilot: Steer? = nil
+
+function M.setAutopilot(steer: Steer)
+  autopilot = steer
+end
+
+function M.reset(x: number, y: number)
+  M.x, M.y, M.vx, M.vy, M.time = x, y, 0, 0, 0
+end
+
+function M.startPressed(): boolean
+  return controls:pressed("start")
+end
+
+function M.update(dt: number, width: number, height: number)
+  controls:update()
+  M.time += dt
+
+  local moveX, moveY = controls:get("move")
+  if autopilot then
+    local steer = autopilot(M.time)
+    moveX, moveY = steer.x, steer.y
+  end
+
+  local blend = 1 - math.exp(-ACCELERATION * dt)
+  M.vx += (moveX * SPEED - M.vx) * blend
+  M.vy += (moveY * SPEED - M.vy) * blend
+  M.x = math.min(math.max(M.x + M.vx * dt, M.radius), width - M.radius)
+  M.y = math.min(math.max(M.y + M.vy * dt, M.radius), height - M.radius)
+end
+
+function M.draw()
+  local angle = math.atan2(M.vy, M.vx)
+  love.graphics.push()
+  love.graphics.translate(M.x, M.y)
+  love.graphics.rotate(angle)
+  love.graphics.setColor(0.5, 0.9, 1)
+  love.graphics.polygon("fill", 18, 0, -12, -11, -6, 0, -12, 11)
+  love.graphics.pop()
+end
+
+return M
