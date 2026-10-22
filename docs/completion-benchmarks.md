@@ -367,6 +367,33 @@ transport, so a fast backend alone cannot pass both gates. Use
 `make inline-eval-phase-gate-check` for the cheap
 fail-closed status check without refreshing the representative measurements.
 
+Compare first-diagnostics-after-edit latency against a pre-Phase-1 binary on
+the same machine with:
+
+```bash
+TUA_REPRESENTATIVE_BASELINE_TUA=/tmp/tua-phase1-baseline/target/release/tua \
+  make representative-diagnostics-baseline
+```
+
+Build that binary from commit `65cb4a6` in a temporary clone or worktree, not
+by changing the active checkout. The comparison alternates baseline and
+candidate runs, uses the same generated fixtures and content-bound diagnostic
+probe for both, and compares pooled p95 values from 100 samples per fixture
+(five runs of 20 edits). Internal span profiling is disabled for both binaries
+so newer inline-only instrumentation cannot skew the candidate. The old
+binary runs in compatibility mode, which omits the request and telemetry that
+did not exist before Phase 1. The candidate still enables and issues the local
+inline request, so its measurement includes the additional speculative load.
+The default per-fixture allowance is the larger of 5% or 10 ms; override the
+run count, ratio, or minimum slack with
+`TUA_REPRESENTATIVE_DIAGNOSTICS_ROUNDS`,
+`TUA_REPRESENTATIVE_DIAGNOSTICS_SAMPLES_PER_ROUND`,
+`TUA_REPRESENTATIVE_DIAGNOSTICS_TOLERANCE`, and
+`TUA_REPRESENTATIVE_DIAGNOSTICS_MIN_SLACK_MS`. Each run must retain at least
+20 edits and the complete comparison must retain at least 100 samples per
+fixture. Reports stay under
+`target/tua-speed/` and are machine-specific evidence, not committed data.
+
 ### Smoke Versus Full Profile
 
 `make representative-benchmark-smoke` deliberately uses only `single-1000` and

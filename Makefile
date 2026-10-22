@@ -204,7 +204,8 @@ generate-lsp-benchmarks: ## Generate deterministic representative LSP benchmark 
 
 .PHONY: representative-benchmark-test
 representative-benchmark-test: ## Verify representative LSP fixture sizes and deterministic content.
-	node --test scripts/generate-lsp-benchmarks.test.js
+	node --test scripts/generate-lsp-benchmarks.test.js \
+		editors/vscode/scripts/representative-diagnostics-compare.test.js
 
 .PHONY: profile-representative
 profile-representative: representative-benchmark-test ## Profile cold, warm, and contended LSP requests at representative scales.
@@ -230,6 +231,16 @@ representative-phase1-gate: ## Run the representative Phase 1 inline gate with s
 	TUA_REPRESENTATIVE_INLINE_E2E_P95_BUDGET_MS=1500 \
 	TUA_REPRESENTATIVE_PROFILE_OUT=target/tua-speed/representative-phase1-gate.json \
 	$(MAKE) profile-representative
+
+.PHONY: representative-diagnostics-baseline
+representative-diagnostics-baseline: representative-benchmark-test ## Compare diagnostic freshness with a pre-Phase-1 Tua binary (set TUA_REPRESENTATIVE_BASELINE_TUA).
+	@test -n "$(TUA_REPRESENTATIVE_BASELINE_TUA)" || { \
+		echo "set TUA_REPRESENTATIVE_BASELINE_TUA to the pre-Phase-1 Tua binary" >&2; \
+		exit 2; \
+	}
+	$(CARGO) build --release --package tua-cli
+	node editors/vscode/scripts/representative-diagnostics-compare.js \
+		"$(TUA_REPRESENTATIVE_BASELINE_TUA)" "$(RELEASE_TUA)"
 
 .PHONY: profile-examples
 profile-examples: ## Profile CLI and LSP speed across every bundled example project.

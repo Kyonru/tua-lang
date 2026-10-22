@@ -32,8 +32,8 @@ passed = false
 evidence = "client-observed contended request-age reaches 869.41 ms on project-1000; the extension now abstains after 250 ms, but representative editor replay must verify that protection before responsive ghost text is claimed"
 
 [prerequisites.diagnostics_freshness]
-passed = false
-evidence = "target/tua-speed/representative-phase1-gate.json records content-bound diagnostic publication for a distinctive per-revision probe in all seven fixtures (p95 5.65-884.50 ms), but the complete Phase 1 diff still needs a baseline comparison"
+passed = true
+evidence = "the 2026-10-21 target/tua-speed/representative-diagnostics-compare.json alternates five runs of commit 65cb4a6 and the inline-enabled candidate, pools 100 content-bound samples per fixture with internal profiling disabled, and records candidate/baseline p95 in ms of 59.25/59.88, 370.07/382.19, 20.46/19.97, 668.37/907.82, 16.08/16.84, 5.82/6.04, and 6.75/6.88; all seven pass the larger-of-5%-or-10-ms allowance"
 
 [prerequisites.scheduler_cache_hit]
 passed = true

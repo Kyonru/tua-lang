@@ -107,6 +107,14 @@ Record baselines on a clean `main`:
   core-backend, client-observed request-age, parse-counter, and
   first-diagnostics-after-edit measurements
 - Diagnostics freshness using `make editor-regression-smoke`
+- A same-machine pre-Phase-1 diagnostics comparison using
+  `make representative-diagnostics-baseline`. Build commit `65cb4a6` in a
+  temporary checkout and pass its binary through
+  `TUA_REPRESENTATIVE_BASELINE_TUA`. The harness alternates five runs, checks
+  identical fixture hashes, and compares pooled first-publication p95 values
+  across 100 samples per fixture. Internal profiling is disabled symmetrically;
+  the compatibility baseline omits unsupported inline requests while the
+  candidate retains the enabled inline request.
 - Large-source behavior using `make profile-large-tables`
 - Complete syntax-parse throughput and p95 latency for each source kind
   (`parse_tua_source`, `parse_lua_source`)
@@ -315,8 +323,10 @@ The harness must compare:
 > full common prefix requires two supporting lines. The feature remains off by
 > default. Menu-completion performance, the strict inline server gate,
 > real-scheduler cache behavior, and validation parse distribution pass. The
-> held-out quality gate, diagnostics baseline comparison, and representative
-> real menu-state replay have not been claimed as passed. Client-observed
+> held-out quality gate and representative real menu-state replay have not
+> been claimed as passed. The same-machine, 100-sample-per-fixture diagnostics
+> comparison against pre-Phase-1 commit `65cb4a6` passes all seven fixtures.
+> Client-observed
 > contention remains as high as 869.41 ms, so the separate responsiveness
 > prerequisite is also pending even though the 1,500 ms no-stall gate passes.
 > Phase 2 must not ship merely because the implementation exists.
@@ -326,8 +336,7 @@ scheduler-dispatch-to-response server/request, core, end-to-end request-age,
 inline-counter, and diagnostics-freshness measurements. That instrumentation
 makes the remaining performance gates measurable. The strict seven-fixture
 server/worker/backend and client no-stall gates pass; the aggregate Phase 1
-gate remains pending on responsiveness, quality, menu replay, and
-diagnostics-baseline evidence.
+gate remains pending on responsiveness, quality, and menu replay.
 
 Implement only:
 

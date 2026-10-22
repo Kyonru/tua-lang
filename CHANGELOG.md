@@ -8,6 +8,13 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Added
 
+- Added a reproducible Phase 1 diagnostic-freshness comparison for
+  deterministic inline completion. The representative harness can run a
+  pre-Phase-1 binary in compatibility mode, alternates it with the
+  inline-enabled candidate on identical generated fixtures, disables
+  asymmetric internal profiling, and gates pooled p95 latency from 100
+  content-bound edits per fixture. The comparator fails closed on fixture,
+  workload, sample-count, or inline-coverage drift.
 - Added an evaluator-only Phase 3 n-gram experiment behind tua-core's
   `test-fixture` feature. It uses immutable target-file-held-out models,
   collision-free token keys, alpha-renamed identifier slots, bounded

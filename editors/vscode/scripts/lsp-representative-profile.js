@@ -63,6 +63,8 @@ const diagnosticsP95BudgetMs = numberEnv(
   "TUA_REPRESENTATIVE_DIAGNOSTICS_P95_BUDGET_MS",
   10000,
 );
+const baselineOnly = booleanEnv("TUA_REPRESENTATIVE_BASELINE_ONLY", false);
+const diagnosticsOnly = booleanEnv("TUA_REPRESENTATIVE_DIAGNOSTICS_ONLY", false);
 const minimumReturnedAtMostOneParseRate = 0.5;
 
 (async () => {
@@ -71,6 +73,10 @@ const minimumReturnedAtMostOneParseRate = 0.5;
 
   console.log("# Tua representative LSP profile");
   console.log(`command: ${command}`);
+  console.log(
+    `mode: ${diagnosticsOnly ? "diagnostics-only" : "full"}` +
+      `${baselineOnly ? " (baseline compatibility)" : ""}`,
+  );
   console.log(`fixtures: ${fixtureNames.join(", ")}`);
   console.log(
     `cold: ${coldRepeat}, warm: ${warmRepeat}, contention: ${contentionRepeat}, ` +
@@ -88,6 +94,8 @@ const minimumReturnedAtMostOneParseRate = 0.5;
   const report = {
     schemaVersion: 2,
     command,
+    mode: diagnosticsOnly ? "diagnostics-only" : "full",
+    baselineCompatibility: baselineOnly,
     configuration: {
       coldRepeat,
       warmRepeat,
@@ -96,6 +104,7 @@ const minimumReturnedAtMostOneParseRate = 0.5;
       contentionDelayMs,
       requestTimeoutMs,
       workspaceWarmTimeoutMs,
+      profileEnabled: !diagnosticsOnly,
     },
     thresholds: {
       completionP95BudgetMs,
@@ -129,7 +138,7 @@ async function profileFixture(root, fixture) {
   const coldValues = metricValues();
   const validationFailures = validationFailureCounts();
 
-  for (let round = 0; round < coldRepeat; round += 1) {
+  for (let round = 0; !diagnosticsOnly && round < coldRepeat; round += 1) {
     for (const label of Object.keys(coldValues)) {
       const session = await openSession(root);
 
@@ -156,7 +165,7 @@ async function profileFixture(root, fixture) {
   let workspaceWarm;
 
   try {
-    const plan = representativeRequestPlan(session.main);
+    const plan = diagnosticsOnly ? [] : representativeRequestPlan(session.main);
 
     for (const request of plan) {
       const sample = await timedRequest(session.client, request);
@@ -178,8 +187,8 @@ async function profileFixture(root, fixture) {
     contention = await profileContention(session.client, session.main);
     validationFailures.contentionCompletion += contention.validationFailures;
     cacheStats = await session.client.request("tua/cacheStats", null);
-    health = await session.client.request("tua/health", null);
-    inlineProfile = inlineProfileStats(session.client.stderr);
+    health = baselineOnly ? null : await session.client.request("tua/health", null);
+    inlineProfile = baselineOnly ? null : inlineProfileStats(session.client.stderr);
   } finally {
     await closeSession(session.client);
   }
@@ -202,8 +211,10 @@ async function profileFixture(root, fixture) {
     ),
     requestAge: {
       completionAfterChange: statsForValues(contention.completionRequestAges),
-      inlineAfterChange: statsForValues(contention.inlineSuccessfulRequestAges),
-      inlineAllAfterChange: statsForValues(contention.inlineRequestAges),
+      inlineAfterChange: baselineOnly
+        ? null
+        : statsForValues(contention.inlineSuccessfulRequestAges),
+      inlineAllAfterChange: baselineOnly ? null : statsForValues(contention.inlineRequestAges),
       diagnosticsAfterChange: statsForValues(contention.diagnosticsRequestAges),
       background: statsForValues(contention.backgroundRequestAges),
     },
@@ -211,16 +222,19 @@ async function profileFixture(root, fixture) {
       hitRates: cacheHitRates(cacheStats),
       raw: cacheStats,
     },
-    inlineCompletion: {
-      responses: contention.inlineResponses,
-      requestErrors: contention.inlineRequestErrors,
-      nonEmptyResponses: contention.inlineNonEmptyResponses,
-      profile: inlineProfile,
-      serverRequest: methodLatency(health, "tua/localInlineCompletion"),
-      counters: cacheStats.inlineCompletion || null,
-    },
+    inlineCompletion: baselineOnly
+      ? null
+      : {
+          responses: contention.inlineResponses,
+          requestErrors: contention.inlineRequestErrors,
+          nonEmptyResponses: contention.inlineNonEmptyResponses,
+          profile: inlineProfile,
+          serverRequest: methodLatency(health, "tua/localInlineCompletion"),
+          counters: cacheStats.inlineCompletion || null,
+        },
     diagnostics: {
       firstPublishAfterChange: statsForValues(contention.diagnosticsRequestAges),
+      samplesMs: contention.diagnosticsRequestAges,
     },
     health,
     workspaceWarm,
@@ -287,7 +301,9 @@ async function openSession(root) {
   const client = new LspClient(command, root, {
     env: {
       ...process.env,
-      TUA_PROFILE: process.env.TUA_PROFILE || "1",
+      // Cross-version diagnostics comparisons must not make the candidate pay
+      // for inline-only profile spans that do not exist in the baseline.
+      TUA_PROFILE: diagnosticsOnly ? "0" : process.env.TUA_PROFILE || "1",
     },
     requestTimeoutMs,
   });
@@ -310,15 +326,17 @@ async function openSession(root) {
     workspaceFolders: [{ uri: pathToFileURL(root).href, name: path.basename(root) }],
   });
   client.notify("initialized", {});
-  client.notify("workspace/didChangeConfiguration", {
-    settings: {
-      tua: {
-        completion: {
-          inline: { enabled: true },
+  if (!baselineOnly) {
+    client.notify("workspace/didChangeConfiguration", {
+      settings: {
+        tua: {
+          completion: {
+            inline: { enabled: true },
+          },
         },
       },
-    },
-  });
+    });
+  }
 
   client.notify("textDocument/didOpen", {
     textDocument: {
@@ -483,13 +501,15 @@ async function profileContention(client, main) {
       contentChanges: [{ text: currentText }],
     });
 
-    const inline = observeRequest(
-      client.startRequest("tua/localInlineCompletion", {
-        textDocument: { uri: main.uri },
-        position: positionAfterLast(currentText, inlinePartialPrefix),
-        documentVersion: version,
-      }),
-    );
+    const inline = baselineOnly
+      ? null
+      : observeRequest(
+          client.startRequest("tua/localInlineCompletion", {
+            textDocument: { uri: main.uri },
+            position: positionAfterLast(currentText, inlinePartialPrefix),
+            documentVersion: version,
+          }),
+        );
     const completion = observeRequest(
       client.startRequest("textDocument/completion", {
         textDocument: { uri: main.uri },
@@ -520,16 +540,18 @@ async function profileContention(client, main) {
       validDocumentCompletionCount += 1;
       validationFailures += Number(!freshCompletion);
     }
-    inlineRequestAges.push(inlineResult.ageMs);
-    if (!inlineResult.message.error) {
-      inlineSuccessfulRequestAges.push(inlineResult.ageMs);
+    if (inlineResult) {
+      inlineRequestAges.push(inlineResult.ageMs);
+      if (!inlineResult.message.error) {
+        inlineSuccessfulRequestAges.push(inlineResult.ageMs);
+      }
+      inlineResponses += 1;
+      inlineRequestErrors += Number(Boolean(inlineResult.message.error));
+      inlineNonEmptyResponses += Number(
+        Array.isArray(inlineResult.message.result?.items) &&
+          inlineResult.message.result.items.length > 0,
+      );
     }
-    inlineResponses += 1;
-    inlineRequestErrors += Number(Boolean(inlineResult.message.error));
-    inlineNonEmptyResponses += Number(
-      Array.isArray(inlineResult.message.result?.items) &&
-        inlineResult.message.result.items.length > 0,
-    );
 
     // A response received before the new-version completion may have already
     // left the server before it processed didChange. The validated completion
@@ -746,13 +768,9 @@ function regressionFailures(report) {
   for (const fixture of report.fixtures) {
     const warmCompletionP95 = fixture.latency.completion.warm.p95Ms;
     const contentionCompletionP95 = fixture.requestAge.completionAfterChange.p95Ms;
-    const inlineEndToEndP95 = fixture.requestAge.inlineAfterChange.p95Ms;
-    const inlineServerP95 = fixture.inlineCompletion.serverRequest.p95Ms;
-    const inlineWorkerP95 = fixture.inlineCompletion.profile.workerExecution.p95Ms;
-    const inlineBackendP95 = fixture.inlineCompletion.profile.coreBackend.p95Ms;
     const diagnosticsP95 = fixture.diagnostics.firstPublishAfterChange.p95Ms;
 
-    if (warmCompletionP95 > report.thresholds.completionP95BudgetMs) {
+    if (!diagnosticsOnly && warmCompletionP95 > report.thresholds.completionP95BudgetMs) {
       failures.push(
         `${fixture.name}: warm completion p95 ${warmCompletionP95.toFixed(2)}ms exceeds ` +
           `${report.thresholds.completionP95BudgetMs}ms`,
@@ -765,29 +783,36 @@ function regressionFailures(report) {
           `${report.thresholds.completionP95BudgetMs}ms`,
       );
     }
-    if (inlineEndToEndP95 > report.thresholds.inlineEndToEndP95BudgetMs) {
-      failures.push(
-        `${fixture.name}: inline end-to-end p95 ${inlineEndToEndP95.toFixed(2)}ms exceeds ` +
-          `${report.thresholds.inlineEndToEndP95BudgetMs}ms`,
-      );
-    }
-    if (inlineServerP95 > report.thresholds.inlineServerP95BudgetMs) {
-      failures.push(
-        `${fixture.name}: inline server/request p95 ${inlineServerP95.toFixed(2)}ms exceeds ` +
-          `${report.thresholds.inlineServerP95BudgetMs}ms`,
-      );
-    }
-    if (inlineBackendP95 > report.thresholds.inlineBackendP95BudgetMs) {
-      failures.push(
-        `${fixture.name}: inline core/backend p95 ${inlineBackendP95.toFixed(2)}ms exceeds ` +
-          `${report.thresholds.inlineBackendP95BudgetMs}ms`,
-      );
-    }
-    if (inlineWorkerP95 > report.thresholds.inlineWorkerP95BudgetMs) {
-      failures.push(
-        `${fixture.name}: inline worker execution p95 ${inlineWorkerP95.toFixed(2)}ms exceeds ` +
-          `${report.thresholds.inlineWorkerP95BudgetMs}ms`,
-      );
+    if (!baselineOnly && !diagnosticsOnly) {
+      const inlineEndToEndP95 = fixture.requestAge.inlineAfterChange.p95Ms;
+      const inlineServerP95 = fixture.inlineCompletion.serverRequest.p95Ms;
+      const inlineWorkerP95 = fixture.inlineCompletion.profile.workerExecution.p95Ms;
+      const inlineBackendP95 = fixture.inlineCompletion.profile.coreBackend.p95Ms;
+
+      if (inlineEndToEndP95 > report.thresholds.inlineEndToEndP95BudgetMs) {
+        failures.push(
+          `${fixture.name}: inline end-to-end p95 ${inlineEndToEndP95.toFixed(2)}ms exceeds ` +
+            `${report.thresholds.inlineEndToEndP95BudgetMs}ms`,
+        );
+      }
+      if (inlineServerP95 > report.thresholds.inlineServerP95BudgetMs) {
+        failures.push(
+          `${fixture.name}: inline server/request p95 ${inlineServerP95.toFixed(2)}ms exceeds ` +
+            `${report.thresholds.inlineServerP95BudgetMs}ms`,
+        );
+      }
+      if (inlineBackendP95 > report.thresholds.inlineBackendP95BudgetMs) {
+        failures.push(
+          `${fixture.name}: inline core/backend p95 ${inlineBackendP95.toFixed(2)}ms exceeds ` +
+            `${report.thresholds.inlineBackendP95BudgetMs}ms`,
+        );
+      }
+      if (inlineWorkerP95 > report.thresholds.inlineWorkerP95BudgetMs) {
+        failures.push(
+          `${fixture.name}: inline worker execution p95 ${inlineWorkerP95.toFixed(2)}ms exceeds ` +
+            `${report.thresholds.inlineWorkerP95BudgetMs}ms`,
+        );
+      }
     }
     if (diagnosticsP95 > report.thresholds.diagnosticsP95BudgetMs) {
       failures.push(
@@ -795,18 +820,22 @@ function regressionFailures(report) {
           `${report.thresholds.diagnosticsP95BudgetMs}ms`,
       );
     }
-    if (fixture.inlineCompletion.requestErrors !== 0) {
+    if (!baselineOnly && fixture.inlineCompletion.requestErrors !== 0) {
       failures.push(
         `${fixture.name}: ${fixture.inlineCompletion.requestErrors} inline request(s) failed`,
       );
     }
     if (
-      fixture.inlineCompletion.serverRequest.count !== fixture.inlineCompletion.responses ||
-      fixture.inlineCompletion.profile.queue.runs !== fixture.inlineCompletion.responses ||
-      fixture.inlineCompletion.profile.preparation.runs !==
-        fixture.inlineCompletion.responses ||
-      fixture.inlineCompletion.profile.workerExecution.runs !== fixture.inlineCompletion.responses ||
-      fixture.inlineCompletion.profile.coreBackend.runs !== fixture.inlineCompletion.responses
+      !baselineOnly &&
+      !diagnosticsOnly &&
+      (fixture.inlineCompletion.serverRequest.count !== fixture.inlineCompletion.responses ||
+        fixture.inlineCompletion.profile.queue.runs !== fixture.inlineCompletion.responses ||
+        fixture.inlineCompletion.profile.preparation.runs !==
+          fixture.inlineCompletion.responses ||
+        fixture.inlineCompletion.profile.workerExecution.runs !==
+          fixture.inlineCompletion.responses ||
+        fixture.inlineCompletion.profile.coreBackend.runs !==
+          fixture.inlineCompletion.responses)
     ) {
       failures.push(
         `${fixture.name}: inline profile spans did not cover every request ` +
@@ -818,50 +847,52 @@ function regressionFailures(report) {
           `${fixture.inlineCompletion.profile.coreBackend.runs})`,
       );
     }
-    const inlineCounters = fixture.inlineCompletion.counters;
-    if (!inlineCounters || Number(inlineCounters.requests || 0) === 0) {
-      failures.push(`${fixture.name}: no inline completion reached the core backend`);
-    } else {
-      const distribution = inlineCounters.candidateParseDistribution || {};
-      const distributed =
-        Number(distribution.zero || 0) +
-        Number(distribution.one || 0) +
-        Number(distribution.two || 0);
-      if (distributed !== Number(inlineCounters.candidateAttempts || 0)) {
-        failures.push(
-          `${fixture.name}: inline parse distribution does not match candidate attempts`,
-        );
-      }
-      const peek = inlineCounters.cachePeek || {};
-      if (Number(peek.hits || 0) + Number(peek.misses || 0) === 0) {
-        failures.push(`${fixture.name}: inline cache-peek counters were not observed`);
-      }
-      const returned = inlineCounters.returnedParseDistribution || {};
-      const returnedZero = Number(returned.zero || 0);
-      const returnedOne = Number(returned.one || 0);
-      const returnedTwo = Number(returned.two || 0);
-      const returnedTotal = returnedZero + returnedOne + returnedTwo;
-      if (returnedTotal !== Number(inlineCounters.candidatesReturned || 0)) {
-        failures.push(
-          `${fixture.name}: returned parse distribution does not match returned candidates`,
-        );
-      }
-      if (returnedZero !== 0) {
-        failures.push(`${fixture.name}: ${returnedZero} candidate(s) returned without parsing`);
-      }
-      if (returnedTotal > 0) {
-        const atMostOneRate = (returnedZero + returnedOne) / returnedTotal;
-        if (atMostOneRate < report.thresholds.minimumReturnedAtMostOneParseRate) {
+    const inlineCounters = fixture.inlineCompletion?.counters;
+    if (!baselineOnly && !diagnosticsOnly) {
+      if (!inlineCounters || Number(inlineCounters.requests || 0) === 0) {
+        failures.push(`${fixture.name}: no inline completion reached the core backend`);
+      } else {
+        const distribution = inlineCounters.candidateParseDistribution || {};
+        const distributed =
+          Number(distribution.zero || 0) +
+          Number(distribution.one || 0) +
+          Number(distribution.two || 0);
+        if (distributed !== Number(inlineCounters.candidateAttempts || 0)) {
           failures.push(
-            `${fixture.name}: only ${(atMostOneRate * 100).toFixed(1)}% of returned candidates ` +
-              `used at most one parse`,
+            `${fixture.name}: inline parse distribution does not match candidate attempts`,
           );
         }
-        if (returnedTwo === 0) {
+        const peek = inlineCounters.cachePeek || {};
+        if (Number(peek.hits || 0) + Number(peek.misses || 0) === 0) {
+          failures.push(`${fixture.name}: inline cache-peek counters were not observed`);
+        }
+        const returned = inlineCounters.returnedParseDistribution || {};
+        const returnedZero = Number(returned.zero || 0);
+        const returnedOne = Number(returned.one || 0);
+        const returnedTwo = Number(returned.two || 0);
+        const returnedTotal = returnedZero + returnedOne + returnedTwo;
+        if (returnedTotal !== Number(inlineCounters.candidatesReturned || 0)) {
           failures.push(
-            `${fixture.name}: temporarily-invalid scenario did not exercise a returned ` +
-              `two-parse candidate`,
+            `${fixture.name}: returned parse distribution does not match returned candidates`,
           );
+        }
+        if (returnedZero !== 0) {
+          failures.push(`${fixture.name}: ${returnedZero} candidate(s) returned without parsing`);
+        }
+        if (returnedTotal > 0) {
+          const atMostOneRate = (returnedZero + returnedOne) / returnedTotal;
+          if (atMostOneRate < report.thresholds.minimumReturnedAtMostOneParseRate) {
+            failures.push(
+              `${fixture.name}: only ${(atMostOneRate * 100).toFixed(1)}% of returned candidates ` +
+                `used at most one parse`,
+            );
+          }
+          if (returnedTwo === 0) {
+            failures.push(
+              `${fixture.name}: temporarily-invalid scenario did not exercise a returned ` +
+                `two-parse candidate`,
+            );
+          }
         }
       }
     }
@@ -899,6 +930,9 @@ function printFixture(fixture) {
     `\n## ${fixture.name} (${fixture.sourceFileCount} files, ${fixture.sourceLineCount} lines)`,
   );
   for (const [label, phases] of Object.entries(fixture.latency)) {
+    if (phases.cold.runs === 0 && phases.warm.runs === 0) {
+      continue;
+    }
     console.log(
       `${label.padEnd(12)} cold p95 ${phases.cold.p95Ms.toFixed(2)}ms  ` +
         `warm p95 ${phases.warm.p95Ms.toFixed(2)}ms`,
@@ -910,19 +944,23 @@ function printFixture(fixture) {
       `cancelled ${fixture.contention.cancelledRequests}/` +
       `${fixture.contention.backgroundRequests}  stale ${fixture.contention.staleResultCount}`,
   );
-  console.log(
-    `inline e2e p95 ${fixture.requestAge.inlineAfterChange.p95Ms.toFixed(2)}ms  ` +
-      `queue p95 ${fixture.inlineCompletion.profile.queue.p95Ms.toFixed(3)}ms  ` +
-      `prepare p95 ${fixture.inlineCompletion.profile.preparation.p95Ms.toFixed(3)}ms  ` +
-      `server/request p95 ${fixture.inlineCompletion.serverRequest.p95Ms.toFixed(2)}ms  ` +
-      `worker p95 ${fixture.inlineCompletion.profile.workerExecution.p95Ms.toFixed(3)}ms  ` +
-      `core p95 ${fixture.inlineCompletion.profile.coreBackend.p95Ms.toFixed(3)}ms`,
-  );
+  if (fixture.inlineCompletion && !diagnosticsOnly) {
+    console.log(
+      `inline e2e p95 ${fixture.requestAge.inlineAfterChange.p95Ms.toFixed(2)}ms  ` +
+        `queue p95 ${fixture.inlineCompletion.profile.queue.p95Ms.toFixed(3)}ms  ` +
+        `prepare p95 ${fixture.inlineCompletion.profile.preparation.p95Ms.toFixed(3)}ms  ` +
+        `server/request p95 ${fixture.inlineCompletion.serverRequest.p95Ms.toFixed(2)}ms  ` +
+        `worker p95 ${fixture.inlineCompletion.profile.workerExecution.p95Ms.toFixed(3)}ms  ` +
+        `core p95 ${fixture.inlineCompletion.profile.coreBackend.p95Ms.toFixed(3)}ms`,
+    );
+  }
   console.log(
     `diagnostics after edit p95 ` +
       `${fixture.diagnostics.firstPublishAfterChange.p95Ms.toFixed(2)}ms  ` +
-      `inline non-empty ${fixture.inlineCompletion.nonEmptyResponses}/` +
-      `${fixture.inlineCompletion.responses}`,
+      (fixture.inlineCompletion
+        ? `inline non-empty ${fixture.inlineCompletion.nonEmptyResponses}/` +
+          `${fixture.inlineCompletion.responses}`
+        : "inline skipped for baseline compatibility"),
   );
   console.log(
     `workspace warm ${fixture.workspaceWarm.completed ? "complete" : "incomplete"} in ` +
@@ -942,6 +980,21 @@ function numberEnv(name, fallback) {
   }
 
   return value;
+}
+
+function booleanEnv(name, fallback) {
+  const value = process.env[name];
+
+  if (value == null || value === "") {
+    return fallback;
+  }
+  if (value === "1" || value === "true") {
+    return true;
+  }
+  if (value === "0" || value === "false") {
+    return false;
+  }
+  throw new Error(`${name} must be 0, 1, false, or true`);
 }
 
 function stringListEnv(name, fallback) {

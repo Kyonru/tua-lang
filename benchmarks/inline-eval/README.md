@@ -31,6 +31,15 @@ dispatch-to-response latency, worker execution, and core/backend work, plus a
 `make inline-eval-phase-gate`, which then checks every prerequisite and its
 evidence in `phase1-gate.toml`; a passing quality dataset alone is insufficient.
 
+`make representative-diagnostics-baseline` closes the separate diagnostic
+freshness comparison with a binary built from pre-Phase-1 commit `65cb4a6`.
+Set `TUA_REPRESENTATIVE_BASELINE_TUA` to that binary. The harness alternates
+five compatibility-baseline and inline-enabled candidate runs, pools 20 content-bound
+diagnostic samples from every run, disables asymmetric internal profiling,
+verifies identical fixture hashes, and writes
+`target/tua-speed/representative-diagnostics-compare.json`. It does not read
+the held-out or external completion datasets.
+
 `--records` keeps every suggestion in the JSON report. `--min-prefix`,
 `--min-support`, `--min-full-prefix-support`, `--dominance`,
 `--recall-variant unique|common-prefix`, and `--contexts open-paren,comma,...`
