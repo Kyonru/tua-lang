@@ -843,6 +843,22 @@ held-out sets or be described as an accepted phase until the aggregate Phase 1
 gate passes. This exception lets the tuning set test whether project evidence
 actually closes the known Tua coverage gap without weakening any release gate.
 
+> **Evaluator status (2026-10-21): tuning only.** Exact retrieval now reports
+> same-directory and rest-of-project evidence separately. The pinned
+> `[phase2_tuning]` policy in `benchmarks/inline-eval/thresholds.toml` adds one
+> explicitly named combined candidate: shipping Phase 1 first, then a
+> conservative rest-of-project common prefix only for comma, operator, and
+> `other` contexts. It excludes same-directory and bundled evidence, requires
+> six non-whitespace prefix characters and two supporting matches before it
+> returns their full common prefix. This policy may be
+> measured on tune and smoke only until it is frozen for a Phase 2 gate; it is
+> not production behavior and is not evidence that Phase 2 passes.
+> On the current tuning set it improves saved characters per eligible position
+> from `0.1906` to `0.1969`, correct-prefix precision from `0.8005` to `0.8082`,
+> and wrong-to-saved from `0.2446` to `0.2368`. All 17 added project suggestions
+> were exact, but the absolute gain is small and no held-out or external data
+> has been inspected.
+
 ### Prerequisite: per-file VFS versions
 
 `VfsFileSource` currently stores only `source` and `kind`, and

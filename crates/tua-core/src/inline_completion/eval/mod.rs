@@ -16,6 +16,7 @@ pub mod backends;
 pub mod dataset;
 pub mod metrics;
 pub mod replay;
+pub mod retrieval;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
@@ -24,12 +25,16 @@ use std::time::Instant;
 use serde::{Deserialize, Serialize};
 
 use self::backends::{
-    Backend, Candidate, CurrentFileCommonPrefix, CurrentFileRecall, Noop, Phase1, Phase1Config,
-    ProductionPhase1, ProductionRequest, RecallOptions, RecallVariant, Request, Semantic,
+    Backend, BundledExactRetrieval, Candidate, CurrentFileCommonPrefix, CurrentFileRecall, Noop,
+    Phase1, Phase1Config, Phase2Tuning, Phase2TuningConfig, ProductionPhase1, ProductionRequest,
+    ProjectExactRetrieval, RecallOptions, RecallVariant, Request, Semantic,
 };
 use self::dataset::{DuplicateReport, EvalFile, EvalProject, EvalSet, SetRole};
 use self::metrics::{
     Breakdown, CurvePoint, DeterministicSummary, Outcome, Percentiles, Scored, Summary,
+};
+use self::retrieval::{
+    EvalProjectRetrievalIndex, HoldoutMode, IndexState, RetrievalIndexReport, RetrievalScope,
 };
 use super::eligibility::{
     auto_close_suffix, cursor_context, is_identifier_char, lexical_region_at,
@@ -68,6 +73,11 @@ pub struct EvalOptions {
     /// Real VS Code menu selections captured locally against frozen dataset
     /// files. Matching entries replace the synthetic menu state.
     pub menu_replay: Option<replay::MenuReplay>,
+    /// Include Phase 2 exact project/corpus retrieval experiments. These
+    /// backends never affect the shipping host query or Phase 1 gates.
+    pub phase2_retrieval: bool,
+    /// Frozen policy for the explicitly named Phase 2 tuning candidate.
+    pub phase2_tuning: Phase2TuningConfig,
 }
 
 impl Default for EvalOptions {
@@ -83,6 +93,8 @@ impl Default for EvalOptions {
             phase1: Phase1Config::default(),
             keep_records: false,
             menu_replay: None,
+            phase2_retrieval: false,
+            phase2_tuning: Phase2TuningConfig::pinned(),
         }
     }
 }
@@ -180,6 +192,10 @@ pub struct BackendReport {
     pub by_project: Breakdown,
     /// Per source, with every eligible request in the denominator.
     pub by_source: Breakdown,
+    /// Exact-retrieval tier: current-file, same-directory, project, or bundled.
+    pub by_tier: Breakdown,
+    /// Project corpus availability: cold, partial, complete, or not-applicable.
+    pub by_index_state: Breakdown,
     /// Requests at the end of a line, where the right answer is no
     /// suggestion. Every suggestion here is wrong.
     pub abstain: Summary,
@@ -295,12 +311,26 @@ pub struct SetReport {
     pub phase1: Phase1Config,
     /// Exploratory configuration used by the `phase1-prototype` backend.
     pub phase1_prototype: Phase1Config,
+    /// Frozen policy used by the combined Phase 1 + project tuning candidate.
+    pub phase2_tuning: Phase2TuningConfig,
     pub backends: BTreeMap<String, BackendReport>,
     pub warmup_by_language: BTreeMap<String, WarmupReport>,
     pub parse_by_language: BTreeMap<String, ParseReport>,
     pub inline_validation: InlineValidationReport,
     pub memory: Vec<(String, MemoryReport)>,
+    /// Phase 2 offline index construction and near-duplicate reports.
+    pub retrieval_indexes: Vec<(String, RetrievalIndexReport)>,
+    /// One-time bundled corpus initialization/access and retained bytes.
+    pub bundled_corpus: Option<BundledCorpusReport>,
     pub records: Vec<Record>,
+}
+
+#[derive(Clone, Debug, Default, Serialize)]
+pub struct BundledCorpusReport {
+    pub approximate_bytes: usize,
+    /// This is construction time on the process's first access and lookup
+    /// time thereafter because the production corpus is held in a OnceLock.
+    pub build_or_access_ms: f64,
 }
 
 #[derive(Clone, Debug, Default, Serialize)]
@@ -360,7 +390,11 @@ pub fn evaluate(
     duplicates: DuplicateReport,
     options: &EvalOptions,
 ) -> EvalReport {
-    let backends: Vec<Box<dyn Backend>> = vec![
+    assert!(
+        !options.phase2_retrieval || sets.iter().all(|set| !set.role.is_gate()),
+        "Phase 2 retrieval is tuning-only and must not inspect held-out or external sets"
+    );
+    let mut backends: Vec<Box<dyn Backend>> = vec![
         Box::new(Noop),
         Box::new(Semantic),
         Box::new(CurrentFileRecall {
@@ -379,6 +413,27 @@ pub fn evaluate(
             current_file: true,
         }),
     ];
+    if options.phase2_retrieval {
+        for scope in [
+            RetrievalScope::Combined,
+            RetrievalScope::SameDirectory,
+            RetrievalScope::Project,
+        ] {
+            for holdout in [HoldoutMode::TargetFile, HoldoutMode::TargetLine] {
+                for state in [IndexState::Cold, IndexState::Partial, IndexState::Complete] {
+                    backends.push(Box::new(ProjectExactRetrieval {
+                        holdout,
+                        state,
+                        scope,
+                    }));
+                }
+            }
+        }
+        backends.push(Box::new(BundledExactRetrieval));
+        backends.push(Box::new(Phase2Tuning {
+            config: options.phase2_tuning.clone(),
+        }));
+    }
 
     let reports = sets
         .iter()
@@ -403,6 +458,8 @@ struct BackendAccumulator {
     by_document: Breakdown,
     by_project: Breakdown,
     by_source: Breakdown,
+    by_tier: Breakdown,
+    by_index_state: Breakdown,
     abstain: Summary,
     scored: Vec<Scored>,
 }
@@ -414,6 +471,7 @@ impl BackendAccumulator {
         candidate: Option<&Candidate>,
         outcome: Option<Outcome>,
         latency_ns: u64,
+        index_state: &'static str,
     ) {
         if keys.abstain {
             self.abstain.add(outcome, latency_ns);
@@ -428,6 +486,7 @@ impl BackendAccumulator {
             (&mut self.by_prefix, keys.prefix),
             (&mut self.by_document, keys.document),
             (&mut self.by_project, keys.project),
+            (&mut self.by_index_state, index_state),
         ] {
             breakdown
                 .entry(key.to_owned())
@@ -439,6 +498,12 @@ impl BackendAccumulator {
                 .entry(candidate.source.to_owned())
                 .or_default()
                 .add_suggestion(outcome);
+            if let Some(tier) = candidate.tier {
+                self.by_tier
+                    .entry(tier.to_owned())
+                    .or_default()
+                    .add_suggestion(outcome);
+            }
             self.scored.push(Scored {
                 score: candidate.score,
                 exact: outcome.exact,
@@ -470,6 +535,12 @@ impl BackendAccumulator {
                 .into_iter()
                 .map(|(key, summary)| (key, summary.rebase(eligible).finish()))
                 .collect(),
+            by_tier: self
+                .by_tier
+                .into_iter()
+                .map(|(key, summary)| (key, summary.rebase(eligible).finish()))
+                .collect(),
+            by_index_state: finish(self.by_index_state),
             abstain: self.abstain.finish(),
         }
     }
@@ -499,9 +570,18 @@ fn evaluate_set(set: &EvalSet, backends: &[Box<dyn Backend>], options: &EvalOpti
         projects: set.projects.len(),
         phase1: Phase1Config::production(),
         phase1_prototype: options.phase1.clone(),
+        phase2_tuning: options.phase2_tuning.clone(),
         ..SetReport::default()
     };
     report.inline_validation.cache_state = "cold".to_owned();
+    if options.phase2_retrieval {
+        let started = Instant::now();
+        let corpus = super::corpus::bundled_corpus();
+        report.bundled_corpus = Some(BundledCorpusReport {
+            approximate_bytes: corpus.approximate_bytes(),
+            build_or_access_ms: started.elapsed().as_secs_f64() * 1000.0,
+        });
+    }
     let mut accumulators = backends
         .iter()
         .map(|_| BackendAccumulator::default())
@@ -524,6 +604,13 @@ fn evaluate_set(set: &EvalSet, backends: &[Box<dyn Backend>], options: &EvalOpti
         let (mut host, memory) = load_host(project, options);
         let mut facts_host = source_host(project);
         report.memory.push((project.name.clone(), memory));
+        let retrieval_index = options.phase2_retrieval.then(|| {
+            let (index, index_report) = EvalProjectRetrievalIndex::build(project);
+            report
+                .retrieval_indexes
+                .push((project.name.clone(), index_report));
+            index
+        });
 
         for file in &project.files {
             evaluate_file(
@@ -536,6 +623,7 @@ fn evaluate_set(set: &EvalSet, backends: &[Box<dyn Backend>], options: &EvalOpti
                 &mut accumulators,
                 &mut warmups,
                 &mut report,
+                retrieval_index.as_ref(),
             );
         }
         report.inline_validation.add(&host.cache_stats());
@@ -666,6 +754,7 @@ fn evaluate_file(
     accumulators: &mut [BackendAccumulator],
     warmups: &mut BTreeMap<&'static str, WarmupAccumulator>,
     report: &mut SetReport,
+    retrieval_index: Option<&EvalProjectRetrievalIndex>,
 ) {
     let source = file.source.replace("\r\n", "\n");
     let (mut positions, ineligible) = sample_positions(&source, options.max_positions_per_file);
@@ -756,6 +845,10 @@ fn evaluate_file(
                 context,
                 declared_callbacks: facts.declared_callbacks.as_ref(),
                 include_ecs,
+                path: &file.path,
+                language: file.language(),
+                retrieval_index,
+                allow_target_file_other_lines: scenario != Scenario::Cut,
             };
             let keys = Keys {
                 abstain,
@@ -797,7 +890,13 @@ fn evaluate_file(
                 let outcome = candidate.as_ref().map(|candidate| {
                     metrics::score(&candidate.text, candidate.is_snippet, expected)
                 });
-                accumulator.add(&keys, candidate.as_ref(), outcome, latency_ns);
+                accumulator.add(
+                    &keys,
+                    candidate.as_ref(),
+                    outcome,
+                    latency_ns,
+                    backend.index_state(),
+                );
                 if options.keep_records && candidate.is_some() {
                     report.records.push(Record {
                         file: file_label.clone(),
@@ -1199,9 +1298,33 @@ pub struct Thresholds {
     /// of command-line settings, so they test exactly what was approved.
     #[serde(default)]
     pub phase1: Option<Phase1Thresholds>,
+    /// Frozen exploratory Phase 2 policy. It does not change the Phase 1
+    /// release gate and is consumed only with `--phase2-retrieval`.
+    #[serde(default)]
+    pub phase2_tuning: Option<Phase2TuningThresholds>,
     /// Acceptance criteria keyed by manifest set name. Each gate names only
     /// the languages that the corresponding dataset is intended to measure.
     pub sets: BTreeMap<String, GateSetThresholds>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct Phase2TuningThresholds {
+    pub contexts: Vec<String>,
+    pub min_prefix_chars: usize,
+    pub min_support: usize,
+    pub min_full_prefix_support: usize,
+}
+
+impl Phase2TuningThresholds {
+    pub fn config(&self) -> Result<Phase2TuningConfig, String> {
+        Ok(Phase2TuningConfig {
+            contexts: parse_contexts(self.contexts.iter().map(String::as_str))?,
+            min_prefix_chars: self.min_prefix_chars,
+            min_support: self.min_support,
+            min_full_prefix_support: self.min_full_prefix_support,
+        })
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

@@ -283,6 +283,10 @@ INLINE_EVAL_DEBUG := $(CARGO) run --quiet --package tua-core --features test-fix
 inline-eval: ## Evaluate local inline-completion sources on the tuning sets (writes target/tua-speed/inline-eval-tune.json).
 	$(INLINE_EVAL) --manifest $(INLINE_EVAL_MANIFEST) --set tune --out target/tua-speed/inline-eval-tune.json
 
+.PHONY: inline-eval-phase2
+inline-eval-phase2: ## Evaluate experimental Phase 2 exact retrieval on tuning data only.
+	$(INLINE_EVAL) --manifest $(INLINE_EVAL_MANIFEST) --set tune --phase2-retrieval --thresholds $(INLINE_EVAL_THRESHOLDS) --out target/tua-speed/inline-eval-tune-phase2.json
+
 .PHONY: inline-eval-smoke
 inline-eval-smoke: ## Check the inline-completion evaluator against its committed smoke expectations (offline).
 	$(INLINE_EVAL_DEBUG) --manifest $(INLINE_EVAL_MANIFEST) --set smoke --max-positions 0 --check-expected $(INLINE_EVAL_SMOKE_EXPECTED)

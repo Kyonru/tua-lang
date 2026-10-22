@@ -9,6 +9,7 @@ before their default or source scope expands. It lives behind the
 
 ```sh
 make inline-eval            # tuning sets -> target/tua-speed/inline-eval-tune.json
+make inline-eval-phase2     # opt-in Phase 2 exact retrieval, tuning data only
 make inline-eval-smoke      # committed fixtures, compared with smoke/expected.json (CI)
 make inline-eval-holdout    # held-out gate, checked against thresholds.toml
 make inline-eval-external   # fetch pinned third-party projects, then gate on them
@@ -16,6 +17,8 @@ make inline-eval-phase-gate # aggregate decision; fails while any prerequisite i
 
 # Ad-hoc paths: directories are projects, files stand alone.
 cargo run -p tua-core --features test-fixture --example inline_eval -- examples/features --json
+
+# The make target above expands to the equivalent --phase2-retrieval command.
 ```
 
 `make representative-phase1-gate` first records the full seven-fixture
@@ -36,6 +39,27 @@ threshold lets a single matching line offer only its first token while repeated
 patterns can offer their whole common continuation. `--no-menu` and
 `--no-warmup` skip the analysis-backed measurements for a faster run, and
 `--max-positions 0` evaluates every position.
+
+`--phase2-retrieval` opts into evaluator-only exact project and bundled-corpus
+backends. It is deliberately absent from the normal Phase 1 smoke and gate
+commands. While Phase 2 policy is being selected, use it only with `tune` or
+`smoke`; do not inspect held-out or external results before the configuration
+and thresholds for those sets are frozen. The option requires
+`--thresholds benchmarks/inline-eval/thresholds.toml`; its `[phase2_tuning]`
+table pins the exploratory combined candidate.
+
+The report keeps `same-directory` and `project` as separate tiers. The clearly
+named `phase2-tuning-phase1-plus-project-common-prefix` backend first asks the
+shipping Phase 1 query, then fills only comma, operator, and `other` contexts
+from rest-of-project evidence. It excludes same-directory and bundled results,
+requires at least six non-whitespace prefix characters and two supporting
+matches before returning their full common prefix.
+These values are tuning inputs, not shipping defaults or acceptance claims.
+On the current tuning set, this candidate raises saved characters per eligible
+position from `0.1906` to `0.1969`, raises correct-prefix precision from
+`0.8005` to `0.8082`, and lowers wrong-to-saved from `0.2446` to `0.2368`.
+The 17 added project suggestions were all exact, but this is tune-only evidence
+and the absolute gain is small; no held-out or external result has been read.
 
 `--menu-replay FILE` replaces simulated menu selection with explicitly enabled
 local JSONL captured from the VS Code provider. Start the extension host with both
@@ -180,6 +204,39 @@ cursor on that line and asks every backend for one suggestion.
 - `phase1`: the exact shipping host query, including budget, cancellation,
   suffix handling, parse-delta validation, and the fixed production policy.
   A gate rejects a `[phase1]` table that does not match that policy.
+- `project-file-holdout-{cold,partial,complete}`: exact project retrieval with
+  the entire target file unavailable, preventing target-file leakage.
+- `project-line-holdout-{cold,partial,complete}`: exact project retrieval with
+  the active line excluded. In `cut`, where later target-file lines do not
+  exist yet, the whole target file is excluded; `edit` and `auto-close` may use
+  its other lines.
+- `same-directory-only-{file,line}-holdout-{cold,partial,complete}` and
+  `project-only-{file,line}-holdout-{cold,partial,complete}`: isolate those
+  tiers so priority order cannot disguise a weak source. The shorter
+  `project-*` names above remain the combined tier-order baseline.
+- `phase2-tuning-phase1-plus-project-common-prefix`: the pinned tuning
+  candidate described above.
+- `bundled-corpus`: exact retrieval from the separate, immutable hand-written
+  Lua/LÖVE corpus. Lua requests do not read Tua-only corpus lines.
+
+The experimental project index clusters files whose normalized significant
+line **multisets** have at least 90% weighted-Jaccard similarity. A file joins
+a cluster only when it matches every member, preventing single-link chains,
+and clusters larger than three retain deterministic first, middle, and last
+checkpoints. For target-file evaluation, the target is removed before both
+clustering and the path-sorted partial-index boundary are computed. Reports
+list clusters and representatives; table, signature, one-time pairwise
+similarity, and target-view clustering time separately; the number of
+weighted-Jaccard checks; production-shaped project-table bytes;
+evaluator-only holdout bytes and temporary clustering bytes; and
+bundled-corpus bytes plus first-build-or-later-access time. Pairwise
+similarities are computed once (`N*(N-1)/2` at most) and reused for every
+target-file view, so target-specific clustering never rescans source lines.
+`partial` exposes the first half of the eligible path-sorted tables; `cold`
+exposes none. All per-file matches participate in global aggregation before a
+winner is selected. The offline `same-directory` tier has no require-target
+information; production adds already-resolved require targets without
+duplicating resolution in this evaluator.
 
 ### Metrics
 
@@ -212,6 +269,11 @@ add up to the backend's. Every summary is broken down by language, scenario,
 menu state, cursor context, prefix kind, project, document state (whether the
 document parsed when the request fired), and source, with backend-only latency
 percentiles and a precision/coverage curve over each backend's scores.
+Exact-retrieval reports additionally include `by_tier` and `by_index_state`.
+Each project has a `retrieval_indexes` entry with build milliseconds, complete
+and partial retained-byte estimates, files skipped by caps, and near-duplicate
+members and representatives. Machine-specific timings and reports remain under
+`target/tua-speed/` and are not committed.
 
 The report also measures:
 

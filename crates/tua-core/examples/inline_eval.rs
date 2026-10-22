@@ -63,6 +63,7 @@ const USAGE: &str =
     "usage: inline_eval [paths...] [--manifest FILE] [--set NAME]... [--json] [--out FILE]
   [--records] [--max-positions N] [--no-menu] [--no-warmup] [--thresholds FILE]
   [--menu-replay FILE]
+  [--phase2-retrieval]
   [--check-phase-gate FILE]
   [--check-expected FILE] [--write-expected FILE] [--min-prefix N] [--min-support N]
   [--min-full-prefix-support N] [--dominance R]
@@ -121,6 +122,7 @@ fn parse_arguments() -> Result<Arguments, String> {
                 arguments.write_expected = Some(value("--write-expected")?.into())
             }
             "--menu-replay" => arguments.menu_replay = Some(value("--menu-replay")?.into()),
+            "--phase2-retrieval" => arguments.options.phase2_retrieval = true,
             "--check-phase-gate" => {
                 arguments.phase_gate = Some(value("--check-phase-gate")?.into())
             }
@@ -235,6 +237,10 @@ fn run() -> Result<ExitCode, String> {
     // Held-out and external sets are quality gates: their thresholds must be
     // committed before anyone looks at their results.
     let gated = selected.iter().any(|(_, set)| set.role.is_gate());
+    ensure_phase2_sets_are_tuning_only(
+        arguments.options.phase2_retrieval,
+        selected.iter().map(|(_, set)| set.role),
+    )?;
     let thresholds = match (&arguments.thresholds, gated) {
         (Some(path), _) => Some(load_thresholds(path)?),
         (None, true) => return Err(
@@ -269,6 +275,23 @@ fn run() -> Result<ExitCode, String> {
         eprintln!(
             "inline_eval: evaluating the shipping phase1 policy pinned in the thresholds file"
         );
+    }
+    if arguments.options.phase2_retrieval {
+        let pinned = thresholds
+            .as_ref()
+            .and_then(|thresholds| thresholds.phase2_tuning.as_ref())
+            .ok_or_else(|| {
+                "--phase2-retrieval needs --thresholds with a [phase2_tuning] table".to_owned()
+            })?
+            .config()?;
+        if pinned != eval::backends::Phase2TuningConfig::pinned() {
+            return Err(
+                "the thresholds [phase2_tuning] table does not match the pinned tuning policy"
+                    .to_owned(),
+            );
+        }
+        arguments.options.phase2_tuning = pinned;
+        eprintln!("inline_eval: evaluating the pinned Phase 2 tuning policy");
     }
 
     let (sets, duplicates) = dataset::load_sets(selected)?;
@@ -349,6 +372,30 @@ fn run() -> Result<ExitCode, String> {
     } else {
         ExitCode::SUCCESS
     })
+}
+
+fn ensure_phase2_sets_are_tuning_only(
+    enabled: bool,
+    roles: impl IntoIterator<Item = SetRole>,
+) -> Result<(), String> {
+    if enabled && roles.into_iter().any(SetRole::is_gate) {
+        Err("--phase2-retrieval is tuning-only and refuses held-out or external sets".to_owned())
+    } else {
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn phase2_retrieval_refuses_gate_roles_even_with_thresholds() {
+        assert!(ensure_phase2_sets_are_tuning_only(true, [SetRole::Tune]).is_ok());
+        assert!(ensure_phase2_sets_are_tuning_only(false, [SetRole::Holdout]).is_ok());
+        assert!(ensure_phase2_sets_are_tuning_only(true, [SetRole::Holdout]).is_err());
+        assert!(ensure_phase2_sets_are_tuning_only(true, [SetRole::External]).is_err());
+    }
 }
 
 fn check_phase_gate_file(path: &Path) -> Result<ExitCode, String> {

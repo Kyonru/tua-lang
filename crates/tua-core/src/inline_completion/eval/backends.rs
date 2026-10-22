@@ -11,6 +11,9 @@ use serde::Serialize;
 
 use super::super::eligibility::CursorContext;
 pub use super::super::recall::RecallOptions;
+use super::retrieval::{
+    EvalProjectRetrievalIndex, HoldoutMode, IndexState, RetrievalScope, RetrievalTier,
+};
 
 /// One inline-completion request, as the editor would make it.
 pub struct Request<'a> {
@@ -25,6 +28,12 @@ pub struct Request<'a> {
     /// parsed facts for this exact source. `None` means it does not.
     pub declared_callbacks: Option<&'a BTreeSet<String>>,
     pub include_ecs: bool,
+    pub path: &'a Path,
+    pub language: &'static str,
+    pub retrieval_index: Option<&'a EvalProjectRetrievalIndex>,
+    /// False for cut documents: lines after the cursor do not exist yet and
+    /// must not be read from the original target-file table.
+    pub allow_target_file_other_lines: bool,
 }
 
 /// A suggestion: text inserted at the cursor, continuing what is typed.
@@ -35,6 +44,9 @@ pub struct Candidate {
     pub source: &'static str,
     /// Comparable only within one source.
     pub score: f64,
+    /// Present only for Phase 2 exact retrieval.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tier: Option<&'static str>,
 }
 
 pub trait Backend {
@@ -47,6 +59,10 @@ pub trait Backend {
         _production: &ProductionRequest<'_>,
     ) -> Option<Candidate> {
         self.suggest(request)
+    }
+
+    fn index_state(&self) -> &'static str {
+        "not-applicable"
     }
 }
 
@@ -95,6 +111,7 @@ fn statement_snippet(request: &Request<'_>, min_prefix_chars: usize) -> Option<C
         is_snippet: true,
         source: "snippet",
         score: 1.0,
+        tier: None,
     })
 }
 
@@ -128,6 +145,7 @@ fn love_callback(request: &Request<'_>) -> Option<Candidate> {
         is_snippet: false,
         source: "love-callback",
         score: 1.0,
+        tier: None,
     })
 }
 
@@ -155,6 +173,7 @@ impl Backend for CurrentFileRecall {
             is_snippet: false,
             source: "current-file",
             score: suggestion.score,
+            tier: None,
         })
     }
 }
@@ -183,6 +202,7 @@ impl Backend for CurrentFileCommonPrefix {
             is_snippet: false,
             source: "current-file-prefix",
             score: suggestion.score,
+            tier: None,
         })
     }
 }
@@ -319,6 +339,7 @@ impl Backend for ProductionPhase1 {
                 &crate::InlineCompletionOptions {
                     semantic: self.semantic,
                     current_file: self.current_file,
+                    project: false,
                 },
                 &crate::InlineCompletionBudget::new(Duration::from_millis(10)),
                 &AtomicBool::new(false),
@@ -330,6 +351,245 @@ impl Backend for ProductionPhase1 {
                 is_snippet: candidate.is_snippet,
                 source: candidate.source.as_str(),
                 score: candidate.score.0,
+                tier: None,
             })
+    }
+}
+
+/// Exact project retrieval with an explicit leakage holdout and corpus state.
+pub struct ProjectExactRetrieval {
+    pub holdout: HoldoutMode,
+    pub state: IndexState,
+    pub scope: RetrievalScope,
+}
+
+/// Frozen tuning policy for the first combined Phase 2 candidate. It keeps
+/// the shipping Phase 1 result when one exists, then fills only three
+/// high-signal contexts from the rest-of-project tier. Same-directory and
+/// bundled evidence are intentionally absent.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub struct Phase2TuningConfig {
+    pub contexts: BTreeSet<CursorContext>,
+    pub min_prefix_chars: usize,
+    pub min_support: usize,
+    pub min_full_prefix_support: usize,
+}
+
+impl Phase2TuningConfig {
+    pub fn pinned() -> Self {
+        Self {
+            contexts: BTreeSet::from([
+                CursorContext::Comma,
+                CursorContext::Operator,
+                CursorContext::Other,
+            ]),
+            min_prefix_chars: 6,
+            min_support: 2,
+            min_full_prefix_support: 2,
+        }
+    }
+}
+
+impl Default for Phase2TuningConfig {
+    fn default() -> Self {
+        Self::pinned()
+    }
+}
+
+pub struct Phase2Tuning {
+    pub config: Phase2TuningConfig,
+}
+
+impl Phase2Tuning {
+    fn project_candidate(&self, request: &Request<'_>) -> Option<Candidate> {
+        if !self.config.contexts.contains(&request.context) {
+            return None;
+        }
+        let line_start = request.document[..request.offset]
+            .rfind('\n')
+            .map_or(0, |index| index + 1);
+        let prefix = &request.document[line_start..request.offset];
+        if prefix
+            .chars()
+            .filter(|character| !character.is_whitespace())
+            .count()
+            < self.config.min_prefix_chars
+        {
+            return None;
+        }
+        let hit = request.retrieval_index?.query_project_common_prefix(
+            IndexState::Complete,
+            request.path,
+            prefix,
+            self.config.min_support,
+            self.config.min_full_prefix_support,
+        )?;
+        Some(Candidate {
+            text: hit.continuation,
+            is_snippet: false,
+            source: "project-common-prefix",
+            score: hit.support as f64,
+            tier: Some(hit.tier.label()),
+        })
+    }
+}
+
+impl Backend for Phase2Tuning {
+    fn name(&self) -> &'static str {
+        "phase2-tuning-phase1-plus-project-common-prefix"
+    }
+
+    fn suggest(&self, request: &Request<'_>) -> Option<Candidate> {
+        self.project_candidate(request)
+    }
+
+    fn suggest_with_host(
+        &self,
+        request: &Request<'_>,
+        production: &ProductionRequest<'_>,
+    ) -> Option<Candidate> {
+        ProductionPhase1 {
+            semantic: true,
+            current_file: true,
+        }
+        .suggest_with_host(request, production)
+        .or_else(|| self.project_candidate(request))
+    }
+
+    fn index_state(&self) -> &'static str {
+        "complete"
+    }
+}
+
+impl Backend for ProjectExactRetrieval {
+    fn name(&self) -> &'static str {
+        match (self.scope, self.holdout, self.state) {
+            (RetrievalScope::Combined, HoldoutMode::TargetFile, IndexState::Cold) => {
+                "project-file-holdout-cold"
+            }
+            (RetrievalScope::Combined, HoldoutMode::TargetFile, IndexState::Partial) => {
+                "project-file-holdout-partial"
+            }
+            (RetrievalScope::Combined, HoldoutMode::TargetFile, IndexState::Complete) => {
+                "project-file-holdout-complete"
+            }
+            (RetrievalScope::Combined, HoldoutMode::TargetLine, IndexState::Cold) => {
+                "project-line-holdout-cold"
+            }
+            (RetrievalScope::Combined, HoldoutMode::TargetLine, IndexState::Partial) => {
+                "project-line-holdout-partial"
+            }
+            (RetrievalScope::Combined, HoldoutMode::TargetLine, IndexState::Complete) => {
+                "project-line-holdout-complete"
+            }
+            (RetrievalScope::SameDirectory, HoldoutMode::TargetFile, IndexState::Cold) => {
+                "same-directory-only-file-holdout-cold"
+            }
+            (RetrievalScope::SameDirectory, HoldoutMode::TargetFile, IndexState::Partial) => {
+                "same-directory-only-file-holdout-partial"
+            }
+            (RetrievalScope::SameDirectory, HoldoutMode::TargetFile, IndexState::Complete) => {
+                "same-directory-only-file-holdout-complete"
+            }
+            (RetrievalScope::SameDirectory, HoldoutMode::TargetLine, IndexState::Cold) => {
+                "same-directory-only-line-holdout-cold"
+            }
+            (RetrievalScope::SameDirectory, HoldoutMode::TargetLine, IndexState::Partial) => {
+                "same-directory-only-line-holdout-partial"
+            }
+            (RetrievalScope::SameDirectory, HoldoutMode::TargetLine, IndexState::Complete) => {
+                "same-directory-only-line-holdout-complete"
+            }
+            (RetrievalScope::Project, HoldoutMode::TargetFile, IndexState::Cold) => {
+                "project-only-file-holdout-cold"
+            }
+            (RetrievalScope::Project, HoldoutMode::TargetFile, IndexState::Partial) => {
+                "project-only-file-holdout-partial"
+            }
+            (RetrievalScope::Project, HoldoutMode::TargetFile, IndexState::Complete) => {
+                "project-only-file-holdout-complete"
+            }
+            (RetrievalScope::Project, HoldoutMode::TargetLine, IndexState::Cold) => {
+                "project-only-line-holdout-cold"
+            }
+            (RetrievalScope::Project, HoldoutMode::TargetLine, IndexState::Partial) => {
+                "project-only-line-holdout-partial"
+            }
+            (RetrievalScope::Project, HoldoutMode::TargetLine, IndexState::Complete) => {
+                "project-only-line-holdout-complete"
+            }
+        }
+    }
+
+    fn suggest(&self, request: &Request<'_>) -> Option<Candidate> {
+        let line_start = request.document[..request.offset]
+            .rfind('\n')
+            .map_or(0, |index| index + 1);
+        let prefix = &request.document[line_start..request.offset];
+        let hit = request.retrieval_index?.query(
+            self.state,
+            self.holdout,
+            request.path,
+            request.line_index,
+            prefix,
+            request.allow_target_file_other_lines,
+            self.scope,
+        )?;
+        Some(Candidate {
+            text: hit.continuation,
+            is_snippet: false,
+            source: "project-exact",
+            score: hit.support as f64,
+            tier: Some(hit.tier.label()),
+        })
+    }
+
+    fn index_state(&self) -> &'static str {
+        self.state.label()
+    }
+}
+
+/// The separately owned bundled Lua/LÖVE cold-start corpus.
+pub struct BundledExactRetrieval;
+
+impl Backend for BundledExactRetrieval {
+    fn name(&self) -> &'static str {
+        "bundled-corpus"
+    }
+
+    fn suggest(&self, request: &Request<'_>) -> Option<Candidate> {
+        let line_start = request.document[..request.offset]
+            .rfind('\n')
+            .map_or(0, |index| index + 1);
+        let prefix = &request.document[line_start..request.offset];
+        let mut candidates = std::collections::BTreeMap::<String, usize>::new();
+        for file in super::super::corpus::bundled_corpus().files() {
+            if request.language == "lua"
+                && file.language == super::super::corpus::BundledCorpusLanguage::Tua
+            {
+                continue;
+            }
+            for hit in file.table.query(prefix, None, usize::MAX) {
+                *candidates.entry(hit.continuation).or_default() += hit.support();
+            }
+        }
+        let (text, support) = candidates.into_iter().min_by(
+            |(left_text, left_support), (right_text, right_support)| {
+                right_support
+                    .cmp(left_support)
+                    .then_with(|| left_text.cmp(right_text))
+            },
+        )?;
+        Some(Candidate {
+            text,
+            is_snippet: false,
+            source: "bundled-corpus",
+            score: support as f64,
+            tier: Some(RetrievalTier::Bundled.label()),
+        })
+    }
+
+    fn index_state(&self) -> &'static str {
+        "bundled"
     }
 }

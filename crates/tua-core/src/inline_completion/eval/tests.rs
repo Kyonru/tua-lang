@@ -23,6 +23,10 @@ fn request<'a>(document: &'a str, declared: Option<&'a BTreeSet<String>>) -> Req
         context: cursor_context(document, offset).expect("eligible cursor"),
         declared_callbacks: declared,
         include_ecs: true,
+        path: std::path::Path::new("test.tua"),
+        language: "tua",
+        retrieval_index: None,
+        allow_target_file_other_lines: true,
     }
 }
 
@@ -315,6 +319,7 @@ fn auto_closed_brackets_must_agree_with_the_suggestion_structurally() {
         is_snippet: false,
         source: "test",
         score: 1.0,
+        tier: None,
     };
     let agreed = |text: &str, suffix: &str| {
         agree_with_suffix(candidate(text), suffix).map(|candidate| candidate.text)
@@ -342,6 +347,7 @@ fn an_open_menu_only_allows_suggestions_extending_its_selection() {
         is_snippet: false,
         source: "test",
         score: 1.0,
+        tier: None,
     };
     let document = "local p = ve";
     let selected = |text: &str| MenuSelection {
@@ -488,6 +494,7 @@ fn thresholds_for(set: &str, backend: &str, languages: &[&str]) -> Thresholds {
     Thresholds {
         backend: backend.to_owned(),
         phase1: None,
+        phase2_tuning: None,
         sets: BTreeMap::from([(
             set.to_owned(),
             GateSetThresholds {
@@ -670,16 +677,98 @@ fn per_source_rates_divide_by_every_eligible_request() {
         is_snippet: false,
         source: "current-file",
         score: 1.0,
+        tier: None,
     };
     let outcome = score("x", false, "x");
-    accumulator.add(&keys, Some(&candidate), Some(outcome), 1);
+    accumulator.add(&keys, Some(&candidate), Some(outcome), 1, "not-applicable");
     for _ in 0..3 {
-        accumulator.add(&keys, None, None, 1);
+        accumulator.add(&keys, None, None, 1, "not-applicable");
     }
     let report = accumulator.finish();
     let source = &report.by_source["current-file"];
     assert_eq!((source.eligible, source.suggested), (4, 1));
     assert!((source.suggestions_per_eligible - 0.25).abs() < 1e-9);
+}
+
+#[test]
+fn phase2_retrieval_reports_holdouts_states_tiers_and_index_costs() {
+    let project = EvalProject {
+        name: "phase2-fixture".to_owned(),
+        config: crate::ProjectConfig::default(),
+        source_roots: vec![PathBuf::from("src")],
+        output_roots: vec![],
+        asset_roots: vec![],
+        files: vec![
+            EvalFile {
+                path: PathBuf::from("src/main.tua"),
+                kind: AnalysisSourceKind::Tua,
+                source: "draw(player)\ndraw(pla".to_owned(),
+            },
+            EvalFile {
+                path: PathBuf::from("src/render.tua"),
+                kind: AnalysisSourceKind::Tua,
+                source: "draw(player)\nprint(player)".to_owned(),
+            },
+        ],
+    };
+    let options = EvalOptions {
+        max_positions_per_file: 8,
+        simulate_menu: false,
+        measure_warmup: false,
+        parse_repeats: 1,
+        phase2_retrieval: true,
+        ..EvalOptions::default()
+    };
+    let report = evaluate(
+        &[EvalSet {
+            name: "tune".to_owned(),
+            role: SetRole::Tune,
+            projects: vec![project],
+        }],
+        DuplicateReport::default(),
+        &options,
+    );
+    let set = &report.sets[0];
+    assert_eq!(set.retrieval_indexes.len(), 1);
+    assert_eq!(set.retrieval_indexes[0].1.files_indexed, 2);
+    assert!(set.retrieval_indexes[0].1.build_ms >= 0.0);
+    assert!(set.retrieval_indexes[0].1.complete_bytes > 0);
+    assert!(set.backends.contains_key("project-file-holdout-cold"));
+    assert!(set.backends.contains_key("project-line-holdout-complete"));
+    assert!(set
+        .backends
+        .contains_key("same-directory-only-file-holdout-complete"));
+    assert!(set
+        .backends
+        .contains_key("project-only-file-holdout-complete"));
+    assert!(set
+        .backends
+        .contains_key("phase2-tuning-phase1-plus-project-common-prefix"));
+    assert!(set.backends.contains_key("bundled-corpus"));
+    assert!(set
+        .bundled_corpus
+        .as_ref()
+        .is_some_and(|corpus| corpus.approximate_bytes > 0));
+    let complete = &set.backends["project-line-holdout-complete"];
+    assert!(complete.by_index_state["complete"].eligible > 0);
+    assert!(complete.by_tier.contains_key("current-file"));
+}
+
+#[test]
+#[should_panic(expected = "Phase 2 retrieval is tuning-only")]
+fn phase2_retrieval_cannot_evaluate_gate_sets_through_the_core_api() {
+    evaluate(
+        &[EvalSet {
+            name: "holdout".to_owned(),
+            role: SetRole::Holdout,
+            projects: vec![],
+        }],
+        DuplicateReport::default(),
+        &EvalOptions {
+            phase2_retrieval: true,
+            ..EvalOptions::default()
+        },
+    );
 }
 
 #[test]
