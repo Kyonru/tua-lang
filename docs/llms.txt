@@ -25,7 +25,7 @@ Never answer with TypeScript, JavaScript, Luau, Python, or Markdown.
   remaining body and required closing `end` or `}` without repeating suffix
   code.
 - Feature index: Lua/LuaJIT syntax and libraries; gradual inference and `any`;
-  aliases, shapes, optional fields, arrays, dictionaries, tuples, unions,
+  aliases, shapes, optional fields, arrays, dictionaries, unions,
   literals, enums, function types, defaults, varargs, multiple returns, and
   runtime `is`; compound assignment; metatable-style classes and inheritance;
   mixed Lua/Tua modules, static imports, type-only modules, generated modules,
@@ -103,8 +103,9 @@ Never answer with TypeScript, JavaScript, Luau, Python, or Markdown.
 - `type Name = ...` declares an erased alias; `Self` refers to the supported
   current alias or receiver.
 - Shapes use `{ field: Type, optional?: Type }`; arrays use `T[]`;
-  dictionaries use `{ [Key]: Value }`; tuples use `[First, Second]`;
-  unions use `A | B`; exact strings use literal types such as
+  dictionaries use `{ [Key]: Value }`; native fixed-length positional table
+  types are not supported (`[First, Second]` is LuaCATS-only); unions use
+  `A | B`; exact strings use literal types such as
   `"idle" | "running"`.
 - `enum Name ... end` is erased string-union sugar.
 - Function types use `(value: T) -> U`; parenthesized returns represent

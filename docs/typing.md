@@ -94,16 +94,20 @@ type Node = {
 }
 ```
 
-### Arrays, Dictionaries, And Tuples
+### Arrays, Dictionaries, And LuaDoc Tuples
 
-Use `T[]` for an array, `{ [Key]: Value }` for a dictionary, and `[T, U]` for a
-fixed positional tuple:
+Use `T[]` for an array and `{ [Key]: Value }` for a dictionary:
 
 ```tua
 local checkpoints: Vec2[] = {}
 local scores: { [string]: number } = {}
-local spawn: [number, number] = { 80, 120 }
+local spawn: { x: number, y: number } = { x = 80, y = 120 }
 ```
+
+Native Tua annotations do not currently have a fixed-length positional table
+type. In Lua interop annotations, LuaCATS tuple syntax remains supported, for
+example `---@alias Spawn [number, number]`. Prefer a named record when the
+positions have meaning, or `number[]` when the length is intentionally dynamic.
 
 An empty table is a valid initializer when an array or dictionary annotation
 provides its element types. Array element types flow through supported indexed
@@ -194,8 +198,8 @@ end
 type Logger = (prefix: string, ...string) -> nil
 ```
 
-Generics are not currently part of Tua. Use arrays, dictionaries, tuples,
-concrete aliases, and `any` at genuinely dynamic boundaries.
+Generics are not currently part of Tua. Use arrays, dictionaries, concrete
+aliases, and `any` at genuinely dynamic boundaries.
 
 ## Inference And Assignment
 
@@ -303,7 +307,7 @@ export type Player = {
 
 export type Room = {
   name: string,
-  spawn: [number, number],
+  spawn: { x: number, y: number },
 }
 
 type InternalScratch = { id: number }

@@ -8,6 +8,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Corrected the native typing documentation to stop advertising LuaCATS
+  `[T, U]` tuple syntax in `.tua` annotations; fixed-length positional table
+  types remain available only in LuaDoc interop today.
+
 - The formatter now preserves UTF-8 text in strings, long-bracket text, and
   comments instead of expanding each non-ASCII byte into mojibake on every
   formatting pass.

@@ -39,7 +39,7 @@ that final invariant.
   recursive shapes.
 - [Table shapes](#table-shapes) and [optional fields](#optional-fields): typed
   Lua records and `field?: Type`.
-- [Arrays, dictionaries, and tuples](#arrays-dictionaries-and-tuples): `T[]`,
+- [Arrays, dictionaries, and LuaDoc tuples](#arrays-dictionaries-and-luadoc-tuples): `T[]`,
   `{ [Key]: Value }`, and `[T, U]`.
 - [Union types](#union-types): `T | U` values and nilable state.
 - [Literal choices and enums](#literal-choices-and-enums): exact string choices
@@ -557,7 +557,7 @@ type SaveSlot = {
 Optional target fields may be absent. Present optional fields must still match
 their declared type.
 
-## Arrays, Dictionaries, And Tuples
+## Arrays, Dictionaries, And LuaDoc Tuples
 
 Use `T[]` for arrays. Tua does not require or provide a `Table<T>` generic:
 
@@ -566,8 +566,13 @@ local steps: number[] = {}
 local names: string[] = { "major", "minor" }
 local byName: { [string]: number } = {}
 local scores: { [string]: number } = { ada = 10, mina = 12 }
-type Position = [number, number]
+type Position = { x: number, y: number }
 ```
+
+Native Tua annotations do not currently provide fixed-length positional table
+types. Lua interop still accepts LuaCATS tuple annotations such as
+`---@alias Position [number, number]`. Use a record when positions have names,
+or an array when its length is dynamic.
 
 An empty table literal is accepted as the initial value of an annotated array
 or dictionary. A record literal with compatible named string fields is also
@@ -684,7 +689,7 @@ private members, getters/setters, generic classes, mixins, and multiple
 inheritance are not part of v1.
 
 Class fields use the same native types as locals and aliases, including `T[]`,
-dictionaries, tuples, unions, function types, and scoped `Self`. Assigning `{}`
+dictionaries, unions, function types, and scoped `Self`. Assigning `{}`
 to an annotated array or dictionary field is valid. Fields not declared by the
 class or an ancestor are rejected; use `any` only when a deliberately dynamic
 object is required.
@@ -838,8 +843,8 @@ LuaDoc/LuaCATS function types such as
 When `annotation_mode = "luacats"` is enabled, native callback aliases emit
 compatible `---@alias ... fun(...)` annotations.
 
-Generics are not part of Tua. Arrays, dictionaries, tuples, concrete aliases,
-and gradual `any` cover the supported container and dynamic boundaries.
+Generics are not part of Tua. Arrays, dictionaries, concrete aliases, and
+gradual `any` cover the supported container and dynamic boundaries.
 
 ## LOVE Assets, Sprites, Vectors, And Callbacks
 
