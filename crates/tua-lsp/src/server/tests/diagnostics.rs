@@ -751,6 +751,36 @@ fn did_change_publishes_fast_diagnostics_before_slow_diagnostics() {
         "TL2004"
     );
 }
+
+#[test]
+fn sequential_project_opens_do_not_flash_source_only_type_mismatches() {
+    let temp = TempProject::new("sequential-project-open-diagnostics");
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/types.tua", "export type Player = { hp: number }\n");
+
+    let main_uri = temp.uri_for("src/main.tua");
+    let types_uri = temp.uri_for("src/types.tua");
+    let output = run_messages(vec![
+        initialize_with_root(1, temp.uri()),
+        did_open(
+            &main_uri,
+            "import type { Player } from \"./types\"\nlocal player: Player = { hp = \"high\" }\nreturn player\n",
+        ),
+        did_open(&types_uri, "export type Player = { hp: string }\n"),
+    ]);
+
+    for publication in diagnostics_publications(&output, &main_uri) {
+        let diagnostics = publication["params"]["diagnostics"]
+            .as_array()
+            .expect("diagnostics should be an array");
+        assert!(
+            diagnostics
+                .iter()
+                .all(|diagnostic| diagnostic["code"] != "TL1003"),
+            "source-only project facts must not flash a mismatch: {publication:#?}"
+        );
+    }
+}
 #[test]
 fn did_change_debounces_slow_diagnostics_until_idle_window() {
     let temp = TempProject::new("debounced-slow-diagnostics");

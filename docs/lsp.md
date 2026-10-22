@@ -69,7 +69,9 @@ Formatting differences are not diagnostics; editor formatting and
 During typing, Tua reports fast current-file diagnostics first and follows with
 project-aware results after a short debounce. Requests are tied to document
 versions; work from an older edit is cancelled or discarded instead of being
-published over newer text.
+published over newer text. When imports or required modules can change a type
+answer, the fast pass defers type mismatches to that project-aware pass rather
+than briefly showing a stale red squiggle.
 
 Open documents retain their last valid semantic facts while syntax is
 temporarily incomplete. Completion uses the current cursor context with those

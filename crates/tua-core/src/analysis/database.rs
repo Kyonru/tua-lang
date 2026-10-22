@@ -782,6 +782,8 @@ pub(super) fn fast_diagnostics_for_source(
     let (environment, mut diagnostics) =
         build_analysis_type_environment_with_diagnostics(&parsed, config);
     let fast_config = fast_diagnostics_config(&config.diagnostics);
+    let project_types_required = !parsed.type_imports.is_empty()
+        || !crate::module_index::require_bindings_for_parsed_source(&parsed).is_empty();
     diagnostics.extend(
         check_parsed_source_with_environment_asset_roots_diagnostics_jit_config_and_asset_index(
             &parsed,
@@ -798,6 +800,11 @@ pub(super) fn fast_diagnostics_for_source(
     let diagnostics = fast_lane_diagnostics(deduplicate_diagnostics(diagnostics))
         .into_iter()
         .filter(|diagnostic| {
+            if project_types_required
+                && diagnostic.code == Some(crate::DiagnosticCode::TYPE_MISMATCH)
+            {
+                return false;
+            }
             diagnostic.code != Some(crate::DiagnosticCode::TYPE_UNKNOWN_NAME)
                 || unknown_type_name(&diagnostic.message)
                     .is_none_or(|name| !type_import_may_bind_name(&parsed, name))

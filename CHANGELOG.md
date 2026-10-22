@@ -14,6 +14,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Prevented transient type-mismatch squiggles while related project files are
+  opened or updated by deferring import-dependent mismatches to the
+  project-aware diagnostic pass.
+
 - Added opt-in `unknown_record_fields` diagnostics (`TL4074`) for typo-prone
   writes such as `game.socre = 10` on known record shapes, while preserving
   gradual table mutation by default.

@@ -2823,6 +2823,35 @@ local missing: MissingType = second
 }
 
 #[test]
+fn fast_diagnostics_defer_mismatches_when_project_types_can_change_the_answer() {
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    host.set_file(
+        "src/main.tua",
+        r#"import type { Player } from "./types"
+local player: Player = { hp = "high" }
+return player
+"#,
+    );
+    host.set_file("src/types.tua", "export type Player = { hp: number }\n");
+
+    let fast = host.fast_diagnostics("src/main.tua");
+    assert!(
+        fast.iter()
+            .all(|diagnostic| diagnostic.code != Some(DiagnosticCode::TYPE_MISMATCH)),
+        "project-dependent mismatch must not flash in fast diagnostics: {fast:#?}"
+    );
+
+    let settled = host.snapshot().diagnostics("src/main.tua");
+    assert!(
+        settled
+            .iter()
+            .any(|diagnostic| diagnostic.code == Some(DiagnosticCode::TYPE_MISMATCH)),
+        "the project-aware pass must still report the real mismatch: {settled:#?}"
+    );
+}
+
+#[test]
 fn imported_record_aliases_accept_values_with_nested_exported_aliases() {
     let fixture = Fixture::parse(
         r#"-- file: src/main.tua
