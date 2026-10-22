@@ -3170,10 +3170,17 @@ fn expression_is_number(expression: &Expression) -> bool {
     matches!(expression, Expression::Number(_))
 }
 
+/// Whether the call this node's arguments come from is a `:` call. Only the
+/// first call suffix counts: in `m.make(1):go()`, `make` is a plain call whose
+/// result happens to receive a later method call.
 fn is_method_call(function_call: &FunctionCall) -> bool {
     function_call
         .suffixes()
-        .any(|suffix| matches!(suffix, Suffix::Call(Call::MethodCall(_))))
+        .find_map(|suffix| match suffix {
+            Suffix::Call(call) => Some(matches!(call, Call::MethodCall(_))),
+            _ => None,
+        })
+        .unwrap_or(false)
 }
 
 fn function_type_from_body(body: &ast::FunctionBody) -> Type {

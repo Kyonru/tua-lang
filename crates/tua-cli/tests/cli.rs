@@ -457,6 +457,51 @@ local hp: number = "full"
 }
 
 #[test]
+fn check_keeps_inner_arity_for_method_calls_on_required_module_results() {
+    let temp = TempDir::new("check-chained-module-method");
+
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).expect("failed to write config");
+    fs::create_dir_all(temp.path().join("src")).expect("failed to create source");
+    fs::write(
+        temp.path().join("src/main.tua"),
+        "local Things = require(\"things\")\n\nThings.make(1):go()\nThings.make(1):go():go()\nThings.make()\n",
+    )
+    .expect("failed to write main source");
+    fs::write(
+        temp.path().join("src/things.lua"),
+        r#"---@class Thing
+---@field go fun(self: Thing): Thing
+
+---@param seed number
+---@return Thing
+local function make(seed)
+  return {}
+end
+
+return { make = make }
+"#,
+    )
+    .expect("failed to write Lua module");
+
+    let output = tua()
+        .arg("check")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tua check");
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be valid UTF-8");
+
+    // A later `:go()` must not make `make(1)` look like a method call that
+    // also receives `Things` as `self`.
+    assert!(!stderr.contains("main.tua:3:1"), "{stderr}");
+    assert!(!stderr.contains("main.tua:4:1"), "{stderr}");
+    assert!(
+        stderr.contains("main.tua:5:1 error TL1004: argument count mismatch: expected 1, found 0"),
+        "{stderr}"
+    );
+}
+
+#[test]
 fn check_enables_standard_lints_by_default() {
     let temp = TempDir::new("check-default-lints");
 

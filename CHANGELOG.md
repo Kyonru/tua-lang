@@ -8,6 +8,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Fixed method calls on the result of a required module function, such as
+  `tween.to(box, 1, { x = 10 }):ease("quadout")`, reporting a false argument
+  count error. The checker treated the inner `to(...)` as a `:` call and
+  counted the module table as an extra `self` argument.
 - VS Code Extension Host launch profiles now build the executed extension
   bundle before launch, emit source maps for JavaScript breakpoints, and stage
   the bundled server through a cross-platform Node script that selects `tua`
