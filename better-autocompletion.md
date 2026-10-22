@@ -814,11 +814,11 @@ Requiring two supporting lines makes long recall precise, but leaves the Tua
 slice below its coverage floor. The current candidate keeps full common-prefix
 continuations at support two or higher and limits a one-line match to its
 first token. After the evaluator began sampling the configured whitespace
-context and stopped crediting blank snippet literals, the tuning set reaches
-0.740 correct-prefix precision overall, with 0.417 wrong characters per
-character saved. Split by language, Lua reaches 0.777 precision, 0.350
-wrong/saved, and 0.173 characters saved per eligible position; Tua reaches
-0.621, 0.733, and 0.078 respectively. Broadening
+context and stopped crediting blank snippet literals, the corrected tuning set
+reaches 0.728 correct-prefix precision overall, with 0.395 wrong characters per
+character saved. Split by language, Lua reaches 0.771 precision, 0.261
+wrong/saved, and 0.304 characters saved per eligible position; Tua reaches
+0.695, 0.554, and 0.093 respectively. Broadening
 assignment/member recall, allowing full one-line continuations, two-letter
 snippet exceptions, and ambiguous snippet common-prefix fallback were all
 tested only on tuning data and rejected. The candidate remains below the
@@ -894,11 +894,12 @@ actually closes the known Tua coverage gap without weakening any release gate.
 > switch so scheduling, invalidation, and contention can be tested, but the
 > extension does not expose it and its presence is not evidence that Phase 2
 > passes.
-> On the current tuning set it improves saved characters per eligible position
-> from `0.1426` to `0.1490`, correct-prefix precision from `0.7399` to `0.7475`,
-> and wrong-to-saved from `0.4172` to `0.3993`. All 12 added project suggestions
-> were exact, but the absolute gain is small and no held-out or external data
-> has been inspected.
+> On the corrected tuning set it adds no suggestion over Phase 1: both save
+> `0.149` characters per eligible position, have `0.728` correct-prefix
+> precision, and offer `0.395` wrong characters per character saved. The
+> architecture remains useful groundwork, but there is currently no tuning
+> evidence that project retrieval improves completion quality. No held-out or
+> external data has been inspected.
 
 > **Implementation status (2026-10-21): integrated but not approved.** The VFS
 > lineage/version mechanism, immutable base-plus-overlay corpus, background
@@ -1298,15 +1299,24 @@ entry points. The flag hard-refuses held-out and external roles in both the CLI
 and core API. No statistical code is connected to AnalysisHost, the LSP, or the
 extension.
 
-Tune-only results show why the raw model must not ship: it reaches only 0.095
-correct-prefix precision and offers 36.96 wrong characters for each character
+Tune-only results show why the raw model must not ship: it reaches only 0.100
+correct-prefix precision and offers 26.14 wrong characters for each character
 saved. A pinned filter (assignment and `other` contexts, score at least 0.85)
 is safer but extremely sparse. Used only after the Phase 2 candidate abstains,
-it raises characters saved per eligible position from 0.149 to 0.159, raises
-correct-prefix precision from 0.748 to 0.762, lowers wrong-to-saved from 0.399
-to 0.389, and has 0.70 ms backend p95. The filtered model itself suggests at
-only 0.005 eligible positions, saves 0.011 characters per eligible position,
-and has 0.946 correct-prefix precision.
+it raises characters saved per eligible position from 0.149 to 0.162, raises
+correct-prefix precision from 0.728 to 0.745, and lowers wrong-to-saved from
+0.395 to 0.369. The filtered model itself suggests at only 0.005 eligible
+positions, saves 0.013 characters per eligible position, and has 0.913
+correct-prefix precision.
+
+These figures supersede earlier tune reports that accidentally included
+configured output roots. Manifest entries name workspace directories, but the
+evaluator had used a file-oriented project lookup that started at each
+directory's parent. Correct workspace loading now honors `tua.toml` source and
+output roots; the regression is covered by a configured `src`/`build` fixture.
+With that correction, Phase 2 adds no suggestions over Phase 1 on the tuning
+set, so project retrieval has no current quality evidence despite its completed
+production-path architecture.
 
 The smoke fixture produced no filtered suggestions, so it corroborates only
 execution, not quality. The small tuning gain may be overfit and is not an

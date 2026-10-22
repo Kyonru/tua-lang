@@ -113,13 +113,14 @@ never predicts an unseen identifier, uncommon number, or string literal.
 contexts, score at least 0.85), and
 `phase3-phase2-plus-ngram-fallback` asks the Phase 2 candidate first.
 
-On the tuning set, the filtered fallback raises saved characters per eligible
-position from Phase 2's `0.149` to `0.159`; correct-prefix precision changes
-from `0.748` to `0.762`, wrong-to-saved improves from `0.399` to `0.389`, and
-backend p95 is `0.70 ms`. The filtered model is extremely sparse: it suggests
-at 0.005 eligible requests, saves 0.011 characters per eligible request, and
-has 0.946 correct-prefix precision. The raw predictor is not usable (`0.095`
-correct-prefix precision and `36.96` wrong characters per character saved).
+After correcting project-root loading so configured generated output is not
+part of the tuning corpus, the filtered fallback raises saved characters per
+eligible position from Phase 2's `0.149` to `0.162`; correct-prefix precision
+changes from `0.728` to `0.745`, and wrong-to-saved improves from `0.395` to
+`0.369`. The filtered model is extremely sparse: it suggests at 0.005 eligible
+requests, saves 0.013 characters per eligible request, and has 0.913
+correct-prefix precision. The raw predictor is not usable (`0.100`
+correct-prefix precision and `26.14` wrong characters per character saved).
 Phase 3 smoke produced no filtered suggestions, so it only exercises the code
 path and provides no quality corroboration. These tune-only gains may be
 overfit; they are not release approval. No Phase 3 held-out or external set has
@@ -136,11 +137,11 @@ contexts from rest-of-project evidence. It excludes same-directory and bundled
 results, requires at least six non-whitespace prefix characters and two
 supporting matches before returning their full common prefix.
 These values are tuning inputs, not shipping defaults or acceptance claims.
-On the current tuning set, this candidate raises saved characters per eligible
-position from `0.1426` to `0.1490`, raises correct-prefix precision from
-`0.7399` to `0.7475`, and lowers wrong-to-saved from `0.4172` to `0.3993`.
-The 12 added project suggestions were all exact, but this is tune-only evidence
-and the absolute gain is small; no held-out or external result has been read.
+On the corrected tuning set, this candidate adds no suggestions over Phase 1:
+both save `0.149` characters per eligible position, have `0.728`
+correct-prefix precision, and offer `0.395` wrong characters per character
+saved. Phase 2 therefore remains an architectural experiment without tuning
+evidence of utility; no held-out or external result has been read.
 
 `--menu-replay FILE` replaces simulated menu selection with explicitly enabled
 local JSONL captured from the VS Code provider. Start the extension host with both

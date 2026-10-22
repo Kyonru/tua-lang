@@ -6,6 +6,14 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+### Fixed
+
+- Fixed the inline-completion evaluator loading manifest project directories
+  through a file-oriented config search. Configured source and output roots are
+  now honored, so generated Lua no longer leaks into tuning corpora or
+  duplicates its Tua source. Corrected Phase 1–3 tuning results replace the
+  contaminated reports; held-out and external sets remain unread.
+
 ### Added
 
 - Added a reproducible Phase 1 diagnostic-freshness comparison for

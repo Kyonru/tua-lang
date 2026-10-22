@@ -264,7 +264,11 @@ pub fn load_project(directory: &Path) -> Result<EvalProject, String> {
             directory.display()
         ));
     }
-    let model = ProjectModel::load_for_path(directory)
+    // Manifest project entries name workspace directories, not files inside
+    // them. Loading "for" the directory starts the config search at its
+    // parent, which can silently miss a `tua.toml` in the named workspace and
+    // make generated output part of the evaluation corpus.
+    let model = ProjectModel::load([directory.to_path_buf()])
         .map_err(|error| format!("{}: {error:?}", directory.display()))?;
     let workspace = model
         .primary_workspace()

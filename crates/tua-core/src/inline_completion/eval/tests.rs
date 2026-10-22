@@ -547,6 +547,35 @@ fn duplicate_files_stay_only_in_the_highest_priority_set() {
     );
 }
 
+#[test]
+fn project_directories_honor_their_configured_source_and_output_roots() {
+    let directory = TempDir::new("project-roots");
+    let source = directory.path().join("src");
+    let output = directory.path().join("build");
+    std::fs::create_dir_all(&source).expect("create source root");
+    std::fs::create_dir_all(&output).expect("create output root");
+    std::fs::write(
+        directory.path().join("tua.toml"),
+        "source = \"src\"\nout = \"build\"\n",
+    )
+    .expect("write config");
+    std::fs::write(source.join("main.tua"), "return 1\n").expect("write source");
+    std::fs::write(output.join("main.lua"), "return 1\n").expect("write output");
+
+    let project = dataset::load_project(directory.path()).expect("load project");
+
+    assert_eq!(project.source_roots, vec![source]);
+    assert_eq!(project.output_roots, vec![output]);
+    assert_eq!(
+        project
+            .files
+            .iter()
+            .map(|file| file.path.file_name().expect("file name"))
+            .collect::<Vec<_>>(),
+        [std::ffi::OsStr::new("main.tua")]
+    );
+}
+
 fn gate_report(roles: &[(&str, SetRole)], suggestions: usize) -> EvalReport {
     let mut summary = metrics::Summary::default();
     for index in 0..4 {
