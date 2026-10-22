@@ -37,23 +37,9 @@ jobs:
           retention-days: 90
 
   representative:
-    name: Representative profiles (${{ matrix.name }})
+    name: Representative profiles
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: standard
-            fixtures: single-1000,single-5000,project-100,graph-chain-256,graph-diamond-256,graph-cycles-64
-            cold_repeat: 2
-            contention_repeat: 3
-            background_burst: 32
-          - name: project-1000
-            fixtures: project-1000
-            cold_repeat: 1
-            contention_repeat: 2
-            background_burst: 16
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
@@ -63,22 +49,23 @@ jobs:
       - name: Run representative profiles
         run: make profile-representative
         env:
-          # Isolate the 1k-file project on a fresh runner. GitHub's shared
-          # runners repeatedly terminated the combined job while profiling
-          # this fixture, even though the same workload completes locally.
-          TUA_REPRESENTATIVE_FIXTURES: ${{ matrix.fixtures }}
-          TUA_REPRESENTATIVE_COLD_REPEAT: ${{ matrix.cold_repeat }}
+          # project-1000 remains part of the local profile-all suite, but a
+          # single run peaks above the memory available on GitHub's standard
+          # hosted runner. The hosted trend still covers large files, a
+          # 100-file project, and 256-module graph shapes.
+          TUA_REPRESENTATIVE_FIXTURES: single-1000,single-5000,project-100,graph-chain-256,graph-diamond-256,graph-cycles-64
+          TUA_REPRESENTATIVE_COLD_REPEAT: 2
           TUA_REPRESENTATIVE_WARM_REPEAT: 5
-          TUA_REPRESENTATIVE_CONTENTION_REPEAT: ${{ matrix.contention_repeat }}
-          TUA_REPRESENTATIVE_BACKGROUND_BURST: ${{ matrix.background_burst }}
+          TUA_REPRESENTATIVE_CONTENTION_REPEAT: 3
+          TUA_REPRESENTATIVE_BACKGROUND_BURST: 32
           TUA_LSP_REQUEST_TIMEOUT_MS: 180000
           TUA_REPRESENTATIVE_COMPLETION_P95_BUDGET_MS: 60000
-          TUA_REPRESENTATIVE_PROFILE_OUT: target/tua-speed/representative-${{ matrix.name }}.json
+          TUA_REPRESENTATIVE_PROFILE_OUT: target/tua-speed/representative-profile.json
       - name: Upload representative report
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: performance-representative-${{ matrix.name }}-${{ github.sha }}-${{ github.run_id }}
-          path: target/tua-speed/representative-${{ matrix.name }}.json
+          name: performance-representative-${{ github.sha }}-${{ github.run_id }}
+          path: target/tua-speed/representative-profile.json
           if-no-files-found: error
           retention-days: 90
