@@ -1,4 +1,6 @@
 /target/
+/artifacts/
+/reports/
 /examples/*/build/
 /examples/*/dist/
 /experiments/
