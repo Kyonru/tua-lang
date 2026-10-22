@@ -574,6 +574,7 @@ impl<'a> Checker<'a> {
                 .and_then(|specifier| *specifier)
                 .is_some();
             let environment_type = self.environment.local(&name).cloned();
+            let has_environment_type = environment_type.is_some();
             if environment_type.is_some() && !has_annotation {
                 // The environment already typed this local, so the value is
                 // not inferred below. A call still has to have its arguments
@@ -598,7 +599,7 @@ impl<'a> Checker<'a> {
                     state_machine::type_is_state_machine(self.environment, &ty)
                         || sprite::type_is_sprite_sheet(self.environment, &ty)
                         || sprite::type_is_sprite_player(self.environment, &ty);
-                let ty = if has_annotation || preserve_literal_unions {
+                let ty = if has_annotation || has_environment_type || preserve_literal_unions {
                     ty
                 } else {
                     widen_inferred_type(&ty)

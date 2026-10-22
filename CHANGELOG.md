@@ -8,6 +8,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Module constructors now preserve selected imported return aliases and nested
+  literal-union contracts consistently across checking, hover, and completion.
+
 - LSP profiling and smoke helpers now compute correct cursor positions after
   multiline source fragments, preventing misleading completion and signature
   results in developer-experience trials.

@@ -2870,6 +2870,106 @@ export type Unit = { position: Point, color: Color }
 }
 
 #[test]
+fn selected_imported_return_aliases_survive_module_exports() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+import type Types from "./types"
+local Pieces = require("pieces")
+
+local piece = Pieces.spawn()
+local function consumeKind(kind: Types.Kind)
+  return kind
+end
+
+consumeKind(piece.kind)
+local invalid: number = piece.<|complete|><|hover|>kind
+return invalid
+-- file: src/pieces.tua
+import type { Piece } from "./types"
+
+local function spawn(): Piece
+  return { kind = "I", x = 1 }
+end
+
+return { spawn = spawn }
+-- file: src/types.d.tua
+export type Kind = "I" | "O"
+export type Piece = { kind: Kind, x: number }
+"#,
+    );
+    let mut host = AnalysisHost::new();
+
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+
+    let snapshot = host.snapshot();
+    let hover = snapshot
+        .hover("src/main.tua", fixture.position("hover"))
+        .expect("selected imported return field should hover");
+    let labels =
+        completion_labels(&snapshot.completion("src/main.tua", fixture.position("complete")));
+    let mismatches = snapshot
+        .diagnostics("src/main.tua")
+        .into_iter()
+        .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::TYPE_MISMATCH))
+        .collect::<Vec<_>>();
+
+    assert_eq!(hover.contents, "(field) kind: \"I\" | \"O\"");
+    assert!(labels.contains(&"kind".to_owned()), "{labels:?}");
+    assert!(labels.contains(&"x".to_owned()), "{labels:?}");
+    assert_eq!(
+        mismatches.len(),
+        1,
+        "expected a number mismatch: {mismatches:#?}"
+    );
+}
+
+#[test]
+fn project_resolved_constructor_contracts_are_not_widened_in_the_checker() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+import type Types from "./types"
+local Game = require("game")
+
+local game = Game.newGame()
+local function consume(value: Types.Game)
+  return value
+end
+
+return consume(game)
+-- file: src/game.tua
+import type Types from "./types"
+
+local function newGame(): Types.Game
+  return { mode = "playing" }
+end
+
+return { newGame = newGame }
+-- file: src/types.d.tua
+export type GameMode = "playing" | "paused" | "gameover"
+export type Game = { mode: GameMode }
+"#,
+    );
+    let mut host = AnalysisHost::new();
+
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+
+    let diagnostics = host.snapshot().diagnostics("src/main.tua");
+
+    assert!(
+        diagnostics
+            .iter()
+            .all(|diagnostic| diagnostic.code != Some(DiagnosticCode::TYPE_MISMATCH)),
+        "the checker should retain the project-resolved literal contract: {diagnostics:#?}"
+    );
+}
+
+#[test]
 fn namespace_imported_declaration_records_accept_array_literals() {
     let fixture = Fixture::parse(
         r#"-- file: src/main.tua

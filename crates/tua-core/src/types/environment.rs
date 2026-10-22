@@ -724,7 +724,7 @@ fn collect_alias_names(
             ));
         }
         for binding in &import.bindings {
-            if names.contains(&binding.local) {
+            if !names.insert(binding.local.clone()) {
                 diagnostics.push(type_diagnostic(
                     &parsed.path,
                     Some(binding.local_span),
