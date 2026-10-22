@@ -2,8 +2,8 @@ use std::env;
 use std::process::ExitCode;
 
 use tua_cli::{
-    parse_args, run_api_command, run_command, run_lsp_command, run_mcp_command, run_watch_command,
-    version_text, CliAction, CommandName, HELP,
+    command_help, parse_args, run_api_command, run_command, run_lsp_command, run_mcp_command,
+    run_watch_command, version_text, CliAction, CommandName, HELP,
 };
 
 const CLI_STACK_SIZE: usize = 8 * 1024 * 1024;
@@ -27,6 +27,10 @@ fn run_main() -> ExitCode {
     match parse_args(env::args().skip(1)) {
         Ok(CliAction::Help) => {
             print!("{HELP}");
+            ExitCode::SUCCESS
+        }
+        Ok(CliAction::CommandHelp(command)) => {
+            print!("{}", command_help(command));
             ExitCode::SUCCESS
         }
         Ok(CliAction::Version) => {

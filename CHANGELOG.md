@@ -6,6 +6,12 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+### Changed
+
+- Added contextual command help such as `tua init --help`, and clarified in
+  generated configuration that `diagnostics.rules` controls the standard set
+  while the individual switches are additional opt-in checks.
+
 ### Fixed
 
 - Module constructors now preserve selected imported return aliases and nested

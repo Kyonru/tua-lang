@@ -44,6 +44,7 @@ Options:
 #[derive(Debug, Eq, PartialEq)]
 pub enum CliAction {
     Help,
+    CommandHelp(CommandName),
     Version,
     Command {
         name: CommandName,
@@ -80,6 +81,43 @@ pub enum CommandName {
     Mcp,
 }
 
+impl CommandName {
+    fn parse(raw: &str) -> Option<Self> {
+        Some(match raw {
+            "init" => Self::Init,
+            "check" => Self::Check,
+            "fmt" => Self::Fmt,
+            "lint" => Self::Lint,
+            "build" => Self::Build,
+            "package" => Self::Package,
+            "traceback" => Self::Traceback,
+            "watch" => Self::Watch,
+            "dev" => Self::Dev,
+            "lsp" => Self::Lsp,
+            "api" => Self::Api,
+            "mcp" => Self::Mcp,
+            _ => return None,
+        })
+    }
+}
+
+pub fn command_help(command: CommandName) -> &'static str {
+    match command {
+        CommandName::Init => "tua init - create a Tua project\n\nUsage:\n  tua init\n\nCreates tua.toml and src/main.tua without overwriting existing files.\n",
+        CommandName::Check => "tua check - parse and type-check the project\n\nUsage:\n  tua check [--deny-warnings]\n",
+        CommandName::Fmt => "tua fmt - format project source files\n\nUsage:\n  tua fmt [--check]\n",
+        CommandName::Lint => "tua lint - run lint rules\n\nUsage:\n  tua lint [--strict]\n",
+        CommandName::Build => "tua build - check and emit Lua output\n\nUsage:\n  tua build [--emit-on-error]\n",
+        CommandName::Package => "tua package - build and package a LOVE game\n\nUsage:\n  tua package [--target love|windows|macos] [--love PATH] [--name NAME] [--identifier ID]\n",
+        CommandName::Traceback => "tua traceback - remap generated Lua traceback lines\n\nUsage:\n  tua traceback [--maps PATH] [FILE]\n",
+        CommandName::Watch => "tua watch - rebuild when source files change\n\nUsage:\n  tua watch\n",
+        CommandName::Dev => "tua dev - rebuild and hot reload a LOVE game\n\nUsage:\n  tua dev [--love PATH]\n",
+        CommandName::Lsp => "tua lsp - start the language server\n\nUsage:\n  tua lsp [--stdio]\n",
+        CommandName::Api => "tua api - start the read-only JSON-RPC API\n\nUsage:\n  tua api [--stdio] [--workspace PATH]\n",
+        CommandName::Mcp => "tua mcp - start the read-only MCP server\n\nUsage:\n  tua mcp [--stdio] [--workspace PATH]\n",
+    }
+}
+
 pub fn parse_args<I, S>(args: I) -> Result<CliAction, CliError>
 where
     I: IntoIterator<Item = S>,
@@ -95,30 +133,18 @@ where
     }
 
     if args.iter().any(|arg| arg == "-h" || arg == "--help") {
-        return Ok(CliAction::Help);
+        return match args.first().and_then(|arg| CommandName::parse(arg)) {
+            Some(command) => Ok(CliAction::CommandHelp(command)),
+            None => Ok(CliAction::Help),
+        };
     }
 
     if args.iter().any(|arg| arg == "-V" || arg == "--version") {
         return Ok(CliAction::Version);
     }
 
-    let command = match args[0].as_str() {
-        "init" => CommandName::Init,
-        "check" => CommandName::Check,
-        "fmt" => CommandName::Fmt,
-        "lint" => CommandName::Lint,
-        "build" => CommandName::Build,
-        "package" => CommandName::Package,
-        "traceback" => CommandName::Traceback,
-        "watch" => CommandName::Watch,
-        "dev" => CommandName::Dev,
-        "lsp" => CommandName::Lsp,
-        "api" => CommandName::Api,
-        "mcp" => CommandName::Mcp,
-        other => {
-            return Err(CliError::usage(format!("unknown command `{other}`")));
-        }
-    };
+    let command = CommandName::parse(&args[0])
+        .ok_or_else(|| CliError::usage(format!("unknown command `{}`", args[0])))?;
 
     let mut options = CommandOptions::default();
 

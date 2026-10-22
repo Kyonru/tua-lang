@@ -4,6 +4,10 @@ icon: lucide/terminal
 
 # CLI
 
+Every command has contextual help. For example, `tua init --help` describes
+only project initialization, while `tua --help` lists the complete command
+set.
+
 The Tua CLI is provided by the `tua-cli` crate.
 
 During development, run commands through Cargo:

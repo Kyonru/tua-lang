@@ -146,6 +146,11 @@ the behavior and tradeoffs of each option.
 
 ## Root Options
 
+In generated `tua.toml` files, `diagnostics.rules = true` enables the standard
+diagnostic set. The dedicated diagnostic switches that follow are additional
+opt-in policies: their generated `false` values do not turn off a standard
+rule.
+
 `source`
 : Directory containing Tua source files.
 

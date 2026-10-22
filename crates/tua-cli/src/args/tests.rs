@@ -12,6 +12,16 @@ fn help_flag_prints_help() {
 }
 
 #[test]
+fn command_help_is_contextual() {
+    assert_eq!(
+        parse_args(["init", "--help"]),
+        Ok(CliAction::CommandHelp(CommandName::Init))
+    );
+    assert!(command_help(CommandName::Init).contains("tua init"));
+    assert!(!command_help(CommandName::Init).contains("--strict"));
+}
+
+#[test]
 fn version_flag_prints_version() {
     assert_eq!(parse_args(["--version"]), Ok(CliAction::Version));
     assert!(version_text().starts_with("tua "));

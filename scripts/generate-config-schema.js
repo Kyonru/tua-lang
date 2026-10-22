@@ -151,7 +151,10 @@ function defaultTemplate(settings) {
   const chunks = [root.join("\n")];
 
   for (const [section, lines] of sections) {
-    chunks.push(`[${section}]\n${lines.join("\n")}`);
+    const guidance = section === "diagnostics"
+      ? "# rules enables Tua's standard diagnostics. The individual switches below\n# control additional opt-in checks; false does not disable a standard rule.\n"
+      : "";
+    chunks.push(`[${section}]\n${guidance}${lines.join("\n")}`);
   }
 
   return `${chunks.join("\n\n")}\n`;

@@ -235,6 +235,20 @@ fn init_creates_default_project_files() {
 }
 
 #[test]
+fn init_help_is_contextual() {
+    let output = tua()
+        .args(["init", "--help"])
+        .output()
+        .expect("failed to run tua init --help");
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("tua init - create a Tua project"));
+    assert!(stdout.contains("Usage:\n  tua init"));
+    assert!(!stdout.contains("Commands:"));
+}
+
+#[test]
 fn init_does_not_overwrite_existing_config() {
     let temp = TempDir::new("init-existing");
     let config_path = temp.path().join(CONFIG_FILE);
