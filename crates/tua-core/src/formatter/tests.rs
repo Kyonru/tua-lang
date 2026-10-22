@@ -224,6 +224,19 @@ fn breaks_long_call_groups_without_trailing_argument_comma() {
 }
 
 #[test]
+fn line_width_counts_unicode_characters_instead_of_utf8_bytes() {
+    let source = "local label = describe(\"日本語\", first, second)\n";
+    let options = FormatOptions {
+        line_width: source.trim_end().chars().count(),
+        ..FormatOptions::default()
+    };
+
+    let output = format_tua_source("src/main.tua", source, &options).expect("source should format");
+
+    assert_eq!(output, source);
+}
+
+#[test]
 fn preserves_multiline_call_indentation_and_grouping_spacing() {
     let source = r#"function draw()
 love.graphics.draw(
@@ -510,6 +523,28 @@ fn preserves_empty_lines_inside_long_strings_and_block_comments() {
     );
 
     assert_eq!(format(source), source);
+}
+
+#[test]
+fn preserves_code_like_text_inside_multiline_literals_and_comments() {
+    let source = concat!(
+        "local script = [[\n",
+        "  local score=10\n",
+        "if score>0 then\n",
+        "    print( score )\n",
+        "]]\n",
+        "--[[\n",
+        "  local lives=3\n",
+        "if lives>0 then\n",
+        "]]\n",
+        "local escaped = \"first\\\n",
+        "  second=unchanged\"\n",
+    );
+
+    let formatted = format(source);
+
+    assert_eq!(formatted, source);
+    assert_eq!(format(&formatted), formatted);
 }
 
 #[test]

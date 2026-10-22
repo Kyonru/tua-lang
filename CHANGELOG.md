@@ -14,6 +14,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Formatting now preserves every byte of multiline string and block-comment
+  bodies, including code-like text and escaped multiline short strings, and
+  line-width decisions no longer count UTF-8 bytes as separate characters.
+
 - Multiline function signatures now align their closing parenthesis with the
   declaration, while parenthesized and continued `if`/`elseif`/`while`
   conditions retain canonical spacing and correctly indent their bodies.

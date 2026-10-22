@@ -388,6 +388,7 @@ enum MaskState {
 #[derive(Clone, Debug, Eq, PartialEq)]
 enum MultilineState {
     Code,
+    ShortString { quote: u8 },
     LongBracket { close: Vec<u8> },
 }
 
@@ -450,14 +451,19 @@ impl<'a> Formatter<'a> {
     }
 
     fn format_source_line(&mut self, line: &str, output: &mut String) {
+        if !matches!(self.multiline_state, MultilineState::Code) {
+            output.push_str(line);
+            output.push('\n');
+            self.has_content = true;
+            self.pending_blank_line = false;
+            self.update_multiline_state(line);
+            return;
+        }
+
         let is_blank = line.trim().is_empty();
-        let preserves_blank = matches!(self.multiline_state, MultilineState::LongBracket { .. });
 
         if is_blank {
-            if preserves_blank {
-                output.push_str(line);
-                output.push('\n');
-            } else if self.has_content {
+            if self.has_content {
                 self.pending_blank_line = true;
             }
         } else {
@@ -492,6 +498,7 @@ impl<'a> Formatter<'a> {
                         let quote = bytes[index];
                         index += 1;
                         let mut escaped = false;
+                        let mut closed = false;
 
                         while index < bytes.len() {
                             if escaped {
@@ -500,9 +507,13 @@ impl<'a> Formatter<'a> {
                                 escaped = true;
                             } else if bytes[index] == quote {
                                 index += 1;
+                                closed = true;
                                 break;
                             }
                             index += 1;
+                        }
+                        if !closed && escaped {
+                            self.multiline_state = MultilineState::ShortString { quote };
                         }
                         continue;
                     }
@@ -519,6 +530,21 @@ impl<'a> Formatter<'a> {
                         index += close.len();
                         self.multiline_state = MultilineState::Code;
                     } else {
+                        index += 1;
+                    }
+                }
+                MultilineState::ShortString { quote } => {
+                    let mut escaped = false;
+                    while index < bytes.len() {
+                        if escaped {
+                            escaped = false;
+                        } else if bytes[index] == b'\\' {
+                            escaped = true;
+                        } else if bytes[index] == *quote {
+                            index += 1;
+                            self.multiline_state = MultilineState::Code;
+                            break;
+                        }
                         index += 1;
                     }
                 }
@@ -873,7 +899,7 @@ fn normalize_spacing(line: &str) -> String {
 fn break_long_groups(line: &str, indent: &str, options: &FormatOptions) -> String {
     let inline = format!("{indent}{line}");
 
-    if inline.len() <= options.line_width {
+    if inline.chars().count() <= options.line_width {
         return inline;
     }
 

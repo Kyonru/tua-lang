@@ -22,6 +22,10 @@ range, and on-type formatting.
 The formatter controls indentation, line wrapping, quote preservation, final
 newlines, spacing, and blank-line normalization. Configure it independently:
 
+String and comment contents are never reformatted. This includes nonblank
+lines inside long-bracket strings, block comments, and escaped multiline short
+strings, even when their text resembles Tua code.
+
 Multiline function parameters are indented once while the closing parenthesis
 stays aligned with the declaration. Continued control-flow conditions are also
 indented once, whether they use enclosing parentheses or leading `and`/`or`
