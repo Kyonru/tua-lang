@@ -50,6 +50,8 @@ enabled = true
 backend = \"tua\"
 
 [diagnostics]
+# rules enables Tua's standard diagnostics. The individual switches below
+# control additional opt-in checks; false does not disable a standard rule.
 rules = true
 duplicate_keys = false
 missing_requires = true
