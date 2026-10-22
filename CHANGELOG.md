@@ -8,6 +8,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Named functions with an explicit parenthesized return list now check each
+  returned Lua value against its matching slot instead of treating the whole
+  list as one tuple-valued result.
+
 - Accessing a missing member on a statically resolved module table now reports
   `TL1012` before a call can fail on `nil` at runtime. Unresolved modules,
   dynamic `__index` proxies, `any`, and shadowed locals remain permissive.

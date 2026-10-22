@@ -40,9 +40,30 @@ fn returns_known_function_signature_and_active_parameter() {
 }
 
 #[test]
+fn returns_named_function_multiple_return_signature() {
+    let source = r#"local function status(enabled: boolean): (string, number)
+  if enabled then return "on", 1 end
+  return "off", 0
+end
+
+status(
+"#;
+    let help = signature_at_last(source, "status(")
+        .expect("named multi-return function should provide signature help");
+
+    assert_eq!(
+        help.signatures[0].label,
+        "function status(enabled: boolean): string, number"
+    );
+}
+
+#[test]
 fn love_set_mode_signature_marks_flags_optional() {
-    let help = signature_at_last("love.window.setMode(400, 540, ", "love.window.setMode(400, 540, ")
-        .expect("setMode should provide signature help");
+    let help = signature_at_last(
+        "love.window.setMode(400, 540, ",
+        "love.window.setMode(400, 540, ",
+    )
+    .expect("setMode should provide signature help");
 
     assert_eq!(
         help.signatures[0].label,

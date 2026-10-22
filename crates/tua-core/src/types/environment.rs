@@ -946,10 +946,31 @@ fn resolve_function_annotation(
         required_parameter_count += 1;
     }
 
-    let return_type = function.return_type.as_ref().map(|ty| {
-        resolve_tua_type_with_context(path, ty, function.span, alias_names, diagnostics, &context)
-    });
-    let return_types = return_type.iter().cloned().collect();
+    let return_types = match function.return_type.as_ref() {
+        Some(TuaType::Tuple(items)) => items
+            .iter()
+            .map(|ty| {
+                resolve_tua_type_with_context(
+                    path,
+                    ty,
+                    function.span,
+                    alias_names,
+                    diagnostics,
+                    &context,
+                )
+            })
+            .collect(),
+        Some(ty) => vec![resolve_tua_type_with_context(
+            path,
+            ty,
+            function.span,
+            alias_names,
+            diagnostics,
+            &context,
+        )],
+        None => Vec::new(),
+    };
+    let return_type = return_types.first().cloned();
 
     TypedFunction {
         name: function.name.clone(),

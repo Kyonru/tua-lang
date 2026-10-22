@@ -1451,6 +1451,24 @@ local total: number = add(1, 2)
 }
 
 #[test]
+fn accepts_named_functions_with_explicit_multiple_returns() {
+    check_tua_source(
+        "src/status.tua",
+        r#"
+local function status(enabled: boolean): (string, number)
+  if enabled then
+    return "on", 1
+  end
+  return "off", 0
+end
+
+local label: string, code: number = status(true)
+"#,
+    )
+    .expect("named function return tuples should describe multiple Lua values");
+}
+
+#[test]
 fn accepts_omitted_trailing_default_parameters() {
     check_tua_source(
         "src/shake.tua",
