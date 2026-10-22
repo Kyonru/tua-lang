@@ -3070,7 +3070,7 @@ fn parameters_from_function_detail(detail: &str) -> Option<(Vec<ExternalParamete
         let (name, ty) = parameter
             .split_once(':')
             .map(|(name, ty)| (name.trim(), ty.trim()))
-            .unwrap_or(("", parameter));
+            .unwrap_or((parameter, "any"));
         let ty = type_from_lua_label(ty).unwrap_or(Type::Any);
 
         if name == "..." {
