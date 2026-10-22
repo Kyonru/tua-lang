@@ -28,4 +28,10 @@ generated project output.
   by `input({...})`. Tua retains Baton's API and only adds static typing,
   completion, validation, and require-driven build integration.
 
+- `runtime/tuatween.lua` is rxi's MIT-licensed flux 0.1.5 (commit
+  `bb330231b87eabf84fbd68322f13a6320db30a41`) with LuaDoc types and a typed
+  export table added; its runtime code is otherwise unchanged. It backs the
+  built-in `tween` module, which Tua types from these annotations.
+- `tests/` holds plain-Lua runtime tests, run by `make runtime-test`.
+
 Vendored files should keep their upstream license headers intact.

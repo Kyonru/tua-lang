@@ -2,6 +2,7 @@ pub mod analysis;
 mod asset;
 mod ast_utils;
 mod audio;
+mod builtin_module;
 pub mod call_hierarchy;
 pub mod check;
 mod classes;
@@ -305,6 +306,10 @@ pub fn tuastore_runtime_source() -> &'static str {
 
 pub fn tuaaudio_runtime_source() -> &'static str {
     audio::runtime_source()
+}
+
+pub fn tuatween_runtime_source() -> &'static str {
+    builtin_module::TWEEN.source
 }
 
 pub fn baton_runtime_source() -> &'static str {

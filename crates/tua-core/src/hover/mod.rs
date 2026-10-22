@@ -174,6 +174,18 @@ impl<'a> HoverResolver<'a> {
             return Some(hover);
         }
 
+        if let Some(module) = crate::builtin_module::module(&current_part.text)
+            .filter(|module| crate::builtin_module::is_visible(self.parsed, module.name))
+        {
+            let mut hover = hover(
+                format!("(built-in module) {}", module.name),
+                Some(current_part.span),
+            );
+            hover.documentation = Some(module.documentation.to_owned());
+
+            return Some(hover);
+        }
+
         if current_part.text == ecs::MODULE_NAME
             && self
                 .environment

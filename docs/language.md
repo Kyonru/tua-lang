@@ -90,6 +90,8 @@ that final invariant.
 - [Input](#input): Baton-backed controls, directional pairs, and LOVE source
   completion.
 - [Object pools](#object-pools): typed acquire/release lifecycle and explorer.
+- [Tweening](tweening.md): the built-in flux-based `tween` module, with typed
+  easing names and values.
 - [Entity component systems](#entity-component-systems): the built-in `ecs`
   module and ECS Explorer.
 

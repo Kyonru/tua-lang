@@ -1569,6 +1569,11 @@ fn lower_builtin_call_operations(
     let mut tuaecs_span = None;
     let game_math_helpers = game_math::used_helpers(parsed);
     let explicit_ecs_binding = explicit_binding_position(parsed, ecs::MODULE_NAME);
+    let explicit_builtin_module_bindings = crate::builtin_module::MODULES
+        .iter()
+        .map(|module| explicit_binding_position(parsed, module.name))
+        .collect::<Vec<_>>();
+    let mut builtin_module_spans = vec![None; crate::builtin_module::MODULES.len()];
     let explicit_object_pool_binding =
         explicit_binding_position(parsed, object_pool::CONSTRUCTOR_NAME);
     let explicit_state_machine_binding =
@@ -1779,6 +1784,30 @@ fn lower_builtin_call_operations(
                 }
             }
 
+            if let Some(module_index) = crate::builtin_module::MODULES
+                .iter()
+                .position(|module| module.name == name)
+            {
+                let field_start = skip_whitespace(&output, index + identifier_end);
+                let is_member = output[..index].trim_end().ends_with(['.', ':']);
+
+                if !is_member
+                    && (output[field_start..].starts_with('.')
+                        || output[field_start..].starts_with(':'))
+                {
+                    let source_span = document.source_span_at(index);
+                    let binding_is_active = explicit_builtin_module_bindings[module_index]
+                        .is_some_and(|position| {
+                            (position.line, position.column)
+                                <= (source_span.start.line, source_span.start.column)
+                        });
+
+                    if !binding_is_active {
+                        builtin_module_spans[module_index].get_or_insert(source_span);
+                    }
+                }
+            }
+
             if ecs_enabled && name == ecs::MODULE_NAME {
                 let field_start = skip_whitespace(&output, index + identifier_end);
 
@@ -1815,6 +1844,7 @@ fn lower_builtin_call_operations(
         || baton_span.is_some()
         || tuaaudio_span.is_some()
         || tuaecs_span.is_some()
+        || builtin_module_spans.iter().any(Option::is_some)
         || !game_math_helpers.is_empty()
     {
         let leading_whitespace =
@@ -1923,6 +1953,19 @@ fn lower_builtin_call_operations(
             source_span,
             LoweringKind::BuiltinCall,
         ));
+    }
+    for (module, source_span) in crate::builtin_module::MODULES
+        .iter()
+        .zip(builtin_module_spans)
+    {
+        if let Some(source_span) = source_span {
+            operations.push(lowering::LoweringOperation::insert(
+                0,
+                format!("local {} = require(\"{}\")\n", module.name, module.runtime),
+                source_span,
+                LoweringKind::BuiltinCall,
+            ));
+        }
     }
     for used in game_math_helpers {
         operations.push(lowering::LoweringOperation::insert(

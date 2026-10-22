@@ -293,6 +293,73 @@ fn init_does_not_overwrite_existing_main() {
 }
 
 #[test]
+fn builtin_tween_checks_bundles_and_yields_to_a_project_runtime() {
+    let temp = TempDir::new("builtin-tween");
+
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).expect("failed to write config");
+    fs::create_dir_all(temp.path().join("src")).expect("failed to create source");
+    fs::write(
+        temp.path().join("src/main.tua"),
+        r#"local banner = { alpha = 0 }
+
+function love.load()
+  tween.to(banner, 0.5, { alpha = 1 }):ease("quadout")
+end
+
+function love.update(dt: number)
+  tween.update(dt)
+end
+"#,
+    )
+    .expect("failed to write main source");
+
+    let build = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tua build");
+    assert!(build.status.success(), "{build:?}");
+    let main = fs::read_to_string(temp.path().join("build/main.lua")).expect("main.lua");
+    assert!(
+        main.starts_with("local tween = require(\"tuatween\")\n"),
+        "{main}"
+    );
+    let runtime =
+        fs::read_to_string(temp.path().join("build/tuatween.lua")).expect("bundled tuatween");
+    assert!(runtime.contains("Copyright (c) 2016 rxi"));
+
+    fs::write(
+        temp.path().join("src/tuatween.lua"),
+        "return { custom = true }\n",
+    )
+    .expect("failed to write project runtime");
+    fs::remove_file(temp.path().join("build/tuatween.lua")).expect("remove bundled copy");
+    let build = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to rebuild");
+    assert!(build.status.success(), "{build:?}");
+    assert_eq!(
+        fs::read_to_string(temp.path().join("build/tuatween.lua")).expect("project tuatween"),
+        "return { custom = true }\n"
+    );
+
+    fs::write(
+        temp.path().join("src/main.tua"),
+        "tween.to({ x = 0 }, 1, { x = 1 }):ease(\"bounce\")\n",
+    )
+    .expect("failed to write misuse");
+    let check = tua()
+        .arg("check")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tua check");
+    assert!(!check.status.success());
+    assert!(String::from_utf8_lossy(&check.stderr).contains("found \"bounce\""));
+}
+
+#[test]
 fn check_prints_config_diagnostics() {
     let temp = TempDir::new("check-invalid-config");
 

@@ -198,7 +198,13 @@ impl<'a> ScopeBuilder<'a> {
             })
             .collect::<BTreeMap<_, _>>();
 
-        for name in ["love", "require", "_G", crate::ecs::MODULE_NAME] {
+        let builtin_modules = crate::builtin_module::MODULES
+            .iter()
+            .map(|module| module.name);
+        for name in ["love", "require", "_G", crate::ecs::MODULE_NAME]
+            .into_iter()
+            .chain(builtin_modules)
+        {
             let kind = if name == "love" {
                 ScopeGlobalKind::LoveBuiltin
             } else {

@@ -627,7 +627,11 @@ pub(crate) fn build_type_environment_with_domain_registry(
                         .map(|parent| (class.name.clone(), parent.clone()))
                 })
                 .collect(),
-            locals: locals.into_iter().chain(domains.builtin_locals()).collect(),
+            locals: crate::builtin_module::builtin_locals(parsed)
+                .into_iter()
+                .chain(locals)
+                .chain(domains.builtin_locals())
+                .collect(),
             local_docs,
             functions,
             deprecated_accesses: BTreeMap::new(),

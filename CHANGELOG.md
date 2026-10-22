@@ -95,6 +95,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Added
 
+- Added the built-in `tween` module, rxi's flux with LuaDoc types. Like
+  `ecs`, it needs no `require`: using it emits one and `tua build` copies the
+  runtime. Easing names, tweened values, and `dt` are checked from the
+  runtime's own annotations.
 - Added a production-safe, default-off Phase 3 statistical inline-completion
   source for Tua. It reuses the immutable project corpus and speculative
   request lane and adds bounded token tables and compact scope facts. When

@@ -304,6 +304,10 @@ INLINE_EVAL_SMOKE_EXPECTED := benchmarks/inline-eval/smoke/expected.json
 INLINE_EVAL := $(CARGO) run --quiet --release --package tua-core --features test-fixture --example inline_eval --
 INLINE_EVAL_DEBUG := $(CARGO) run --quiet --package tua-core --features test-fixture --example inline_eval --
 
+.PHONY: runtime-test
+runtime-test: ## Run plain-Lua tests for bundled runtimes (LUA=lua by default).
+	$(LUA) vendor/tests/run.lua vendor/runtime vendor/tests
+
 .PHONY: inline-eval
 inline-eval: ## Evaluate local inline-completion sources on the tuning sets (writes target/tua-speed/inline-eval-tune.json).
 	$(INLINE_EVAL) --manifest $(INLINE_EVAL_MANIFEST) --set tune --out target/tua-speed/inline-eval-tune.json

@@ -30,6 +30,7 @@ nav = [
     { "State Stores" = "stores.md" },
     { "State Machines" = "state-machines.md" },
     { "Input" = "input.md" },
+    { "Tweening" = "tweening.md" },
     { "Entity Component Systems" = "ecs.md" },
     { "Object Pooling" = "object-pooling.md" },
     { "Audio" = "audio.md" },

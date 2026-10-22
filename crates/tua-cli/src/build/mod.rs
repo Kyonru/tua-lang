@@ -16,9 +16,9 @@ use tua_core::{
     emit_tua_source_with_workspace_artifact, emit_tua_source_with_workspace_environment_artifact,
     format_diagnostics_for_cli, tuaaudio_runtime_source, tuaecs_runtime_source,
     tuaobjectpool_runtime_source, tuasignal_runtime_source, tuasprite_runtime_source,
-    tuastatemachine_runtime_source, tuastore_runtime_source, AnalysisHost, AnalysisSourceKind,
-    AnnotationMode, Diagnostic, DiagnosticCategory, DiagnosticCode, DiagnosticSeverity,
-    LoadedConfig, ProjectWorkspace,
+    tuastatemachine_runtime_source, tuastore_runtime_source, tuatween_runtime_source, AnalysisHost,
+    AnalysisSourceKind, AnnotationMode, Diagnostic, DiagnosticCategory, DiagnosticCode,
+    DiagnosticSeverity, LoadedConfig, ProjectWorkspace,
 };
 
 struct BundledRuntime {
@@ -72,6 +72,11 @@ const BUNDLED_RUNTIMES: &[BundledRuntime] = &[
         file_name: "tuaaudio.lua",
         require_literal: "require(\"tuaaudio\")",
         source: tuaaudio_runtime_source,
+    },
+    BundledRuntime {
+        file_name: "tuatween.lua",
+        require_literal: "require(\"tuatween\")",
+        source: tuatween_runtime_source,
     },
     BundledRuntime {
         file_name: "baton.lua",

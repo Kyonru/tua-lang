@@ -1877,7 +1877,9 @@ impl<'a> SymbolAnalyzer<'a> {
     }
 
     fn is_builtin_global(name: &str) -> bool {
-        name == ecs::MODULE_NAME || lua::is_protected_global(name)
+        name == ecs::MODULE_NAME
+            || crate::builtin_module::module(name).is_some()
+            || lua::is_protected_global(name)
     }
 }
 

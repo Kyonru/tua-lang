@@ -1527,6 +1527,29 @@ fn complete_identifier_items(
         .local(ecs::MODULE_NAME)
         .is_some_and(|ty| ecs::is_module_type(environment, ty));
     insert_keyword_and_builtin_identifier_items(&mut completions, &mut labels, prefix, include_ecs);
+    for module in crate::builtin_module::MODULES {
+        if completion_text_matches(module.name, prefix)
+            && crate::builtin_module::is_visible(parsed, module.name)
+        {
+            push_unique_completion(
+                &mut completions,
+                &mut labels,
+                Completion {
+                    label: module.name.to_owned(),
+                    kind: CompletionKind::Module,
+                    detail: Some(module.summary.to_owned()),
+                    documentation: Some(module.documentation.to_owned()),
+                    deprecation: None,
+                    insert_text: None,
+                    filter_text: None,
+                    is_snippet: false,
+                    module_path: None,
+                    source_module: None,
+                    additional_text_edits: Vec::new(),
+                },
+            );
+        }
+    }
 
     completions
 }
