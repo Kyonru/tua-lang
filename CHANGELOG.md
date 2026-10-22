@@ -25,6 +25,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Inline anonymous function arguments no longer leave stale formatter state
+  that can dedent the closing parenthesis of a later multiline call.
+
 - `format.indent_width` and `format.line_width` now consistently reject zero
   in `tua.toml` and ignore invalid zero-valued LSP overrides, matching their
   schema and VS Code constraints.

@@ -15,7 +15,7 @@ local trafficLight = stateMachine({
       event: "calm" | "clear" | "panic" | "warn",
       from: "green" | "red" | "yellow",
       to: "green" | "red" | "yellow"
-      )
+    )
       print("entered", self.current, event, from, to)
     end,
   },

@@ -689,7 +689,7 @@ impl<'a> Formatter<'a> {
             if self.paren_depth > 0 {
                 self.indent_level += paren_indent;
                 self.suppressed_paren_block_indents.push(paren_indent);
-                if code_contains_word(code, "function") {
+                if function_parameter_list_is_open(code) {
                     self.multiline_function_header_depths.push(self.paren_depth);
                 }
             }
@@ -1547,6 +1547,71 @@ fn code_contains_word(value: &str, word: &str) -> bool {
     }
 
     false
+}
+
+fn function_parameter_list_is_open(code: &str) -> bool {
+    let bytes = code.as_bytes();
+    let mut state = MaskState::Code;
+    let mut function_start = None;
+    let mut index = 0;
+
+    while index < bytes.len() {
+        match &mut state {
+            MaskState::Code => {
+                if bytes[index] == b'-' && bytes.get(index + 1) == Some(&b'-') {
+                    break;
+                }
+                if bytes[index] == b'\'' || bytes[index] == b'"' {
+                    state = MaskState::ShortString {
+                        quote: bytes[index],
+                        escaped: false,
+                    };
+                    index += 1;
+                    continue;
+                }
+                if let Some((close, consumed)) = long_bracket_open(&bytes[index..]) {
+                    state = MaskState::LongString { close };
+                    index += consumed;
+                    continue;
+                }
+                if is_identifier_continue(bytes[index]) {
+                    let start = index;
+                    index += 1;
+                    while bytes
+                        .get(index)
+                        .is_some_and(|byte| is_identifier_continue(*byte))
+                    {
+                        index += 1;
+                    }
+                    if &code[start..index] == "function" {
+                        function_start = Some(start);
+                    }
+                    continue;
+                }
+                index += 1;
+            }
+            MaskState::ShortString { quote, escaped } => {
+                if *escaped {
+                    *escaped = false;
+                } else if bytes[index] == b'\\' {
+                    *escaped = true;
+                } else if bytes[index] == *quote {
+                    state = MaskState::Code;
+                }
+                index += 1;
+            }
+            MaskState::LongString { close } => {
+                if bytes[index..].starts_with(close) {
+                    index += close.len();
+                    state = MaskState::Code;
+                } else {
+                    index += 1;
+                }
+            }
+        }
+    }
+
+    function_start.is_some_and(|start| update_group_depth(0, &code[start..], b'(', b')') > 0)
 }
 
 fn code_before_comment(line: &str) -> &str {

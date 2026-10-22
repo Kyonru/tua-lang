@@ -21,7 +21,7 @@ local movement = ecs.system(
     velocity: Shared.Velocity,
     rotation: Shared.Rotation,
     dt: number
-    )
+  )
     position.x = math.max(18, math.min(702, position.x + velocity.x * dt))
     position.y = math.max(18, math.min(462, position.y + velocity.y * dt))
 

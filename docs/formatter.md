@@ -65,3 +65,23 @@ formatted document ends with a line terminator.
 Formatting is never reported as `TL4xxx` lint output. If CI should enforce the
 canonical layout, run `tua fmt --check` as its own step.
 
+## Current scope
+
+`line_width` is a preferred wrapping width, not a hard column limit. The
+formatter currently expands comma-separated call arguments and table fields;
+it does not yet reflow long binary expressions, method chains, comments,
+strings, or single-argument calls. Syntax-aware reflow for those forms belongs
+in a future document-layout engine rather than more line-level heuristics.
+
+Formatting requires parseable source. Whole-document formatting normalizes
+the configured line-ending convention, while range and on-type formatting
+limit their edits to the requested source area. Project `[format]` settings
+are canonical and take precedence over an editor client's generic tab-size
+and insert-spaces preferences.
+
+Tua does not currently provide formatter-disable directives, configurable
+trailing commas, or path/stdin formatting modes. Type-annotation punctuation
+also remains source-preserving where changing it could be confused with Lua's
+method-call colon. These are deliberate boundaries of the current line-based
+formatter, not claims of full Prettier-style reflow.
+

@@ -27,7 +27,7 @@ local function recursive(a: string)
     return "value"
   end
 
-  return recursive(a+1)
+  return recursive(a + 1)
 end
 
 return {

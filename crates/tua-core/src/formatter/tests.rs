@@ -557,6 +557,24 @@ fn keeps_multiline_function_argument_bodies_relative_to_the_call() {
 }
 
 #[test]
+fn inline_function_arguments_do_not_dedent_later_multiline_calls() {
+    let source = r#"audio:on("beat", function(event)
+  beat = event.beat
+end)
+
+function love.draw()
+  love.graphics.print(
+    "Active voices",
+    32,
+    118
+  )
+end
+"#;
+
+    assert_eq!(format(source), source);
+}
+
+#[test]
 fn removes_unnecessary_empty_lines() {
     let source = "\n\nlocal first=1\n\n\n\nlocal second=2\n\n\n";
 
