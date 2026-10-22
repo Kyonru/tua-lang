@@ -360,6 +360,59 @@ end
 }
 
 #[test]
+fn builtin_camera_checks_and_bundles() {
+    let temp = TempDir::new("builtin-camera");
+
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).expect("failed to write config");
+    fs::create_dir_all(temp.path().join("src")).expect("failed to create source");
+    fs::write(
+        temp.path().join("src/main.tua"),
+        r#"local player = { x = 0, y = 0 }
+local camera = Camera.new({ style = "platformer", smoothing = 8, zoom = 2 })
+
+function love.update(dt: number)
+  camera:follow(player.x, player.y)
+  camera:update(dt)
+end
+
+function love.draw()
+  camera:draw(function()
+    love.graphics.circle("fill", player.x, player.y, 8)
+  end)
+end
+"#,
+    )
+    .expect("failed to write main source");
+
+    let build = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tua build");
+    assert!(build.status.success(), "{build:?}");
+    let main = fs::read_to_string(temp.path().join("build/main.lua")).expect("main.lua");
+    assert!(
+        main.contains("local Camera = require(\"tuacamera\")"),
+        "{main}"
+    );
+    assert!(temp.path().join("build/tuacamera.lua").exists());
+
+    fs::write(
+        temp.path().join("src/main.tua"),
+        "local cam = Camera.new({ style = \"orbit\" })\ncam:shake(\"hard\")\n",
+    )
+    .expect("failed to write misuse");
+    let check = tua()
+        .arg("check")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tua check");
+    let stderr = String::from_utf8_lossy(&check.stderr);
+    assert!(stderr.contains("found \"orbit\""), "{stderr}");
+    assert!(stderr.contains("main.tua:2:"), "{stderr}");
+}
+
+#[test]
 fn check_prints_config_diagnostics() {
     let temp = TempDir::new("check-invalid-config");
 

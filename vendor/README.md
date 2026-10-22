@@ -32,6 +32,8 @@ generated project output.
   `bb330231b87eabf84fbd68322f13a6320db30a41`) with LuaDoc types and a typed
   export table added; its runtime code is otherwise unchanged. It backs the
   built-in `tween` module, which Tua types from these annotations.
+- `runtime/tuacamera.lua` is Tua's MIT-licensed 2D camera behind the built-in
+  `Camera` module, typed from its own annotations.
 - `tests/` holds plain-Lua runtime tests, run by `make runtime-test`.
 
 Vendored files should keep their upstream license headers intact.

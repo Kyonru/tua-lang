@@ -31,6 +31,7 @@ nav = [
     { "State Machines" = "state-machines.md" },
     { "Input" = "input.md" },
     { "Tweening" = "tweening.md" },
+    { "Camera" = "camera.md" },
     { "Entity Component Systems" = "ecs.md" },
     { "Object Pooling" = "object-pooling.md" },
     { "Audio" = "audio.md" },

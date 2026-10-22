@@ -312,6 +312,10 @@ pub fn tuatween_runtime_source() -> &'static str {
     builtin_module::TWEEN.source
 }
 
+pub fn tuacamera_runtime_source() -> &'static str {
+    builtin_module::CAMERA.source
+}
+
 pub fn baton_runtime_source() -> &'static str {
     input::runtime_source()
 }

@@ -1,6 +1,6 @@
 //! Built-in runtime modules typed from their own LuaDoc.
 //!
-//! `tween` is a global in Tua source, like `ecs`: using it emits
+//! `tween` and `Camera` are globals in Tua source, like `ecs`: using one emits
 //! `local tween = require("tuatween")`, and `tua build` copies the runtime.
 //! Their types come from the runtime's annotations, so the Lua file is the
 //! single source of truth for behavior and checking.
@@ -36,7 +36,16 @@ pub(crate) const TWEEN: BuiltinModule = BuiltinModule {
         `tween.to(target, seconds, values)`, then call `tween.update(dt)` every frame.",
 };
 
-pub(crate) const MODULES: &[BuiltinModule] = &[TWEEN];
+pub(crate) const CAMERA: BuiltinModule = BuiltinModule {
+    name: "Camera",
+    runtime: "tuacamera",
+    source: include_str!("../../../vendor/runtime/tuacamera.lua"),
+    summary: "built-in 2D camera module",
+    documentation: "Create a 2D camera with `Camera.new({...})`: follow styles, \
+        smoothing, bounds, zoom, shake, viewports, and screen/world conversion.",
+};
+
+pub(crate) const MODULES: &[BuiltinModule] = &[TWEEN, CAMERA];
 
 pub(crate) fn module(name: &str) -> Option<&'static BuiltinModule> {
     MODULES.iter().find(|module| module.name == name)
@@ -228,7 +237,13 @@ mod tests {
                 panic!("{} should export a table, found {ty}", module.name);
             };
             let rendered = ty.to_string();
-            for internal in ["Tween", "TweenGroup"] {
+            for internal in [
+                "Tween",
+                "TweenGroup",
+                "Camera",
+                "CameraOptions",
+                "CameraRect",
+            ] {
                 assert!(
                     !rendered.contains(&format!(": {internal}"))
                         && !rendered.contains(&format!("-> {internal}")),
@@ -240,18 +255,25 @@ mod tests {
 
         let tween = module_type(module("tween").expect("tween"));
         assert!(tween.to_string().contains("\"quadout\""), "{tween}");
+        let camera = module_type(module("Camera").expect("Camera"));
+        assert!(camera.to_string().contains("\"platformer\""), "{camera}");
     }
 
     #[test]
     fn using_a_module_emits_its_require_once() {
         let emitted = crate::emit_tua_source(
             "src/main.tua",
-            "local box = { x = 0 }\ntween.to(box, 1, { x = 1 })\ntween.update(0.1)\n",
+            "local box = { x = 0 }\ntween.to(box, 1, { x = 1 })\ntween.update(0.1)\nlocal cam = Camera.new()\n",
         )
         .expect("emit");
 
         assert_eq!(
             emitted.matches("require(\"tuatween\")").count(),
+            1,
+            "{emitted}"
+        );
+        assert_eq!(
+            emitted.matches("require(\"tuacamera\")").count(),
             1,
             "{emitted}"
         );
@@ -265,15 +287,10 @@ mod tests {
     fn a_project_binding_or_member_access_is_not_the_builtin() {
         let emitted = crate::emit_tua_source(
             "src/main.tua",
-            "local tween = { to = function() end }\ntween.to()\n",
+            "local tween = { to = function() end }\ntween.to()\nlocal ui = { Camera = { new = function() end } }\nui.Camera.new()\n",
         )
         .expect("emit");
-        assert!(!emitted.contains("require("), "{emitted}");
-        let emitted = crate::emit_tua_source(
-            "src/member.tua",
-            "local ui = { tween = { update = function() end } }\nui.tween.update()\n",
-        )
-        .expect("emit");
+
         assert!(!emitted.contains("require("), "{emitted}");
         let checked = crate::check_tua_source(
             "src/main.tua",
@@ -286,7 +303,9 @@ mod tests {
     fn module_calls_are_checked_against_the_runtime_annotations() {
         let diagnostics = crate::check_tua_source(
             "src/main.tua",
-            r#"tween.to({ x = 0 }, 1, { x = "far" }):ease("bounce")
+            r#"local cam = Camera.new({ style = "orbit", zoom = 2 })
+cam:shake("hard")
+tween.to({ x = 0 }, 1, { x = "far" })
 tween.update(0.016)
 "#,
         )
@@ -299,17 +318,23 @@ tween.update(0.016)
         assert!(
             messages
                 .iter()
-                .any(|(line, message)| *line == 1 && message.contains("values.x")),
+                .any(|(line, message)| *line == 1 && message.contains("found \"orbit\"")),
             "{messages:#?}"
         );
         assert!(
             messages
                 .iter()
-                .any(|(line, message)| *line == 1 && message.contains("found \"bounce\"")),
+                .any(|(line, message)| *line == 2 && message.contains("trauma")),
             "{messages:#?}"
         );
         assert!(
-            !messages.iter().any(|(line, _)| *line == 2),
+            messages
+                .iter()
+                .any(|(line, message)| *line == 3 && message.contains("values.x")),
+            "{messages:#?}"
+        );
+        assert!(
+            !messages.iter().any(|(line, _)| *line == 4),
             "{messages:#?}"
         );
     }
@@ -318,20 +343,23 @@ tween.update(0.016)
     fn modules_have_hover_and_completion() {
         let hover = crate::hover_tua_source(
             "src/main.tua",
-            "tween.update(0.1)\n",
-            crate::SourcePosition { line: 1, column: 2 },
+            "local cam = Camera.new()\nprint(cam)\n",
+            crate::SourcePosition {
+                line: 1,
+                column: 14,
+            },
         )
         .expect("hover")
-        .expect("a hover for tween");
+        .expect("a hover for Camera");
         assert!(
-            hover.contents.contains("(built-in module) tween"),
+            hover.contents.contains("(built-in module) Camera"),
             "{}",
             hover.contents
         );
 
         let completions = crate::complete_tua_source(
             "src/main.tua",
-            "local x = 1\ntw",
+            "local cam = Camera.new()\ntw",
             crate::SourcePosition { line: 2, column: 3 },
         )
         .expect("completions");

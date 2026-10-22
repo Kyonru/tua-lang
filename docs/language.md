@@ -92,6 +92,8 @@ that final invariant.
 - [Object pools](#object-pools): typed acquire/release lifecycle and explorer.
 - [Tweening](tweening.md): the built-in flux-based `tween` module, with typed
   easing names and values.
+- [Camera](camera.md): the built-in `Camera` module, with follow styles,
+  bounds, shake, split screen, and coordinate conversion.
 - [Entity component systems](#entity-component-systems): the built-in `ecs`
   module and ECS Explorer.
 

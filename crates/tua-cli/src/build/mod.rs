@@ -14,11 +14,11 @@ use crate::source_map::{debugger_source_map_path_for, source_map_path_for, write
 use tua_core::{
     anim8_runtime_source, baton_runtime_source, brinevector_runtime_source,
     emit_tua_source_with_workspace_artifact, emit_tua_source_with_workspace_environment_artifact,
-    format_diagnostics_for_cli, tuaaudio_runtime_source, tuaecs_runtime_source,
-    tuaobjectpool_runtime_source, tuasignal_runtime_source, tuasprite_runtime_source,
-    tuastatemachine_runtime_source, tuastore_runtime_source, tuatween_runtime_source, AnalysisHost,
-    AnalysisSourceKind, AnnotationMode, Diagnostic, DiagnosticCategory, DiagnosticCode,
-    DiagnosticSeverity, LoadedConfig, ProjectWorkspace,
+    format_diagnostics_for_cli, tuaaudio_runtime_source, tuacamera_runtime_source,
+    tuaecs_runtime_source, tuaobjectpool_runtime_source, tuasignal_runtime_source,
+    tuasprite_runtime_source, tuastatemachine_runtime_source, tuastore_runtime_source,
+    tuatween_runtime_source, AnalysisHost, AnalysisSourceKind, AnnotationMode, Diagnostic,
+    DiagnosticCategory, DiagnosticCode, DiagnosticSeverity, LoadedConfig, ProjectWorkspace,
 };
 
 struct BundledRuntime {
@@ -77,6 +77,11 @@ const BUNDLED_RUNTIMES: &[BundledRuntime] = &[
         file_name: "tuatween.lua",
         require_literal: "require(\"tuatween\")",
         source: tuatween_runtime_source,
+    },
+    BundledRuntime {
+        file_name: "tuacamera.lua",
+        require_literal: "require(\"tuacamera\")",
+        source: tuacamera_runtime_source,
     },
     BundledRuntime {
         file_name: "baton.lua",
