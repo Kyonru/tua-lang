@@ -114,12 +114,12 @@ contexts, score at least 0.85), and
 `phase3-phase2-plus-ngram-fallback` asks the Phase 2 candidate first.
 
 On the tuning set, the filtered fallback raises saved characters per eligible
-position from Phase 2's `0.197` to `0.204`; correct-prefix precision changes
-from `0.808` to `0.819`, wrong-to-saved improves from `0.24` to `0.23`, and
-backend p95 is `1.26 ms`. The filtered model is extremely sparse: it suggests
-at 0.006 eligible requests, saves 0.008 characters per eligible request, and
-has 0.957 correct-prefix precision. The raw predictor is not usable (`0.180`
-correct-prefix precision and `17.61` wrong characters per character saved).
+position from Phase 2's `0.149` to `0.159`; correct-prefix precision changes
+from `0.748` to `0.762`, wrong-to-saved improves from `0.399` to `0.389`, and
+backend p95 is `0.70 ms`. The filtered model is extremely sparse: it suggests
+at 0.005 eligible requests, saves 0.011 characters per eligible request, and
+has 0.946 correct-prefix precision. The raw predictor is not usable (`0.095`
+correct-prefix precision and `36.96` wrong characters per character saved).
 Phase 3 smoke produced no filtered suggestions, so it only exercises the code
 path and provides no quality corroboration. These tune-only gains may be
 overfit; they are not release approval. No Phase 3 held-out or external set has

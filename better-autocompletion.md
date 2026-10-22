@@ -1298,14 +1298,15 @@ entry points. The flag hard-refuses held-out and external roles in both the CLI
 and core API. No statistical code is connected to AnalysisHost, the LSP, or the
 extension.
 
-Tune-only results show why the raw model must not ship: it reaches only 0.180
-correct-prefix precision and offers 17.61 wrong characters for each character
+Tune-only results show why the raw model must not ship: it reaches only 0.095
+correct-prefix precision and offers 36.96 wrong characters for each character
 saved. A pinned filter (assignment and `other` contexts, score at least 0.85)
 is safer but extremely sparse. Used only after the Phase 2 candidate abstains,
-it raises characters saved per eligible position from 0.197 to 0.204, with
-0.819 correct-prefix precision, a 0.23 wrong-to-saved ratio, and 1.26 ms
-backend p95. The filtered model itself suggests at only 0.006 eligible
-positions and saves 0.008 characters per eligible position.
+it raises characters saved per eligible position from 0.149 to 0.159, raises
+correct-prefix precision from 0.748 to 0.762, lowers wrong-to-saved from 0.399
+to 0.389, and has 0.70 ms backend p95. The filtered model itself suggests at
+only 0.005 eligible positions, saves 0.011 characters per eligible position,
+and has 0.946 correct-prefix precision.
 
 The smoke fixture produced no filtered suggestions, so it corroborates only
 execution, not quality. The small tuning gain may be overfit and is not an
