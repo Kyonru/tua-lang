@@ -42,7 +42,12 @@ use super::eligibility::{
     auto_close_suffix, cursor_context, is_identifier_char, lexical_region_at,
     strip_trailing_comment, suffix_allows_inline, word_before, CursorContext, LexicalRegion,
 };
-use crate::{AnalysisHost, AnalysisWarmPriority, SourcePosition};
+use crate::{
+    AnalysisHost, AnalysisWarmPriority, PatternCorpusBatchEntry, ProjectModel, RetrievalLimits,
+    SourcePosition,
+};
+
+const PRODUCTION_EVAL_CORPUS_GENERATION: u64 = 1;
 
 /// Delays after the last keystroke at which a request fires: the inline
 /// debounce during continuous typing, then the pauses the plan asks about.
@@ -75,8 +80,10 @@ pub struct EvalOptions {
     /// Real VS Code menu selections captured locally against frozen dataset
     /// files. Matching entries replace the synthetic menu state.
     pub menu_replay: Option<replay::MenuReplay>,
-    /// Include Phase 2 exact project/corpus retrieval experiments. These
-    /// backends never affect the shipping host query or Phase 1 gates.
+    /// Include Phase 2 exact project/corpus retrieval experiments. The
+    /// combined candidate exercises the production host query against an
+    /// adopted corpus; the standalone tier baselines remain evaluator-only.
+    /// None of these backends affect Phase 1 gates.
     pub phase2_retrieval: bool,
     /// Frozen policy for the explicitly named Phase 2 tuning candidate.
     pub phase2_tuning: Phase2TuningConfig,
@@ -632,6 +639,10 @@ fn evaluate_set(set: &EvalSet, backends: &[Box<dyn Backend>], options: &EvalOpti
         }
 
         let (mut host, memory) = load_host(project, options);
+        if options.phase2_retrieval {
+            host.set_project_pattern_eligibility_generation(PRODUCTION_EVAL_CORPUS_GENERATION);
+            refresh_production_project_corpus(&mut host, &project.files);
+        }
         let mut facts_host = source_host(project);
         report.memory.push((project.name.clone(), memory));
         let retrieval_index = options.phase2_retrieval.then(|| {
@@ -666,6 +677,13 @@ fn evaluate_set(set: &EvalSet, backends: &[Box<dyn Backend>], options: &EvalOpti
                 retrieval_index.as_ref(),
                 ngram_index.as_ref(),
             );
+            if options.phase2_retrieval {
+                // `evaluate_file` closes its temporary document overlay. That
+                // assigns the on-disk source a fresh VFS version, so refresh
+                // this one table before a later target queries it. Real LSP
+                // indexing does the same work asynchronously after an edit.
+                refresh_production_project_corpus(&mut host, std::slice::from_ref(file));
+            }
         }
         report.inline_validation.add(&host.cache_stats());
     }
@@ -714,6 +732,24 @@ fn evaluate_set(set: &EvalSet, backends: &[Box<dyn Backend>], options: &EvalOpti
     report.inline_validation.finish();
 
     report
+}
+
+fn refresh_production_project_corpus(host: &mut AnalysisHost, files: &[EvalFile]) {
+    let entries = files
+        .iter()
+        .filter_map(|file| {
+            host.prepare_project_pattern_file(&file.path).map(|input| {
+                PatternCorpusBatchEntry::File(
+                    input.build(&ProjectModel::default(), RetrievalLimits::default()),
+                )
+            })
+        })
+        .collect::<Vec<_>>();
+    let result = host.adopt_project_pattern_batch(PRODUCTION_EVAL_CORPUS_GENERATION, entries);
+    assert!(
+        !result.generation_rejected && !result.lineage_rejected && result.stale == 0,
+        "the production evaluator corpus must adopt every current input"
+    );
 }
 
 fn load_host(project: &EvalProject, options: &EvalOptions) -> (AnalysisHost, MemoryReport) {

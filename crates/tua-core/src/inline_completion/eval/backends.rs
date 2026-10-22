@@ -563,15 +563,36 @@ impl Backend for Phase2Tuning {
 
     fn suggest_with_host(
         &self,
-        request: &Request<'_>,
+        _request: &Request<'_>,
         production: &ProductionRequest<'_>,
     ) -> Option<Candidate> {
-        ProductionPhase1 {
-            semantic: true,
-            current_file: true,
-        }
-        .suggest_with_host(request, production)
-        .or_else(|| self.project_candidate(request))
+        assert_eq!(
+            self.config,
+            Phase2TuningConfig::pinned(),
+            "the production Phase 2 evaluator must use the pinned host policy"
+        );
+        production
+            .host
+            .local_inline_completion(
+                production.path,
+                production.position,
+                &crate::InlineCompletionOptions {
+                    semantic: true,
+                    current_file: true,
+                    project: true,
+                },
+                &crate::InlineCompletionBudget::new(Duration::from_millis(10)),
+                &AtomicBool::new(false),
+            )
+            .into_iter()
+            .next()
+            .map(|candidate| Candidate {
+                text: candidate.insert_text,
+                is_snippet: candidate.is_snippet,
+                source: candidate.source.as_str(),
+                score: candidate.score.0,
+                tier: None,
+            })
     }
 
     fn index_state(&self) -> &'static str {

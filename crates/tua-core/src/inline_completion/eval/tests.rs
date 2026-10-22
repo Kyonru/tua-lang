@@ -2,8 +2,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
 use super::backends::{
-    Backend, Candidate, CurrentFileCommonPrefix, CurrentFileRecall, Phase1, RecallOptions, Request,
-    Semantic,
+    Backend, Candidate, CurrentFileCommonPrefix, CurrentFileRecall, Phase1, Phase2Tuning,
+    Phase2TuningConfig, ProductionRequest, RecallOptions, Request, Semantic,
 };
 use super::dataset::{self, ManifestSet, SetRole};
 use super::metrics::{precision_coverage_curve, score, snippet_literal_prefix, tokens};
@@ -63,6 +63,86 @@ fn recall() -> CurrentFileRecall {
     CurrentFileRecall {
         options: RecallOptions::default(),
     }
+}
+
+fn production_phase2_host(continuation: &str) -> (AnalysisHost, PathBuf, String) {
+    let active = PathBuf::from("active/main.tua");
+    let source = "draw(player,".to_owned();
+    let mut host = AnalysisHost::new();
+    host.set_project_pattern_eligibility_generation(PRODUCTION_EVAL_CORPUS_GENERATION);
+    host.set_file(&active, source.clone());
+    host.set_file("one/a.tua", format!("draw(player,{continuation}"));
+    host.set_file("two/b.tua", format!("draw(player,{continuation}"));
+    let entries = ["one/a.tua", "two/b.tua"].map(|path| {
+        crate::PatternCorpusBatchEntry::File(
+            host.prepare_project_pattern_file(path)
+                .expect("corpus input")
+                .build(
+                    &crate::ProjectModel::default(),
+                    crate::RetrievalLimits::default(),
+                ),
+        )
+    });
+    let adoption = host.adopt_project_pattern_batch(PRODUCTION_EVAL_CORPUS_GENERATION, entries);
+    assert_eq!(adoption.adopted, 2);
+    (host, active, source)
+}
+
+fn production_phase2_candidate(
+    host: &AnalysisHost,
+    path: &std::path::Path,
+    document: &str,
+) -> Option<Candidate> {
+    let offset = document.len();
+    let request = Request {
+        document,
+        offset,
+        line_index: 0,
+        context: cursor_context(document, offset).expect("eligible cursor"),
+        declared_callbacks: None,
+        include_ecs: false,
+        path,
+        language: "tua",
+        retrieval_index: None,
+        ngram_index: None,
+        allow_target_file_other_lines: false,
+    };
+    Phase2Tuning {
+        config: Phase2TuningConfig::pinned(),
+    }
+    .suggest_with_host(
+        &request,
+        &ProductionRequest {
+            host,
+            path,
+            position: crate::SourcePosition {
+                line: 1,
+                column: document.chars().count() + 1,
+            },
+        },
+    )
+}
+
+#[test]
+fn phase2_combined_backend_uses_the_adopted_production_corpus() {
+    let (host, path, source) = production_phase2_host(" score)");
+    let candidate = production_phase2_candidate(&host, &path, &source).expect("project hit");
+    assert_eq!(candidate.text, " score)");
+    assert_eq!(candidate.source, "project");
+}
+
+#[test]
+fn phase2_combined_backend_rejects_a_parse_worsening_project_hit() {
+    let (host, path, source) = production_phase2_host(" end)");
+    assert!(production_phase2_candidate(&host, &path, &source).is_none());
+}
+
+#[test]
+fn phase2_combined_backend_rejects_stale_production_corpus_versions() {
+    let (mut host, path, source) = production_phase2_host(" score)");
+    host.set_file("one/a.tua", "draw(player, changed)");
+    host.set_file("two/b.tua", "draw(player, changed)");
+    assert!(production_phase2_candidate(&host, &path, &source).is_none());
 }
 
 #[test]
@@ -711,12 +791,22 @@ fn phase2_retrieval_reports_holdouts_states_tiers_and_index_costs() {
             EvalFile {
                 path: PathBuf::from("src/main.tua"),
                 kind: AnalysisSourceKind::Tua,
-                source: "draw(player)\ndraw(pla".to_owned(),
+                source: "draw(player, score)\ndraw(pla".to_owned(),
             },
             EvalFile {
                 path: PathBuf::from("src/render.tua"),
                 kind: AnalysisSourceKind::Tua,
                 source: "draw(player)\nprint(player)".to_owned(),
+            },
+            EvalFile {
+                path: PathBuf::from("one/a.tua"),
+                kind: AnalysisSourceKind::Tua,
+                source: "draw(player, score)".to_owned(),
+            },
+            EvalFile {
+                path: PathBuf::from("two/b.tua"),
+                kind: AnalysisSourceKind::Tua,
+                source: "draw(player, score)".to_owned(),
             },
         ],
     };
@@ -726,6 +816,7 @@ fn phase2_retrieval_reports_holdouts_states_tiers_and_index_costs() {
         measure_warmup: false,
         parse_repeats: 1,
         phase2_retrieval: true,
+        keep_records: true,
         ..EvalOptions::default()
     };
     let report = evaluate(
@@ -739,7 +830,7 @@ fn phase2_retrieval_reports_holdouts_states_tiers_and_index_costs() {
     );
     let set = &report.sets[0];
     assert_eq!(set.retrieval_indexes.len(), 1);
-    assert_eq!(set.retrieval_indexes[0].1.files_indexed, 2);
+    assert_eq!(set.retrieval_indexes[0].1.files_indexed, 4);
     assert!(set.retrieval_indexes[0].1.build_ms >= 0.0);
     assert!(set.retrieval_indexes[0].1.complete_bytes > 0);
     assert!(set.backends.contains_key("project-file-holdout-cold"));
@@ -758,6 +849,13 @@ fn phase2_retrieval_reports_holdouts_states_tiers_and_index_costs() {
         .bundled_corpus
         .as_ref()
         .is_some_and(|corpus| corpus.approximate_bytes > 0));
+    assert!(set.records.iter().any(|record| {
+        record.backend == "phase2-tuning-phase1-plus-project-common-prefix"
+            && record
+                .candidate
+                .as_ref()
+                .is_some_and(|candidate| candidate.source == "project")
+    }));
     let complete = &set.backends["project-line-holdout-complete"];
     assert!(complete.by_index_state["complete"].eligible > 0);
     assert!(complete.by_tier.contains_key("current-file"));

@@ -89,11 +89,13 @@ patterns can offer their whole common continuation. `--no-menu` and
 `--no-warmup` skip the analysis-backed measurements for a faster run, and
 `--max-positions 0` evaluates every position.
 
-`--phase2-retrieval` opts into evaluator-only exact project and bundled-corpus
-backends. It is deliberately absent from the normal Phase 1 smoke and gate
-commands. While Phase 2 policy is being selected, use it only with `tune` or
-`smoke`; do not inspect held-out or external results before the configuration
-and thresholds for those sets are frozen. The option requires
+`--phase2-retrieval` opts into standalone exact-retrieval baselines, the
+bundled-corpus backend, and a combined candidate that runs the real
+`AnalysisHost::local_inline_completion` query against an adopted
+`ProjectPatternCorpus`. It is deliberately absent from the normal Phase 1
+smoke and gate commands. While Phase 2 policy is being selected, use it only
+with `tune` or `smoke`; do not inspect held-out or external results before the
+configuration and thresholds for those sets are frozen. The option requires
 `--thresholds benchmarks/inline-eval/thresholds.toml`; its `[phase2_tuning]`
 table pins the exploratory combined candidate.
 
@@ -124,17 +126,20 @@ overfit; they are not release approval. No Phase 3 held-out or external set has
 been read, and no n-gram code is compiled into production, the LSP, or the
 extension.
 
-The report keeps `same-directory` and `project` as separate tiers. The clearly
-named `phase2-tuning-phase1-plus-project-common-prefix` backend first asks the
-shipping Phase 1 query, then fills only comma, operator, and `other` contexts
-from rest-of-project evidence. It excludes same-directory and bundled results,
-requires at least six non-whitespace prefix characters and two supporting
-matches before returning their full common prefix.
+The report keeps `same-directory` and `project` as separate standalone tiers.
+The clearly named `phase2-tuning-phase1-plus-project-common-prefix` backend
+runs the production host query with project retrieval enabled. Its adopted
+corpus, source ordering, parse-delta validation, request budget, cancellation,
+and VFS-version rejection are therefore the same code used by the hidden
+server experiment. The pinned policy fills only comma, operator, and `other`
+contexts from rest-of-project evidence. It excludes same-directory and bundled
+results, requires at least six non-whitespace prefix characters and two
+supporting matches before returning their full common prefix.
 These values are tuning inputs, not shipping defaults or acceptance claims.
 On the current tuning set, this candidate raises saved characters per eligible
-position from `0.1906` to `0.1969`, raises correct-prefix precision from
-`0.8005` to `0.8082`, and lowers wrong-to-saved from `0.2446` to `0.2368`.
-The 17 added project suggestions were all exact, but this is tune-only evidence
+position from `0.1426` to `0.1490`, raises correct-prefix precision from
+`0.7399` to `0.7475`, and lowers wrong-to-saved from `0.4172` to `0.3993`.
+The 12 added project suggestions were all exact, but this is tune-only evidence
 and the absolute gain is small; no held-out or external result has been read.
 
 `--menu-replay FILE` replaces simulated menu selection with explicitly enabled
@@ -293,7 +298,8 @@ cursor on that line and asks every backend for one suggestion.
   tiers so priority order cannot disguise a weak source. The shorter
   `project-*` names above remain the combined tier-order baseline.
 - `phase2-tuning-phase1-plus-project-common-prefix`: the pinned tuning
-  candidate described above.
+  candidate described above, executed through the production host query and
+  adopted immutable corpus rather than the standalone evaluator index.
 - `bundled-corpus`: exact retrieval from the separate, immutable hand-written
   Lua/LÖVE corpus. Lua requests do not read Tua-only corpus lines.
 - `phase3-ngram-raw`: the unfiltered statistical experiment, useful for

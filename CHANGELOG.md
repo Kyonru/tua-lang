@@ -266,6 +266,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- The combined Phase 2 inline-completion evaluator now measures the actual host
+  query against an adopted immutable project corpus, including production
+  validation and stale-version rejection, instead of substituting a parallel
+  evaluator-only retrieval path.
 - The deterministic inline-completion evaluator now samples pauses after
   internal whitespace, so its enabled whitespace context contributes to
   quality results, and it no longer credits whitespace-only snippet literals

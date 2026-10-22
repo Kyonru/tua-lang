@@ -878,22 +878,25 @@ held-out sets or be described as an accepted phase until the aggregate Phase 1
 gate passes. This exception lets the tuning set test whether project evidence
 actually closes the known Tua coverage gap without weakening any release gate.
 
-> **Evaluator status (2026-10-21): tuning only.** Exact retrieval now reports
+> **Evaluator status (2026-10-22): tuning only.** Exact retrieval now reports
 > same-directory and rest-of-project evidence separately. The pinned
 > `[phase2_tuning]` policy in `benchmarks/inline-eval/thresholds.toml` adds one
-> explicitly named combined candidate: shipping Phase 1 first, then a
-> conservative rest-of-project common prefix only for comma, operator, and
-> `other` contexts. It excludes same-directory and bundled evidence, requires
-> six non-whitespace prefix characters and two supporting matches before it
-> returns their full common prefix. This policy may be
+> explicitly named combined candidate. That candidate now runs the production
+> `AnalysisHost::local_inline_completion` path against an adopted immutable
+> corpus, including production source order, parse-delta validation, request
+> budget, cancellation, and VFS-version rejection. Its conservative project
+> fallback is limited to comma, operator, and `other` contexts, excludes
+> same-directory and bundled evidence, and requires six non-whitespace prefix
+> characters and two supporting matches before returning their full common
+> prefix. This policy may be
 > measured on tune and smoke only until it is frozen for a Phase 2 gate. The
 > production path implements this policy behind a hidden, default-off server
 > switch so scheduling, invalidation, and contention can be tested, but the
 > extension does not expose it and its presence is not evidence that Phase 2
 > passes.
 > On the current tuning set it improves saved characters per eligible position
-> from `0.1906` to `0.1969`, correct-prefix precision from `0.8005` to `0.8082`,
-> and wrong-to-saved from `0.2446` to `0.2368`. All 17 added project suggestions
+> from `0.1426` to `0.1490`, correct-prefix precision from `0.7399` to `0.7475`,
+> and wrong-to-saved from `0.4172` to `0.3993`. All 12 added project suggestions
 > were exact, but the absolute gain is small and no held-out or external data
 > has been inspected.
 
