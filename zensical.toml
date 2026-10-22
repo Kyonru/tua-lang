@@ -42,6 +42,7 @@ nav = [
     { "Linter" = "linter.md" },
     { "Language Server" = "lsp.md" },
     { "Debugging" = "debugging.md" },
+    { "Packaging Games" = "packaging.md" },
     { "Diagnostic Codes" = "luahelper-code-matrix.md" },
     { "Completion Benchmark Guide" = "completion-benchmarks.md" },
     { "LLM Language Evaluation" = "llm-language-evaluation.md" },

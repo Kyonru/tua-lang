@@ -125,6 +125,20 @@ emitted runtime files.
     cargo run -p tua-cli -- build --emit-on-error
     ```
 
+## `package`
+
+```bash
+cargo run -p tua-cli -- package
+cargo run -p tua-cli -- package --target windows --love path/to/love-11.5-win64
+cargo run -p tua-cli -- package --target macos --love /Applications/love.app
+```
+
+Builds the project, then writes `dist/<name>.love`. `--target windows` or
+`--target macos` also fuses a standalone game with the LOVE runtime passed to
+`--love`; packaging never downloads anything. `--name` sets the game name
+(default: the project directory's name) and `--identifier` the macOS bundle
+identifier. See [Packaging Games](packaging.md).
+
 ## `traceback`
 
 ```bash

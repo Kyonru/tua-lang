@@ -194,3 +194,35 @@ fn rejects_unknown_options() {
     assert!(error.message.contains("unknown option"));
     assert!(error.message.contains("--fast"));
 }
+
+#[test]
+fn package_accepts_a_target_runtime_name_and_identifier() {
+    assert_eq!(
+        parse_args([
+            "package",
+            "--target",
+            "macos",
+            "--love",
+            "/Applications/love.app",
+            "--name",
+            "Star Dust",
+            "--identifier",
+            "io.example.stardust",
+        ]),
+        Ok(CliAction::Command {
+            name: CommandName::Package,
+            options: CommandOptions {
+                package: crate::package::PackageOptions {
+                    target: crate::package::PackageTarget::Macos,
+                    love: Some("/Applications/love.app".into()),
+                    name: Some("Star Dust".to_owned()),
+                    identifier: Some("io.example.stardust".to_owned()),
+                },
+                ..CommandOptions::default()
+            },
+        })
+    );
+    assert!(parse_args(["package", "--target", "linux"]).is_err());
+    assert!(parse_args(["package", "--love"]).is_err());
+    assert!(parse_args(["build", "--target", "love"]).is_err());
+}

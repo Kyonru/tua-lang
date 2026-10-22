@@ -412,6 +412,113 @@ end
     assert!(stderr.contains("main.tua:2:"), "{stderr}");
 }
 
+fn stored_zip_names(bytes: &[u8]) -> Vec<String> {
+    let read_u16 = |at: usize| u16::from_le_bytes([bytes[at], bytes[at + 1]]) as usize;
+    let read_u32 = |at: usize| {
+        u32::from_le_bytes([bytes[at], bytes[at + 1], bytes[at + 2], bytes[at + 3]]) as usize
+    };
+    let mut names = Vec::new();
+    let mut at = 0;
+    while at + 4 <= bytes.len() && read_u32(at) == 0x0403_4b50 {
+        let size = read_u32(at + 18);
+        let name_len = read_u16(at + 26);
+        let extra_len = read_u16(at + 28);
+        names.push(String::from_utf8(bytes[at + 30..at + 30 + name_len].to_vec()).expect("utf-8"));
+        at += 30 + name_len + extra_len + size;
+    }
+    names
+}
+
+fn write_packaging_project(temp: &TempDir) {
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).expect("failed to write config");
+    fs::create_dir_all(temp.path().join("src/assets")).expect("failed to create source");
+    fs::write(
+        temp.path().join("src/main.tua"),
+        "function love.draw()\n  love.graphics.print(\"hi\", 10, 10)\nend\n",
+    )
+    .expect("failed to write main source");
+    fs::write(temp.path().join("src/assets/level.txt"), "1 2 3\n").expect("failed to write asset");
+}
+
+#[test]
+fn package_writes_a_reproducible_love_archive_without_source_maps() {
+    let temp = TempDir::new("package-love");
+    write_packaging_project(&temp);
+
+    let package = tua()
+        .args(["package", "--name", "Star Dust"])
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tua package");
+    assert!(package.status.success(), "{package:?}");
+    let stdout = String::from_utf8_lossy(&package.stdout);
+    assert!(stdout.contains("packaged dist/Star Dust.love"), "{stdout}");
+
+    let archive = fs::read(temp.path().join("dist/Star Dust.love")).expect("archive");
+    let names = stored_zip_names(&archive);
+    assert_eq!(
+        names,
+        ["assets/", "assets/level.txt", "main.lua"],
+        "{names:?}"
+    );
+
+    let again = tua()
+        .args(["package", "--name", "Star Dust"])
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to rerun tua package");
+    assert!(again.status.success());
+    assert_eq!(
+        fs::read(temp.path().join("dist/Star Dust.love")).expect("archive"),
+        archive,
+        "identical inputs should produce identical archives"
+    );
+}
+
+#[test]
+fn package_fuses_a_windows_build_with_the_supplied_runtime() {
+    let temp = TempDir::new("package-windows");
+    write_packaging_project(&temp);
+    let runtime = temp.path().join("love-win64");
+    fs::create_dir_all(&runtime).expect("failed to create runtime");
+    fs::write(runtime.join("love.exe"), b"MZ fake love").expect("love.exe");
+    fs::write(runtime.join("SDL2.dll"), b"dll").expect("dll");
+    fs::write(runtime.join("license.txt"), b"zlib").expect("license");
+    fs::write(runtime.join("lovec.exe"), b"console").expect("lovec");
+
+    let missing = tua()
+        .args(["package", "--target", "windows"])
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tua package");
+    assert!(!missing.status.success());
+    assert!(String::from_utf8_lossy(&missing.stderr).contains("--love"));
+
+    let package = tua()
+        .args([
+            "package",
+            "--target",
+            "windows",
+            "--name",
+            "Star Dust",
+            "--love",
+        ])
+        .arg(&runtime)
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tua package");
+    assert!(package.status.success(), "{package:?}");
+
+    let game = temp.path().join("dist/windows/Star Dust");
+    let executable = fs::read(game.join("Star Dust.exe")).expect("fused exe");
+    let archive = fs::read(temp.path().join("dist/Star Dust.love")).expect("archive");
+    assert!(executable.starts_with(b"MZ fake love"));
+    assert!(executable.ends_with(&archive));
+    assert!(game.join("SDL2.dll").exists());
+    assert!(game.join("license.txt").exists());
+    assert!(!game.join("lovec.exe").exists());
+}
+
 #[test]
 fn check_prints_config_diagnostics() {
     let temp = TempDir::new("check-invalid-config");

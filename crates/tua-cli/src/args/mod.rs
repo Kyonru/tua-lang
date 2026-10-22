@@ -1,4 +1,5 @@
 use crate::error::CliError;
+use crate::package::{PackageOptions, PackageTarget};
 use std::path::PathBuf;
 
 pub const HELP: &str = "\
@@ -15,6 +16,7 @@ Commands:
   fmt       Format project source files
   lint      Run standard and configured lint rules
   build     Check and emit Lua output
+  package   Build, then package the game as a .love (and optionally a fused app)
   traceback Remap generated Lua traceback lines to Tua source
   watch     Rebuild when source files change
   lsp       Start the tua language server over stdio
@@ -28,6 +30,10 @@ Options:
   --check           With fmt, report files that would change without writing
   --strict          With lint, enable all lint diagnostics
   --maps <path>     With traceback, source-map directory or .lua.map.json file
+  --target <kind>   With package, love (default), windows, or macos
+  --love <path>     With package, the LOVE for Windows directory or love.app to fuse with
+  --name <name>     With package, the game name (default: project directory name)
+  --identifier <id> With package --target macos, the app bundle identifier
   -h, --help        Print command help
   -V, --version     Print version
 ";
@@ -45,6 +51,7 @@ pub enum CliAction {
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct CommandOptions {
     pub emit_on_error: bool,
+    pub package: PackageOptions,
     pub fmt_check: bool,
     pub lint_strict: bool,
     pub traceback_maps: Option<PathBuf>,
@@ -59,6 +66,7 @@ pub enum CommandName {
     Fmt,
     Lint,
     Build,
+    Package,
     Traceback,
     Watch,
     Lsp,
@@ -94,6 +102,7 @@ where
         "fmt" => CommandName::Fmt,
         "lint" => CommandName::Lint,
         "build" => CommandName::Build,
+        "package" => CommandName::Package,
         "traceback" => CommandName::Traceback,
         "watch" => CommandName::Watch,
         "lsp" => CommandName::Lsp,
@@ -113,6 +122,26 @@ where
 
         match arg.as_str() {
             "--emit-on-error" if command == CommandName::Build => options.emit_on_error = true,
+            flag @ ("--target" | "--love" | "--name" | "--identifier")
+                if command == CommandName::Package =>
+            {
+                index += 1;
+                let Some(value) = args.get(index) else {
+                    return Err(CliError::usage(format!("`{flag}` expects a value")));
+                };
+                match flag {
+                    "--target" => {
+                        options.package.target = PackageTarget::parse(value).ok_or_else(|| {
+                            CliError::usage(format!(
+                                "unknown package target `{value}`; use love, windows, or macos"
+                            ))
+                        })?;
+                    }
+                    "--love" => options.package.love = Some(PathBuf::from(value)),
+                    "--name" => options.package.name = Some(value.clone()),
+                    _ => options.package.identifier = Some(value.clone()),
+                }
+            }
             "--check" if command == CommandName::Fmt => options.fmt_check = true,
             "--strict" if command == CommandName::Lint => options.lint_strict = true,
             "--maps" if command == CommandName::Traceback => {

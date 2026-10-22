@@ -95,6 +95,12 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Added
 
+- Added `tua package`, which builds the project and writes a reproducible
+  `dist/<name>.love`. `--target windows` and `--target macos` also fuse a
+  standalone game with a LOVE runtime passed to `--love`: a Windows folder with
+  the fused `.exe` and LOVE's DLLs, or a renamed macOS `.app`, signed ad hoc
+  when packaged on a Mac. Source maps, Tua sources, and configuration stay out
+  of the archive.
 - Added the built-in `tween` module, rxi's flux with LuaDoc types. Like
   `ecs`, it needs no `require`: using it emits one and `tua build` copies the
   runtime. Easing names, tweened values, and `dt` are checked from the
