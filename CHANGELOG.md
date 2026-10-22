@@ -8,13 +8,27 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Added
 
-- Added the disabled-by-design Phase 2 inline-retrieval foundation: monotonic
-  effective-source versions shared across VFS clones, a background-only module
-  resolver that accepts an already-loaded project model, collision-safe
-  immutable exact-prefix tables with explicit byte caps, and a small
-  parseable Lua/LÖVE corpus. These primitives are currently exposed only to
-  tests and the offline evaluator; no project-wide completion source is
-  enabled yet.
+- Added a hidden, disabled-by-default Phase 2 project-retrieval source for
+  deterministic inline completion. It uses monotonic effective-source versions
+  scoped to a VFS lineage, a background-only module resolver supplied with the
+  already-loaded project model, and collision-checked immutable exact-prefix
+  tables under explicit source, query, file-count, and 16 MiB corpus caps.
+  Edits only advance the VFS version and coalesce per-file rebuilds for 300 ms;
+  workers build at most 16 files per batch, and the coordinator adopts results
+  only when their lineage, eligibility generation, and source versions remain
+  current. Base remerges and disposal of replaced corpora also stay off the
+  coordinator's latency-sensitive path. Corpus lifecycle, memory, cancellation,
+  and rejection counters are reported by `tua/cacheStats` and `tua/health`.
+  The request-time source follows the tune-only conservative policy: it runs
+  after semantic and current-file sources, only in comma, operator, and other
+  contexts, after six non-whitespace prefix characters, and requires two
+  supporting project matches before returning their common prefix. Same-folder
+  and bundled-corpus evidence are excluded. Per-file callback declarations are
+  indexed for later duplicate suppression, but callback generation remains
+  deferred until it is evaluated. The server recognizes the internal
+  `sources.project` switch for integration testing, but the VS Code extension
+  does not contribute or document that setting. No Phase 2 held-out or external
+  gate has run, so project retrieval is not release-approved.
 - Experimental deterministic inline completion can now suggest one locally
   validated ghost-text item from Tua's existing statement snippets or repeated
   lines in the current file. It is opt-in through
@@ -26,14 +40,17 @@ language or editor behavior, and migration notes call out those changes.
   10 ms core deadline, including a pre-parse check that abstains when the
   remaining budget is insufficient; queue, protocol, and end-to-end latency are
   measured separately. The deterministic query never builds an analysis
-  snapshot, runs the checker, reads another project file, contacts a network
-  service, or persists source patterns. The unified VS Code provider tries the
+  snapshot, runs the checker, contacts a network service, or persists source
+  patterns. With the publicly exposed Phase 1 sources, it reads only the active
+  document; the hidden Phase 2 project experiment instead reads its immutable
+  in-memory corpus and live VFS versions. The unified VS Code provider tries the
   deterministic backend first when it is
   enabled and uses the separately opted-in loopback Ollama backend only when
   that backend is disabled, returns no candidate, or is unsupported by an
   older server. Transient local cancellation, stale-document, and capacity
   failures abstain instead of starting model work. This first phase has no
-  project corpus, cross-project history, n-gram generation, or multiline
+  publicly enabled project corpus, cross-project history, n-gram generation,
+  or multiline
   recall. Disabled and malformed requests do not enter the speculative queue;
   a panicking speculative request returns an internal error without killing
   the worker, and newest-wins cancellation suppresses superseded results.

@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Component, Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum VfsSourceKind {
@@ -23,13 +23,29 @@ pub struct VfsOptions {
     pub ignored_paths: Vec<String>,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Debug)]
 pub struct VirtualFileSystem {
     options: VfsOptions,
     disk_files: BTreeMap<PathBuf, VfsFileSource>,
     open_files: BTreeMap<PathBuf, VfsFileSource>,
-    effective_versions: BTreeMap<PathBuf, VfsSourceVersion>,
+    effective_versions: Arc<VfsSourceVersionIndex>,
     version_allocator: Arc<AtomicU64>,
+    lineage: VfsLineageId,
+}
+
+impl Clone for VirtualFileSystem {
+    fn clone(&self) -> Self {
+        Self {
+            options: self.options.clone(),
+            disk_files: self.disk_files.clone(),
+            open_files: self.open_files.clone(),
+            effective_versions: Arc::new(VfsSourceVersionIndex::from_versions(
+                self.effective_versions.snapshot(),
+            )),
+            version_allocator: Arc::clone(&self.version_allocator),
+            lineage: self.lineage,
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -54,11 +70,131 @@ pub struct VfsFile {
 /// A monotonic identity for one path's effective source and kind inside a VFS
 /// lineage. Versions from independent VFS instances are not comparable.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct VfsSourceVersion(u64);
+pub struct VfsSourceVersion {
+    lineage: VfsLineageId,
+    revision: u64,
+}
+
+/// Opaque identity shared only by clones of one VFS lineage.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct VfsLineageId(u64);
+
+/// Live validity registry for effective VFS sources.
+///
+/// Readers take only short per-path read locks. The epoch makes a multi-path
+/// query fail closed if a writer changes the registry between any two reads,
+/// without holding a read guard across the query itself.
+#[derive(Debug, Default)]
+pub(crate) struct VfsSourceVersionIndex {
+    versions: RwLock<BTreeMap<PathBuf, VfsSourceVersion>>,
+    epoch: AtomicU64,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct VfsSourceVersionView<'a> {
+    index: &'a VfsSourceVersionIndex,
+    epoch: u64,
+}
+
+impl VfsSourceVersionIndex {
+    fn from_versions(versions: BTreeMap<PathBuf, VfsSourceVersion>) -> Self {
+        Self {
+            versions: RwLock::new(versions),
+            epoch: AtomicU64::new(0),
+        }
+    }
+
+    pub(crate) fn begin_read(&self) -> Option<VfsSourceVersionView<'_>> {
+        let epoch = self.epoch.load(Ordering::Acquire);
+        epoch
+            .is_multiple_of(2)
+            .then_some(VfsSourceVersionView { index: self, epoch })
+    }
+
+    fn get_blocking(&self, path: &Path) -> Option<VfsSourceVersion> {
+        self.versions
+            .read()
+            .expect("VFS version index poisoned")
+            .get(path)
+            .copied()
+    }
+
+    fn snapshot(&self) -> BTreeMap<PathBuf, VfsSourceVersion> {
+        self.versions
+            .read()
+            .expect("VFS version index poisoned")
+            .clone()
+    }
+
+    fn mutate<R>(&self, mutation: impl FnOnce(&mut BTreeMap<PathBuf, VfsSourceVersion>) -> R) -> R {
+        self.epoch.fetch_add(1, Ordering::AcqRel);
+        let result = mutation(&mut self.versions.write().expect("VFS version index poisoned"));
+        self.epoch.fetch_add(1, Ordering::Release);
+        result
+    }
+
+    fn insert(&self, path: PathBuf, version: VfsSourceVersion) {
+        self.mutate(|versions| {
+            versions.insert(path, version);
+        });
+    }
+
+    fn remove(&self, path: &Path) {
+        self.mutate(|versions| {
+            versions.remove(path);
+        });
+    }
+
+    fn retain(&self, mut keep: impl FnMut(&PathBuf, &mut VfsSourceVersion) -> bool) {
+        self.mutate(|versions| versions.retain(|path, version| keep(path, version)));
+    }
+}
+
+impl VfsSourceVersionView<'_> {
+    pub(crate) fn get(&self, path: &Path) -> Option<VfsSourceVersion> {
+        if self.index.epoch.load(Ordering::Acquire) != self.epoch {
+            return None;
+        }
+        let versions = self.index.versions.try_read().ok()?;
+        let version = versions.get(path).copied();
+        drop(versions);
+        (self.index.epoch.load(Ordering::Acquire) == self.epoch)
+            .then_some(version)
+            .flatten()
+    }
+
+    pub(crate) fn is_current(self) -> bool {
+        self.index.epoch.load(Ordering::Acquire) == self.epoch
+    }
+}
+
+static NEXT_VFS_LINEAGE: AtomicU64 = AtomicU64::new(1);
+
+impl Default for VirtualFileSystem {
+    fn default() -> Self {
+        let lineage = NEXT_VFS_LINEAGE
+            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |value| {
+                value.checked_add(1)
+            })
+            .expect("VFS lineage allocator exhausted");
+        Self {
+            options: VfsOptions::default(),
+            disk_files: BTreeMap::new(),
+            open_files: BTreeMap::new(),
+            effective_versions: Arc::new(VfsSourceVersionIndex::default()),
+            version_allocator: Arc::new(AtomicU64::new(0)),
+            lineage: VfsLineageId(lineage),
+        }
+    }
+}
 
 impl VfsSourceVersion {
     pub fn get(self) -> u64 {
-        self.0
+        self.revision
+    }
+
+    pub fn lineage(self) -> VfsLineageId {
+        self.lineage
     }
 }
 
@@ -75,6 +211,10 @@ impl VirtualFileSystem {
 
     pub fn options(&self) -> &VfsOptions {
         &self.options
+    }
+
+    pub fn lineage(&self) -> VfsLineageId {
+        self.lineage
     }
 
     pub fn set_source_roots(&mut self, roots: impl IntoIterator<Item = PathBuf>) {
@@ -231,7 +371,11 @@ impl VirtualFileSystem {
 
     /// Version of the effective open-overlay-or-disk source and kind.
     pub fn source_version(&self, path: impl AsRef<Path>) -> Option<VfsSourceVersion> {
-        self.effective_versions.get(&normalize_path(path)).copied()
+        self.effective_versions.get_blocking(&normalize_path(path))
+    }
+
+    pub(crate) fn source_versions(&self) -> Arc<VfsSourceVersionIndex> {
+        Arc::clone(&self.effective_versions)
     }
 
     pub fn paths(&self) -> BTreeSet<PathBuf> {
@@ -261,8 +405,7 @@ impl VirtualFileSystem {
             }
             let version = self
                 .effective_versions
-                .get(path)
-                .copied()
+                .get_blocking(path)
                 .expect("visible VFS path should have an effective source version");
             files.insert(path.clone(), vfs_file(path, source, version, false));
         }
@@ -273,8 +416,7 @@ impl VirtualFileSystem {
             }
             let version = self
                 .effective_versions
-                .get(path)
-                .copied()
+                .get_blocking(path)
                 .expect("visible VFS path should have an effective source version");
             files.insert(path.clone(), vfs_file(path, source, version, true));
         }
@@ -315,8 +457,13 @@ impl VirtualFileSystem {
                 version.checked_add(1)
             })
             .expect("VFS source version allocator exhausted");
-        self.effective_versions
-            .insert(path.to_owned(), VfsSourceVersion(previous + 1));
+        self.effective_versions.insert(
+            path.to_owned(),
+            VfsSourceVersion {
+                lineage: self.lineage,
+                revision: previous + 1,
+            },
+        );
     }
 }
 

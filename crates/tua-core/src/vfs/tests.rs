@@ -180,6 +180,71 @@ fn cloned_vfs_shares_the_allocator_and_snapshots_freeze_versions() {
 }
 
 #[test]
+fn coordinator_mutation_does_not_wait_for_a_long_project_query_view() {
+    use std::sync::mpsc;
+    use std::time::Duration;
+
+    let mut coordinator = VirtualFileSystem::new();
+    let path = PathBuf::from("game/src/player.tua");
+    coordinator.set_disk_file(&path, "return 1\n", VfsSourceKind::Tua);
+    let versions = coordinator.source_versions();
+    let query_view = versions.begin_read().expect("stable version epoch");
+    let before = query_view.get(&path).unwrap();
+
+    // The view is deliberately kept alive as if a project query were paused
+    // between file lookups. It owns only an epoch, never a read guard, so the
+    // coordinator's write must complete before the query is released.
+    let (done_tx, done_rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        coordinator.set_disk_file(&path, "return 2\n", VfsSourceKind::Tua);
+        done_tx.send(coordinator).unwrap();
+    });
+    let coordinator = done_rx
+        .recv_timeout(Duration::from_secs(1))
+        .expect("VFS mutation must not wait for the project query lifetime");
+
+    assert!(coordinator.source_version("game/src/player.tua").unwrap() > before);
+    assert!(!query_view.is_current());
+}
+
+#[test]
+fn project_query_version_lookup_fails_closed_while_a_writer_holds_the_registry() {
+    let mut vfs = VirtualFileSystem::new();
+    let path = PathBuf::from("game/src/player.tua");
+    vfs.set_disk_file(&path, "return 1\n", VfsSourceKind::Tua);
+    let versions = vfs.source_versions();
+    let query_view = versions.begin_read().expect("stable version epoch");
+
+    // Holding the write guard in this thread makes a blocking read deadlock.
+    // The speculative query lookup must instead return immediately and
+    // abstain; ordinary `source_version` remains a blocking VFS API.
+    let writer = versions
+        .versions
+        .write()
+        .expect("VFS version index poisoned");
+    assert_eq!(query_view.get(&path), None);
+    drop(writer);
+}
+
+#[test]
+fn independent_vfs_instances_never_share_a_version_identity() {
+    let mut first = VirtualFileSystem::new();
+    let mut second = VirtualFileSystem::new();
+    first.set_disk_file("main.tua", "return 1\n", VfsSourceKind::Tua);
+    second.set_disk_file("main.tua", "return 1\n", VfsSourceKind::Tua);
+
+    let first_version = first.source_version("main.tua").unwrap();
+    let second_version = second.source_version("main.tua").unwrap();
+    assert_eq!(first_version.get(), second_version.get());
+    assert_ne!(first_version.lineage(), second_version.lineage());
+    assert_ne!(first_version, second_version);
+
+    let clone = first.clone();
+    assert_eq!(clone.lineage(), first.lineage());
+    assert_eq!(clone.source_version("main.tua"), Some(first_version));
+}
+
+#[test]
 fn excludes_output_roots_and_ignored_paths() {
     let mut vfs = VirtualFileSystem::new();
 

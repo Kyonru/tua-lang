@@ -47,6 +47,50 @@ fn local_inline_completion_returns_current_file_recall() {
 }
 
 #[test]
+fn local_inline_completion_reads_only_the_adopted_project_corpus() {
+    let temp = TempProject::new("inline-project-corpus");
+    let source = "draw(player,";
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/game/main.tua", source);
+    temp.write(
+        "src/game/sibling.tua",
+        "draw(player, wrong)\ndraw(player, wrong)\n",
+    );
+    temp.write("src/one/pattern.tua", "draw(player,score)\n");
+    temp.write("src/two/pattern.tua", "draw(player,score)\n");
+    let uri = temp.uri_for("src/game/main.tua");
+    let output = run_chunked_messages(vec![
+        (
+            Duration::ZERO,
+            vec![
+                initialize_with_root(1, temp.uri()),
+                did_open(&uri, source),
+                did_change_configuration(json!({
+                    "completion": {
+                        "inline": {
+                            "enabled": true,
+                            "sources": {
+                                "semantic": false,
+                                "currentFile": false,
+                                "project": true
+                            }
+                        }
+                    }
+                })),
+            ],
+        ),
+        (
+            Duration::from_millis(750),
+            vec![local_inline_request(2, &uri, source, source, 1)],
+        ),
+    ]);
+    let result = &response_with_id(&output, 2)["result"];
+
+    assert_eq!(result["items"][0]["insertText"], "score)");
+    assert_eq!(result["items"][0]["source"], "project");
+}
+
+#[test]
 fn local_inline_completion_is_empty_when_disabled_or_stale() {
     let uri = "file:///tmp/local-inline-stale.tua";
     let source = "draw(player, score)\ndraw(player, ";

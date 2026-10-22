@@ -16,14 +16,15 @@ use super::analysis::AnalysisHost;
 use super::handlers::{LocalInlineCompletionWork, RequestTrace};
 use super::protocol::{error_response, response};
 use super::{
-    method_is_background_refresh, LspServer, PendingDiagnostics, SharedReceivedInputState,
-    WorkspaceWarmWork,
+    method_is_background_refresh, LspServer, PatternCorpusWork, PendingDiagnostics,
+    SharedReceivedInputState, WorkspaceWarmWork,
 };
 
 const REQUEST_CANCELLED: i64 = -32800;
 const CONTENT_MODIFIED: i64 = -32801;
 const INTERNAL_SLOW_DIAGNOSTICS: &str = "tua/internalSlowDiagnostics";
 const INTERNAL_WORKSPACE_WARM: &str = "tua/internalWorkspaceWarm";
+const INTERNAL_PATTERN_CORPUS: &str = "tua/internalPatternCorpus";
 const REQUEST_WORKER_STACK_BYTES: usize = 8 * 1024 * 1024;
 pub(super) const MAX_IN_FLIGHT_JOBS: usize = 16;
 pub(super) const MAX_PENDING_REQUESTS: usize = 256;
@@ -58,11 +59,12 @@ pub(super) struct WorkerResult {
     job_id: u64,
     response: Value,
     warm_result: Option<WorkspaceWarmResult>,
+    corpus_result: Option<PatternCorpusWorkerResult>,
 }
 
 impl WorkerResult {
-    pub(super) fn is_workspace_warm(&self) -> bool {
-        self.warm_result.is_some()
+    pub(super) fn is_background_adoption(&self) -> bool {
+        self.warm_result.is_some() || self.corpus_result.is_some()
     }
 
     #[cfg(test)]
@@ -75,8 +77,20 @@ impl WorkerResult {
                 analysis: None,
                 succeeded: false,
             }),
+            corpus_result: None,
         }
     }
+}
+
+pub(super) struct PatternCorpusWorkerResult {
+    pub(super) generation: u64,
+    pub(super) paths: Vec<std::path::PathBuf>,
+    pub(super) entries: Vec<tua_core::PatternCorpusBatchEntry>,
+    pub(super) remerge: Option<tua_core::PatternCorpusRemergeOutcome>,
+    pub(super) unfinished_paths: Vec<std::path::PathBuf>,
+    pub(super) cancelled: bool,
+    pub(super) elapsed_ms: u64,
+    pub(super) disposed: bool,
 }
 
 struct WorkspaceWarmResult {
@@ -94,6 +108,7 @@ struct WorkerJob {
     method: String,
     cancelled: Arc<AtomicBool>,
     warm_work: Option<WorkspaceWarmWork>,
+    corpus_work: Option<PatternCorpusWork>,
 }
 
 struct InFlightJob {
@@ -106,6 +121,7 @@ struct InFlightJob {
     waiters: Vec<RequestWaiter>,
     slow_diagnostics: Option<(String, PendingDiagnostics)>,
     warm_work: Option<WorkspaceWarmWork>,
+    corpus_work: Option<(u64, Vec<std::path::PathBuf>)>,
 }
 
 struct RequestWaiter {
@@ -273,6 +289,7 @@ impl RequestScheduler {
             method,
             cancelled: Arc::clone(&cancelled),
             warm_work: None,
+            corpus_work: None,
         };
         let in_flight = InFlightJob {
             non_interactive,
@@ -289,6 +306,7 @@ impl RequestScheduler {
             }],
             slow_diagnostics: None,
             warm_work: None,
+            corpus_work: None,
         };
 
         self.request_jobs.insert(request_key, job_id);
@@ -361,6 +379,7 @@ impl RequestScheduler {
             method: INTERNAL_SLOW_DIAGNOSTICS.to_owned(),
             cancelled: Arc::clone(&cancelled),
             warm_work: None,
+            corpus_work: None,
         };
         self.jobs.insert(
             job_id,
@@ -374,6 +393,7 @@ impl RequestScheduler {
                 waiters: Vec::new(),
                 slow_diagnostics: Some((uri.clone(), pending)),
                 warm_work: None,
+                corpus_work: None,
             },
         );
 
@@ -405,6 +425,7 @@ impl RequestScheduler {
             method: INTERNAL_WORKSPACE_WARM.to_owned(),
             cancelled: Arc::clone(&cancelled),
             warm_work: Some(work.clone()),
+            corpus_work: None,
         };
 
         self.jobs.insert(
@@ -419,6 +440,7 @@ impl RequestScheduler {
                 waiters: Vec::new(),
                 slow_diagnostics: None,
                 warm_work: Some(work),
+                corpus_work: None,
             },
         );
 
@@ -428,6 +450,80 @@ impl RequestScheduler {
         }
 
         true
+    }
+
+    pub(super) fn dispatch_due_pattern_corpus(
+        &mut self,
+        server: &mut LspServer,
+        now: Instant,
+    ) -> bool {
+        if self.has_in_flight() {
+            return false;
+        }
+        let Some(work) = server.take_next_pattern_corpus_work(now) else {
+            return false;
+        };
+
+        self.next_job_id = self.next_job_id.saturating_add(1);
+        let job_id = self.next_job_id;
+        let cancelled = Arc::new(AtomicBool::new(false));
+        let generation = work.generation;
+        let paths = work.paths.clone();
+        let worker = WorkerJob {
+            job_id,
+            server: None,
+            local_inline: None,
+            queued_at: tua_core::profile::enabled().then(Instant::now),
+            message: Value::Null,
+            method: INTERNAL_PATTERN_CORPUS.to_owned(),
+            cancelled: Arc::clone(&cancelled),
+            warm_work: None,
+            corpus_work: Some(work),
+        };
+
+        self.jobs.insert(
+            job_id,
+            InFlightJob {
+                non_interactive: true,
+                uri: None,
+                generation: None,
+                cancelled,
+                coalesce_key: None,
+                newest_wins_key: None,
+                waiters: Vec::new(),
+                slow_diagnostics: None,
+                warm_work: None,
+                corpus_work: Some((generation, paths)),
+            },
+        );
+
+        if self.background_tx.send(worker).is_err() {
+            self.remove_job(job_id);
+            return false;
+        }
+
+        true
+    }
+
+    pub(super) fn cancel_stale_pattern_corpus(&mut self, generation: u64) {
+        for job in self.jobs.values() {
+            if job
+                .corpus_work
+                .as_ref()
+                .is_some_and(|(job_generation, _)| *job_generation != generation)
+            {
+                job.cancelled.store(true, Ordering::Release);
+            }
+        }
+    }
+
+    #[cfg(test)]
+    pub(super) fn pattern_corpus_job_is_cancelled(&self, generation: u64) -> bool {
+        self.jobs.values().any(|job| {
+            job.corpus_work.as_ref().is_some_and(|(job_generation, _)| {
+                *job_generation == generation && job.cancelled.load(Ordering::Acquire)
+            })
+        })
     }
 
     pub(super) fn cancel(&mut self, id: &Value) -> Vec<Value> {
@@ -508,7 +604,9 @@ impl RequestScheduler {
         let warm_jobs = self
             .jobs
             .iter()
-            .filter_map(|(job_id, job)| job.warm_work.is_some().then_some(*job_id))
+            .filter_map(|(job_id, job)| {
+                (job.warm_work.is_some() || job.corpus_work.is_some()).then_some(*job_id)
+            })
             .collect::<Vec<_>>();
 
         for job_id in warm_jobs {
@@ -526,6 +624,8 @@ impl RequestScheduler {
         };
         let finish_kind = if job.warm_work.is_some() {
             "workspaceWarm"
+        } else if job.corpus_work.is_some() {
+            "patternCorpus"
         } else if job.slow_diagnostics.is_some() {
             "slowDiagnostics"
         } else if job.newest_wins_key.is_some() {
@@ -544,7 +644,12 @@ impl RequestScheduler {
                 warm_result.succeeded,
             );
         }
+        if let Some(corpus_result) = result.corpus_result {
+            server.finish_pattern_corpus(corpus_result);
+            return Vec::new();
+        }
         debug_assert!(job.warm_work.is_none());
+        debug_assert!(job.corpus_work.is_none());
         let stale_generation = job
             .uri
             .as_ref()
@@ -822,11 +927,77 @@ fn run_worker_job(job: WorkerJob) -> WorkerResult {
         method,
         cancelled,
         warm_work,
+        corpus_work,
     } = job;
     if let Some(queued_at) = queued_at {
         tua_core::profile::record_duration(format!("lsp.queue {method}"), queued_at.elapsed());
     }
-    let (response_value, warm_result) = if let Some(work) = warm_work {
+    let (response_value, warm_result, corpus_result) = if let Some(work) = corpus_work {
+        let started = Instant::now();
+        let PatternCorpusWork {
+            generation,
+            paths,
+            operation,
+        } = work;
+        let mut entries = Vec::new();
+        let mut remerge = None;
+        let mut completed = 0usize;
+        let mut disposed = false;
+        let succeeded = panic::catch_unwind(AssertUnwindSafe(|| match operation {
+            super::PatternCorpusOperation::Files {
+                inputs,
+                project_model,
+                retrieval_limits,
+            } => {
+                entries.reserve(inputs.len());
+                for input in inputs {
+                    if cancelled.load(Ordering::Acquire) {
+                        break;
+                    }
+                    let outcome = {
+                        let _profile = tua_core::profile::span("inline.index.file");
+                        input.build(&project_model, retrieval_limits)
+                    };
+                    entries.push(tua_core::PatternCorpusBatchEntry::File(outcome));
+                    completed += 1;
+                }
+            }
+            super::PatternCorpusOperation::Remerge(prepared) => {
+                if !cancelled.load(Ordering::Acquire) {
+                    let _profile = tua_core::profile::span("inline.index.remerge");
+                    remerge = Some(prepared.build());
+                }
+            }
+            super::PatternCorpusOperation::Dispose(disposals) => {
+                for disposal in disposals {
+                    match disposal {
+                        super::PatternCorpusDisposal::Retired(retired) => drop(retired),
+                        super::PatternCorpusDisposal::RejectedRemerge(rejected) => drop(rejected),
+                    }
+                }
+                disposed = true;
+            }
+        }))
+        .is_ok();
+        let was_cancelled = cancelled.load(Ordering::Acquire) || !succeeded;
+        let unfinished_paths = paths.iter().skip(completed).cloned().collect();
+        let elapsed_ms = started.elapsed().as_millis().min(u128::from(u64::MAX)) as u64;
+
+        (
+            Value::Null,
+            None,
+            Some(PatternCorpusWorkerResult {
+                generation,
+                paths,
+                entries,
+                remerge,
+                unfinished_paths,
+                cancelled: was_cancelled,
+                elapsed_ms,
+                disposed,
+            }),
+        )
+    } else if let Some(work) = warm_work {
         let worker_server = server
             .take()
             .expect("workspace warm job should carry a server clone");
@@ -864,6 +1035,7 @@ fn run_worker_job(job: WorkerJob) -> WorkerResult {
                 analysis,
                 succeeded,
             }),
+            None,
         )
     } else if cancelled.load(Ordering::Acquire) {
         (
@@ -872,6 +1044,7 @@ fn run_worker_job(job: WorkerJob) -> WorkerResult {
                 REQUEST_CANCELLED,
                 "request cancelled".to_owned(),
             ),
+            None,
             None,
         )
     } else if let Some(work) = local_inline {
@@ -889,7 +1062,7 @@ fn run_worker_job(job: WorkerJob) -> WorkerResult {
                 "language server speculative request worker panicked".to_owned(),
             )
         });
-        (response, None)
+        (response, None, None)
     } else {
         let server = server
             .as_mut()
@@ -905,13 +1078,14 @@ fn run_worker_job(job: WorkerJob) -> WorkerResult {
             )
         });
 
-        (response, None)
+        (response, None, None)
     };
 
     WorkerResult {
         job_id,
         response: response_value,
         warm_result,
+        corpus_result,
     }
 }
 

@@ -157,8 +157,13 @@ pub use ide_db::{
 };
 pub use inlay_hint::{inlay_hints_parsed_source, inlay_hints_tua_source, InlayHint, InlayHintKind};
 pub use inline_completion::{
+    CorpusAdoptionResult, CorpusEntryAdoption, CorpusEntryAdoptionStatus, CorpusFileId,
     InlineCompletionBudget, InlineCompletionCandidate, InlineCompletionOptions,
-    InlineCompletionScore, InlineCompletionSource, PatternId, PreparedInlineCompletion,
+    InlineCompletionScore, InlineCompletionSource, PatternCorpusBatchEntry,
+    PatternCorpusBuildInput, PatternCorpusBuildOutcome, PatternCorpusLimits, PatternCorpusMatch,
+    PatternCorpusRemergeOutcome, PatternCorpusStats, PatternCorpusTier, PatternCorpusTombstone,
+    PatternFileBuild, PatternId, PreparedInlineCompletion, PreparedPatternCorpusRemerge,
+    ProjectPatternCorpus, RetiredProjectPatternCorpus, RetrievalBuildError, RetrievalLimits,
 };
 pub use inspector::{
     InspectorItem, SpriteAnimationInspection, SpriteAssetInspection, SpriteFrameInspection,

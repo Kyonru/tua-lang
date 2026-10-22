@@ -7,7 +7,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::{
     AnalysisHost, AnalysisSourceKind, InlineCompletionBudget, InlineCompletionOptions,
-    InlineCompletionSource, PreparedInlineCompletion, SourcePosition,
+    InlineCompletionSource, PatternCorpusBatchEntry, PreparedInlineCompletion, ProjectModel,
+    RetrievalLimits, SourcePosition,
 };
 
 fn context_at_end(source: &str) -> Option<CursorContext> {
@@ -174,6 +175,7 @@ fn prepared_query_is_owned_sendable_and_does_no_analysis_work() {
     let before = host.cache_stats();
     let prepared = host.prepare_local_inline_completion(&path).unwrap();
     assert_eq!(prepared.source(), source);
+    assert!(prepared.project.is_none());
     let after_prepare = host.cache_stats();
 
     assert_eq!(after_prepare.inline_completion_requests, 1);
@@ -312,6 +314,7 @@ fn cancellation_deadline_and_source_switches_abstain() {
             &InlineCompletionOptions {
                 semantic: false,
                 current_file: false,
+                project: false,
             },
             &InlineCompletionBudget::unlimited(),
             &cancelled,
@@ -340,4 +343,290 @@ fn frozen_context_allowlist_suppresses_assignment_and_member_recall() {
             )
             .is_empty());
     }
+}
+
+#[test]
+fn prepared_query_reads_the_immutable_project_corpus() {
+    let mut host = AnalysisHost::new();
+    host.set_project_pattern_eligibility_generation(1);
+    host.set_file("active/main.tua", "draw(player,");
+    host.set_file("active/sibling.tua", "draw(player, wrong)");
+    host.set_file("one/a.tua", "draw(player, score); alpha()");
+    host.set_file("two/b.tua", "draw(player, score); beta()");
+    let outcomes = [
+        "active/main.tua",
+        "active/sibling.tua",
+        "one/a.tua",
+        "two/b.tua",
+    ]
+    .map(|path| {
+        PatternCorpusBatchEntry::File(
+            host.prepare_project_pattern_file(path)
+                .unwrap()
+                .build(&ProjectModel::default(), RetrievalLimits::default()),
+        )
+    });
+    assert_eq!(host.adopt_project_pattern_batch(1, outcomes).adopted, 4);
+
+    let prepared = host
+        .prepare_local_inline_completion_with_project("active/main.tua", true)
+        .unwrap();
+    drop(host);
+    let candidates = prepared.complete(
+        SourcePosition {
+            line: 1,
+            column: 13,
+        },
+        &InlineCompletionOptions {
+            semantic: false,
+            current_file: false,
+            project: true,
+        },
+        &InlineCompletionBudget::unlimited(),
+        &AtomicBool::new(false),
+    );
+    assert_eq!(candidates.len(), 1);
+    assert_eq!(candidates[0].insert_text, " score);");
+    assert_eq!(candidates[0].source, InlineCompletionSource::Project);
+}
+
+#[test]
+fn project_disabled_preparation_captures_no_project_or_vfs_version_arc() {
+    let mut host = AnalysisHost::new();
+    host.set_file("src/main.tua", "draw(player,");
+
+    // Both the compatibility entry point and the explicit disabled form must
+    // leave the sole container for the corpus and live VFS-version registry
+    // absent. This keeps the default request independent of project corpus
+    // lifetime and avoids adding a version-registry reader on every keypress.
+    let default_prepared = host
+        .prepare_local_inline_completion("src/main.tua")
+        .unwrap();
+    assert!(default_prepared.project.is_none());
+    let explicitly_disabled = host
+        .prepare_local_inline_completion_with_project("src/main.tua", false)
+        .unwrap();
+    assert!(explicitly_disabled.project.is_none());
+
+    let enabled = host
+        .prepare_local_inline_completion_with_project("src/main.tua", true)
+        .unwrap();
+    assert!(enabled.project.is_some());
+}
+
+#[test]
+fn production_semantic_policy_keeps_unevaluated_love_callbacks_disabled() {
+    let mut host = AnalysisHost::new();
+    host.set_project_pattern_eligibility_generation(1);
+    host.set_file("src/callbacks.tua", "function love.update(dt: number)\nend");
+    host.set_file("src/main.tua", "function love.upd");
+    let outcome = host
+        .prepare_project_pattern_file("src/callbacks.tua")
+        .unwrap()
+        .build(&ProjectModel::default(), RetrievalLimits::default());
+    assert_eq!(
+        host.adopt_project_pattern_batch(1, [PatternCorpusBatchEntry::File(outcome)])
+            .adopted,
+        1
+    );
+    let prepared = host
+        .prepare_local_inline_completion_with_project("src/main.tua", true)
+        .unwrap();
+    let position = SourcePosition {
+        line: 1,
+        column: 18,
+    };
+    let local_only = prepared.complete(
+        position,
+        &InlineCompletionOptions {
+            semantic: true,
+            current_file: false,
+            project: false,
+        },
+        &InlineCompletionBudget::unlimited(),
+        &AtomicBool::new(false),
+    );
+    assert!(local_only.is_empty());
+    let with_project = prepared.complete(
+        position,
+        &InlineCompletionOptions {
+            semantic: true,
+            current_file: false,
+            project: true,
+        },
+        &InlineCompletionBudget::unlimited(),
+        &AtomicBool::new(false),
+    );
+    assert!(with_project.is_empty());
+    assert!(host.project_declared_love_callbacks().contains("update"));
+}
+
+#[test]
+fn prepared_project_query_observes_a_later_vfs_invalidation_without_copy_on_write() {
+    let mut host = AnalysisHost::new();
+    host.set_project_pattern_eligibility_generation(1);
+    host.set_file("one/a.tua", "draw(player, score)\ndraw(player, score)");
+    host.set_file("active/main.tua", "draw(player,");
+    let outcome = host
+        .prepare_project_pattern_file("one/a.tua")
+        .unwrap()
+        .build(&ProjectModel::default(), RetrievalLimits::default());
+    assert_eq!(
+        host.adopt_project_pattern_batch(1, [PatternCorpusBatchEntry::File(outcome)])
+            .adopted,
+        1
+    );
+    let prepared = host
+        .prepare_local_inline_completion_with_project("active/main.tua", true)
+        .unwrap();
+    host.set_file("one/a.tua", "draw(player, changed)");
+    assert!(prepared
+        .complete(
+            SourcePosition {
+                line: 1,
+                column: 13,
+            },
+            &InlineCompletionOptions {
+                semantic: false,
+                current_file: false,
+                project: true,
+            },
+            &InlineCompletionBudget::unlimited(),
+            &AtomicBool::new(false),
+        )
+        .is_empty());
+}
+
+#[test]
+fn prepared_project_query_observes_generation_change_and_clear_without_a_vfs_edit() {
+    fn prepared_host() -> (AnalysisHost, PreparedInlineCompletion) {
+        let mut host = AnalysisHost::new();
+        host.set_project_pattern_eligibility_generation(1);
+        host.set_file("one/a.tua", "draw(player, score)\ndraw(player, score)");
+        host.set_file("active/main.tua", "draw(player,");
+        let outcome = host
+            .prepare_project_pattern_file("one/a.tua")
+            .unwrap()
+            .build(&ProjectModel::default(), RetrievalLimits::default());
+        assert_eq!(
+            host.adopt_project_pattern_batch(1, [PatternCorpusBatchEntry::File(outcome)])
+                .adopted,
+            1
+        );
+        let prepared = host
+            .prepare_local_inline_completion_with_project("active/main.tua", true)
+            .unwrap();
+        (host, prepared)
+    }
+
+    let complete = |prepared: &PreparedInlineCompletion| {
+        prepared.complete(
+            SourcePosition {
+                line: 1,
+                column: 13,
+            },
+            &InlineCompletionOptions {
+                semantic: false,
+                current_file: false,
+                project: true,
+            },
+            &InlineCompletionBudget::unlimited(),
+            &AtomicBool::new(false),
+        )
+    };
+
+    let (host, prepared) = prepared_host();
+    assert_eq!(complete(&prepared)[0].insert_text, " score)");
+    let mut coordinator_clone = host.clone();
+    coordinator_clone.set_project_pattern_eligibility_generation(2);
+    assert!(complete(&prepared).is_empty());
+
+    let (host, prepared) = prepared_host();
+    assert_eq!(complete(&prepared)[0].insert_text, " score)");
+    let mut coordinator_clone = host.clone();
+    let retired = coordinator_clone
+        .clear_project_pattern_corpus()
+        .expect("populated corpus should be retired");
+    assert!(complete(&prepared).is_empty());
+    std::thread::spawn(move || drop(retired)).join().unwrap();
+}
+
+#[test]
+fn project_completion_rechecks_the_same_version_epoch_after_validation() {
+    use std::cell::{Cell, RefCell};
+
+    let mut host = AnalysisHost::new();
+    host.set_project_pattern_eligibility_generation(1);
+    host.set_file("one/a.tua", "draw(player, score)\ndraw(player, score)");
+    host.set_file("active/main.tua", "if (\ndraw(player,");
+    let outcome = host
+        .prepare_project_pattern_file("one/a.tua")
+        .unwrap()
+        .build(&ProjectModel::default(), RetrievalLimits::default());
+    assert_eq!(
+        host.adopt_project_pattern_batch(1, [PatternCorpusBatchEntry::File(outcome)])
+            .adopted,
+        1
+    );
+    let prepared = host
+        .prepare_local_inline_completion_with_project("active/main.tua", true)
+        .unwrap();
+    let position = SourcePosition {
+        line: 2,
+        column: 13,
+    };
+    let options = InlineCompletionOptions {
+        semantic: false,
+        current_file: false,
+        project: true,
+    };
+    let run = |baseline: &dyn Fn() -> Option<Vec<crate::Diagnostic>>| {
+        let project = prepared.project.as_ref().unwrap();
+        super::complete(
+            super::InlineCompletionInput {
+                path: &prepared.path,
+                source: &prepared.source,
+                kind: prepared.kind,
+                position,
+                include_ecs: prepared.include_ecs,
+                stats: &prepared.stats,
+            },
+            Some(super::ProjectCompletionInput {
+                corpus: &project.corpus,
+                versions: &project.versions,
+                eligibility: &project.eligibility,
+                generation: project.generation,
+                eligibility_epoch: project.eligibility_epoch,
+                limits: project.limits,
+            }),
+            &options,
+            &InlineCompletionBudget::unlimited(),
+            &AtomicBool::new(false),
+            baseline,
+        )
+    };
+
+    // The invalid source forces validation to consult the baseline after the
+    // project lookup. Without a concurrent edit the real candidate survives.
+    assert_eq!(run(&|| None)[0].insert_text, " score)");
+    let returned_before = prepared.stats.candidates_returned.load(Ordering::Relaxed);
+
+    let host = RefCell::new(host);
+    let changed = Cell::new(false);
+    let baseline = || {
+        changed.set(true);
+        host.borrow_mut()
+            .set_file("one/a.tua", "draw(player, changed)");
+        None
+    };
+    assert!(run(&baseline).is_empty());
+    assert!(
+        changed.get(),
+        "validation must exercise the final epoch check"
+    );
+    assert_eq!(
+        prepared.stats.candidates_returned.load(Ordering::Relaxed),
+        returned_before,
+        "stale candidates must not increment returned counters"
+    );
 }

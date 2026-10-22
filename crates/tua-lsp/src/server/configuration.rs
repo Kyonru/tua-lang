@@ -82,6 +82,9 @@ pub(super) struct InlineCompletionOverrides {
     pub(super) enabled: Option<bool>,
     pub(super) semantic: Option<bool>,
     pub(super) current_file: Option<bool>,
+    /// Experimental Phase 2 gate-development switch. It is intentionally not
+    /// exposed by the extension until project retrieval passes its gates.
+    pub(super) project: Option<bool>,
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -221,6 +224,10 @@ impl WorkspaceSettings {
 
     pub(super) fn inline_current_file_enabled(&self) -> bool {
         self.completion.inline.current_file.unwrap_or(true)
+    }
+
+    pub(super) fn inline_project_enabled(&self) -> bool {
+        self.inline_completion_enabled() && self.completion.inline.project.unwrap_or(false)
     }
 }
 
@@ -491,6 +498,7 @@ impl InlineCompletionOverrides {
             semantic: sources.and_then(|sources| bool_setting(sources, "semantic", "semantic")),
             current_file: sources
                 .and_then(|sources| bool_setting(sources, "current_file", "currentFile")),
+            project: sources.and_then(|sources| bool_setting(sources, "project", "project")),
         }
     }
 }
@@ -758,6 +766,7 @@ mod tests {
         assert!(!defaults.inline_completion_enabled());
         assert!(defaults.inline_semantic_enabled());
         assert!(defaults.inline_current_file_enabled());
+        assert!(!defaults.inline_project_enabled());
 
         let settings = WorkspaceSettings::from_did_change_configuration(&json!({
             "params": {
@@ -768,7 +777,8 @@ mod tests {
                                 "enabled": true,
                                 "sources": {
                                     "semantic": false,
-                                    "currentFile": false
+                                    "currentFile": false,
+                                    "project": true
                                 }
                             }
                         }
@@ -780,5 +790,6 @@ mod tests {
         assert!(settings.inline_completion_enabled());
         assert!(!settings.inline_semantic_enabled());
         assert!(!settings.inline_current_file_enabled());
+        assert!(settings.inline_project_enabled());
     }
 }

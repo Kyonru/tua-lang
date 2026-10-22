@@ -49,6 +49,12 @@ struct LinePattern {
     line_indices: Box<[usize]>,
 }
 
+pub(crate) struct FilePatternEntry<'a> {
+    pub normalized: &'a str,
+    pub original: &'a str,
+    pub line_indices: &'a [usize],
+}
+
 /// A continuation retrieved from original source text.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RetrievalMatch {
@@ -258,6 +264,23 @@ impl FilePatternTable {
 
     pub fn is_truncated(&self) -> bool {
         self.truncated
+    }
+
+    pub(crate) fn entries(&self) -> impl Iterator<Item = FilePatternEntry<'_>> {
+        self.patterns.iter().map(|pattern| FilePatternEntry {
+            normalized: &pattern.normalized,
+            original: &pattern.original,
+            line_indices: &pattern.line_indices,
+        })
+    }
+
+    pub(crate) fn prefix_start(&self, normalized_prefix: &str) -> usize {
+        self.patterns
+            .partition_point(|pattern| pattern.normalized.as_ref() < normalized_prefix)
+    }
+
+    pub(crate) fn max_continuation_bytes(&self) -> usize {
+        self.max_continuation_bytes
     }
 }
 

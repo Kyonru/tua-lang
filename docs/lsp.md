@@ -178,8 +178,8 @@ directions. See [Input](input.md).
 ### Deterministic Local Inline Completion
 
 Set `tua.completion.inline.enabled` to `true` to try deterministic ghost text
-without a model. It is experimental and off by default. The first phase has
-two independently configurable sources:
+without a model. It is experimental and off by default. The public extension
+configuration has two independently configurable sources:
 
 - `tua.completion.inline.sources.semantic` reuses unique, source-only statement
   snippets after at least three prefix characters;
@@ -199,12 +199,15 @@ The server checks cursor eligibility, suffix compatibility, cancellation, and
 parse safety before returning at most one item. Candidate generation and
 validation use a 10 ms core deadline; before starting a non-interruptible parse,
 Tua checks that the remaining budget is sufficient and otherwise abstains.
-Queue, protocol, and end-to-end request latency are measured separately. This
-path reads the current in-memory document only. It does not build an analysis
-snapshot, run type checking, scan other project files, read a pattern database,
-or persist source text. LÖVE callback ghost text, project-wide retrieval,
-bundled patterns, statistical prediction, and multi-line pattern recall are not
-part of this phase.
+Queue, protocol, and end-to-end request latency are measured separately. With
+these public Phase 1 sources, the path reads the current in-memory document
+only. It does not build an analysis snapshot, run type checking, scan other
+project files, read a pattern database, or persist source text. Project-wide
+retrieval exists only as a hidden, default-off Phase 2 integration experiment;
+the extension does not contribute its internal source switch, and it has not
+passed held-out, external, or aggregate phase gates. Bundled patterns,
+statistical prediction, and multi-line pattern recall are not production
+sources.
 
 The extension waits 65 ms before requesting ghost text, then gives the local
 backend 250 ms to respond. That request uses a linked cancellation token, so a
@@ -592,8 +595,8 @@ The bundled VS Code extension also uses version-matched Tua requests:
 | `tua/objectPoolGraph` | Object-pool declarations and lifecycle facts |
 | `tua/audioGraph` | Static audio-system declarations and their exact configured names |
 | `tua/builtinDocument` | Generated Lua and LOVE builtin stub source |
-| `tua/cacheStats` | Analysis cache and workspace-warming counters |
-| `tua/health` | Server revision, queue, cache, stale-result, and latency health |
+| `tua/cacheStats` | Analysis cache, workspace-warming, and experimental pattern-corpus counters |
+| `tua/health` | Server revision, queues, cache, pattern-corpus, stale-result, and latency health |
 | `tua/resetCompletionStats` | Clear local adaptive completion statistics |
 | `tua/localInlineCompletion` | Return a version-bound deterministic inline-completion candidate from enabled local sources |
 

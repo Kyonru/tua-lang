@@ -1168,10 +1168,17 @@ impl AnalysisHost {
         &self,
         path: impl AsRef<Path>,
     ) -> Option<BTreeSet<String>> {
-        let file = self.peek_current_analysis_file(path.as_ref())?;
-        let parsed = match &file.parsed {
+        let path = normalize_path(path.as_ref());
+        let source = self.vfs.source(&path)?;
+        let kind = self.vfs.kind(&path).map(analysis_source_kind)?;
+        let cache = self.cache.borrow();
+        let cached = cache.files.get(&path)?;
+        if cached.source != source || cached.kind != kind {
+            return None;
+        }
+        let parsed = match &cached.file.parsed {
             Ok(parsed) => parsed,
-            Err(_) => &file.degraded_semantics.as_ref()?.parsed,
+            Err(_) => &cached.file.degraded_semantics.as_ref()?.parsed,
         };
 
         Some(
@@ -1189,6 +1196,14 @@ impl AnalysisHost {
         &self,
         path: impl AsRef<Path>,
     ) -> Option<crate::PreparedInlineCompletion> {
+        self.prepare_local_inline_completion_with_project(path, false)
+    }
+
+    pub fn prepare_local_inline_completion_with_project(
+        &self,
+        path: impl AsRef<Path>,
+        include_project: bool,
+    ) -> Option<crate::PreparedInlineCompletion> {
         let path = normalize_path(path.as_ref());
         let source = self.vfs.source(&path)?.to_owned();
         let kind = self.vfs.kind(&path).map(analysis_source_kind)?;
@@ -1203,12 +1218,28 @@ impl AnalysisHost {
         };
         counter.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
+        let project = include_project.then(|| {
+            // Capture the live epoch before any immutable project value. A
+            // concurrent generation change or clear after this point makes
+            // the prepared request stale instead of blessing the old corpus
+            // with the new epoch.
+            let eligibility_epoch = self.project_pattern_eligibility.epoch();
+            crate::inline_completion::PreparedProjectCompletion {
+                corpus: Arc::clone(&self.project_pattern_corpus),
+                versions: self.vfs.source_versions(),
+                eligibility: Arc::clone(&self.project_pattern_eligibility),
+                generation: self.project_pattern_eligibility.generation(),
+                eligibility_epoch,
+                limits: self.project_pattern_limits,
+            }
+        });
         Some(crate::PreparedInlineCompletion {
             path,
             source,
             kind,
             include_ecs: self.config.ecs.enabled,
             baseline_parse_errors,
+            project,
             stats: std::sync::Arc::clone(&self.inline_completion_stats),
         })
     }
@@ -1223,10 +1254,319 @@ impl AnalysisHost {
         budget: &crate::InlineCompletionBudget,
         cancelled: &std::sync::atomic::AtomicBool,
     ) -> Vec<crate::InlineCompletionCandidate> {
-        let Some(prepared) = self.prepare_local_inline_completion(path) else {
+        let Some(prepared) =
+            self.prepare_local_inline_completion_with_project(path, options.project)
+        else {
             return Vec::new();
         };
         prepared.complete(position, options, budget, cancelled)
+    }
+
+    /// Capture one file's immutable corpus-build input from the effective VFS
+    /// source. This copies source text but never parses or loads a project
+    /// model, so the returned value can be moved to a background worker.
+    pub fn prepare_project_pattern_file(
+        &self,
+        path: impl AsRef<Path>,
+    ) -> Option<crate::PatternCorpusBuildInput> {
+        let path = normalize_path(path.as_ref());
+        Some(crate::PatternCorpusBuildInput::new(
+            path.clone(),
+            self.vfs.source(&path)?.to_owned(),
+            analysis_source_kind(self.vfs.kind(&path)?),
+            self.vfs.source_version(&path)?,
+        ))
+    }
+
+    /// Source size without cloning the source. Background scheduling uses
+    /// this to reject oversized files before preparing owned build input.
+    pub fn project_pattern_source_bytes(&self, path: impl AsRef<Path>) -> Option<usize> {
+        self.vfs.source(path).map(str::len)
+    }
+
+    /// Immediately invalidate project-pattern queries for older eligibility
+    /// inputs. Rebuilding remains asynchronous; no table work occurs here.
+    pub fn set_project_pattern_eligibility_generation(&mut self, generation: u64) {
+        self.project_pattern_eligibility.set_generation(generation);
+    }
+
+    pub fn set_project_pattern_limits(&mut self, limits: crate::PatternCorpusLimits) {
+        self.project_pattern_limits = limits;
+    }
+
+    pub fn project_pattern_corpus_stats(&self) -> crate::PatternCorpusStats {
+        self.project_pattern_corpus.stats()
+    }
+
+    pub fn project_pattern_corpus(&self) -> Arc<crate::ProjectPatternCorpus> {
+        Arc::clone(&self.project_pattern_corpus)
+    }
+
+    /// Replace the published corpus with an empty value immediately, while
+    /// returning ownership of the retired storage for off-coordinator drop.
+    pub fn clear_project_pattern_corpus(&mut self) -> Option<crate::RetiredProjectPatternCorpus> {
+        self.project_pattern_eligibility.invalidate();
+        if self.project_pattern_corpus.stats().files == 0
+            && self.project_pattern_corpus.stats().overlay_files == 0
+        {
+            return None;
+        }
+        let empty = Arc::new(crate::ProjectPatternCorpus::empty(
+            self.project_pattern_eligibility.generation(),
+            Some(self.vfs.lineage()),
+        ));
+        let retired = std::mem::replace(&mut self.project_pattern_corpus, empty);
+        Some(crate::RetiredProjectPatternCorpus(retired))
+    }
+
+    pub fn prepare_project_pattern_tombstone(
+        &self,
+        path: impl AsRef<Path>,
+    ) -> crate::PatternCorpusTombstone {
+        let path = normalize_path(path.as_ref());
+        crate::PatternCorpusTombstone {
+            expected_version: self.vfs.source_version(&path),
+            path,
+            lineage: self.vfs.lineage(),
+        }
+    }
+
+    /// Adopt independently validated files into a new immutable corpus value.
+    /// A generation mismatch rejects the whole batch; a stale file rejects
+    /// only that file so useful work from the same batch is retained.
+    pub fn adopt_project_pattern_batch(
+        &mut self,
+        generation: u64,
+        entries: impl IntoIterator<Item = crate::PatternCorpusBatchEntry>,
+    ) -> crate::CorpusAdoptionResult {
+        let _profile = profile::span("inline.index.adopt_core");
+        let mut result = crate::CorpusAdoptionResult::default();
+        if generation != self.project_pattern_eligibility.generation() {
+            result.generation_rejected = true;
+            result.entries = entries
+                .into_iter()
+                .map(|entry| crate::CorpusEntryAdoption {
+                    path: normalize_path(match &entry {
+                        crate::PatternCorpusBatchEntry::File(outcome) => outcome.path(),
+                        crate::PatternCorpusBatchEntry::Tombstone(tombstone) => tombstone.path(),
+                    }),
+                    status: crate::CorpusEntryAdoptionStatus::GenerationMismatch,
+                })
+                .collect();
+            result
+                .entries
+                .sort_by(|left, right| left.path.cmp(&right.path));
+            return result;
+        }
+        let lineage = self.vfs.lineage();
+        let corpus = if self.project_pattern_corpus.eligibility_generation() == generation
+            && self.project_pattern_corpus.lineage() == Some(lineage)
+        {
+            (*self.project_pattern_corpus).clone()
+        } else {
+            crate::ProjectPatternCorpus::empty(generation, Some(lineage))
+        };
+        let mut mutations = Vec::new();
+        for entry in entries {
+            match entry {
+                crate::PatternCorpusBatchEntry::Tombstone(tombstone) => {
+                    if tombstone.lineage != lineage {
+                        result.lineage_rejected = true;
+                        result.stale += 1;
+                        result.entries.push(crate::CorpusEntryAdoption {
+                            path: tombstone.path,
+                            status: crate::CorpusEntryAdoptionStatus::WrongLineage,
+                        });
+                    } else if self.vfs.source_version(&tombstone.path) != tombstone.expected_version
+                    {
+                        result.stale += 1;
+                        result.entries.push(crate::CorpusEntryAdoption {
+                            path: tombstone.path,
+                            status: crate::CorpusEntryAdoptionStatus::Stale,
+                        });
+                    } else {
+                        mutations.push(
+                            crate::inline_completion::ValidatedCorpusMutation::Tombstone {
+                                path: tombstone.path,
+                                skipped: false,
+                            },
+                        );
+                    }
+                }
+                crate::PatternCorpusBatchEntry::File(outcome) => {
+                    let path = normalize_path(outcome.path());
+                    if outcome.version().lineage() != lineage {
+                        result.lineage_rejected = true;
+                        result.stale += 1;
+                        result.entries.push(crate::CorpusEntryAdoption {
+                            path,
+                            status: crate::CorpusEntryAdoptionStatus::WrongLineage,
+                        });
+                        continue;
+                    }
+                    if self.vfs.source_version(&path) != Some(outcome.version()) {
+                        result.stale += 1;
+                        result.entries.push(crate::CorpusEntryAdoption {
+                            path,
+                            status: crate::CorpusEntryAdoptionStatus::Stale,
+                        });
+                        continue;
+                    }
+                    match outcome {
+                        crate::PatternCorpusBuildOutcome::Built(build) => {
+                            mutations.push(
+                                crate::inline_completion::ValidatedCorpusMutation::File(build),
+                            );
+                        }
+                        crate::PatternCorpusBuildOutcome::Skipped { .. } => {
+                            mutations.push(
+                                crate::inline_completion::ValidatedCorpusMutation::Tombstone {
+                                    path,
+                                    skipped: true,
+                                },
+                            );
+                        }
+                    }
+                }
+            }
+        }
+        if mutations.is_empty() {
+            result
+                .entries
+                .sort_by(|left, right| left.path.cmp(&right.path));
+            result.needs_remerge = corpus.needs_remerge(self.project_pattern_limits);
+            return result;
+        }
+        let (corpus, admissions) = corpus.with_batch(mutations, self.project_pattern_limits);
+        for admission in &admissions {
+            match admission.status {
+                crate::CorpusEntryAdoptionStatus::Adopted => result.adopted += 1,
+                crate::CorpusEntryAdoptionStatus::Tombstoned => result.tombstoned += 1,
+                crate::CorpusEntryAdoptionStatus::Skipped => result.skipped += 1,
+                crate::CorpusEntryAdoptionStatus::OverBudget => result.over_budget += 1,
+                crate::CorpusEntryAdoptionStatus::FileLimit => result.file_limit += 1,
+                crate::CorpusEntryAdoptionStatus::Stale
+                | crate::CorpusEntryAdoptionStatus::GenerationMismatch
+                | crate::CorpusEntryAdoptionStatus::WrongLineage => {}
+            }
+        }
+        result.entries.extend(admissions);
+        result
+            .entries
+            .sort_by(|left, right| left.path.cmp(&right.path));
+        result.needs_remerge = corpus.needs_remerge(self.project_pattern_limits);
+        self.project_pattern_corpus = Arc::new(corpus);
+        result
+    }
+
+    pub fn tombstone_project_pattern_file(
+        &mut self,
+        generation: u64,
+        path: impl AsRef<Path>,
+    ) -> bool {
+        if generation != self.project_pattern_eligibility.generation() {
+            return false;
+        }
+        let tombstone = self.prepare_project_pattern_tombstone(path);
+        let result = self.adopt_project_pattern_batch(
+            generation,
+            [crate::PatternCorpusBatchEntry::Tombstone(tombstone)],
+        );
+        !result.generation_rejected && !result.lineage_rejected && result.stale == 0
+    }
+
+    pub fn prepare_project_pattern_remerge(&self) -> Option<crate::PreparedPatternCorpusRemerge> {
+        let _profile = profile::span("inline.index.prepare_remerge");
+        if self.project_pattern_corpus.eligibility_generation()
+            != self.project_pattern_eligibility.generation()
+        {
+            return None;
+        }
+        crate::ProjectPatternCorpus::prepare_remerge(
+            Arc::clone(&self.project_pattern_corpus),
+            self.vfs.lineage(),
+        )
+    }
+
+    pub fn adopt_project_pattern_remerge(
+        &mut self,
+        outcome: crate::PatternCorpusRemergeOutcome,
+    ) -> bool {
+        self.try_adopt_project_pattern_remerge(outcome).is_ok()
+    }
+
+    /// Adopt a worker-built remerge without releasing either accepted old
+    /// storage or a rejected worker result on the coordinator thread.
+    pub fn try_adopt_project_pattern_remerge(
+        &mut self,
+        outcome: crate::PatternCorpusRemergeOutcome,
+    ) -> Result<crate::RetiredProjectPatternCorpus, crate::PatternCorpusRemergeOutcome> {
+        let _profile = profile::span("inline.index.adopt_remerge_core");
+        if outcome.generation() != self.project_pattern_eligibility.generation()
+            || outcome.lineage() != self.vfs.lineage()
+            || !Arc::ptr_eq(outcome.source(), &self.project_pattern_corpus)
+            || outcome
+                .versions()
+                .iter()
+                .any(|(path, version)| self.vfs.source_version(path) != Some(*version))
+            || outcome.merged_bytes() > self.project_pattern_limits.max_bytes
+        {
+            return Err(outcome);
+        }
+        let retired = crate::RetiredProjectPatternCorpus(Arc::clone(outcome.source()));
+        let merged = outcome.into_merged();
+        self.project_pattern_corpus = Arc::new(merged);
+        Ok(retired)
+    }
+
+    /// Query only immutable corpus state plus effective VFS versions/source.
+    /// No analysis, project model, filesystem, or snapshot work is performed.
+    pub fn project_pattern_matches(
+        &self,
+        path: impl AsRef<Path>,
+        prefix: &str,
+        active_line: usize,
+        max_results: usize,
+        budget: &crate::InlineCompletionBudget,
+        cancelled: &std::sync::atomic::AtomicBool,
+    ) -> Vec<crate::PatternCorpusMatch> {
+        let path = normalize_path(path.as_ref());
+        let Some(source) = self.vfs.source(&path) else {
+            return Vec::new();
+        };
+        self.project_pattern_corpus.query(
+            crate::inline_completion::PatternCorpusQuery {
+                generation: self.project_pattern_eligibility.generation(),
+                active_path: &path,
+                active_source: source,
+                prefix,
+                active_line,
+                max_results,
+                max_active_source_bytes: self.project_pattern_limits.max_active_source_bytes,
+                max_query_patterns: self.project_pattern_limits.max_query_patterns,
+                max_query_prefix_bytes: self.project_pattern_limits.max_query_prefix_bytes,
+                max_related_targets: self.project_pattern_limits.max_related_targets,
+                rank_same_directory: self.project_pattern_limits.rank_same_directory,
+                rest_of_project_only: false,
+                budget: *budget,
+                cancelled,
+            },
+            |candidate| self.vfs.source_version(candidate),
+        )
+    }
+
+    pub fn project_declared_love_callbacks(&self) -> BTreeSet<String> {
+        let cancelled = std::sync::atomic::AtomicBool::new(false);
+        self.project_pattern_corpus
+            .declared_love_callbacks(
+                self.project_pattern_eligibility.generation(),
+                self.vfs.lineage(),
+                self.project_pattern_limits.max_callback_support_checks,
+                crate::InlineCompletionBudget::unlimited(),
+                &cancelled,
+                |path| self.vfs.source_version(path),
+            )
+            .unwrap_or_default()
     }
 
     fn current_analysis_file(&self, path: &Path) -> Option<AnalysisFile> {

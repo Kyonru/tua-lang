@@ -6,6 +6,71 @@ fn enable_scheduled_local_inline_completion(server: &mut LspServer) {
     })));
 }
 
+fn enable_project_pattern_corpus(server: &mut LspServer) {
+    let _ = server.handle_message(did_change_configuration(json!({
+        "completion": {
+            "inline": {
+                "enabled": true,
+                "sources": {"project": true}
+            }
+        }
+    })));
+}
+
+fn finish_pattern_work(server: &mut LspServer, work: PatternCorpusWork) {
+    let started = Instant::now();
+    let PatternCorpusWork {
+        generation,
+        paths,
+        operation,
+    } = work;
+    let PatternCorpusOperation::Files {
+        inputs,
+        project_model,
+        retrieval_limits,
+    } = operation
+    else {
+        panic!("test helper expected file build work");
+    };
+    let entries = inputs
+        .into_iter()
+        .map(|input| {
+            tua_core::PatternCorpusBatchEntry::File(input.build(&project_model, retrieval_limits))
+        })
+        .collect();
+    server.finish_pattern_corpus(scheduler::PatternCorpusWorkerResult {
+        generation,
+        paths,
+        entries,
+        remerge: None,
+        unfinished_paths: Vec::new(),
+        cancelled: false,
+        elapsed_ms: started.elapsed().as_millis() as u64,
+        disposed: false,
+    });
+}
+
+fn finish_remerge_work(server: &mut LspServer, work: PatternCorpusWork) {
+    let PatternCorpusWork {
+        generation,
+        paths,
+        operation,
+    } = work;
+    let PatternCorpusOperation::Remerge(prepared) = operation else {
+        panic!("test helper expected remerge work");
+    };
+    server.finish_pattern_corpus(scheduler::PatternCorpusWorkerResult {
+        generation,
+        paths,
+        entries: Vec::new(),
+        remerge: Some(prepared.build()),
+        unfinished_paths: Vec::new(),
+        cancelled: false,
+        elapsed_ms: 0,
+        disposed: false,
+    });
+}
+
 fn wait_for_speculative_results(
     scheduler: &RequestScheduler,
     expected: usize,
@@ -449,7 +514,7 @@ fn speculative_barrier_defers_only_workspace_warm_adoption() {
     let mut deferred = VecDeque::new();
     let request =
         ServerEvent::RequestFinished(Box::new(scheduler::WorkerResult::test_result(1, false)));
-    assert!(defer_workspace_warm_result(request, &mut deferred).is_some());
+    assert!(defer_background_adoption(request, &mut deferred).is_some());
     assert!(
         deferred.is_empty(),
         "ordinary request results stay responsive"
@@ -457,15 +522,15 @@ fn speculative_barrier_defers_only_workspace_warm_adoption() {
 
     let warm =
         ServerEvent::RequestFinished(Box::new(scheduler::WorkerResult::test_result(2, true)));
-    assert!(defer_workspace_warm_result(warm, &mut deferred).is_none());
+    assert!(defer_background_adoption(warm, &mut deferred).is_none());
     assert_eq!(deferred.len(), 1);
-    assert!(take_deferred_workspace_warm_result(&mut deferred, true, true).is_none());
+    assert!(take_deferred_background_adoption(&mut deferred, true, true).is_none());
     assert_eq!(
         deferred.len(),
         1,
         "the bounded priority window keeps warm adoption deferred"
     );
-    assert!(take_deferred_workspace_warm_result(&mut deferred, false, true).is_some());
+    assert!(take_deferred_background_adoption(&mut deferred, false, true).is_some());
     assert!(
         deferred.is_empty(),
         "idle coordinator drains deferred warm adoption"
@@ -1090,6 +1155,370 @@ fn workspace_warm_queue_prioritizes_an_open_file() {
         }
         WorkspaceWarmWork::Snapshot { .. } => panic!("files must warm before the snapshot"),
     }
+}
+
+#[test]
+fn project_pattern_corpus_is_disabled_until_explicitly_enabled() {
+    let temp = TempProject::new("pattern-disabled");
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/main.tua", "print(value)\n");
+    let mut server = TestServer::new();
+
+    server.send_without_drain(initialize_with_root(1, temp.uri()));
+
+    assert!(!server.server.pattern_corpus.enabled);
+    assert!(server.server.pattern_corpus.pending.is_empty());
+    assert!(server
+        .server
+        .take_next_pattern_corpus_work(Instant::now() + Duration::from_secs(1))
+        .is_none());
+}
+
+#[test]
+fn disabling_project_patterns_publishes_empty_and_queues_storage_for_background_drop() {
+    let temp = TempProject::new("pattern-disable-clears");
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/main.tua", "draw(player,score)\n");
+    let mut server = TestServer::new();
+    server.send_without_drain(initialize_with_root(1, temp.uri()));
+    enable_project_pattern_corpus(&mut server.server);
+    let work = server
+        .server
+        .take_next_pattern_corpus_work(Instant::now() + Duration::from_secs(1))
+        .expect("enabled corpus should queue a file build");
+    finish_pattern_work(&mut server.server, work);
+    assert_eq!(
+        server.server.analysis.project_pattern_corpus_stats().files,
+        1
+    );
+    let populated_bytes = server
+        .server
+        .analysis
+        .project_pattern_corpus_stats()
+        .approximate_bytes;
+
+    server.send_without_drain(did_change_configuration(json!({
+        "completion": {
+            "inline": {
+                "enabled": true,
+                "sources": {"project": false}
+            }
+        }
+    })));
+
+    assert_eq!(
+        server.server.analysis.project_pattern_corpus_stats().files,
+        0,
+        "disabling must publish an empty corpus immediately"
+    );
+    server.send(cache_stats_request(88));
+    let stats = &response_with_id(server.output(), 88)["result"];
+    assert!(
+        stats["patternCorpus"]["approximateBytes"]
+            .as_u64()
+            .is_some_and(|bytes| bytes < populated_bytes as u64),
+        "only the fixed empty-corpus overhead should remain published"
+    );
+    assert_eq!(stats["patternCorpus"]["disposalsQueued"], 1);
+    let disposal = server
+        .server
+        .take_next_pattern_corpus_work(Instant::now())
+        .expect("retired storage should be queued for a background drop");
+    assert!(matches!(
+        disposal.operation,
+        PatternCorpusOperation::Dispose(_)
+    ));
+}
+
+#[test]
+fn project_pattern_edits_are_debounced_and_coalesced_without_building() {
+    let temp = TempProject::new("pattern-coalesce");
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/main.tua", "print(first)\n");
+    let uri = temp.uri_for("src/main.tua");
+    let mut server = TestServer::new();
+    server.send_without_drain(initialize_with_root(1, temp.uri()));
+    enable_project_pattern_corpus(&mut server.server);
+    server.server.pattern_corpus.pending.clear();
+
+    let first = Instant::now();
+    server.send_without_drain(did_open(&uri, "print(first)\n"));
+    let first_due = server
+        .server
+        .next_pattern_corpus_due()
+        .expect("queued open");
+    assert!(first_due >= first + PATTERN_CORPUS_REBUILD_DEBOUNCE);
+
+    server.send_without_drain(did_change(&uri, "print(second)\n", 2));
+    let second_due = server
+        .server
+        .next_pattern_corpus_due()
+        .expect("queued edit");
+    assert!(second_due >= first_due);
+    assert_eq!(server.server.pattern_corpus.pending.len(), 1);
+    assert!(server
+        .server
+        .take_next_pattern_corpus_work(second_due - Duration::from_millis(1))
+        .is_none());
+    assert_eq!(
+        server.server.analysis.project_pattern_corpus_stats().files,
+        0
+    );
+    assert!(server
+        .server
+        .pattern_corpus
+        .pending
+        .contains_key(&temp.path.join("src/main.tua")));
+}
+
+#[test]
+fn project_pattern_adoption_rejects_an_edited_file_and_keeps_fresh_files() {
+    let temp = TempProject::new("pattern-stale-partial");
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/main.tua", "print(main_value)\n");
+    temp.write("src/other.tua", "print(other_value)\n");
+    let main_uri = temp.uri_for("src/main.tua");
+    let mut server = TestServer::new();
+    server.send_without_drain(initialize_with_root(1, temp.uri()));
+    enable_project_pattern_corpus(&mut server.server);
+
+    let work = server
+        .server
+        .take_next_pattern_corpus_work(Instant::now() + Duration::from_secs(1))
+        .expect("initial corpus work");
+    server.send_without_drain(did_open(&main_uri, "print(changed_value)\n"));
+    finish_pattern_work(&mut server.server, work);
+
+    let stats = server.server.analysis.project_pattern_corpus_stats();
+    assert_eq!(server.server.pattern_corpus.stale, 1);
+    assert_eq!(stats.files, 1, "the unchanged file should still be adopted");
+    assert!(server
+        .server
+        .pattern_corpus
+        .pending
+        .contains_key(&temp.path.join("src/main.tua")));
+}
+
+#[test]
+fn project_pattern_generation_change_rejects_the_whole_old_batch() {
+    let temp = TempProject::new("pattern-generation");
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/main.tua", "print(value)\n");
+    let mut server = TestServer::new();
+    server.send_without_drain(initialize_with_root(1, temp.uri()));
+    enable_project_pattern_corpus(&mut server.server);
+    let old = server
+        .server
+        .take_next_pattern_corpus_work(Instant::now() + Duration::from_secs(1))
+        .expect("initial corpus work");
+
+    server.server.reset_pattern_corpus_queue();
+    finish_pattern_work(&mut server.server, old);
+
+    assert_eq!(server.server.pattern_corpus.generation_rejections, 1);
+    assert_eq!(
+        server.server.analysis.project_pattern_corpus_stats().files,
+        0
+    );
+}
+
+#[test]
+fn project_pattern_remerge_builds_in_background_and_adopts_when_current() {
+    let temp = TempProject::new("pattern-remerge");
+    temp.write("tua.toml", "source = \"src\"\n");
+    for index in 0..32 {
+        temp.write(
+            &format!("src/module_{index:02}.tua"),
+            &format!("print(value_{index})\n"),
+        );
+    }
+    let mut server = TestServer::new();
+    server.send_without_drain(initialize_with_root(1, temp.uri()));
+    enable_project_pattern_corpus(&mut server.server);
+    let due = Instant::now() + Duration::from_secs(1);
+    for _ in 0..2 {
+        let work = server
+            .server
+            .take_next_pattern_corpus_work(due)
+            .expect("file build batch");
+        finish_pattern_work(&mut server.server, work);
+    }
+
+    assert!(server.server.pattern_corpus.remerge_pending);
+    assert_eq!(
+        server
+            .server
+            .analysis
+            .project_pattern_corpus_stats()
+            .overlay_files,
+        32
+    );
+    let remerge = server
+        .server
+        .take_next_pattern_corpus_work(due)
+        .expect("background remerge work");
+    finish_remerge_work(&mut server.server, remerge);
+
+    let stats = server.server.analysis.project_pattern_corpus_stats();
+    assert_eq!(server.server.pattern_corpus.remerges, 1);
+    assert_eq!(stats.base_files, 32);
+    assert_eq!(stats.overlay_files, 0);
+}
+
+#[test]
+fn project_pattern_remerge_rejects_a_source_changed_during_build() {
+    let temp = TempProject::new("pattern-remerge-stale");
+    temp.write("tua.toml", "source = \"src\"\n");
+    for index in 0..32 {
+        temp.write(
+            &format!("src/module_{index:02}.tua"),
+            &format!("print(value_{index})\n"),
+        );
+    }
+    let changed_uri = temp.uri_for("src/module_00.tua");
+    let mut server = TestServer::new();
+    server.send_without_drain(initialize_with_root(1, temp.uri()));
+    enable_project_pattern_corpus(&mut server.server);
+    let due = Instant::now() + Duration::from_secs(1);
+    for _ in 0..2 {
+        let work = server
+            .server
+            .take_next_pattern_corpus_work(due)
+            .expect("file build batch");
+        finish_pattern_work(&mut server.server, work);
+    }
+    let remerge = server
+        .server
+        .take_next_pattern_corpus_work(due)
+        .expect("background remerge work");
+    server.send_without_drain(did_open(&changed_uri, "print(changed)\n"));
+    finish_remerge_work(&mut server.server, remerge);
+
+    assert_eq!(server.server.pattern_corpus.remerges, 0);
+    assert_eq!(server.server.pattern_corpus.remerge_rejections, 1);
+    assert_eq!(
+        server
+            .server
+            .analysis
+            .project_pattern_corpus_stats()
+            .overlay_files,
+        32
+    );
+}
+
+#[test]
+fn deleting_a_project_pattern_source_publishes_a_tombstone() {
+    let temp = TempProject::new("pattern-delete");
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/main.tua", "print(value)\n");
+    let uri = temp.uri_for("src/main.tua");
+    let mut server = TestServer::new();
+    server.send_without_drain(initialize_with_root(1, temp.uri()));
+    enable_project_pattern_corpus(&mut server.server);
+    let work = server
+        .server
+        .take_next_pattern_corpus_work(Instant::now() + Duration::from_secs(1))
+        .expect("initial corpus work");
+    finish_pattern_work(&mut server.server, work);
+    assert_eq!(
+        server.server.analysis.project_pattern_corpus_stats().files,
+        1
+    );
+
+    temp.remove("src/main.tua");
+    server.send_without_drain(watched_files_changed([(&uri, 3)]));
+
+    let stats = server.server.analysis.project_pattern_corpus_stats();
+    assert_eq!(stats.files, 0);
+    assert_eq!(stats.tombstones, 1);
+}
+
+#[test]
+fn project_pattern_worker_does_not_consume_client_request_capacity() {
+    let temp = TempProject::new("pattern-contention");
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/main.tua", "local value = 1\nvalue\n");
+    let uri = temp.uri_for("src/main.tua");
+    let mut server = LspServer::default();
+    let _ = server.handle_message(initialize_with_root(1, temp.uri()));
+    enable_project_pattern_corpus(&mut server);
+    let (event_tx, _event_rx) = std::sync::mpsc::sync_channel(EVENT_QUEUE_CAPACITY);
+    let mut scheduler = RequestScheduler::new(event_tx, SharedReceivedInputState::default());
+
+    assert!(
+        scheduler.dispatch_due_pattern_corpus(&mut server, Instant::now() + Duration::from_secs(1))
+    );
+    let output = scheduler.dispatch(
+        &mut server,
+        invoked_completion_request(99, &uri, "local value = 1\nvalue\n", "value"),
+        None,
+    );
+
+    assert!(output.iter().all(|message| message.get("error").is_none()));
+}
+
+#[test]
+fn project_pattern_generation_change_cancels_background_work_between_files() {
+    let temp = TempProject::new("pattern-cancel-generation");
+    temp.write("tua.toml", "source = \"src\"\n");
+    for index in 0..PATTERN_CORPUS_BATCH_SIZE {
+        temp.write(
+            &format!("src/module_{index}.tua"),
+            &format!("print(value_{index})\n"),
+        );
+    }
+    let mut server = LspServer::default();
+    let _ = server.handle_message(initialize_with_root(1, temp.uri()));
+    enable_project_pattern_corpus(&mut server);
+    let generation = server.pattern_corpus.generation;
+    let (event_tx, _event_rx) = std::sync::mpsc::sync_channel(EVENT_QUEUE_CAPACITY);
+    let mut scheduler = RequestScheduler::new(event_tx, SharedReceivedInputState::default());
+    assert!(
+        scheduler.dispatch_due_pattern_corpus(&mut server, Instant::now() + Duration::from_secs(1))
+    );
+
+    server.reset_pattern_corpus_queue();
+    scheduler.cancel_stale_pattern_corpus(server.pattern_corpus.generation);
+
+    assert!(scheduler.pattern_corpus_job_is_cancelled(generation));
+    scheduler.abandon_workspace_warm();
+}
+
+#[test]
+fn idle_server_builds_and_reports_the_project_pattern_corpus() {
+    let temp = TempProject::new("pattern-idle-integration");
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/main.tua", "print(first)\nprint(sec");
+    temp.write("src/other.lua", "print(other)\n");
+
+    let output = run_chunked_messages(vec![
+        (
+            Duration::ZERO,
+            vec![
+                initialize_with_root(1, temp.uri()),
+                did_change_configuration(json!({
+                    "completion": {
+                        "inline": {
+                            "enabled": true,
+                            "sources": {"project": true}
+                        }
+                    }
+                })),
+            ],
+        ),
+        (Duration::from_millis(750), vec![cache_stats_request(100)]),
+    ]);
+    let corpus = &response_with_id(&output, 100)["result"]["patternCorpus"];
+
+    assert_eq!(corpus["enabled"], true);
+    assert_eq!(corpus["queued"].as_u64(), Some(0));
+    assert_eq!(corpus["inFlight"].as_u64(), Some(0));
+    assert_eq!(corpus["filesBuilt"].as_u64(), Some(2));
+    assert_eq!(corpus["adopted"].as_u64(), Some(2));
+    assert_eq!(corpus["files"].as_u64(), Some(2));
+    assert!(corpus["approximateBytes"]
+        .as_u64()
+        .is_some_and(|bytes| bytes > 0));
 }
 
 #[test]

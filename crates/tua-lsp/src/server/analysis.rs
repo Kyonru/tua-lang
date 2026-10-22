@@ -11,10 +11,10 @@ use tua_core::{
     CompletionAdaptiveStats, Diagnostic, DocumentHighlight, DocumentSymbol, FoldingRange,
     FormatOptions, InlayHint, InspectorItem, ModelCompletionContext, ModelCompletionValidation,
     ModelCompletionValidationRequest, ModuleDependencyGraph, ModuleLink, ModuleSpecifierKind,
-    PreparedInlineCompletion, ProjectModel, ProjectModelOptions, ProjectWorkspace, Reference,
-    RenameEdit, RenameTarget, SelectionRange, SemanticToken, SignalGraph, SignatureHelp,
-    SourcePosition, SourceSpan, TextEdit, TypeExplanation, VfsSourceKind, WorkspaceSymbol,
-    CONFIG_FILE,
+    PatternCorpusBatchEntry, PatternCorpusBuildInput, PatternCorpusStats, PreparedInlineCompletion,
+    ProjectModel, ProjectModelOptions, ProjectWorkspace, Reference, RenameEdit, RenameTarget,
+    RetrievalLimits, SelectionRange, SemanticToken, SignalGraph, SignatureHelp, SourcePosition,
+    SourceSpan, TextEdit, TypeExplanation, VfsSourceKind, WorkspaceSymbol, CONFIG_FILE,
 };
 
 use super::auto_import::{
@@ -88,8 +88,10 @@ impl AnalysisHost {
     pub(super) fn prepare_local_inline_completion(
         &self,
         path: &Path,
+        include_project: bool,
     ) -> Option<PreparedInlineCompletion> {
-        self.core.prepare_local_inline_completion(path)
+        self.core
+            .prepare_local_inline_completion_with_project(path, include_project)
     }
 
     pub(super) fn snapshot(
@@ -119,6 +121,101 @@ impl AnalysisHost {
 
     pub(super) fn file_paths(&self) -> Vec<PathBuf> {
         self.core.file_paths()
+    }
+
+    pub(super) fn project_model(&self) -> Option<ProjectModel> {
+        self.project_model.clone()
+    }
+
+    pub(super) fn prepare_project_pattern_file(
+        &self,
+        path: &Path,
+    ) -> Option<PatternCorpusBuildInput> {
+        self.core.prepare_project_pattern_file(path)
+    }
+
+    pub(super) fn project_pattern_source_bytes(&self, path: &Path) -> Option<usize> {
+        self.core.project_pattern_source_bytes(path)
+    }
+
+    pub(super) fn set_project_pattern_eligibility_generation(&mut self, generation: u64) {
+        self.core
+            .set_project_pattern_eligibility_generation(generation);
+    }
+
+    pub(super) fn adopt_project_pattern_batch(
+        &mut self,
+        generation: u64,
+        entries: impl IntoIterator<Item = PatternCorpusBatchEntry>,
+    ) -> tua_core::CorpusAdoptionResult {
+        self.core.adopt_project_pattern_batch(generation, entries)
+    }
+
+    pub(super) fn tombstone_project_pattern_file(
+        &mut self,
+        generation: u64,
+        path: &Path,
+    ) -> tua_core::CorpusAdoptionResult {
+        let tombstone = self.core.prepare_project_pattern_tombstone(path);
+        self.core.adopt_project_pattern_batch(
+            generation,
+            [PatternCorpusBatchEntry::Tombstone(tombstone)],
+        )
+    }
+
+    pub(super) fn prepare_project_pattern_remerge(
+        &self,
+    ) -> Option<tua_core::PreparedPatternCorpusRemerge> {
+        self.core.prepare_project_pattern_remerge()
+    }
+
+    pub(super) fn try_adopt_project_pattern_remerge(
+        &mut self,
+        outcome: tua_core::PatternCorpusRemergeOutcome,
+    ) -> Result<tua_core::RetiredProjectPatternCorpus, tua_core::PatternCorpusRemergeOutcome> {
+        self.core.try_adopt_project_pattern_remerge(outcome)
+    }
+
+    pub(super) fn clear_project_pattern_corpus(
+        &mut self,
+    ) -> Option<tua_core::RetiredProjectPatternCorpus> {
+        self.core.clear_project_pattern_corpus()
+    }
+
+    pub(super) fn project_pattern_corpus_stats(&self) -> PatternCorpusStats {
+        self.core.project_pattern_corpus_stats()
+    }
+
+    pub(super) fn project_pattern_retrieval_limits(&self) -> RetrievalLimits {
+        RetrievalLimits::default()
+    }
+
+    pub(super) fn project_pattern_path_is_eligible(
+        &self,
+        path: &Path,
+        roots: &[PathBuf],
+        settings: &WorkspaceSettings,
+    ) -> bool {
+        let Some(model) = self.project_model.as_ref() else {
+            return false;
+        };
+        let Some(workspace) = model.workspace_for_path(path) else {
+            return false;
+        };
+
+        workspace
+            .source_roots()
+            .iter()
+            .any(|root| path.starts_with(root))
+            && !workspace
+                .output_roots()
+                .iter()
+                .any(|root| path.starts_with(root))
+            && !workspace.is_type_library_path(path)
+            && !workspace.is_ignored(path)
+            && !settings.is_ignored(path, roots)
+            && !path_is_vendored(path)
+            && workspace.source_kind_for_path(path).is_some()
     }
 
     pub(super) fn open_paths(&self) -> Vec<PathBuf> {
@@ -270,7 +367,7 @@ impl AnalysisHost {
         source: impl Into<String>,
         roots: &[PathBuf],
         settings: &WorkspaceSettings,
-    ) {
+    ) -> bool {
         let uri = uri.into();
         let path = path_from_uri(&uri);
         let source = source.into();
@@ -297,7 +394,8 @@ impl AnalysisHost {
             );
         }
         let current_roots = self.effective_workspace_folders(roots);
-        if path_sets_differ(&previous_roots, &current_roots) {
+        let project_inputs_changed = path_sets_differ(&previous_roots, &current_roots);
+        if project_inputs_changed {
             self.reindex_workspace(roots, settings);
         }
         let kind = {
@@ -314,6 +412,7 @@ impl AnalysisHost {
             self.remove_completion_adaptive_source(&path);
             self.core.remove_file(path);
         }
+        project_inputs_changed
     }
 
     pub(super) fn update_document(
@@ -1422,6 +1521,15 @@ fn project_contains_path(model: Option<&ProjectModel>, path: &Path) -> bool {
             .workspaces()
             .iter()
             .any(|workspace| path.starts_with(workspace.root()))
+    })
+}
+
+fn path_is_vendored(path: &Path) -> bool {
+    path.components().any(|component| {
+        matches!(
+            component.as_os_str().to_str(),
+            Some("vendor" | "node_modules" | ".git")
+        )
     })
 }
 

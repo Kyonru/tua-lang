@@ -395,8 +395,35 @@ abstention rather than an Ollama fallback trigger.
 Disabled or malformed local requests never enter the speculative queue, and a
 panic in candidate generation is contained to that request so the worker can
 serve the next keystroke.
-Project-wide patterns will require an immutable versioned corpus; mutable
-pattern state must not be shared through `AnalysisSnapshot`.
+The hidden Phase 2 project-wide exact-retrieval experiment uses an immutable,
+host-owned corpus that is not part of `AnalysisSnapshot`. Background workers
+receive owned source/version inputs and a caller-supplied loaded project model,
+then return immutable per-file tables. The coordinator adopts each table only
+while its effective VFS version and eligibility generation still match. A
+merged base plus a small overlay of replacements and tombstones lets edits
+become stale immediately without mutating shared state; request-time queries
+read only that corpus, the active VFS source, and effective VFS versions.
+Module targets are resolved and declared LÖVE callbacks are collected during
+background construction, never by loading a model or reading disk on the
+request path. Callback generation remains deferred pending evaluation; the
+collected declarations are foundation for later cross-file duplicate
+suppression.
+
+The LSP keeps this source disabled unless its internal experimental source flag
+is explicitly enabled; the extension does not contribute that setting.
+`didChange` only advances the VFS version and moves a per-file deadline; after
+300 ms of idle time, the background lane builds at most 16 files per batch.
+Base remerges use the same prepare/build/adopt boundary: construction stays on
+the worker, while the coordinator accepts the result only if the corpus
+identity, VFS lineage, generation, and every input version are still current.
+Corpus queue, adoption, memory, cancellation, and remerge counters are
+available through `tua/cacheStats` and `tua/health`.
+The bounded request path uses the currently tuned policy only after semantic
+and current-file sources abstain: comma, operator, and other contexts, at least
+six non-whitespace prefix characters, and at least two supporting matches from
+outside the active file and directory. Same-directory and bundled-corpus
+evidence are not used. This integration has not passed held-out, external, or
+aggregate phase gates and is not a public completion capability.
 
 Developer menu-state replay follows the same boundary. When two explicit
 environment variables configure a local capture and deterministic inline

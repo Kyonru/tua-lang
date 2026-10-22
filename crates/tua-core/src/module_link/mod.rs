@@ -69,10 +69,6 @@ pub(crate) fn resolve_module_specifier_literals(
 
 pub(crate) struct ResolvedModuleSpecifiers {
     pub links: Vec<ModuleLink>,
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "consumed by Phase 2 corpus adoption")
-    )]
     pub identities: Vec<ModuleSpecifierIdentity>,
 }
 
@@ -136,8 +132,7 @@ pub(crate) struct ModuleSpecifierIdentity {
     pub type_only: bool,
 }
 
-#[cfg(test)]
-fn module_specifier_identities(source: &str) -> Vec<ModuleSpecifierIdentity> {
+pub(crate) fn module_specifier_identities(source: &str) -> Vec<ModuleSpecifierIdentity> {
     let mut identities = module_specifier_literals(source)
         .into_iter()
         .map(|literal| literal.identity())

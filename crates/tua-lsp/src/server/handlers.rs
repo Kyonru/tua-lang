@@ -293,6 +293,7 @@ impl LspServer {
                 self.analysis
                     .reindex_workspace(&self.workspace_folders, &self.settings);
                 self.reset_workspace_warm_queue();
+                self.reset_pattern_corpus_queue();
                 self.client_watched_files_dynamic_registration =
                     client_supports_watched_files_dynamic_registration(&message);
                 self.client_pull_diagnostics = client_supports_pull_diagnostics(&message);
@@ -685,13 +686,19 @@ impl LspServer {
         let version = text_document.get("version").and_then(Value::as_i64);
 
         self.recent_document_changes.remove(&uri);
-        self.analysis
-            .open_document(uri.clone(), text, &self.workspace_folders, &self.settings);
+        let project_inputs_changed =
+            self.analysis
+                .open_document(uri.clone(), text, &self.workspace_folders, &self.settings);
         self.queue_workspace_warm_path(
             path_from_uri(&uri),
             tua_core::AnalysisWarmPriority::High,
             true,
         );
+        if project_inputs_changed {
+            self.reset_pattern_corpus_queue();
+        } else {
+            self.queue_pattern_corpus_path(path_from_uri(&uri), Instant::now());
+        }
         self.clear_semantic_token_results(&uri);
         self.pending_pull_fast_diagnostics.remove(&uri);
         let generation = self.bump_document_generation(&uri, version);
@@ -723,6 +730,7 @@ impl LspServer {
         );
         let generation = self.bump_document_generation(&uri, version);
         let now = Instant::now();
+        self.queue_pattern_corpus_path(path_from_uri(&uri), now);
         self.recent_document_changes.insert(uri.clone(), now);
         self.queue_slow_diagnostics(uri.clone(), generation, version, now);
         self.queue_pull_fast_diagnostics(uri.clone(), generation, version, now);
@@ -752,6 +760,7 @@ impl LspServer {
                 &self.workspace_folders,
                 &self.settings,
             );
+            self.queue_pattern_corpus_path(path_from_uri(&uri), Instant::now());
             self.bump_document_generation(&uri, version);
         }
 
@@ -773,7 +782,9 @@ impl LspServer {
         let params = message.get("params")?;
         let uri = document_uri(params)?.to_owned();
 
+        let path = path_from_uri(&uri);
         self.analysis.close_document(&uri);
+        self.queue_pattern_corpus_path(path, Instant::now());
         self.pending_slow_diagnostics.remove(&uri);
         self.pending_pull_fast_diagnostics.remove(&uri);
         self.last_published_diagnostics.remove(&uri);
@@ -849,6 +860,18 @@ impl LspServer {
             self.reset_workspace_warm_queue();
         }
 
+        if should_reindex {
+            self.reset_pattern_corpus_queue();
+        } else {
+            let now = Instant::now();
+            for uri in &source_changes {
+                self.queue_pattern_corpus_path(path_from_uri(uri), now);
+            }
+            for uri in &deleted_sources {
+                self.tombstone_pattern_corpus_path(&path_from_uri(uri));
+            }
+        }
+
         if self.client_pull_diagnostics {
             return diagnostics_may_have_changed
                 .then(|| self.diagnostic_refresh_notifications())
@@ -898,6 +921,7 @@ impl LspServer {
         self.analysis
             .reindex_workspace(&self.workspace_folders, &self.settings);
         self.reset_workspace_warm_queue();
+        self.reset_pattern_corpus_queue();
         self.pending_pull_fast_diagnostics.clear();
 
         self.diagnostic_refresh_notifications()
@@ -910,6 +934,7 @@ impl LspServer {
         self.analysis
             .refresh_open_documents(&self.workspace_folders, &self.settings);
         self.reset_workspace_warm_queue();
+        self.reset_pattern_corpus_queue();
         self.pending_slow_diagnostics.clear();
         self.pending_pull_fast_diagnostics.clear();
 
@@ -1547,6 +1572,13 @@ impl LspServer {
 
     fn cache_stats_response(&self) -> Value {
         let stats = self.analysis.cache_stats();
+        let corpus = self.analysis.project_pattern_corpus_stats();
+        let corpus_disposals = self
+            .pattern_corpus
+            .disposals
+            .lock()
+            .expect("pattern corpus disposal queue lock poisoned")
+            .len();
 
         json!({
             "parse": {
@@ -1618,6 +1650,36 @@ impl LspServer {
                 "snapshotReadyRevision": self.workspace_warm.snapshot_ready_revision,
                 "snapshotFailedRevision": self.workspace_warm.snapshot_failed_revision
             },
+            "patternCorpus": {
+                "enabled": self.pattern_corpus.enabled,
+                "generation": self.pattern_corpus.generation,
+                "discovered": self.pattern_corpus.files_discovered,
+                "queued": self.pattern_corpus.pending.len(),
+                "inFlight": self.pattern_corpus.in_flight.len()
+                    + usize::from(self.pattern_corpus.remerge_in_flight),
+                "batchesCompleted": self.pattern_corpus.batches_completed,
+                "filesBuilt": self.pattern_corpus.files_built,
+                "adopted": self.pattern_corpus.adopted,
+                "tombstoned": self.pattern_corpus.tombstoned,
+                "stale": self.pattern_corpus.stale,
+                "skipped": self.pattern_corpus.skipped,
+                "overBudget": self.pattern_corpus.over_budget,
+                "fileLimit": self.pattern_corpus.file_limit,
+                "generationRejections": self.pattern_corpus.generation_rejections,
+                "lineageRejections": self.pattern_corpus.lineage_rejections,
+                "cancelledBatches": self.pattern_corpus.cancelled_batches,
+                "remerges": self.pattern_corpus.remerges,
+                "remergePending": self.pattern_corpus.remerge_pending,
+                "remergeInFlight": self.pattern_corpus.remerge_in_flight,
+                "remergeRejections": self.pattern_corpus.remerge_rejections,
+                "disposalsQueued": corpus_disposals,
+                "lastBuildMs": self.pattern_corpus.last_build_ms,
+                "files": corpus.files,
+                "baseFiles": corpus.base_files,
+                "overlayFiles": corpus.overlay_files,
+                "tombstones": corpus.tombstones,
+                "approximateBytes": corpus.approximate_bytes
+            },
             "invalidations": stats.invalidations,
             "dependentInvalidations": stats.dependent_invalidations
         })
@@ -1634,10 +1696,22 @@ impl LspServer {
         let warm_queued_low = self.workspace_warm.low.len();
         let warm_queued = warm_queued_high + warm_queued_low;
         let warm_coverage = percentage(warm_warmed, warm_discovered);
+        let corpus = self.analysis.project_pattern_corpus_stats();
+        let corpus_queued = self.pattern_corpus.pending.len();
+        let corpus_in_flight = self.pattern_corpus.in_flight.len()
+            + usize::from(self.pattern_corpus.remerge_in_flight);
+        let corpus_disposals = self
+            .pattern_corpus
+            .disposals
+            .lock()
+            .expect("pattern corpus disposal queue lock poisoned")
+            .len();
         let latency = latency_summary(&self.request_health.recent_latencies);
         let queue_total = self.scheduler_health.coordinator_queue_depth
             + self.scheduler_health.in_flight_jobs
-            + warm_queued;
+            + warm_queued
+            + corpus_queued
+            + corpus_disposals;
 
         json!({
             "revision": self.analysis.revision(),
@@ -1663,7 +1737,28 @@ impl LspServer {
                 "inFlight": self.scheduler_health.in_flight_jobs,
                 "workspaceWarmHigh": warm_queued_high,
                 "workspaceWarmLow": warm_queued_low,
+                "patternCorpus": corpus_queued,
                 "total": queue_total
+            },
+            "patternCorpus": {
+                "enabled": self.pattern_corpus.enabled,
+                "generation": self.pattern_corpus.generation,
+                "queued": corpus_queued,
+                "inFlight": corpus_in_flight,
+                "files": corpus.files,
+                "baseFiles": corpus.base_files,
+                "overlayFiles": corpus.overlay_files,
+                "tombstones": corpus.tombstones,
+                "approximateBytes": corpus.approximate_bytes,
+                "stale": self.pattern_corpus.stale,
+                "generationRejections": self.pattern_corpus.generation_rejections,
+                "lineageRejections": self.pattern_corpus.lineage_rejections,
+                "cancelledBatches": self.pattern_corpus.cancelled_batches,
+                "remergePending": self.pattern_corpus.remerge_pending,
+                "remergeInFlight": self.pattern_corpus.remerge_in_flight,
+                "remergeRejections": self.pattern_corpus.remerge_rejections,
+                "disposalsQueued": corpus_disposals,
+                "lastBuildMs": self.pattern_corpus.last_build_ms
             },
             "cache": {
                 "hits": cache_hits,
@@ -1711,7 +1806,11 @@ impl LspServer {
             "staleResults": {
                 "requests": self.request_health.stale_results,
                 "workspaceWarm": self.workspace_warm.stale_results,
-                "total": self.request_health.stale_results + self.workspace_warm.stale_results
+                "patternCorpus": self.pattern_corpus.stale + self.pattern_corpus.generation_rejections,
+                "total": self.request_health.stale_results
+                    + self.workspace_warm.stale_results
+                    + self.pattern_corpus.stale
+                    + self.pattern_corpus.generation_rejections
             },
             "latency": latency
         })
@@ -1903,7 +2002,11 @@ impl LspServer {
         {
             return LocalInlineCompletionWork::empty(current_version);
         }
-        let Some(prepared) = self.analysis.prepare_local_inline_completion(&request.path) else {
+        let include_project = self.settings.inline_project_enabled();
+        let Some(prepared) = self
+            .analysis
+            .prepare_local_inline_completion(&request.path, include_project)
+        else {
             return LocalInlineCompletionWork::empty(current_version);
         };
         let Some(position) = request
@@ -1916,6 +2019,7 @@ impl LspServer {
         let options = InlineCompletionOptions {
             semantic: self.settings.inline_semantic_enabled(),
             current_file: self.settings.inline_current_file_enabled(),
+            project: include_project,
         };
 
         LocalInlineCompletionWork {

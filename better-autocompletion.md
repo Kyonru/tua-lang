@@ -731,20 +731,17 @@ measurements. Each one must exist before its gate is checked.
   exact-current-source cache-peek hits inside the language server, with real
   scheduling and the newest-wins cancellation, before relying on any
   candidate that needs parsed facts.
-- **Cold, partial, and warm index states.** These describe the Phase 2 project
-  corpus, so Phase 1 has nothing to vary. Keep the breakdown in the evaluator's
-  report format, and fill it in when the Phase 2 backend exists; the Phase 2
-  gate compares those states.
-- **Phase 2 evaluator work.** These measure project retrieval, so they arrive
-  with its backend:
-  - index build time;
-  - the target file held out from project retrieval, and callback suppression
-    from another project file;
-  - near-duplicate weighting. De-duplication is exact, but staged tutorials
-    such as the external `arkanoid-tutorial` (about three quarters of the
-    external `.lua` files) repeat almost the same code. Cluster near-identical
-    files, keep representative checkpoints, and gate on per-project (macro)
-    results as well as pooled ones.
+- **Cold, partial, and warm index states.** The Phase 2 evaluator now reports
+  cold, partial, and complete project indexes separately. They remain tuning
+  evidence only until a Phase 2 gate is frozen and run.
+- **Phase 2 evaluator work.** The experimental backend now reports separate
+  index-construction and near-duplicate clustering costs, removes the target
+  file before clustering and partial-index selection, supports target-file and
+  target-line holdouts, and clusters near-identical tutorial checkpoints with
+  deterministic representatives. Callback suppression from another project
+  file remains deferred with callback generation. The evaluator must still
+  gate on per-project (macro) results as well as pooled ones when Phase 2's
+  thresholds are frozen.
 - **Completion-latency comparisons.** `make profile-completion` accepts a
   regression of the larger of 5% and 1 ms, which on a 5 ms baseline is about
   18%. A single run's p95 is also noisy. Check the Phase 1 gate's 5% tolerance
@@ -851,21 +848,35 @@ actually closes the known Tua coverage gap without weakening any release gate.
 > `other` contexts. It excludes same-directory and bundled evidence, requires
 > six non-whitespace prefix characters and two supporting matches before it
 > returns their full common prefix. This policy may be
-> measured on tune and smoke only until it is frozen for a Phase 2 gate; it is
-> not production behavior and is not evidence that Phase 2 passes.
+> measured on tune and smoke only until it is frozen for a Phase 2 gate. The
+> production path implements this policy behind a hidden, default-off server
+> switch so scheduling, invalidation, and contention can be tested, but the
+> extension does not expose it and its presence is not evidence that Phase 2
+> passes.
 > On the current tuning set it improves saved characters per eligible position
 > from `0.1906` to `0.1969`, correct-prefix precision from `0.8005` to `0.8082`,
 > and wrong-to-saved from `0.2446` to `0.2368`. All 17 added project suggestions
 > were exact, but the absolute gain is small and no held-out or external data
 > has been inspected.
 
+> **Implementation status (2026-10-21): integrated but not approved.** The VFS
+> lineage/version mechanism, immutable base-plus-overlay corpus, background
+> build/adopt/remerge lifecycle, bounded request query, versioned callback
+> declaration index, and `tua/cacheStats`/`tua/health` counters are implemented.
+> Callback generation remains deferred until it is evaluated, so the index is
+> foundation for later duplicate suppression rather than a production source.
+> The project source remains unreachable from the extension's contributed
+> settings; only an explicit raw `sources.project` configuration can enable it
+> for integration testing. The bundled corpus remains evaluator-only. Phase 1's
+> aggregate gate is still incomplete, and neither the Phase 2 held-out nor
+> external data has been inspected.
+
 ### Prerequisite: per-file VFS versions
 
-`VfsFileSource` currently stores only `source` and `kind`, and
-`SourceFingerprint` is computed by hashing the full text. A per-query staleness
-check would therefore re-hash every file that has a hit.
+The implementation now stores an opaque version with every effective
+`VfsFileSource`, avoiding a full-source hash for each request-time hit check.
 
-Add a per-file version to the VFS:
+The implemented per-file version contract is:
 
 - Track a version for each path's **effective visible source and kind**, with
   accessors on both `VirtualFileSystem` and `VfsSnapshot`. The effective value
@@ -882,9 +893,8 @@ Add a per-file version to the VFS:
   `definition_cache`, `snapshot_cache`, and others) with fresh ones. The VFS
   version allocator must **not** be added to that list, or the collision comes
   back. Put a comment at that function saying so, and cover it with a test.
-- Optionally, give each allocator a random lineage ID, recorded in every
-  corpus. A `debug_assert` can then verify that versions are never compared
-  across lineages.
+- Give each allocator an opaque lineage ID recorded in every corpus, so
+  adoption and queries reject versions produced by another VFS lineage.
 - A bare version is meaningful only inside its VFS lineage. Corpus adoption
   and lookup compare it together with the corpus/eligibility generation; a
   version from one independent host is never compared with another host's.
@@ -1009,12 +1019,18 @@ Store:
 
 Hashes may speed up lookup but never establish identity on their own.
 
-Tiers:
+Tiers remain distinct so evaluation can enable them independently:
 
 1. Current file, excluding the active line
-2. Required modules and same-directory files
-3. Rest of the project
-4. Bundled corpus
+2. Required modules
+3. Same-directory files
+4. Rest of the project
+5. Bundled corpus
+
+The current tune-only production policy holds out the active file, excludes
+same-directory and bundled results, and considers required-module and other
+project files together when forming the supported common prefix. That policy
+is an integration candidate, not a shipped default.
 
 Required-module relationships for tier 2 come from each file's own table, but
 they are never discovered or resolved on the request path:
@@ -1071,9 +1087,11 @@ specifier, so it doesn't satisfy the request-time contract. If retained for
 other callers, it should delegate to the shared lexical step and the shared
 resolver, after obtaining its model through its existing compatibility path.
 
-The corpus also stores a versioned per-file set of declared LÖVE callbacks.
-Callback completion uses it to suppress callbacks already declared outside the
-active file. Tables with stale VFS versions never participate.
+The corpus also stores a versioned per-file set of declared LÖVE callbacks,
+but current completion does not consume it. If callback generation is
+reevaluated and passes its own gate, it must use this index to suppress
+callbacks already declared outside the active file; tables with stale VFS
+versions must never participate.
 
 ### Memory
 
@@ -1104,7 +1122,7 @@ Skip, at the point of publishing:
 
 ### Bundled corpus
 
-Add a small, hand-written Lua/LÖVE corpus built once with `OnceLock`.
+A small, hand-written Lua/LÖVE corpus is built once with `OnceLock`.
 
 It should cover only high-value, stable idioms such as:
 
@@ -1116,11 +1134,21 @@ It should cover only high-value, stable idioms such as:
 - Basic Tua class and state patterns
 
 Treat it as another retrieval source, not as training data merged into the
-project corpus.
+project corpus. The corpus and its evaluator backend exist, but production
+completion does not query it because tuning did not support enabling it.
 
 ### Phase 2 settings
 
-Add only when Phase 2 ships:
+The server currently recognizes the following hidden source switch solely for
+integration testing:
+
+```text
+tua.completion.inline.sources.project = false
+```
+
+It is not contributed by the VS Code extension and is not part of the public
+configuration contract. Only expose approved settings if the Phase 2 gate
+passes:
 
 ```text
 tua.completion.inline.sources.project = true
@@ -1310,11 +1338,12 @@ Inline requests never read persistent storage.
 ```text
 crates/tua-core/src/inline_completion/
   mod.rs
-  budget.rs
+  eligibility.rs
   recall.rs
   semantic.rs
   validate.rs
-  eval.rs
+  retrieval.rs
+  eval/
   tests.rs
 
 crates/tua-core/examples/inline_eval.rs
@@ -1325,6 +1354,7 @@ Phase 2 adds:
 ```text
 crates/tua-core/src/inline_completion/corpus.rs
 crates/tua-core/src/inline_completion/corpus/*
+crates/tua-core/src/inline_completion/project_corpus.rs
 ```
 
 Phase 3 adds tokenizer, predictor, and renderer modules, but only if the Phase
@@ -1365,7 +1395,8 @@ Phase 3 adds tokenizer, predictor, and renderer modules, but only if the Phase
 - `scheduler.rs`
 - `mod.rs`
 - `configuration.rs`
-- `tests/inline.rs`
+- `tests/inline_completion.rs`
+- `tests/scheduling.rs`
 
 Phase 2 also needs a result type for background corpus builds and their
 adoption, modelled on `WorkspaceWarmResult`.
@@ -1403,8 +1434,10 @@ Test:
 - Source-only snippets when the semantic cache misses
 - Phase 1 never produces callback ghost text and source-only candidates are
   identical whether the current-file cache hits or misses
-- (Phase 2) Callback duplicates are suppressed using the shared exact
-  declaration query, not fuzzy or display-name symbol lookup
+- (Phase 2 foundation) The versioned callback declaration index uses the shared
+  exact declaration query, not fuzzy or display-name symbol lookup
+- (Phase 2 gate, deferred) If callback generation is reintroduced, prove that
+  it consumes that index for duplicate suppression
 - Inline queries build nothing: rebuild counters (`record_file_rebuild`) are
   unchanged and the snapshot cache revision doesn't move
 - Size check before parsing
@@ -1436,8 +1469,9 @@ Test:
 - (Phase 2) The shared module resolver gives dependency analysis and corpus
   construction identical results for configured roots and relative imports
 - (Phase 2) Eligibility-generation changes reject the old corpus immediately
-- (Phase 2) Callback duplicates are suppressed when declared in another
-  current project file
+- (Phase 2 gate, deferred) If callback generation is reintroduced, prove that
+  declarations in another current project file suppress duplicates and stale
+  declaration tables do not participate
 
 ### LSP
 
@@ -1497,8 +1531,8 @@ In `examples/love-tua`:
 - No recall in the intentionally excluded assignment and member-access
   contexts
 - Extend a selected menu item
-- In Phase 2, suggest missing callbacks and suppress callbacks declared in any
-  current project file
+- After callback generation independently passes its gate, suggest missing
+  callbacks and suppress callbacks declared in any current project file
 - No suggestions in comments or strings
 - No duplicated closing delimiters
 - Correct behavior during invalid edits
