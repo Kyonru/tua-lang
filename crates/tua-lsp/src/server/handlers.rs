@@ -65,6 +65,13 @@ pub(super) struct LocalInlineCompletionWork {
     options: InlineCompletionOptions,
     selected_completion: Option<Value>,
     document_version: Option<i64>,
+    response_kind: InlineCompletionResponseKind,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum InlineCompletionResponseKind {
+    Custom,
+    Standard,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -82,7 +89,7 @@ impl<'a> DocumentRequest<'a> {
 }
 
 impl LocalInlineCompletionWork {
-    fn empty(document_version: Option<i64>) -> Self {
+    fn empty(document_version: Option<i64>, response_kind: InlineCompletionResponseKind) -> Self {
         Self {
             prepared: None,
             position: None,
@@ -90,15 +97,26 @@ impl LocalInlineCompletionWork {
             options: InlineCompletionOptions::default(),
             selected_completion: None,
             document_version,
+            response_kind,
         }
     }
 
     pub(super) fn execute(self, cancelled: &AtomicBool) -> Value {
-        let _worker_profile = tua_core::profile::span("lsp.request tua/localInlineCompletion");
+        let profile_name = match self.response_kind {
+            InlineCompletionResponseKind::Custom => "lsp.request tua/localInlineCompletion",
+            InlineCompletionResponseKind::Standard => "lsp.request textDocument/inlineCompletion",
+        };
+        let _worker_profile = tua_core::profile::span(profile_name);
+        let empty_response = match self.response_kind {
+            InlineCompletionResponseKind::Custom => {
+                empty_local_inline_completion(self.document_version)
+            }
+            InlineCompletionResponseKind::Standard => json!([]),
+        };
         let (Some(prepared), Some(position), Some(lsp_position)) =
             (self.prepared, self.position, self.lsp_position)
         else {
-            return empty_local_inline_completion(self.document_version);
+            return empty_response;
         };
         let source = prepared.source();
         let budget = InlineCompletionBudget::new(LOCAL_INLINE_COMPLETION_BUDGET);
@@ -145,10 +163,18 @@ impl LocalInlineCompletionWork {
             })
             .collect::<Vec<_>>();
 
-        json!({
-            "documentVersion": self.document_version,
-            "items": items
-        })
+        match self.response_kind {
+            InlineCompletionResponseKind::Custom => json!({
+                "documentVersion": self.document_version,
+                "items": items
+            }),
+            InlineCompletionResponseKind::Standard => Value::Array(
+                items
+                    .into_iter()
+                    .map(standard_inline_completion_item)
+                    .collect(),
+            ),
+        }
     }
 }
 
@@ -310,6 +336,7 @@ impl LspServer {
                     capabilities::initialize_result(
                         self.client_pull_diagnostics,
                         self.client_completion_label_details,
+                        !client_owns_combined_inline_completion_provider(&message),
                     ),
                 )
             }
@@ -355,6 +382,10 @@ impl LspServer {
             RequestKind::LocalInlineCompletion => response(
                 id,
                 self.local_inline_completion_response(&message, cancelled),
+            ),
+            RequestKind::StandardInlineCompletion => response(
+                id,
+                self.standard_inline_completion_response(&message, cancelled),
             ),
             RequestKind::InlineCompletionContext => {
                 response(id, self.inline_completion_context_response(&message))
@@ -1632,6 +1663,8 @@ impl LspServer {
                 "returnedParseDistribution": inline_returned_parse_distribution(&stats),
                 "editedParseSufficient": stats.inline_edited_parse_sufficient,
                 "candidatesReturned": stats.inline_candidates_returned,
+                "statisticalScopeFiles": stats.inline_statistical_scope_files,
+                "statisticalScopeBytes": stats.inline_statistical_scope_bytes,
                 "parsesPerRequest": ratio(
                     stats.inline_candidate_parses + stats.inline_baseline_parses,
                     stats.inline_completion_requests
@@ -1995,33 +2028,55 @@ impl LspServer {
         &self,
         message: &Value,
     ) -> LocalInlineCompletionWork {
+        self.prepare_inline_completion(message, InlineCompletionResponseKind::Custom)
+    }
+
+    pub(super) fn prepare_standard_inline_completion(
+        &self,
+        message: &Value,
+    ) -> LocalInlineCompletionWork {
+        self.prepare_inline_completion(message, InlineCompletionResponseKind::Standard)
+    }
+
+    fn prepare_inline_completion(
+        &self,
+        message: &Value,
+        response_kind: InlineCompletionResponseKind,
+    ) -> LocalInlineCompletionWork {
         let Some(request) = self.document_request(message) else {
-            return LocalInlineCompletionWork::empty(None);
+            return LocalInlineCompletionWork::empty(None, response_kind);
         };
         let current_version = self.document_versions.get(request.uri).copied();
-        if !self.settings.inline_completion_enabled()
-            || requested_document_version(request.params) != current_version
-        {
-            return LocalInlineCompletionWork::empty(current_version);
+        let version_is_current = match response_kind {
+            InlineCompletionResponseKind::Custom => {
+                requested_document_version(request.params) == current_version
+            }
+            InlineCompletionResponseKind::Standard => true,
+        };
+        if !self.settings.inline_completion_enabled() || !version_is_current {
+            return LocalInlineCompletionWork::empty(current_version, response_kind);
         }
         let include_project = self.settings.inline_project_enabled();
-        let Some(prepared) = self
-            .analysis
-            .prepare_local_inline_completion(&request.path, include_project)
-        else {
-            return LocalInlineCompletionWork::empty(current_version);
+        let include_statistical = self.settings.inline_statistical_enabled();
+        let Some(prepared) = self.analysis.prepare_local_inline_completion(
+            &request.path,
+            include_project,
+            include_statistical,
+        ) else {
+            return LocalInlineCompletionWork::empty(current_version, response_kind);
         };
         let Some(position) = request
             .params
             .get("position")
             .and_then(|position| model_completion_position(prepared.source(), position))
         else {
-            return LocalInlineCompletionWork::empty(current_version);
+            return LocalInlineCompletionWork::empty(current_version, response_kind);
         };
         let options = InlineCompletionOptions {
             semantic: self.settings.inline_semantic_enabled(),
             current_file: self.settings.inline_current_file_enabled(),
             project: include_project,
+            statistical: include_statistical,
         };
 
         LocalInlineCompletionWork {
@@ -2029,8 +2084,18 @@ impl LspServer {
             position: Some(position),
             lsp_position: request.params.get("position").cloned(),
             options,
-            selected_completion: request.params.get("selectedCompletion").cloned(),
+            selected_completion: match response_kind {
+                InlineCompletionResponseKind::Custom => {
+                    request.params.get("selectedCompletion").cloned()
+                }
+                InlineCompletionResponseKind::Standard => request
+                    .params
+                    .get("context")
+                    .and_then(|context| context.get("selectedCompletionInfo"))
+                    .cloned(),
+            },
             document_version: current_version,
+            response_kind,
         }
     }
 
@@ -2040,6 +2105,15 @@ impl LspServer {
 
     fn local_inline_completion_response(&self, message: &Value, cancelled: &AtomicBool) -> Value {
         self.prepare_local_inline_completion(message)
+            .execute(cancelled)
+    }
+
+    fn standard_inline_completion_response(
+        &self,
+        message: &Value,
+        cancelled: &AtomicBool,
+    ) -> Value {
+        self.prepare_standard_inline_completion(message)
             .execute(cancelled)
     }
 
@@ -2734,6 +2808,30 @@ fn empty_local_inline_completion(document_version: Option<i64>) -> Value {
     })
 }
 
+fn standard_inline_completion_item(mut item: Value) -> Value {
+    let is_snippet = item
+        .get("isSnippet")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let insert_text = item
+        .get_mut("insertText")
+        .map(Value::take)
+        .unwrap_or(Value::String(String::new()));
+    let range = item
+        .get_mut("range")
+        .map(Value::take)
+        .unwrap_or(Value::Null);
+
+    json!({
+        "insertText": if is_snippet {
+            json!({ "kind": "snippet", "value": insert_text })
+        } else {
+            insert_text
+        },
+        "range": range
+    })
+}
+
 fn lsp_range_for_source(source: &str, span: SourceSpan) -> Value {
     json!({
         "start": lsp_position_for_source(source, span.start),
@@ -2968,6 +3066,15 @@ fn client_supports_completion_label_details(message: &Value) -> bool {
         .and_then(|text_document| text_document.get("completion"))
         .and_then(|completion| completion.get("completionItem"))
         .and_then(|completion_item| completion_item.get("labelDetailsSupport"))
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+}
+
+fn client_owns_combined_inline_completion_provider(message: &Value) -> bool {
+    message
+        .get("params")
+        .and_then(|params| params.get("initializationOptions"))
+        .and_then(|options| options.get("combinedInlineCompletionProvider"))
         .and_then(Value::as_bool)
         .unwrap_or(false)
 }

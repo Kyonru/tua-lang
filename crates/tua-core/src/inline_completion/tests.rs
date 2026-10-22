@@ -7,8 +7,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::{
     AnalysisHost, AnalysisSourceKind, InlineCompletionBudget, InlineCompletionOptions,
-    InlineCompletionSource, PatternCorpusBatchEntry, PreparedInlineCompletion, ProjectModel,
-    RetrievalLimits, SourcePosition,
+    InlineCompletionSource, PatternCorpusBatchEntry, PatternCorpusBuildOutcome, PatternCorpusTier,
+    PreparedInlineCompletion, ProjectModel, RetrievalLimits, SourcePosition,
 };
 
 fn context_at_end(source: &str) -> Option<CursorContext> {
@@ -29,6 +29,21 @@ fn without_inline_stats(mut stats: crate::AnalysisCacheStats) -> crate::Analysis
     stats.inline_returned_after_one_parse = 0;
     stats.inline_returned_after_two_parses = 0;
     stats
+}
+
+fn build_project_file_with_required_targets(
+    host: &AnalysisHost,
+    path: &str,
+    required_targets: &[&str],
+) -> PatternCorpusBuildOutcome {
+    let mut outcome = host
+        .prepare_project_pattern_file(path)
+        .unwrap()
+        .build(&ProjectModel::default(), RetrievalLimits::default());
+    for target in required_targets {
+        outcome.add_required_target_for_test(*target);
+    }
+    outcome
 }
 
 #[test]
@@ -316,6 +331,7 @@ fn cancellation_deadline_and_source_switches_abstain() {
                 semantic: false,
                 current_file: false,
                 project: false,
+                statistical: false,
             },
             &InlineCompletionBudget::unlimited(),
             &cancelled,
@@ -355,18 +371,16 @@ fn prepared_query_reads_the_immutable_project_corpus() {
     host.set_file("one/a.tua", "draw(player, score); alpha()");
     host.set_file("two/b.tua", "draw(player, score); beta()");
     let outcomes = [
-        "active/main.tua",
-        "active/sibling.tua",
-        "one/a.tua",
-        "two/b.tua",
+        build_project_file_with_required_targets(
+            &host,
+            "active/main.tua",
+            &["one/a.tua", "two/b.tua"],
+        ),
+        build_project_file_with_required_targets(&host, "active/sibling.tua", &[]),
+        build_project_file_with_required_targets(&host, "one/a.tua", &[]),
+        build_project_file_with_required_targets(&host, "two/b.tua", &[]),
     ]
-    .map(|path| {
-        PatternCorpusBatchEntry::File(
-            host.prepare_project_pattern_file(path)
-                .unwrap()
-                .build(&ProjectModel::default(), RetrievalLimits::default()),
-        )
-    });
+    .map(PatternCorpusBatchEntry::File);
     assert_eq!(host.adopt_project_pattern_batch(1, outcomes).adopted, 4);
 
     let prepared = host
@@ -382,6 +396,7 @@ fn prepared_query_reads_the_immutable_project_corpus() {
             semantic: false,
             current_file: false,
             project: true,
+            statistical: false,
         },
         &InlineCompletionBudget::unlimited(),
         &AtomicBool::new(false),
@@ -389,6 +404,7 @@ fn prepared_query_reads_the_immutable_project_corpus() {
     assert_eq!(candidates.len(), 1);
     assert_eq!(candidates[0].insert_text, " score);");
     assert_eq!(candidates[0].source, InlineCompletionSource::Project);
+    assert_eq!(candidates[0].tier, Some(PatternCorpusTier::RequiredModule));
 }
 
 #[test]
@@ -443,6 +459,7 @@ fn production_semantic_policy_keeps_unevaluated_love_callbacks_disabled() {
             semantic: true,
             current_file: false,
             project: false,
+            statistical: false,
         },
         &InlineCompletionBudget::unlimited(),
         &AtomicBool::new(false),
@@ -454,6 +471,7 @@ fn production_semantic_policy_keeps_unevaluated_love_callbacks_disabled() {
             semantic: true,
             current_file: false,
             project: true,
+            statistical: false,
         },
         &InlineCompletionBudget::unlimited(),
         &AtomicBool::new(false),
@@ -468,14 +486,12 @@ fn prepared_project_query_observes_a_later_vfs_invalidation_without_copy_on_writ
     host.set_project_pattern_eligibility_generation(1);
     host.set_file("one/a.tua", "draw(player, score)\ndraw(player, score)");
     host.set_file("active/main.tua", "draw(player,");
-    let outcome = host
-        .prepare_project_pattern_file("one/a.tua")
-        .unwrap()
-        .build(&ProjectModel::default(), RetrievalLimits::default());
+    let active = build_project_file_with_required_targets(&host, "active/main.tua", &["one/a.tua"]);
+    let outcome = build_project_file_with_required_targets(&host, "one/a.tua", &[]);
     assert_eq!(
-        host.adopt_project_pattern_batch(1, [PatternCorpusBatchEntry::File(outcome)])
+        host.adopt_project_pattern_batch(1, [active, outcome].map(PatternCorpusBatchEntry::File),)
             .adopted,
-        1
+        2
     );
     let prepared = host
         .prepare_local_inline_completion_with_project("active/main.tua", true)
@@ -491,6 +507,7 @@ fn prepared_project_query_observes_a_later_vfs_invalidation_without_copy_on_writ
                 semantic: false,
                 current_file: false,
                 project: true,
+                statistical: false,
             },
             &InlineCompletionBudget::unlimited(),
             &AtomicBool::new(false),
@@ -505,14 +522,16 @@ fn prepared_project_query_observes_generation_change_and_clear_without_a_vfs_edi
         host.set_project_pattern_eligibility_generation(1);
         host.set_file("one/a.tua", "draw(player, score)\ndraw(player, score)");
         host.set_file("active/main.tua", "draw(player,");
-        let outcome = host
-            .prepare_project_pattern_file("one/a.tua")
-            .unwrap()
-            .build(&ProjectModel::default(), RetrievalLimits::default());
+        let active =
+            build_project_file_with_required_targets(&host, "active/main.tua", &["one/a.tua"]);
+        let outcome = build_project_file_with_required_targets(&host, "one/a.tua", &[]);
         assert_eq!(
-            host.adopt_project_pattern_batch(1, [PatternCorpusBatchEntry::File(outcome)])
-                .adopted,
-            1
+            host.adopt_project_pattern_batch(
+                1,
+                [active, outcome].map(PatternCorpusBatchEntry::File),
+            )
+            .adopted,
+            2
         );
         let prepared = host
             .prepare_local_inline_completion_with_project("active/main.tua", true)
@@ -530,6 +549,7 @@ fn prepared_project_query_observes_generation_change_and_clear_without_a_vfs_edi
                 semantic: false,
                 current_file: false,
                 project: true,
+                statistical: false,
             },
             &InlineCompletionBudget::unlimited(),
             &AtomicBool::new(false),
@@ -560,14 +580,12 @@ fn project_completion_rechecks_the_same_version_epoch_after_validation() {
     host.set_project_pattern_eligibility_generation(1);
     host.set_file("one/a.tua", "draw(player, score)\ndraw(player, score)");
     host.set_file("active/main.tua", "if (\ndraw(player,");
-    let outcome = host
-        .prepare_project_pattern_file("one/a.tua")
-        .unwrap()
-        .build(&ProjectModel::default(), RetrievalLimits::default());
+    let active = build_project_file_with_required_targets(&host, "active/main.tua", &["one/a.tua"]);
+    let outcome = build_project_file_with_required_targets(&host, "one/a.tua", &[]);
     assert_eq!(
-        host.adopt_project_pattern_batch(1, [PatternCorpusBatchEntry::File(outcome)])
+        host.adopt_project_pattern_batch(1, [active, outcome].map(PatternCorpusBatchEntry::File),)
             .adopted,
-        1
+        2
     );
     let prepared = host
         .prepare_local_inline_completion_with_project("active/main.tua", true)
@@ -580,6 +598,7 @@ fn project_completion_rechecks_the_same_version_epoch_after_validation() {
         semantic: false,
         current_file: false,
         project: true,
+        statistical: false,
     };
     let run = |baseline: &dyn Fn() -> Option<Vec<crate::Diagnostic>>| {
         let project = prepared.project.as_ref().unwrap();
@@ -603,6 +622,7 @@ fn project_completion_rechecks_the_same_version_epoch_after_validation() {
             &options,
             &InlineCompletionBudget::unlimited(),
             &AtomicBool::new(false),
+            None,
             baseline,
         )
     };
@@ -660,4 +680,236 @@ fn oversized_documents_are_refused_before_recall_and_counted() {
     assert_eq!(stats.inline_skipped_oversized, 1);
     assert_eq!(stats.inline_validation_attempts, 0);
     assert_eq!(stats.inline_candidate_parses, 0);
+}
+
+#[test]
+fn statistical_project_completion_uses_cached_scope_and_rejects_stale_evidence() {
+    let mut host = AnalysisHost::new();
+    host.set_project_pattern_eligibility_generation(1);
+    let training = |name: &str| format!("local {name} = 0\n{}", format!("{name} = 1\n").repeat(40));
+    host.set_file("train/a.tua", training("position"));
+    host.set_file("train/b.tua", training("velocity"));
+    host.set_file("active/main.tua", "local point = 0\npoint =");
+    let cold = host
+        .prepare_local_inline_completion_with_sources("active/main.tua", false, true)
+        .unwrap();
+    assert!(cold.statistical_scope.is_none());
+    assert_eq!(host.retained_statistical_scope_files(), 0);
+    host.set_inline_statistical_enabled(true);
+    host.set_file("active/main.tua", "local point = 0\npoint =1");
+    let warmed = host.clone();
+    assert_eq!(
+        host.statistical_scope_storage_ptr(),
+        warmed.statistical_scope_storage_ptr(),
+        "host clones should share the immutable scope map"
+    );
+    assert!(warmed.warm_file("active/main.tua", crate::AnalysisWarmPriority::High));
+    assert_ne!(
+        host.statistical_scope_storage_ptr(),
+        warmed.statistical_scope_storage_ptr(),
+        "warming should copy only the Arc-backed map before mutation"
+    );
+    assert!(host.adopt_warmed_file(&warmed, "active/main.tua"));
+    assert!(host.retained_statistical_scope_files() >= 1);
+    host.set_file("active/main.tua", "local point = 0\npoint =");
+    let warmed_invalid = host.clone();
+    assert!(warmed_invalid.warm_file("active/main.tua", crate::AnalysisWarmPriority::High));
+    assert_eq!(
+        warmed_invalid.peek_current_source_parses("active/main.tua"),
+        Some(false)
+    );
+    assert!(host.adopt_warmed_file(&warmed_invalid, "active/main.tua"));
+    for path in ["train/a.tua", "train/b.tua"] {
+        let outcome = host
+            .prepare_project_pattern_file(path)
+            .unwrap()
+            .build(&ProjectModel::default(), RetrievalLimits::default());
+        assert_eq!(
+            host.adopt_project_pattern_batch(1, [PatternCorpusBatchEntry::File(outcome)])
+                .adopted,
+            1
+        );
+    }
+    // The invalid typing source agrees with the last-good source through the
+    // cursor, so preparation reuses only compact retained facts and does not
+    // build degraded analysis on the hot path.
+    let options = InlineCompletionOptions {
+        semantic: false,
+        current_file: false,
+        project: false,
+        statistical: true,
+    };
+    let prepared = host
+        .prepare_local_inline_completion_with_sources("active/main.tua", false, true)
+        .unwrap();
+    let position = SourcePosition { line: 2, column: 8 };
+    assert_eq!(
+        context_at_end(&prepared.source),
+        Some(CursorContext::Assignment)
+    );
+    assert!(prepared.statistical_scope.is_some());
+    let project = prepared.project.as_ref().unwrap();
+    let versions = project.versions.begin_read().unwrap();
+    let prediction = project
+        .corpus
+        .query_statistical(
+            project.generation,
+            &prepared.path,
+            &prepared.source,
+            prepared.source.len(),
+            prepared.statistical_scope.as_ref().unwrap(),
+            InlineCompletionBudget::unlimited(),
+            &AtomicBool::new(false),
+            |path| versions.get(path),
+        )
+        .unwrap();
+    assert_eq!(prediction.text, " 1");
+    let candidates = prepared.complete(
+        position,
+        &options,
+        &InlineCompletionBudget::unlimited(),
+        &AtomicBool::new(false),
+    );
+    assert_eq!(candidates.len(), 1, "stats: {:?}", host.cache_stats());
+    assert_eq!(candidates[0].insert_text, " 1");
+    assert_eq!(
+        candidates[0].source,
+        InlineCompletionSource::ProjectStatistical
+    );
+    assert!(host.project_pattern_corpus_stats().approximate_bytes <= 16 * 1024 * 1024);
+
+    let cancelled = AtomicBool::new(true);
+    assert!(prepared
+        .complete(
+            position,
+            &options,
+            &InlineCompletionBudget::unlimited(),
+            &cancelled,
+        )
+        .is_empty());
+
+    // A later valid edit is warmed and adopted without building a snapshot.
+    // The non-ASCII prefix also proves the unchanged-prefix byte boundary is
+    // computed on character boundaries before the next incomplete edit.
+    host.set_file("active/main.tua", "-- café\nlocal target = 0\ntarget =1");
+    let warmed = host.clone();
+    assert!(warmed.warm_file("active/main.tua", crate::AnalysisWarmPriority::High));
+    assert!(host.adopt_warmed_file(&warmed, "active/main.tua"));
+    host.set_file("active/main.tua", "-- café\nlocal target = 0\ntarget =");
+    let prepared = host
+        .prepare_local_inline_completion_with_sources("active/main.tua", false, true)
+        .unwrap();
+    let position = SourcePosition { line: 3, column: 9 };
+    let refreshed = prepared.complete(
+        position,
+        &options,
+        &InlineCompletionBudget::unlimited(),
+        &AtomicBool::new(false),
+    );
+    assert_eq!(refreshed.len(), 1);
+    assert_eq!(refreshed[0].insert_text, " 1");
+
+    // Invalidating one of the two distinct supporting files leaves only one
+    // valid supporter, so the already-prepared request must now abstain.
+    host.set_file("train/b.tua", "local changed = true\n");
+    assert!(prepared
+        .complete(
+            position,
+            &options,
+            &InlineCompletionBudget::unlimited(),
+            &AtomicBool::new(false),
+        )
+        .is_empty());
+
+    host.set_inline_statistical_enabled(false);
+    assert_eq!(host.retained_statistical_scope_files(), 0);
+    assert!(host
+        .prepare_local_inline_completion_with_sources("active/main.tua", false, true)
+        .unwrap()
+        .statistical_scope
+        .is_none());
+}
+
+#[test]
+fn statistical_scope_facts_have_a_total_file_and_byte_cap() {
+    let mut host = AnalysisHost::new();
+    host.set_inline_statistical_enabled(true);
+
+    // An actively edited file is the only retention priority. Related
+    // dependencies are also scheduled at High priority, so warming every
+    // unopened file as High must not make those entries sticky or evict the
+    // open document's request-side facts.
+    host.set_file("zzz-active.tua", "local disk_version = true\n");
+    host.open_document("zzz-active.tua", "local active = 1\n");
+    let warmed = host.clone();
+    assert!(warmed.warm_file("zzz-active.tua", crate::AnalysisWarmPriority::High));
+    assert!(host.adopt_warmed_file(&warmed, "zzz-active.tua"));
+
+    for index in 0..(super::statistical::MAX_SCOPE_FACT_FILES + 16) {
+        host.set_file(
+            format!("src/file-{index:03}.tua"),
+            format!("local value{index} = {index}\n"),
+        );
+        let path = format!("src/file-{index:03}.tua");
+        let warmed = host.clone();
+        assert!(warmed.warm_file(&path, crate::AnalysisWarmPriority::High));
+        assert!(host.adopt_warmed_file(&warmed, &path));
+    }
+    let stats = host.cache_stats();
+    assert_eq!(
+        stats.inline_statistical_scope_files,
+        super::statistical::MAX_SCOPE_FACT_FILES
+    );
+    assert!(
+        stats.inline_statistical_scope_bytes <= super::statistical::MAX_SCOPE_FACT_BYTES,
+        "{}",
+        stats.inline_statistical_scope_bytes
+    );
+
+    assert!(host
+        .prepare_local_inline_completion_with_sources("zzz-active.tua", false, true)
+        .unwrap()
+        .statistical_scope
+        .is_some());
+    let stats = host.cache_stats();
+    assert_eq!(
+        stats.inline_statistical_scope_files,
+        super::statistical::MAX_SCOPE_FACT_FILES
+    );
+    assert!(stats.inline_statistical_scope_bytes <= super::statistical::MAX_SCOPE_FACT_BYTES);
+
+    host.close_document("zzz-active.tua");
+    assert_eq!(
+        host.cache_stats().inline_statistical_scope_files,
+        super::statistical::MAX_SCOPE_FACT_FILES - 1,
+        "closing a document must immediately release facts for its former overlay source"
+    );
+    assert!(host
+        .prepare_local_inline_completion_with_sources("zzz-active.tua", false, true)
+        .unwrap()
+        .statistical_scope
+        .is_none());
+}
+
+#[test]
+fn statistical_scope_lookup_abstains_above_the_validation_parse_cap() {
+    let mut host = AnalysisHost::new();
+    host.set_inline_statistical_enabled(true);
+    let source = format!("local active = 1\n-- {}", "x".repeat(7_000));
+    assert!(!super::validate::within_parse_cap(
+        AnalysisSourceKind::Tua,
+        source.len()
+    ));
+    assert!(source.len() < super::statistical::MAX_SOURCE_BYTES);
+    host.set_file("active.tua", source);
+
+    // Analysis may retain bounded facts for other consumers, but request
+    // preparation must reject the source before comparing it with last-good.
+    let _ = host.snapshot();
+    assert_eq!(host.cache_stats().inline_statistical_scope_files, 1);
+    assert!(host
+        .prepare_local_inline_completion_with_sources("active.tua", false, true)
+        .unwrap()
+        .statistical_scope
+        .is_none());
 }

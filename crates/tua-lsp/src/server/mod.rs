@@ -654,7 +654,8 @@ impl LspServer {
 
     fn reset_pattern_corpus_queue(&mut self) {
         let generation = self.pattern_corpus.generation.saturating_add(1).max(1);
-        let enabled = self.settings.inline_project_enabled();
+        let enabled =
+            self.settings.inline_project_enabled() || self.settings.inline_statistical_enabled();
         self.analysis
             .set_project_pattern_eligibility_generation(generation);
 
@@ -1155,7 +1156,8 @@ fn message_interactive_priority(message: &Value) -> Option<u8> {
         | "textDocument/rangeFormatting"
         | "textDocument/onTypeFormatting"
         | "tua/projectLayout"
-        | "tua/localInlineCompletion" => Some(2),
+        | "tua/localInlineCompletion"
+        | "textDocument/inlineCompletion" => Some(2),
         "textDocument/hover" | "textDocument/documentHighlight" | "textDocument/inlayHint" => {
             Some(3)
         }

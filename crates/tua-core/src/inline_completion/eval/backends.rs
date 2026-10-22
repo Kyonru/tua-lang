@@ -145,18 +145,7 @@ impl Backend for Phase3NgramIncremental {
         request: &Request<'_>,
         production: &ProductionRequest<'_>,
     ) -> Option<Candidate> {
-        if (Phase2Tuning {
-            config: self.phase2.clone(),
-        })
-        .suggest_with_host(request, production)
-        .is_some()
-        {
-            return None;
-        }
-        Phase3Ngram {
-            config: Some(self.ngram.clone()),
-        }
-        .suggest(request)
+        production_phase3_candidate(request, production, &self.ngram, true)
     }
 }
 
@@ -190,21 +179,51 @@ impl Backend for Phase3NgramFallback {
         request: &Request<'_>,
         production: &ProductionRequest<'_>,
     ) -> Option<Candidate> {
-        Phase2Tuning {
-            config: self.phase2.clone(),
-        }
-        .suggest_with_host(request, production)
-        .or_else(|| {
-            Phase3Ngram {
-                config: Some(self.ngram.clone()),
-            }
-            .suggest(request)
-        })
+        production_phase3_candidate(request, production, &self.ngram, false)
     }
 
     fn index_state(&self) -> &'static str {
         "complete"
     }
+}
+
+fn production_phase3_candidate(
+    request: &Request<'_>,
+    production: &ProductionRequest<'_>,
+    config: &Phase3TuningConfig,
+    only_statistical: bool,
+) -> Option<Candidate> {
+    production
+        .host
+        .local_inline_completion(
+            production.path,
+            production.position,
+            &crate::InlineCompletionOptions {
+                semantic: true,
+                current_file: true,
+                project: !only_statistical,
+                statistical: true,
+            },
+            &crate::InlineCompletionBudget::new(Duration::from_millis(10)),
+            &AtomicBool::new(false),
+        )
+        .into_iter()
+        .next()
+        .filter(|candidate| {
+            candidate.source != crate::InlineCompletionSource::ProjectStatistical
+                || config.allows(request.language, request.context, candidate.score.0)
+        })
+        .filter(|candidate| {
+            !only_statistical
+                || candidate.source == crate::InlineCompletionSource::ProjectStatistical
+        })
+        .map(|candidate| Candidate {
+            text: candidate.insert_text,
+            is_snippet: candidate.is_snippet,
+            source: candidate.source.as_str(),
+            score: candidate.score.0,
+            tier: candidate.tier.map(|tier| tier.as_str()),
+        })
 }
 
 /// A suggestion: text inserted at the cursor, continuing what is typed.
@@ -513,6 +532,7 @@ impl Backend for ProductionPhase1 {
                     semantic: self.semantic,
                     current_file: self.current_file,
                     project: false,
+                    statistical: false,
                 },
                 &crate::InlineCompletionBudget::new(Duration::from_millis(10)),
                 &AtomicBool::new(false),
@@ -524,7 +544,7 @@ impl Backend for ProductionPhase1 {
                 is_snippet: candidate.is_snippet,
                 source: candidate.source.as_str(),
                 score: candidate.score.0,
-                tier: None,
+                tier: candidate.tier.map(|tier| tier.as_str()),
             })
     }
 }
@@ -633,6 +653,7 @@ impl Backend for Phase2Tuning {
                     semantic: true,
                     current_file: true,
                     project: true,
+                    statistical: false,
                 },
                 &crate::InlineCompletionBudget::new(Duration::from_millis(10)),
                 &AtomicBool::new(false),
@@ -644,7 +665,7 @@ impl Backend for Phase2Tuning {
                 is_snippet: candidate.is_snippet,
                 source: candidate.source.as_str(),
                 score: candidate.score.0,
-                tier: None,
+                tier: candidate.tier.map(|tier| tier.as_str()),
             })
     }
 

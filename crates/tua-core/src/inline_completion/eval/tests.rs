@@ -65,27 +65,31 @@ fn recall() -> CurrentFileRecall {
     }
 }
 
-fn production_phase2_host(continuation: &str) -> (AnalysisHost, PathBuf, String) {
-    let active = PathBuf::from("active/main.tua");
-    let source = "draw(player,".to_owned();
+fn production_phase2_host(continuation: &str) -> (TempDir, AnalysisHost, PathBuf, PathBuf, String) {
+    static NEXT_FIXTURE: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+    let fixture = NEXT_FIXTURE.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let temp = TempDir::new(&format!("phase2-required-module-{fixture}"));
+    let active = temp.path().join("main.tua");
+    let support = temp.path().join("helper.tua");
+    let source = "local Helper = require('helper')\ndraw(player,".to_owned();
+    let support_source = format!("draw(player,{continuation}\ndraw(player,{continuation}");
+    std::fs::write(&active, &source).expect("write active fixture");
+    std::fs::write(&support, &support_source).expect("write support fixture");
+    let model = crate::ProjectModel::load([temp.path().to_path_buf()]).expect("project model");
     let mut host = AnalysisHost::new();
     host.set_project_pattern_eligibility_generation(PRODUCTION_EVAL_CORPUS_GENERATION);
     host.set_file(&active, source.clone());
-    host.set_file("one/a.tua", format!("draw(player,{continuation}"));
-    host.set_file("two/b.tua", format!("draw(player,{continuation}"));
-    let entries = ["one/a.tua", "two/b.tua"].map(|path| {
+    host.set_file(&support, support_source);
+    let entries = [&active, &support].map(|path| {
         crate::PatternCorpusBatchEntry::File(
             host.prepare_project_pattern_file(path)
                 .expect("corpus input")
-                .build(
-                    &crate::ProjectModel::default(),
-                    crate::RetrievalLimits::default(),
-                ),
+                .build(&model, crate::RetrievalLimits::default()),
         )
     });
     let adoption = host.adopt_project_pattern_batch(PRODUCTION_EVAL_CORPUS_GENERATION, entries);
     assert_eq!(adoption.adopted, 2);
-    (host, active, source)
+    (temp, host, active, support, source)
 }
 
 fn production_phase2_candidate(
@@ -116,8 +120,8 @@ fn production_phase2_candidate(
             host,
             path,
             position: crate::SourcePosition {
-                line: 1,
-                column: document.chars().count() + 1,
+                line: document.lines().count(),
+                column: document.lines().last().unwrap().chars().count() + 1,
             },
         },
     )
@@ -125,23 +129,23 @@ fn production_phase2_candidate(
 
 #[test]
 fn phase2_combined_backend_uses_the_adopted_production_corpus() {
-    let (host, path, source) = production_phase2_host(" score)");
+    let (_temp, host, path, _support, source) = production_phase2_host(" score)");
     let candidate = production_phase2_candidate(&host, &path, &source).expect("project hit");
     assert_eq!(candidate.text, " score)");
     assert_eq!(candidate.source, "project");
+    assert_eq!(candidate.tier, Some("requiredModule"));
 }
 
 #[test]
 fn phase2_combined_backend_rejects_a_parse_worsening_project_hit() {
-    let (host, path, source) = production_phase2_host(" end)");
+    let (_temp, host, path, _support, source) = production_phase2_host(" end)");
     assert!(production_phase2_candidate(&host, &path, &source).is_none());
 }
 
 #[test]
 fn phase2_combined_backend_rejects_stale_production_corpus_versions() {
-    let (mut host, path, source) = production_phase2_host(" score)");
-    host.set_file("one/a.tua", "draw(player, changed)");
-    host.set_file("two/b.tua", "draw(player, changed)");
+    let (_temp, mut host, path, support, source) = production_phase2_host(" score)");
+    host.set_file(support, "draw(player, changed)");
     assert!(production_phase2_candidate(&host, &path, &source).is_none());
 }
 
@@ -1063,37 +1067,62 @@ fn per_source_rates_divide_by_every_eligible_request() {
 
 #[test]
 fn phase2_retrieval_reports_holdouts_states_tiers_and_index_costs() {
+    let temp = TempDir::new("phase2-report");
+    let fixture_files = [
+        (
+            "main.tua",
+            "local Helper = require('helper')\ndraw(player, score)",
+        ),
+        ("helper.tua", "draw(player, score)\ndraw(player, score)"),
+        ("render.tua", "draw(player)\nprint(player)"),
+        ("one/a.tua", "draw(player, score)"),
+        ("two/b.tua", "draw(player, score)"),
+    ];
+    for (relative, source) in fixture_files {
+        let path = temp.path().join(relative);
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).expect("create fixture directory");
+        }
+        std::fs::write(path, source).expect("write fixture source");
+    }
+    let model = crate::ProjectModel::load([temp.path().to_path_buf()]).expect("project model");
     let project = EvalProject {
         name: "phase2-fixture".to_owned(),
+        model,
         config: crate::ProjectConfig::default(),
-        source_roots: vec![PathBuf::from("src")],
+        source_roots: vec![temp.path().to_path_buf()],
         output_roots: vec![],
         asset_roots: vec![],
         files: vec![
             EvalFile {
-                path: PathBuf::from("src/main.tua"),
+                path: temp.path().join("main.tua"),
                 kind: AnalysisSourceKind::Tua,
-                source: "draw(player, score)\ndraw(pla".to_owned(),
+                source: "local Helper = require('helper')\ndraw(player, score)".to_owned(),
             },
             EvalFile {
-                path: PathBuf::from("src/render.tua"),
+                path: temp.path().join("helper.tua"),
+                kind: AnalysisSourceKind::Tua,
+                source: "draw(player, score)\ndraw(player, score)".to_owned(),
+            },
+            EvalFile {
+                path: temp.path().join("render.tua"),
                 kind: AnalysisSourceKind::Tua,
                 source: "draw(player)\nprint(player)".to_owned(),
             },
             EvalFile {
-                path: PathBuf::from("one/a.tua"),
+                path: temp.path().join("one/a.tua"),
                 kind: AnalysisSourceKind::Tua,
                 source: "draw(player, score)".to_owned(),
             },
             EvalFile {
-                path: PathBuf::from("two/b.tua"),
+                path: temp.path().join("two/b.tua"),
                 kind: AnalysisSourceKind::Tua,
                 source: "draw(player, score)".to_owned(),
             },
         ],
     };
     let options = EvalOptions {
-        max_positions_per_file: 8,
+        max_positions_per_file: 0,
         simulate_menu: false,
         measure_warmup: false,
         parse_repeats: 1,
@@ -1112,7 +1141,7 @@ fn phase2_retrieval_reports_holdouts_states_tiers_and_index_costs() {
     );
     let set = &report.sets[0];
     assert_eq!(set.retrieval_indexes.len(), 1);
-    assert_eq!(set.retrieval_indexes[0].1.files_indexed, 4);
+    assert_eq!(set.retrieval_indexes[0].1.files_indexed, 5);
     assert!(set.retrieval_indexes[0].1.build_ms >= 0.0);
     assert!(set.retrieval_indexes[0].1.complete_bytes > 0);
     assert!(set.backends.contains_key("project-file-holdout-cold"));
@@ -1133,10 +1162,9 @@ fn phase2_retrieval_reports_holdouts_states_tiers_and_index_costs() {
         .is_some_and(|corpus| corpus.approximate_bytes > 0));
     assert!(set.records.iter().any(|record| {
         record.backend == "phase2-tuning-phase1-plus-project-common-prefix"
-            && record
-                .candidate
-                .as_ref()
-                .is_some_and(|candidate| candidate.source == "project")
+            && record.candidate.as_ref().is_some_and(|candidate| {
+                candidate.source == "project" && candidate.tier == Some("requiredModule")
+            })
     }));
     let complete = &set.backends["project-line-holdout-complete"];
     assert!(complete.by_index_state["complete"].eligible > 0);
@@ -1216,6 +1244,7 @@ fn phase3_reports_model_costs_and_both_experimental_backends() {
     let training = "score = score + 1\n".repeat(32);
     let project = EvalProject {
         name: "phase3-fixture".to_owned(),
+        model: crate::ProjectModel::default(),
         config: crate::ProjectConfig::default(),
         source_roots: vec![PathBuf::from("src")],
         output_roots: vec![],

@@ -202,7 +202,7 @@ pub(super) fn continuation_after<'line>(line: &'line str, prefix: &str) -> Optio
     Some(&body[start..])
 }
 
-fn first_token(text: &str) -> Option<&str> {
+pub(super) fn first_token(text: &str) -> Option<&str> {
     let start = text.find(|character: char| !character.is_whitespace())?;
     let rest = &text[start..];
     let first = rest.chars().next()?;

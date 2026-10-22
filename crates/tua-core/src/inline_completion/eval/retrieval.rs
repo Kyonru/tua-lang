@@ -628,6 +628,7 @@ mod tests {
     fn project(files: &[(&str, &str)]) -> EvalProject {
         EvalProject {
             name: "fixture".to_owned(),
+            model: crate::ProjectModel::default(),
             config: ProjectConfig::default(),
             source_roots: vec![],
             output_roots: vec![],
@@ -900,6 +901,7 @@ mod tests {
             .join("\n");
         let project = EvalProject {
             name: "large-synthetic".to_owned(),
+            model: crate::ProjectModel::default(),
             config: ProjectConfig::default(),
             source_roots: vec![],
             output_roots: vec![],

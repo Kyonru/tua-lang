@@ -21,6 +21,9 @@ use crate::{parse_lua_source, parse_tua_source, AnalysisSourceKind};
 use super::eligibility::strip_trailing_comment;
 use super::recall::{continuation_after, normalize};
 use super::retrieval::{FilePatternTable, RetrievalBuildError, RetrievalLimits};
+use super::statistical::{
+    self, StatisticalEvidence, StatisticalFileTable, StatisticalPrediction, StatisticalScopeFacts,
+};
 
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct CorpusFileId(u32);
@@ -98,6 +101,7 @@ pub struct PatternCorpusBuildInput {
     source: String,
     kind: AnalysisSourceKind,
     version: VfsSourceVersion,
+    include_statistical: bool,
 }
 
 impl PatternCorpusBuildInput {
@@ -106,12 +110,14 @@ impl PatternCorpusBuildInput {
         source: String,
         kind: AnalysisSourceKind,
         version: VfsSourceVersion,
+        include_statistical: bool,
     ) -> Self {
         Self {
             path,
             source,
             kind,
             version,
+            include_statistical,
         }
     }
 
@@ -153,10 +159,20 @@ impl PatternCorpusBuildInput {
             .into_iter()
             .map(|link| normalize_path(link.target))
             .collect::<BTreeSet<_>>();
+        let build_statistical = self.include_statistical
+            && self.kind == AnalysisSourceKind::Tua
+            && self.source.len() <= statistical::MAX_SOURCE_BYTES;
         let parsed = match self.kind {
             AnalysisSourceKind::Tua => parse_tua_source(&self.path, self.source),
             AnalysisSourceKind::Lua => parse_lua_source(&self.path, self.source),
         };
+        let statistical = build_statistical
+            .then(|| {
+                let parsed = parsed.as_ref().ok()?;
+                let scope = crate::scope_map_parsed_source(parsed);
+                StatisticalFileTable::build(&parsed.source, &scope).map(Arc::new)
+            })
+            .flatten();
         let declared_love_callbacks = parsed
             .as_ref()
             .ok()
@@ -174,6 +190,7 @@ impl PatternCorpusBuildInput {
             specifier_identities: resolved.identities,
             resolved_targets,
             declared_love_callbacks,
+            statistical,
         })
     }
 }
@@ -202,6 +219,14 @@ impl PatternCorpusBuildOutcome {
             Self::Skipped { version, .. } => *version,
         }
     }
+
+    #[cfg(test)]
+    pub(crate) fn add_required_target_for_test(&mut self, path: impl Into<PathBuf>) {
+        let Self::Built(build) = self else {
+            panic!("project-pattern fixture should build")
+        };
+        build.resolved_targets.insert(normalize_path(path.into()));
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -213,6 +238,7 @@ pub struct PatternFileBuild {
     specifier_identities: Vec<ModuleSpecifierIdentity>,
     resolved_targets: BTreeSet<PathBuf>,
     declared_love_callbacks: BTreeSet<String>,
+    statistical: Option<Arc<StatisticalFileTable>>,
 }
 
 #[derive(Clone, Debug)]
@@ -289,6 +315,7 @@ struct CorpusFile {
     specifier_identities: Vec<ModuleSpecifierIdentity>,
     resolved_targets: BTreeSet<PathBuf>,
     declared_love_callbacks: BTreeSet<String>,
+    statistical: Option<Arc<StatisticalFileTable>>,
 }
 
 #[derive(Clone, Debug)]
@@ -356,6 +383,7 @@ pub(crate) struct PatternCorpusQuery<'a> {
 pub(crate) struct ProjectCommonPrefixMatch {
     pub continuation: String,
     pub support: usize,
+    pub tier: PatternCorpusTier,
 }
 
 #[derive(Clone, Debug)]
@@ -699,8 +727,17 @@ impl ProjectPatternCorpus {
             let Some(file) = self.files.get(&pattern.file_id) else {
                 continue;
             };
+            let tier = tier_for(
+                &file.path,
+                &active_path,
+                &required_targets,
+                request.rank_same_directory,
+            );
             if request.rest_of_project_only
-                && (file.path == active_path || file.path.parent() == active_path.parent())
+                && matches!(
+                    tier,
+                    PatternCorpusTier::CurrentFile | PatternCorpusTier::SameDirectory
+                )
             {
                 continue;
             }
@@ -726,12 +763,6 @@ impl ProjectPatternCorpus {
             if continuation.is_empty() || continuation.len() > pattern.max_continuation_bytes {
                 continue;
             }
-            let tier = tier_for(
-                &file.path,
-                &active_path,
-                &required_targets,
-                request.rank_same_directory,
-            );
             aggregate_match(
                 &mut grouped,
                 tier,
@@ -750,8 +781,17 @@ impl ProjectPatternCorpus {
             let Some(file) = self.files.get(id) else {
                 continue;
             };
+            let tier = tier_for(
+                &file.path,
+                &active_path,
+                &required_targets,
+                request.rank_same_directory,
+            );
             if request.rest_of_project_only
-                && (file.path == active_path || file.path.parent() == active_path.parent())
+                && matches!(
+                    tier,
+                    PatternCorpusTier::CurrentFile | PatternCorpusTier::SameDirectory
+                )
             {
                 continue;
             }
@@ -762,12 +802,6 @@ impl ProjectPatternCorpus {
             if !valid {
                 continue;
             }
-            let tier = tier_for(
-                &file.path,
-                &active_path,
-                &required_targets,
-                request.rank_same_directory,
-            );
             let start = table.prefix_start(&normalized_prefix);
             for pattern in table.entries().skip(start) {
                 if !pattern.normalized.starts_with(&normalized_prefix) {
@@ -839,29 +873,40 @@ impl ProjectPatternCorpus {
         matches
     }
 
-    pub(crate) fn query_project_common_prefix(
+    pub(crate) fn query_required_module_common_prefix(
         &self,
         mut request: PatternCorpusQuery<'_>,
         min_support: usize,
         min_full_prefix_support: usize,
         current_version: impl Fn(&Path) -> Option<VfsSourceVersion>,
     ) -> Option<ProjectCommonPrefixMatch> {
-        // The measured policy treats same-directory evidence as a separate
-        // source and holds out the active file completely.
+        // The measured policy holds out the active file and accepts only
+        // directly required-module evidence. Same-directory and unrelated
+        // project matches remain available to evaluator baselines, but are
+        // too imprecise to enter the production candidate.
         request.rank_same_directory = true;
         request.rest_of_project_only = true;
         request.max_results = request.max_query_patterns;
         let budget = request.budget;
         let cancelled = request.cancelled;
-        let mut continuations = BTreeMap::<String, usize>::new();
+        let mut by_tier = BTreeMap::<PatternCorpusTier, BTreeMap<String, usize>>::new();
         for (index, hit) in self.query(request, current_version).into_iter().enumerate() {
             if index.is_multiple_of(32)
                 && (cancelled.load(Ordering::Relaxed) || budget.is_expired())
             {
                 return None;
             }
-            *continuations.entry(hit.continuation).or_default() += hit.support;
+            *by_tier
+                .entry(hit.tier)
+                .or_default()
+                .entry(hit.continuation)
+                .or_default() += hit.support;
         }
+        // Evidence from a directly required module is more closely related to
+        // the active file than an arbitrary project match. Never let a lower
+        // tier shorten or veto a higher-tier continuation.
+        let tier = PatternCorpusTier::RequiredModule;
+        let continuations = by_tier.remove(&tier)?;
         let support = continuations.values().sum::<usize>();
         if support < min_support {
             return None;
@@ -887,18 +932,95 @@ impl ProjectPatternCorpus {
         }) {
             prefix = prefix.trim_end_matches(super::eligibility::is_identifier_char);
         }
-        let prefix = prefix.trim_end();
-        if prefix.is_empty()
-            || cancelled.load(Ordering::Relaxed)
-            || budget.is_expired()
-            || support < min_full_prefix_support
-        {
+        let mut prefix = prefix.trim_end();
+        if prefix.is_empty() || cancelled.load(Ordering::Relaxed) || budget.is_expired() {
             return None;
+        }
+        if support < min_full_prefix_support {
+            prefix = super::recall::first_token(prefix)?;
         }
         Some(ProjectCommonPrefixMatch {
             continuation: prefix.to_owned(),
             support,
+            tier,
         })
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn query_statistical(
+        &self,
+        generation: u64,
+        active_path: &Path,
+        active_source: &str,
+        offset: usize,
+        scope: &StatisticalScopeFacts,
+        budget: super::InlineCompletionBudget,
+        cancelled: &AtomicBool,
+        current_version: impl Fn(&Path) -> Option<VfsSourceVersion>,
+    ) -> Option<StatisticalPrediction> {
+        if generation != self.eligibility_generation
+            || self.lineage.is_none()
+            || cancelled.load(Ordering::Relaxed)
+            || budget.is_expired()
+        {
+            return None;
+        }
+        let active_path = normalize_path(active_path);
+        let active_version = current_version(&active_path)?;
+        if Some(active_version.lineage()) != self.lineage {
+            return None;
+        }
+        let active_id = self.path_ids.get(&active_path).copied();
+        let required_targets = self.related_targets(
+            active_id,
+            active_source,
+            Some(active_version),
+            256,
+            budget,
+            cancelled,
+        )?;
+        let mut bytes = 0usize;
+        let mut evidence = Vec::new();
+        'tiers: for wanted_tier in [
+            PatternCorpusTier::RequiredModule,
+            PatternCorpusTier::SameDirectory,
+            PatternCorpusTier::Project,
+        ] {
+            for (index, file) in self.files.values().enumerate() {
+                if index.is_multiple_of(32)
+                    && (cancelled.load(Ordering::Relaxed) || budget.is_expired())
+                {
+                    return None;
+                }
+                if evidence.len() >= statistical::MAX_QUERY_FILES {
+                    break 'tiers;
+                }
+                if file.path == active_path
+                    || file.kind != AnalysisSourceKind::Tua
+                    || current_version(&file.path) != Some(file.version)
+                    || tier_for(&file.path, &active_path, &required_targets, true) != wanted_tier
+                {
+                    continue;
+                }
+                let Some(table) = file.statistical.as_deref() else {
+                    continue;
+                };
+                if bytes.saturating_add(table.approximate_bytes()) > statistical::MAX_QUERY_BYTES {
+                    continue;
+                }
+                bytes += table.approximate_bytes();
+                evidence.push(StatisticalEvidence {
+                    table,
+                    weight: match wanted_tier {
+                        PatternCorpusTier::RequiredModule => 3.0,
+                        PatternCorpusTier::SameDirectory => 2.0,
+                        PatternCorpusTier::Project => 1.0,
+                        PatternCorpusTier::CurrentFile => unreachable!(),
+                    },
+                });
+            }
+        }
+        statistical::predict(&evidence, active_source, offset, scope, budget, cancelled)
     }
 
     pub(crate) fn declared_love_callbacks(
@@ -1045,6 +1167,7 @@ impl PatternFileBuild {
             specifier_identities: self.specifier_identities,
             resolved_targets: self.resolved_targets,
             declared_love_callbacks: self.declared_love_callbacks,
+            statistical: self.statistical,
         }
     }
 }
@@ -1072,6 +1195,10 @@ impl CorpusFile {
                 // one supporter node for the immutable aggregate index.
                 .map(|name| name.capacity() * 2 + size_of::<CorpusFileId>() * 2)
                 .sum::<usize>()
+            + self
+                .statistical
+                .as_ref()
+                .map_or(0, |table| table.approximate_bytes())
     }
 }
 
@@ -1250,6 +1377,78 @@ mod tests {
         assert_send_sync::<PreparedPatternCorpusRemerge>();
         assert_send_sync::<PatternCorpusRemergeOutcome>();
         assert_send_sync::<RetiredProjectPatternCorpus>();
+    }
+
+    #[test]
+    fn statistical_tables_are_not_built_until_the_source_is_enabled() {
+        let mut host = AnalysisHost::new();
+        add(
+            &mut host,
+            "main.tua",
+            "local point = 0\npoint = point + 1\n",
+        );
+        let warmed = host.clone();
+        assert!(warmed.warm_file("main.tua", crate::AnalysisWarmPriority::High));
+        assert!(host.adopt_warmed_file(&warmed, "main.tua"));
+        assert_eq!(host.retained_statistical_scope_files(), 0);
+        let outcome = host
+            .prepare_project_pattern_file("main.tua")
+            .unwrap()
+            .build(&ProjectModel::default(), RetrievalLimits::default());
+        let PatternCorpusBuildOutcome::Built(build) = outcome else {
+            panic!("expected a project corpus table")
+        };
+        assert!(build.statistical.is_none());
+        let _ = host.snapshot();
+        assert_eq!(host.cache_stats().inline_statistical_scope_files, 0);
+
+        host.set_inline_statistical_enabled(true);
+        let outcome = host
+            .prepare_project_pattern_file("main.tua")
+            .unwrap()
+            .build(&ProjectModel::default(), RetrievalLimits::default());
+        let PatternCorpusBuildOutcome::Built(build) = outcome else {
+            panic!("expected a project corpus table")
+        };
+        assert!(build.statistical.is_some());
+
+        host.set_file_with_kind("plain.lua", "local point = 1\n", AnalysisSourceKind::Lua);
+        let outcome = host
+            .prepare_project_pattern_file("plain.lua")
+            .unwrap()
+            .build(&ProjectModel::default(), RetrievalLimits::default());
+        let PatternCorpusBuildOutcome::Built(build) = outcome else {
+            panic!("expected a project corpus table")
+        };
+        assert!(build.statistical.is_none());
+
+        host.set_file(
+            "large.tua",
+            format!(
+                "local point = 0\n-- {}",
+                "x".repeat(statistical::MAX_SOURCE_BYTES)
+            ),
+        );
+        let outcome = host
+            .prepare_project_pattern_file("large.tua")
+            .unwrap()
+            .build(&ProjectModel::default(), RetrievalLimits::default());
+        let PatternCorpusBuildOutcome::Built(build) = outcome else {
+            panic!("expected a project corpus table")
+        };
+        assert!(build.statistical.is_none());
+        let _ = host.snapshot();
+        assert_eq!(host.cache_stats().inline_statistical_scope_files, 1);
+        assert!(host
+            .prepare_local_inline_completion_with_sources("plain.lua", false, true)
+            .unwrap()
+            .statistical_scope
+            .is_none());
+        assert!(host
+            .prepare_local_inline_completion_with_sources("large.tua", false, true)
+            .unwrap()
+            .statistical_scope
+            .is_none());
     }
 
     fn build(host: &AnalysisHost, path: &str) -> PatternCorpusBuildOutcome {
@@ -1483,6 +1682,61 @@ mod tests {
                 .map(|hit| hit.tier),
             Some(PatternCorpusTier::Project)
         );
+    }
+
+    #[test]
+    fn project_completion_keeps_and_prefers_a_same_directory_required_module() {
+        let mut host = AnalysisHost::new();
+        host.set_project_pattern_eligibility_generation(1);
+        add(
+            &mut host,
+            "active/main.tua",
+            "local Helper = require('./helper')\ndraw(player,",
+        );
+        add(
+            &mut host,
+            "active/helper.tua",
+            "draw(player, score)\ndraw(player, score)",
+        );
+        add(
+            &mut host,
+            "elsewhere/noise.tua",
+            "draw(player, stale)\ndraw(player, stale)",
+        );
+
+        let mut active = build(&host, "active/main.tua");
+        let PatternCorpusBuildOutcome::Built(active_build) = &mut active else {
+            panic!("active build")
+        };
+        active_build
+            .resolved_targets
+            .insert(normalize_path("active/helper.tua"));
+        let entries = [
+            active,
+            build(&host, "active/helper.tua"),
+            build(&host, "elsewhere/noise.tua"),
+        ]
+        .map(PatternCorpusBatchEntry::File);
+        assert_eq!(host.adopt_project_pattern_batch(1, entries).adopted, 3);
+
+        let candidates = host.local_inline_completion(
+            "active/main.tua",
+            crate::SourcePosition {
+                line: 2,
+                column: 13,
+            },
+            &crate::InlineCompletionOptions {
+                semantic: false,
+                current_file: false,
+                project: true,
+                ..crate::InlineCompletionOptions::default()
+            },
+            &super::super::InlineCompletionBudget::unlimited(),
+            &AtomicBool::new(false),
+        );
+        assert_eq!(candidates.len(), 1);
+        assert_eq!(candidates[0].insert_text, " score)");
+        assert_eq!(candidates[0].tier, Some(PatternCorpusTier::RequiredModule));
     }
 
     #[test]

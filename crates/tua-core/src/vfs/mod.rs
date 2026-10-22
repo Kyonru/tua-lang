@@ -362,6 +362,10 @@ impl VirtualFileSystem {
             .map(|file| file.source.as_str())
     }
 
+    pub(crate) fn is_open(&self, path: impl AsRef<Path>) -> bool {
+        self.open_files.contains_key(&normalize_path(path))
+    }
+
     pub fn kind(&self, path: impl AsRef<Path>) -> Option<VfsSourceKind> {
         let path = normalize_path(path);
 

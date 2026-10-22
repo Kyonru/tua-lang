@@ -192,7 +192,10 @@ impl RequestScheduler {
                 .and_then(|uri| server.document_versions.get(uri).copied())
         });
         let background = request_runs_in_background(&method);
-        let speculative = method == "tua/localInlineCompletion";
+        let speculative = matches!(
+            method.as_str(),
+            "tua/localInlineCompletion" | "textDocument/inlineCompletion"
+        );
         if speculative && uri.is_none() {
             return vec![error_response(
                 id,
@@ -204,7 +207,7 @@ impl RequestScheduler {
         let coalesce_key = ((background || method == "textDocument/inlayHint") && uri.is_some())
             .then(|| coalesce_key(&method, &message, generation));
         let newest_wins_key = speculative
-            .then(|| uri.as_ref().map(|uri| format!("{method}:{uri}")))
+            .then(|| uri.as_ref().map(|uri| format!("inline:{uri}")))
             .flatten();
         let (mut outbound, trace) = server.begin_request_trace(&message, &method);
 
@@ -218,13 +221,15 @@ impl RequestScheduler {
         }
 
         if speculative && !server.local_inline_completion_is_enabled() {
-            let response = response(
-                id,
+            let result = if method == "textDocument/inlineCompletion" {
+                json!([])
+            } else {
                 json!({
                     "documentVersion": document_version,
                     "items": []
-                }),
-            );
+                })
+            };
+            let response = response(id, result);
             outbound.extend(server.finish_request_trace(trace, &response));
             outbound.push(response);
             return outbound;
@@ -278,7 +283,11 @@ impl RequestScheduler {
         let cancelled = Arc::new(AtomicBool::new(false));
         let local_inline = speculative.then(|| {
             let _profile = tua_core::profile::span("inline.request.prepare");
-            server.prepare_local_inline_completion(&message)
+            if method == "textDocument/inlineCompletion" {
+                server.prepare_standard_inline_completion(&message)
+            } else {
+                server.prepare_local_inline_completion(&message)
+            }
         });
         let worker = WorkerJob {
             job_id,

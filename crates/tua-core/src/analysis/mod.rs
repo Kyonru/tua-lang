@@ -142,6 +142,12 @@ pub enum AnalysisWarmPriority {
     Low,
 }
 
+#[derive(Clone, Debug)]
+struct InlineStatisticalScopeEntry {
+    facts: crate::inline_completion::statistical::StatisticalScopeFacts,
+    pinned_open_document: bool,
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct AnalysisHost {
     config: ProjectConfig,
@@ -158,6 +164,8 @@ pub struct AnalysisHost {
     completion_cache: Arc<Mutex<BTreeMap<CompletionRequestKey, Vec<Completion>>>>,
     completion_cache_stats: Arc<Mutex<CompletionCacheStats>>,
     inline_completion_stats: Arc<crate::inline_completion::InlineCompletionRuntimeStats>,
+    inline_statistical_enabled: bool,
+    inline_statistical_scopes: RefCell<Arc<BTreeMap<PathBuf, InlineStatisticalScopeEntry>>>,
     project_pattern_corpus: Arc<crate::inline_completion::ProjectPatternCorpus>,
     project_pattern_eligibility: Arc<crate::inline_completion::ProjectPatternEligibility>,
     project_pattern_limits: crate::inline_completion::PatternCorpusLimits,
@@ -348,6 +356,8 @@ pub struct AnalysisCacheStats {
     pub inline_returned_after_zero_parses: usize,
     pub inline_returned_after_one_parse: usize,
     pub inline_returned_after_two_parses: usize,
+    pub inline_statistical_scope_files: usize,
+    pub inline_statistical_scope_bytes: usize,
     pub invalidations: usize,
     pub dependent_invalidations: usize,
     pub require_surface_invalidations: usize,

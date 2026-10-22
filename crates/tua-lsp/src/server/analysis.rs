@@ -89,9 +89,13 @@ impl AnalysisHost {
         &self,
         path: &Path,
         include_project: bool,
+        include_statistical: bool,
     ) -> Option<PreparedInlineCompletion> {
-        self.core
-            .prepare_local_inline_completion_with_project(path, include_project)
+        self.core.prepare_local_inline_completion_with_sources(
+            path,
+            include_project,
+            include_statistical,
+        )
     }
 
     pub(super) fn snapshot(
@@ -868,6 +872,8 @@ impl AnalysisHost {
             .set_completion_sequence_ranking(settings.completion_sequence_ranking_config());
         self.core
             .set_completion_multi_token(settings.completion_multi_token_config());
+        self.core
+            .set_inline_statistical_enabled(settings.inline_statistical_enabled());
         self.core.set_ignored_paths(ignored_paths);
         self.core.set_asset_roots(asset_roots);
 

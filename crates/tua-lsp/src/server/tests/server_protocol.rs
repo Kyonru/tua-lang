@@ -33,6 +33,10 @@ fn initialize_returns_server_capabilities() {
         true
     );
     assert_eq!(output[0]["result"]["capabilities"]["hoverProvider"], true);
+    assert_eq!(
+        output[0]["result"]["capabilities"]["inlineCompletionProvider"],
+        true
+    );
     let completion_triggers = output[0]["result"]["capabilities"]["completionProvider"]
         ["triggerCharacters"]
         .as_array()
@@ -201,6 +205,25 @@ fn initialize_returns_server_capabilities() {
     );
     assert_eq!(
         output[0]["result"]["capabilities"]["diagnosticProvider"],
+        Value::Null
+    );
+}
+
+#[test]
+fn initialize_suppresses_standard_inline_provider_for_the_combined_extension_provider() {
+    let output = run_messages(vec![json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+            "initializationOptions": {
+                "combinedInlineCompletionProvider": true
+            }
+        }
+    })]);
+
+    assert_eq!(
+        output[0]["result"]["capabilities"]["inlineCompletionProvider"],
         Value::Null
     );
 }

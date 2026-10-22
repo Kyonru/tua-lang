@@ -919,11 +919,14 @@ actually closes the known Tua coverage gap without weakening any release gate.
 > explicitly named combined candidate. That candidate now runs the production
 > `AnalysisHost::local_inline_completion` path against an adopted immutable
 > corpus, including production source order, parse-delta validation, request
-> budget, cancellation, and VFS-version rejection. Its conservative project
-> fallback is limited to comma, operator, and `other` contexts, excludes
-> same-directory and bundled evidence, and requires six non-whitespace prefix
-> characters and two supporting matches before returning their full common
-> prefix. This policy may be
+> budget, cancellation, and VFS-version rejection. The evaluator now builds
+> that corpus with the project's real `ProjectModel`, matching the LSP instead
+> of silently losing required-module relationships. Its conservative project
+> fallback is limited to directly required modules in comma, operator, and
+> `other` contexts and requires six non-whitespace prefix characters and two
+> supporting matches before returning their full common prefix. Unrelated
+> project, same-directory, and bundled evidence cannot enter the production
+> candidate. This policy may be
 > measured on tune and smoke only until it is frozen for a Phase 2 gate. The
 > production path implements this policy behind a hidden, default-off server
 > switch so scheduling, invalidation, and contention can be tested, but the
@@ -935,6 +938,10 @@ actually closes the known Tua coverage gap without weakening any release gate.
 > architecture remains useful groundwork, but there is currently no tuning
 > evidence that project retrieval improves completion quality. No held-out or
 > external data has been inspected.
+> A tune-only probe that accepted one required-module match in more contexts
+> produced five scenario suggestions at three independent cursors, but only two
+> were correct. It reduced aggregate precision and increased wrong-to-saved, so
+> it was rejected and the conservative policy restored.
 
 > **Implementation status (2026-10-21): integrated but not approved.** The VFS
 > lineage/version mechanism, immutable base-plus-overlay corpus, background
@@ -1337,7 +1344,29 @@ If exact retrieval wins, stop here and do not ship the n-gram engine.
 
 ### Phase 3 implementation and tuning evidence
 
-The experiment now exists only behind tua-core's `test-fixture` feature. It
+> **Production integration status (2026-10-22): safe opt-in, not quality
+> approved.** The strict Tua-only candidate now runs through the production
+> `AnalysisHost` query after semantic, current-file, and exact project sources
+> abstain. It reuses Phase 2's immutable corpus and background lifecycle,
+> requires every predicted token to be supported by at least two distinct
+> files. It does not retain a second full source buffer: it reuses the bounded
+> original line continuations already held by Phase 2 exact retrieval alongside
+> its token tables. Query identifiers are classified only from compact scope
+> facts captured by normal warm-up; missing or stale facts cause
+> abstention. The existing single-line, context, score, file, byte, beam,
+> candidate, token, deadline, cancellation, VFS-version, suffix, and
+> parse-delta checks all fail closed. With the source disabled, analysis retains
+> no statistical facts and corpus builds create no statistical tables.
+>
+> The extension contributes `tua.completion.inline.sources.statistical` as an
+> explicitly experimental, default-off switch so production-path dogfooding is
+> possible. This is not a release-quality approval: tuning evidence remains
+> sparse and no held-out or external quality set has been spent. General
+> multiline generation, confidence UI, feedback ranking, and menu-ranker
+> integration remain deferred.
+
+The original evaluator experiment remains available behind tua-core's
+`test-fixture` feature. It
 uses collision-free exact token-sequence keys, per-order slot renaming,
 Jelinek-Mercer interpolation through order six, a three-wide beam, mean
 surprise stopping, a 12-token single-line limit, and a renderer covered for
@@ -1350,7 +1379,9 @@ cancellation limits all fail closed.
 `make inline-eval-phase3` and `make inline-eval-phase3-smoke` are the only
 entry points. The flag accepts only named manifest tuning and smoke sets; it
 hard-refuses held-out, external, and ad-hoc paths in both the CLI and core API.
-No statistical code is connected to AnalysisHost, the LSP, or the extension.
+The production implementation shares the model primitives but replaces the
+evaluator's target-view machinery with immutable per-file corpus tables and
+the host's normal versioned request path.
 
 The candidate policy is now explicit in the thresholds file: Tua only,
 assignment and `other` contexts, score at least 0.85. An incremental backend
@@ -1368,13 +1399,15 @@ that run is explicitly authorized.
 
 Tune-only results show why the raw model must not ship: it reaches only 0.100
 correct-prefix precision and offers 26.14 wrong characters for each character
-saved. A pinned filter (assignment and `other` contexts, score at least 0.85)
-is safer but extremely sparse. Used only after the Phase 2 candidate abstains,
-it raises characters saved per eligible position from 0.149 to 0.162, raises
-correct-prefix precision from 0.728 to 0.745, and lowers wrong-to-saved from
-0.395 to 0.369. The filtered model itself suggests at only 0.005 eligible
-positions, saves 0.013 characters per eligible position, and has 0.913
-correct-prefix precision.
+saved. The production-path pinned filter (assignment and `other` contexts,
+score at least 0.85, with two-file token support) is safe but extremely sparse.
+Used only after Phase 2 abstains, it moves characters saved per eligible
+position from 0.149 to 0.151, raises combined correct-prefix precision from
+0.728 to 0.740, and moves wrong-to-saved from about 0.40 to 0.39. The source
+itself makes about 13 scenario suggestions (`0.003` per eligible position),
+with `0.727` exact precision, `1.000` correct-prefix precision, zero incorrect
+characters, and roughly `0.574 ms` in-process p95 latency. These are tuning
+figures, not independent release evidence.
 
 These figures supersede earlier tune reports that accidentally included
 configured output roots. Manifest entries name workspace directories, but the
@@ -1385,9 +1418,9 @@ With that correction, Phase 2 adds no suggestions over Phase 1 on the tuning
 set, so project retrieval has no current quality evidence despite its completed
 production-path architecture.
 
-A separate synthetic smoke set now crosses the pinned confidence filter: it
-currently produces two filtered suggestions at one independent cursor, both
-exact correct continuations with no incorrect characters. Its Make check and
+A separate three-file synthetic smoke set now crosses the production filter:
+it currently produces 90 incremental scenario suggestions at 45 independent
+cursors, all exact, with no incorrect characters. Its Make check and
 a focused assertion fail if the source silently becomes a no-op or if any
 suggestion stops being exact. Its repeated training pattern is constructed for that plumbing
 invariant, so it does not corroborate general quality. The small tuning gain
@@ -1395,8 +1428,9 @@ may be overfit and is not an approval to ship. The Phase 3 policy and
 provisional gate limits are now reviewable, but their configured minimum of 100
 independent suggestions intentionally exceeds the tuning set's 11. Neither
 gate dataset may be used until the candidate has broader evidence and an
-explicit authorization; the production decision remains unchanged and exact
-retrieval is the last implemented source.
+explicit authorization. The production decision remains unchanged: the
+statistical source is an explicitly experimental, default-off dogfooding path,
+not a quality-approved completion source.
 
 ---
 
@@ -1404,13 +1438,17 @@ retrieval is the last implemented source.
 
 Only after preceding gates:
 
-> **Safe DX preparation (2026-10-21): implemented without changing candidate
-> behavior.** The extension exposes a workspace-scoped toggle for the existing
-> default-off deterministic backend, reports `Local`, `Ollama`, both, or off in
-> its language status, and records source-free returned/accepted counters for
-> semantic and current-file candidates. The counters are observational only:
-> they neither rank nor generate suggestions. Project, corpus, n-gram, and
-> multiline settings remain unexposed.
+> **Safe DX slice (2026-10-22): implemented.** The extension exposes a
+> workspace-scoped toggle for the default-off deterministic backend, reports
+> `Local`, `Ollama`, both, or off, and names the enabled deterministic sources
+> in its language status. Versioned, source-free returned/accepted counters now
+> cover semantic, current-file, project, and project-statistical results; they
+> neither rank nor generate suggestions and are never uploaded. The standard
+> LSP 3.18 `textDocument/inlineCompletion` request is a thin adapter over the
+> same production core query and speculative newest-wins lane as Tua's custom
+> metadata-rich request. Project exact retrieval remains hidden, while the
+> statistical source is an explicit default-off experiment. General multiline
+> behavior remains unexposed.
 
 - Evaluate multiline block completion and expose `maxLines`.
 - Evaluate empty-statement completion.
@@ -1421,7 +1459,8 @@ Only after preceding gates:
 - Record counts as "returned" and "accepted," never "shown."
 - Use a neutral prior or log-odds adjustment.
 - Do not multiply directly by `(accepted + 1) / (returned + 2)`.
-- Add standard `textDocument/inlineCompletion` support.
+- ~~Add standard `textDocument/inlineCompletion` support.~~ Implemented as an
+  adapter over the shared production query.
 - Revisit speculative-lane sizing only if later contention measurements show
   the single-worker/latest-queued design is insufficient.
 - Feed pattern information into menu ranking only if menu benchmarks improve.
@@ -1510,6 +1549,7 @@ crates/tua-core/src/inline_completion/
   semantic.rs
   validate.rs
   retrieval.rs
+  statistical.rs
   eval/
   tests.rs
 
@@ -1524,9 +1564,12 @@ crates/tua-core/src/inline_completion/corpus/*
 crates/tua-core/src/inline_completion/project_corpus.rs
 ```
 
-Phase 3 adds an evaluator-only tokenizer, model, predictor, and renderer under
-`inline_completion/eval/ngram.rs`. It remains excluded from production unless
-its frozen gate passes.
+Phase 3 adds the original evaluator-only tokenizer, held-out model, predictor,
+and renderer under `inline_completion/eval/ngram.rs`. The constrained
+production integration in `inline_completion/statistical.rs` reuses its model
+primitives through the immutable project corpus and bounded host query, but
+remains explicitly default-off and not quality-approved until its frozen gate
+passes.
 
 ### Core modifications
 

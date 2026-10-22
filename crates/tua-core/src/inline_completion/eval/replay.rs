@@ -343,6 +343,7 @@ mod tests {
             role: SetRole::Tune,
             projects: vec![EvalProject {
                 name: "project".to_owned(),
+                model: crate::ProjectModel::default(),
                 config: ProjectConfig::default(),
                 source_roots: Vec::new(),
                 output_roots: Vec::new(),
@@ -441,6 +442,7 @@ mod tests {
             role: SetRole::Tune,
             projects: vec![EvalProject {
                 name: "project".to_owned(),
+                model: crate::ProjectModel::default(),
                 config: ProjectConfig::default(),
                 source_roots: Vec::new(),
                 output_roots: Vec::new(),

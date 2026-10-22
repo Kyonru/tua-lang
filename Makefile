@@ -313,12 +313,12 @@ inline-eval-phase2: ## Evaluate experimental Phase 2 exact retrieval on tuning d
 	$(INLINE_EVAL) --manifest $(INLINE_EVAL_MANIFEST) --set tune --phase2-retrieval --thresholds $(INLINE_EVAL_THRESHOLDS) --out target/tua-speed/inline-eval-tune-phase2.json
 
 .PHONY: inline-eval-phase3
-inline-eval-phase3: ## Evaluate the offline Phase 3 n-gram experiment on tuning data only.
+inline-eval-phase3: ## Compare raw and production-path Phase 3 predictors on tuning data only.
 	$(INLINE_EVAL) --manifest $(INLINE_EVAL_MANIFEST) --set tune --phase3-ngram --thresholds $(INLINE_EVAL_THRESHOLDS) --out target/tua-speed/inline-eval-tune-phase3.json
 
 .PHONY: inline-eval-phase3-smoke
 inline-eval-phase3-smoke: ## Exercise the Phase 3 predictor on committed smoke fixtures without spending gate data.
-	$(INLINE_EVAL_DEBUG) --manifest $(INLINE_EVAL_MANIFEST) --set phase3-smoke --max-positions 0 --phase3-ngram --thresholds $(INLINE_EVAL_THRESHOLDS) --require-correct-backend phase3-ngram --out target/tua-speed/inline-eval-smoke-phase3.json
+	$(INLINE_EVAL_DEBUG) --manifest $(INLINE_EVAL_MANIFEST) --set phase3-smoke --max-positions 0 --phase3-ngram --thresholds $(INLINE_EVAL_THRESHOLDS) --require-correct-backend phase3-ngram-incremental --out target/tua-speed/inline-eval-smoke-phase3.json
 
 .PHONY: inline-eval-smoke
 inline-eval-smoke: ## Check the inline-completion evaluator against its committed smoke expectations (offline).

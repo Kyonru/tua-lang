@@ -10,7 +10,7 @@ before their default or source scope expands. It lives behind the
 ```sh
 make inline-eval            # tuning sets -> target/tua-speed/inline-eval-tune.json
 make inline-eval-phase2     # opt-in Phase 2 exact retrieval, tuning data only
-make inline-eval-phase3     # evaluator-only n-gram experiment, tuning data only
+make inline-eval-phase3     # Phase 3 raw + production-path experiment, tuning data only
 make inline-eval-phase3-smoke # check the filtered Phase 3 source on its synthetic smoke set
 make inline-eval-smoke      # committed fixtures, compared with smoke/expected.json (CI)
 make inline-editor-replay   # real VS Code menu/provider replay, tuning data only (macOS)
@@ -103,16 +103,18 @@ configuration and thresholds for those sets are frozen. The option requires
 `--thresholds benchmarks/inline-eval/thresholds.toml`; its `[phase2_tuning]`
 table pins the exploratory combined candidate.
 
-`--phase3-ngram` implies Phase 2 retrieval and adds an evaluator-only
-order-six Jelinek-Mercer model. Both the CLI and the core evaluator reject this
-flag for held-out, external, and ad-hoc paths, even when a thresholds file is
-supplied; only named manifest tuning and smoke sets are accepted.
-The model keeps immutable per-file counts so the target file and near-copy
-siblings are excluded before prediction, caps each input at 256 KiB, each file
-at 100,000 contexts, and each per-target query view at an estimated 16 MiB,
-and fails closed on its 10 ms deadline or cancellation. Evaluator-only storage
-for all held-out views is estimated and reported separately. It
-never predicts an unseen identifier, uncommon number, or string literal.
+`--phase3-ngram` implies Phase 2 retrieval and compares two implementations:
+the original evaluator-only order-six Jelinek-Mercer model and the constrained
+production host query used by the filtered incremental/combined backends. Both
+the CLI and the core evaluator reject this flag for held-out, external, and
+ad-hoc paths, even when a thresholds file is supplied; only named manifest
+tuning and smoke sets are accepted. The evaluator-only model keeps immutable
+per-file counts so the target file and near-copy siblings are excluded before
+prediction, caps each input at 256 KiB, each file at 100,000 contexts, and each
+per-target query view at an estimated 16 MiB, and fails closed on its 10 ms
+deadline or cancellation. Its storage for all held-out views is estimated and
+reported separately. Neither implementation predicts an unseen identifier,
+uncommon number, or string literal.
 `phase3-ngram-raw` exposes the unfiltered experiment;
 `phase3-ngram` is the pinned tune-only candidate (Tua, assignment and `other`
 contexts, score at least 0.85), `phase3-ngram-incremental` reports only its
@@ -121,15 +123,17 @@ reports their combined product behavior. Independent suggestion counts collapse
 all scenarios at the same project, file, and original cursor.
 
 After correcting project-root loading so configured generated output is not
-part of the tuning corpus, the filtered fallback raises saved characters per
-eligible position from Phase 2's `0.149` to `0.162`; correct-prefix precision
-changes from `0.728` to `0.745`, and wrong-to-saved improves from `0.395` to
-`0.369`. The filtered model is extremely sparse: it suggests at 0.005 eligible
-requests, saves 0.013 characters per eligible request, and has 0.913
-correct-prefix precision. The raw predictor is not usable (`0.100`
-correct-prefix precision and `26.14` wrong characters per character saved).
-The dedicated synthetic Phase 3 smoke set currently produces two filtered
-suggestions at one independent cursor, both exact correct continuations with no
+part of the tuning corpus, the production-path filtered fallback raises saved
+characters per eligible position from Phase 2's `0.149` to `0.151`;
+correct-prefix precision changes from `0.728` to `0.740`, and wrong-to-saved
+moves from about `0.40` to `0.39`. The production source is extremely sparse:
+it makes about 13 scenario suggestions (`0.003` per eligible request), with
+`0.727` exact precision, `1.000` correct-prefix precision, zero incorrect
+characters, and roughly `0.574 ms` in-process p95 latency. The raw evaluator
+predictor is not usable (`0.100` correct-prefix precision and `26.14` wrong
+characters per character saved).
+The dedicated synthetic Phase 3 smoke set currently produces 90 incremental
+suggestions at 45 independent cursors, all exact correct continuations with no
 incorrect characters.
 The Make target and a focused core assertion fail if the pinned source silently
 becomes a no-op or if any suggestion stops being exact. The repeated
@@ -137,8 +141,9 @@ training pattern is deliberately constructed to cross the confidence filter,
 so this proves only end-to-end wiring, target-file exclusion, and deterministic
 correctness on that controlled pattern. It is not quality corroboration. The
 tune-only gains may be overfit; they are not release approval. No Phase 3
-held-out or external set has been read, and no n-gram code is compiled into
-production, the LSP, or the extension.
+held-out or external set has been read. The default-off production source
+reuses the immutable project corpus and bounded host query; the evaluator's
+target-specific held-out views remain test-fixture-only.
 
 `thresholds.toml` also records the provisional Phase 3 gate contract without
 running it. It requires at least 100 independent Tua suggestions, checks the
@@ -159,10 +164,13 @@ The clearly named `phase2-tuning-phase1-plus-project-common-prefix` backend
 runs the production host query with project retrieval enabled. Its adopted
 corpus, source ordering, parse-delta validation, request budget, cancellation,
 and VFS-version rejection are therefore the same code used by the hidden
-server experiment. The pinned policy fills only comma, operator, and `other`
-contexts from rest-of-project evidence. It excludes same-directory and bundled
-results, requires at least six non-whitespace prefix characters and two
-supporting matches before returning their full common prefix.
+server experiment. The evaluator builds that corpus with the same loaded
+`ProjectModel`, so required-module relationships do not disappear during
+measurement. The pinned policy fills only comma, operator, and `other`
+contexts from directly required modules. It excludes unrelated project,
+same-directory, and bundled results, requires at least six non-whitespace
+prefix characters and two supporting matches before returning their full
+common prefix.
 These values are tuning inputs, not shipping defaults or acceptance claims.
 On the corrected tuning set, this candidate adds no suggestions over Phase 1:
 both save `0.149` characters per eligible position, have `0.728`

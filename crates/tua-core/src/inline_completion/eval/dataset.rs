@@ -178,6 +178,10 @@ impl EvalFile {
 #[derive(Clone, Debug)]
 pub struct EvalProject {
     pub name: String,
+    /// The same loaded project model used to discover this project's files.
+    /// Production-shaped corpus builds must resolve module specifiers against
+    /// this model rather than an empty stand-in.
+    pub model: ProjectModel,
     pub config: ProjectConfig,
     pub source_roots: Vec<PathBuf>,
     pub output_roots: Vec<PathBuf>,
@@ -302,6 +306,7 @@ pub fn load_project(directory: &Path) -> Result<EvalProject, String> {
 
     Ok(EvalProject {
         name: display_name(directory),
+        model,
         config,
         source_roots,
         output_roots,
@@ -319,6 +324,8 @@ fn load_single_file(path: &Path) -> Result<EvalProject, String> {
 
     Ok(EvalProject {
         name: display_name(path),
+        model: ProjectModel::load([root.clone()])
+            .map_err(|error| format!("{}: {error:?}", path.display()))?,
         config: ProjectConfig::default(),
         source_roots: vec![root.clone()],
         output_roots: Vec::new(),

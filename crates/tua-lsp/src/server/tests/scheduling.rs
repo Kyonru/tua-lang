@@ -269,6 +269,104 @@ fn newer_local_inline_request_cancels_the_older_request_for_the_same_document() 
 }
 
 #[test]
+fn standard_and_custom_inline_requests_share_newest_wins_cancellation() {
+    let uri = "file:///tmp/newest-inline-protocols.tua";
+    let mut server = LspServer::default();
+    let _ = server.handle_message(did_open(uri, "local value = 1\n"));
+    enable_scheduled_local_inline_completion(&mut server);
+    let (event_tx, _event_rx) = std::sync::mpsc::sync_channel(EVENT_QUEUE_CAPACITY);
+    let mut scheduler = RequestScheduler::new(event_tx, SharedReceivedInputState::default());
+    let custom = json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tua/localInlineCompletion",
+        "params": {
+            "textDocument": {"uri": uri},
+            "position": {"line": 0, "character": 15},
+            "documentVersion": 1,
+            "testDelayMs": 100
+        }
+    });
+    let standard = json!({
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "textDocument/inlineCompletion",
+        "params": {
+            "textDocument": {"uri": uri},
+            "position": {"line": 0, "character": 15},
+            "context": {"triggerKind": 1}
+        }
+    });
+
+    assert!(scheduler
+        .dispatch(&mut server, custom, Some(1))
+        .iter()
+        .all(|message| message.get("error").is_none()));
+    let deadline = Instant::now() + Duration::from_millis(100);
+    while scheduler.speculative_pending_count() != 0 {
+        assert!(Instant::now() < deadline, "the custom request should start");
+        std::thread::yield_now();
+    }
+    let output = scheduler.dispatch(&mut server, standard, Some(1));
+
+    assert_eq!(response_with_id(&output, 1)["error"]["code"], -32800);
+    let mut results = wait_for_speculative_results(&scheduler, 2).into_iter();
+    assert!(scheduler
+        .finish(&mut server, results.next().expect("superseded result"))
+        .is_empty());
+    let output = scheduler.finish(&mut server, results.next().expect("standard result"));
+    assert!(response_with_id(&output, 2).get("error").is_none());
+}
+
+#[test]
+fn standard_inline_request_rejects_a_result_after_the_document_changes() {
+    let uri = "file:///tmp/stale-standard-inline.tua";
+    let mut server = LspServer::default();
+    let _ = server.handle_message(did_open(uri, "local value = 1\n"));
+    enable_scheduled_local_inline_completion(&mut server);
+    let (event_tx, _event_rx) = std::sync::mpsc::sync_channel(EVENT_QUEUE_CAPACITY);
+    let mut scheduler = RequestScheduler::new(event_tx, SharedReceivedInputState::default());
+    let request = json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "textDocument/inlineCompletion",
+        "params": {
+            "textDocument": {"uri": uri},
+            "position": {"line": 0, "character": 15},
+            "context": {"triggerKind": 1},
+            "testDelayMs": 100
+        }
+    });
+
+    assert!(scheduler
+        .dispatch(&mut server, request, Some(1))
+        .iter()
+        .all(|message| message.get("error").is_none()));
+    let deadline = Instant::now() + Duration::from_millis(100);
+    while scheduler.speculative_pending_count() != 0 {
+        assert!(
+            Instant::now() < deadline,
+            "the standard request should start"
+        );
+        std::thread::yield_now();
+    }
+
+    let _ = server.handle_message(did_change(uri, "local value = 2\n", 2));
+    let output = scheduler.cancel_stale_document_requests(
+        uri,
+        server.document_generations.get(uri).copied(),
+        server.document_versions.get(uri).copied(),
+    );
+
+    assert_eq!(response_with_id(&output, 1)["error"]["code"], -32801);
+    let result = wait_for_speculative_results(&scheduler, 1)
+        .into_iter()
+        .next()
+        .expect("cancelled standard request result");
+    assert!(scheduler.finish(&mut server, result).is_empty());
+}
+
+#[test]
 fn malformed_local_inline_request_returns_invalid_params_without_queuing() {
     let mut server = LspServer::default();
     enable_scheduled_local_inline_completion(&mut server);

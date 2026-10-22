@@ -214,6 +214,29 @@ impl AnalysisHost {
         self.bump_revision();
     }
 
+    /// Enables capture of the compact scope facts used by the optional
+    /// statistical inline source. Keeping this explicit preserves a zero-work
+    /// default path: ordinary analysis never extracts or stores these facts.
+    pub fn set_inline_statistical_enabled(&mut self, enabled: bool) {
+        if self.inline_statistical_enabled == enabled {
+            return;
+        }
+        self.inline_statistical_enabled = enabled;
+        if !enabled {
+            Arc::make_mut(self.inline_statistical_scopes.get_mut()).clear();
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn retained_statistical_scope_files(&self) -> usize {
+        self.inline_statistical_scopes.borrow().len()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn statistical_scope_storage_ptr(&self) -> *const () {
+        Arc::as_ptr(&self.inline_statistical_scopes.borrow()).cast()
+    }
+
     pub fn replace_completion_adaptive_file_observations(
         &mut self,
         file_scope_hash: u64,
@@ -357,6 +380,7 @@ impl AnalysisHost {
         self.cache.borrow_mut().invalidate_file(path.as_ref(), true);
         self.clear_query_caches();
         self.last_good_files.borrow_mut().remove(&path);
+        Arc::make_mut(self.inline_statistical_scopes.get_mut()).remove(&path);
         self.vfs.remove_file(&path);
         if had_module_path != self.has_module_path(&path) {
             self.bump_module_path_revision();
@@ -419,6 +443,10 @@ impl AnalysisHost {
         self.cache.borrow_mut().invalidate_file(path.as_ref(), true);
         self.clear_query_caches();
         self.vfs.close_file(&path);
+        // Closing an overlay can reveal a different disk source. Do not let
+        // request-side facts captured from the former open document survive
+        // until the background warmer reaches the newly visible source.
+        Arc::make_mut(self.inline_statistical_scopes.get_mut()).remove(&path);
         if had_module_path != self.has_module_path(&path) {
             self.bump_module_path_revision();
         }
@@ -631,7 +659,12 @@ impl AnalysisHost {
         };
         let _profile = profile::span_for_path(span, path.as_ref());
 
-        self.current_analysis_file(path.as_ref()).is_some()
+        let path = normalize_path(path.as_ref());
+        let Some(file) = self.current_analysis_file(&path) else {
+            return false;
+        };
+        self.publish_inline_statistical_last_good(&path, &file);
+        true
     }
 
     pub fn adopt_warmed_file(&mut self, warmed: &AnalysisHost, path: impl AsRef<Path>) -> bool {
@@ -643,6 +676,7 @@ impl AnalysisHost {
             || self.asset_roots != warmed.asset_roots
             || self.builtin_catalogs != warmed.builtin_catalogs
             || self.vfs.options() != warmed.vfs.options()
+            || self.inline_statistical_enabled != warmed.inline_statistical_enabled
         {
             return false;
         }
@@ -677,11 +711,37 @@ impl AnalysisHost {
             return false;
         }
 
-        let mut cache = self.cache.borrow_mut();
+        let parsed = cached.file.parsed.is_ok();
+        {
+            let mut cache = self.cache.borrow_mut();
+            cache.update_dependencies(&path, &cached.file);
+            cache.files.insert(path.clone(), cached);
+            cache.parsed_files.extend(parsed_files);
+        }
 
-        cache.update_dependencies(&path, &cached.file);
-        cache.files.insert(path, cached);
-        cache.parsed_files.extend(parsed_files);
+        // Invalid edits keep the previous valid facts. The warmed worker
+        // publishes new facts only for a valid current source, so adoption can
+        // copy immutable/Arc-backed values without walking a ScopeMap on the
+        // coordinator thread.
+        if self.inline_statistical_enabled && parsed {
+            if let Some(last_good) = warmed.last_good_files.borrow().get(&path).cloned() {
+                self.last_good_files
+                    .borrow_mut()
+                    .insert(path.clone(), last_good);
+            }
+            if let Some(scope) = warmed
+                .inline_statistical_scopes
+                .borrow()
+                .get(&path)
+                .cloned()
+            {
+                insert_statistical_scope(
+                    Arc::make_mut(&mut self.inline_statistical_scopes.borrow_mut()),
+                    path,
+                    scope,
+                );
+            }
+        }
 
         true
     }
@@ -759,6 +819,9 @@ impl AnalysisHost {
             .inline_completion_stats
             .returned_after_two_parses
             .load(std::sync::atomic::Ordering::Relaxed);
+        let statistical_scopes = self.inline_statistical_scopes.borrow();
+        stats.inline_statistical_scope_files = statistical_scopes.len();
+        stats.inline_statistical_scope_bytes = statistical_scope_map_bytes(&statistical_scopes);
 
         stats
     }
@@ -1155,6 +1218,52 @@ impl AnalysisHost {
         )
     }
 
+    fn peek_current_statistical_scope(
+        &self,
+        path: &Path,
+    ) -> Option<crate::inline_completion::statistical::StatisticalScopeFacts> {
+        if !self.inline_statistical_enabled {
+            return None;
+        }
+        let path = normalize_path(path);
+        let source = self.vfs.source(&path)?;
+        if analysis_source_kind(self.vfs.kind(&path)?) != AnalysisSourceKind::Tua
+            || !crate::inline_completion::within_inline_validation_parse_cap(
+                AnalysisSourceKind::Tua,
+                source.len(),
+            )
+        {
+            return None;
+        }
+        // Scope extraction happens only while publishing last-good analysis,
+        // never on the request path. Facts before the first changed character
+        // retain their exact spans. The predictor records that boundary and
+        // abstains when the requested cursor lies after it, so edits elsewhere
+        // and cold analysis caches fail closed.
+        let last_good_files = self.last_good_files.borrow();
+        let facts = self.inline_statistical_scopes.borrow();
+        last_good_files.get(&path).and_then(|last_good| {
+            if !crate::inline_completion::within_inline_validation_parse_cap(
+                AnalysisSourceKind::Tua,
+                last_good.parsed.source.len(),
+            ) {
+                return None;
+            }
+            let facts = facts.get(&path)?.facts.clone();
+            let common_prefix_bytes = if source == last_good.parsed.source {
+                source.len()
+            } else {
+                source
+                    .chars()
+                    .zip(last_good.parsed.source.chars())
+                    .take_while(|(current, previous)| current == previous)
+                    .map(|(character, _)| character.len_utf8())
+                    .sum()
+            };
+            Some(facts.restricted_to_common_prefix(common_prefix_bytes))
+        })
+    }
+
     /// Whether the current source parsed, from the cache only. `None` when the
     /// cache has no entry for the current source.
     #[cfg(any(test, feature = "test-fixture"))]
@@ -1208,6 +1317,15 @@ impl AnalysisHost {
         path: impl AsRef<Path>,
         include_project: bool,
     ) -> Option<crate::PreparedInlineCompletion> {
+        self.prepare_local_inline_completion_with_sources(path, include_project, false)
+    }
+
+    pub fn prepare_local_inline_completion_with_sources(
+        &self,
+        path: impl AsRef<Path>,
+        include_project: bool,
+        include_statistical: bool,
+    ) -> Option<crate::PreparedInlineCompletion> {
         let path = normalize_path(path.as_ref());
         let source = self.vfs.source(&path)?.to_owned();
         let kind = self.vfs.kind(&path).map(analysis_source_kind)?;
@@ -1222,7 +1340,7 @@ impl AnalysisHost {
         };
         counter.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
-        let project = include_project.then(|| {
+        let project = (include_project || include_statistical).then(|| {
             // Capture the live epoch before any immutable project value. A
             // concurrent generation change or clear after this point makes
             // the prepared request stale instead of blessing the old corpus
@@ -1237,6 +1355,9 @@ impl AnalysisHost {
                 limits: self.project_pattern_limits,
             }
         });
+        let statistical_scope = include_statistical
+            .then(|| self.peek_current_statistical_scope(&path))
+            .flatten();
         Some(crate::PreparedInlineCompletion {
             path,
             source,
@@ -1244,6 +1365,7 @@ impl AnalysisHost {
             include_ecs: self.config.ecs.enabled,
             baseline_parse_errors,
             project,
+            statistical_scope,
             stats: std::sync::Arc::clone(&self.inline_completion_stats),
         })
     }
@@ -1258,9 +1380,11 @@ impl AnalysisHost {
         budget: &crate::InlineCompletionBudget,
         cancelled: &std::sync::atomic::AtomicBool,
     ) -> Vec<crate::InlineCompletionCandidate> {
-        let Some(prepared) =
-            self.prepare_local_inline_completion_with_project(path, options.project)
-        else {
+        let Some(prepared) = self.prepare_local_inline_completion_with_sources(
+            path,
+            options.project,
+            options.statistical,
+        ) else {
             return Vec::new();
         };
         prepared.complete(position, options, budget, cancelled)
@@ -1279,6 +1403,7 @@ impl AnalysisHost {
             self.vfs.source(&path)?.to_owned(),
             analysis_source_kind(self.vfs.kind(&path)?),
             self.vfs.source_version(&path)?,
+            self.inline_statistical_enabled,
         ))
     }
 
@@ -1600,6 +1725,7 @@ impl AnalysisHost {
     fn invalidate_all_analysis(&mut self) {
         self.cache.borrow_mut().invalidate_all();
         self.last_good_files.borrow_mut().clear();
+        Arc::make_mut(self.inline_statistical_scopes.get_mut()).clear();
         self.clear_query_caches();
     }
 
@@ -1624,13 +1750,33 @@ impl AnalysisHost {
 
     fn refresh_last_good_files(&self, files: &BTreeMap<PathBuf, AnalysisFile>) {
         let mut last_good_files = self.last_good_files.borrow_mut();
+        let mut statistical_scopes = self.inline_statistical_scopes.borrow_mut();
+        let statistical_scopes = Arc::make_mut(&mut statistical_scopes);
 
         last_good_files.retain(|path, _| files.contains_key(path));
+        statistical_scopes.retain(|path, _| files.contains_key(path));
 
         for (path, file) in files {
             let Ok(parsed) = &file.parsed else {
                 continue;
             };
+
+            if self.inline_statistical_enabled
+                && file.kind == AnalysisSourceKind::Tua
+                && file.source.len() <= crate::inline_completion::statistical::MAX_SOURCE_BYTES
+            {
+                insert_statistical_scope(
+                    statistical_scopes,
+                    path.clone(),
+                    InlineStatisticalScopeEntry {
+                        facts:
+                            crate::inline_completion::statistical::StatisticalScopeFacts::from_scope(
+                                file.scope().expect("parsed file must have a scope map"),
+                            ),
+                        pinned_open_document: self.vfs.is_open(path),
+                    },
+                );
+            }
 
             last_good_files.insert(
                 path.clone(),
@@ -1644,5 +1790,87 @@ impl AnalysisHost {
                 },
             );
         }
+    }
+
+    fn publish_inline_statistical_last_good(&self, path: &Path, file: &AnalysisFile) {
+        if !self.inline_statistical_enabled
+            || file.kind != AnalysisSourceKind::Tua
+            || file.source.len() > crate::inline_completion::statistical::MAX_SOURCE_BYTES
+        {
+            return;
+        }
+        let Ok(parsed) = &file.parsed else {
+            return;
+        };
+        let Some(scope) = file.scope() else {
+            return;
+        };
+        let Some(hir) = file.hir() else {
+            return;
+        };
+        let Some(environment) = file.environment() else {
+            return;
+        };
+
+        self.last_good_files.borrow_mut().insert(
+            path.to_path_buf(),
+            LastGoodAnalysisFile {
+                parsed: parsed.clone(),
+                hir: hir.clone(),
+                environment: environment.clone(),
+            },
+        );
+        insert_statistical_scope(
+            Arc::make_mut(&mut self.inline_statistical_scopes.borrow_mut()),
+            path.to_path_buf(),
+            InlineStatisticalScopeEntry {
+                facts: crate::inline_completion::statistical::StatisticalScopeFacts::from_scope(
+                    scope,
+                ),
+                // Scheduling priority is not an ownership signal: related
+                // dependencies are also warmed at High priority. Only an
+                // editor overlay is protected from bounded-cache eviction.
+                pinned_open_document: self.vfs.is_open(path),
+            },
+        );
+    }
+}
+
+fn statistical_scope_map_bytes(scopes: &BTreeMap<PathBuf, InlineStatisticalScopeEntry>) -> usize {
+    std::mem::size_of_val(scopes)
+        + scopes
+            .iter()
+            .map(|(path, entry)| 64 + path.as_os_str().len() + entry.facts.approximate_bytes())
+            .sum::<usize>()
+}
+
+fn insert_statistical_scope(
+    scopes: &mut BTreeMap<PathBuf, InlineStatisticalScopeEntry>,
+    path: PathBuf,
+    entry: InlineStatisticalScopeEntry,
+) {
+    let protected = path.clone();
+    scopes.insert(path, entry);
+    while scopes.len() > crate::inline_completion::statistical::MAX_SCOPE_FACT_FILES
+        || statistical_scope_map_bytes(scopes)
+            > crate::inline_completion::statistical::MAX_SCOPE_FACT_BYTES
+    {
+        let Some(last) = scopes
+            .iter()
+            .rev()
+            .find(|(candidate, entry)| **candidate != protected && !entry.pinned_open_document)
+            .map(|(candidate, _)| candidate.clone())
+            .or_else(|| {
+                scopes
+                    .keys()
+                    .rev()
+                    .find(|candidate| **candidate != protected)
+                    .cloned()
+            })
+            .or_else(|| scopes.keys().next_back().cloned())
+        else {
+            break;
+        };
+        scopes.remove(&last);
     }
 }

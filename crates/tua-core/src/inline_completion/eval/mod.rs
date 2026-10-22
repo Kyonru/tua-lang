@@ -43,8 +43,7 @@ use super::eligibility::{
     strip_trailing_comment, suffix_allows_inline, word_before, CursorContext, LexicalRegion,
 };
 use crate::{
-    AnalysisHost, AnalysisWarmPriority, PatternCorpusBatchEntry, ProjectModel, RetrievalLimits,
-    SourcePosition,
+    AnalysisHost, AnalysisWarmPriority, PatternCorpusBatchEntry, RetrievalLimits, SourcePosition,
 };
 
 const PRODUCTION_EVAL_CORPUS_GENERATION: u64 = 1;
@@ -672,9 +671,9 @@ fn evaluate_set(set: &EvalSet, backends: &[Box<dyn Backend>], options: &EvalOpti
         }
 
         let (mut host, memory) = load_host(project, options);
-        if options.phase2_retrieval {
+        if options.phase2_retrieval || options.phase3_ngram {
             host.set_project_pattern_eligibility_generation(PRODUCTION_EVAL_CORPUS_GENERATION);
-            refresh_production_project_corpus(&mut host, &project.files);
+            refresh_production_project_corpus(&mut host, &project.model, &project.files);
         }
         let mut facts_host = source_host(project);
         report.memory.push((project.name.clone(), memory));
@@ -710,12 +709,16 @@ fn evaluate_set(set: &EvalSet, backends: &[Box<dyn Backend>], options: &EvalOpti
                 retrieval_index.as_ref(),
                 ngram_index.as_ref(),
             );
-            if options.phase2_retrieval {
+            if options.phase2_retrieval || options.phase3_ngram {
                 // `evaluate_file` closes its temporary document overlay. That
                 // assigns the on-disk source a fresh VFS version, so refresh
                 // this one table before a later target queries it. Real LSP
                 // indexing does the same work asynchronously after an edit.
-                refresh_production_project_corpus(&mut host, std::slice::from_ref(file));
+                refresh_production_project_corpus(
+                    &mut host,
+                    &project.model,
+                    std::slice::from_ref(file),
+                );
             }
         }
         report.inline_validation.add(&host.cache_stats());
@@ -767,14 +770,16 @@ fn evaluate_set(set: &EvalSet, backends: &[Box<dyn Backend>], options: &EvalOpti
     report
 }
 
-fn refresh_production_project_corpus(host: &mut AnalysisHost, files: &[EvalFile]) {
+fn refresh_production_project_corpus(
+    host: &mut AnalysisHost,
+    model: &crate::ProjectModel,
+    files: &[EvalFile],
+) {
     let entries = files
         .iter()
         .filter_map(|file| {
             host.prepare_project_pattern_file(&file.path).map(|input| {
-                PatternCorpusBatchEntry::File(
-                    input.build(&ProjectModel::default(), RetrievalLimits::default()),
-                )
+                PatternCorpusBatchEntry::File(input.build(model, RetrievalLimits::default()))
             })
         })
         .collect::<Vec<_>>();
@@ -788,7 +793,8 @@ fn refresh_production_project_corpus(host: &mut AnalysisHost, files: &[EvalFile]
 fn load_host(project: &EvalProject, options: &EvalOptions) -> (AnalysisHost, MemoryReport) {
     let allocated = || options.allocated_bytes.map_or(0, |current| current());
     let before_load_bytes = allocated();
-    let host = source_host(project);
+    let mut host = source_host(project);
+    host.set_inline_statistical_enabled(options.phase3_ngram);
     let after_files_bytes = allocated();
     // Representative project loading: a full snapshot, as the language server
     // builds for diagnostics.

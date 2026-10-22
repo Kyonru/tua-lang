@@ -235,6 +235,7 @@ mod tests {
             },
             is_snippet: false,
             source: InlineCompletionSource::CurrentFile,
+            tier: None,
             score: InlineCompletionScore(1.0),
             pattern_id: None,
         };
@@ -272,6 +273,7 @@ mod tests {
             },
             is_snippet: false,
             source: InlineCompletionSource::CurrentFile,
+            tier: None,
             score: InlineCompletionScore(1.0),
             pattern_id: None,
         };
@@ -327,6 +329,7 @@ mod tests {
             },
             is_snippet: false,
             source: InlineCompletionSource::CurrentFile,
+            tier: None,
             score: InlineCompletionScore(1.0),
             pattern_id: None,
         };
@@ -373,6 +376,7 @@ mod tests {
             } else {
                 InlineCompletionSource::CurrentFile
             },
+            tier: None,
             score: InlineCompletionScore(1.0),
             pattern_id: None,
         };

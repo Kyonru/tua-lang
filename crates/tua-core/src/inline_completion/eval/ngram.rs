@@ -928,6 +928,7 @@ mod tests {
     fn project(files: &[(&str, &str)]) -> EvalProject {
         EvalProject {
             name: "fixture".to_owned(),
+            model: crate::ProjectModel::default(),
             config: ProjectConfig::default(),
             source_roots: vec![],
             output_roots: vec![],
@@ -1287,6 +1288,7 @@ mod tests {
             .collect::<Vec<_>>();
         let fixture = EvalProject {
             name: "large".to_owned(),
+            model: crate::ProjectModel::default(),
             config: ProjectConfig::default(),
             source_roots: vec![],
             output_roots: vec![],

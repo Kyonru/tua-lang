@@ -85,6 +85,9 @@ pub(super) struct InlineCompletionOverrides {
     /// Experimental Phase 2 gate-development switch. It is intentionally not
     /// exposed by the extension until project retrieval passes its gates.
     pub(super) project: Option<bool>,
+    /// Experimental Phase 3 source. The extension exposes it as an explicit
+    /// opt-in, but it remains off until its independent quality gate passes.
+    pub(super) statistical: Option<bool>,
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -228,6 +231,10 @@ impl WorkspaceSettings {
 
     pub(super) fn inline_project_enabled(&self) -> bool {
         self.inline_completion_enabled() && self.completion.inline.project.unwrap_or(false)
+    }
+
+    pub(super) fn inline_statistical_enabled(&self) -> bool {
+        self.inline_completion_enabled() && self.completion.inline.statistical.unwrap_or(false)
     }
 }
 
@@ -499,6 +506,8 @@ impl InlineCompletionOverrides {
             current_file: sources
                 .and_then(|sources| bool_setting(sources, "current_file", "currentFile")),
             project: sources.and_then(|sources| bool_setting(sources, "project", "project")),
+            statistical: sources
+                .and_then(|sources| bool_setting(sources, "statistical", "statistical")),
         }
     }
 }
@@ -767,6 +776,7 @@ mod tests {
         assert!(defaults.inline_semantic_enabled());
         assert!(defaults.inline_current_file_enabled());
         assert!(!defaults.inline_project_enabled());
+        assert!(!defaults.inline_statistical_enabled());
 
         let settings = WorkspaceSettings::from_did_change_configuration(&json!({
             "params": {
@@ -778,7 +788,8 @@ mod tests {
                                 "sources": {
                                     "semantic": false,
                                     "currentFile": false,
-                                    "project": true
+                                    "project": true,
+                                    "statistical": true
                                 }
                             }
                         }
@@ -791,5 +802,6 @@ mod tests {
         assert!(!settings.inline_semantic_enabled());
         assert!(!settings.inline_current_file_enabled());
         assert!(settings.inline_project_enabled());
+        assert!(settings.inline_statistical_enabled());
     }
 }

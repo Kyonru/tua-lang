@@ -22,7 +22,10 @@ mod recall;
 #[doc(hidden)]
 pub mod retrieval;
 mod semantic;
+pub(crate) mod statistical;
 mod validate;
+
+pub(crate) use validate::within_parse_cap as within_inline_validation_parse_cap;
 
 pub use project_corpus::{
     CorpusAdoptionResult, CorpusEntryAdoption, CorpusEntryAdoptionStatus, CorpusFileId,
@@ -40,6 +43,7 @@ pub enum InlineCompletionSource {
     Semantic,
     CurrentFile,
     Project,
+    ProjectStatistical,
     Corpus,
 }
 
@@ -49,6 +53,7 @@ impl InlineCompletionSource {
             Self::Semantic => "semantic",
             Self::CurrentFile => "currentFile",
             Self::Project => "project",
+            Self::ProjectStatistical => "projectStatistical",
             Self::Corpus => "corpus",
         }
     }
@@ -69,6 +74,9 @@ pub struct InlineCompletionCandidate {
     pub range: SourceSpan,
     pub is_snippet: bool,
     pub source: InlineCompletionSource,
+    /// Project-retrieval tier, when the candidate came from the immutable
+    /// workspace corpus. Other sources leave this unset.
+    pub tier: Option<PatternCorpusTier>,
     pub score: InlineCompletionScore,
     pub pattern_id: Option<PatternId>,
 }
@@ -86,6 +94,7 @@ pub struct PreparedInlineCompletion {
     pub(crate) include_ecs: bool,
     pub(crate) baseline_parse_errors: Option<Vec<crate::Diagnostic>>,
     pub(crate) project: Option<PreparedProjectCompletion>,
+    pub(crate) statistical_scope: Option<statistical::StatisticalScopeFacts>,
     pub(crate) stats: Arc<InlineCompletionRuntimeStats>,
 }
 
@@ -125,6 +134,7 @@ impl PreparedInlineCompletion {
             options,
             budget,
             cancelled,
+            self.statistical_scope.as_ref(),
             &baseline_parse_errors,
         )
     }
@@ -137,6 +147,9 @@ pub struct InlineCompletionOptions {
     pub semantic: bool,
     pub current_file: bool,
     pub project: bool,
+    /// Conservative Tua-only project n-grams. This remains default-off until
+    /// its independent quality gates pass.
+    pub statistical: bool,
 }
 
 impl Default for InlineCompletionOptions {
@@ -145,6 +158,7 @@ impl Default for InlineCompletionOptions {
             semantic: true,
             current_file: true,
             project: false,
+            statistical: false,
         }
     }
 }
@@ -266,6 +280,7 @@ pub(crate) fn complete(
     options: &InlineCompletionOptions,
     budget: &InlineCompletionBudget,
     cancelled: &AtomicBool,
+    statistical_scope: Option<&statistical::StatisticalScopeFacts>,
     baseline_parse_errors: &dyn Fn() -> Option<Vec<crate::Diagnostic>>,
 ) -> Vec<InlineCompletionCandidate> {
     if cancelled.load(Ordering::Relaxed) || budget.is_expired() {
@@ -303,8 +318,7 @@ pub(crate) fn complete(
     // validation. Each lookup is non-blocking and takes no long-lived guard;
     // the final epoch check rejects a candidate if any VFS source changed at
     // any point during this completion.
-    let project_versions = options
-        .project
+    let project_versions = (options.project || options.statistical)
         .then(|| {
             let project = project.as_ref()?;
             project
@@ -333,6 +347,7 @@ pub(crate) fn complete(
             range,
             is_snippet,
             source: InlineCompletionSource::Semantic,
+            tier: None,
             score: InlineCompletionScore(1.0),
             pattern_id: None,
         })
@@ -356,6 +371,7 @@ pub(crate) fn complete(
                         range,
                         is_snippet: false,
                         source: InlineCompletionSource::CurrentFile,
+                        tier: None,
                         score: InlineCompletionScore(suggestion.score),
                         pattern_id: None,
                     })
@@ -386,7 +402,7 @@ pub(crate) fn complete(
                 return None;
             }
             let versions = project_versions.as_ref()?;
-            let hit = project.corpus.query_project_common_prefix(
+            let hit = project.corpus.query_required_module_common_prefix(
                 PatternCorpusQuery {
                     generation: project.generation,
                     active_path: input.path,
@@ -412,7 +428,44 @@ pub(crate) fn complete(
                 range,
                 is_snippet: false,
                 source: InlineCompletionSource::Project,
+                tier: Some(hit.tier),
                 score: InlineCompletionScore(hit.support as f64),
+                pattern_id: None,
+            })
+        })
+        .or_else(|| {
+            let project = project.as_ref()?;
+            if !options.statistical
+                || input.kind != AnalysisSourceKind::Tua
+                || !matches!(
+                    context,
+                    eligibility::CursorContext::Assignment | eligibility::CursorContext::Other
+                )
+                || !project
+                    .eligibility
+                    .matches(project.generation, project.eligibility_epoch)
+            {
+                return None;
+            }
+            let scope = statistical_scope?;
+            let versions = project_versions.as_ref()?;
+            let prediction = project.corpus.query_statistical(
+                project.generation,
+                input.path,
+                input.source,
+                offset,
+                scope,
+                *budget,
+                cancelled,
+                |path| versions.get(path),
+            )?;
+            Some(InlineCompletionCandidate {
+                insert_text: prediction.text,
+                range,
+                is_snippet: false,
+                source: InlineCompletionSource::ProjectStatistical,
+                tier: Some(PatternCorpusTier::Project),
+                score: InlineCompletionScore(prediction.score),
                 pattern_id: None,
             })
         });
@@ -438,7 +491,7 @@ pub(crate) fn complete(
     ) else {
         return Vec::new();
     };
-    if options.project
+    if (options.project || options.statistical)
         && (project.as_ref().is_some_and(|project| {
             !project
                 .eligibility

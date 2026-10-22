@@ -16,6 +16,7 @@ pub(super) enum RequestKind {
     Health,
     ResetCompletionStats,
     LocalInlineCompletion,
+    StandardInlineCompletion,
     InlineCompletionContext,
     ValidateInlineCompletion,
     Inspect,
@@ -70,6 +71,7 @@ impl RequestKind {
             "tua/health" => Self::Health,
             "tua/resetCompletionStats" => Self::ResetCompletionStats,
             "tua/localInlineCompletion" => Self::LocalInlineCompletion,
+            "textDocument/inlineCompletion" => Self::StandardInlineCompletion,
             "tua/inlineCompletionContext" => Self::InlineCompletionContext,
             "tua/validateInlineCompletion" => Self::ValidateInlineCompletion,
             "tua/inspect" => Self::Inspect,
@@ -157,6 +159,10 @@ mod tests {
         assert_eq!(
             RequestKind::from_method("tua/localInlineCompletion"),
             Some(RequestKind::LocalInlineCompletion)
+        );
+        assert_eq!(
+            RequestKind::from_method("textDocument/inlineCompletion"),
+            Some(RequestKind::StandardInlineCompletion)
         );
         assert_eq!(
             RequestKind::from_method("tua/inlineCompletionContext"),

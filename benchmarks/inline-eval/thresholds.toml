@@ -34,7 +34,7 @@ snippet_min_prefix_chars = 3
 # Frozen tuning policy for the evaluator-only Phase 2 candidate. This is not a
 # release threshold and must be selected on tune/smoke before any Phase 2
 # held-out or external run. The candidate keeps Phase 1 results first, then
-# uses only rest-of-project common-prefix evidence in these contexts.
+# uses only directly required-module common-prefix evidence in these contexts.
 [phase2_tuning]
 contexts = ["comma", "operator", "other"]
 min_prefix_chars = 6

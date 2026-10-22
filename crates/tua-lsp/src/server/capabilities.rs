@@ -34,6 +34,7 @@ pub(super) fn server_description() -> String {
 pub(super) fn initialize_result(
     client_pull_diagnostics: bool,
     client_completion_label_details: bool,
+    advertise_inline_completion: bool,
 ) -> Value {
     let completion_trigger_characters = completion_trigger_characters();
     let mut result = json!({
@@ -138,6 +139,10 @@ pub(super) fn initialize_result(
         result["capabilities"]["completionProvider"]["completionItem"] = json!({
             "labelDetailsSupport": true
         });
+    }
+
+    if advertise_inline_completion {
+        result["capabilities"]["inlineCompletionProvider"] = json!(true);
     }
 
     result
