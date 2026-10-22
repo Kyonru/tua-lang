@@ -14,6 +14,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Multiline function signatures now align their closing parenthesis with the
+  declaration, while parenthesized and continued `if`/`elseif`/`while`
+  conditions retain canonical spacing and correctly indent their bodies.
+
 - LuaCATS emission now resolves selected and namespace-qualified imported type
   aliases into self-contained structural annotations instead of leaking
   Tua-only names such as `Types.Game` into generated Lua.

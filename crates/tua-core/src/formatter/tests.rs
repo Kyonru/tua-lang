@@ -348,6 +348,97 @@ until
 }
 
 #[test]
+fn formats_multiline_conditions_without_losing_block_structure() {
+    let source = r#"if(
+player.x > 0 and
+player.y > 0 and
+player.x + player.width < arena.width
+) then
+print("inside")
+end
+
+if player.x > 0
+and player.y > 0
+and player.x + player.width < arena.width then
+print("inside")
+end
+
+if mode == "then"
+and ready then
+print("ready")
+end
+"#;
+    let expected = r#"if (
+  player.x > 0 and
+  player.y > 0 and
+  player.x + player.width < arena.width
+) then
+  print("inside")
+end
+
+if player.x > 0
+  and player.y > 0
+  and player.x + player.width < arena.width then
+  print("inside")
+end
+
+if mode == "then"
+  and ready then
+  print("ready")
+end
+"#;
+
+    let output = format(source);
+
+    assert_eq!(output, expected);
+    assert_eq!(format(&output), output);
+    let parsed = parse_tua_source("src/main.tua", output).expect("formatted source should parse");
+    let environment = crate::types::build_type_environment(&parsed)
+        .expect("formatted source should build a type environment");
+    let diagnostics = crate::linter::lint_parsed_source(
+        &parsed,
+        &crate::DiagnosticsConfig::default(),
+        &crate::config::JitConfig::default(),
+        &environment,
+    );
+    assert!(
+        diagnostics
+            .iter()
+            .all(|diagnostic| diagnostic.code
+                != Some(crate::DiagnosticCode::LINT_MULTI_LINE_STATEMENT)),
+        "formatter output must satisfy its continuation-layout lint: {diagnostics:#?}"
+    );
+}
+
+#[test]
+fn aligns_multiline_function_signature_closers_with_the_declaration() {
+    let source = r#"local function collides(
+x: number,
+y: number,
+width: number,
+height: number
+): boolean
+return x > 0 and y > 0
+end
+"#;
+    let expected = r#"local function collides(
+  x: number,
+  y: number,
+  width: number,
+  height: number
+): boolean
+  return x > 0 and y > 0
+end
+"#;
+
+    let output = format(source);
+
+    assert_eq!(output, expected);
+    assert_eq!(format(&output), output);
+    parse_tua_source("src/main.tua", output).expect("formatted signature should parse");
+}
+
+#[test]
 fn avoids_extra_paren_indent_inside_call_table_and_function_blocks() {
     let source = r#"function update()
 table.insert(list, {

@@ -371,6 +371,7 @@ struct Formatter<'a> {
     paren_continuation_indents: Vec<usize>,
     pending_continuation: bool,
     suppressed_paren_block_indents: Vec<usize>,
+    multiline_function_header_depths: Vec<usize>,
     split_control_header: Option<SplitControlHeader>,
     multiline_state: MultilineState,
     has_content: bool,
@@ -407,6 +408,7 @@ impl<'a> Formatter<'a> {
             paren_continuation_indents: Vec::new(),
             pending_continuation: false,
             suppressed_paren_block_indents: Vec::new(),
+            multiline_function_header_depths: Vec::new(),
             split_control_header: None,
             multiline_state: MultilineState::Code,
             has_content: false,
@@ -564,8 +566,21 @@ impl<'a> Formatter<'a> {
                 && !closes_paren
                 && split_header.is_none(),
         );
-        let split_header_indent = usize::from(split_header.is_some() && !closes_split_header);
-        let indent_level = self.indent_level
+        let closes_function_header = closes_paren
+            && self
+                .multiline_function_header_depths
+                .last()
+                .is_some_and(|depth| *depth == self.paren_depth);
+        let split_header_indent = usize::from(
+            split_header.is_some()
+                && paren_indent == 0
+                && (!closes_split_header
+                    || (!split_header.is_some_and(|header| header.is_bare_closer(code))
+                        && !closes_paren)),
+        );
+        let indent_level = self
+            .indent_level
+            .saturating_sub(usize::from(closes_function_header))
             + paren_indent
             + paren_extra
             + continuation_indent
@@ -577,6 +592,9 @@ impl<'a> Formatter<'a> {
         output.push('\n');
 
         self.update_paren_state(code, continuation_indent);
+        if closes_function_header {
+            self.multiline_function_header_depths.pop();
+        }
         self.brace_depth = update_group_depth(self.brace_depth, code, b'{', b'}');
         self.pending_continuation = self.paren_depth == 0 && line_ends_with_continuation(code);
 
@@ -592,6 +610,9 @@ impl<'a> Formatter<'a> {
             if self.paren_depth > 0 {
                 self.indent_level += paren_indent;
                 self.suppressed_paren_block_indents.push(paren_indent);
+                if code_contains_word(code, "function") {
+                    self.multiline_function_header_depths.push(self.paren_depth);
+                }
             }
             self.indent_level += 1;
         }
@@ -674,19 +695,33 @@ impl SplitControlHeader {
         let code = code.trim();
 
         match self {
-            Self::Then => code == "then",
-            Self::Do => code == "do",
+            Self::Then => code_contains_word(code, "then"),
+            Self::Do => code_contains_word(code, "do"),
+            Self::UntilCondition => false,
+        }
+    }
+
+    fn is_bare_closer(self, code: &str) -> bool {
+        match self {
+            Self::Then => code.trim() == "then",
+            Self::Do => code.trim() == "do",
             Self::UntilCondition => false,
         }
     }
 }
 
 fn split_control_header(code: &str) -> Option<SplitControlHeader> {
-    match code.trim() {
-        "if" | "elseif" => Some(SplitControlHeader::Then),
-        "while" => Some(SplitControlHeader::Do),
-        "until" => Some(SplitControlHeader::UntilCondition),
-        _ => None,
+    let code = code.trim();
+    if (starts_with_word(code, "if") || starts_with_word(code, "elseif"))
+        && !code_contains_word(code, "then")
+    {
+        Some(SplitControlHeader::Then)
+    } else if starts_with_word(code, "while") && !code_contains_word(code, "do") {
+        Some(SplitControlHeader::Do)
+    } else if code == "until" {
+        Some(SplitControlHeader::UntilCondition)
+    } else {
+        None
     }
 }
 
@@ -760,7 +795,10 @@ fn normalize_spacing(line: &str) -> String {
                         }
                     }
                     b'(' => {
-                        if should_trim_before_call_paren(&output) {
+                        if should_space_before_group_paren(&output) {
+                            trim_trailing_spaces(&mut output);
+                            output.push(' ');
+                        } else if should_trim_before_call_paren(&output) {
                             trim_trailing_spaces(&mut output);
                         }
                         output.push(bytes[index] as char);
@@ -1289,9 +1327,67 @@ fn starts_with_word(value: &str, word: &str) -> bool {
 }
 
 fn code_contains_word(value: &str, word: &str) -> bool {
-    value
-        .split(|character: char| !character.is_ascii_alphanumeric() && character != '_')
-        .any(|part| part == word)
+    let bytes = value.as_bytes();
+    let mut state = MaskState::Code;
+    let mut index = 0;
+
+    while index < bytes.len() {
+        match &mut state {
+            MaskState::Code => {
+                if bytes[index] == b'-' && bytes.get(index + 1) == Some(&b'-') {
+                    break;
+                }
+                if bytes[index] == b'\'' || bytes[index] == b'"' {
+                    state = MaskState::ShortString {
+                        quote: bytes[index],
+                        escaped: false,
+                    };
+                    index += 1;
+                    continue;
+                }
+                if let Some((close, consumed)) = long_bracket_open(&bytes[index..]) {
+                    state = MaskState::LongString { close };
+                    index += consumed;
+                    continue;
+                }
+                if is_identifier_continue(bytes[index]) {
+                    let start = index;
+                    index += 1;
+                    while bytes
+                        .get(index)
+                        .is_some_and(|byte| is_identifier_continue(*byte))
+                    {
+                        index += 1;
+                    }
+                    if &value[start..index] == word {
+                        return true;
+                    }
+                    continue;
+                }
+                index += 1;
+            }
+            MaskState::ShortString { quote, escaped } => {
+                if *escaped {
+                    *escaped = false;
+                } else if bytes[index] == b'\\' {
+                    *escaped = true;
+                } else if bytes[index] == *quote {
+                    state = MaskState::Code;
+                }
+                index += 1;
+            }
+            MaskState::LongString { close } => {
+                if bytes[index..].starts_with(close) {
+                    index += close.len();
+                    state = MaskState::Code;
+                } else {
+                    index += 1;
+                }
+            }
+        }
+    }
+
+    false
 }
 
 fn code_before_comment(line: &str) -> &str {
@@ -1373,9 +1469,20 @@ fn trim_trailing_spaces(output: &mut String) {
 }
 
 fn should_trim_before_call_paren(output: &str) -> bool {
-    output.trim_end().as_bytes().last().is_some_and(|byte| {
+    let output = output.trim_end();
+    if should_space_before_group_paren(output) {
+        return false;
+    }
+    output.as_bytes().last().is_some_and(|byte| {
         byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b')' | b']' | b'}')
     })
+}
+
+fn should_space_before_group_paren(output: &str) -> bool {
+    output
+        .split_whitespace()
+        .next_back()
+        .is_some_and(|word| matches!(word, "if" | "elseif" | "while" | "for" | "return" | "not"))
 }
 
 fn long_bracket_open(bytes: &[u8]) -> Option<(Vec<u8>, usize)> {

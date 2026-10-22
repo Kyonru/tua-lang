@@ -22,6 +22,11 @@ range, and on-type formatting.
 The formatter controls indentation, line wrapping, quote preservation, final
 newlines, spacing, and blank-line normalization. Configure it independently:
 
+Multiline function parameters are indented once while the closing parenthesis
+stays aligned with the declaration. Continued control-flow conditions are also
+indented once, whether they use enclosing parentheses or leading `and`/`or`
+operators; the body begins one level below the completed header.
+
 ```toml title="tua.toml"
 [format]
 indent_width = 2
