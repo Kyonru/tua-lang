@@ -2904,6 +2904,14 @@ export type Piece = { kind: Kind, x: number }
         host.set_file(&file.path, file.source.clone());
     }
 
+    let fast_diagnostics = host.fast_diagnostics(Path::new("src/main.tua"));
+    assert!(
+        fast_diagnostics
+            .iter()
+            .all(|diagnostic| diagnostic.code != Some(DiagnosticCode::TYPE_MISMATCH)),
+        "fast diagnostics must defer selected imported aliases: {fast_diagnostics:#?}"
+    );
+
     let snapshot = host.snapshot();
     let hover = snapshot
         .hover("src/main.tua", fixture.position("hover"))

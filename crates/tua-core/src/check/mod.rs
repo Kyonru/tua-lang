@@ -189,7 +189,7 @@ struct Checker<'a> {
     scoped_locals: Vec<BTreeMap<String, Type>>,
     scoped_local_contracts: Vec<BTreeMap<String, Type>>,
     stable_inferred_locals: bool,
-    unresolved_required_module_aliases: BTreeSet<String>,
+    unresolved_project_aliases: BTreeSet<String>,
     asset_roots: Vec<PathBuf>,
     asset_index: Option<&'a asset::AssetIndex>,
     reported_asset_diagnostics: BTreeSet<(usize, usize, u16, String)>,
@@ -257,10 +257,7 @@ impl<'a> Checker<'a> {
             scoped_locals: Vec::new(),
             scoped_local_contracts: Vec::new(),
             stable_inferred_locals: parsed.raw.language == ParsedLanguage::Tua,
-            unresolved_required_module_aliases: unresolved_required_module_aliases(
-                parsed,
-                environment,
-            ),
+            unresolved_project_aliases: unresolved_project_aliases(parsed, environment),
             asset_roots: if asset_index.is_some() {
                 normalize_asset_roots_without_fs(asset_roots)
             } else {
@@ -1041,7 +1038,7 @@ impl<'a> Checker<'a> {
         target: &Type,
         root: Option<&str>,
     ) {
-        if type_contains_any_alias(target, &self.unresolved_required_module_aliases) {
+        if type_contains_any_alias(target, &self.unresolved_project_aliases) {
             return;
         }
 
@@ -1058,7 +1055,7 @@ impl<'a> Checker<'a> {
     }
 
     fn check_type_assignable(&mut self, node: &impl Node, source: &Type, target: &Type) {
-        if type_contains_any_alias(target, &self.unresolved_required_module_aliases) {
+        if type_contains_any_alias(target, &self.unresolved_project_aliases) {
             return;
         }
 
@@ -1076,7 +1073,7 @@ impl<'a> Checker<'a> {
         source: &Type,
         target: &Type,
     ) {
-        if type_contains_any_alias(target, &self.unresolved_required_module_aliases) {
+        if type_contains_any_alias(target, &self.unresolved_project_aliases) {
             return;
         }
 
@@ -4108,11 +4105,22 @@ fn mismatch_found_label(expected: &Type, found: &Type) -> String {
     }
 }
 
-fn unresolved_required_module_aliases(
+fn unresolved_project_aliases(
     parsed: &ParsedSource,
     environment: &TypeEnvironment,
 ) -> BTreeSet<String> {
     let mut aliases = BTreeSet::new();
+
+    for import in &parsed.type_imports {
+        if import.reexport {
+            continue;
+        }
+        for binding in &import.bindings {
+            if environment.alias(&binding.local).is_none() {
+                aliases.insert(binding.local.clone());
+            }
+        }
+    }
 
     for binding in require_bindings_for_parsed_source(parsed) {
         let Some(exports) = required_module_exports_for_receiver(parsed, &binding.alias) else {
