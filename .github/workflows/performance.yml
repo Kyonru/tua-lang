@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   profiles:
-    name: Full profiles
+    name: Compiler and LSP profiles
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -25,26 +25,60 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: 22
-      - name: Run full profiles
-        run: make profile-all
-        env:
-          # The full representative profile is a trend artifact, and GitHub's
-          # shared runners are substantially slower and noisier on the 1k-file
-          # workspace. Keep five warm samples for the primary latency trend,
-          # but limit cold starts and contention fan-out so the shared runner
-          # can finish every fixture. PR freshness gating remains stricter in
-          # benchmark-smoke.
-          TUA_LSP_REQUEST_TIMEOUT_MS: 180000
-          TUA_REPRESENTATIVE_COMPLETION_P95_BUDGET_MS: 60000
-          TUA_REPRESENTATIVE_COLD_REPEAT: 1
-          TUA_REPRESENTATIVE_WARM_REPEAT: 5
-          TUA_REPRESENTATIVE_CONTENTION_REPEAT: 2
-          TUA_REPRESENTATIVE_BACKGROUND_BURST: 16
+      - name: Run compiler and LSP profiles
+        run: make profile-lsp profile-completion profile-examples
       - name: Upload profile reports
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: performance-${{ github.sha }}-${{ github.run_id }}
+          name: performance-general-${{ github.sha }}-${{ github.run_id }}
           path: target/tua-speed/*.json
+          if-no-files-found: error
+          retention-days: 90
+
+  representative:
+    name: Representative profiles (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: standard
+            fixtures: single-1000,single-5000,project-100,graph-chain-256,graph-diamond-256,graph-cycles-64
+            cold_repeat: 2
+            contention_repeat: 3
+            background_burst: 32
+          - name: project-1000
+            fixtures: project-1000
+            cold_repeat: 1
+            contention_repeat: 2
+            background_burst: 16
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+      - name: Run representative profiles
+        run: make profile-representative
+        env:
+          # Isolate the 1k-file project on a fresh runner. GitHub's shared
+          # runners repeatedly terminated the combined job while profiling
+          # this fixture, even though the same workload completes locally.
+          TUA_REPRESENTATIVE_FIXTURES: ${{ matrix.fixtures }}
+          TUA_REPRESENTATIVE_COLD_REPEAT: ${{ matrix.cold_repeat }}
+          TUA_REPRESENTATIVE_WARM_REPEAT: 5
+          TUA_REPRESENTATIVE_CONTENTION_REPEAT: ${{ matrix.contention_repeat }}
+          TUA_REPRESENTATIVE_BACKGROUND_BURST: ${{ matrix.background_burst }}
+          TUA_LSP_REQUEST_TIMEOUT_MS: 180000
+          TUA_REPRESENTATIVE_COMPLETION_P95_BUDGET_MS: 60000
+          TUA_REPRESENTATIVE_PROFILE_OUT: target/tua-speed/representative-${{ matrix.name }}.json
+      - name: Upload representative report
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: performance-representative-${{ matrix.name }}-${{ github.sha }}-${{ github.run_id }}
+          path: target/tua-speed/representative-${{ matrix.name }}.json
           if-no-files-found: error
           retention-days: 90
