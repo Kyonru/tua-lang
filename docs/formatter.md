@@ -38,13 +38,17 @@ operators; the body begins one level below the completed header.
 
 ```toml title="tua.toml"
 [format]
+indent_style = "spaces"
 indent_width = 2
 line_width = 100
 quote_style = "preserve"
+line_ending = "lf"
 final_newline = true
 ```
 
-`indent_width` and `line_width` must both be at least 1. Invalid TOML values
+`indent_style` accepts `spaces` or `tabs`. `indent_width` controls spaces per
+level and is ignored for tab indentation. `indent_width` and `line_width` must
+both be at least 1. Invalid TOML values
 are reported as configuration errors; invalid editor overrides are ignored in
 favor of the project/default setting.
 
@@ -52,6 +56,11 @@ favor of the project/default setting.
 only complete short-string literals and update delimiter escapes without
 changing the string value. Long-bracket strings, multiline literal bodies,
 and comments are always preserved.
+
+`line_ending` accepts `lf`, `crlf`, or `preserve`. Preserve follows the source
+file's existing LF/CRLF convention; mixed files are normalized to CRLF when
+any CRLF line is present. `final_newline` independently controls whether the
+formatted document ends with a line terminator.
 
 Formatting is never reported as `TL4xxx` lint output. If CI should enforce the
 canonical layout, run `tua fmt --check` as its own step.

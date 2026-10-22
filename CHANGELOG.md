@@ -8,6 +8,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Changed
 
+- Formatter configuration now supports `indent_style = "spaces" | "tabs"`
+  and `line_ending = "lf" | "crlf" | "preserve"`, including language-server
+  and VS Code overrides.
+
 - The formatter now applies canonical spacing around arithmetic, comparison,
   concatenation, and function-type arrow operators while preserving unary
   signs, scientific notation, and varargs.

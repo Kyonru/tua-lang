@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use serde::de::Error as _;
 use serde::{Deserialize, Deserializer};
 
-use crate::formatter::{FormatOptions, QuoteStyle};
+use crate::formatter::{FormatOptions, IndentStyle, LineEnding, QuoteStyle};
 use crate::{Diagnostic, DiagnosticCode, DiagnosticSeverity};
 
 mod parser;
@@ -34,9 +34,11 @@ asset_pipelines = []
 annotation_mode = \"off\"
 
 [format]
+indent_style = \"spaces\"
 indent_width = 2
 line_width = 100
 quote_style = \"preserve\"
+line_ending = \"lf\"
 final_newline = true
 
 [jit]
@@ -220,21 +222,27 @@ impl<'de> Deserialize<'de> for AnnotationMode {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 #[serde(default, deny_unknown_fields)]
 pub struct FormatConfig {
+    #[serde(deserialize_with = "parser::deserialize_indent_style")]
+    pub indent_style: IndentStyle,
     #[serde(deserialize_with = "parser::deserialize_positive_usize")]
     pub indent_width: usize,
     #[serde(deserialize_with = "parser::deserialize_positive_usize")]
     pub line_width: usize,
     #[serde(deserialize_with = "parser::deserialize_quote_style")]
     pub quote_style: QuoteStyle,
+    #[serde(deserialize_with = "parser::deserialize_line_ending")]
+    pub line_ending: LineEnding,
     pub final_newline: bool,
 }
 
 impl Default for FormatConfig {
     fn default() -> Self {
         Self {
+            indent_style: IndentStyle::Spaces,
             indent_width: 2,
             line_width: 100,
             quote_style: QuoteStyle::Preserve,
+            line_ending: LineEnding::Lf,
             final_newline: true,
         }
     }
@@ -243,9 +251,11 @@ impl Default for FormatConfig {
 impl FormatConfig {
     pub fn options(&self) -> FormatOptions {
         FormatOptions {
+            indent_style: self.indent_style,
             indent_width: self.indent_width,
             line_width: self.line_width,
             quote_style: self.quote_style,
+            line_ending: self.line_ending,
             final_newline: self.final_newline,
         }
     }

@@ -102,9 +102,11 @@ the behavior and tradeoffs of each option.
 | `type_libraries` | array | `[]` | - |
 | `asset_pipelines` | array | `[]` | - |
 | `emit.annotation_mode` | string | `"off"` | - |
+| `format.indent_style` | string | `"spaces"` | `tua.format.indentStyle` |
 | `format.indent_width` | integer | `2` | `tua.format.indentWidth` |
 | `format.line_width` | integer | `100` | `tua.format.lineWidth` |
 | `format.quote_style` | string | `"preserve"` | `tua.format.quoteStyle` |
+| `format.line_ending` | string | `"lf"` | `tua.format.lineEnding` |
 | `format.final_newline` | boolean | `true` | `tua.format.finalNewline` |
 | `jit.enabled` | boolean | `false` | `tua.jit.enabled` |
 | `jit.variable_type_drift` | boolean | `true` | - |
@@ -266,14 +268,20 @@ lines inside multiline strings and block comments are preserved.
 
 ```toml
 [format]
+indent_style = "spaces"
 indent_width = 2
 line_width = 100
 quote_style = "preserve"
+line_ending = "lf"
 final_newline = true
 ```
 
+`indent_style`
+: `spaces` (default) uses `indent_width` spaces per nesting level. `tabs` uses
+  one tab per nesting level.
+
 `indent_width`
-: Spaces per indentation level.
+: Spaces per indentation level when `indent_style = "spaces"`.
 
 `line_width`
 : Preferred maximum line width for line-aware groups.
@@ -282,6 +290,10 @@ final_newline = true
 : `preserve` keeps each short string's source delimiter. `double` or `single`
   consistently rewrites complete short strings while preserving their values.
   Long-bracket strings are never rewritten.
+
+`line_ending`
+: `lf` or `crlf` writes that line-ending convention. `preserve` follows the
+  source document's convention.
 
 `final_newline`
 : Writes a final LF newline when formatting.

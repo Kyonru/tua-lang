@@ -9,6 +9,38 @@ pub enum QuoteStyle {
     Single,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum IndentStyle {
+    Spaces,
+    Tabs,
+}
+
+impl IndentStyle {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Spaces => "spaces",
+            Self::Tabs => "tabs",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum LineEnding {
+    Lf,
+    Crlf,
+    Preserve,
+}
+
+impl LineEnding {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Lf => "lf",
+            Self::Crlf => "crlf",
+            Self::Preserve => "preserve",
+        }
+    }
+}
+
 impl QuoteStyle {
     pub fn as_str(self) -> &'static str {
         match self {
@@ -21,18 +53,22 @@ impl QuoteStyle {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct FormatOptions {
+    pub indent_style: IndentStyle,
     pub indent_width: usize,
     pub line_width: usize,
     pub quote_style: QuoteStyle,
+    pub line_ending: LineEnding,
     pub final_newline: bool,
 }
 
 impl Default for FormatOptions {
     fn default() -> Self {
         Self {
+            indent_style: IndentStyle::Spaces,
             indent_width: 2,
             line_width: 100,
             quote_style: QuoteStyle::Preserve,
+            line_ending: LineEnding::Lf,
             final_newline: true,
         }
     }
@@ -451,7 +487,17 @@ impl<'a> Formatter<'a> {
             }
         }
 
-        output
+        let line_ending = match self.options.line_ending {
+            LineEnding::Lf => "\n",
+            LineEnding::Crlf => "\r\n",
+            LineEnding::Preserve if source.contains("\r\n") => "\r\n",
+            LineEnding::Preserve => "\n",
+        };
+        if line_ending == "\r\n" {
+            output.replace('\n', line_ending)
+        } else {
+            output
+        }
     }
 
     fn format_source_line(&mut self, line: &str, output: &mut String) {
@@ -615,7 +661,10 @@ impl<'a> Formatter<'a> {
             + paren_extra
             + continuation_indent
             + split_header_indent;
-        let indent = " ".repeat(indent_level * self.options.indent_width);
+        let indent = match self.options.indent_style {
+            IndentStyle::Spaces => " ".repeat(indent_level * self.options.indent_width),
+            IndentStyle::Tabs => "\t".repeat(indent_level),
+        };
         let formatted = break_long_groups(&normalized, &indent, self.options);
 
         output.push_str(&formatted);
@@ -991,7 +1040,7 @@ fn break_long_table(line: &str, indent: &str, options: &FormatOptions) -> Option
         return None;
     }
 
-    let item_indent = format!("{indent}{}", " ".repeat(options.indent_width));
+    let item_indent = format!("{indent}{}", indent_unit(options));
     let mut output = String::new();
 
     output.push_str(indent);
@@ -1035,7 +1084,7 @@ fn break_long_call(line: &str, indent: &str, options: &FormatOptions) -> Option<
         return None;
     }
 
-    let item_indent = format!("{indent}{}", " ".repeat(options.indent_width));
+    let item_indent = format!("{indent}{}", indent_unit(options));
     let mut output = String::new();
 
     output.push_str(indent);
@@ -1057,6 +1106,13 @@ fn break_long_call(line: &str, indent: &str, options: &FormatOptions) -> Option<
     output.push_str(after);
 
     Some(output)
+}
+
+fn indent_unit(options: &FormatOptions) -> String {
+    match options.indent_style {
+        IndentStyle::Spaces => " ".repeat(options.indent_width),
+        IndentStyle::Tabs => "\t".to_owned(),
+    }
 }
 
 fn outer_group(line: &str, open: u8, close: u8) -> Option<(usize, usize)> {

@@ -75,6 +75,15 @@ fn parses_all_formatter_quote_styles() {
 }
 
 #[test]
+fn parses_formatter_indent_and_line_ending_styles() {
+    let config = parse_config("[format]\nindent_style = \"tabs\"\nline_ending = \"preserve\"\n")
+        .expect("formatter styles should parse");
+
+    assert_eq!(config.format.indent_style, IndentStyle::Tabs);
+    assert_eq!(config.format.line_ending, LineEnding::Preserve);
+}
+
+#[test]
 fn rejects_zero_formatter_widths() {
     for setting in ["indent_width", "line_width"] {
         let error = parse_config(&format!("[format]\n{setting} = 0\n"))
@@ -264,9 +273,11 @@ severity = { TL1003 = "warning", TL4035 = "allow" }
                 annotation_mode: AnnotationMode::Luacats,
             },
             format: FormatConfig {
+                indent_style: IndentStyle::Spaces,
                 indent_width: 4,
                 line_width: 80,
                 quote_style: QuoteStyle::Preserve,
+                line_ending: LineEnding::Lf,
                 final_newline: false,
             },
             jit: JitConfig {

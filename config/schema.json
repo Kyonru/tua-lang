@@ -60,6 +60,18 @@
       "description": "Controls annotation-preserving Lua emission."
     },
     {
+      "path": "format.indent_style",
+      "type": "string",
+      "default": "spaces",
+      "enum": [
+        "spaces",
+        "tabs"
+      ],
+      "description": "Indent nested code with spaces or tabs.",
+      "editor": "tua.format.indentStyle",
+      "editorDescription": "Indentation style for the Tua formatter. Null inherits [format].indent_style from tua.toml."
+    },
+    {
       "path": "format.indent_width",
       "type": "integer",
       "default": 2,
@@ -89,6 +101,19 @@
       "description": "Short-string quote policy: preserve source quotes or consistently use double or single quotes.",
       "editor": "tua.format.quoteStyle",
       "editorDescription": "Short-string quote style for the Tua formatter. Null inherits [format].quote_style from tua.toml; long-bracket strings are never rewritten."
+    },
+    {
+      "path": "format.line_ending",
+      "type": "string",
+      "default": "lf",
+      "enum": [
+        "lf",
+        "crlf",
+        "preserve"
+      ],
+      "description": "Output line-ending policy. Preserve follows the source file's LF or CRLF convention.",
+      "editor": "tua.format.lineEnding",
+      "editorDescription": "Line endings written by the Tua formatter. Null inherits [format].line_ending from tua.toml."
     },
     {
       "path": "format.final_newline",

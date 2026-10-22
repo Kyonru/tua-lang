@@ -701,6 +701,59 @@ local long = [[keep 'both' "styles"]]
 }
 
 #[test]
+fn supports_tab_indentation_for_blocks_and_wrapped_groups() {
+    let source = r#"function draw()
+local values = { alpha = 1, beta = 2, gamma = 3, delta = 4 }
+end
+"#;
+    let options = FormatOptions {
+        indent_style: IndentStyle::Tabs,
+        line_width: 45,
+        ..FormatOptions::default()
+    };
+
+    let output = format_tua_source("src/main.tua", source, &options).expect("source should format");
+
+    assert_eq!(
+        output,
+        "function draw()\n\tlocal values = {\n\t\talpha = 1,\n\t\tbeta = 2,\n\t\tgamma = 3,\n\t\tdelta = 4,\n\t}\nend\n"
+    );
+    assert_eq!(
+        format_tua_source("src/main.tua", &output, &options).expect("output should reformat"),
+        output
+    );
+}
+
+#[test]
+fn supports_lf_crlf_and_source_preserving_line_endings() {
+    let source = "function draw()\r\nlocal value=1\r\nend\r\n";
+    let crlf = FormatOptions {
+        line_ending: LineEnding::Crlf,
+        ..FormatOptions::default()
+    };
+    let preserve = FormatOptions {
+        line_ending: LineEnding::Preserve,
+        ..FormatOptions::default()
+    };
+
+    let crlf_output =
+        format_tua_source("src/main.tua", source, &crlf).expect("source should format");
+    assert_eq!(
+        crlf_output,
+        "function draw()\r\n  local value = 1\r\nend\r\n"
+    );
+    assert_eq!(
+        format_tua_source("src/main.tua", source, &preserve).expect("source should format"),
+        crlf_output
+    );
+    assert_eq!(
+        format_tua_source("src/main.tua", source, &FormatOptions::default())
+            .expect("source should format"),
+        "function draw()\n  local value = 1\nend\n"
+    );
+}
+
+#[test]
 fn returns_parse_diagnostics_without_formatting_invalid_source() {
     let diagnostics = format_tua_source(
         "src/main.tua",

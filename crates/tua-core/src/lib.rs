@@ -147,7 +147,7 @@ pub use folding_range::{
 };
 pub use formatter::{
     format_parsed_source, format_tua_source, format_tua_source_on_type, format_tua_source_range,
-    FormatOptions, QuoteStyle,
+    FormatOptions, IndentStyle, LineEnding, QuoteStyle,
 };
 pub use hir::{
     lower_parsed_source, HirDeclaration, HirDeclarationKind, HirExportValue, HirModule,

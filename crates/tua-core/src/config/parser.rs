@@ -7,7 +7,7 @@ use serde::{Deserialize, Deserializer};
 use toml_edit::{Document, InlineTable, Table, Value};
 
 use super::{ConfigParseError, ProjectConfig};
-use crate::formatter::QuoteStyle;
+use crate::formatter::{IndentStyle, LineEnding, QuoteStyle};
 
 const CONFIG_SCHEMA_JSON: &str = include_str!("../../../../config/schema.json");
 
@@ -99,6 +99,33 @@ where
         "single" => Ok(QuoteStyle::Single),
         _ => Err(D::Error::custom(
             "expected quote style \"preserve\", \"double\", or \"single\"",
+        )),
+    }
+}
+
+pub(super) fn deserialize_indent_style<'de, D>(deserializer: D) -> Result<IndentStyle, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    match String::deserialize(deserializer)?.as_str() {
+        "spaces" => Ok(IndentStyle::Spaces),
+        "tabs" => Ok(IndentStyle::Tabs),
+        _ => Err(D::Error::custom(
+            "expected indent style \"spaces\" or \"tabs\"",
+        )),
+    }
+}
+
+pub(super) fn deserialize_line_ending<'de, D>(deserializer: D) -> Result<LineEnding, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    match String::deserialize(deserializer)?.as_str() {
+        "lf" => Ok(LineEnding::Lf),
+        "crlf" => Ok(LineEnding::Crlf),
+        "preserve" => Ok(LineEnding::Preserve),
+        _ => Err(D::Error::custom(
+            "expected line ending \"lf\", \"crlf\", or \"preserve\"",
         )),
     }
 }

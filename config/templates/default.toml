@@ -11,9 +11,11 @@ asset_pipelines = []
 annotation_mode = "off"
 
 [format]
+indent_style = "spaces"
 indent_width = 2
 line_width = 100
 quote_style = "preserve"
+line_ending = "lf"
 final_newline = true
 
 [jit]

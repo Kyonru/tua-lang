@@ -118,6 +118,19 @@
           ],
           "description": "Controls Tua language-server log verbosity. Changes apply without restarting when supported by the server."
         },
+        "tua.format.indentStyle": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null,
+          "enum": [
+            "spaces",
+            "tabs",
+            null
+          ],
+          "description": "Indentation style for the Tua formatter. Null inherits [format].indent_style from tua.toml."
+        },
         "tua.format.indentWidth": {
           "type": [
             "number",
@@ -149,6 +162,20 @@
             null
           ],
           "description": "Short-string quote style for the Tua formatter. Null inherits [format].quote_style from tua.toml; long-bracket strings are never rewritten."
+        },
+        "tua.format.lineEnding": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null,
+          "enum": [
+            "lf",
+            "crlf",
+            "preserve",
+            null
+          ],
+          "description": "Line endings written by the Tua formatter. Null inherits [format].line_ending from tua.toml."
         },
         "tua.format.finalNewline": {
           "type": [

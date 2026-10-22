@@ -3,8 +3,8 @@ use std::path::{Path, PathBuf};
 use serde_json::Value;
 use tua_core::{
     CompletionMultiTokenConfig, CompletionSequenceRankingConfig, DiagnosticsConfig, EcsConfig,
-    FormatConfig, FormatOptions, JitConfig, ModulePathSeparator, ProjectConfig,
-    ProjectFileAssociation, QuoteStyle, VfsSourceKind,
+    FormatConfig, FormatOptions, IndentStyle, JitConfig, LineEnding, ModulePathSeparator,
+    ProjectConfig, ProjectFileAssociation, QuoteStyle, VfsSourceKind,
 };
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -56,9 +56,11 @@ pub(super) struct DiagnosticOverrides {
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub(super) struct FormatOverrides {
+    pub(super) indent_style: Option<IndentStyle>,
     pub(super) indent_width: Option<usize>,
     pub(super) line_width: Option<usize>,
     pub(super) quote_style: Option<QuoteStyle>,
+    pub(super) line_ending: Option<LineEnding>,
     pub(super) final_newline: Option<bool>,
 }
 
@@ -414,16 +416,22 @@ impl FormatOverrides {
         };
 
         Self {
+            indent_style: indent_style_setting(settings, "indent_style", "indentStyle"),
             indent_width: usize_setting(settings, "indent_width", "indentWidth")
                 .filter(|value| *value >= 1),
             line_width: usize_setting(settings, "line_width", "lineWidth")
                 .filter(|value| *value >= 1),
             quote_style: quote_style_setting(settings, "quote_style", "quoteStyle"),
+            line_ending: line_ending_setting(settings, "line_ending", "lineEnding"),
             final_newline: bool_setting(settings, "final_newline", "finalNewline"),
         }
     }
 
     fn apply(&self, format: &mut FormatConfig) {
+        if let Some(indent_style) = self.indent_style {
+            format.indent_style = indent_style;
+        }
+
         if let Some(indent_width) = self.indent_width {
             format.indent_width = indent_width;
         }
@@ -434,6 +442,10 @@ impl FormatOverrides {
 
         if let Some(quote_style) = self.quote_style {
             format.quote_style = quote_style;
+        }
+
+        if let Some(line_ending) = self.line_ending {
+            format.line_ending = line_ending;
         }
 
         apply_bool(self.final_newline, &mut format.final_newline);
@@ -698,6 +710,39 @@ fn quote_style_setting(
     }
 }
 
+fn indent_style_setting(
+    settings: &serde_json::Map<String, Value>,
+    snake_case: &str,
+    camel_case: &str,
+) -> Option<IndentStyle> {
+    match settings
+        .get(camel_case)
+        .or_else(|| settings.get(snake_case))
+        .and_then(Value::as_str)
+    {
+        Some("spaces") => Some(IndentStyle::Spaces),
+        Some("tabs") => Some(IndentStyle::Tabs),
+        _ => None,
+    }
+}
+
+fn line_ending_setting(
+    settings: &serde_json::Map<String, Value>,
+    snake_case: &str,
+    camel_case: &str,
+) -> Option<LineEnding> {
+    match settings
+        .get(camel_case)
+        .or_else(|| settings.get(snake_case))
+        .and_then(Value::as_str)
+    {
+        Some("lf") => Some(LineEnding::Lf),
+        Some("crlf") => Some(LineEnding::Crlf),
+        Some("preserve") => Some(LineEnding::Preserve),
+        _ => None,
+    }
+}
+
 fn string_array_setting(settings: &Value, names: &[&str]) -> Vec<String> {
     names
         .iter()
@@ -768,7 +813,7 @@ fn normalized_path(path: &Path) -> String {
 #[cfg(test)]
 mod tests {
     use serde_json::json;
-    use tua_core::{FormatConfig, QuoteStyle};
+    use tua_core::{FormatConfig, IndentStyle, LineEnding, QuoteStyle};
 
     use super::WorkspaceSettings;
 
@@ -839,5 +884,22 @@ mod tests {
             settings.format_options(FormatConfig::default()),
             FormatConfig::default().options()
         );
+    }
+
+    #[test]
+    fn formatter_style_overrides_accept_tabs_and_preserved_line_endings() {
+        let settings = WorkspaceSettings::from_did_change_configuration(&json!({
+            "params": {
+                "settings": {
+                    "tua": {
+                        "format": { "indentStyle": "tabs", "lineEnding": "preserve" }
+                    }
+                }
+            }
+        }));
+        let options = settings.format_options(FormatConfig::default());
+
+        assert_eq!(options.indent_style, IndentStyle::Tabs);
+        assert_eq!(options.line_ending, LineEnding::Preserve);
     }
 }
