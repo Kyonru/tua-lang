@@ -3061,7 +3061,7 @@ Display sleep is disabled by default. Some types of input (e.g. joystick button 
         path: &["love", "window"],
         label: "setMode",
         kind: LuaItemKind::Function,
-        detail: r"function love.window.setMode(width: number, height: number, flags: table): boolean",
+        detail: r"function love.window.setMode(width: number, height: number, flags?: table): boolean",
         documentation: r"Sets the display mode and properties of the window.
 
 If width or height is 0, setMode will use the width and height of the desktop. 

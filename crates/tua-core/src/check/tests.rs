@@ -1483,6 +1483,17 @@ local explicit: number = shake(1, "out")
 }
 
 #[test]
+fn accepts_love_set_mode_without_optional_flags() {
+    check_tua_source(
+        "src/main.tua",
+        r#"
+local success: boolean = love.window.setMode(400, 540)
+"#,
+    )
+    .expect("LOVE setMode flags should be optional");
+}
+
+#[test]
 fn accepts_love_method_multi_return_from_inferred_function_body() {
     check_tua_source_with_asset_roots_and_diagnostics_config(
         "src/assets.tua",

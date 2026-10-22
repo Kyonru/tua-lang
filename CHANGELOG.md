@@ -8,6 +8,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Corrected the generated LOVE catalog for `love.window.setMode`: its `flags`
+  table is optional in checking, completion, hover, and signature help, matching
+  LOVE's supported two-argument form.
+
 - Malformed static imports now produce one project diagnostic instead of
   overlapping lowering and module-graph reports with different ranges and
   severities.

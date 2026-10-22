@@ -5,6 +5,7 @@ package.path = root .. "/?.lua;" .. root .. "/?/init.lua;" .. package.path
 
 local chunk = assert(loadfile(root .. "/love_api.lua"))
 local api = chunk("love_api")
+local overrides = dofile("scripts/love-api-overrides.lua")
 
 local function rust_raw(value)
   value = tostring(value or "")
@@ -36,7 +37,7 @@ local function type_label(label)
   return label
 end
 
-local function argument_label(arg)
+local function argument_label(target, arg)
   local name = arg.name or "arg"
 
   if name == "..." then
@@ -47,7 +48,7 @@ local function argument_label(arg)
     return "..."
   end
 
-  local suffix = arg.default ~= nil and "?" or ""
+  local suffix = overrides.argument_is_optional(target, arg) and "?" or ""
   return name .. suffix .. ": " .. type_label(arg.type)
 end
 
@@ -79,7 +80,7 @@ local function signature_label(target, variant)
   local args = {}
 
   for _, arg in ipairs(variant.arguments or {}) do
-    args[#args + 1] = argument_label(arg)
+    args[#args + 1] = argument_label(target, arg)
   end
 
   local detail = "function " .. target .. "(" .. table.concat(args, ", ") .. ")"
@@ -394,7 +395,11 @@ for _, entry in ipairs(entries) do
 
     for _, parameter in ipairs(signature.parameters) do
       file:write("                    LuaSignatureParameter {\n")
-      file:write("                        label: ", rust_raw(argument_label(parameter)), ",\n")
+      file:write(
+        "                        label: ",
+        rust_raw(argument_label(entry.name, parameter)),
+        ",\n"
+      )
       file:write("                        documentation: ", rust_raw(argument_documentation(parameter)), ",\n")
       file:write("                    },\n")
     end

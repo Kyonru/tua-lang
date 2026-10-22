@@ -40,6 +40,18 @@ fn returns_known_function_signature_and_active_parameter() {
 }
 
 #[test]
+fn love_set_mode_signature_marks_flags_optional() {
+    let help = signature_at_last("love.window.setMode(400, 540, ", "love.window.setMode(400, 540, ")
+        .expect("setMode should provide signature help");
+
+    assert_eq!(
+        help.signatures[0].label,
+        "function love.window.setMode(width: number, height: number, flags?: table): boolean"
+    );
+    assert_eq!(help.active_parameter, 2);
+}
+
+#[test]
 fn returns_signature_for_incomplete_call() {
     let source = r#"type Player = { hp: number }
 

@@ -5,6 +5,7 @@ package.path = root .. "/?.lua;" .. root .. "/?/init.lua;" .. package.path
 
 local chunk = assert(loadfile(root .. "/love_api.lua"))
 local api = chunk("love_api")
+local overrides = dofile("scripts/love-api-overrides.lua")
 
 local function rust_raw(value)
   value = tostring(value or "")
@@ -55,7 +56,7 @@ local function function_detail(target, fn)
 
   for _, argument in ipairs(variant.arguments or {}) do
     local name = argument.name or "arg"
-    local suffix = argument.default ~= nil and "?" or ""
+    local suffix = overrides.argument_is_optional(target, argument) and "?" or ""
 
     if name == "..." then
       if argument.type ~= nil then

@@ -23760,7 +23760,7 @@ Returns:
             }],
         }]),
         r"love.window.setMode" => Some(&[LuaSignature {
-            label: r"function love.window.setMode(width: number, height: number, flags: table): boolean",
+            label: r"function love.window.setMode(width: number, height: number, flags?: table): boolean",
             documentation: r"Sets the display mode and properties of the window.
 
 If width or height is 0, setMode will use the width and height of the desktop. 
@@ -23787,7 +23787,7 @@ Returns:
                     documentation: r"Display height.",
                 },
                 LuaSignatureParameter {
-                    label: r"flags: table",
+                    label: r"flags?: table",
                     documentation: r"The flags table with the options:",
                 },
             ],
