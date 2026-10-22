@@ -214,9 +214,7 @@ fn breaks_long_table_groups() {
 
     let output = format_tua_source("src/main.tua", source, &options).expect("source should format");
 
-    assert_eq!(
-        output,
-        r#"local values = {
+    let expected = r#"local values = {
   alpha = 1,
   beta = 2,
   gamma = 3,
@@ -224,7 +222,38 @@ fn breaks_long_table_groups() {
   epsilon = 5,
   zeta = 6,
 }
+"#;
+    assert_eq!(output, expected);
+    assert_eq!(
+        format_tua_source("src/main.tua", &output, &options).expect("output should reformat"),
+        output
+    );
+}
+
+#[test]
+fn wraps_table_arguments_without_inserting_a_call_gap() {
+    let source = "consume({ alpha = 1, beta = 2, gamma = 3, delta = 4, epsilon = 5 })\n";
+    let options = FormatOptions {
+        line_width: 45,
+        ..FormatOptions::default()
+    };
+
+    let output = format_tua_source("src/main.tua", source, &options).expect("source should format");
+
+    assert_eq!(
+        output,
+        r#"consume({
+  alpha = 1,
+  beta = 2,
+  gamma = 3,
+  delta = 4,
+  epsilon = 5,
+})
 "#
+    );
+    assert_eq!(
+        format_tua_source("src/main.tua", &output, &options).expect("output should reformat"),
+        output
     );
 }
 
@@ -252,7 +281,11 @@ fn breaks_long_call_groups_without_trailing_argument_comma() {
 )
 "#
     );
-    parse_tua_source("src/main.tua", output).expect("formatted call should parse");
+    parse_tua_source("src/main.tua", &output).expect("formatted call should parse");
+    assert_eq!(
+        format_tua_source("src/main.tua", &output, &options).expect("output should reformat"),
+        output
+    );
 }
 
 #[test]

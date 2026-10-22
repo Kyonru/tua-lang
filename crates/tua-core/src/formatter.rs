@@ -996,7 +996,12 @@ fn break_long_table(line: &str, indent: &str, options: &FormatOptions) -> Option
 
     output.push_str(indent);
     output.push_str(before);
-    if !before.is_empty() {
+    if !before.is_empty()
+        && !before
+            .as_bytes()
+            .last()
+            .is_some_and(|byte| matches!(byte, b'(' | b'[' | b'{'))
+    {
         output.push(' ');
     }
     output.push_str("{\n");

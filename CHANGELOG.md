@@ -21,6 +21,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Long table literals wrapped inside calls and index expressions no longer
+  gain an invalid-looking gap before `{`, and automatic call/table wrapping is
+  now covered by second-pass idempotence checks.
+
 - Formatting now preserves every byte of multiline string and block-comment
   bodies, including code-like text and escaped multiline short strings, and
   line-width decisions no longer count UTF-8 bytes as separate characters.
