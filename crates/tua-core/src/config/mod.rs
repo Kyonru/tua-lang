@@ -660,9 +660,7 @@ fn ensure_recommended_gitignore(path: &Path) -> Result<(bool, bool), ConfigError
         "\n"
     };
     let mut addition = String::new();
-    let has_header = contents
-        .lines()
-        .any(|line| line.trim() == GITIGNORE_HEADER);
+    let has_header = contents.lines().any(|line| line.trim() == GITIGNORE_HEADER);
     if !contents.is_empty() {
         if !contents.ends_with('\n') {
             addition.push_str(newline);
