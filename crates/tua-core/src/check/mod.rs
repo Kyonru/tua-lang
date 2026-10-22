@@ -467,6 +467,12 @@ impl<'a> Checker<'a> {
             return;
         };
 
+        if (expression_is_nil(lhs) && self.index_read_may_be_missing(rhs))
+            || (expression_is_nil(rhs) && self.index_read_may_be_missing(lhs))
+        {
+            return;
+        }
+
         if self.types_can_overlap(&left, &right) {
             return;
         }
@@ -563,6 +569,53 @@ impl<'a> Checker<'a> {
                 }
             }
         }
+    }
+
+    fn index_read_may_be_missing(&mut self, expression: &Expression) -> bool {
+        let Expression::Var(Var::Expression(expression)) = expression else {
+            return false;
+        };
+        let suffixes = expression.suffixes().collect::<Vec<_>>();
+        if !matches!(suffixes.last(), Some(Suffix::Index(Index::Brackets { .. }))) {
+            return false;
+        }
+
+        let mut current = match expression.prefix() {
+            Prefix::Name(name) => match self.infer_named_value(&token_text(name)) {
+                Some(ty) => ty,
+                None => return false,
+            },
+            Prefix::Expression(expression) => match self.infer_expression(expression) {
+                Some(ty) => ty,
+                None => return false,
+            },
+            _ => return false,
+        };
+
+        for suffix in suffixes.iter().take(suffixes.len().saturating_sub(1)) {
+            current = match suffix {
+                Suffix::Index(Index::Dot { name, .. }) => {
+                    match self.resolve_table_field_type(&current, &token_text(name)) {
+                        Some(ty) => ty,
+                        None => return false,
+                    }
+                }
+                Suffix::Index(Index::Brackets { expression, .. }) => {
+                    let Some(key) = self.index_key_type(expression) else {
+                        return false;
+                    };
+                    match resolve_index_type(self.environment, &current, &key) {
+                        Some(ty) => ty,
+                        None => return false,
+                    }
+                }
+                _ => return false,
+            };
+        }
+
+        self.environment
+            .optional_index_value_type(&current)
+            .is_some()
     }
 
     /// Validate large array literals one item at a time against an explicit
@@ -1353,6 +1406,10 @@ impl<'a> Checker<'a> {
             return vec![Type::string()];
         }
 
+        if let Some(ty) = self.checked_rawget_return_type(function_call) {
+            return vec![ty];
+        }
+
         let Some(callee) = self.infer_call_target(function_call) else {
             self.check_dynamic_call_argument_expressions(function_call);
             return Vec::new();
@@ -1398,6 +1455,22 @@ impl<'a> Checker<'a> {
                 self.check_external_call_arguments(function_call, &function)
             }
         }
+    }
+
+    fn checked_rawget_return_type(&mut self, function_call: &FunctionCall) -> Option<Type> {
+        let parts = field_chain_before_first_call(function_call)?;
+        if parts.as_slice() != ["rawget"] || self.infer_named_value("rawget").is_some() {
+            return None;
+        }
+
+        let arguments = call_arguments(function_call)?;
+        arguments.get(1)?;
+        let CallArgument::Expression(collection) = arguments.first()? else {
+            return None;
+        };
+        let collection = self.infer_expression(collection)?;
+
+        self.environment.optional_index_value_type(&collection)
     }
 
     fn check_dynamic_call_argument_expressions(&mut self, function_call: &FunctionCall) {
@@ -2819,6 +2892,10 @@ fn infer_symbol_type(symbol: &str) -> Option<Type> {
         "nil" => Some(Type::nil()),
         _ => None,
     }
+}
+
+fn expression_is_nil(expression: &Expression) -> bool {
+    matches!(expression, Expression::Symbol(symbol) if token_text(symbol) == "nil")
 }
 
 fn is_equality_operator(binop: &ast::BinOp) -> bool {

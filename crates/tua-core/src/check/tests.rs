@@ -3083,6 +3083,53 @@ end
 }
 
 #[test]
+fn array_bounds_checks_remain_runtime_valid() {
+    check_tua_source(
+        "src/colors.tua",
+        r#"
+local color: number[] = { 1, 0.5, 0 }
+
+if color[4] ~= nil then
+  print(color[4])
+end
+
+local alpha: number | nil = rawget(color, 4)
+"#,
+    )
+    .expect("unchecked array reads may still be absent at runtime");
+}
+
+#[test]
+fn rawget_array_results_require_an_optional_contract() {
+    let diagnostics = check_tua_source(
+        "src/colors.tua",
+        r#"
+local color: number[] = { 1, 0.5, 0 }
+local alpha: number = rawget(color, 4)
+"#,
+    )
+    .expect_err("rawget should expose a possibly absent array item");
+
+    assert_single_mismatch(&diagnostics, "expected number, found nil");
+}
+
+#[test]
+fn shadowed_rawget_keeps_its_declared_return_type() {
+    check_tua_source(
+        "src/colors.tua",
+        r#"
+local function rawget(values: number[], index: number): number
+  return values[index]
+end
+
+local color: number[] = { 1, 0.5, 0 }
+local alpha: number = rawget(color, 1)
+"#,
+    )
+    .expect("a local rawget function should shadow the Lua builtin");
+}
+
+#[test]
 fn accepts_flow_sensitive_narrowing_inside_simple_guards() {
     check_tua_source(
         "src/narrowing.tua",

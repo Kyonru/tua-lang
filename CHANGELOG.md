@@ -8,6 +8,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Array bounds checks such as `values[index] ~= nil` are no longer reported as
+  impossible. Ordinary `T[]` indexing keeps its ergonomic `T` contract, while
+  unshadowed `rawget(values, index)` now infers `T | nil` in checking, function
+  return inference, and hover.
 - `TL4031` no longer reports local functions that escape through a module
   return, including nested export tables, conditional returns, returned local
   module tables, and functions assigned to their fields. Private callbacks that

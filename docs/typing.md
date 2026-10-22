@@ -109,6 +109,11 @@ An empty table is a valid initializer when an array or dictionary annotation
 provides its element types. Array element types flow through supported indexed
 reads and writes, `table.insert`, `ipairs`, and common loop patterns.
 
+Ordinary `values[index]` reads use the declared element type, matching the
+dense-array contract. When the index may be outside the populated range, use
+Lua's `rawget(values, index)`: Tua infers `T | nil`, and direct indexed
+comparisons with `nil` remain valid runtime bounds checks.
+
 Parenthesize a union or function type before making it an array:
 
 ```tua

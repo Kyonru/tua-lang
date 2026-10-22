@@ -77,6 +77,13 @@ impl TypeEnvironment {
         context.resolve(self, ty)
     }
 
+    /// Returns the value produced by a checked raw lookup. Ordinary `T[]`
+    /// indexing stays optimistic for ergonomic Lua code, while `rawget`
+    /// exposes the runtime possibility that a key is absent.
+    pub(crate) fn optional_index_value_type(&self, collection: &Type) -> Option<Type> {
+        optional_index_value_type(self.resolve_aliases(collection))
+    }
+
     pub(crate) fn is_class(&self, name: &str) -> bool {
         self.class_names.contains(name)
     }
@@ -3001,6 +3008,20 @@ fn infer_function_call_return_types(
             return Vec::new();
         };
 
+        if name == "rawget"
+            && !query.locals.contains_key(name)
+            && !query.context.function_types.contains_key(name)
+        {
+            if let Some(collection) = rawget_collection_argument(function_call)
+                .and_then(|argument| query.type_of(argument))
+                .and_then(|collection| {
+                    optional_index_value_type_from_map(query.context.aliases, &collection)
+                })
+            {
+                return vec![collection];
+            }
+        }
+
         if !query.locals.contains_key(name) && !query.context.function_types.contains_key(name) {
             if let Some(ty) = query
                 .context
@@ -3078,6 +3099,34 @@ fn infer_function_call_return_types(
     .unwrap_or_default()
 }
 
+fn optional_index_value_type(collection: Type) -> Option<Type> {
+    let value = match collection {
+        Type::Array(item) => *item,
+        Type::Dictionary { value, .. } => *value,
+        Type::Tuple(items) => Type::union(items),
+        Type::Union(collections) => {
+            let values = collections
+                .into_iter()
+                .filter_map(optional_index_value_type)
+                .collect::<Vec<_>>();
+            if values.is_empty() {
+                return None;
+            }
+            Type::union(values)
+        }
+        _ => return None,
+    };
+
+    Some(Type::union([value, Type::nil()]))
+}
+
+fn optional_index_value_type_from_map(
+    aliases: &BTreeMap<String, Type>,
+    collection: &Type,
+) -> Option<Type> {
+    optional_index_value_type(resolve_aliases_from_map(aliases, collection, 0))
+}
+
 fn infer_builtin_constructor_return_type(
     query: ExpressionInferenceQuery<'_, '_>,
     domain: BuiltinDomain,
@@ -3097,6 +3146,19 @@ fn first_parenthesized_call_argument(function_call: &FunctionCall) -> Option<&Ex
     };
 
     arguments.iter().next()
+}
+
+fn rawget_collection_argument(function_call: &FunctionCall) -> Option<&Expression> {
+    let Suffix::Call(Call::AnonymousCall(ast::FunctionArgs::Parentheses { arguments, .. })) =
+        function_call.suffixes().next()?
+    else {
+        return None;
+    };
+    let mut arguments = arguments.iter();
+    let collection = arguments.next()?;
+    arguments.next()?;
+
+    Some(collection)
 }
 
 fn constructor_call_return_type_from_map(
