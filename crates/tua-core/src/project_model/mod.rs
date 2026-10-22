@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use crate::config::{load_config_from_dir, ConfigError, LoadedConfig, ProjectConfig, CONFIG_FILE};
 use crate::module_path_index::ProjectModuleWorkspace;
-use crate::vfs::{module_name_for_path, normalize_path, ModulePathSeparator, VfsSourceKind};
+use crate::vfs::{normalize_path, ModulePathSeparator, VfsSourceKind};
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct ProjectModel {
@@ -387,13 +387,11 @@ impl ProjectWorkspace {
 
     pub fn module_name_for_path(&self, path: impl AsRef<Path>) -> Option<String> {
         let path = path.as_ref();
-        let root = self
-            .require_roots
-            .iter()
-            .filter(|root| path.starts_with(root))
-            .max_by_key(|root| root.components().count())?;
-
-        module_name_for_path(root, path, self.require_path_separator)
+        crate::module_graph::runtime_module_key_for_path(
+            path,
+            &self.require_roots,
+            self.require_path_separator,
+        )
     }
 
     pub fn resolve_required_module(&self, module: &str) -> Option<PathBuf> {

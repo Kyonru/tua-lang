@@ -2193,12 +2193,11 @@ fn module_name_for_import_candidate(
     output_roots: &[PathBuf],
     separator: ModulePathSeparator,
 ) -> Option<String> {
-    source_roots
-        .iter()
-        .chain(output_roots)
-        .filter(|root| path.starts_with(root))
-        .max_by_key(|root| root.components().count())
-        .and_then(|root| module_name_for_path(root, path, separator))
+    crate::module_graph::runtime_module_key_for_path(
+        path,
+        source_roots.iter().chain(output_roots),
+        separator,
+    )
 }
 
 fn module_candidate_exists(candidate: &Path, known_paths: &BTreeSet<PathBuf>) -> bool {

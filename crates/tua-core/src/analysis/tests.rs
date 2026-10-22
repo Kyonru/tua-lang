@@ -1762,6 +1762,53 @@ fn pipeline_diagnostics_allow_missing_module_guidance_to_be_disabled() {
 }
 
 #[test]
+fn pipeline_diagnostics_report_distinct_runtime_keys_for_one_module() {
+    let path = PathBuf::from("src/main.tua");
+    let mut host = AnalysisHost::with_config(ProjectConfig::default());
+    host.set_source_roots([PathBuf::from("src")]);
+    host.set_file(
+        &path,
+        "local Imported = import(\"./shared\")\nlocal Required = require(\"shared.init\")\nreturn { Imported, Required }\n",
+    );
+    host.set_file("src/shared/init.tua", "return { enabled = true }\n");
+
+    let diagnostics = host.snapshot().pipeline_diagnostics(&path);
+    let spelling = diagnostics
+        .iter()
+        .filter(|diagnostic| {
+            diagnostic.code == Some(DiagnosticCode::LINT_CANONICAL_MODULE_SPELLING)
+        })
+        .collect::<Vec<_>>();
+
+    assert_eq!(spelling.len(), 1, "{diagnostics:?}");
+    assert!(spelling[0].message.contains("`shared.init`"));
+    assert!(spelling[0].message.contains("`shared`"));
+}
+
+#[test]
+fn canonical_module_spelling_respects_the_standard_rules_switch() {
+    let path = PathBuf::from("src/main.tua");
+    let mut config = ProjectConfig::default();
+    config.diagnostics.rules = false;
+    let mut host = AnalysisHost::with_config(config);
+    host.set_source_roots([PathBuf::from("src")]);
+    host.set_file(
+        &path,
+        "local Imported = import(\"./shared\")\nlocal Required = require(\"shared.init\")\nreturn { Imported, Required }\n",
+    );
+    host.set_file("src/shared/init.tua", "return { enabled = true }\n");
+
+    let diagnostics = host.snapshot().pipeline_diagnostics(&path);
+    assert!(
+        diagnostics
+            .iter()
+            .all(|diagnostic| diagnostic.code
+                != Some(DiagnosticCode::LINT_CANONICAL_MODULE_SPELLING)),
+        "{diagnostics:?}"
+    );
+}
+
+#[test]
 fn pipeline_diagnostics_resolve_imports_from_existing_disk_siblings() {
     let project = TempProject::new("disk-sibling-import");
     let main = project.write(

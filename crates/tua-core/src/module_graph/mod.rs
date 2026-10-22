@@ -71,6 +71,11 @@ pub struct ModuleGraphModule {
 pub struct RequireGraphEdge {
     pub source: PathBuf,
     pub module: String,
+    /// The key passed to Lua's runtime `require` after lowering.
+    ///
+    /// Static `import` calls use the canonical key derived from the resolved
+    /// path, while source `require` calls retain their literal spelling.
+    pub runtime_module_key: Option<String>,
     pub kind: ModuleSpecifierKind,
     pub type_only: bool,
     pub span: SourceSpan,
@@ -203,6 +208,7 @@ impl ModuleGraph {
         graph.propagate_runtime_export_forwards(&forwards);
 
         graph.collect_require_diagnostics();
+        graph.collect_runtime_module_key_diagnostics();
         graph.collect_cycle_diagnostics();
         graph.cycles.sort();
         graph
@@ -490,6 +496,43 @@ impl ModuleGraph {
         }
     }
 
+    fn collect_runtime_module_key_diagnostics(&mut self) {
+        let mut first_keys = BTreeMap::<PathBuf, (String, PathBuf)>::new();
+
+        for module in self.modules.values() {
+            for edge in &module.require_edges {
+                if edge.type_only {
+                    continue;
+                }
+                let Some(target) = resolved_module_path(&edge.resolution).map(normalize_path)
+                else {
+                    continue;
+                };
+                let Some(runtime_key) = edge.runtime_module_key.as_deref() else {
+                    continue;
+                };
+
+                match first_keys.get(&target) {
+                    Some((first_key, first_source)) if first_key != runtime_key => {
+                        self.diagnostics
+                            .entry(module.path.clone())
+                            .or_default()
+                            .push(runtime_module_key_diagnostic(
+                                edge,
+                                &target,
+                                first_key,
+                                first_source,
+                            ));
+                    }
+                    Some(_) => {}
+                    None => {
+                        first_keys.insert(target, (runtime_key.to_owned(), edge.source.clone()));
+                    }
+                }
+            }
+        }
+    }
+
     fn collect_cycle_diagnostics(&mut self) {
         let mut visited = BTreeSet::new();
         let mut reported = BTreeSet::new();
@@ -609,10 +652,21 @@ fn require_edges_for_source(
                     }
                 }
             };
+            let runtime_module_key = match literal.kind {
+                ModuleSpecifierKind::Require => Some(literal.module.clone()),
+                ModuleSpecifierKind::Import => resolved_module_path(&resolution).and_then(|path| {
+                    runtime_module_key_for_path(
+                        path,
+                        context.source_roots.iter().chain(context.output_roots),
+                        context.separator,
+                    )
+                }),
+            };
 
             RequireGraphEdge {
                 source: source_path.to_path_buf(),
                 module: literal.module,
+                runtime_module_key,
                 kind: literal.kind,
                 type_only,
                 span: literal.span,
@@ -620,6 +674,14 @@ fn require_edges_for_source(
             }
         })
         .collect()
+}
+
+fn resolved_module_path(resolution: &RequireResolution) -> Option<&Path> {
+    match resolution {
+        RequireResolution::Resolved { path } => Some(path),
+        RequireResolution::Duplicate { selected, .. } => Some(selected),
+        RequireResolution::Missing { .. } | RequireResolution::Invalid { .. } => None,
+    }
 }
 
 fn resolution_for_candidates(
@@ -754,6 +816,18 @@ fn module_name_for_any_root(
 ) -> Option<String> {
     roots
         .iter()
+        .filter(|root| path.starts_with(root))
+        .max_by_key(|root| root.components().count())
+        .and_then(|root| module_name_for_path(root, path, separator))
+}
+
+pub(crate) fn runtime_module_key_for_path<'a>(
+    path: &Path,
+    roots: impl IntoIterator<Item = &'a PathBuf>,
+    separator: ModulePathSeparator,
+) -> Option<String> {
+    roots
+        .into_iter()
         .filter(|root| path.starts_with(root))
         .max_by_key(|root| root.components().count())
         .and_then(|root| module_name_for_path(root, path, separator))
@@ -1266,6 +1340,27 @@ fn duplicate_module_diagnostic(
         ),
     )
     .with_code(DiagnosticCode::LINT_DUPLICATE_REQUIRE_CANDIDATE)
+}
+
+fn runtime_module_key_diagnostic(
+    edge: &RequireGraphEdge,
+    target: &Path,
+    first_key: &str,
+    first_source: &Path,
+) -> Diagnostic {
+    let current_key = edge.runtime_module_key.as_deref().unwrap_or(&edge.module);
+    Diagnostic::new(
+        edge.source.clone(),
+        edge.span.start.line,
+        edge.span.start.column,
+        DiagnosticSeverity::Warning,
+        format!(
+            "module `{}` is loaded as `{current_key}` here but as `{first_key}` from {}; use one runtime module spelling to avoid duplicate module state",
+            target.to_string_lossy().replace('\\', "/"),
+            first_source.to_string_lossy().replace('\\', "/"),
+        ),
+    )
+    .with_code(DiagnosticCode::LINT_CANONICAL_MODULE_SPELLING)
 }
 
 #[cfg(test)]

@@ -263,6 +263,10 @@ return { ok = true }
     assert_eq!(module.require_edges.len(), 4);
     assert_eq!(module.require_edges[0].kind, ModuleSpecifierKind::Import);
     assert_eq!(
+        module.require_edges[0].runtime_module_key.as_deref(),
+        Some("systems.enemy")
+    );
+    assert_eq!(
         module.require_edges[0].resolution,
         RequireResolution::Resolved {
             path: PathBuf::from("src/systems/enemy.tua")
@@ -285,6 +289,85 @@ return { ok = true }
         RequireResolution::Resolved {
             path: PathBuf::from("src/shared/init.tua")
         }
+    );
+    assert_eq!(
+        module.require_edges[3].runtime_module_key.as_deref(),
+        Some("shared")
+    );
+}
+
+#[test]
+fn reports_distinct_runtime_keys_for_the_same_resolved_module() {
+    let (main, main_hir, main_exports) = tua_input(
+        "src/main.tua",
+        r#"
+local imported = import("./shared")
+local required = require("shared.init")
+return { imported = imported, required = required }
+"#,
+    );
+    let (shared, shared_hir, shared_exports) =
+        tua_input("src/shared/init.tua", "return { enabled = true }\n");
+    let graph = graph([
+        (&main, &main_hir, &main_exports, AnalysisSourceKind::Tua),
+        (
+            &shared,
+            &shared_hir,
+            &shared_exports,
+            AnalysisSourceKind::Tua,
+        ),
+    ]);
+    let module = graph
+        .module("src/main.tua")
+        .expect("main should be indexed");
+
+    assert_eq!(
+        module.require_edges[0].runtime_module_key.as_deref(),
+        Some("shared")
+    );
+    assert_eq!(
+        module.require_edges[1].runtime_module_key.as_deref(),
+        Some("shared.init")
+    );
+    let diagnostics = graph.diagnostics("src/main.tua");
+    assert_eq!(diagnostics.len(), 1, "{diagnostics:#?}");
+    assert_eq!(
+        diagnostics[0].code,
+        Some(DiagnosticCode::LINT_CANONICAL_MODULE_SPELLING)
+    );
+    assert!(diagnostics[0].message.contains("`shared.init`"));
+    assert!(diagnostics[0].message.contains("`shared`"));
+}
+
+#[test]
+fn accepts_import_and_require_when_their_runtime_keys_match() {
+    let (main, main_hir, main_exports) = tua_input(
+        "src/main.tua",
+        r#"
+local imported = import("./shared")
+local required = require("shared")
+return { imported = imported, required = required }
+"#,
+    );
+    let (shared, shared_hir, shared_exports) =
+        tua_input("src/shared/init.tua", "return { enabled = true }\n");
+    let graph = graph([
+        (&main, &main_hir, &main_exports, AnalysisSourceKind::Tua),
+        (
+            &shared,
+            &shared_hir,
+            &shared_exports,
+            AnalysisSourceKind::Tua,
+        ),
+    ]);
+
+    assert!(
+        graph
+            .all_diagnostics()
+            .all(|diagnostic| diagnostic.code
+                != Some(DiagnosticCode::LINT_CANONICAL_MODULE_SPELLING)),
+        "{:?}",
+        graph.all_diagnostics().collect::<Vec<_>>()
     );
 }
 
@@ -589,6 +672,7 @@ fn deeply_nested_require_graphs_do_not_use_the_call_stack() {
                 require_edges: vec![RequireGraphEdge {
                     source: path.clone(),
                     module: format!("module_{:04}", (index + 1) % MODULE_COUNT),
+                    runtime_module_key: Some(format!("module_{:04}", (index + 1) % MODULE_COUNT)),
                     kind: ModuleSpecifierKind::Require,
                     type_only: false,
                     span,

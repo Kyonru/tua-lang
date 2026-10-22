@@ -2085,6 +2085,9 @@ impl AnalysisSnapshot {
             | Some(crate::DiagnosticCode::LINT_REQUIRE_CYCLE) => {
                 self.config.diagnostics.bad_requires
             }
+            Some(crate::DiagnosticCode::LINT_CANONICAL_MODULE_SPELLING) => {
+                self.config.diagnostics.rules
+            }
             _ => true,
         }
     }
