@@ -69,34 +69,6 @@ that final invariant.
 - [Gradual-analysis boundaries](#boundaries): patterns that intentionally stay
   dynamic or conservative.
 
-### LOVE And Game Features
-
-- [LOVE API catalog](#love-api-catalog): callbacks, signatures, enums, object
-  methods, and inheritance.
-- [Asset loaders](#asset-loaders): typed image, sound, music, font, shader,
-  canvas, quad, sprite-batch, and particle helpers.
-- [Sprites and animation](sprites.md): sprite sheets, players, markers,
-  nested clips, and batching.
-- [Vectors and game math](vectors.md): built-in `Vec2`, fused vector
-  arithmetic, and the `math` game helpers.
-- [LOVE methods and callbacks](#love-methods-and-callbacks): colon-call
-  guidance, callback snippets, diagnostics, and fixes.
-- [Signals](signals.md): typed event buses, payloads, patterns, and the Signal
-  Graph.
-- [State stores](#state-stores): explicit shared state with inferred reads,
-  updates, and subscriptions.
-- [State machines](#state-machines): configured state/event unions, generated
-  event methods, and callback suggestions.
-- [Input](#input): Baton-backed controls, directional pairs, and LOVE source
-  completion.
-- [Object pools](#object-pools): typed acquire/release lifecycle and explorer.
-- [Tweening](tweening.md): the built-in flux-based `tween` module, with typed
-  easing names and values.
-- [Camera](camera.md): the built-in `Camera` module, with follow styles,
-  bounds, shake, split screen, and coordinate conversion.
-- [Entity component systems](#entity-component-systems): the built-in `ecs`
-  module and ECS Explorer.
-
 ## Overview
 
 Tua source is still Lua in the places where runtime behavior matters:
@@ -293,161 +265,26 @@ definition only to a generated file that uses it. See
 [Game Math Helpers](vectors.md#game-math-helpers) for every signature and
 usage examples.
 
-### Helper Overview
+### Feature Guides
 
-Tua also includes small source-level helpers for common asset loading:
+Tua's game-focused helpers are documented separately so this page can remain a
+language reference:
 
-```tua
-local player = image "assets/player.png"
-local jump = sound "assets/jump.wav"
-local theme = music "assets/theme.ogg"
-local ui = font("assets/ui.ttf", 18)
-local wave = shader "assets/wave.glsl"
-local pixels = imageData "assets/player.png"
-local target = canvas(320, 180)
-local frame = quad(0, 0, 16, 16, 64, 64)
-local batch = spriteBatch(player, 128)
-local sparks = particles(player, 64)
-local position: Vec2 = vec2(100, 200)
-local events = signal()
-local light = stateMachine({
-  initial = "green",
-  events = {
-    { name = "warn", from = "green", to = "yellow" },
-  },
-})
+- [Sprites And Animation](sprites.md)
+- [Vectors And Game Math](vectors.md)
+- [Signals](signals.md)
+- [State Stores](stores.md)
+- [State Machines](state-machines.md)
+- [Input](input.md)
+- [Tweening](tweening.md)
+- [Camera](camera.md)
+- [Entity Component Systems](ecs.md)
+- [Object Pooling](object-pooling.md)
+- [Audio Systems](audio.md)
 
-type PlayerState = {
-  name: string,
-  hp: number,
-}
-
-local hero: PlayerState = { name = "Ada", hp = 10 }
-
-player:setFilter("nearest")
-jump:play()
-events:on("player.hit", function(player: PlayerState, damage: number)
-  print(player.name, damage)
-end)
-events:declare("game.paused", function(reason: string) end)
-events:emit("player.hit", hero, 4)
-events:emit("game.paused", "menu")
-```
-
-Asset helpers lower to ordinary LOVE calls and infer LOVE object types for
-editor tooling. `vec2(x, y)` lowers to a cached BrineVector constructor, and
-`signal()` lowers to a cached lightweight signal-bus constructor:
-
-```lua
-local player = love.graphics.newImage("assets/player.png")
-local jump = love.audio.newSource("assets/jump.wav", "static")
-local theme = love.audio.newSource("assets/theme.ogg", "stream")
-local ui = love.graphics.newFont("assets/ui.ttf", 18)
-local wave = love.graphics.newShader("assets/wave.glsl")
-local pixels = love.image.newImageData("assets/player.png")
-local target = love.graphics.newCanvas(320, 180)
-local frame = love.graphics.newQuad(0, 0, 16, 16, 64, 64)
-local batch = love.graphics.newSpriteBatch(player, 128)
-local sparks = love.graphics.newParticleSystem(player, 64)
-local __tua_vec2 = require("brinevector")
-local position = __tua_vec2(100, 200)
-local __tua_signal = require("tuasignal")
-local events = __tua_signal()
-local __tua_state_machine = require("tuastatemachine").create
-local light = __tua_state_machine({
-  initial = "green",
-  events = {
-    { name = "warn", from = "green", to = "yellow" },
-  },
-})
-local __tua_store = require("tuastore")
-local game = __tua_store({ score = 0, paused = false })
-
-local hero = { name = "Ada", hp = 10 }
-
-player:setFilter("nearest")
-jump:play()
-events:on("player.hit", function(player, damage)
-  print(player.name, damage)
-end)
-events:declare("game.paused", function(reason) end)
-events:emit("player.hit", hero, 4)
-events:emit("game.paused", "menu")
-```
-
-When generated Lua needs a helper runtime such as `brinevector`, `anim8`,
-`tuasignal`, `tuaecs`, `tuaobjectpool`, `tuastatemachine`, `tuastore`, `baton`,
-or `tuaaudio`, `tua build` writes the bundled runtime file into the output
-directory unless the project already provides one. `tuaaudio` also requires
-the bundled signal and store runtimes.
-
-### Signals
-
-`signal()` creates an explicit event bus with `on`, `once`, `emit`, `off`,
-`declare`, and pattern methods. Typed handlers and `declare` schemas define
-each event's payload, so `emit` gets signature help and type checking, and
-event-name strings complete, navigate, and rename across files. Conflicting
-schemas report `TL5005`. Builds lower the helper to the bundled `tuasignal.lua`
-runtime. See [Signals](signals.md) for the full API, handler removal,
-emitting inside handlers, pattern methods, and the Signal Graph.
-
-### State Stores
-
-`store({...})` derives a state shape from its initial table. `get` returns that
-shape, `set` validates full replacement state, `update` validates a mutator,
-and `subscribe` receives current and previous state. `watch` derives one
-signature per top-level field so keys and listener value types stay connected.
-Hovering a static watcher key shows the state field type, and definition jumps
-back to that field in the initial store table.
-The helper creates explicit instances rather than an ambient global and lowers
-to the bundled `tuastore.lua` runtime. See [State Stores](stores.md) for module
-sharing, shallow change detection, and LOVE persistence adapters.
-
-### State Machines
-
-`stateMachine({...})` derives exact state and event unions from a static
-configuration. Configured events become callable methods, callback keys such
-as `onbeforewarn` and `onenteryellow` complete inside `callbacks`, and `is` and
-`can` suggest only valid names. Builds lower the helper to the bundled
-`tuastatemachine.lua` runtime based on lua-state-machine. See
-[State Machines](state-machines.md) for callbacks, wildcard transitions,
-asynchronous transitions, and dynamic configuration boundaries.
-
-Hover inside nested options, event entries, and callbacks uses the specific
-schema field or callback parameter. Fixed fields navigate to generated built-in
-schemas; generated event methods and callback keys navigate to the source
-event or state string that introduced them.
-
-### Object Pools
-
-`objectPool({...})` creates a reusable pool with `acquire`, `release`,
-`prewarm`, ownership, count, and cleanup methods. An annotated `create`
-callback return type flows through `acquire`, while unannotated factories stay
-permissive. The helper targets measured allocation and garbage-collection
-pressure in short-lived gameplay objects; it is not a replacement for normal
-tables or ECS population queries. The language server can visualize the
-lifecycle through `Tua: Show Object Pool Explorer`, and it publishes
-conservative `TL5007` warnings when a directly acquired same-file local has no
-later visible release or pool clear.
-
-### Input
-
-`input({...})` creates a Baton input player and derives exact control and pair
-names from a direct table literal. `get("confirm")` returns one number, while
-`get("move")` returns x and y when `move` is a configured pair. Source strings
-such as `"key:space"`, `"axis:leftx-"`, and `"button:a"` use the generated LOVE
-catalog for completion and validation. Builds include `baton.lua` only when the
-helper is used. See [Input](input.md) for configuration, polling, deadzones,
-joysticks, and dynamic boundaries.
-
-### Entity Component Systems
-
-The built-in `ecs` module provides typed components, worlds, systems, and
-queries without a package install or explicit `require`. Builds that use it
-write the bundled `tuaecs.lua` runtime, and **Tua: Show ECS Explorer** exposes
-the compiler's component and system model. Static component schemas determine
-the payload returned by `world:get`, including across module exports. See
-[Entity Component Systems](ecs.md) for the full API and workflow.
+Helpers lower to ordinary LOVE calls or bundled Lua modules. The build includes
+a helper runtime only when the source uses that feature, and a compatible
+project-provided module can replace the bundled implementation.
 
 ## Primitive Types
 
@@ -866,7 +703,7 @@ compatible `---@alias ... fun(...)` annotations.
 Generics are not part of Tua. Arrays, dictionaries, concrete aliases, and
 gradual `any` cover the supported container and dynamic boundaries.
 
-## LOVE Assets, Sprites, Vectors, And Callbacks
+## LOVE Assets And Callbacks
 
 Tua includes built-in LOVE knowledge for common game code. Asset loader helpers
 infer LOVE object types and emit ordinary LOVE API calls:
@@ -884,7 +721,6 @@ local target = canvas(320, 180)
 local frame = quad(0, 0, 16, 16, 64, 64)
 local batch = spriteBatch(player, 128)
 local sparks = particles(player, 64)
-local position: Vec2 = vec2(100, 200)
 ```
 
 Emitted Lua:
@@ -900,8 +736,6 @@ local target = love.graphics.newCanvas(320, 180)
 local frame = love.graphics.newQuad(0, 0, 16, 16, 64, 64)
 local batch = love.graphics.newSpriteBatch(player, 128)
 local sparks = love.graphics.newParticleSystem(player, 64)
-local __tua_vec2 = require("brinevector")
-local position = __tua_vec2(100, 200)
 ```
 
 Values inferred as LOVE objects expose method completions, hover, and signature
@@ -924,42 +758,6 @@ code. Tua also reports obvious missing files, unsupported formats, and source
 type mismatches such as using an audio file where an image is expected. Today
 that optional binary metadata is conservative; for example, valid PNG headers
 can provide dimensions, while audio duration is left unknown.
-
-### Sprite Sheets And Anim8
-
-`spriteSheet({...})` validates a local sprite image, frame grid, and named
-animations, and lowers them to the bundled anim8 runtime. Grid coordinates and
-marker frames are zero-based in the configuration. `sheet:player("idle")`
-creates a lightweight player with checked animation and marker names, speed
-control, manual seeking, nested clips, and `SpriteBatch` insertion. Players
-share their sheet's read-only animation arrays, so creating them is cheap.
-
-```tua
-local Hero = spriteSheet({
-  image = "assets/hero.png",
-  frame = { width = 32, height = 32 },
-  animations = {
-    idle = { from = 0, to = 3, row = 0, fps = 6 },
-    run = { from = 0, to = 7, row = 1, fps = 12 },
-  },
-})
-
-local hero = Hero:player("idle")
-hero:play("run")
-```
-
-See [Sprites And Animation](sprites.md) for frame geometry, timing, the player
-API, markers, trimmed frames, nested clips, batching, and sharing.
-
-### Vectors
-
-`Vec2` is a built-in nominal vector type for positions and velocities, created
-with `vec2(x, y)` and backed by BrineVector at runtime. Tua checks its fields,
-computed properties such as `length` and `normalized`, its methods, and its
-operators, and compiles whole vector expressions such as
-`position += velocity * dt` into one constructor call, so they allocate once.
-See [Vectors And Game Math](vectors.md) for the full API, fused-arithmetic
-rules and trade-offs, and FFI versus table vectors.
 
 ### LOVE Methods And Callbacks
 

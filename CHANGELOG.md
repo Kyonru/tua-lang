@@ -8,6 +8,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Changed
 
+- Public documentation now focuses on supported language, feature, and tooling
+  workflows. Contributor benchmarks, evaluation methodology, and implementation
+  plans moved to a dedicated internal documentation index.
+
 - Documentation navigation now separates the core Language guides from a
   dedicated Features section for Tua's game-focused APIs and runtimes.
 

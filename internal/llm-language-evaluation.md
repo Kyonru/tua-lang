@@ -1,7 +1,3 @@
----
-icon: lucide/bot
----
-
 # LLM Language Evaluation
 
 Tua includes a deterministic, provider-neutral benchmark for measuring whether
@@ -71,7 +67,7 @@ matching, BLEU, and reference-answer similarity are not used.
 The benchmark compares models with a compact 300–500-word core contract plus
 one task card when the task needs types, functions, modules, classes, or LOVE.
 The cards live beside the corpus under `benchmarks/llm-language/cards/`; the
-complete public language contract remains [`llms.txt`](llms.txt). This keeps
+complete public language contract remains [`llms.txt`](../docs/llms.txt). This keeps
 routine prompts small while the full contract remains available for retrieval
 and unfamiliar tasks.
 

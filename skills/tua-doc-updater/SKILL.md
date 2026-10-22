@@ -18,6 +18,9 @@ separate docs request when the implementation changed.
   and workflow behavior.
 - `docs/archive/` only for dated historical snapshots; do not update archived
   ledgers as if they were current plans.
+- `internal/` for maintained contributor workflows, implementation plans,
+  benchmark methodology, and evaluation evidence that should not appear in the
+  public site navigation.
 - `docs/` for user-facing documentation.
 - `zensical.toml` for docs navigation.
 - `examples/` READMEs and sources for runnable, commented examples.
@@ -50,6 +53,12 @@ separate docs request when the implementation changed.
 - If an example source changes, rebuild or explain why generated output is not
   committed.
 - Keep the docs factual: label future work as future work.
+- Keep public pages task-focused. Move phase histories, tuning thresholds,
+  repository test mechanics, and maintainer-only instructions to `internal/`
+  and link them from `CONTRIBUTING.md` when they remain useful.
+- Prefer one owning explanation and concise cross-links over repeating the same
+  feature overview across the homepage, language guide, LSP guide, and focused
+  feature page.
 - Label simulated persona evaluations and synthetic editor replays explicitly;
   do not present them as human studies. Separate product findings from harness
   defects and distinguish fixed issues from remaining gaps.

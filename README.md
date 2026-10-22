@@ -137,7 +137,6 @@ service opens a network socket or starts automatically.
 - [Audio systems](https://kyonru.github.io/tua-lang/audio/)
 - [CLI reference](https://kyonru.github.io/tua-lang/cli/)
 - [Language server](https://kyonru.github.io/tua-lang/lsp/)
-- [LLM language evaluation](https://kyonru.github.io/tua-lang/llm-language-evaluation/)
 - [External API and MCP](https://kyonru.github.io/tua-lang/external-api-bridge/)
 - [Debugging](https://kyonru.github.io/tua-lang/debugging/)
 - [Examples](https://kyonru.github.io/tua-lang/examples/)
@@ -149,28 +148,9 @@ service opens a network socket or starts automatically.
 
 ## Development
 
-Pending contributor priorities are tracked in [`ROADMAP.md`](ROADMAP.md).
-
-```sh
-cargo test --workspace
-cargo run -p tua-cli -- --help
-```
-
-Useful local workflows:
-
-```sh
-make build-features
-make editor-regression-smoke
-make extension-package
-```
-
-GitHub Linguist support materials live in `support/github-linguist/`.
-
-Serve the documentation site locally:
-
-```sh
-make docs
-```
+See [CONTRIBUTING.md](CONTRIBUTING.md) for setup and verification, the
+[internal contributor guides](internal/README.md) for specialized test and
+benchmark workflows, and [ROADMAP.md](ROADMAP.md) for current priorities.
 
 ## Examples
 

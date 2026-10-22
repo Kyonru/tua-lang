@@ -8,11 +8,6 @@ This page defines Tua's stable `TLxxxx` error, warning, and hint codes. The
 compiler, CLI, language server, and VS Code extension use the same codes for the
 same semantic conditions.
 
-!!! info "Canonical user-facing reference"
-    The implementation registry lives in
-    `crates/tua-core/src/diagnostic/mod.rs`. This page defines what each
-    registered code means and how users control it.
-
 ## Reading A Diagnostic
 
 CLI diagnostics use this shape:
@@ -266,14 +261,3 @@ Some diagnostics expose conservative editor fixes:
 
 Not every diagnostic has a safe mechanical fix. Tua omits an action when the
 correct edit depends on runtime intent.
-
-## Maintaining The Registry
-
-When adding or changing a diagnostic:
-
-1. Add or update the `DiagnosticCode` constant and `is_known` registry in
-   `crates/tua-core/src/diagnostic/mod.rs`.
-2. Keep the code inside its category range and preserve existing code meanings.
-3. Add focused core tests for code, severity, range, and message behavior.
-4. Update this page and any related configuration or feature documentation.
-5. Add exact LSP or code-action tests when the editor surface changes.

@@ -158,14 +158,10 @@ distributed with the rest of the project.
 - [Releases](releases.md) covers downloads, checksums, compatibility, and
   migration policy.
 
-### Contribute Or Investigate
+### Project Information
 
 - [Architecture](architecture.md) explains crate ownership, shared analysis,
   request and build flows, and where changes belong.
-- [Completion Benchmarks](completion-benchmarks.md) explains how to run and
-  interpret completion performance checks.
-- [LLM Language Evaluation](llm-language-evaluation.md) provides a 40-task,
-  compiler-backed corpus for measuring how reliably models learn Tua.
 - [External API And MCP](external-api-bridge.md) documents the shipped,
   read-only stdio JSON-RPC API and MCP adapter for trusted local tools.
 - [Contributing](https://github.com/Kyonru/tua-lang/blob/main/CONTRIBUTING.md),

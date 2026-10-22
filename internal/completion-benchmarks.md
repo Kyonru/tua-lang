@@ -1,7 +1,3 @@
----
-icon: lucide/gauge
----
-
 # Completion Benchmark Guide
 
 Use Tua's benchmark targets to answer three different questions:

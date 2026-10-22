@@ -1,6 +1,6 @@
 //! Local, deterministic inline completion.
 //!
-//! Phase 0 of `better-autocompletion.md` provides the cursor-eligibility rules
+//! Phase 0 of `internal/better-autocompletion.md` provides the cursor-eligibility rules
 //! and offline evaluator. Phase 1 exposes the measured current-file backend as
 //! a host-level query that never builds semantic analysis or a snapshot.
 

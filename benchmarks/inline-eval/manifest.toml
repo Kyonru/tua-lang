@@ -1,4 +1,4 @@
-# Inline-completion evaluation datasets (Phase 0 of better-autocompletion.md).
+# Inline-completion evaluation datasets (Phase 0 of internal/better-autocompletion.md).
 #
 # The split is by project, never by file, and was recorded here before any
 # threshold tuning. No path may appear in two sets; the evaluator rejects

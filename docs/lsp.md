@@ -206,65 +206,21 @@ member-access contexts, where the tuning data was substantially less precise.
 Semantic statement snippets may contain their normal block body, but the
 pattern-recall source is single-line.
 
-Every suggestion must pass a parse check that fits the request budget, so
-deterministic inline completion is unavailable in files larger than about
-6.8 KB of Tua or 31 KB of Lua. Those requests return nothing without scanning
-the file, and the LSP statistics count them as `skippedOversized`.
+The server returns at most one suggestion and abstains when the cursor, suffix,
+document size, parse state, deadline, or cancellation state makes the result
+unsafe. Suggestions are version-bound, so edits and newer requests discard
+stale work. When the completion menu is open, ghost text appears only if it
+extends the selected item.
 
-The server checks cursor eligibility, suffix compatibility, cancellation, and
-parse safety before returning at most one item. Candidate generation and
-validation use a 10 ms core deadline; before starting a non-interruptible parse,
-Tua checks that the remaining budget is sufficient and otherwise abstains.
-Queue, protocol, and end-to-end request latency are measured separately. With
-these public Phase 1 sources, the path reads the current in-memory document
-only. It does not build an analysis snapshot, run type checking, scan other
-project files, read a pattern database, or persist source text. Project-wide
-exact retrieval exists only as a hidden, default-off Phase 2 integration
-experiment; the extension does not contribute its internal source switch, and
-it added no candidates at its safe tuning policy. The optional statistical
-source uses the same immutable corpus lifecycle and background-indexes bounded
-Tua token tables. Statistical-only builds do not retain Phase 2's exact source
-line continuations. The predictor requires two distinct files to support each
-predicted token at its deciding context order, keeps uncommon literals
-non-generatable, and uses cached scope facts when they match. On a cold file or
-changed suffix it treats bare identifiers as bound slots while preserving
-concrete member names, so it can still support forward typing without
-triggering analysis. It is available for explicit testing, not
-quality-approved or enabled by default. Bundled patterns and multi-line pattern
-recall are not production sources.
+Local sources run before Ollama and never send code over the network. A local
+timeout or cancellation returns no suggestion instead of starting model work.
+The language status reports `Local`, `Ollama`, `Local + Ollama`, or `off`.
+Source-specific returned and accepted counters contain no completion text and
+do not affect ranking.
 
-Tua serves the same bounded core query through its metadata-rich
-`tua/localInlineCompletion` request and standard LSP 3.18
-`textDocument/inlineCompletion`. The standard response omits internal source,
-score, and pattern metadata; snippet candidates use LSP `StringValue` snippet
-encoding. Both requests share the speculative newest-wins lane, cancellation,
-validation, and stale-document rejection. Standalone clients are advertised
-the standard capability. The Tua VS Code extension declares that it owns the
-combined deterministic/Ollama provider, so the server suppresses standard
-provider registration for that client and avoids duplicate requests.
-
-The extension waits 65 ms before requesting ghost text, then gives the local
-backend 250 ms to respond. That request uses a linked cancellation token, so a
-timeout, edit, cursor movement, provider cancellation, or newer request cancels
-the local work and returns no suggestion. The extension also rejects responses
-for an older document version. When the completion menu has a selected item,
-deterministic ghost text is shown only when it extends that item. When enabled,
-the local backend runs first; the separately opted-in Ollama backend runs only
-if local completion is
-disabled, returns no candidate, or is unavailable on an older server. A
-timed-out, cancelled, stale, capacity-limited, or otherwise transient local
-request abstains instead of starting model work. No deterministic source sends
-code over the network.
-
-The inline-completion language status uses neutral backend names: `Local`,
-`Ollama`, `Local + Ollama`, or `off`. Deterministic counters are likewise kept
-separate by source as `semanticReturned`/`semanticAccepted`,
-`currentFileReturned`/`currentFileAccepted`,
-`projectReturned`/`projectAccepted`, and
-`projectStatisticalReturned`/`projectStatisticalAccepted`. "Returned" means an
-item was returned to VS Code; it does not claim that the item was visible.
-These counters store no completion text and do not feed ranking or candidate
-generation.
+Standalone clients can use the standard LSP 3.18
+`textDocument/inlineCompletion` request. The VS Code extension combines local
+and Ollama suggestions through one provider to avoid duplicate ghost text.
 
 ### Local Ollama Inline Completion
 
@@ -312,20 +268,7 @@ accepted character totals. They appear alongside the deterministic counters in
 copied debug information and are cleared by **Tua: Reset Completion Learning
 Stats**.
 
-The feature remains experimental and disabled by default. It should not be
-considered for a different default until local dogfooding records at least 100
-returned suggestions, at least 15% acceptance, and no regression in ordinary
-completion latency.
-
-To measure language knowledge separately from editor acceptance telemetry, run
-the provider-neutral [LLM Language Evaluation](llm-language-evaluation.md).
-Its offline gate proves the 40 reference tasks pass checking and lowering and
-that every negative control fails; an optional Ollama lane scores a local model
-with the same compiler-backed oracle.
-
-The custom semantic requests are `tua/inlineCompletionContext` and
-`tua/validateInlineCompletion`. Responses bind the document version, analysis
-revision, UTF-16 position, context ID, and source fingerprint.
+The feature remains experimental and disabled by default.
 
 ### Navigation And Symbols
 
@@ -607,7 +550,7 @@ contain a value.
 | `tua.ecs.enabled` | Enable or disable built-in ECS analysis; enabled by default |
 | `tua.completion.sequenceRanking.*` | Configure experimental contextual completion ranking |
 | `tua.completion.multiToken.*` | Configure experimental validated multi-token suggestions |
-| `tua.completion.inline.*` | Configure experimental deterministic inline completion and its Phase 1 sources |
+| `tua.completion.inline.*` | Configure experimental deterministic inline completion and its local sources |
 | `tua.fileAssociations` | Index additional glob patterns as Tua or Lua source |
 | `tua.ignoredPaths` | Exclude matching paths from indexing and diagnostics |
 | `tua.requirePathSeparator` | Suggest module paths with `.` or `/` separators |
@@ -686,31 +629,3 @@ If generated Lua cannot be opened, inspect **Tua: Focus Output** for build
 diagnostics. If sprite preview is unavailable, enable `tua.preview.enabled`;
 ordinary sprite diagnostics and completion do not depend on the preview
 setting.
-
-## Contributor Checks
-
-Use focused checks for language-server changes:
-
-```bash
-cargo test -p tua-lsp
-make lsp-smoke
-make lsp-features-smoke
-npm --prefix editors/vscode run test:vscode
-```
-
-The extension-host suite covers live completion freshness, cancellation,
-navigation, signature help, inlay hints, UTF-16 positions, file-renames,
-project explorers, asset actions, and sprite preview behavior.
-
-For performance work, start with:
-
-```bash
-make profile-lsp
-make profile-completion
-make profile-representative
-```
-
-See [Completion Benchmarks](completion-benchmarks.md) for benchmark selection,
-latency metrics, baselines, cache interpretation, and freshness checks. Set
-`TUA_PROFILE=1` when internal analysis spans are needed; normal server output
-remains clean when profiling is disabled.

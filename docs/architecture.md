@@ -535,5 +535,4 @@ change, include the relevant integration test and run `make diff-check`.
 - [Configuration](configuration.md)
 - [Lua Interoperability](lua-interop.md)
 - [Diagnostics](luahelper-code-matrix.md)
-- [Completion Benchmarks](completion-benchmarks.md)
 - [External API Bridge](external-api-bridge.md)

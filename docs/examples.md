@@ -12,10 +12,7 @@ A buildable tour of the language and LSP features.
 
 ```bash
 make build-features
-make lsp-features-smoke
 ```
-
-Use this when changing language-server behavior.
 
 The feature tour opts out of the default standard lint set because several
 files demonstrate intentionally incomplete or suspicious patterns. Use the
@@ -41,8 +38,7 @@ cd examples/linter
 ```
 
 The lint command exits with status `1` by design. With standard rules enabled
-by default, `tua check` reports the same fixture warnings. The fixture has no
-`tua.toml`, so it does not participate in buildable-example or benchmark runs.
+by default, `tua check` reports the same fixture warnings.
 
 ## `examples/love-minimal`
 
@@ -83,9 +79,7 @@ make run-love-tua
 The `.tua` and `.lua` sources live together at the example root, including the
 tracked Feel runtime and declarations under `lib/feel`. Tua indexes the
 declarations without emitting them, copies runtime Lua unchanged, and writes
-the runnable project under the ignored `build/` directory. Because the example
-is self-contained, it participates in the default example build and benchmark
-suites without network setup.
+the runnable project under `build/`.
 
 ## `examples/starfall`
 
@@ -129,56 +123,4 @@ resolution, and mixed `.tua` compilation plus `.lua` copying.
 
 ```bash
 make build-project-model
-```
-
-## Syntax Validation
-
-When LuaJIT or Lua is available:
-
-```bash
-make lua-syntax
-```
-
-The test skips gracefully when no compatible Lua executable is present.
-
-## LSP Benchmark Fixtures
-
-`benchmarks/lsp/small`, `benchmarks/lsp/medium`, and `benchmarks/lsp/large`
-are checked-in Tua projects for profiling editor latency and cache behavior.
-They include comments describing the feature surface each file stresses.
-Larger deterministic fixtures are generated under `target/` so 1,000 generated
-project files do not live in the repository.
-
-```bash
-make profile-lsp
-make profile-completion
-make completion-ranking-smoke
-make generate-lsp-benchmarks
-make profile-representative
-```
-
-## Examples Speed Suite
-
-The real bundled examples can also be profiled as a regression suite:
-
-```bash
-make benchmark-smoke
-make profile-examples-smoke
-make profile-examples
-make profile-examples-baseline
-make profile-all
-```
-
-The examples suite discovers every `examples/*/tua.toml` and times CLI commands
-and LSP editor requests. The representative suite measures generated large-file,
-project-scale, deep-chain, diamond/fan-in, and cyclic dependency fixtures,
-including request contention. Both write JSON
-reports under `target/tua-speed/`. The lint timing includes intentional warning
-fixtures; their documented diagnostic exit is measured rather than treated as
-a profiler failure. Check, formatting, build, process, and LSP failures still
-stop the suite. Example timing comparisons use local soft thresholds because
-timing varies by machine:
-
-```bash
-TUA_SPEED_BASELINE=target/tua-speed/examples-baseline.json make profile-examples
 ```

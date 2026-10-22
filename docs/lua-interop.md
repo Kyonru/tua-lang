@@ -541,15 +541,6 @@ For libraries outside the built-in catalogs, keep their Lua modules in the
 project and annotate public boundaries, or provide simple annotated Lua stub
 modules that return the same export shape as the runtime library.
 
-??? note "Maintaining the generated LOVE catalog"
-    The catalog revision is pinned in `scripts/love-api-revision.txt`.
-    Maintainers can regenerate or verify all generated surfaces with:
-
-    ```bash
-    make generate-love-api LOVE_API_ROOT=/path/to/love-api
-    make love-api-drift-check LOVE_API_ROOT=/path/to/love-api
-    ```
-
 ## Troubleshooting
 
 | Symptom | What to check |

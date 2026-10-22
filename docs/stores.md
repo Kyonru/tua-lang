@@ -172,13 +172,3 @@ local game = store(saved or defaults)
 `tuastore.lua` beside generated Lua only when the helper is used. A
 project-provided `tuastore.lua` is never overwritten, so compatible custom
 implementations can replace the bundled runtime.
-
-To compare the bundled runtime with a released version on the current Lua
-interpreter, run:
-
-```console
-make profile-store
-```
-
-Set `STORE_BASE_REF` to choose the comparison commit and `LUA` to select an
-interpreter, such as `make profile-store LUA=luajit`.

@@ -124,9 +124,7 @@ smallest component store. Common query widths use specialized loops, and wider
 queries reuse one argument buffer rather than allocating one for every entity.
 This can reduce irrelevant work, garbage collection, and object overhead, but
 ECS is not automatically faster. Measure representative update loops and avoid
-changing architecture solely for a theoretical gain. Repository contributors
-can use `make profile-ecs-love`, optionally with `ECS_BASE_REF=<ref>` and
-`ECS_LOVE_FLAGS=--jit`, to compare runtime revisions under LOVE.
+changing architecture solely for a theoretical gain.
 
 ## When Ordinary Tua Is Better
 

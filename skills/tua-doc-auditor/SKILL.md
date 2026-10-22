@@ -21,6 +21,9 @@ feature, or copy an example that no longer represents the product.
   registry, LSP capabilities, extension manifests, examples, `CHANGELOG.md`,
   `ROADMAP.md`, `docs/llms.txt`, generated root `llms.txt`, build targets, CI,
   and `zensical.toml`.
+- Treat `internal/` as the home for contributor-only implementation plans,
+  benchmark methodology, evaluation evidence, and maintainer workflows. Flag
+  those topics when they distract from supported user workflows in `docs/`.
 - Build or exercise a documented command or example when its accuracy is in
   doubt. Do not call prose stale only because wording differs from code.
 - Keep archived documents historical; do not treat them as current promises.
@@ -42,6 +45,10 @@ feature, or copy an example that no longer represents the product.
   surfaces;
 - missing contributor, support, and private vulnerability-reporting paths;
 - inconsistent terminology and unsupported guarantees.
+- audience mixing: repository paths, phase histories, tuning evidence, and CI
+  mechanics embedded in pages meant to help users install or use Tua;
+- repetition that restates a focused page without helping readers choose or
+  apply the feature.
 
 Report exact document and implementation evidence, user impact, and the
 smallest correction. Separate a docs defect from a product usability gap. When

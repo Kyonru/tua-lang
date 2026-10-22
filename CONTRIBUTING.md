@@ -34,6 +34,9 @@ npm ci --prefix editors/vscode
 `make docs-build` creates a Python virtual environment under `.venv/docs` and
 installs Zensical when it is not already available.
 
+Specialized benchmark, extension, generated-catalog, and evaluation workflows
+are indexed in [`internal/README.md`](internal/README.md).
+
 ## Make A Change
 
 1. Add or update a focused regression test at the layer that owns the behavior.

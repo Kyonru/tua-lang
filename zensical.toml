@@ -47,8 +47,6 @@ nav = [
     { "Hot Reload" = "hot-reload.md" },
     { "Packaging Games" = "packaging.md" },
     { "Diagnostic Codes" = "luahelper-code-matrix.md" },
-    { "Completion Benchmark Guide" = "completion-benchmarks.md" },
-    { "LLM Language Evaluation" = "llm-language-evaluation.md" },
     { "External API And MCP" = "external-api-bridge.md" },
   ] },
   { "Project" = [

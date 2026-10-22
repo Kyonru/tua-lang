@@ -245,25 +245,3 @@ cargo run -p tua-cli -- mcp --stdio --workspace /path/to/project
 
 Starts the stdio-only MCP adapter with twelve read-only Tua tools. It pins MCP
 protocol `2025-11-25` and applies no edits.
-
-## Make Targets
-
-Common repository targets:
-
-```bash
-make fmt-check
-make test
-make verify
-make ci-check
-make build-features
-make lsp-smoke
-make lsp-features-smoke
-TUA_OLLAMA_MODEL=qwen2.5-coder:1.5b-base make ollama-completion-smoke
-```
-
-`make verify` is non-mutating: it checks formatting, tests, strict Clippy,
-extension activation, tracked JSON, and whitespace without rewriting source.
-`make ci-check` adds bundled example builds, the documentation build, and the
-benchmark smoke. Generated LOVE catalog verification still needs
-`LOVE_API_ROOT`, while the real VS Code extension-host test remains
-`make extension-test`.
