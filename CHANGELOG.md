@@ -8,6 +8,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Changed
 
+- The formatter now applies canonical spacing around arithmetic, comparison,
+  concatenation, and function-type arrow operators while preserving unary
+  signs, scientific notation, and varargs.
+
 - Formatter `quote_style` now accepts `single` and `double` in addition to
   `preserve`, with matching TOML, language-server, and VS Code configuration.
 

@@ -799,10 +799,19 @@ fn normalize_spacing(line: &str, quote_style: QuoteStyle) -> String {
 
                 let operator = assignment_operator_at(bytes, index);
                 if let Some(operator) = operator {
-                    trim_trailing_spaces(&mut output);
-                    output.push(' ');
-                    output.push_str(operator);
-                    output.push(' ');
+                    push_spaced_operator(&mut output, operator);
+                    index += operator.len();
+                    while bytes
+                        .get(index)
+                        .is_some_and(|byte| byte.is_ascii_whitespace())
+                    {
+                        index += 1;
+                    }
+                    continue;
+                }
+
+                if let Some(operator) = binary_operator_at(bytes, index, &output) {
+                    push_spaced_operator(&mut output, operator);
                     index += operator.len();
                     while bytes
                         .get(index)
@@ -1549,6 +1558,94 @@ fn assignment_operator_at(bytes: &[u8], index: usize) -> Option<&'static str> {
     }
 
     None
+}
+
+fn binary_operator_at(bytes: &[u8], index: usize, output: &str) -> Option<&'static str> {
+    if bytes[index..].starts_with(b"->") {
+        return Some("->");
+    }
+
+    for operator in [
+        "==", "~=", "<=", ">=", "//", "..", "+", "-", "*", "/", "%", "^", "<", ">",
+    ] {
+        let operator_bytes = operator.as_bytes();
+        if !bytes[index..].starts_with(operator_bytes) {
+            continue;
+        }
+        if operator == ".."
+            && (bytes.get(index.wrapping_sub(1)) == Some(&b'.')
+                || bytes.get(index + 2) == Some(&b'.'))
+        {
+            continue;
+        }
+        if matches!(operator, "+" | "-") && sign_belongs_to_number(bytes, index) {
+            continue;
+        }
+        if matches!(operator, "+" | "-") && !previous_token_allows_binary_operator(output) {
+            continue;
+        }
+        return Some(operator);
+    }
+
+    None
+}
+
+fn sign_belongs_to_number(bytes: &[u8], index: usize) -> bool {
+    let Some(exponent) = index.checked_sub(1).and_then(|index| bytes.get(index)) else {
+        return false;
+    };
+    if !matches!(exponent, b'e' | b'E' | b'p' | b'P')
+        || !bytes.get(index + 1).is_some_and(u8::is_ascii_digit)
+    {
+        return false;
+    }
+
+    index
+        .checked_sub(2)
+        .and_then(|index| bytes.get(index))
+        .is_some_and(|byte| byte.is_ascii_hexdigit() || *byte == b'.')
+}
+
+fn previous_token_allows_binary_operator(output: &str) -> bool {
+    let output = output.trim_end();
+    let Some(last) = output.as_bytes().last() else {
+        return false;
+    };
+    if matches!(last, b')' | b']' | b'}' | b'\'' | b'"') || last.is_ascii_digit() {
+        return true;
+    }
+    if !is_identifier_continue(*last) {
+        return false;
+    }
+
+    !output
+        .rsplit(|character: char| !character.is_ascii_alphanumeric() && character != '_')
+        .next()
+        .is_some_and(|word| {
+            matches!(
+                word,
+                "and"
+                    | "do"
+                    | "elseif"
+                    | "for"
+                    | "if"
+                    | "in"
+                    | "not"
+                    | "or"
+                    | "return"
+                    | "then"
+                    | "while"
+            )
+        })
+}
+
+fn push_spaced_operator(output: &mut String, operator: &str) {
+    trim_trailing_spaces(output);
+    if !output.is_empty() {
+        output.push(' ');
+    }
+    output.push_str(operator);
+    output.push(' ');
 }
 
 fn trim_trailing_spaces(output: &mut String) {

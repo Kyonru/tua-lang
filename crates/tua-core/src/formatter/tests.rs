@@ -20,7 +20,7 @@ end"#;
         format(source),
         r#"function love.update(dt)
   local hp = 10
-  if hp>0 then
+  if hp > 0 then
     damage(player, 15, "fast") -- keep me
   else
     heal(player, 5)
@@ -91,7 +91,39 @@ end"#;
     assert_eq!(
         format(source),
         r#"function shake(duration = 0.3, strength:number = 1)
-  return duration*strength
+  return duration * strength
+end
+"#
+    );
+}
+
+#[test]
+fn spaces_binary_operators_without_changing_unary_or_lexical_tokens() {
+    let source = r#"local arithmetic=a+b*c-d/e%f^g
+local comparisons=a==b and c~=d or e<=f and g>=h and i<j and k>m
+local unary=-a+-b
+local nested=a*-b+p- -v
+local joined=left..right
+local scientific=1e-3+2e+4
+local callback: (number)->string = tostring
+local function collect(...)
+local values={...}
+return values
+end
+"#;
+
+    assert_eq!(
+        format(source),
+        r#"local arithmetic = a + b * c - d / e % f ^ g
+local comparisons = a == b and c ~= d or e <= f and g >= h and i < j and k > m
+local unary = -a + -b
+local nested = a * -b + p - -v
+local joined = left .. right
+local scientific = 1e-3 + 2e+4
+local callback: (number) -> string = tostring
+local function collect(...)
+  local values = {...}
+  return values
 end
 "#
     );

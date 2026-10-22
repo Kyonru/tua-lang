@@ -9,6 +9,11 @@ valid Tua source and `[format]` settings, it produces one deterministic layout.
 It does not decide whether the program is correct and it does not publish lint
 diagnostics.
 
+Core token spacing is deliberately not configurable. Assignments, arithmetic,
+comparisons, concatenation, and function-type arrows use one canonical spaced
+form; unary signs, scientific-notation signs, field access, and varargs remain
+compact.
+
 ```bash
 tua fmt
 tua fmt --check
