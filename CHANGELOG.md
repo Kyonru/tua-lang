@@ -8,6 +8,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- The formatter now indents split `if`, `elseif`, `while`, and `until`
+  conditions, including comments and CRLF input, without producing its own
+  `TL4037` continuation-layout warning.
 - Standard-library calls such as `math.sqrt(...)` now retain their return types
   inside checked function bodies. This prevents valid branched multi-return
   functions from reporting inferred `nil` values on later return paths.

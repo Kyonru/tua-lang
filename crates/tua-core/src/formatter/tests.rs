@@ -295,6 +295,59 @@ fn indents_leading_concat_continuation() {
 }
 
 #[test]
+fn indents_split_control_flow_headers() {
+    let source = "if -- split header\r\n-- explain condition\r\nleft or\r\nright\r\nthen\r\nprint(\"if\")\r\nelseif\r\nfallback\r\nthen\r\nprint(\"elseif\")\r\nend\r\n\r\nwhile\r\nrunning\r\ndo\r\nprint(\"while\")\r\nend\r\n\r\nrepeat\r\nprint(\"repeat\")\r\nuntil\r\nfinished or\r\ncancelled\r\n";
+
+    let output = format(source);
+
+    assert_eq!(
+        output,
+        r#"if -- split header
+  -- explain condition
+  left or
+  right
+then
+  print("if")
+elseif
+  fallback
+then
+  print("elseif")
+end
+
+while
+  running
+do
+  print("while")
+end
+
+repeat
+  print("repeat")
+until
+  finished or
+  cancelled
+"#
+    );
+
+    let parsed = parse_tua_source("src/main.tua", output).expect("formatted source should parse");
+    let environment = crate::types::build_type_environment(&parsed)
+        .expect("formatted source should build a type environment");
+    let diagnostics = crate::linter::lint_parsed_source(
+        &parsed,
+        &crate::DiagnosticsConfig::default(),
+        &crate::config::JitConfig::default(),
+        &environment,
+    );
+
+    assert!(
+        diagnostics
+            .iter()
+            .all(|diagnostic| diagnostic.code
+                != Some(crate::DiagnosticCode::LINT_MULTI_LINE_STATEMENT)),
+        "formatter output must satisfy its continuation-layout lint: {diagnostics:#?}"
+    );
+}
+
+#[test]
 fn avoids_extra_paren_indent_inside_call_table_and_function_blocks() {
     let source = r#"function update()
 table.insert(list, {

@@ -371,6 +371,7 @@ struct Formatter<'a> {
     paren_continuation_indents: Vec<usize>,
     pending_continuation: bool,
     suppressed_paren_block_indents: Vec<usize>,
+    split_control_header: Option<SplitControlHeader>,
     multiline_state: MultilineState,
     has_content: bool,
     pending_blank_line: bool,
@@ -389,6 +390,13 @@ enum MultilineState {
     LongBracket { close: Vec<u8> },
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum SplitControlHeader {
+    Then,
+    Do,
+    UntilCondition,
+}
+
 impl<'a> Formatter<'a> {
     fn new(options: &'a FormatOptions) -> Self {
         Self {
@@ -399,6 +407,7 @@ impl<'a> Formatter<'a> {
             paren_continuation_indents: Vec::new(),
             pending_continuation: false,
             suppressed_paren_block_indents: Vec::new(),
+            split_control_header: None,
             multiline_state: MultilineState::Code,
             has_content: false,
             pending_blank_line: false,
@@ -524,6 +533,9 @@ impl<'a> Formatter<'a> {
         }
 
         let code = code_before_comment(trimmed);
+        let split_header = self.split_control_header;
+        let closes_split_header = split_header.is_some_and(|header| header.closes_with(code));
+        let opens_split_header = split_control_header(code);
         let dedent = line_starts_with_dedent(code);
         let middle_block = line_is_middle_block(code);
         let closes_suppressed_block =
@@ -549,9 +561,15 @@ impl<'a> Formatter<'a> {
             (self.pending_continuation || starts_with_continuation)
                 && paren_indent == 0
                 && !dedent
-                && !closes_paren,
+                && !closes_paren
+                && split_header.is_none(),
         );
-        let indent_level = self.indent_level + paren_indent + paren_extra + continuation_indent;
+        let split_header_indent = usize::from(split_header.is_some() && !closes_split_header);
+        let indent_level = self.indent_level
+            + paren_indent
+            + paren_extra
+            + continuation_indent
+            + split_header_indent;
         let indent = " ".repeat(indent_level * self.options.indent_width);
         let formatted = break_long_groups(&normalized, &indent, self.options);
 
@@ -570,7 +588,7 @@ impl<'a> Formatter<'a> {
             self.indent_level = self.indent_level.saturating_sub(promoted_indent);
         }
 
-        if line_opens_block(code) {
+        if line_opens_block(code) || closes_split_header {
             if self.paren_depth > 0 {
                 self.indent_level += paren_indent;
                 self.suppressed_paren_block_indents.push(paren_indent);
@@ -578,9 +596,18 @@ impl<'a> Formatter<'a> {
             self.indent_level += 1;
         }
 
-        if middle_block {
+        if middle_block && opens_split_header.is_none() {
             self.indent_level += 1;
         }
+
+        self.split_control_header = match (split_header, closes_split_header) {
+            (Some(SplitControlHeader::UntilCondition), false) if !code.trim().is_empty() => {
+                line_ends_with_continuation(code).then_some(SplitControlHeader::UntilCondition)
+            }
+            (Some(_), true) => None,
+            (Some(header), false) => Some(header),
+            (None, _) => opens_split_header,
+        };
     }
 
     fn update_paren_state(&mut self, code: &str, continuation_indent: usize) {
@@ -639,6 +666,27 @@ impl<'a> Formatter<'a> {
                 }
             }
         }
+    }
+}
+
+impl SplitControlHeader {
+    fn closes_with(self, code: &str) -> bool {
+        let code = code.trim();
+
+        match self {
+            Self::Then => code == "then",
+            Self::Do => code == "do",
+            Self::UntilCondition => false,
+        }
+    }
+}
+
+fn split_control_header(code: &str) -> Option<SplitControlHeader> {
+    match code.trim() {
+        "if" | "elseif" => Some(SplitControlHeader::Then),
+        "while" => Some(SplitControlHeader::Do),
+        "until" => Some(SplitControlHeader::UntilCondition),
+        _ => None,
     }
 }
 
@@ -1212,6 +1260,10 @@ fn line_ends_with_continuation(code: &str) -> bool {
     code.as_bytes()
         .last()
         .is_some_and(|byte| matches!(byte, b'=' | b'+' | b'-' | b'*' | b'/' | b'%' | b'^'))
+        || code
+            .split_whitespace()
+            .next_back()
+            .is_some_and(|word| matches!(word, "and" | "or"))
 }
 
 fn line_starts_with_continuation(code: &str) -> bool {
