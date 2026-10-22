@@ -27,8 +27,8 @@ end
 
 function score.draw()
   love.graphics.setFont(score.font)
-  love.graphics.print(math.floor(score.time), score.time_x, score.time_y)
-  love.graphics.print(math.floor(score.score), score.score_x, score.score_y)
+  love.graphics.print(tostring(math.floor(score.time)), score.time_x, score.time_y)
+  love.graphics.print(tostring(math.floor(score.score)), score.score_x, score.score_y)
 end
 
 function score.get(): number

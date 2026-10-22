@@ -1530,6 +1530,20 @@ local checked_y: number = y
 }
 
 #[test]
+fn accepts_numeric_arguments_for_optional_math_random_bounds() {
+    check_tua_source(
+        "src/random.tua",
+        r#"
+local upper = math.random(5)
+local ranged = math.random(1, 5)
+local checked_upper: number = upper
+local checked_ranged: number = ranged
+"#,
+    )
+    .expect("math.random bounds and returns should be numeric");
+}
+
+#[test]
 fn accepts_required_module_function_returns_in_checked_function_bodies() {
     let temp = TempProject::new("required-module-check-return");
     let source = r#"local Functions = require("functions")
