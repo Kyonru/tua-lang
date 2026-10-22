@@ -8,6 +8,16 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Added
 
+- Added an evaluator-only Phase 3 n-gram experiment behind tua-core's
+  `test-fixture` feature. It uses immutable target-file-held-out models,
+  collision-free token keys, alpha-renamed identifier slots, bounded
+  Jelinek-Mercer decoding, and a tested token renderer under explicit source,
+  context, memory, cancellation, and deadline limits. New tuning and smoke Make
+  targets compare the raw predictor, a pinned high-confidence candidate, and a
+  Phase 2-first fallback. The command hard-refuses held-out and external sets;
+  no statistical predictor is compiled into production, the LSP, or the VS
+  Code extension.
+
 - VS Code now exposes **Tua: Toggle Deterministic Inline Completions** for the
   existing default-off workspace gate. Its inline-completion status reports
   `Local`, `Ollama`, `Local + Ollama`, or `off` instead of presenting every

@@ -11,6 +11,7 @@ use serde::Serialize;
 
 use super::super::eligibility::CursorContext;
 pub use super::super::recall::RecallOptions;
+use super::ngram::EvalNgramIndex;
 use super::retrieval::{
     EvalProjectRetrievalIndex, HoldoutMode, IndexState, RetrievalScope, RetrievalTier,
 };
@@ -31,9 +32,126 @@ pub struct Request<'a> {
     pub path: &'a Path,
     pub language: &'static str,
     pub retrieval_index: Option<&'a EvalProjectRetrievalIndex>,
+    pub ngram_index: Option<&'a EvalNgramIndex>,
     /// False for cut documents: lines after the cursor do not exist yet and
     /// must not be read from the original target-file table.
     pub allow_target_file_other_lines: bool,
+}
+
+/// Standalone evaluator-only Phase 3 predictor. The target file is excluded
+/// by `EvalNgramIndex`, including for edit and auto-close scenarios.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct Phase3TuningConfig {
+    pub contexts: BTreeSet<CursorContext>,
+    pub min_score: f64,
+}
+
+impl Phase3TuningConfig {
+    pub fn pinned() -> Self {
+        Self {
+            contexts: BTreeSet::from([CursorContext::Assignment, CursorContext::Other]),
+            min_score: 0.85,
+        }
+    }
+}
+
+impl Default for Phase3TuningConfig {
+    fn default() -> Self {
+        Self::pinned()
+    }
+}
+
+pub struct Phase3Ngram {
+    pub config: Option<Phase3TuningConfig>,
+}
+
+impl Backend for Phase3Ngram {
+    fn name(&self) -> &'static str {
+        if self.config.is_some() {
+            "phase3-ngram"
+        } else {
+            "phase3-ngram-raw"
+        }
+    }
+
+    fn suggest(&self, request: &Request<'_>) -> Option<Candidate> {
+        if self
+            .config
+            .as_ref()
+            .is_some_and(|config| !config.contexts.contains(&request.context))
+        {
+            return None;
+        }
+        let prediction = request.ngram_index?.predict(
+            request.path,
+            request.language,
+            request.document,
+            request.offset,
+            Duration::from_millis(10),
+            &AtomicBool::new(false),
+        )?;
+        if self
+            .config
+            .as_ref()
+            .is_some_and(|config| prediction.score < config.min_score)
+        {
+            return None;
+        }
+        Some(Candidate {
+            text: prediction.text,
+            is_snippet: false,
+            source: "project-ngram",
+            score: prediction.score,
+            tier: Some("project"),
+        })
+    }
+}
+
+/// Conservative comparison candidate: keep the measured Phase 2 result and
+/// ask the statistical backend only when semantic and exact retrieval abstain.
+pub struct Phase3NgramFallback {
+    pub phase2: Phase2TuningConfig,
+    pub ngram: Phase3TuningConfig,
+}
+
+impl Backend for Phase3NgramFallback {
+    fn name(&self) -> &'static str {
+        "phase3-phase2-plus-ngram-fallback"
+    }
+
+    fn suggest(&self, request: &Request<'_>) -> Option<Candidate> {
+        Phase2Tuning {
+            config: self.phase2.clone(),
+        }
+        .suggest(request)
+        .or_else(|| {
+            Phase3Ngram {
+                config: Some(self.ngram.clone()),
+            }
+            .suggest(request)
+        })
+    }
+
+    fn suggest_with_host(
+        &self,
+        request: &Request<'_>,
+        production: &ProductionRequest<'_>,
+    ) -> Option<Candidate> {
+        Phase2Tuning {
+            config: self.phase2.clone(),
+        }
+        .suggest_with_host(request, production)
+        .or_else(|| {
+            Phase3Ngram {
+                config: Some(self.ngram.clone()),
+            }
+            .suggest(request)
+        })
+    }
+
+    fn index_state(&self) -> &'static str {
+        "complete"
+    }
 }
 
 /// A suggestion: text inserted at the cursor, continuing what is typed.

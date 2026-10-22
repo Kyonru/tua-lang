@@ -3,7 +3,7 @@
 //! This intentionally owns no VFS or host state. It measures immutable
 //! per-file tables before production scheduling/adoption is introduced.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::mem::size_of;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
@@ -111,6 +111,9 @@ struct IndexedFile {
 struct TargetFileView {
     complete: Box<[bool]>,
     partial: Box<[bool]>,
+    /// Stricter experimental view: also excludes files near-duplicate to the
+    /// held-out target, so a tutorial-step sibling cannot reveal its suffix.
+    phase3_complete: Box<[bool]>,
 }
 
 struct SimilarityMatrix {
@@ -258,7 +261,8 @@ impl EvalProjectRetrievalIndex {
         );
         let target_file_views = files
             .iter()
-            .map(|target| {
+            .enumerate()
+            .map(|(target_index, target)| {
                 let eligible = all
                     .iter()
                     .copied()
@@ -273,7 +277,23 @@ impl EvalProjectRetrievalIndex {
                     files.len(),
                     &near_duplicate_clusters(&similarities, &eligible[..partial_len]),
                 );
-                (target.path.clone(), TargetFileView { complete, partial })
+                let phase3_eligible = eligible
+                    .iter()
+                    .copied()
+                    .filter(|index| !similarities.get(target_index, *index))
+                    .collect::<Vec<_>>();
+                let phase3_complete = representative_mask(
+                    files.len(),
+                    &near_duplicate_clusters(&similarities, &phase3_eligible),
+                );
+                (
+                    target.path.clone(),
+                    TargetFileView {
+                        complete,
+                        partial,
+                        phase3_complete,
+                    },
+                )
             })
             .collect::<BTreeMap<_, _>>();
         let clustering_ms = clustering_started.elapsed().as_secs_f64() * 1000.0;
@@ -298,7 +318,7 @@ impl EvalProjectRetrievalIndex {
         let evaluation_holdout_bytes = target_view_keys
             + target_file_views
                 .values()
-                .map(|view| view.complete.len() + view.partial.len())
+                .map(|view| view.complete.len() + view.partial.len() + view.phase3_complete.len())
                 .sum::<usize>();
         let report = RetrievalIndexReport {
             files_considered: project.files.len(),
@@ -412,6 +432,25 @@ impl EvalProjectRetrievalIndex {
             (HoldoutMode::TargetLine, IndexState::Partial) => Some(&self.partial_representatives),
             (HoldoutMode::TargetLine, IndexState::Complete) => Some(&self.complete_representatives),
         }
+    }
+
+    /// Paths retained by the leakage-safe complete target-file view. Phase 3
+    /// reuses this exact near-duplicate policy instead of allowing a sibling
+    /// copy of the target to train the statistical model.
+    pub fn phase3_paths_for_target(&self, active_path: &Path) -> Option<BTreeSet<PathBuf>> {
+        let mask = self
+            .target_file_views
+            .get(active_path)?
+            .phase3_complete
+            .as_ref();
+        Some(
+            self.files
+                .iter()
+                .zip(mask)
+                .filter(|(_, keep)| **keep)
+                .map(|(file, _)| file.path.clone())
+                .collect(),
+        )
     }
 
     /// Retrieve only evidence from the rest-of-project tier and return the

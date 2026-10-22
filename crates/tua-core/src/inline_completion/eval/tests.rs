@@ -26,6 +26,7 @@ fn request<'a>(document: &'a str, declared: Option<&'a BTreeSet<String>>) -> Req
         path: std::path::Path::new("test.tua"),
         language: "tua",
         retrieval_index: None,
+        ngram_index: None,
         allow_target_file_other_lines: true,
     }
 }
@@ -769,6 +770,70 @@ fn phase2_retrieval_cannot_evaluate_gate_sets_through_the_core_api() {
             ..EvalOptions::default()
         },
     );
+}
+
+#[test]
+#[should_panic(expected = "Phase 3 n-grams are tuning-only")]
+fn phase3_ngram_cannot_evaluate_gate_sets_through_the_core_api() {
+    evaluate(
+        &[EvalSet {
+            name: "external".to_owned(),
+            role: SetRole::External,
+            projects: vec![],
+        }],
+        DuplicateReport::default(),
+        &EvalOptions {
+            phase3_ngram: true,
+            ..EvalOptions::default()
+        },
+    );
+}
+
+#[test]
+fn phase3_reports_model_costs_and_both_experimental_backends() {
+    let project = EvalProject {
+        name: "phase3-fixture".to_owned(),
+        config: crate::ProjectConfig::default(),
+        source_roots: vec![PathBuf::from("src")],
+        output_roots: vec![],
+        asset_roots: vec![],
+        files: vec![
+            EvalFile {
+                path: PathBuf::from("src/main.tua"),
+                kind: AnalysisSourceKind::Tua,
+                source: "value = value + 1\n".to_owned(),
+            },
+            EvalFile {
+                path: PathBuf::from("src/other.tua"),
+                kind: AnalysisSourceKind::Tua,
+                source: "score = score + 1\n".to_owned(),
+            },
+        ],
+    };
+    let report = evaluate(
+        &[EvalSet {
+            name: "tune".to_owned(),
+            role: SetRole::Tune,
+            projects: vec![project],
+        }],
+        DuplicateReport::default(),
+        &EvalOptions {
+            max_positions_per_file: 0,
+            simulate_menu: false,
+            measure_warmup: false,
+            parse_repeats: 1,
+            phase2_retrieval: true,
+            phase3_ngram: true,
+            ..EvalOptions::default()
+        },
+    );
+    let set = &report.sets[0];
+    assert_eq!(set.ngram_indexes.len(), 1);
+    assert!(set.ngram_indexes[0].1.approximate_bytes > 0);
+    assert!(set.backends.contains_key("phase3-ngram"));
+    assert!(set
+        .backends
+        .contains_key("phase3-phase2-plus-ngram-fallback"));
 }
 
 #[test]

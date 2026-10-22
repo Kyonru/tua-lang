@@ -1240,6 +1240,38 @@ eligible position, without exceeding:
 
 If exact retrieval wins, stop here and do not ship the n-gram engine.
 
+### Phase 3 implementation and tuning evidence
+
+The experiment now exists only behind tua-core's `test-fixture` feature. It
+uses collision-free exact token-sequence keys, per-order slot renaming,
+Jelinek-Mercer interpolation through order six, a three-wide beam, mean
+surprise stopping, a 12-token single-line limit, and a renderer covered for
+calls, indexing, member access, unary and binary operators, commas, and table
+constructors. Unbound slots, uncommon numbers, and strings terminate decoding.
+Per-file immutable tables make target-file holdout structural rather than a
+post-query filter. Source, context, model-memory, file-count, deadline, and
+cancellation limits all fail closed.
+
+`make inline-eval-phase3` and `make inline-eval-phase3-smoke` are the only
+entry points. The flag hard-refuses held-out and external roles in both the CLI
+and core API. No statistical code is connected to AnalysisHost, the LSP, or the
+extension.
+
+Tune-only results show why the raw model must not ship: it reaches only 0.180
+correct-prefix precision and offers 17.61 wrong characters for each character
+saved. A pinned filter (assignment and `other` contexts, score at least 0.85)
+is safer but extremely sparse. Used only after the Phase 2 candidate abstains,
+it raises characters saved per eligible position from 0.197 to 0.204, with
+0.819 correct-prefix precision, a 0.23 wrong-to-saved ratio, and 1.26 ms
+backend p95. The filtered model itself suggests at only 0.006 eligible
+positions and saves 0.008 characters per eligible position.
+
+The smoke fixture produced no filtered suggestions, so it corroborates only
+execution, not quality. The small tuning gain may be overfit and is not an
+approval to ship. The Phase 3 configuration must be reviewed and frozen before
+either gate dataset is used; until that happens, the production decision
+remains unchanged and exact retrieval is the last implemented source.
+
 ---
 
 ## Phase 4: Product hardening
@@ -1365,8 +1397,9 @@ crates/tua-core/src/inline_completion/corpus/*
 crates/tua-core/src/inline_completion/project_corpus.rs
 ```
 
-Phase 3 adds tokenizer, predictor, and renderer modules, but only if the Phase
-2 results approve it.
+Phase 3 adds an evaluator-only tokenizer, model, predictor, and renderer under
+`inline_completion/eval/ngram.rs`. It remains excluded from production unless
+its frozen gate passes.
 
 ### Core modifications
 

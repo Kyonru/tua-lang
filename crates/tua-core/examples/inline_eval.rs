@@ -63,7 +63,7 @@ const USAGE: &str =
     "usage: inline_eval [paths...] [--manifest FILE] [--set NAME]... [--json] [--out FILE]
   [--records] [--max-positions N] [--no-menu] [--no-warmup] [--thresholds FILE]
   [--menu-replay FILE]
-  [--phase2-retrieval]
+  [--phase2-retrieval] [--phase3-ngram]
   [--check-phase-gate FILE]
   [--check-expected FILE] [--write-expected FILE] [--min-prefix N] [--min-support N]
   [--min-full-prefix-support N] [--dominance R]
@@ -123,6 +123,10 @@ fn parse_arguments() -> Result<Arguments, String> {
             }
             "--menu-replay" => arguments.menu_replay = Some(value("--menu-replay")?.into()),
             "--phase2-retrieval" => arguments.options.phase2_retrieval = true,
+            "--phase3-ngram" => {
+                arguments.options.phase2_retrieval = true;
+                arguments.options.phase3_ngram = true;
+            }
             "--check-phase-gate" => {
                 arguments.phase_gate = Some(value("--check-phase-gate")?.into())
             }
@@ -237,6 +241,10 @@ fn run() -> Result<ExitCode, String> {
     // Held-out and external sets are quality gates: their thresholds must be
     // committed before anyone looks at their results.
     let gated = selected.iter().any(|(_, set)| set.role.is_gate());
+    ensure_phase3_sets_are_tuning_only(
+        arguments.options.phase3_ngram,
+        selected.iter().map(|(_, set)| set.role),
+    )?;
     ensure_phase2_sets_are_tuning_only(
         arguments.options.phase2_retrieval,
         selected.iter().map(|(_, set)| set.role),
@@ -385,6 +393,17 @@ fn ensure_phase2_sets_are_tuning_only(
     }
 }
 
+fn ensure_phase3_sets_are_tuning_only(
+    enabled: bool,
+    roles: impl IntoIterator<Item = SetRole>,
+) -> Result<(), String> {
+    if enabled && roles.into_iter().any(SetRole::is_gate) {
+        Err("--phase3-ngram is tuning/smoke-only and refuses held-out or external sets".to_owned())
+    } else {
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -395,6 +414,15 @@ mod tests {
         assert!(ensure_phase2_sets_are_tuning_only(false, [SetRole::Holdout]).is_ok());
         assert!(ensure_phase2_sets_are_tuning_only(true, [SetRole::Holdout]).is_err());
         assert!(ensure_phase2_sets_are_tuning_only(true, [SetRole::External]).is_err());
+    }
+
+    #[test]
+    fn phase3_ngram_refuses_gate_roles_even_with_thresholds() {
+        assert!(ensure_phase3_sets_are_tuning_only(true, [SetRole::Tune]).is_ok());
+        assert!(ensure_phase3_sets_are_tuning_only(true, [SetRole::Smoke]).is_ok());
+        assert!(ensure_phase3_sets_are_tuning_only(false, [SetRole::Holdout]).is_ok());
+        assert!(ensure_phase3_sets_are_tuning_only(true, [SetRole::Holdout]).is_err());
+        assert!(ensure_phase3_sets_are_tuning_only(true, [SetRole::External]).is_err());
     }
 }
 
@@ -548,6 +576,17 @@ fn print_summary(report: &eval::EvalReport) {
             println!(
                 "largest project load: {name}, +{:.1} MiB requested heap for a full snapshot (counted by the allocator; compare peak RSS)",
                 (memory.files_delta_bytes + memory.snapshot_delta_bytes) as f64 / 1_048_576.0
+            );
+        }
+        for (project, model) in &set.ngram_indexes {
+            println!(
+                "phase3 n-gram {project}: {}/{} files, {} contexts, {:.1} KiB max-query estimate, {:.1} KiB evaluator holdout estimate, {:.2} ms build",
+                model.files_indexed,
+                model.files_considered,
+                model.contexts,
+                model.approximate_bytes as f64 / 1024.0,
+                model.evaluation_holdout_bytes as f64 / 1024.0,
+                model.build_ms,
             );
         }
     }

@@ -10,6 +10,8 @@ before their default or source scope expands. It lives behind the
 ```sh
 make inline-eval            # tuning sets -> target/tua-speed/inline-eval-tune.json
 make inline-eval-phase2     # opt-in Phase 2 exact retrieval, tuning data only
+make inline-eval-phase3     # evaluator-only n-gram experiment, tuning data only
+make inline-eval-phase3-smoke # exercise Phase 3 on committed smoke data
 make inline-eval-smoke      # committed fixtures, compared with smoke/expected.json (CI)
 make inline-eval-holdout    # held-out gate, checked against thresholds.toml
 make inline-eval-external   # fetch pinned third-party projects, then gate on them
@@ -47,6 +49,33 @@ commands. While Phase 2 policy is being selected, use it only with `tune` or
 and thresholds for those sets are frozen. The option requires
 `--thresholds benchmarks/inline-eval/thresholds.toml`; its `[phase2_tuning]`
 table pins the exploratory combined candidate.
+
+`--phase3-ngram` implies Phase 2 retrieval and adds an evaluator-only
+order-six Jelinek-Mercer model. Both the CLI and the core evaluator reject this
+flag for held-out and external roles, even when a thresholds file is supplied.
+The model keeps immutable per-file counts so the target file and near-copy
+siblings are excluded before prediction, caps each input at 256 KiB, each file
+at 100,000 contexts, and each per-target query view at an estimated 16 MiB,
+and fails closed on its 10 ms deadline or cancellation. Evaluator-only storage
+for all held-out views is estimated and reported separately. It
+never predicts an unseen identifier, uncommon number, or string literal.
+`phase3-ngram-raw` exposes the unfiltered experiment;
+`phase3-ngram` is the pinned tune-only candidate (assignment and `other`
+contexts, score at least 0.85), and
+`phase3-phase2-plus-ngram-fallback` asks the Phase 2 candidate first.
+
+On the tuning set, the filtered fallback raises saved characters per eligible
+position from Phase 2's `0.197` to `0.204`; correct-prefix precision changes
+from `0.808` to `0.819`, wrong-to-saved improves from `0.24` to `0.23`, and
+backend p95 is `1.26 ms`. The filtered model is extremely sparse: it suggests
+at 0.006 eligible requests, saves 0.008 characters per eligible request, and
+has 0.957 correct-prefix precision. The raw predictor is not usable (`0.180`
+correct-prefix precision and `17.61` wrong characters per character saved).
+Phase 3 smoke produced no filtered suggestions, so it only exercises the code
+path and provides no quality corroboration. These tune-only gains may be
+overfit; they are not release approval. No Phase 3 held-out or external set has
+been read, and no n-gram code is compiled into production, the LSP, or the
+extension.
 
 The report keeps `same-directory` and `project` as separate tiers. The clearly
 named `phase2-tuning-phase1-plus-project-common-prefix` backend first asks the
@@ -218,6 +247,12 @@ cursor on that line and asks every backend for one suggestion.
   candidate described above.
 - `bundled-corpus`: exact retrieval from the separate, immutable hand-written
   Lua/LÖVE corpus. Lua requests do not read Tua-only corpus lines.
+- `phase3-ngram-raw`: the unfiltered statistical experiment, useful for
+  precision/coverage curves rather than product behavior.
+- `phase3-ngram`: the pinned high-confidence, context-limited statistical
+  candidate.
+- `phase3-phase2-plus-ngram-fallback`: semantic/current-file/project exact
+  retrieval first, then the filtered statistical candidate only on abstention.
 
 The experimental project index clusters files whose normalized significant
 line **multisets** have at least 90% weighted-Jaccard similarity. A file joins
@@ -274,6 +309,11 @@ Each project has a `retrieval_indexes` entry with build milliseconds, complete
 and partial retained-byte estimates, files skipped by caps, and near-duplicate
 members and representatives. Machine-specific timings and reports remain under
 `target/tua-speed/` and are not committed.
+
+Phase 3 reports add an `ngram_indexes` entry per project with files considered,
+files retained after byte caps, exact context count, the largest estimated
+per-target query-view bytes, evaluator-only held-out storage estimate, and
+build time. Query latency stays in the normal backend summaries.
 
 The report also measures:
 

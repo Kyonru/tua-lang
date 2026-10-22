@@ -15,6 +15,7 @@
 pub mod backends;
 pub mod dataset;
 pub mod metrics;
+pub mod ngram;
 pub mod replay;
 pub mod retrieval;
 
@@ -26,8 +27,9 @@ use serde::{Deserialize, Serialize};
 
 use self::backends::{
     Backend, BundledExactRetrieval, Candidate, CurrentFileCommonPrefix, CurrentFileRecall, Noop,
-    Phase1, Phase1Config, Phase2Tuning, Phase2TuningConfig, ProductionPhase1, ProductionRequest,
-    ProjectExactRetrieval, RecallOptions, RecallVariant, Request, Semantic,
+    Phase1, Phase1Config, Phase2Tuning, Phase2TuningConfig, Phase3Ngram, Phase3NgramFallback,
+    Phase3TuningConfig, ProductionPhase1, ProductionRequest, ProjectExactRetrieval, RecallOptions,
+    RecallVariant, Request, Semantic,
 };
 use self::dataset::{DuplicateReport, EvalFile, EvalProject, EvalSet, SetRole};
 use self::metrics::{
@@ -78,6 +80,11 @@ pub struct EvalOptions {
     pub phase2_retrieval: bool,
     /// Frozen policy for the explicitly named Phase 2 tuning candidate.
     pub phase2_tuning: Phase2TuningConfig,
+    /// Frozen tune-only policy for the statistical candidate.
+    pub phase3_tuning: Phase3TuningConfig,
+    /// Include the evaluator-only Phase 3 statistical experiment. This always
+    /// implies Phase 2 retrieval so the fallback comparison has one baseline.
+    pub phase3_ngram: bool,
 }
 
 impl Default for EvalOptions {
@@ -95,6 +102,8 @@ impl Default for EvalOptions {
             menu_replay: None,
             phase2_retrieval: false,
             phase2_tuning: Phase2TuningConfig::pinned(),
+            phase3_tuning: Phase3TuningConfig::pinned(),
+            phase3_ngram: false,
         }
     }
 }
@@ -313,6 +322,7 @@ pub struct SetReport {
     pub phase1_prototype: Phase1Config,
     /// Frozen policy used by the combined Phase 1 + project tuning candidate.
     pub phase2_tuning: Phase2TuningConfig,
+    pub phase3_tuning: Phase3TuningConfig,
     pub backends: BTreeMap<String, BackendReport>,
     pub warmup_by_language: BTreeMap<String, WarmupReport>,
     pub parse_by_language: BTreeMap<String, ParseReport>,
@@ -322,6 +332,8 @@ pub struct SetReport {
     pub retrieval_indexes: Vec<(String, RetrievalIndexReport)>,
     /// One-time bundled corpus initialization/access and retained bytes.
     pub bundled_corpus: Option<BundledCorpusReport>,
+    /// Phase 3 evaluator-only model construction measurements.
+    pub ngram_indexes: Vec<(String, ngram::NgramIndexReport)>,
     pub records: Vec<Record>,
 }
 
@@ -394,6 +406,10 @@ pub fn evaluate(
         !options.phase2_retrieval || sets.iter().all(|set| !set.role.is_gate()),
         "Phase 2 retrieval is tuning-only and must not inspect held-out or external sets"
     );
+    assert!(
+        !options.phase3_ngram || sets.iter().all(|set| !set.role.is_gate()),
+        "Phase 3 n-grams are tuning-only and must not inspect held-out or external sets"
+    );
     let mut backends: Vec<Box<dyn Backend>> = vec![
         Box::new(Noop),
         Box::new(Semantic),
@@ -432,6 +448,16 @@ pub fn evaluate(
         backends.push(Box::new(BundledExactRetrieval));
         backends.push(Box::new(Phase2Tuning {
             config: options.phase2_tuning.clone(),
+        }));
+    }
+    if options.phase3_ngram {
+        backends.push(Box::new(Phase3Ngram { config: None }));
+        backends.push(Box::new(Phase3Ngram {
+            config: Some(options.phase3_tuning.clone()),
+        }));
+        backends.push(Box::new(Phase3NgramFallback {
+            phase2: Phase2TuningConfig::pinned(),
+            ngram: options.phase3_tuning.clone(),
         }));
     }
 
@@ -571,6 +597,7 @@ fn evaluate_set(set: &EvalSet, backends: &[Box<dyn Backend>], options: &EvalOpti
         phase1: Phase1Config::production(),
         phase1_prototype: options.phase1.clone(),
         phase2_tuning: options.phase2_tuning.clone(),
+        phase3_tuning: options.phase3_tuning.clone(),
         ..SetReport::default()
     };
     report.inline_validation.cache_state = "cold".to_owned();
@@ -611,6 +638,16 @@ fn evaluate_set(set: &EvalSet, backends: &[Box<dyn Backend>], options: &EvalOpti
                 .push((project.name.clone(), index_report));
             index
         });
+        let ngram_index = options.phase3_ngram.then(|| {
+            let retrieval_index = retrieval_index
+                .as_ref()
+                .expect("Phase 3 requires the Phase 2 leakage-safe retrieval index");
+            let (index, index_report) = ngram::EvalNgramIndex::build(project, retrieval_index);
+            report
+                .ngram_indexes
+                .push((project.name.clone(), index_report));
+            index
+        });
 
         for file in &project.files {
             evaluate_file(
@@ -624,6 +661,7 @@ fn evaluate_set(set: &EvalSet, backends: &[Box<dyn Backend>], options: &EvalOpti
                 &mut warmups,
                 &mut report,
                 retrieval_index.as_ref(),
+                ngram_index.as_ref(),
             );
         }
         report.inline_validation.add(&host.cache_stats());
@@ -755,6 +793,7 @@ fn evaluate_file(
     warmups: &mut BTreeMap<&'static str, WarmupAccumulator>,
     report: &mut SetReport,
     retrieval_index: Option<&EvalProjectRetrievalIndex>,
+    ngram_index: Option<&ngram::EvalNgramIndex>,
 ) {
     let source = file.source.replace("\r\n", "\n");
     let (mut positions, ineligible) = sample_positions(&source, options.max_positions_per_file);
@@ -848,6 +887,7 @@ fn evaluate_file(
                 path: &file.path,
                 language: file.language(),
                 retrieval_index,
+                ngram_index,
                 allow_target_file_other_lines: scenario != Scenario::Cut,
             };
             let keys = Keys {
