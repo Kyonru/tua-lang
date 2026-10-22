@@ -6,6 +6,8 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-22
+
 ### Changed
 
 - Public documentation now focuses on supported language, feature, and tooling
@@ -1080,7 +1082,8 @@ language or editor behavior, and migration notes call out those changes.
 - Project source and `tua.toml` files require no migration for this coordinated
   release.
 
-[Unreleased]: https://github.com/Kyonru/tua-lang/compare/v0.2.9...HEAD
+[Unreleased]: https://github.com/Kyonru/tua-lang/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/Kyonru/tua-lang/compare/v0.2.9...v0.3.0
 [0.2.9]: https://github.com/Kyonru/tua-lang/compare/v0.2.8...v0.2.9
 [0.2.8]: https://github.com/Kyonru/tua-lang/compare/v0.2.7...v0.2.8
 [0.2.7]: https://github.com/Kyonru/tua-lang/compare/v0.2.6...v0.2.7

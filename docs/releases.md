@@ -56,7 +56,7 @@ sha256sum --check SHA256SUMS
 On macOS:
 
 ```bash
-shasum -a 256 tua-0.2.9-darwin-arm64.vsix
+shasum -a 256 tua-0.3.0-darwin-arm64.vsix
 ```
 
 Compare the printed value with the matching line in `SHA256SUMS`. On Windows,
