@@ -1273,8 +1273,10 @@ position over Phase 1, for Tua and Lua separately, without violating:
 
 ## Phase 3: Statistical predictor experiment
 
-N-grams start as an offline backend in the evaluator. They don't ship until
-they beat exact retrieval.
+N-grams start as an offline backend in the evaluator. They do not become a
+default source until they beat exact retrieval on an approved gate set. A
+default-off production-path switch may exist earlier for dogfooding, provided
+it has independent resource caps and is described as unapproved.
 
 ### Normalization
 
@@ -1331,16 +1333,18 @@ Test:
 
 ### Shipping gate
 
-The statistical backend ships only if it beats semantic-plus-retrieval on the
-frozen held-out sets (Tua and Lua separately), in characters saved per
-eligible position, without exceeding:
+The statistical backend becomes enabled by default only if it beats
+semantic-plus-retrieval on the frozen held-out set for every language it will
+serve (currently Tua only), in characters saved per eligible position, without
+exceeding:
 
 - Incorrect-output threshold
 - Latency budget
 - Memory budget
 - Contention budget
 
-If exact retrieval wins, stop here and do not ship the n-gram engine.
+If exact retrieval wins, do not enable the n-gram engine by default. A bounded,
+default-off dogfooding path may remain available for gathering evidence.
 
 ### Phase 3 implementation and tuning evidence
 
@@ -1349,11 +1353,14 @@ If exact retrieval wins, stop here and do not ship the n-gram engine.
 > `AnalysisHost` query after semantic, current-file, and exact project sources
 > abstain. It reuses Phase 2's immutable corpus and background lifecycle,
 > requires every predicted token to be supported by at least two distinct
-> files. It does not retain a second full source buffer: it reuses the bounded
-> original line continuations already held by Phase 2 exact retrieval alongside
-> its token tables. Query identifiers are classified only from compact scope
-> facts captured by normal warm-up; missing or stale facts cause
-> abstention. The existing single-line, context, score, file, byte, beam,
+> files at the context order that selected it. In statistical-only production
+> mode it does not construct Phase 2's original-line tables; it retains bounded
+> token counts and provenance. Query identifiers use compact scope facts when
+> they match the active source. The bounded scope cache retains the last
+> analyzed source for coordinate mapping; on a cold file or changed suffix,
+> bare identifiers become conservative bound slots while fields and methods
+> stay concrete. This permits forward typing without triggering analysis. The
+> existing single-line, context, score, file, byte, beam,
 > candidate, token, deadline, cancellation, VFS-version, suffix, and
 > parse-delta checks all fail closed. With the source disabled, analysis retains
 > no statistical facts and corpus builds create no statistical tables.
@@ -1379,12 +1386,16 @@ cancellation limits all fail closed.
 `make inline-eval-phase3` and `make inline-eval-phase3-smoke` are the only
 entry points. The flag accepts only named manifest tuning and smoke sets; it
 hard-refuses held-out, external, and ad-hoc paths in both the CLI and core API.
-The production implementation shares the model primitives but replaces the
-evaluator's target-view machinery with immutable per-file corpus tables and
-the host's normal versioned request path.
+The raw evaluator model and production predictor intentionally remain separate
+implementations. Release comparisons call the production `AnalysisHost` path;
+the raw model is only an exploratory reference. Scenario setup discards the
+target's fully warmed scope facts before querying, so production-path results
+cannot learn identifier roles from text after the simulated cursor.
 
-The candidate policy is now explicit in the thresholds file: Tua only,
-assignment and `other` contexts, score at least 0.85. An incremental backend
+The candidate policy is now explicit in production and mirrored by the
+thresholds file: Tua only, assignment and `other` contexts, score at least
+0.85. The production backend is not filtered a second time by evaluator-only
+configuration. An incremental backend
 reports only n-gram suggestions made after Phase 2 abstains, while the combined
 backend measures their product effect. Reports count independent suggestion
 positions by project, file, and original byte offset, so cut, edit, auto-close,
@@ -1402,12 +1413,21 @@ correct-prefix precision and offers 26.14 wrong characters for each character
 saved. The production-path pinned filter (assignment and `other` contexts,
 score at least 0.85, with two-file token support) is safe but extremely sparse.
 Used only after Phase 2 abstains, it moves characters saved per eligible
-position from 0.149 to 0.151, raises combined correct-prefix precision from
-0.728 to 0.740, and moves wrong-to-saved from about 0.40 to 0.39. The source
-itself makes about 13 scenario suggestions (`0.003` per eligible position),
-with `0.727` exact precision, `1.000` correct-prefix precision, zero incorrect
-characters, and roughly `0.574 ms` in-process p95 latency. These are tuning
+position from 0.149 to 0.150, raises combined correct-prefix precision from
+0.728 to 0.735, and moves wrong-to-saved from about 0.395 to 0.392. After
+removing future scope facts from each simulated document, the source itself
+makes six scenario suggestions at three independent cursors (`0.0014` per
+eligible position); all six are exact and correct prefixes, with zero incorrect
+characters and roughly `0.353 ms` in-process p95 latency. These are tuning
 figures, not independent release evidence.
+
+A full representative LSP run with the statistical source explicitly enabled
+passed its general, inline-server, client-stall, cache-peek, and validation
+checks across the 1,000/5,000-line, 100/1,000-file, chain, diamond, and cycle
+fixtures. It returned no stale results. Where the statistical core ran, its
+highest fixture p95 was `1.348 ms`; oversized and unsupported cases abstained
+before predictor work. This is resource and contention evidence only, not a
+quality gate.
 
 These figures supersede earlier tune reports that accidentally included
 configured output roots. Manifest entries name workspace directories, but the
@@ -1419,14 +1439,14 @@ set, so project retrieval has no current quality evidence despite its completed
 production-path architecture.
 
 A separate three-file synthetic smoke set now crosses the production filter:
-it currently produces 90 incremental scenario suggestions at 45 independent
-cursors, all exact, with no incorrect characters. Its Make check and
+after target-scope holdout it produces 26 incremental scenario suggestions at
+13 independent cursors, all exact, with no incorrect characters. Its Make check and
 a focused assertion fail if the source silently becomes a no-op or if any
 suggestion stops being exact. Its repeated training pattern is constructed for that plumbing
 invariant, so it does not corroborate general quality. The small tuning gain
 may be overfit and is not an approval to ship. The Phase 3 policy and
 provisional gate limits are now reviewable, but their configured minimum of 100
-independent suggestions intentionally exceeds the tuning set's 11. Neither
+independent suggestions intentionally exceeds the tuning set's three. Neither
 gate dataset may be used until the candidate has broader evidence and an
 explicit authorization. The production decision remains unchanged: the
 statistical source is an explicitly experimental, default-off dogfooding path,
@@ -1436,7 +1456,10 @@ not a quality-approved completion source.
 
 ## Phase 4: Product hardening
 
-Only after preceding gates:
+Quality-dependent ranking and generation work begins only after the preceding
+gates. Protocol adapters, observability, private counters, cancellation, and
+an opt-in dogfooding switch may land earlier when they do not expose an
+unapproved source by default.
 
 > **Safe DX slice (2026-10-22): implemented.** The extension exposes a
 > workspace-scoped toggle for the default-off deterministic backend, reports
@@ -1566,8 +1589,9 @@ crates/tua-core/src/inline_completion/project_corpus.rs
 
 Phase 3 adds the original evaluator-only tokenizer, held-out model, predictor,
 and renderer under `inline_completion/eval/ngram.rs`. The constrained
-production integration in `inline_completion/statistical.rs` reuses its model
-primitives through the immutable project corpus and bounded host query, but
+production integration in `inline_completion/statistical.rs` is a separate
+implementation over immutable per-file corpus tables and the bounded host
+query. Evaluator comparisons exercise that production path directly; it
 remains explicitly default-off and not quality-approved until its frozen gate
 passes.
 

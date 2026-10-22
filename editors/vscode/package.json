@@ -43,6 +43,8 @@
   "scripts": {
     "build": "esbuild src/extension.js --bundle --minify --platform=node --format=cjs --external:vscode --outfile=dist/extension.js",
     "build:dev": "esbuild src/extension.js --bundle --platform=node --format=cjs --external:vscode --sourcemap --sources-content=true --outfile=dist/extension.js",
+    "stage:server": "node scripts/stage-server.js",
+    "clean:server": "node scripts/stage-server.js --clean",
     "check": "node ../../scripts/sync-version.js --check && node ../../scripts/generate-config-schema.js --check && node scripts/check-js.js && node --test test/unit/*.test.js scripts/representative-diagnostics-compare.test.js scripts/inline-editor-replay.test.js && node scripts/syntax-grammar-check.js && node scripts/manifest-check.js && node scripts/launch-config-check.js && node scripts/ollama-completion-check.js && node scripts/activation-smoke.js",
     "test:love-debugger": "node scripts/love-debugger-e2e.js",
     "test:vscode": "npm run build && node test/run.js",
@@ -439,7 +441,7 @@
         "tua.completion.inline.sources.statistical": {
           "type": "boolean",
           "default": false,
-          "description": "Experimentally use the local project statistical predictor after deterministic sources abstain. This source is off by default while its release evidence is finalized."
+          "description": "Experimentally use the local project statistical predictor after deterministic sources abstain. This source is independently off by default and is not quality-approved."
         },
         "tua.completion.ollama.endpoint": {
           "type": "string",

@@ -102,6 +102,11 @@ async function runCompletionTests() {
   );
   const [freshItems, staleItems] = await Promise.all([freshCompletion, staleCompletion]);
   assert.equal(freshItems.items[0].label, "outside_from_lsp");
+  // The execute-provider command owns neither the suggest widget's cancellation
+  // token nor its stale-result filtering. Keep this late response assertion to
+  // prove document versions crossed the real language-client boundary; the
+  // editor-facing newest-wins behavior is covered by the inline controller and
+  // server scheduler tests.
   assert.equal(staleItems.items[0].label, "outdated_result");
 
   const currentRequests = readEvents().filter(
@@ -142,6 +147,10 @@ async function runCompletionTests() {
   const extension = vscode.extensions.getExtension("SolenodonteLabs.tua");
   assert(extension, "the Tua extension should be available");
   const api = await extension.activate();
+  // Headless Extension Hosts do not reliably ask VS Code's inline-completion
+  // UI for ghost text. This test-only API invokes the same registered
+  // controller with the real document and language client, and activation only
+  // exposes it in ExtensionMode.Test with an explicit environment opt-in.
   assert.equal(typeof api?.requestInlineCompletion, "function");
   const inlineItems = await api.requestInlineCompletion(document, editor.selection.active);
   assert.equal(inlineItems?.length, 1);

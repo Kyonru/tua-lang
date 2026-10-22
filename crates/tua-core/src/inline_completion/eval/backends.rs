@@ -145,7 +145,7 @@ impl Backend for Phase3NgramIncremental {
         request: &Request<'_>,
         production: &ProductionRequest<'_>,
     ) -> Option<Candidate> {
-        production_phase3_candidate(request, production, &self.ngram, true)
+        production_phase3_candidate(request, production, true)
     }
 }
 
@@ -179,7 +179,7 @@ impl Backend for Phase3NgramFallback {
         request: &Request<'_>,
         production: &ProductionRequest<'_>,
     ) -> Option<Candidate> {
-        production_phase3_candidate(request, production, &self.ngram, false)
+        production_phase3_candidate(request, production, false)
     }
 
     fn index_state(&self) -> &'static str {
@@ -188,9 +188,8 @@ impl Backend for Phase3NgramFallback {
 }
 
 fn production_phase3_candidate(
-    request: &Request<'_>,
+    _request: &Request<'_>,
     production: &ProductionRequest<'_>,
-    config: &Phase3TuningConfig,
     only_statistical: bool,
 ) -> Option<Candidate> {
     production
@@ -209,10 +208,6 @@ fn production_phase3_candidate(
         )
         .into_iter()
         .next()
-        .filter(|candidate| {
-            candidate.source != crate::InlineCompletionSource::ProjectStatistical
-                || config.allows(request.language, request.context, candidate.score.0)
-        })
         .filter(|candidate| {
             !only_statistical
                 || candidate.source == crate::InlineCompletionSource::ProjectStatistical

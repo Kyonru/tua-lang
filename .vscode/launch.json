@@ -13,7 +13,7 @@
         "${workspaceFolder}/examples"
       ],
       "outFiles": ["${workspaceFolder}/editors/vscode/dist/**/*.js"],
-      "preLaunchTask": "Build Server and Check Extension",
+      "preLaunchTask": "Build Extension and Server",
       "skipFiles": ["<node_internals>/**/*.js"],
       "env": {
         "TUA_SERVER_PATH": "${workspaceFolder}/target/debug/tua",
@@ -39,7 +39,7 @@
         "${workspaceFolder}/examples/features"
       ],
       "outFiles": ["${workspaceFolder}/editors/vscode/dist/**/*.js"],
-      "preLaunchTask": "Build Server and Check Extension",
+      "preLaunchTask": "Build Extension and Server",
       "skipFiles": ["<node_internals>/**/*.js"],
       "env": {
         "TUA_SERVER_PATH": "${workspaceFolder}/target/debug/tua"
@@ -63,7 +63,7 @@
         "${workspaceFolder}/examples/features"
       ],
       "outFiles": ["${workspaceFolder}/editors/vscode/dist/**/*.js"],
-      "preLaunchTask": "Stage Extension Server and Check Extension",
+      "preLaunchTask": "Build Extension and Stage Server",
       "skipFiles": ["<node_internals>/**/*.js"]
     },
     {
@@ -78,7 +78,7 @@
         "${workspaceFolder}/examples/love-full"
       ],
       "outFiles": ["${workspaceFolder}/editors/vscode/dist/**/*.js"],
-      "preLaunchTask": "Build Server and Check Extension",
+      "preLaunchTask": "Build Extension and Server",
       "skipFiles": ["<node_internals>/**/*.js"],
       "env": {
         "TUA_SERVER_PATH": "${workspaceFolder}/target/debug/tua"
@@ -102,7 +102,7 @@
         "${workspaceFolder}/examples/love-full"
       ],
       "outFiles": ["${workspaceFolder}/editors/vscode/dist/**/*.js"],
-      "preLaunchTask": "Build Server (Release) and Check Extension",
+      "preLaunchTask": "Build Extension and Release Server",
       "skipFiles": ["<node_internals>/**/*.js"],
       "env": {
         "TUA_SERVER_PATH": "${workspaceFolder}/target/release/tua"
@@ -126,7 +126,7 @@
         "${workspaceFolder}/examples/love-full"
       ],
       "outFiles": ["${workspaceFolder}/editors/vscode/dist/**/*.js"],
-      "preLaunchTask": "Stage Extension Server and Check Extension",
+      "preLaunchTask": "Build Extension and Stage Server",
       "skipFiles": ["<node_internals>/**/*.js"]
     },
     {
@@ -143,7 +143,7 @@
         "${workspaceFolder}/examples/love-full"
       ],
       "outFiles": ["${workspaceFolder}/editors/vscode/dist/**/*.js"],
-      "preLaunchTask": "Build Server (Release) and Check Extension",
+      "preLaunchTask": "Build Extension and Release Server",
       "skipFiles": ["<node_internals>/**/*.js"],
       "env": {
         "TUA_SERVER_PATH": "${workspaceFolder}/target/release/tua"

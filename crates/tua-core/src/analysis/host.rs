@@ -227,9 +227,27 @@ impl AnalysisHost {
         }
     }
 
+    /// Select whether background corpus builds retain exact line-retrieval
+    /// tables. `None` is the core/test default for backwards compatibility;
+    /// the LSP always sets the explicit workspace configuration.
+    pub fn set_inline_project_enabled(&mut self, enabled: bool) {
+        self.project_pattern_exact_enabled = Some(enabled);
+    }
+
     #[cfg(test)]
     pub(crate) fn retained_statistical_scope_files(&self) -> usize {
         self.inline_statistical_scopes.borrow().len()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn retained_last_good_files(&self) -> usize {
+        self.last_good_files.borrow().len()
+    }
+
+    #[cfg(any(test, feature = "test-fixture"))]
+    pub(crate) fn forget_inline_statistical_scope(&self, path: impl AsRef<Path>) {
+        Arc::make_mut(&mut self.inline_statistical_scopes.borrow_mut())
+            .remove(&normalize_path(path.as_ref()));
     }
 
     #[cfg(test)]
@@ -663,7 +681,7 @@ impl AnalysisHost {
         let Some(file) = self.current_analysis_file(&path) else {
             return false;
         };
-        self.publish_inline_statistical_last_good(&path, &file);
+        self.publish_inline_statistical_scope(&path, &file);
         true
     }
 
@@ -722,13 +740,8 @@ impl AnalysisHost {
         // Invalid edits keep the previous valid facts. The warmed worker
         // publishes new facts only for a valid current source, so adoption can
         // copy immutable/Arc-backed values without walking a ScopeMap on the
-        // coordinator thread.
+        // coordinator thread or mutating the shared last-good semantic cache.
         if self.inline_statistical_enabled && parsed {
-            if let Some(last_good) = warmed.last_good_files.borrow().get(&path).cloned() {
-                self.last_good_files
-                    .borrow_mut()
-                    .insert(path.clone(), last_good);
-            }
             if let Some(scope) = warmed
                 .inline_statistical_scopes
                 .borrow()
@@ -1235,32 +1248,34 @@ impl AnalysisHost {
         {
             return None;
         }
-        // Scope extraction happens only while publishing last-good analysis,
+        // Scope extraction happens only while publishing successful analysis,
         // never on the request path. Facts before the first changed character
-        // retain their exact spans. The predictor records that boundary and
-        // abstains when the requested cursor lies after it, so edits elsewhere
-        // and cold analysis caches fail closed.
-        let last_good_files = self.last_good_files.borrow();
+        // retain their exact spans. Beyond that boundary the predictor treats
+        // bare identifiers as conservative bound slots, so forward typing does
+        // not trigger analysis or reuse stale declaration classifications.
         let facts = self.inline_statistical_scopes.borrow();
-        last_good_files.get(&path).and_then(|last_good| {
-            if !crate::inline_completion::within_inline_validation_parse_cap(
-                AnalysisSourceKind::Tua,
-                last_good.parsed.source.len(),
-            ) {
-                return None;
-            }
-            let facts = facts.get(&path)?.facts.clone();
-            let common_prefix_bytes = if source == last_good.parsed.source {
+        Some(if let Some(entry) = facts.get(&path) {
+            let common_prefix_bytes = if source == entry.source.as_ref() {
                 source.len()
             } else {
                 source
                     .chars()
-                    .zip(last_good.parsed.source.chars())
+                    .zip(entry.source.chars())
                     .take_while(|(current, previous)| current == previous)
                     .map(|(character, _)| character.len_utf8())
                     .sum()
             };
-            Some(facts.restricted_to_common_prefix(common_prefix_bytes))
+            entry
+                .facts
+                .clone()
+                .restricted_to_common_prefix(common_prefix_bytes)
+        } else {
+            // Missing analysis facts are not permission to treat identifiers
+            // as globals. The predictor classifies every bare identifier in
+            // this cold source as a bound slot and therefore cannot emit a
+            // project-local name that is absent from the current context.
+            crate::inline_completion::statistical::StatisticalScopeFacts::default()
+                .restricted_to_common_prefix(0)
         })
     }
 
@@ -1398,11 +1413,17 @@ impl AnalysisHost {
         path: impl AsRef<Path>,
     ) -> Option<crate::PatternCorpusBuildInput> {
         let path = normalize_path(path.as_ref());
+        let kind = analysis_source_kind(self.vfs.kind(&path)?);
+        let include_exact = self.project_pattern_exact_enabled.unwrap_or(true);
+        if !include_exact && (!self.inline_statistical_enabled || kind != AnalysisSourceKind::Tua) {
+            return None;
+        }
         Some(crate::PatternCorpusBuildInput::new(
             path.clone(),
             self.vfs.source(&path)?.to_owned(),
-            analysis_source_kind(self.vfs.kind(&path)?),
+            kind,
             self.vfs.source_version(&path)?,
+            include_exact,
             self.inline_statistical_enabled,
         ))
     }
@@ -1750,33 +1771,13 @@ impl AnalysisHost {
 
     fn refresh_last_good_files(&self, files: &BTreeMap<PathBuf, AnalysisFile>) {
         let mut last_good_files = self.last_good_files.borrow_mut();
-        let mut statistical_scopes = self.inline_statistical_scopes.borrow_mut();
-        let statistical_scopes = Arc::make_mut(&mut statistical_scopes);
 
         last_good_files.retain(|path, _| files.contains_key(path));
-        statistical_scopes.retain(|path, _| files.contains_key(path));
 
         for (path, file) in files {
             let Ok(parsed) = &file.parsed else {
                 continue;
             };
-
-            if self.inline_statistical_enabled
-                && file.kind == AnalysisSourceKind::Tua
-                && file.source.len() <= crate::inline_completion::statistical::MAX_SOURCE_BYTES
-            {
-                insert_statistical_scope(
-                    statistical_scopes,
-                    path.clone(),
-                    InlineStatisticalScopeEntry {
-                        facts:
-                            crate::inline_completion::statistical::StatisticalScopeFacts::from_scope(
-                                file.scope().expect("parsed file must have a scope map"),
-                            ),
-                        pinned_open_document: self.vfs.is_open(path),
-                    },
-                );
-            }
 
             last_good_files.insert(
                 path.clone(),
@@ -1792,10 +1793,13 @@ impl AnalysisHost {
         }
     }
 
-    fn publish_inline_statistical_last_good(&self, path: &Path, file: &AnalysisFile) {
+    fn publish_inline_statistical_scope(&self, path: &Path, file: &AnalysisFile) {
         if !self.inline_statistical_enabled
             || file.kind != AnalysisSourceKind::Tua
-            || file.source.len() > crate::inline_completion::statistical::MAX_SOURCE_BYTES
+            || !crate::inline_completion::within_inline_validation_parse_cap(
+                AnalysisSourceKind::Tua,
+                file.source.len(),
+            )
         {
             return;
         }
@@ -1805,28 +1809,15 @@ impl AnalysisHost {
         let Some(scope) = file.scope() else {
             return;
         };
-        let Some(hir) = file.hir() else {
-            return;
-        };
-        let Some(environment) = file.environment() else {
-            return;
-        };
-
-        self.last_good_files.borrow_mut().insert(
-            path.to_path_buf(),
-            LastGoodAnalysisFile {
-                parsed: parsed.clone(),
-                hir: hir.clone(),
-                environment: environment.clone(),
-            },
-        );
         insert_statistical_scope(
             Arc::make_mut(&mut self.inline_statistical_scopes.borrow_mut()),
             path.to_path_buf(),
             InlineStatisticalScopeEntry {
-                facts: crate::inline_completion::statistical::StatisticalScopeFacts::from_scope(
-                    scope,
-                ),
+                facts:
+                    crate::inline_completion::statistical::StatisticalScopeFacts::from_parsed_scope(
+                        parsed, scope,
+                    ),
+                source: Arc::from(parsed.source.as_str()),
                 // Scheduling priority is not an ownership signal: related
                 // dependencies are also warmed at High priority. Only an
                 // editor overlay is protected from bounded-cache eviction.
@@ -1840,7 +1831,9 @@ fn statistical_scope_map_bytes(scopes: &BTreeMap<PathBuf, InlineStatisticalScope
     std::mem::size_of_val(scopes)
         + scopes
             .iter()
-            .map(|(path, entry)| 64 + path.as_os_str().len() + entry.facts.approximate_bytes())
+            .map(|(path, entry)| {
+                64 + path.as_os_str().len() + entry.source.len() + entry.facts.approximate_bytes()
+            })
             .sum::<usize>()
 }
 

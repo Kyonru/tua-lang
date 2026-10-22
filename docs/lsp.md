@@ -220,11 +220,16 @@ project files, read a pattern database, or persist source text. Project-wide
 exact retrieval exists only as a hidden, default-off Phase 2 integration
 experiment; the extension does not contribute its internal source switch, and
 it added no candidates at its safe tuning policy. The optional statistical
-source reuses that immutable corpus, requires two distinct files to support
-each predicted token, keeps uncommon literals non-generatable, and abstains
-without cached semantic scope facts. It is available for explicit testing,
-not quality-approved or enabled by default. Bundled patterns and multi-line
-pattern recall are not production sources.
+source uses the same immutable corpus lifecycle and background-indexes bounded
+Tua token tables. Statistical-only builds do not retain Phase 2's exact source
+line continuations. The predictor requires two distinct files to support each
+predicted token at its deciding context order, keeps uncommon literals
+non-generatable, and uses cached scope facts when they match. On a cold file or
+changed suffix it treats bare identifiers as bound slots while preserving
+concrete member names, so it can still support forward typing without
+triggering analysis. It is available for explicit testing, not
+quality-approved or enabled by default. Bundled patterns and multi-line pattern
+recall are not production sources.
 
 Tua serves the same bounded core query through its metadata-rich
 `tua/localInlineCompletion` request and standard LSP 3.18

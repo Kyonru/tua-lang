@@ -620,10 +620,11 @@ Supported editor settings:
   to `true`, but has no effect while the parent feature is disabled.
 - `tua.completion.inline.sources.statistical`: enables the experimental,
   Tua-only project statistical fallback after semantic and current-file
-  sources abstain. It defaults to `false`. The predictor requires cached scope
-  facts and support from at least two distinct project files, stays within the
-  immutable in-memory corpus and request budget, and is not quality-approved
-  or enabled by default.
+  sources abstain. It defaults to `false`. The predictor uses matching cached
+  scope facts when available and otherwise treats bare identifiers as bound
+  slots; it requires support from at least two distinct project files at the
+  deciding context order, stays within the immutable in-memory corpus and
+  request budget, and is not quality-approved or enabled by default.
 - `tua.completion.ollama.endpoint`: machine-scoped loopback endpoint; defaults
   to `http://127.0.0.1:11434`.
 - `tua.completion.ollama.model`: machine-scoped model name; defaults to

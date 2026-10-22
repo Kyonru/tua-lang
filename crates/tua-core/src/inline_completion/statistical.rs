@@ -1,9 +1,11 @@
 //! Conservative project-local statistical completion.
 //!
-//! Tables are immutable, versioned by the surrounding project corpus, and
-//! contain no source buffers. Identifier slots come only from the shared
-//! semantic scope map; when current-source scope facts are unavailable the
-//! production query abstains instead of guessing bindings.
+//! Tables are immutable and versioned by the surrounding project corpus. They
+//! retain token counts, not source lines. A bounded active-file scope entry
+//! may also retain the last analyzed source so parser coordinates can be
+//! mapped back to original Tua coordinates. When those facts are unavailable
+//! or stale, bare identifiers are conservatively treated as bound slots while
+//! field and method names remain concrete.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::mem::size_of;
@@ -13,7 +15,7 @@ use std::sync::Arc;
 use full_moon::ast::LuaVersion;
 use full_moon::tokenizer::{Lexer, LexerResult, TokenType};
 
-use crate::{ScopeDeclarationKind, ScopeMap, ScopeResolution, SourceSpan};
+use crate::{ParsedSource, ScopeDeclarationKind, ScopeMap, ScopeResolution, SourceSpan};
 
 use super::InlineCompletionBudget;
 
@@ -68,9 +70,9 @@ pub(crate) struct StatisticalScopeFacts {
 }
 
 impl StatisticalScopeFacts {
-    pub(crate) fn from_scope(scope: &ScopeMap) -> Self {
+    pub(crate) fn from_parsed_scope(parsed: &ParsedSource, scope: &ScopeMap) -> Self {
         Self {
-            local_spans: Arc::new(local_identifier_spans(scope)),
+            local_spans: Arc::new(local_identifier_spans(parsed, scope)),
             valid_through_offset: usize::MAX,
         }
     }
@@ -106,8 +108,13 @@ struct Beam {
 }
 
 impl StatisticalFileTable {
-    pub(crate) fn build(source: &str, scope: &ScopeMap) -> Option<Self> {
-        let tokens = tokenize(source, &StatisticalScopeFacts::from_scope(scope), 0)?;
+    pub(crate) fn build(parsed: &ParsedSource, scope: &ScopeMap) -> Option<Self> {
+        let tokens = tokenize(
+            &parsed.source,
+            &StatisticalScopeFacts::from_parsed_scope(parsed, scope),
+            0,
+            0,
+        )?;
         let mut counts = BTreeMap::<Vec<ModelToken>, BTreeMap<ModelToken, u32>>::new();
         let mut approximate_bytes = size_of::<Self>();
         'tokens: for next_index in 1..tokens.len() {
@@ -156,7 +163,6 @@ pub(crate) fn predict(
     if evidence.is_empty()
         || offset == 0
         || offset > document.len()
-        || offset > scope.valid_through_offset
         || cancelled.load(Ordering::Relaxed)
         || budget.is_expired()
     {
@@ -175,7 +181,7 @@ pub(crate) fn predict(
         .bytes()
         .filter(|byte| *byte == b'\n')
         .count();
-    let mut context = tokenize(&prefix[line_start..], scope, base_line)?;
+    let mut context = tokenize(&prefix[line_start..], scope, base_line, line_start)?;
     while context.last() == Some(&RawToken::Newline) {
         context.pop();
     }
@@ -196,16 +202,19 @@ pub(crate) fn predict(
         }
         let mut next = Vec::new();
         for beam in std::mem::take(&mut beams) {
-            let Some(distribution) = distribution(evidence, &beam.context, budget, cancelled)
-            else {
-                if !beam.output.is_empty() {
-                    completed.push(beam);
+            let distribution = match distribution(evidence, &beam.context, budget, cancelled) {
+                DistributionResult::Candidates(distribution) => distribution,
+                DistributionResult::NoEvidence => {
+                    if !beam.output.is_empty() && can_end(beam.output.last()) {
+                        completed.push(beam);
+                    }
+                    continue;
                 }
-                continue;
+                DistributionResult::Abort => return None,
             };
             for (token, probability) in distribution.into_iter().take(BEAM_WIDTH) {
                 if token == RawToken::Newline {
-                    if !beam.output.is_empty() {
+                    if !beam.output.is_empty() && can_end(beam.output.last()) {
                         completed.push(beam.clone());
                     }
                     continue;
@@ -238,7 +247,11 @@ pub(crate) fn predict(
         );
         beams = next;
     }
-    completed.extend(beams);
+    completed.extend(
+        beams
+            .into_iter()
+            .filter(|beam| !beam.output.is_empty() && can_end(beam.output.last())),
+    );
     if cancelled.load(Ordering::Relaxed) || budget.is_expired() {
         return None;
     }
@@ -261,16 +274,22 @@ pub(crate) fn predict(
     (!text.is_empty()).then_some(StatisticalPrediction { text, score })
 }
 
+enum DistributionResult {
+    Candidates(Vec<(RawToken, f64)>),
+    NoEvidence,
+    Abort,
+}
+
 fn distribution(
     evidence: &[StatisticalEvidence<'_>],
     context: &[RawToken],
     budget: InlineCompletionBudget,
     cancelled: &AtomicBool,
-) -> Option<Vec<(RawToken, f64)>> {
+) -> DistributionResult {
     let mut by_order = Vec::<(BTreeMap<RawToken, f64>, BTreeMap<RawToken, usize>, f64)>::new();
     for order in 1..=MAX_ORDER.min(context.len()) {
         if cancelled.load(Ordering::Relaxed) || budget.is_expired() {
-            return None;
+            return DistributionResult::Abort;
         }
         let (key, bindings) = normalize(&context[context.len() - order..]);
         let mut resolved = BTreeMap::new();
@@ -280,7 +299,7 @@ fn distribution(
             if source_index.is_multiple_of(8)
                 && (cancelled.load(Ordering::Relaxed) || budget.is_expired())
             {
-                return None;
+                return DistributionResult::Abort;
             }
             let Some(next) = source.table.counts.get(&key) else {
                 continue;
@@ -290,7 +309,7 @@ fn distribution(
                 if token_index.is_multiple_of(32)
                     && (cancelled.load(Ordering::Relaxed) || budget.is_expired())
                 {
-                    return None;
+                    return DistributionResult::Abort;
                 }
                 let weighted = f64::from(*count) * source.weight;
                 total += weighted;
@@ -306,18 +325,25 @@ fn distribution(
         by_order.push((resolved, supporters, total));
     }
     let mut candidates = BTreeSet::new();
-    for (resolved, supporters, _) in &by_order {
-        for token in resolved.keys().filter(|token| {
-            supporters.get(*token).copied().unwrap_or_default() >= MIN_SUPPORTING_FILES
-        }) {
+    for (resolved, _, _) in &by_order {
+        for token in resolved.keys() {
             if candidates.len() >= MAX_STEP_CANDIDATES && !candidates.contains(token) {
-                return None;
+                return DistributionResult::Abort;
             }
             candidates.insert(token.clone());
         }
     }
     let mut scored = Vec::new();
     for candidate in candidates {
+        let supported_at_deciding_order =
+            by_order.iter().rev().find_map(|(resolved, supporters, _)| {
+                resolved.contains_key(&candidate).then(|| {
+                    supporters.get(&candidate).copied().unwrap_or_default() >= MIN_SUPPORTING_FILES
+                })
+            });
+        if supported_at_deciding_order != Some(true) {
+            continue;
+        }
         let mut probability = 0.0;
         for (resolved, _, total) in &by_order {
             if *total == 0.0 {
@@ -336,13 +362,18 @@ fn distribution(
             .total_cmp(left)
             .then_with(|| left_token.cmp(right_token))
     });
-    (!scored.is_empty()).then_some(scored)
+    if scored.is_empty() {
+        DistributionResult::NoEvidence
+    } else {
+        DistributionResult::Candidates(scored)
+    }
 }
 
 fn tokenize(
     source: &str,
     scope: &StatisticalScopeFacts,
     base_line: usize,
+    base_offset: usize,
 ) -> Option<Vec<RawToken>> {
     let tokens = match Lexer::new(source, LuaVersion::luau()).collect() {
         LexerResult::Ok(tokens) | LexerResult::Recovered(tokens, _) => tokens,
@@ -367,11 +398,21 @@ fn tokenize(
                 span.start.line += base_line;
                 span.end.line += base_line;
                 let member = matches!(result.last(), Some(RawToken::Symbol(symbol)) if symbol == "." || symbol == ":");
-                result.push(if !member && scope.local_spans.contains(&span_key(span)) {
-                    RawToken::SlotIdentifier(identifier.to_string())
-                } else {
-                    RawToken::ConcreteIdentifier(identifier.to_string())
-                });
+                let beyond_cached_scope = base_offset.saturating_add(token.end_position().bytes())
+                    > scope.valid_through_offset;
+                result.push(
+                    if !member
+                        && (beyond_cached_scope || scope.local_spans.contains(&span_key(span)))
+                    {
+                        // Unknown bare identifiers from the changed suffix are
+                        // slots, never concrete project vocabulary. That keeps
+                        // cold and forward-typing queries useful without ever
+                        // inventing another file's local name.
+                        RawToken::SlotIdentifier(identifier.to_string())
+                    } else {
+                        RawToken::ConcreteIdentifier(identifier.to_string())
+                    },
+                );
             }
             TokenType::Symbol { .. } => result.push(RawToken::Symbol(token.to_string())),
             _ => return None,
@@ -380,7 +421,10 @@ fn tokenize(
     Some(result)
 }
 
-fn local_identifier_spans(scope: &ScopeMap) -> BTreeSet<(usize, usize, usize, usize)> {
+fn local_identifier_spans(
+    parsed: &ParsedSource,
+    scope: &ScopeMap,
+) -> BTreeSet<(usize, usize, usize, usize)> {
     let local_symbol = |id| {
         scope.declaration(id).is_some_and(|declaration| {
             matches!(
@@ -396,14 +440,28 @@ fn local_identifier_spans(scope: &ScopeMap) -> BTreeSet<(usize, usize, usize, us
         .declarations()
         .iter()
         .filter(|declaration| local_symbol(declaration.id))
-        .map(|declaration| span_key(declaration.name_span))
+        .filter_map(|declaration| source_span(parsed, declaration.name_span).map(span_key))
         .chain(scope.references().iter().filter_map(|reference| {
             let ScopeResolution::Symbol(id) = reference.resolution else {
                 return None;
             };
-            local_symbol(id).then_some(span_key(reference.span))
+            local_symbol(id)
+                .then(|| source_span(parsed, reference.span).map(span_key))
+                .flatten()
         }))
         .collect()
+}
+
+fn source_span(parsed: &ParsedSource, parser_span: SourceSpan) -> Option<SourceSpan> {
+    let start = parsed.raw.parser_position_origin(parser_span.start)?;
+    let end = parsed.raw.parser_position_origin(parser_span.end)?;
+    if start.class_generated || end.class_generated {
+        return None;
+    }
+    Some(SourceSpan {
+        start: start.source_position,
+        end: end.source_position,
+    })
 }
 
 fn span_key(span: SourceSpan) -> (usize, usize, usize, usize) {
@@ -529,7 +587,7 @@ fn needs_space(
         return false;
     }
     if current_text == "(" {
-        return matches!(previous, RawToken::Symbol(_));
+        return false;
     }
     if current_text == "-" && unary_position(Some(previous)) {
         return !matches!(previous_text, "(" | "[" | "{" | ",");
@@ -613,7 +671,7 @@ mod tests {
         );
         let parsed = parse_tua_source(Path::new("train.tua"), source).unwrap();
         let scope = scope_map_parsed_source(&parsed);
-        StatisticalFileTable::build(&parsed.source, &scope).unwrap()
+        StatisticalFileTable::build(&parsed, &scope).unwrap()
     }
 
     fn query_scope() -> StatisticalScopeFacts {
@@ -622,7 +680,7 @@ mod tests {
             "local point = 0\npoint = point + 1\n",
         )
         .unwrap();
-        StatisticalScopeFacts::from_scope(&scope_map_parsed_source(&parsed))
+        StatisticalScopeFacts::from_parsed_scope(&parsed, &scope_map_parsed_source(&parsed))
     }
 
     #[test]
@@ -693,12 +751,12 @@ mod tests {
     }
 
     #[test]
-    fn stale_scope_facts_abstain_past_the_unchanged_prefix() {
+    fn changed_suffix_identifiers_use_conservative_bound_slots() {
         let first = table("position");
         let second = table("velocity");
         let document = "local point = 0\npoint = point + ";
         let scope = query_scope().restricted_to_common_prefix(document.len() - 1);
-        assert!(predict(
+        let prediction = predict(
             &[
                 StatisticalEvidence {
                     table: &first,
@@ -715,7 +773,8 @@ mod tests {
             InlineCompletionBudget::unlimited(),
             &AtomicBool::new(false),
         )
-        .is_none());
+        .expect("a changed-suffix local should bind to the current context slot");
+        assert_eq!(prediction.text, "1");
     }
 
     #[test]
@@ -730,5 +789,144 @@ mod tests {
         ];
         let output = &context[2..];
         assert_eq!(render(&context, output), "update(1)");
+        assert_eq!(
+            render(
+                &[
+                    RawToken::Symbol("function".to_owned()),
+                    RawToken::Symbol("(".to_owned()),
+                ],
+                &[RawToken::Symbol("(".to_owned())],
+            ),
+            "("
+        );
+        assert_eq!(
+            render(
+                &[
+                    RawToken::Symbol(")".to_owned()),
+                    RawToken::Symbol("(".to_owned()),
+                ],
+                &[RawToken::Symbol("(".to_owned())],
+            ),
+            "("
+        );
+    }
+
+    #[test]
+    fn source_normalization_maps_local_spans_back_to_tua_coordinates() {
+        let source = r#"class Counter {
+  value: number = 0
+}
+local values: number[] = {}
+local speed: number = 1
+speed += 1
+values[1] = speed
+"#;
+        let parsed = parse_tua_source(Path::new("source.tua"), source).unwrap();
+        assert_ne!(parsed.raw.source, parsed.raw.parser_source);
+        let scope = scope_map_parsed_source(&parsed);
+        let facts = StatisticalScopeFacts::from_parsed_scope(&parsed, &scope);
+        let tokens = tokenize(source, &facts, 0, 0).unwrap();
+        let slot_names = tokens
+            .iter()
+            .filter_map(|token| match token {
+                RawToken::SlotIdentifier(name) => Some(name.as_str()),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert!(slot_names.iter().filter(|name| **name == "values").count() >= 2);
+        assert!(slot_names.iter().filter(|name| **name == "speed").count() >= 3);
+        assert!(!tokens.contains(&RawToken::ConcreteIdentifier("speed".to_owned())));
+    }
+
+    #[test]
+    fn cold_scope_treats_bare_identifiers_as_slots_but_keeps_members_concrete() {
+        let source = "point = ship.velocity + point";
+        let facts = StatisticalScopeFacts::default().restricted_to_common_prefix(0);
+        let tokens = tokenize(source, &facts, 0, 0).unwrap();
+        assert_eq!(
+            tokens,
+            vec![
+                RawToken::SlotIdentifier("point".to_owned()),
+                RawToken::Symbol("=".to_owned()),
+                RawToken::SlotIdentifier("ship".to_owned()),
+                RawToken::Symbol(".".to_owned()),
+                RawToken::ConcreteIdentifier("velocity".to_owned()),
+                RawToken::Symbol("+".to_owned()),
+                RawToken::SlotIdentifier("point".to_owned()),
+            ]
+        );
+    }
+
+    #[test]
+    fn candidate_overflow_aborts_instead_of_returning_a_truncated_prefix() {
+        let key = vec![ModelToken::ConcreteIdentifier("context".to_owned())];
+        let values = (0..=MAX_STEP_CANDIDATES)
+            .map(|index| (ModelToken::ConcreteIdentifier(format!("value{index}")), 1))
+            .collect::<BTreeMap<_, _>>();
+        let table = StatisticalFileTable {
+            counts: BTreeMap::from([(key, values)]),
+            approximate_bytes: 0,
+        };
+        let evidence = [
+            StatisticalEvidence {
+                table: &table,
+                weight: 1.0,
+            },
+            StatisticalEvidence {
+                table: &table,
+                weight: 1.0,
+            },
+        ];
+        assert!(matches!(
+            distribution(
+                &evidence,
+                &[RawToken::ConcreteIdentifier("context".to_owned())],
+                InlineCompletionBudget::unlimited(),
+                &AtomicBool::new(false),
+            ),
+            DistributionResult::Abort
+        ));
+    }
+
+    #[test]
+    fn two_file_support_is_required_at_the_deciding_context_order() {
+        let short = vec![ModelToken::ConcreteIdentifier("b".to_owned())];
+        let long = vec![
+            ModelToken::ConcreteIdentifier("a".to_owned()),
+            ModelToken::ConcreteIdentifier("b".to_owned()),
+        ];
+        let candidate = ModelToken::Number("1".to_owned());
+        let first = StatisticalFileTable {
+            counts: BTreeMap::from([
+                (short.clone(), BTreeMap::from([(candidate.clone(), 1)])),
+                (long.clone(), BTreeMap::from([(candidate.clone(), 1)])),
+            ]),
+            approximate_bytes: 0,
+        };
+        let second = StatisticalFileTable {
+            counts: BTreeMap::from([(short, BTreeMap::from([(candidate, 1)]))]),
+            approximate_bytes: 0,
+        };
+        assert!(matches!(
+            distribution(
+                &[
+                    StatisticalEvidence {
+                        table: &first,
+                        weight: 1.0,
+                    },
+                    StatisticalEvidence {
+                        table: &second,
+                        weight: 1.0,
+                    },
+                ],
+                &[
+                    RawToken::ConcreteIdentifier("a".to_owned()),
+                    RawToken::ConcreteIdentifier("b".to_owned()),
+                ],
+                InlineCompletionBudget::unlimited(),
+                &AtomicBool::new(false),
+            ),
+            DistributionResult::NoEvidence
+        ));
     }
 }

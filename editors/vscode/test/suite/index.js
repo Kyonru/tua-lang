@@ -44,6 +44,11 @@ async function run() {
     ].sort(),
     "the language client should initialize with both workspace folders",
   );
+  assert.equal(
+    initialized.initializationOptions?.combinedInlineCompletionProvider,
+    true,
+    "the extension should identify its combined inline provider so the client does not register a competing standard provider",
+  );
 
   await vscode.commands.executeCommand("tua.copyDebugInfo");
   assert.match(

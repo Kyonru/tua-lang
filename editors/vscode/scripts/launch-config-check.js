@@ -11,6 +11,11 @@ const repositoryRoot = path.resolve(extensionRoot, "..", "..");
 const launchPath = path.join(repositoryRoot, ".vscode", "launch.json");
 const tasksPath = path.join(repositoryRoot, ".vscode", "tasks.json");
 const packagePath = path.join(extensionRoot, "package.json");
+const {
+  cleanStagedServer,
+  serverExecutableName,
+  stageServer,
+} = require("./stage-server");
 
 const launch = readJson(launchPath);
 const tasks = readJson(tasksPath);
@@ -31,6 +36,24 @@ assert.equal(
   "esbuild src/extension.js --bundle --platform=node --format=cjs --external:vscode --sourcemap --sources-content=true --outfile=dist/extension.js",
   "build:dev must produce a debuggable sourcemapped bundle",
 );
+assert.equal(manifest.scripts?.["stage:server"], "node scripts/stage-server.js");
+assert.equal(manifest.scripts?.["clean:server"], "node scripts/stage-server.js --clean");
+
+const stageServerTask = taskByLabel.get("Stage Extension Server");
+assert(stageServerTask, "tasks.json must define Stage Extension Server");
+assert.equal(stageServerTask.type, "npm");
+assert.equal(stageServerTask.script, "stage:server");
+assert.equal(stageServerTask.path, "editors/vscode/");
+assert(
+  dependenciesOf(stageServerTask).includes("Build Server (Release)"),
+  "Stage Extension Server must build the release server before copying it",
+);
+
+const cleanServerTask = taskByLabel.get("Clean Extension Server");
+assert(cleanServerTask, "tasks.json must define Clean Extension Server");
+assert.equal(cleanServerTask.type, "npm");
+assert.equal(cleanServerTask.script, "clean:server");
+assert.equal(cleanServerTask.path, "editors/vscode/");
 
 for (const task of tasks.tasks) {
   for (const dependency of dependenciesOf(task)) {
@@ -52,6 +75,17 @@ for (const configuration of extensionLaunches) {
     taskDependsOn(configuration.preLaunchTask, "Build Extension (Debug)", new Set()),
     `${configuration.name} must depend on Build Extension (Debug)`,
   );
+  if (configuration.name.includes("Bundled Server")) {
+    assert(
+      taskDependsOn(configuration.preLaunchTask, "Stage Extension Server", new Set()),
+      `${configuration.name} must stage the bundled release server`,
+    );
+    assert.equal(
+      configuration.env?.TUA_SERVER_PATH,
+      undefined,
+      `${configuration.name} must exercise bundled-server discovery`,
+    );
+  }
 
   const serverPath = configuration.env?.TUA_SERVER_PATH;
   if (serverPath) {
@@ -64,6 +98,7 @@ for (const configuration of extensionLaunches) {
 }
 
 smokeBuild();
+smokeStageServer();
 
 function taskDependsOn(label, expected, visited) {
   if (label === expected) {
@@ -113,6 +148,43 @@ function smokeBuild() {
     assert(
       map.sourcesContent?.some((source) => source?.includes("async function activate")),
       "development source map must embed extension sources",
+    );
+  } finally {
+    fs.rmSync(scratch, { force: true, recursive: true });
+  }
+}
+
+function smokeStageServer() {
+  const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "tua-extension-server-"));
+  try {
+    for (const platform of ["linux", "win32"]) {
+      const executable = serverExecutableName(platform);
+      const source = path.join(scratch, "target", "release", executable);
+      fs.mkdirSync(path.dirname(source), { recursive: true });
+      fs.writeFileSync(source, platform);
+
+      const destination = stageServer({ root: scratch, platform });
+      assert.equal(
+        destination,
+        path.join(scratch, "editors", "vscode", "bin", executable),
+      );
+      assert.equal(fs.readFileSync(destination, "utf8"), platform);
+      if (platform !== "win32") {
+        assert.equal(
+          fs.statSync(destination).mode & 0o111,
+          0o111,
+          "staged Unix server must be executable",
+        );
+      }
+    }
+
+    const stagedDirectory = cleanStagedServer({ root: scratch });
+    assert(!fs.existsSync(stagedDirectory), "clean task must remove the staged server");
+
+    assert.throws(
+      () => stageServer({ root: path.join(scratch, "missing"), platform: "linux" }),
+      /Release Tua server not found/,
+      "staging must fail clearly when the release binary has not been built",
     );
   } finally {
     fs.rmSync(scratch, { force: true, recursive: true });

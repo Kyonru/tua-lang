@@ -794,6 +794,10 @@ fn load_host(project: &EvalProject, options: &EvalOptions) -> (AnalysisHost, Mem
     let allocated = || options.allocated_bytes.map_or(0, |current| current());
     let before_load_bytes = allocated();
     let mut host = source_host(project);
+    // Phase 3's combined backend compares against the exact Phase 2 source,
+    // so evaluator runs need both tables. Production can enable statistical
+    // completion alone and then omits the exact-continuation table entirely.
+    host.set_inline_project_enabled(options.phase2_retrieval || options.phase3_ngram);
     host.set_inline_statistical_enabled(options.phase3_ngram);
     let after_files_bytes = allocated();
     // Representative project loading: a full snapshot, as the language server
@@ -934,6 +938,13 @@ fn evaluate_file(
             // The production backend must always observe this scenario's
             // source, even when menu and warm-up measurement are disabled.
             host.open_document_with_kind(&file.path, document.clone(), file.kind);
+            if options.phase3_ngram {
+                // A completed target file from the initial project snapshot is
+                // future information during forward typing. Production can
+                // answer safely without it by binding bare identifiers from
+                // the changed source as slots, so evaluate that cold path.
+                host.forget_inline_statistical_scope(&file.path);
+            }
             let facts = if analyze {
                 document_facts(
                     facts_host,

@@ -428,16 +428,19 @@ external, or aggregate phase gates and is not a public completion capability.
 The Phase 3 statistical experiment reuses the same immutable corpus and
 background build/adopt lifecycle rather than creating another index or worker.
 It adds bounded token-count tables for Tua files when the statistical source is
-explicitly enabled. Those tables share Phase 2's capped corpus, which also keeps
-original line continuations for exact retrieval, but no second full source
-buffer is retained. Query-side identifier slots come from compact scope facts
-captured by normal analysis warm-up; a cold or stale scope causes
-abstention. Each generated token needs evidence from at least two distinct
-files, and decoding is bounded by file, byte, candidate, beam, token, deadline,
+explicitly enabled. When project exact retrieval is disabled, statistical-only
+builds omit its original-line tables entirely; the corpus then retains token
+counts and provenance only. Query-side identifier slots use bounded scope facts
+captured by normal analysis warm-up. The scope cache may retain the last
+analyzed source for small active Tua files so normalized parser positions can
+be mapped back to original coordinates; cold or changed suffixes fall back to
+conservative slots instead of preventing forward typing. Each generated token
+needs evidence from at least two distinct files at the context order that chose
+it, and decoding is bounded by file, byte, candidate, beam, token, deadline,
 and cancellation limits before entering the same suffix and parse-delta
 validator as exact sources. The extension exposes this source as an explicit
-default-off experiment because tuning evidence is promising but too sparse for
-quality approval.
+default-off experiment because tuning evidence is too sparse for quality
+approval.
 
 The custom and standard inline-completion protocols are adapters over this one
 core path. `tua/localInlineCompletion` carries Tua source metadata for the VS

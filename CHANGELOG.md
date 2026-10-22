@@ -9,10 +9,28 @@ language or editor behavior, and migration notes call out those changes.
 ### Fixed
 
 - VS Code Extension Host launch profiles now build the executed extension
-  bundle before launch, emit source maps for JavaScript breakpoints, and select
-  `tua.exe` for debug/release server profiles on Windows. A launch-config smoke
-  check prevents missing tasks, stale `src` out-file mappings, and broken
-  platform server paths from returning.
+  bundle before launch, emit source maps for JavaScript breakpoints, and stage
+  the bundled server through a cross-platform Node script that selects `tua`
+  or `tua.exe`. Normal F5 launch no longer runs the full extension check. A
+  launch-config smoke check prevents missing tasks, stale `src` out-file
+  mappings, and broken Unix or Windows staging from returning.
+- Fixed the Phase 3 production evaluator retaining target-file scope facts from
+  text after a simulated cursor. Every scenario now queries with the same cold
+  fallback available during forward typing, and the evaluator no longer applies
+  a second tune-only filter after the production predictor returns.
+- Statistical inline completion no longer copies warmed analysis into the
+  semantic last-good cache or changes hover/menu recovery behavior. Scope facts
+  use original Tua coordinates, remain independently bounded, and degrade bare
+  identifiers after a changed boundary to slots instead of abstaining. Decoder
+  overflow, cancellation, and deadline exhaustion now fail closed; incomplete
+  candidates are not returned.
+- Statistical-only corpus builds no longer retain Phase 2 exact continuation
+  tables, callback data, or Lua-file tables. Query caps select Tua evidence in
+  deterministic path order, independent of background adoption order, and
+  two-file support is required at the context order that chooses each token.
+- The VS Code integration test API now requires both Extension Host test mode
+  and an explicit test environment opt-in. Extension Host coverage also checks
+  that the client declares its combined inline provider during initialization.
 
 - Fixed the inline-completion evaluator loading manifest project directories
   through a file-oriented config search. Configured source and output roots are
@@ -53,17 +71,22 @@ language or editor behavior, and migration notes call out those changes.
 
 - Added a production-safe, default-off Phase 3 statistical inline-completion
   source for Tua. It reuses the immutable project corpus and speculative
-  request lane, adds bounded token tables and compact scope facts alongside
-  Phase 2's capped original-line retrieval entries without retaining another
-  full source buffer,
-  requires two distinct files to support each predicted token, and passes
+  request lane and adds bounded token tables and compact scope facts. When
+  statistical completion is enabled without hidden Phase 2 exact retrieval,
+  corpus builds omit original-line continuation tables. Matching cached scope
+  facts improve identifier classification; cold files and changed suffixes use
+  conservative bound slots without triggering analysis. The predictor requires
+  two distinct files at the deciding context order to support each token and passes
   candidates through the existing deadline, cancellation, VFS freshness,
   suffix, and parse-delta checks. The extension exposes it as the explicitly
   experimental `tua.completion.inline.sources.statistical` setting. Corrected
-  tune-only production-path evidence improves combined correct-prefix
-  precision from 0.728 to 0.740 with zero incorrect statistical characters,
-  but only about 13 scenario suggestions, so it remains off by default and no
-  held-out or external set was spent.
+  leakage-safe tune-only production-path evidence improves combined
+  correct-prefix precision from 0.728 to 0.735 with zero incorrect statistical
+  characters, but only six scenario suggestions at three independent cursors,
+  so it remains off by default and no held-out or external set was spent. A
+  statistical-on representative LSP profile passed every resource/contention
+  check with no stale results and at most 1.348 ms core p95 on fixtures where
+  the predictor ran.
 - Added standard LSP 3.18 `textDocument/inlineCompletion` support as an adapter
   over the same core query and newest-wins speculative lane used by Tua's
   custom request. Standard clients receive portable ranges and snippet

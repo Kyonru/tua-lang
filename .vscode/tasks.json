@@ -27,14 +27,17 @@
     {
       "label": "Stage Extension Server",
       "group": "build",
-      "type": "shell",
-      "command": "make extension-server",
-      "problemMatcher": "$rustc"
+      "type": "npm",
+      "script": "stage:server",
+      "path": "editors/vscode/",
+      "dependsOn": "Build Server (Release)",
+      "problemMatcher": []
     },
     {
       "label": "Clean Extension Server",
-      "type": "shell",
-      "command": "make extension-clean-server",
+      "type": "npm",
+      "script": "clean:server",
+      "path": "editors/vscode/",
       "problemMatcher": []
     },
     {
@@ -80,30 +83,27 @@
       "problemMatcher": "$rustc"
     },
     {
-      "label": "Build Server and Check Extension",
+      "label": "Build Extension and Server",
       "dependsOrder": "sequence",
       "dependsOn": [
-        "Check Extension",
         "Build Extension (Debug)",
         "Build Server"
       ],
       "problemMatcher": "$rustc"
     },
     {
-      "label": "Build Server (Release) and Check Extension",
+      "label": "Build Extension and Release Server",
       "dependsOrder": "sequence",
       "dependsOn": [
-        "Check Extension",
         "Build Extension (Debug)",
         "Build Server (Release)"
       ],
       "problemMatcher": "$rustc"
     },
     {
-      "label": "Stage Extension Server and Check Extension",
+      "label": "Build Extension and Stage Server",
       "dependsOrder": "sequence",
       "dependsOn": [
-        "Check Extension",
         "Build Extension (Debug)",
         "Stage Extension Server"
       ],

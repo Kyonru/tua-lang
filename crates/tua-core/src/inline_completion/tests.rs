@@ -710,6 +710,11 @@ fn statistical_project_completion_uses_cached_scope_and_rejects_stale_evidence()
         "warming should copy only the Arc-backed map before mutation"
     );
     assert!(host.adopt_warmed_file(&warmed, "active/main.tua"));
+    assert_eq!(
+        host.retained_last_good_files(),
+        0,
+        "statistical warm adoption must not populate semantic recovery state"
+    );
     assert!(host.retained_statistical_scope_files() >= 1);
     host.set_file("active/main.tua", "local point = 0\npoint =");
     let warmed_invalid = host.clone();
@@ -809,6 +814,23 @@ fn statistical_project_completion_uses_cached_scope_and_rejects_stale_evidence()
     assert_eq!(refreshed.len(), 1);
     assert_eq!(refreshed[0].insert_text, " 1");
 
+    // Forward typing must not depend on a future or already-complete analysis
+    // snapshot. With no cached scope for this new file, bare identifiers are
+    // conservatively bound as slots and the project model remains usable.
+    host.set_file("active/cold.tua", "local cold = 0\ncold =");
+    let cold = host
+        .prepare_local_inline_completion_with_sources("active/cold.tua", false, true)
+        .unwrap();
+    assert!(cold.statistical_scope.is_some());
+    let cold_candidates = cold.complete(
+        SourcePosition { line: 2, column: 7 },
+        &options,
+        &InlineCompletionBudget::unlimited(),
+        &AtomicBool::new(false),
+    );
+    assert_eq!(cold_candidates.len(), 1);
+    assert_eq!(cold_candidates[0].insert_text, " 1");
+
     // Invalidating one of the two distinct supporting files leaves only one
     // valid supporter, so the already-prepared request must now abstain.
     host.set_file("train/b.tua", "local changed = true\n");
@@ -888,7 +910,7 @@ fn statistical_scope_facts_have_a_total_file_and_byte_cap() {
         .prepare_local_inline_completion_with_sources("zzz-active.tua", false, true)
         .unwrap()
         .statistical_scope
-        .is_none());
+        .is_some());
 }
 
 #[test]
@@ -903,10 +925,10 @@ fn statistical_scope_lookup_abstains_above_the_validation_parse_cap() {
     assert!(source.len() < super::statistical::MAX_SOURCE_BYTES);
     host.set_file("active.tua", source);
 
-    // Analysis may retain bounded facts for other consumers, but request
-    // preparation must reject the source before comparing it with last-good.
+    // Facts larger than the request parse cap have no consumer and are not
+    // retained at all.
     let _ = host.snapshot();
-    assert_eq!(host.cache_stats().inline_statistical_scope_files, 1);
+    assert_eq!(host.cache_stats().inline_statistical_scope_files, 0);
     assert!(host
         .prepare_local_inline_completion_with_sources("active.tua", false, true)
         .unwrap()

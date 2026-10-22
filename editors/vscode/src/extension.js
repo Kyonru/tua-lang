@@ -76,11 +76,14 @@ async function activate(context) {
   debugLog(`${DEBUG_LSP_ENV}=1 enabled; verbose extension/LSP trace is active.`);
 
   await startLanguageServer();
-  return integrationTestApi();
+  return integrationTestApi(context);
 }
 
-function integrationTestApi() {
-  if (process.env.TUA_EXTENSION_TEST_API !== "1") {
+function integrationTestApi(context) {
+  if (
+    process.env.TUA_EXTENSION_TEST_API !== "1" ||
+    context.extensionMode !== vscode.ExtensionMode.Test
+  ) {
     return undefined;
   }
 

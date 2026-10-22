@@ -66,6 +66,7 @@ const diagnosticsP95BudgetMs = numberEnv(
 );
 const baselineOnly = booleanEnv("TUA_REPRESENTATIVE_BASELINE_ONLY", false);
 const diagnosticsOnly = booleanEnv("TUA_REPRESENTATIVE_DIAGNOSTICS_ONLY", false);
+const inlineStatistical = booleanEnv("TUA_REPRESENTATIVE_INLINE_STATISTICAL", false);
 // The client's local request timeout. When set, contended request age above it
 // fails the delivery check: the editor would already have discarded the result.
 const inlineDeliveryP95BudgetMs = optionalNumberEnv(
@@ -112,6 +113,7 @@ const minimumReturnedAtMostOneParseRate = 0.5;
       requestTimeoutMs,
       workspaceWarmTimeoutMs,
       profileEnabled: !diagnosticsOnly,
+      inlineStatistical,
     },
     thresholds: {
       completionP95BudgetMs,
@@ -341,7 +343,10 @@ async function openSession(root) {
       settings: {
         tua: {
           completion: {
-            inline: { enabled: true },
+            inline: {
+              enabled: true,
+              sources: { statistical: inlineStatistical },
+            },
           },
         },
       },

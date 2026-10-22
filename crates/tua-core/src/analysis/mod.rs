@@ -145,6 +145,7 @@ pub enum AnalysisWarmPriority {
 #[derive(Clone, Debug)]
 struct InlineStatisticalScopeEntry {
     facts: crate::inline_completion::statistical::StatisticalScopeFacts,
+    source: Arc<str>,
     pinned_open_document: bool,
 }
 
@@ -164,6 +165,7 @@ pub struct AnalysisHost {
     completion_cache: Arc<Mutex<BTreeMap<CompletionRequestKey, Vec<Completion>>>>,
     completion_cache_stats: Arc<Mutex<CompletionCacheStats>>,
     inline_completion_stats: Arc<crate::inline_completion::InlineCompletionRuntimeStats>,
+    project_pattern_exact_enabled: Option<bool>,
     inline_statistical_enabled: bool,
     inline_statistical_scopes: RefCell<Arc<BTreeMap<PathBuf, InlineStatisticalScopeEntry>>>,
     project_pattern_corpus: Arc<crate::inline_completion::ProjectPatternCorpus>,

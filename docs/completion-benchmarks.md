@@ -490,6 +490,7 @@ baseline.
 | `TUA_REPRESENTATIVE_INLINE_WORKER_P95_BUDGET_MS` | Inline worker-execution p95 budget for the outer `lsp.request` span; defaults to 20 ms. |
 | `TUA_REPRESENTATIVE_INLINE_BACKEND_P95_BUDGET_MS` | Inline core/backend p95 budget for `inline.request.core`; defaults to 20 ms. |
 | `TUA_REPRESENTATIVE_INLINE_E2E_P95_BUDGET_MS` | Successful contended inline request-age p95 budget, including queue and transport; defaults to 10,000 ms. This broad default catches stalls and is not a UX target. |
+| `TUA_REPRESENTATIVE_INLINE_STATISTICAL` | Set to `1` to enable the default-off project statistical source during the representative run and measure its background indexing and contended request cost. |
 | `TUA_REPRESENTATIVE_DIAGNOSTICS_P95_BUDGET_MS` | First diagnostics publication after an edit p95 budget; defaults to 10,000 ms. |
 | `TUA_REPRESENTATIVE_PROFILE_OUT` | JSON report path. |
 | `TUA_LSP_REQUEST_TIMEOUT_MS` | Per-request timeout. |

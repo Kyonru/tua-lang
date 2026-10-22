@@ -79,6 +79,7 @@ function handleMessage(message) {
     case "initialize":
       workspaceFolders = message.params.workspaceFolders || [];
       log({
+        initializationOptions: message.params.initializationOptions,
         type: "initialize",
         rootUri: message.params.rootUri,
         workspaceFolders,

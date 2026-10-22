@@ -874,6 +874,8 @@ impl AnalysisHost {
             .set_completion_multi_token(settings.completion_multi_token_config());
         self.core
             .set_inline_statistical_enabled(settings.inline_statistical_enabled());
+        self.core
+            .set_inline_project_enabled(settings.inline_project_enabled());
         self.core.set_ignored_paths(ignored_paths);
         self.core.set_asset_roots(asset_roots);
 

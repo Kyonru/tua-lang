@@ -101,6 +101,7 @@ pub struct PatternCorpusBuildInput {
     source: String,
     kind: AnalysisSourceKind,
     version: VfsSourceVersion,
+    include_exact: bool,
     include_statistical: bool,
 }
 
@@ -110,6 +111,7 @@ impl PatternCorpusBuildInput {
         source: String,
         kind: AnalysisSourceKind,
         version: VfsSourceVersion,
+        include_exact: bool,
         include_statistical: bool,
     ) -> Self {
         Self {
@@ -117,6 +119,7 @@ impl PatternCorpusBuildInput {
             source,
             kind,
             version,
+            include_exact,
             include_statistical,
         }
     }
@@ -142,15 +145,19 @@ impl PatternCorpusBuildInput {
         project_model: &ProjectModel,
         limits: RetrievalLimits,
     ) -> PatternCorpusBuildOutcome {
-        let table = match FilePatternTable::build(&self.source, limits) {
-            Ok(table) => Arc::new(table),
-            Err(error) => {
-                return PatternCorpusBuildOutcome::Skipped {
-                    path: self.path,
-                    version: self.version,
-                    reason: error,
-                };
+        let table = if self.include_exact {
+            match FilePatternTable::build(&self.source, limits) {
+                Ok(table) => Some(Arc::new(table)),
+                Err(error) => {
+                    return PatternCorpusBuildOutcome::Skipped {
+                        path: self.path,
+                        version: self.version,
+                        reason: error,
+                    };
+                }
             }
+        } else {
+            None
         };
         let literals = module_specifier_literals(&self.source);
         let resolved = resolve_module_specifier_literals(&self.path, &literals, project_model);
@@ -170,17 +177,21 @@ impl PatternCorpusBuildInput {
             .then(|| {
                 let parsed = parsed.as_ref().ok()?;
                 let scope = crate::scope_map_parsed_source(parsed);
-                StatisticalFileTable::build(&parsed.source, &scope).map(Arc::new)
+                StatisticalFileTable::build(parsed, &scope).map(Arc::new)
             })
             .flatten();
-        let declared_love_callbacks = parsed
-            .as_ref()
-            .ok()
-            .map(crate::love_callback::declared_love_callbacks)
-            .into_iter()
-            .flatten()
-            .map(str::to_owned)
-            .collect::<BTreeSet<_>>();
+        let declared_love_callbacks = if self.include_exact {
+            parsed
+                .as_ref()
+                .ok()
+                .map(crate::love_callback::declared_love_callbacks)
+                .into_iter()
+                .flatten()
+                .map(str::to_owned)
+                .collect::<BTreeSet<_>>()
+        } else {
+            BTreeSet::new()
+        };
 
         PatternCorpusBuildOutcome::Built(PatternFileBuild {
             path: self.path,
@@ -234,7 +245,7 @@ pub struct PatternFileBuild {
     path: PathBuf,
     version: VfsSourceVersion,
     kind: AnalysisSourceKind,
-    table: Arc<FilePatternTable>,
+    table: Option<Arc<FilePatternTable>>,
     specifier_identities: Vec<ModuleSpecifierIdentity>,
     resolved_targets: BTreeSet<PathBuf>,
     declared_love_callbacks: BTreeSet<String>,
@@ -321,6 +332,7 @@ struct CorpusFile {
 #[derive(Clone, Debug)]
 enum OverlayEntry {
     Table(Arc<FilePatternTable>),
+    Metadata,
     Tombstone,
 }
 
@@ -577,15 +589,16 @@ impl ProjectPatternCorpus {
                 continue;
             }
             let id = existing_id.unwrap_or(CorpusFileId(next_id));
-            let table = Arc::clone(&build.table);
+            let table = build.table.as_ref().map(Arc::clone);
             let file = build.into_file();
+            let overlay_entry = table
+                .map(OverlayEntry::Table)
+                .unwrap_or(OverlayEntry::Metadata);
             let projected = approximate_bytes
                 .saturating_sub(files.get(&id).map_or(0, file_map_entry_bytes))
                 .saturating_sub(overlay.get(&id).map_or(0, overlay_map_entry_bytes))
                 .saturating_add(file_map_entry_bytes(&file))
-                .saturating_add(overlay_map_entry_bytes(&OverlayEntry::Table(Arc::clone(
-                    &table,
-                ))))
+                .saturating_add(overlay_map_entry_bytes(&overlay_entry))
                 .saturating_add(if existing_id.is_none() {
                     path_map_entry_bytes(&path)
                 } else {
@@ -608,7 +621,7 @@ impl ProjectPatternCorpus {
             }
             add_callback_support(&mut callback_support, id, &file.declared_love_callbacks);
             files.insert(id, file);
-            overlay.insert(id, OverlayEntry::Table(table));
+            overlay.insert(id, overlay_entry);
             results.push(CorpusEntryAdoption {
                 path,
                 status: CorpusEntryAdoptionStatus::Adopted,
@@ -986,7 +999,10 @@ impl ProjectPatternCorpus {
             PatternCorpusTier::SameDirectory,
             PatternCorpusTier::Project,
         ] {
-            for (index, file) in self.files.values().enumerate() {
+            // Path order is stable across batching and adoption order. Corpus
+            // file IDs are intentionally opaque and may be assigned in a
+            // different order when background batches finish differently.
+            for (index, file) in self.statistical_candidate_files().enumerate() {
                 if index.is_multiple_of(32)
                     && (cancelled.load(Ordering::Relaxed) || budget.is_expired())
                 {
@@ -1021,6 +1037,12 @@ impl ProjectPatternCorpus {
             }
         }
         statistical::predict(&evidence, active_source, offset, scope, budget, cancelled)
+    }
+
+    /// Iterate corpus files in path order so background batch/adoption order
+    /// cannot change which files survive the statistical query cap.
+    fn statistical_candidate_files(&self) -> impl Iterator<Item = &CorpusFile> {
+        self.path_ids.values().filter_map(|id| self.files.get(id))
     }
 
     pub(crate) fn declared_love_callbacks(
@@ -1107,6 +1129,7 @@ impl ProjectPatternCorpus {
                 OverlayEntry::Table(table) => table
                     .approximate_bytes()
                     .max(table_base_pattern_bytes(table)),
+                OverlayEntry::Metadata => 0,
                 OverlayEntry::Tombstone => 0,
             })
             .sum()
@@ -1237,7 +1260,7 @@ fn overlay_map_entry_bytes(entry: &OverlayEntry) -> usize {
             OverlayEntry::Table(table) => table
                 .approximate_bytes()
                 .max(table_base_pattern_bytes(table)),
-            OverlayEntry::Tombstone => 0,
+            OverlayEntry::Metadata | OverlayEntry::Tombstone => 0,
         }
 }
 
@@ -1411,6 +1434,15 @@ mod tests {
             panic!("expected a project corpus table")
         };
         assert!(build.statistical.is_some());
+        let _ = host.snapshot();
+        assert_eq!(
+            host.cache_stats().inline_statistical_scope_files,
+            0,
+            "ordinary snapshots must not extract optional inline scope facts"
+        );
+        let warmed = host.clone();
+        assert!(warmed.warm_file("main.tua", crate::AnalysisWarmPriority::High));
+        assert!(host.adopt_warmed_file(&warmed, "main.tua"));
 
         host.set_file_with_kind("plain.lua", "local point = 1\n", AnalysisSourceKind::Lua);
         let outcome = host
@@ -1437,7 +1469,6 @@ mod tests {
             panic!("expected a project corpus table")
         };
         assert!(build.statistical.is_none());
-        let _ = host.snapshot();
         assert_eq!(host.cache_stats().inline_statistical_scope_files, 1);
         assert!(host
             .prepare_local_inline_completion_with_sources("plain.lua", false, true)
@@ -1449,6 +1480,125 @@ mod tests {
             .unwrap()
             .statistical_scope
             .is_none());
+    }
+
+    #[test]
+    fn statistical_only_builds_omit_exact_tables_and_lua_files() {
+        let mut host = AnalysisHost::new();
+        host.set_inline_project_enabled(false);
+        host.set_inline_statistical_enabled(true);
+        add(
+            &mut host,
+            "train.tua",
+            "local point = 0\npoint = point + 1\n",
+        );
+
+        let outcome = host
+            .prepare_project_pattern_file("train.tua")
+            .expect("Tua statistical input")
+            .build(&ProjectModel::default(), RetrievalLimits::default());
+        let PatternCorpusBuildOutcome::Built(build) = outcome else {
+            panic!("expected a statistical corpus table")
+        };
+        assert!(build.table.is_none(), "exact retrieval must stay disabled");
+        assert!(build.statistical.is_some());
+        assert!(build.declared_love_callbacks.is_empty());
+
+        host.set_file_with_kind("plain.lua", "local point = 1\n", AnalysisSourceKind::Lua);
+        assert!(
+            host.prepare_project_pattern_file("plain.lua").is_none(),
+            "statistical-only indexing must not clone or parse Lua sources"
+        );
+    }
+
+    #[test]
+    fn metadata_only_overlay_remerges_and_tombstones_without_exact_patterns() {
+        let mut host = AnalysisHost::new();
+        host.set_inline_project_enabled(false);
+        host.set_inline_statistical_enabled(true);
+        add(
+            &mut host,
+            "train.tua",
+            "local point = 0\npoint = point + 1\n",
+        );
+        add(&mut host, "active.tua", "point =");
+        let generation = host.project_pattern_corpus_stats().eligibility_generation;
+        let outcome = build(&host, "train.tua");
+        adopt(&mut host, generation, outcome);
+
+        let before = host.project_pattern_corpus_stats();
+        assert_eq!(before.files, 1);
+        assert_eq!(before.overlay_files, 1);
+        assert!(
+            query(&host, "active.tua", "point =", 0).is_empty(),
+            "metadata-only overlays must never produce exact retrieval text"
+        );
+
+        let prepared = host
+            .prepare_project_pattern_remerge()
+            .expect("metadata overlay should be remergeable");
+        let outcome = prepared.build();
+        let retired = host
+            .try_adopt_project_pattern_remerge(outcome)
+            .expect("unchanged metadata remerge should adopt");
+        drop(retired);
+        let merged = host.project_pattern_corpus_stats();
+        assert_eq!(merged.files, 1);
+        assert_eq!(merged.base_files, 1);
+        assert_eq!(merged.overlay_files, 0);
+        assert!(query(&host, "active.tua", "point =", 0).is_empty());
+
+        let tombstone = host.prepare_project_pattern_tombstone("train.tua");
+        let adoption = host.adopt_project_pattern_batch(
+            generation,
+            [PatternCorpusBatchEntry::Tombstone(tombstone)],
+        );
+        assert_eq!(adoption.tombstoned, 1);
+        assert_eq!(host.project_pattern_corpus_stats().files, 0);
+        assert!(query(&host, "active.tua", "point =", 0).is_empty());
+    }
+
+    #[test]
+    fn statistical_query_cap_is_independent_of_background_adoption_order() {
+        fn selected_paths(reverse: bool) -> Vec<PathBuf> {
+            let mut host = AnalysisHost::new();
+            host.set_inline_project_enabled(false);
+            host.set_inline_statistical_enabled(true);
+            host.set_project_pattern_eligibility_generation(1);
+            for index in 0..statistical::MAX_QUERY_FILES * 2 {
+                add(
+                    &mut host,
+                    &format!("train/{index:03}.tua"),
+                    "local point = 0\npoint = 1\n",
+                );
+            }
+            let indices = if reverse {
+                (0..statistical::MAX_QUERY_FILES * 2)
+                    .rev()
+                    .collect::<Vec<_>>()
+            } else {
+                (0..statistical::MAX_QUERY_FILES * 2).collect::<Vec<_>>()
+            };
+            for index in indices {
+                let path = format!("train/{index:03}.tua");
+                let outcome = build(&host, &path);
+                adopt(&mut host, 1, outcome);
+            }
+
+            host.project_pattern_corpus()
+                .statistical_candidate_files()
+                .filter(|file| file.statistical.is_some())
+                .take(statistical::MAX_QUERY_FILES)
+                .map(|file| file.path.clone())
+                .collect()
+        }
+
+        let ascending = selected_paths(false);
+        let descending = selected_paths(true);
+        assert_eq!(ascending, descending);
+        assert_eq!(ascending.len(), statistical::MAX_QUERY_FILES);
+        assert_eq!(ascending.first().unwrap(), Path::new("train/000.tua"));
+        assert_eq!(ascending.last().unwrap(), Path::new("train/063.tua"));
     }
 
     fn build(host: &AnalysisHost, path: &str) -> PatternCorpusBuildOutcome {
