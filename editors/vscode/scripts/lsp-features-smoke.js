@@ -671,11 +671,18 @@ function positionAt(source, needle) {
 }
 
 function positionAfter(source, needle) {
-  const position = positionAt(source, needle);
+  const offset = source.indexOf(needle);
+  if (offset === -1) {
+    fail(`needle not found in source: ${needle}`);
+  }
 
-  position.character += needle.length;
+  const before = source.slice(0, offset + needle.length);
+  const lines = before.split("\n");
 
-  return position;
+  return {
+    line: lines.length - 1,
+    character: lines[lines.length - 1].length,
+  };
 }
 
 function sourceTextFromRange(source, range) {

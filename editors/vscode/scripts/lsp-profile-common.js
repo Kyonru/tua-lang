@@ -758,10 +758,18 @@ function positionAt(source, needle) {
 }
 
 function positionAfter(source, needle) {
-  const position = positionAt(source, needle);
+  const offset = source.indexOf(needle);
+  if (offset === -1) {
+    throw new Error(`needle not found in source: ${needle}`);
+  }
 
-  position.character += needle.length;
-  return position;
+  const before = source.slice(0, offset + needle.length);
+  const lines = before.split("\n");
+
+  return {
+    line: lines.length - 1,
+    character: lines[lines.length - 1].length,
+  };
 }
 
 function relativeLabel(root, filename) {

@@ -8,6 +8,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- LSP profiling and smoke helpers now compute correct cursor positions after
+  multiline source fragments, preventing misleading completion and signature
+  results in developer-experience trials.
+
 - Array literals returned through namespace-imported declaration aliases now
   resolve their record element contracts before structural checking.
 
