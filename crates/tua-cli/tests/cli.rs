@@ -223,6 +223,7 @@ fn init_creates_default_project_files() {
     assert!(stdout.contains("created tua.toml"));
     assert!(stdout.contains("created src/"));
     assert!(stdout.contains("created src/main.tua"));
+    assert!(stdout.contains("created .gitignore"));
     assert_eq!(
         fs::read_to_string(temp.path().join(CONFIG_FILE)).expect("failed to read config"),
         DEFAULT_CONFIG_TEXT
@@ -231,6 +232,31 @@ fn init_creates_default_project_files() {
     assert_eq!(
         fs::read_to_string(temp.path().join("src/main.tua")).expect("failed to read main"),
         DEFAULT_MAIN_TEXT
+    );
+    assert_eq!(
+        fs::read_to_string(temp.path().join(".gitignore")).expect("failed to read gitignore"),
+        "# Tua generated files\n/build/\n/dist/\n/.tua/\n"
+    );
+}
+
+#[test]
+fn init_updates_an_existing_gitignore() {
+    let temp = TempDir::new("init-existing-gitignore");
+    let gitignore_path = temp.path().join(".gitignore");
+    fs::write(&gitignore_path, "node_modules/\n/dist/\n")
+        .expect("failed to write existing gitignore");
+
+    let output = tua()
+        .arg("init")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tua init");
+
+    assert!(output.status.success());
+    assert!(String::from_utf8_lossy(&output.stdout).contains("updated .gitignore"));
+    assert_eq!(
+        fs::read_to_string(gitignore_path).expect("failed to read gitignore"),
+        "node_modules/\n/dist/\n\n# Tua generated files\n/build/\n/.tua/\n"
     );
 }
 
@@ -245,6 +271,7 @@ fn init_help_is_contextual() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("tua init - create a Tua project"));
     assert!(stdout.contains("Usage:\n  tua init"));
+    assert!(stdout.contains("adds generated folders to .gitignore"));
     assert!(!stdout.contains("Commands:"));
 }
 

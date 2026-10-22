@@ -17,7 +17,8 @@ built 6 file(s)
 packaged dist/my-game.love (184.2 KiB)
 ```
 
-Packages go to `dist/` in the project root. Add `dist/` to `.gitignore`.
+Packages go to `dist/` in the project root. `tua init` adds this directory to
+`.gitignore`.
 
 In VS Code, **Tua: Package Game...** asks which package to build and runs the
 same command in a task. For fused builds it uses `tua.love.windowsRuntime` or

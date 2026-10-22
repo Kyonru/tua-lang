@@ -103,7 +103,7 @@ impl CommandName {
 
 pub fn command_help(command: CommandName) -> &'static str {
     match command {
-        CommandName::Init => "tua init - create a Tua project\n\nUsage:\n  tua init\n\nCreates tua.toml and src/main.tua without overwriting existing files.\n",
+        CommandName::Init => "tua init - create a Tua project\n\nUsage:\n  tua init\n\nCreates tua.toml and src/main.tua without overwriting existing files, and adds generated folders to .gitignore.\n",
         CommandName::Check => "tua check - parse and type-check the project\n\nUsage:\n  tua check [--deny-warnings]\n",
         CommandName::Fmt => "tua fmt - format project source files\n\nUsage:\n  tua fmt [--check]\n",
         CommandName::Lint => "tua lint - run lint rules\n\nUsage:\n  tua lint [--strict]\n",

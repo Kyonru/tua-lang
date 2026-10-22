@@ -6,6 +6,12 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+### Changed
+
+- `tua init` and **Tua: Initialize Tua Project** now create or extend
+  `.gitignore` with the generated `build/`, `dist/`, and `.tua/` directories
+  while preserving existing entries.
+
 ## [0.3.0] - 2026-10-22
 
 ### Changed

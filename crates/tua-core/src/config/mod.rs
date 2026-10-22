@@ -20,6 +20,10 @@ pub use parser::{
 
 pub const CONFIG_FILE: &str = "tua.toml";
 
+const GITIGNORE_FILE: &str = ".gitignore";
+const GITIGNORE_HEADER: &str = "# Tua generated files";
+const RECOMMENDED_GITIGNORE_ENTRIES: [&str; 3] = ["/build/", "/dist/", "/.tua/"];
+
 pub const DEFAULT_CONFIG_TEXT: &str = "\
 source = \"src\"
 out = \"build\"
@@ -483,9 +487,12 @@ pub struct InitResult {
     pub config_path: PathBuf,
     pub source_dir: PathBuf,
     pub main_path: PathBuf,
+    pub gitignore_path: PathBuf,
     pub config_created: bool,
     pub source_created: bool,
     pub main_created: bool,
+    pub gitignore_created: bool,
+    pub gitignore_updated: bool,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -603,14 +610,99 @@ pub fn init_project(dir: impl AsRef<Path>) -> Result<InitResult, ConfigError> {
     })?;
     let main_path = source_dir.join(&defaults.main);
     let main_created = write_file_without_overwrite(&main_path, DEFAULT_MAIN_TEXT)?;
+    let gitignore_path = dir.join(GITIGNORE_FILE);
+    let (gitignore_created, gitignore_updated) = ensure_recommended_gitignore(&gitignore_path)?;
 
     Ok(InitResult {
         config_path,
         source_dir,
         main_path,
+        gitignore_path,
         config_created,
         source_created,
         main_created,
+        gitignore_created,
+        gitignore_updated,
+    })
+}
+
+fn ensure_recommended_gitignore(path: &Path) -> Result<(bool, bool), ConfigError> {
+    let contents = match fs::read_to_string(path) {
+        Ok(contents) => contents,
+        Err(source) if source.kind() == io::ErrorKind::NotFound => {
+            let contents = format!(
+                "{GITIGNORE_HEADER}\n{}\n",
+                RECOMMENDED_GITIGNORE_ENTRIES.join("\n")
+            );
+            write_file_without_overwrite(path, &contents)?;
+            return Ok((true, false));
+        }
+        Err(source) => {
+            return Err(ConfigError::Io {
+                path: path.to_path_buf(),
+                source,
+            });
+        }
+    };
+
+    let missing = RECOMMENDED_GITIGNORE_ENTRIES
+        .iter()
+        .copied()
+        .filter(|entry| !gitignore_contains_entry(&contents, entry))
+        .collect::<Vec<_>>();
+    if missing.is_empty() {
+        return Ok((false, false));
+    }
+
+    let newline = if contents.contains("\r\n") {
+        "\r\n"
+    } else {
+        "\n"
+    };
+    let mut addition = String::new();
+    let has_header = contents
+        .lines()
+        .any(|line| line.trim() == GITIGNORE_HEADER);
+    if !contents.is_empty() {
+        if !contents.ends_with('\n') {
+            addition.push_str(newline);
+        }
+        let ends_with_blank_line = if newline == "\r\n" {
+            contents.ends_with("\r\n\r\n")
+        } else {
+            contents.ends_with("\n\n")
+        };
+        if !has_header && !ends_with_blank_line {
+            addition.push_str(newline);
+        }
+    }
+    if !has_header {
+        addition.push_str(GITIGNORE_HEADER);
+        addition.push_str(newline);
+    }
+    for entry in missing {
+        addition.push_str(entry);
+        addition.push_str(newline);
+    }
+
+    OpenOptions::new()
+        .append(true)
+        .open(path)
+        .and_then(|mut file| file.write_all(addition.as_bytes()))
+        .map_err(|source| ConfigError::Io {
+            path: path.to_path_buf(),
+            source,
+        })?;
+
+    Ok((false, true))
+}
+
+fn gitignore_contains_entry(contents: &str, expected: &str) -> bool {
+    let expected = expected.trim_matches('/');
+
+    contents.lines().any(|line| {
+        let line = line.trim();
+        !line.starts_with(['#', '!']) && line.trim_matches('/') == expected
     })
 }
 

@@ -6,9 +6,12 @@ fn format_init_result_reports_created_project_files() {
         config_path: "tua.toml".into(),
         source_dir: "src".into(),
         main_path: "src/main.tua".into(),
+        gitignore_path: ".gitignore".into(),
         config_created: true,
         source_created: true,
         main_created: true,
+        gitignore_created: true,
+        gitignore_updated: false,
     };
 
     let message = format_init_result(result);
@@ -17,4 +20,5 @@ fn format_init_result_reports_created_project_files() {
     assert!(message.contains("created tua.toml"));
     assert!(message.contains("created src/"));
     assert!(message.contains("created src/main.tua"));
+    assert!(message.contains("created .gitignore"));
 }

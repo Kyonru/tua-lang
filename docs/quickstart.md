@@ -20,13 +20,16 @@ that already exist:
 
 ```text
 tua.toml
+.gitignore
 src/
 src/main.tua
 ```
 
 `tua.toml` maps `src/**/*.tua` to `build/**/*.lua`. Its `main = "main.tua"`
 setting also emits `src/main.tua` as `build/main.lua`, which is the entrypoint
-LOVE expects.
+LOVE expects. Initialization creates or extends `.gitignore` with Tua's
+generated `build/`, `dist/`, and `.tua/` directories while preserving existing
+entries.
 
 ## 2. Write Tua
 

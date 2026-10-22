@@ -328,6 +328,10 @@ async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
     assert(fs.existsSync(path.join(workspace, "tua.toml")), "init project should create tua.toml");
     assert(fs.existsSync(path.join(workspace, "src", "main.tua")), "init project should create src/main.tua");
     assert(
+      fs.existsSync(path.join(workspace, ".gitignore")),
+      "init project should create a .gitignore for generated folders",
+    );
+    assert(
       state.informationMessages.some((message) => message.includes("Initialized Tua project in workspace.")),
       "init project should confirm successful scaffolding",
     );
@@ -1817,6 +1821,9 @@ function writeMockServer(filename) {
         "  > tua.toml echo [project]",
         "  >> tua.toml echo name = \"smoke\"",
         "  > src\\main.tua echo print(\"hello from smoke\")",
+        "  > .gitignore echo /build/",
+        "  >> .gitignore echo /dist/",
+        "  >> .gitignore echo /.tua/",
         "  echo initialized tua project",
         "  exit /b 0",
         ")",
@@ -1842,6 +1849,7 @@ function writeMockServer(filename) {
       "  fs.mkdirSync(path.join(cwd, 'src'), { recursive: true });",
       "  fs.writeFileSync(path.join(cwd, 'tua.toml'), '[project]\\nname = \"smoke\"\\n');",
       "  fs.writeFileSync(path.join(cwd, 'src', 'main.tua'), 'print(\"hello from smoke\")\\n');",
+      "  fs.writeFileSync(path.join(cwd, '.gitignore'), '/build/\\n/dist/\\n/.tua/\\n');",
       "  console.log('initialized tua project');",
       "  process.exit(0);",
       "}",

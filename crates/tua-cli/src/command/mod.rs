@@ -111,6 +111,14 @@ fn format_init_result(result: tua_core::InitResult) -> String {
         lines.push("src/main.tua already exists; left unchanged".to_owned());
     }
 
+    if result.gitignore_created {
+        lines.push("created .gitignore with Tua-generated folders".to_owned());
+    } else if result.gitignore_updated {
+        lines.push("updated .gitignore with Tua-generated folders".to_owned());
+    } else {
+        lines.push(".gitignore already covers Tua-generated folders; left unchanged".to_owned());
+    }
+
     lines.join("\n")
 }
 

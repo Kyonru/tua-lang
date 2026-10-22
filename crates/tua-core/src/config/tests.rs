@@ -713,6 +713,8 @@ fn init_creates_default_config_and_src_directory() {
     assert!(result.config_created);
     assert!(result.source_created);
     assert!(result.main_created);
+    assert!(result.gitignore_created);
+    assert!(!result.gitignore_updated);
     assert_eq!(
         fs::read_to_string(temp.path().join(CONFIG_FILE)).expect("failed to read config"),
         DEFAULT_CONFIG_TEXT
@@ -721,6 +723,49 @@ fn init_creates_default_config_and_src_directory() {
     assert_eq!(
         fs::read_to_string(temp.path().join("src/main.tua")).expect("failed to read main"),
         DEFAULT_MAIN_TEXT
+    );
+    assert_eq!(
+        fs::read_to_string(temp.path().join(".gitignore")).expect("failed to read gitignore"),
+        "# Tua generated files\n/build/\n/dist/\n/.tua/\n"
+    );
+}
+
+#[test]
+fn init_extends_an_existing_gitignore_without_duplication() {
+    let temp = TempDir::new("init-gitignore");
+    let gitignore_path = temp.path().join(".gitignore");
+    fs::write(&gitignore_path, "node_modules/\nbuild/\n").expect("failed to write gitignore");
+
+    let first = init_project(temp.path()).expect("init should succeed");
+    let contents = fs::read_to_string(&gitignore_path).expect("failed to read gitignore");
+
+    assert!(!first.gitignore_created);
+    assert!(first.gitignore_updated);
+    assert_eq!(
+        contents,
+        "node_modules/\nbuild/\n\n# Tua generated files\n/dist/\n/.tua/\n"
+    );
+
+    let second = init_project(temp.path()).expect("second init should succeed");
+    assert!(!second.gitignore_created);
+    assert!(!second.gitignore_updated);
+    assert_eq!(
+        fs::read_to_string(gitignore_path).expect("failed to read gitignore"),
+        contents
+    );
+}
+
+#[test]
+fn init_preserves_existing_gitignore_line_endings() {
+    let temp = TempDir::new("init-gitignore-crlf");
+    let gitignore_path = temp.path().join(".gitignore");
+    fs::write(&gitignore_path, "node_modules/\r\n").expect("failed to write gitignore");
+
+    init_project(temp.path()).expect("init should succeed");
+
+    assert_eq!(
+        fs::read_to_string(gitignore_path).expect("failed to read gitignore"),
+        "node_modules/\r\n\r\n# Tua generated files\r\n/build/\r\n/dist/\r\n/.tua/\r\n"
     );
 }
 
