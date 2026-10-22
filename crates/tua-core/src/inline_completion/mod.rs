@@ -16,6 +16,8 @@ pub mod corpus;
 pub mod eligibility;
 #[cfg(any(test, feature = "test-fixture"))]
 pub mod eval;
+#[cfg(any(test, feature = "test-fixture"))]
+mod identity;
 mod policy;
 mod project_corpus;
 mod recall;

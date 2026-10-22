@@ -1568,6 +1568,16 @@ current fixed-order baseline.
 
 ### Prerequisite 2: stable structural identity
 
+> **Evaluator identity slice implemented (2026-10-22).** Learned-pattern
+> candidates now receive an evaluator-only, versioned canonical key. It
+> alpha-normalizes bare identifiers, preserves member and known API names,
+> replaces literal values, ignores formatting/comments/retrieval origin, and
+> has collision-safe length-delimited bytes ready for a future HMAC. Semantic
+> candidates remain fixed-priority until they have named rule IDs. On the tune
+> set, 1,040 rankable candidates produced 326 identities with zero failures;
+> only 17 identities appeared in multiple projects. That sparsity makes real
+> chronological acceptance evidence a prerequisite for persistence.
+
 Every rankable candidate needs a versioned structural identity produced by
 `tua-core`. The canonical identity includes:
 
@@ -1712,7 +1722,10 @@ queryable migrations become real requirements.
 
 1. ~~Add candidate-slate and oracle reporting to the tuning evaluator only.~~
    Implemented without changing production selection.
-2. Add and test stable structural identities, still without persistence.
+2. ~~Add and test stable structural identities, still without persistence.~~
+   Implemented for learned-pattern candidates in the evaluator; semantic rule
+   IDs remain intentionally deferred because semantic results are not history
+   ranked.
 3. Implement an in-memory chronological ranker and compare it with fixed-order
    and frequency-only baselines.
 4. Stop if the oracle ceiling or ranker does not clear the quality gates.

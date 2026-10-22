@@ -791,6 +791,13 @@ fn print_summary(report: &eval::EvalReport) {
                 slate.oracle_best.correct_prefix_precision,
                 slate.oracle_best.wrong_to_saved_ratio,
             );
+            println!(
+                "candidate identities: {} rankable candidates, {} distinct structural keys, {} seen in multiple projects, {} failures",
+                slate.rankable_candidates,
+                slate.distinct_structural_identities,
+                slate.identities_seen_in_multiple_projects,
+                slate.structural_identity_failures,
+            );
         }
         for (language, warmup) in &set.warmup_by_language {
             let rates = warmup

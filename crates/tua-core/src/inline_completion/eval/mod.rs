@@ -43,7 +43,8 @@ use super::eligibility::{
     strip_trailing_comment, suffix_allows_inline, word_before, CursorContext, LexicalRegion,
 };
 use crate::{
-    AnalysisHost, AnalysisWarmPriority, PatternCorpusBatchEntry, RetrievalLimits, SourcePosition,
+    AnalysisHost, AnalysisWarmPriority, InlineCompletionSource, PatternCorpusBatchEntry,
+    RetrievalLimits, SourcePosition,
 };
 
 const PRODUCTION_EVAL_CORPUS_GENERATION: u64 = 1;
@@ -254,6 +255,10 @@ pub struct CandidateSlateReport {
     pub all_wrong_requests: usize,
     pub independent_candidate_positions: usize,
     pub independent_disagreement_positions: usize,
+    pub rankable_candidates: usize,
+    pub structural_identity_failures: usize,
+    pub distinct_structural_identities: usize,
+    pub identities_seen_in_multiple_projects: usize,
     pub candidates_per_request: BTreeMap<usize, usize>,
     /// The existing production Phase 1 query, measured on the same requests.
     pub production_baseline: Summary,
@@ -576,12 +581,17 @@ struct CandidateSlateAccumulator {
     oracle_best: Summary,
     independent_candidate_positions: BTreeSet<(String, String, usize)>,
     independent_disagreement_positions: BTreeSet<(String, String, usize)>,
+    rankable_candidates: usize,
+    structural_identity_failures: usize,
+    identity_projects: BTreeMap<super::identity::StructuralPatternKey, BTreeSet<String>>,
 }
 
 impl CandidateSlateAccumulator {
     fn add(
         &mut self,
         keys: &Keys<'_>,
+        document: &str,
+        offset: usize,
         production_baseline: Option<Outcome>,
         mut candidates: Vec<(Candidate, Outcome)>,
     ) {
@@ -596,6 +606,33 @@ impl CandidateSlateAccumulator {
         let mut seen = BTreeSet::new();
         candidates
             .retain(|(candidate, _)| seen.insert((candidate.text.clone(), candidate.is_snippet)));
+
+        for (candidate, _) in &candidates {
+            let source = match candidate.source {
+                "current-file" | "current-file-prefix" => Some(InlineCompletionSource::CurrentFile),
+                "project" | "project-exact" | "project-common-prefix" => {
+                    Some(InlineCompletionSource::Project)
+                }
+                "project-ngram" => Some(InlineCompletionSource::ProjectStatistical),
+                "corpus" | "bundled-corpus" => Some(InlineCompletionSource::Corpus),
+                _ => None,
+            };
+            let Some(source) = source else {
+                continue;
+            };
+            self.rankable_candidates += 1;
+            if let Some(identity) =
+                super::identity::structural_pattern_key(source, document, offset, &candidate.text)
+            {
+                debug_assert!(!identity.canonical_bytes().is_empty());
+                self.identity_projects
+                    .entry(identity)
+                    .or_default()
+                    .insert(keys.project.to_owned());
+            } else {
+                self.structural_identity_failures += 1;
+            }
+        }
 
         let count = candidates.len();
         *self.candidates_per_request.entry(count).or_default() += 1;
@@ -647,6 +684,11 @@ impl CandidateSlateAccumulator {
     }
 
     fn finish(self) -> CandidateSlateReport {
+        let identities_seen_in_multiple_projects = self
+            .identity_projects
+            .values()
+            .filter(|projects| projects.len() > 1)
+            .count();
         CandidateSlateReport {
             backend_order: HISTORY_SLATE_BACKENDS.to_vec(),
             eligible_requests: self.eligible_requests,
@@ -660,6 +702,10 @@ impl CandidateSlateAccumulator {
             all_wrong_requests: self.all_wrong_requests,
             independent_candidate_positions: self.independent_candidate_positions.len(),
             independent_disagreement_positions: self.independent_disagreement_positions.len(),
+            rankable_candidates: self.rankable_candidates,
+            structural_identity_failures: self.structural_identity_failures,
+            distinct_structural_identities: self.identity_projects.len(),
+            identities_seen_in_multiple_projects,
             candidates_per_request: self.candidates_per_request,
             production_baseline: self.production_baseline.finish(),
             slate_first: self.slate_first.finish(),
@@ -1214,7 +1260,13 @@ fn evaluate_file(
                 }
             }
             if let Some(slate) = candidate_slate.as_deref_mut() {
-                slate.add(&keys, production_baseline, slate_candidates);
+                slate.add(
+                    &keys,
+                    request.document,
+                    request.offset,
+                    production_baseline,
+                    slate_candidates,
+                );
             }
         }
     }

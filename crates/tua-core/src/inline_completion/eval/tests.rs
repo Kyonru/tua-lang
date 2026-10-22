@@ -1192,6 +1192,9 @@ fn phase2_retrieval_reports_holdouts_states_tiers_and_index_costs() {
     assert!(slate.independent_disagreement_positions <= slate.disagreement_requests);
     assert!(slate.oracle_best.chars_saved >= slate.production_baseline.chars_saved);
     assert_eq!(slate.oracle_best.incorrect_chars, 0);
+    assert!(slate.rankable_candidates > 0);
+    assert_eq!(slate.structural_identity_failures, 0);
+    assert!(slate.distinct_structural_identities > 0);
 }
 
 #[test]
@@ -1221,6 +1224,8 @@ fn candidate_slate_deduplicates_edits_and_oracle_abstains_when_all_are_wrong() {
     let mut slate = CandidateSlateAccumulator::default();
     slate.add(
         &keys(10),
+        "world:",
+        6,
         Some(correct),
         vec![
             (candidate("world:update(dt)", "semantic"), correct),
@@ -1232,10 +1237,12 @@ fn candidate_slate_deduplicates_edits_and_oracle_abstains_when_all_are_wrong() {
     );
     slate.add(
         &keys(20),
+        "world:",
+        6,
         Some(wrong),
         vec![(candidate("world:draw()", "project"), wrong)],
     );
-    slate.add(&keys(30), None, vec![]);
+    slate.add(&keys(30), "world:", 6, None, vec![]);
 
     let report = slate.finish();
     assert_eq!(report.eligible_requests, 3);
@@ -1260,6 +1267,9 @@ fn candidate_slate_deduplicates_edits_and_oracle_abstains_when_all_are_wrong() {
     assert_eq!(report.oracle_best.suggested, 1);
     assert_eq!(report.oracle_best.correct_prefix, 1);
     assert_eq!(report.oracle_best.incorrect_chars, 0);
+    assert_eq!(report.rankable_candidates, 2);
+    assert_eq!(report.structural_identity_failures, 0);
+    assert!(report.distinct_structural_identities > 0);
 }
 
 #[test]
