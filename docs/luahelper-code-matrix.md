@@ -139,7 +139,7 @@ enforced separately with `tua fmt --check`.
 | `TL4026` | An inline-ignore directive did not suppress any matching diagnostic. | `inline_ignores` |
 | `TL4027` | Assignment target count differs from the explicit value count, excluding multi-value and intentional-`nil` tails. | `assignment_arity` |
 | `TL4028` | Local count differs from the explicit initializer count, excluding multi-value and intentional-`nil` tails. | `local_declaration_arity` |
-| `TL4029` | A value assigned to a local is never read. | `unused_assignments` |
+| `TL4029` | An initializer, parameter value, or reassignment is overwritten before a read, or a final local assignment is never read. | `unused_assignments` |
 | `TL4030` | A binary operator receives statically incompatible operand types. | `binary_operator_type_mismatches` |
 | `TL4031` | A local function is referenced but never directly called; callback uses still count as uncalled. | `uncalled_local_functions`; opt-in even under `--strict` |
 | `TL4032` | A local changes between LuaJIT-unfriendly value types. | `jit.enabled` and `jit.variable_type_drift` |

@@ -8,6 +8,14 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Malformed static imports now produce one project diagnostic instead of
+  overlapping lowering and module-graph reports with different ranges and
+  severities.
+
+- `unused_assignments` now performs source-order dead-store analysis. It
+  reports unused initial values, overwritten reassignments, parameters replaced
+  before their first read, and final unread assignments while remaining
+  conservative across conditional paths and preserving right-hand-side effects.
 - Field, index, method, and call operations on unions now require every union
   member to support the operation. Unsafe access such as `Player | nil` field
   reads and calls now report `TL1011`; control-flow narrowing keeps valid

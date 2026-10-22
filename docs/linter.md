@@ -159,6 +159,14 @@ result. A trailing `nil` also records that missing values are intentional.
 Unambiguous shortages recommend adding `nil`; excess values warn that some
 results are unused.
 
+`UnusedAssignment` follows straight-line reads and writes in source order. It
+reports an initializer, parameter value, or reassignment that is overwritten
+before any read, plus a final assignment whose value is never read. Conditional
+paths are handled conservatively: Tua stays quiet unless the dead value is
+proven on the analyzed path. The diagnostic describes the unused value only;
+it does not imply that a right-hand-side call or other side effect can be
+deleted.
+
 `ImplicitReturn` reports a function that explicitly returns one or more values
 on one path but can still reach its end without a return. Bare `return` and
 `return nil` both make a path explicit, and resolved `error(...)` or

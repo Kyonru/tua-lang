@@ -3804,7 +3804,7 @@ oldGlobal()
 }
 
 #[test]
-fn reports_unused_assignments_when_local_is_never_read() {
+fn reports_dead_initial_values_overwrites_and_final_assignments() {
     let diagnostics = check_tua_source_with_diagnostics_config(
         "src/main.tua",
         r#"
@@ -3814,6 +3814,17 @@ unused = 2
 local used = 1
 used = 2
 print(used)
+
+local overwritten = 1
+overwritten = 2
+overwritten = 3
+print(overwritten)
+
+local function replaceParameter(value)
+  value = 4
+  print(value)
+end
+replaceParameter(1)
 "#,
         &DiagnosticsConfig {
             unused_assignments: true,
@@ -3824,11 +3835,55 @@ print(used)
 
     assert_eq!(
         count_code(&diagnostics, DiagnosticCode::LINT_UNUSED_ASSIGNMENT),
-        1
+        6,
+        "{diagnostics:#?}"
     );
-    assert!(diagnostics[0]
-        .message
-        .contains("assignment to local `unused` is never read"));
+    let messages = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_UNUSED_ASSIGNMENT))
+        .map(|diagnostic| diagnostic.message.as_str())
+        .collect::<Vec<_>>();
+    assert!(messages
+        .contains(&"initial value assigned to local `unused` is overwritten before it is read"));
+    assert!(messages.contains(&"value assigned to local `unused` is never read"));
+    assert!(messages
+        .contains(&"initial value assigned to local `used` is overwritten before it is read"));
+    assert!(messages
+        .contains(&"value assigned to local `overwritten` is overwritten before it is read"));
+    assert!(messages.contains(&"parameter `value` is overwritten before its value is read"));
+}
+
+#[test]
+fn dead_store_analysis_keeps_conditional_paths_conservative() {
+    let diagnostics = check_tua_source_with_diagnostics_config(
+        "src/main.tua",
+        r#"
+local first = 1
+if condition then
+  first = 2
+end
+print(first)
+
+local second = sideEffect()
+if condition then
+  print(second)
+end
+second = 2
+print(second)
+
+local captured = 1
+local function updateLater()
+  captured = 2
+end
+print(captured, updateLater)
+"#,
+        &DiagnosticsConfig {
+            unused_assignments: true,
+            ..diagnostics_without_standard_rules()
+        },
+    );
+
+    assert!(diagnostics.is_ok(), "{diagnostics:#?}");
 }
 
 #[test]

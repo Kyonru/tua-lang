@@ -732,6 +732,7 @@ struct SymbolAnalyzer<'a> {
     value_reference_captures: Vec<BTreeSet<usize>>,
     next_function_id: usize,
     next_declaration_group: usize,
+    dead_store_conditional_depth: usize,
 }
 
 #[derive(Clone, Debug)]
@@ -794,7 +795,20 @@ struct Declaration {
     initialized: bool,
     warned_uninitialized: bool,
     first_read: Option<SourcePosition>,
-    assignment_positions: Vec<SourcePosition>,
+    pending_write: Option<PendingWrite>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct PendingWrite {
+    position: SourcePosition,
+    kind: PendingWriteKind,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum PendingWriteKind {
+    InitialValue,
+    Assignment,
+    Parameter,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -825,6 +839,22 @@ enum DeclarationKind {
     ImplicitSelf,
 }
 
+fn pending_write_for_declaration(
+    kind: DeclarationKind,
+    position: SourcePosition,
+) -> Option<PendingWrite> {
+    let kind = match kind {
+        DeclarationKind::Local => PendingWriteKind::InitialValue,
+        DeclarationKind::Parameter => PendingWriteKind::Parameter,
+        DeclarationKind::Loop
+        | DeclarationKind::LocalFunction
+        | DeclarationKind::Import
+        | DeclarationKind::ImplicitSelf => return None,
+    };
+
+    Some(PendingWrite { position, kind })
+}
+
 impl<'a> SymbolAnalyzer<'a> {
     fn new(parsed: &'a ParsedSource, config: &'a DiagnosticsConfig) -> Self {
         let configured_globals = config.globals.iter().cloned().collect::<BTreeSet<_>>();
@@ -846,6 +876,7 @@ impl<'a> SymbolAnalyzer<'a> {
             value_reference_captures: Vec::new(),
             next_function_id: 0,
             next_declaration_group: 0,
+            dead_store_conditional_depth: 0,
         }
     }
 
@@ -977,6 +1008,7 @@ impl<'a> SymbolAnalyzer<'a> {
     }
 
     fn enter_conditional_execution(&mut self) {
+        self.dead_store_conditional_depth += 1;
         if let Some(function) = self.function_stack.last_mut() {
             function.conditional_depth += 1;
         }
@@ -995,7 +1027,58 @@ impl<'a> SymbolAnalyzer<'a> {
         }
     }
 
+    fn pending_write_state(&self) -> Vec<Option<PendingWrite>> {
+        self.declarations
+            .iter()
+            .map(|declaration| declaration.pending_write)
+            .collect()
+    }
+
+    fn restore_pending_write_state(&mut self, state: &[Option<PendingWrite>]) {
+        for (declaration, pending_write) in self.declarations.iter_mut().zip(state) {
+            declaration.pending_write = *pending_write;
+        }
+    }
+
+    fn record_local_write(&mut self, id: usize, position: SourcePosition) {
+        if !self.config.unused_assignments {
+            return;
+        }
+
+        if self.declarations[id].function_id != self.current_function_id() {
+            // A nested function executes later and possibly many times. Its
+            // write cannot kill a value in the enclosing function's current
+            // source-order flow.
+            return;
+        }
+
+        if self.dead_store_conditional_depth > 0 {
+            // A conditional write may not execute, and another branch may read
+            // the previous value. Drop the pending fact instead of claiming a
+            // dead store without a full path proof.
+            self.declarations[id].pending_write = None;
+            return;
+        }
+
+        let declaration = &mut self.declarations[id];
+        if let Some(previous) = declaration.pending_write.take() {
+            if !should_ignore_unused(&declaration.name) {
+                self.diagnostics.push(unused_assignment_diagnostic(
+                    &self.parsed.path,
+                    previous.position,
+                    &declaration.name,
+                    UnusedWriteReason::Overwritten(previous.kind),
+                ));
+            }
+        }
+        declaration.pending_write = Some(PendingWrite {
+            position,
+            kind: PendingWriteKind::Assignment,
+        });
+    }
+
     fn exit_conditional_execution(&mut self) {
+        self.dead_store_conditional_depth = self.dead_store_conditional_depth.saturating_sub(1);
         if let Some(function) = self.function_stack.last_mut() {
             function.conditional_depth = function.conditional_depth.saturating_sub(1);
         }
@@ -1239,9 +1322,7 @@ impl<'a> SymbolAnalyzer<'a> {
                     }
                     self.known_globals.insert(name_text);
                 } else if let Some(id) = self.resolve_local(&name_text) {
-                    self.declarations[id]
-                        .assignment_positions
-                        .push(token_position(name));
+                    self.record_local_write(id, token_position(name));
                     self.declarations[id].initialized |= initializes_local;
                 }
             }
@@ -1357,9 +1438,7 @@ impl<'a> SymbolAnalyzer<'a> {
 
             if names.len() == 1 && function.name().method_name().is_none() {
                 if let Some(id) = self.resolve_local(&root_name) {
-                    self.declarations[id]
-                        .assignment_positions
-                        .push(token_position(root));
+                    self.record_local_write(id, token_position(root));
                     self.declarations[id].initialized = true;
                 } else {
                     if self.config.rules && Self::is_builtin_global(&root_name) {
@@ -1391,6 +1470,9 @@ impl<'a> SymbolAnalyzer<'a> {
         implicit_self: Option<SourcePosition>,
     ) {
         let outer_initialization = self.initialization_state();
+        let outer_pending_writes = self.pending_write_state();
+        let outer_dead_store_conditional_depth = self.dead_store_conditional_depth;
+        self.dead_store_conditional_depth = 0;
         for specifier in body.type_specifiers().flatten() {
             let ty = crate::parser::tua_type_from_type_info(specifier.type_info());
             self.mark_imports_used_in_type(&ty);
@@ -1453,6 +1535,8 @@ impl<'a> SymbolAnalyzer<'a> {
         self.exit_scope();
         self.function_stack.pop();
         self.restore_initialization_state(&outer_initialization);
+        self.restore_pending_write_state(&outer_pending_writes);
+        self.dead_store_conditional_depth = outer_dead_store_conditional_depth;
     }
 
     fn analyze_expression(&mut self, expression: &Expression) {
@@ -1670,19 +1754,21 @@ impl<'a> SymbolAnalyzer<'a> {
 
         for declaration_id in &scope.declarations {
             let declaration = &self.declarations[*declaration_id];
-
-            if declaration.used || should_ignore_unused(&declaration.name) {
+            if !self.config.unused_assignments || should_ignore_unused(&declaration.name) {
                 continue;
             }
 
-            if self.config.unused_assignments {
-                for position in &declaration.assignment_positions {
-                    self.diagnostics.push(unused_assignment_diagnostic(
-                        &self.parsed.path,
-                        *position,
-                        &declaration.name,
-                    ));
-                }
+            if let Some(PendingWrite {
+                position,
+                kind: PendingWriteKind::Assignment,
+            }) = declaration.pending_write
+            {
+                self.diagnostics.push(unused_assignment_diagnostic(
+                    &self.parsed.path,
+                    position,
+                    &declaration.name,
+                    UnusedWriteReason::NeverRead,
+                ));
             }
         }
 
@@ -1733,6 +1819,9 @@ impl<'a> SymbolAnalyzer<'a> {
             scope.future_locals.remove(&name);
 
             let id = self.declarations.len();
+            let pending_write = initialized
+                .then(|| pending_write_for_declaration(kind, position))
+                .flatten();
             self.declarations.push(Declaration {
                 name: name.clone(),
                 position,
@@ -1747,7 +1836,7 @@ impl<'a> SymbolAnalyzer<'a> {
                 initialized,
                 warned_uninitialized: false,
                 first_read: None,
-                assignment_positions: Vec::new(),
+                pending_write,
             });
             scope.bindings.insert(name, id);
             scope.declarations.push(id);
@@ -1776,7 +1865,7 @@ impl<'a> SymbolAnalyzer<'a> {
                 initialized: true,
                 warned_uninitialized: false,
                 first_read: None,
-                assignment_positions: Vec::new(),
+                pending_write: None,
             });
             scope.bindings.insert("self".to_owned(), id);
             scope.declarations.push(id);
@@ -1813,6 +1902,7 @@ impl<'a> SymbolAnalyzer<'a> {
                 ));
             }
             self.declarations[id].used = true;
+            self.declarations[id].pending_write = None;
             let is_local_function = self.declarations[id].kind == DeclarationKind::LocalFunction;
             let contained = self.declarations[id].contained_local_functions.clone();
 
@@ -3510,13 +3600,39 @@ fn deprecated_api_diagnostic(
     .with_code(DiagnosticCode::LINT_DEPRECATED_API)
 }
 
-fn unused_assignment_diagnostic(path: &Path, position: SourcePosition, name: &str) -> Diagnostic {
+#[derive(Clone, Copy)]
+enum UnusedWriteReason {
+    NeverRead,
+    Overwritten(PendingWriteKind),
+}
+
+fn unused_assignment_diagnostic(
+    path: &Path,
+    position: SourcePosition,
+    name: &str,
+    reason: UnusedWriteReason,
+) -> Diagnostic {
+    let message = match reason {
+        UnusedWriteReason::NeverRead => {
+            format!("value assigned to local `{name}` is never read")
+        }
+        UnusedWriteReason::Overwritten(PendingWriteKind::InitialValue) => {
+            format!("initial value assigned to local `{name}` is overwritten before it is read")
+        }
+        UnusedWriteReason::Overwritten(PendingWriteKind::Parameter) => {
+            format!("parameter `{name}` is overwritten before its value is read")
+        }
+        UnusedWriteReason::Overwritten(PendingWriteKind::Assignment) => {
+            format!("value assigned to local `{name}` is overwritten before it is read")
+        }
+    };
+
     Diagnostic::new(
         path,
         position.line,
         position.column,
         DiagnosticSeverity::Warning,
-        format!("assignment to local `{name}` is never read"),
+        message,
     )
     .with_code(DiagnosticCode::LINT_UNUSED_ASSIGNMENT)
 }
