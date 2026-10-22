@@ -24,6 +24,8 @@ nav = [
     { "Typing" = "typing.md" },
     { "Lua Interop" = "lua-interop.md" },
     { "Asset Pipelines" = "asset-pipelines.md" },
+  ] },
+  { "Features" = [
     { "Sprites And Animation" = "sprites.md" },
     { "Vectors And Game Math" = "vectors.md" },
     { "Signals" = "signals.md" },

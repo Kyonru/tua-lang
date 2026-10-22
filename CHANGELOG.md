@@ -8,6 +8,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Changed
 
+- Documentation navigation now separates the core Language guides from a
+  dedicated Features section for Tua's game-focused APIs and runtimes.
+
 - Formatter configuration now supports `indent_style = "spaces" | "tabs"`
   and `line_ending = "lf" | "crlf" | "preserve"`, including language-server
   and VS Code overrides.

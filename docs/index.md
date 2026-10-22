@@ -125,8 +125,8 @@ distributed with the rest of the project.
 
 - [Learn Tua](learn.md) is the guided tutorial for types, tables, functions,
   modules, classes, and LOVE callbacks.
-- [Language](language.md) is the navigable feature guide for exact syntax,
-  emitted Lua, and game-focused features.
+- [Language](language.md) is the syntax and semantics overview, covering source
+  forms and their emitted Lua.
 - [Typing In Tua](typing.md) explains inference, type forms, narrowing,
   exported types, and declaration-only `.d.tua` modules.
 - [Lua Interoperability](lua-interop.md) covers mixed `.lua` and `.tua`
@@ -134,11 +134,15 @@ distributed with the rest of the project.
 - [Asset Pipelines](asset-pipelines.md) covers cached external importers,
   generated modules, and structured asset diagnostics.
 - [Examples](examples.md) explains the bundled feature tour and LOVE projects.
+
+### Build Game Systems
+
 - [Sprites And Animation](sprites.md), [Vectors And Game Math](vectors.md),
   [Signals](signals.md), [State Stores](stores.md),
-  [State Machines](state-machines.md), [Entity Component Systems](ecs.md),
-  [Object Pooling](object-pooling.md), and [Audio Systems](audio.md) document
-  Tua's opt-in game helpers.
+  [State Machines](state-machines.md), [Input](input.md),
+  [Tweening](tweening.md), [Camera](camera.md),
+  [Entity Component Systems](ecs.md), [Object Pooling](object-pooling.md), and
+  [Audio Systems](audio.md) document Tua's game-focused features.
 
 ### Configure And Use The Toolchain
 
