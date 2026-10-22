@@ -570,7 +570,16 @@ impl<'a> Checker<'a> {
                 .get(index)
                 .and_then(|specifier| *specifier)
                 .is_some();
-            let environment_type = self.environment.local(&name).cloned();
+            let indexed_contract_type = assignment_expression_for_local(&expressions, index)
+                .filter(|(expression, return_index)| {
+                    *return_index == 0 && expression_has_bracket_index(expression)
+                })
+                .and_then(|(expression, return_index)| {
+                    self.infer_expression_return(expression, return_index)
+                })
+                .filter(type_contains_string_literal);
+            let environment_type =
+                indexed_contract_type.or_else(|| self.environment.local(&name).cloned());
             let has_environment_type = environment_type.is_some();
             if environment_type.is_some() && !has_annotation {
                 // The environment already typed this local, so the value is
@@ -4235,6 +4244,16 @@ fn type_contains_string_literal(ty: &Type) -> bool {
         }
         Type::Primitive(_) | Type::Any | Type::Alias(_) => false,
     }
+}
+
+fn expression_has_bracket_index(expression: &Expression) -> bool {
+    let Expression::Var(Var::Expression(expression)) = expression else {
+        return false;
+    };
+
+    expression
+        .suffixes()
+        .any(|suffix| matches!(suffix, Suffix::Index(Index::Brackets { .. })))
 }
 
 fn type_contains_lua_enum_alias(ty: &Type) -> bool {

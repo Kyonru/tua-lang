@@ -11,6 +11,9 @@ language or editor behavior, and migration notes call out those changes.
 - Module constructors now preserve selected imported return aliases and nested
   literal-union contracts consistently across checking, hover, and completion.
 
+- Indexing an annotated array of imported literal unions now retains its item
+  contract when the result is assigned to an unannotated local.
+
 - LSP profiling and smoke helpers now compute correct cursor positions after
   multiline source fragments, preventing misleading completion and signature
   results in developer-experience trials.

@@ -2978,6 +2978,41 @@ export type Game = { mode: GameMode }
 }
 
 #[test]
+fn indexed_imported_literal_union_contracts_remain_narrow() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/pieces.tua
+import type { PieceKind } from "./types"
+
+local kinds: PieceKind[] = { "I", "O" }
+local kind = kinds[1]
+
+local function consume(value: PieceKind)
+  return value
+end
+
+return consume(kind)
+-- file: src/types.d.tua
+export type PieceKind = "I" | "O"
+"#,
+    );
+    let mut host = AnalysisHost::new();
+
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+
+    let diagnostics = host.snapshot().diagnostics("src/pieces.tua");
+
+    assert!(
+        diagnostics
+            .iter()
+            .all(|diagnostic| diagnostic.code != Some(DiagnosticCode::TYPE_MISMATCH)),
+        "indexed declared unions should retain their item contract: {diagnostics:#?}"
+    );
+}
+
+#[test]
 fn namespace_imported_declaration_records_accept_array_literals() {
     let fixture = Fixture::parse(
         r#"-- file: src/main.tua
