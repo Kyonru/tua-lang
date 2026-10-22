@@ -19,36 +19,54 @@ evidence = "not run; frozen external data remains unspent"
 
 [prerequisites.menu_replay]
 passed = false
-evidence = "unbound: recorded before reports carried a revision, so it may predate the shipped code; rerun. Previously: the clean-tree 2026-10-21 target/tua-speed/inline-editor-replay.json from commit 95c9000 (run 533668ad-de48-4880-8e45-51ec238464ec) matches 4/4 hash-pinned Tua tuning captures: one real selected-menu request and three closed-menu requests across identifier/comma contexts; capture SHA-256 591477a46dce3ef355520a166513d13cd548970269359e8e26d4301b2649d89f and evaluator SHA-256 f50a9c119697f5205a6550f8e3828afb84074e7f177d96a18c1c67ed16c2e41a"
+evidence = "pending: rerun `make inline-editor-replay` on a clean tree. The 95c9000 run (4/4 curated captures, 1 selected-menu and 3 closed-menu) predates revision binding and only proves plumbing, not menu-state frequency"
 
 [prerequisites.completion_performance]
 passed = false
-evidence = "unbound: recorded before reports carried a revision, so it may predate the shipped code; rerun. Previously: the complete 2026-10-21 Phase 1 diff records completion p95 6.05 ms against the clean-main allowance of 6.62 ms (5% or 1 ms, whichever is larger); completion-context cache hit rate remained 98.5%"
+evidence = "the 100-repeat completion p95 at 6df7118 is 6.34 ms against 5.38 ms for pre-Phase-1 commit 65cb4a6 on the same machine (+17.8%; exact 5% allows 5.65 ms). Single sequential runs; confirm with interleaved reruns before attributing the cause"
+artifact = "target/tua-speed/completion-phase1-gate.json"
+revision = "6df711848e68"
+check = "completionBaseline"
 
 [prerequisites.inline_server_performance]
-passed = false
-evidence = "unbound: recorded before reports carried a revision, so it may predate the shipped code; rerun. Previously: the full 2026-10-21 target/tua-speed/representative-phase1-gate.json records dispatch-to-response p95 0-7 ms, worker p95 0.236-7.371 ms, and core/backend p95 0.225-1.208 ms across all seven fixtures within each strict 10 ms budget"
+passed = true
+evidence = "dispatch-to-response p95 0-1 ms, worker p95 at most 1.37 ms, and core/backend p95 at most 1.36 ms across seven fixtures, each within its 10 ms budget. Three fixtures' active files exceed the parse cap, so their inline requests are refused before generation (skippedOversized 3 each) and measure only that refusal"
+artifact = "target/tua-speed/representative-phase1-gate.json"
+revision = "6df711848e68"
+check = "inlineServerPerformance"
 
 [prerequisites.inline_client_no_stall]
-passed = false
-evidence = "unbound: recorded before reports carried a revision, so it may predate the shipped code; rerun. Previously: the full 2026-10-21 target/tua-speed/representative-phase1-gate.json records client-observed contended request-age p95 of 56.10, 359.28, 35.26, 869.41, 35.79, 12.41, and 11.19 ms, all within the 1,500 ms stall ceiling"
+passed = true
+evidence = "client-observed contended request-age p95 59.2, 370.4, 31.3, 738.4, 32.1, 9.4, and 17.3 ms, all within the 1,500 ms stall ceiling"
+artifact = "target/tua-speed/representative-phase1-gate.json"
+revision = "6df711848e68"
+check = "inlineClientNoStall"
 
 [prerequisites.inline_contended_delivery]
 passed = false
-evidence = "not yet measured against the 250 ms client timeout; the unbound 2026-10-21 representative run recorded contended request-age p95 of 359.28 and 869.41 ms on two fixtures, where the editor would discard the result"
+evidence = "contended request-age p95 is 370.4 ms on single-5000 and 738.4 ms on project-1000, beyond the 250 ms client timeout, so the editor discards those results under load. Both active files are refused as oversized, so the delay is queueing behind other work, not inline computation"
+artifact = "target/tua-speed/representative-phase1-gate.json"
+revision = "6df711848e68"
+check = "inlineContendedDelivery"
 
 [prerequisites.inline_client_responsiveness]
 passed = false
-evidence = "unbound: recorded before reports carried a revision, so it may predate the shipped code; rerun. Previously: the clean-tree 2026-10-21 target/tua-speed/inline-editor-replay.json from commit 95c9000 records linked $/cancelRequest after 251.08 ms for the production 250 ms timeout, observes the delayed mock server's nonempty 900 ms response as cancelled, and proves no late ghost text rendered"
+evidence = "pending: rerun `make inline-editor-replay` on a clean tree. The unbound 95c9000 run cancelled the delayed local request after 251.08 ms and rendered no late ghost text"
 
 [prerequisites.diagnostics_freshness]
 passed = false
-evidence = "unbound: recorded before reports carried a revision, so it may predate the shipped code; rerun. Previously: the 2026-10-21 target/tua-speed/representative-diagnostics-compare.json alternates five runs of commit 65cb4a6 and the inline-enabled candidate, pools 100 content-bound samples per fixture with internal profiling disabled, and records candidate/baseline p95 in ms of 59.25/59.88, 370.07/382.19, 20.46/19.97, 668.37/907.82, 16.08/16.84, 5.82/6.04, and 6.75/6.88; all seven pass the larger-of-5%-or-10-ms allowance"
+evidence = "pending: the 2026-10-22 comparison against 65cb4a6 finished on a tree another session was editing, so its report is dirty and does not count. It recorded single-1000 (71.87 vs 69.62 ms allowed) and single-5000 (411.80 vs 394.29 ms allowed) over the allowance; rerun `make representative-diagnostics-baseline` on a clean tree"
 
 [prerequisites.scheduler_cache_hit]
-passed = false
-evidence = "unbound: recorded before reports carried a revision, so it may predate the shipped code; rerun. Previously: target/tua-speed/representative-phase1-gate.json records 0 cache-peek hits and 21 misses under real scheduling; Phase 1 therefore excludes callbacks and other cache-dependent candidates instead of relying on unavailable cached analysis"
+passed = true
+evidence = "negative result: the cache peek was observed 21 times under real scheduling and never hit, so Phase 1 ships no candidate that depends on cached analysis. Passing means that decision is supported, not that the cache helps"
+artifact = "target/tua-speed/representative-phase1-gate.json"
+revision = "6df711848e68"
+check = "inlineCachePeekObserved"
 
 [prerequisites.validation_parse_distribution]
 passed = false
-evidence = "unbound: recorded before reports carried a revision, so it may predate the shipped code; rerun. Previously: the full 2026-10-21 representative report records four returning fixtures with returned-after-parse counts 0/2/1 (zero/one/two), 66.7% at most one parse, and the temporarily-invalid two-parse path; three capped large-file fixtures safely returned nothing"
+evidence = "the tuning run of the production host returned 239 candidates: 106 after one parse and 133 after two (44.4% at most one parse; 50% required), averaging 1.72 parses per validation. One-parse validation is not the common case"
+artifact = "target/tua-speed/inline-eval-tune.json"
+revision = "6df711848e68"
+check = "validationParseDistribution"
