@@ -386,7 +386,7 @@ The most useful annotations establish types at module and callback boundaries.
 | --- | --- |
 | `---@class` | Declares a named table or object shape. |
 | `---@field` | Adds a typed field, optional field, visibility metadata, documentation, or a dictionary-style index signature such as `[string]`. |
-| `---@alias` | Declares a reusable type alias or literal union. |
+| `---@alias` | Declares a reusable type alias or literal union, on one line or as a bare `---@alias Name` followed by `---\| member` lines. |
 | `---@type` | Types an attached local or value where the relationship is statically clear. |
 | `---@param` | Types and documents a function parameter. |
 | `---@return` | Types and documents one or more function returns. |

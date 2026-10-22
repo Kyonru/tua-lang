@@ -8,6 +8,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Multi-line LuaCATS aliases (a bare `---@alias Name` followed by
+  `---| member` lines) now declare their union. They were previously dropped,
+  so every value typed with them became `any`.
 - Literal parameter types such as `---@param mode "fill" | "line"` now keep
   their contract when the function is used from another module. Inferred
   widening previously turned them into `string`, so a misspelled mode passed

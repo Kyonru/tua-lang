@@ -56,9 +56,88 @@ struct LuaDocParser<'a> {
 
 impl LuaDocParser<'_> {
     fn parse(&mut self, source: &str) {
-        for (index, raw_line) in source.lines().enumerate() {
-            self.parse_line(index + 1, raw_line.strip_suffix('\r').unwrap_or(raw_line));
+        let lines = source
+            .lines()
+            .map(|line| line.strip_suffix('\r').unwrap_or(line))
+            .collect::<Vec<_>>();
+        let mut index = 0;
+
+        while index < lines.len() {
+            if let Some(consumed) = self.parse_multiline_alias(&lines, index) {
+                index += consumed;
+                continue;
+            }
+            self.parse_line(index + 1, lines[index]);
+            index += 1;
         }
+    }
+
+    /// LuaCATS spells a long alias as a bare `---@alias Name` followed by one
+    /// `---| type` line per member. Returns the number of lines consumed.
+    fn parse_multiline_alias(&mut self, lines: &[&str], index: usize) -> Option<usize> {
+        let line = lines[index];
+        let leading = line.len() - line.trim_start().len();
+        let header = line[leading..].strip_prefix("---")?.trim_start();
+        let after_tag = header.strip_prefix("@alias")?;
+        if !after_tag.starts_with(char::is_whitespace) {
+            return None;
+        }
+        let tag_start = line.len() - header.len();
+        let tag_span = line_span(index + 1, tag_start, tag_start + "@alias".len());
+        let (name, name_span, cursor) = take_token_at(
+            line,
+            index + 1,
+            skip_spaces(line, tag_start + "@alias".len()),
+        )?;
+        if !line[cursor..].trim().is_empty() {
+            return None;
+        }
+
+        let mut members = Vec::new();
+        let mut type_span: Option<SourceSpan> = None;
+        for (offset, member_line) in lines[index + 1..].iter().enumerate() {
+            let member_leading = member_line.len() - member_line.trim_start().len();
+            let Some(rest) = member_line[member_leading..].strip_prefix("---|") else {
+                break;
+            };
+            // `---|>` marks LuaLS's default member; it is still a member.
+            let marker = member_line.len() - rest.len();
+            let cursor = marker + usize::from(rest.starts_with('>'));
+            let line_number = index + 2 + offset;
+            let Ok((ty, span, _)) = required_type(member_line, line_number, cursor, "alias member")
+            else {
+                break;
+            };
+            members.push(ty);
+            type_span = Some(match type_span {
+                Some(first) => SourceSpan {
+                    start: first.start,
+                    end: span.end,
+                },
+                None => span,
+            });
+        }
+
+        let type_span = type_span?;
+        let consumed = members.len() + 1;
+        let ty = if members.len() == 1 {
+            members.pop()?
+        } else {
+            TuaType::Union(members)
+        };
+        self.annotations.push(LuaDocAnnotation {
+            kind: LuaDocAnnotationKind::Alias(LuaDocAlias {
+                name,
+                name_span,
+                ty,
+                type_span,
+            }),
+            raw: line[leading..].trim().to_owned(),
+            documentation: None,
+            span: line_span(index + 1, leading, line.len()),
+            tag_span,
+        });
+        Some(consumed)
     }
 
     fn parse_line(&mut self, line_number: usize, line: &str) {

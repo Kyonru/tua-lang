@@ -1859,3 +1859,57 @@ proptest! {
         }
     }
 }
+
+#[test]
+fn parses_multiline_lua_doc_alias_members() {
+    let parsed = parse_lua_source(
+        "src/lua_doc.lua",
+        r#"---@alias DrawMode
+---| "fill" # solid shape
+---|> "line"
+---| number
+
+---@alias Single
+---| "only"
+local value = 1
+"#,
+    )
+    .expect("multi-line aliases should parse with Lua source");
+
+    assert_eq!(parsed.lua_doc_annotations.len(), 2);
+
+    let LuaDocAnnotationKind::Alias(alias) = &parsed.lua_doc_annotations[0].kind else {
+        panic!("first annotation should be an alias");
+    };
+    assert_eq!(alias.name, "DrawMode");
+    assert_eq!(
+        alias.ty,
+        TuaType::Union(vec![
+            TuaType::StringLiteral("fill".to_owned()),
+            TuaType::StringLiteral("line".to_owned()),
+            TuaType::Named("number".to_owned()),
+        ])
+    );
+    assert_eq!(alias.type_span.start.line, 2);
+    assert_eq!(alias.type_span.end.line, 4);
+
+    let LuaDocAnnotationKind::Alias(alias) = &parsed.lua_doc_annotations[1].kind else {
+        panic!("second annotation should be an alias");
+    };
+    assert_eq!(alias.name, "Single");
+    assert_eq!(alias.ty, TuaType::StringLiteral("only".to_owned()));
+}
+
+#[test]
+fn bare_lua_doc_alias_without_members_still_reports_its_missing_type() {
+    let parsed = parse_lua_doc_annotations_with_options(
+        "src/lua_doc.lua",
+        "---@alias Missing\nlocal value = 1\n",
+        LuaDocParseOptions {
+            diagnostics_enabled: true,
+        },
+    );
+
+    assert!(parsed.annotations.is_empty());
+    assert_eq!(parsed.diagnostics.len(), 1, "{:?}", parsed.diagnostics);
+}
