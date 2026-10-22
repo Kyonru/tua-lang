@@ -954,8 +954,21 @@ impl<'a> ExportInferer<'a> {
             .filter(|returns| !returns.is_empty())
             .unwrap_or_else(|| vec![Type::Any]);
 
+        let required_parameter_count = crate::types::lua_doc_required_parameter_count(
+            body.parameters().iter().filter_map(|parameter| {
+                let ast::Parameter::Name(name) = parameter else {
+                    return None;
+                };
+                Some(param_annotations.get(&token_text(name)).map(|doc| doc.0))
+            }),
+        );
+
         Some(ModuleExportField {
-            ty: Type::function_returns(parameters, return_types),
+            ty: Type::function_returns_with_required(
+                parameters,
+                required_parameter_count,
+                return_types,
+            ),
             documentation: self.field_documentation(field),
             deprecation: self.field_deprecation(field),
             parameter_names: parameter_names_from_body(body),

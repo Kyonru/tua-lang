@@ -1400,10 +1400,16 @@ fn lua_doc_function_for_code_line(
             _ => None,
         });
 
+    let required_parameter_count = lua_doc_required_parameter_count(
+        parameters
+            .iter()
+            .map(|parameter| param_annotations.get(&parameter.name).map(|doc| doc.0)),
+    );
+
     Some(TypedFunction {
         name: Some(name),
         parameter_count: parameters.len(),
-        required_parameter_count: parameters.len(),
+        required_parameter_count,
         parameters,
         has_varargs: vararg_type.is_some(),
         vararg_type: None,
@@ -1673,12 +1679,17 @@ pub(crate) fn typed_function_from_lua_doc_body(
         .unwrap_or_default();
     let return_type = return_types.first().cloned();
     let documentation = lua_doc_documentation(docs);
+    let required_parameter_count = lua_doc_required_parameter_count(
+        parameters
+            .iter()
+            .map(|parameter| param_annotations.get(&parameter.name).map(|doc| doc.0)),
+    );
 
     Some(TypedFunction {
         name,
         parameters,
         parameter_count,
-        required_parameter_count: parameter_count,
+        required_parameter_count,
         has_varargs,
         vararg_type,
         return_type,
@@ -1686,6 +1697,33 @@ pub(crate) fn typed_function_from_lua_doc_body(
         documentation,
         overloads: lua_doc_overloads(parsed, docs, alias_names, diagnostics, &context),
     })
+}
+
+/// The parameters a call must supply: through the last one that is not
+/// optional. A LuaDoc parameter is optional when written `name?` or typed with
+/// `nil`, as in `T?`; an unannotated parameter stays required.
+pub(crate) fn lua_doc_required_parameter_count<'a>(
+    parameters: impl IntoIterator<Item = Option<&'a LuaDocParam>>,
+) -> usize {
+    parameters
+        .into_iter()
+        .enumerate()
+        .filter(|(_, doc)| !doc.is_some_and(lua_doc_param_is_optional))
+        .map(|(index, _)| index + 1)
+        .last()
+        .unwrap_or(0)
+}
+
+fn lua_doc_param_is_optional(param: &LuaDocParam) -> bool {
+    fn allows_nil(ty: &TuaType) -> bool {
+        match ty {
+            TuaType::Named(name) => name == "nil",
+            TuaType::Union(types) => types.iter().any(allows_nil),
+            _ => false,
+        }
+    }
+
+    param.optional || allows_nil(&param.ty)
 }
 
 fn lua_doc_param_annotations<'a>(

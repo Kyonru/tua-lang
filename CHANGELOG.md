@@ -8,6 +8,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Trailing LuaDoc parameters marked optional, as `---@param name? T` or
+  `---@param name T?`, can now be omitted. Every annotated parameter was
+  previously required, so `Camera.new()` against `---@param options? Options`
+  reported an argument count error.
 - Calls after the first in a chain are now checked. Misuse such as
   `builder():add("two")` or `love.graphics.newImage(path):setFilter("bogus")`
   was previously accepted, and the chain took the first call's result, so

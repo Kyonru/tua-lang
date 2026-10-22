@@ -541,6 +541,49 @@ return { set = set }
 }
 
 #[test]
+fn check_lets_callers_omit_optional_lua_doc_parameters() {
+    let temp = TempDir::new("check-optional-lua-doc-params");
+
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).expect("failed to write config");
+    fs::create_dir_all(temp.path().join("src")).expect("failed to create source");
+    fs::write(
+        temp.path().join("src/main.tua"),
+        "local Camera = require(\"camera\")\n\nCamera.new()\nCamera.new({ zoom = 2 })\nCamera.shake(1)\nCamera.shake()\nCamera.shake(1, \"long\")\n",
+    )
+    .expect("failed to write main source");
+    fs::write(
+        temp.path().join("src/camera.lua"),
+        r#"---@param options? { zoom?: number }
+local function new(options) end
+
+---@param amount number
+---@param seconds number?
+local function shake(amount, seconds) end
+
+return { new = new, shake = shake }
+"#,
+    )
+    .expect("failed to write Lua module");
+
+    let output = tua()
+        .arg("check")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tua check");
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be valid UTF-8");
+
+    for line in [3, 4, 5] {
+        assert!(!stderr.contains(&format!("main.tua:{line}:")), "{stderr}");
+    }
+    assert!(
+        stderr.contains("main.tua:6:1 error TL1004: argument count mismatch: expected 1, found 0"),
+        "{stderr}"
+    );
+    assert!(stderr.contains("main.tua:7:"), "{stderr}");
+}
+
+#[test]
 fn check_enables_standard_lints_by_default() {
     let temp = TempDir::new("check-default-lints");
 
