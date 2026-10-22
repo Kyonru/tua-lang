@@ -39,8 +39,8 @@ impl Clone for VirtualFileSystem {
             options: self.options.clone(),
             disk_files: self.disk_files.clone(),
             open_files: self.open_files.clone(),
-            effective_versions: Arc::new(VfsSourceVersionIndex::from_versions(
-                self.effective_versions.snapshot(),
+            effective_versions: Arc::new(VfsSourceVersionIndex::from_shared(
+                self.effective_versions.share(),
             )),
             version_allocator: Arc::clone(&self.version_allocator),
             lineage: self.lineage,
@@ -84,9 +84,12 @@ pub struct VfsLineageId(u64);
 /// Readers take only short per-path read locks. The epoch makes a multi-path
 /// query fail closed if a writer changes the registry between any two reads,
 /// without holding a read guard across the query itself.
+///
+/// The map is copy-on-write: cloning a VFS for a worker job shares it, and
+/// only the first mutation while a clone still holds it copies the map.
 #[derive(Debug, Default)]
 pub(crate) struct VfsSourceVersionIndex {
-    versions: RwLock<BTreeMap<PathBuf, VfsSourceVersion>>,
+    versions: RwLock<Arc<BTreeMap<PathBuf, VfsSourceVersion>>>,
     epoch: AtomicU64,
 }
 
@@ -97,7 +100,7 @@ pub(crate) struct VfsSourceVersionView<'a> {
 }
 
 impl VfsSourceVersionIndex {
-    fn from_versions(versions: BTreeMap<PathBuf, VfsSourceVersion>) -> Self {
+    fn from_shared(versions: Arc<BTreeMap<PathBuf, VfsSourceVersion>>) -> Self {
         Self {
             versions: RwLock::new(versions),
             epoch: AtomicU64::new(0),
@@ -119,16 +122,15 @@ impl VfsSourceVersionIndex {
             .copied()
     }
 
-    fn snapshot(&self) -> BTreeMap<PathBuf, VfsSourceVersion> {
-        self.versions
-            .read()
-            .expect("VFS version index poisoned")
-            .clone()
+    fn share(&self) -> Arc<BTreeMap<PathBuf, VfsSourceVersion>> {
+        Arc::clone(&self.versions.read().expect("VFS version index poisoned"))
     }
 
     fn mutate<R>(&self, mutation: impl FnOnce(&mut BTreeMap<PathBuf, VfsSourceVersion>) -> R) -> R {
         self.epoch.fetch_add(1, Ordering::AcqRel);
-        let result = mutation(&mut self.versions.write().expect("VFS version index poisoned"));
+        let result = mutation(Arc::make_mut(
+            &mut self.versions.write().expect("VFS version index poisoned"),
+        ));
         self.epoch.fetch_add(1, Ordering::Release);
         result
     }

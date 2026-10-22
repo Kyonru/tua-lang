@@ -361,3 +361,27 @@ fn module_names_support_dot_and_slash_separators() {
         Some("systems".to_owned())
     );
 }
+
+#[test]
+fn cloning_shares_the_version_map_until_the_next_mutation() {
+    let mut coordinator = VirtualFileSystem::new();
+    let player = PathBuf::from("game/src/player.tua");
+    let enemy = PathBuf::from("game/src/enemy.tua");
+    coordinator.set_disk_file(&player, "return 1\n", VfsSourceKind::Tua);
+    let player_version = coordinator.source_version(&player);
+
+    let worker = coordinator.clone();
+    assert!(Arc::ptr_eq(
+        &coordinator.effective_versions.share(),
+        &worker.effective_versions.share()
+    ));
+
+    coordinator.set_disk_file(&enemy, "return 2\n", VfsSourceKind::Tua);
+    assert!(!Arc::ptr_eq(
+        &coordinator.effective_versions.share(),
+        &worker.effective_versions.share()
+    ));
+    assert_eq!(worker.source_version(&player), player_version);
+    assert_eq!(worker.source_version(&enemy), None);
+    assert!(coordinator.source_version(&enemy).is_some());
+}
