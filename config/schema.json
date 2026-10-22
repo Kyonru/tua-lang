@@ -82,11 +82,13 @@
       "type": "string",
       "default": "preserve",
       "enum": [
-        "preserve"
+        "preserve",
+        "double",
+        "single"
       ],
-      "description": "String quote formatting policy.",
+      "description": "Short-string quote policy: preserve source quotes or consistently use double or single quotes.",
       "editor": "tua.format.quoteStyle",
-      "editorDescription": "Quote style for the Tua formatter. Preserve keeps the source quote style; null inherits tua.toml."
+      "editorDescription": "Short-string quote style for the Tua formatter. Null inherits [format].quote_style from tua.toml; long-bracket strings are never rewritten."
     },
     {
       "path": "format.final_newline",

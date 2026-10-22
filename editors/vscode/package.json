@@ -144,9 +144,11 @@
           "default": null,
           "enum": [
             "preserve",
+            "double",
+            "single",
             null
           ],
-          "description": "Quote style for the Tua formatter. Preserve keeps the source quote style; null inherits tua.toml."
+          "description": "Short-string quote style for the Tua formatter. Null inherits [format].quote_style from tua.toml; long-bracket strings are never rewritten."
         },
         "tua.format.finalNewline": {
           "type": [

@@ -39,6 +39,11 @@ quote_style = "preserve"
 final_newline = true
 ```
 
+`quote_style` accepts `preserve`, `double`, or `single`. Forced styles rewrite
+only complete short-string literals and update delimiter escapes without
+changing the string value. Long-bracket strings, multiline literal bodies,
+and comments are always preserved.
+
 Formatting is never reported as `TL4xxx` lint output. If CI should enforce the
 canonical layout, run `tua fmt --check` as its own step.
 

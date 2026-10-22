@@ -690,6 +690,8 @@ fn quote_style_setting(
         .and_then(Value::as_str)
     {
         Some("preserve") => Some(QuoteStyle::Preserve),
+        Some("double") => Some(QuoteStyle::Double),
+        Some("single") => Some(QuoteStyle::Single),
         _ => None,
     }
 }
@@ -764,6 +766,7 @@ fn normalized_path(path: &Path) -> String {
 #[cfg(test)]
 mod tests {
     use serde_json::json;
+    use tua_core::{FormatConfig, QuoteStyle};
 
     use super::WorkspaceSettings;
 
@@ -801,5 +804,22 @@ mod tests {
         assert!(!settings.inline_current_file_enabled());
         assert!(settings.inline_project_enabled());
         assert!(settings.inline_statistical_enabled());
+    }
+
+    #[test]
+    fn formatter_quote_style_overrides_accept_single_and_double() {
+        for (value, expected) in [
+            ("single", QuoteStyle::Single),
+            ("double", QuoteStyle::Double),
+        ] {
+            let settings = WorkspaceSettings::from_did_change_configuration(&json!({
+                "params": { "settings": { "tua": { "format": { "quoteStyle": value } } } }
+            }));
+
+            assert_eq!(
+                settings.format_options(FormatConfig::default()).quote_style,
+                expected
+            );
+        }
     }
 }

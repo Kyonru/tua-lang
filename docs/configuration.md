@@ -279,7 +279,9 @@ final_newline = true
 : Preferred maximum line width for line-aware groups.
 
 `quote_style`
-: Currently `preserve`, which keeps existing string quote style.
+: `preserve` keeps each short string's source delimiter. `double` or `single`
+  consistently rewrites complete short strings while preserving their values.
+  Long-bracket strings are never rewritten.
 
 `final_newline`
 : Writes a final LF newline when formatting.

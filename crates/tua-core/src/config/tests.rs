@@ -62,6 +62,19 @@ fn default_config_matches_spec() {
 }
 
 #[test]
+fn parses_all_formatter_quote_styles() {
+    for (value, expected) in [
+        ("preserve", QuoteStyle::Preserve),
+        ("double", QuoteStyle::Double),
+        ("single", QuoteStyle::Single),
+    ] {
+        let config = parse_config(&format!("[format]\nquote_style = {value:?}\n"))
+            .expect("quote style should parse");
+        assert_eq!(config.format.quote_style, expected);
+    }
+}
+
+#[test]
 fn parses_declaration_only_type_libraries() {
     let config = parse_config(
         r#"

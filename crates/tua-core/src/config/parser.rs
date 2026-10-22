@@ -95,7 +95,11 @@ where
 {
     match String::deserialize(deserializer)?.as_str() {
         "preserve" => Ok(QuoteStyle::Preserve),
-        _ => Err(D::Error::custom("expected quote style \"preserve\"")),
+        "double" => Ok(QuoteStyle::Double),
+        "single" => Ok(QuoteStyle::Single),
+        _ => Err(D::Error::custom(
+            "expected quote style \"preserve\", \"double\", or \"single\"",
+        )),
     }
 }
 
@@ -456,7 +460,7 @@ mod tests {
         let quote_style = config_setting_metadata("format.quote_style")
             .expect("quote style should be schema backed");
 
-        assert_eq!(quote_style.enum_values, ["preserve"]);
+        assert_eq!(quote_style.enum_values, ["preserve", "double", "single"]);
         assert_eq!(
             closest_config_child_name("diagnostics", "missing_requirez").as_deref(),
             Some("missing_requires")

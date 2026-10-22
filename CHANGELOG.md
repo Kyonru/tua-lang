@@ -8,6 +8,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Changed
 
+- Formatter `quote_style` now accepts `single` and `double` in addition to
+  `preserve`, with matching TOML, language-server, and VS Code configuration.
+
 - Added contextual command help such as `tua init --help`, and clarified in
   generated configuration that `diagnostics.rules` controls the standard set
   while the individual switches are additional opt-in checks.

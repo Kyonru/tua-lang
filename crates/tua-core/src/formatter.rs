@@ -5,12 +5,16 @@ use crate::{parse_tua_source, Diagnostic, ParsedSource, SourcePosition, SourceSp
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum QuoteStyle {
     Preserve,
+    Double,
+    Single,
 }
 
 impl QuoteStyle {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Preserve => "preserve",
+            Self::Double => "double",
+            Self::Single => "single",
         }
     }
 }
@@ -574,7 +578,7 @@ impl<'a> Formatter<'a> {
             self.indent_level = self.indent_level.saturating_sub(1);
         }
 
-        let normalized = normalize_spacing(trimmed);
+        let normalized = normalize_spacing(trimmed, self.options.quote_style);
         let closes_paren = code.trim_start().starts_with(')');
         let closes_brace = code.trim_start().starts_with('}');
         let starts_with_continuation = line_starts_with_continuation(code);
@@ -751,7 +755,7 @@ fn split_control_header(code: &str) -> Option<SplitControlHeader> {
     }
 }
 
-fn normalize_spacing(line: &str) -> String {
+fn normalize_spacing(line: &str, quote_style: QuoteStyle) -> String {
     let mut state = MaskState::Code;
     let mut output = String::with_capacity(line.len());
     let bytes = line.as_bytes();
@@ -776,13 +780,14 @@ fn normalize_spacing(line: &str) -> String {
                 }
 
                 if bytes[index] == b'\'' || bytes[index] == b'"' {
-                    state = MaskState::ShortString {
-                        quote: bytes[index],
-                        escaped: false,
-                    };
-                    output.push(bytes[index] as char);
-                    index += 1;
-                    continue;
+                    if let Some(end) = short_string_end(bytes, index) {
+                        output.push_str(&format_short_string(&line[index..=end], quote_style));
+                        index = end + 1;
+                        continue;
+                    }
+
+                    output.push_str(&line[index..]);
+                    break;
                 }
 
                 if let Some((close, consumed)) = long_bracket_open(&bytes[index..]) {
@@ -894,6 +899,64 @@ fn normalize_spacing(line: &str) -> String {
     }
 
     output.trim_end().to_owned()
+}
+
+fn short_string_end(bytes: &[u8], start: usize) -> Option<usize> {
+    let quote = *bytes.get(start)?;
+    let mut escaped = false;
+
+    for (index, byte) in bytes.iter().enumerate().skip(start + 1) {
+        if escaped {
+            escaped = false;
+        } else if *byte == b'\\' {
+            escaped = true;
+        } else if *byte == quote {
+            return Some(index);
+        }
+    }
+
+    None
+}
+
+fn format_short_string(literal: &str, style: QuoteStyle) -> String {
+    let source_quote = literal
+        .chars()
+        .next()
+        .expect("short string literal should have an opening quote");
+    let target_quote = match style {
+        QuoteStyle::Preserve => return literal.to_owned(),
+        QuoteStyle::Double => '"',
+        QuoteStyle::Single => '\'',
+    };
+    if source_quote == target_quote {
+        return literal.to_owned();
+    }
+
+    let content = &literal[source_quote.len_utf8()..literal.len() - source_quote.len_utf8()];
+    let mut output = String::with_capacity(literal.len() + 2);
+    output.push(target_quote);
+    let mut characters = content.chars();
+    while let Some(character) = characters.next() {
+        if character == '\\' {
+            let Some(escaped) = characters.next() else {
+                output.push('\\');
+                break;
+            };
+            if escaped == source_quote {
+                output.push(source_quote);
+            } else {
+                output.push('\\');
+                output.push(escaped);
+            }
+        } else if character == target_quote {
+            output.push('\\');
+            output.push(character);
+        } else {
+            output.push(character);
+        }
+    }
+    output.push(target_quote);
+    output
 }
 
 fn break_long_groups(line: &str, indent: &str, options: &FormatOptions) -> String {

@@ -586,6 +586,56 @@ fn preserves_utf8_in_strings_comments_and_long_brackets() {
 }
 
 #[test]
+fn formats_short_string_quotes_without_changing_values() {
+    let source = r#"local plain = 'hello'
+local quoted = 'say "hello"'
+local apostrophe = 'it\'s ready'
+local escaped = '\\ and \"'
+local long = [[keep 'both' "styles"]]
+-- keep 'comment quotes'
+"#;
+    let double = FormatOptions {
+        quote_style: QuoteStyle::Double,
+        ..FormatOptions::default()
+    };
+    let single = FormatOptions {
+        quote_style: QuoteStyle::Single,
+        ..FormatOptions::default()
+    };
+
+    let double_output =
+        format_tua_source("src/main.tua", source, &double).expect("source should format");
+    assert_eq!(
+        double_output,
+        r#"local plain = "hello"
+local quoted = "say \"hello\""
+local apostrophe = "it's ready"
+local escaped = "\\ and \""
+local long = [[keep 'both' "styles"]]
+-- keep 'comment quotes'
+"#
+    );
+
+    let single_output = format_tua_source("src/main.tua", double_output, &single)
+        .expect("double-quoted source should format");
+    assert_eq!(
+        single_output,
+        r#"local plain = 'hello'
+local quoted = 'say "hello"'
+local apostrophe = 'it\'s ready'
+local escaped = '\\ and "'
+local long = [[keep 'both' "styles"]]
+-- keep 'comment quotes'
+"#
+    );
+    assert_eq!(
+        format_tua_source("src/main.tua", &single_output, &single)
+            .expect("formatted source should remain valid"),
+        single_output
+    );
+}
+
+#[test]
 fn returns_parse_diagnostics_without_formatting_invalid_source() {
     let diagnostics = format_tua_source(
         "src/main.tua",
