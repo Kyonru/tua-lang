@@ -14,6 +14,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Added opt-in `unknown_record_fields` diagnostics (`TL4074`) for typo-prone
+  writes such as `game.socre = 10` on known record shapes, while preserving
+  gradual table mutation by default.
+
 - Module constructors now preserve selected imported return aliases and nested
   literal-union contracts consistently across checking, hover, and completion.
 

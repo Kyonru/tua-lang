@@ -75,6 +75,7 @@ max_cyclomatic_complexity = 0
 divide_by_zero = false
 almost_swapped = false
 mixed_tables = false
+unknown_record_fields = false
 inline_ignores = true
 inline_ignore_scopes = [\"tua-ignore-line\", \"tua-ignore-next-line\", \"tua-ignore-file\"]
 inline_ignore_max_per_file = 0
@@ -310,6 +311,7 @@ pub struct DiagnosticsConfig {
     pub divide_by_zero: bool,
     pub almost_swapped: bool,
     pub mixed_tables: bool,
+    pub unknown_record_fields: bool,
     pub inline_ignores: bool,
     pub inline_ignore_scopes: Vec<String>,
     pub inline_ignore_max_per_file: usize,
@@ -356,6 +358,7 @@ impl Default for DiagnosticsConfig {
             divide_by_zero: false,
             almost_swapped: false,
             mixed_tables: false,
+            unknown_record_fields: false,
             inline_ignores: true,
             inline_ignore_scopes: vec![
                 "tua-ignore-line".to_owned(),

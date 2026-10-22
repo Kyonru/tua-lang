@@ -314,6 +314,13 @@
       "editor": "tua.diagnostics.mixedTables"
     },
     {
+      "path": "diagnostics.unknown_record_fields",
+      "type": "boolean",
+      "default": false,
+      "description": "Report writes to fields that are absent from a statically known record shape.",
+      "editor": "tua.diagnostics.unknownRecordFields"
+    },
+    {
       "path": "diagnostics.inline_ignores",
       "type": "boolean",
       "default": true,

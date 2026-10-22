@@ -213,6 +213,7 @@ max_cyclomatic_complexity = 12
 divide_by_zero = true
 almost_swapped = true
 mixed_tables = true
+unknown_record_fields = true
 inline_ignores = true
 inline_ignore_scopes = ["tua-ignore-line", "tua-ignore-next-line", "tua-ignore-file"]
 inline_ignore_max_per_file = 4
@@ -278,6 +279,7 @@ severity = { TL1003 = "warning", TL4035 = "allow" }
                 divide_by_zero: true,
                 almost_swapped: true,
                 mixed_tables: true,
+                unknown_record_fields: true,
                 inline_ignores: true,
                 inline_ignore_scopes: vec![
                     "tua-ignore-line".to_owned(),
@@ -383,6 +385,7 @@ duplicate_keys = true
     assert!(!config.diagnostics.divide_by_zero);
     assert!(!config.diagnostics.almost_swapped);
     assert!(!config.diagnostics.mixed_tables);
+    assert!(!config.diagnostics.unknown_record_fields);
     assert!(config.diagnostics.inline_ignores);
     assert_eq!(
         config.diagnostics.inline_ignore_scopes,
@@ -407,6 +410,7 @@ fn strict_lints_leave_noisy_project_policy_rules_opt_in() {
     assert!(!diagnostics.divide_by_zero);
     assert!(!diagnostics.almost_swapped);
     assert!(!diagnostics.mixed_tables);
+    assert!(!diagnostics.unknown_record_fields);
     assert!(diagnostics.self_assignments);
     assert!(diagnostics.undefined_variables);
 }

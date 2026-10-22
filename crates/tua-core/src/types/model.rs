@@ -324,6 +324,12 @@ impl TableShape {
             && self.nominal_identity.is_none()
     }
 
+    pub fn has_index_signature(&self) -> bool {
+        self.fields
+            .keys()
+            .any(|name| is_index_signature_field(name))
+    }
+
     pub fn semantic_fields(&self) -> BTreeMap<String, TableField> {
         self.semantic_fields_at_depth(0)
     }

@@ -197,6 +197,7 @@ struct Checker<'a> {
     checked_function_bodies: BTreeSet<(usize, usize)>,
     terminating_builtin_references: BTreeSet<(usize, usize)>,
     exact_module_references: BTreeMap<(usize, usize), String>,
+    unknown_record_fields: bool,
     diagnostics: Vec<Diagnostic>,
 }
 
@@ -269,6 +270,7 @@ impl<'a> Checker<'a> {
             checked_function_bodies: BTreeSet::new(),
             terminating_builtin_references,
             exact_module_references,
+            unknown_record_fields: diagnostics_config.unknown_record_fields,
             diagnostics: Vec::new(),
         }
     }
@@ -1401,11 +1403,57 @@ impl<'a> Checker<'a> {
         };
 
         self.report_unknown_class_member(variable, &receiver_type, field);
+        let mut exact_module = false;
         if let Var::Expression(expression) = variable {
             if let Prefix::Name(root) = expression.prefix() {
+                let root_position = node_position(root);
+                exact_module = self
+                    .exact_module_references
+                    .contains_key(&(root_position.line, root_position.column));
                 self.report_unknown_module_export(variable, root, &receiver_type, field);
             }
         }
+        if !exact_module {
+            self.report_unknown_record_field(variable, &receiver_type, field);
+        }
+    }
+
+    fn report_unknown_record_field(&mut self, node: &impl Node, ty: &Type, field: &str) {
+        if !self.unknown_record_fields {
+            return;
+        }
+        if matches!(ty, Type::Alias(name) if self.environment.is_class(name)) {
+            return;
+        }
+        let Type::Table(table) = resolve_aliases(ty, self.environment, 0) else {
+            return;
+        };
+        if table.is_plain_empty()
+            || table.has_index_signature()
+            || table.semantic_field(field).is_some()
+            || table.metatable_facts().is_some_and(|facts| {
+                matches!(
+                    facts.index,
+                    IndexFallback::Function(_) | IndexFallback::Unknown
+                )
+            })
+        {
+            return;
+        }
+
+        let position = node_span(node)
+            .map(|span| span.start)
+            .unwrap_or_else(|| node_position(node));
+        self.diagnostics.push(
+            Diagnostic::new(
+                &self.parsed.path,
+                position.line,
+                position.column,
+                DiagnosticSeverity::Warning,
+                format!("record has no known field `{field}`; check the spelling or declare the field in its type"),
+            )
+            .with_code(DiagnosticCode::LINT_UNKNOWN_RECORD_FIELD),
+        );
     }
 
     fn report_unknown_class_member(&mut self, node: &impl Node, ty: &Type, field: &str) {

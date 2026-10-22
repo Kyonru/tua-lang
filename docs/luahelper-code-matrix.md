@@ -185,6 +185,7 @@ enforced separately with `tua fmt --check`.
 | `TL4071` | Division uses a literal-zero denominator without the intentional literal `0 / 0` NaN form. | `divide_by_zero`; opt-in |
 | `TL4072` | Two adjacent simple assignments look like a failed swap and reuse an overwritten value. | `almost_swapped`; opt-in |
 | `TL4073` | A table literal mixes sequential entries with keyed fields. | `mixed_tables`; opt-in |
+| `TL4074` | A write targets a field absent from a statically known record shape. | `unknown_record_fields`; opt-in |
 
 Configuration keys in this table live under `[diagnostics]` unless they start
 with `jit.`. VS Code can override matching diagnostic settings for the running
@@ -219,7 +220,7 @@ TL1003 = "warning"
 
 Use `tua lint --strict` to enable the broadly applicable optional lints for that
 command. Direct-call-only and project-policy rules (`TL4031`, `TL4070` through
-`TL4073`) remain opt-in. Inline ignore behavior remains controlled by project
+`TL4074`) remain opt-in. Inline ignore behavior remains controlled by project
 or editor configuration.
 
 See [Configuration](configuration.md#diagnostics) for every setting and its

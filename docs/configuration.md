@@ -137,6 +137,7 @@ the behavior and tradeoffs of each option.
 | `diagnostics.divide_by_zero` | boolean | `false` | `tua.diagnostics.divideByZero` |
 | `diagnostics.almost_swapped` | boolean | `false` | `tua.diagnostics.almostSwapped` |
 | `diagnostics.mixed_tables` | boolean | `false` | `tua.diagnostics.mixedTables` |
+| `diagnostics.unknown_record_fields` | boolean | `false` | `tua.diagnostics.unknownRecordFields` |
 | `diagnostics.inline_ignores` | boolean | `true` | `tua.diagnostics.inlineIgnores` |
 | `diagnostics.inline_ignore_scopes` | string-array | `["tua-ignore-line","tua-ignore-next-line","tua-ignore-file"]` | `tua.diagnostics.inlineIgnoreScopes` |
 | `diagnostics.inline_ignore_max_per_file` | integer | `0` | `tua.diagnostics.inlineIgnoreMaxPerFile` |

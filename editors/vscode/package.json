@@ -357,6 +357,14 @@
           "default": null,
           "description": "Report table literals that mix sequential array entries with keyed fields."
         },
+        "tua.diagnostics.unknownRecordFields": {
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "default": null,
+          "description": "Report writes to fields that are absent from a statically known record shape."
+        },
         "tua.diagnostics.inlineIgnores": {
           "type": [
             "boolean",

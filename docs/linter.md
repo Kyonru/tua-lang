@@ -102,6 +102,7 @@ project or editor settings:
 | `DivideByZero` | `TL4071` |
 | `AlmostSwapped` | `TL4072` |
 | `MixedTable` | `TL4073` |
+| `UnknownRecordField` | `TL4074` |
 
 `UnknownGlobal` considers plain global assignments and simple global function
 declarations anywhere in the current Tua file to be definitions, regardless of
@@ -167,6 +168,12 @@ assignments.
 `MixedTable` reports a literal that contains both implicit sequential entries
 and keyed fields. Mixed tables are valid and common Lua, so this is a
 project-policy warning rather than a standard rule.
+
+`UnknownRecordField` reports writes such as `game.socre = 10` when the
+receiver has a known non-empty record shape without that field. Empty tables,
+dictionaries, dynamic `__index` tables, classes, and exact module exports keep
+their existing semantics. Enable `unknown_record_fields` when a project treats
+record-shaped tables as closed for mutation.
 
 `BuiltinGlobalWrite` reports direct assignments, compound assignments, and
 simple global function declarations that overwrite protected Lua 5.1/LuaJIT,

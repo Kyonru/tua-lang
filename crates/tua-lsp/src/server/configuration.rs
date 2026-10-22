@@ -47,6 +47,7 @@ pub(super) struct DiagnosticOverrides {
     pub(super) divide_by_zero: Option<bool>,
     pub(super) almost_swapped: Option<bool>,
     pub(super) mixed_tables: Option<bool>,
+    pub(super) unknown_record_fields: Option<bool>,
     pub(super) inline_ignores: Option<bool>,
     pub(super) inline_ignore_scopes: Option<Vec<String>>,
     pub(super) inline_ignore_max_per_file: Option<usize>,
@@ -311,6 +312,11 @@ impl DiagnosticOverrides {
             divide_by_zero: bool_setting(settings, "divide_by_zero", "divideByZero"),
             almost_swapped: bool_setting(settings, "almost_swapped", "almostSwapped"),
             mixed_tables: bool_setting(settings, "mixed_tables", "mixedTables"),
+            unknown_record_fields: bool_setting(
+                settings,
+                "unknown_record_fields",
+                "unknownRecordFields",
+            ),
             inline_ignores: bool_setting(settings, "inline_ignores", "inlineIgnores"),
             inline_ignore_scopes: string_array_value(
                 settings
@@ -381,6 +387,10 @@ impl DiagnosticOverrides {
         apply_bool(self.divide_by_zero, &mut diagnostics.divide_by_zero);
         apply_bool(self.almost_swapped, &mut diagnostics.almost_swapped);
         apply_bool(self.mixed_tables, &mut diagnostics.mixed_tables);
+        apply_bool(
+            self.unknown_record_fields,
+            &mut diagnostics.unknown_record_fields,
+        );
         apply_bool(self.inline_ignores, &mut diagnostics.inline_ignores);
 
         if let Some(scopes) = &self.inline_ignore_scopes {

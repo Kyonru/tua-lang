@@ -1328,6 +1328,42 @@ local player: Player = { hp = "low" }
 }
 
 #[test]
+fn optional_unknown_record_field_lint_catches_typoed_writes_without_closing_tables() {
+    let config = DiagnosticsConfig {
+        rules: false,
+        unknown_record_fields: true,
+        ..DiagnosticsConfig::default()
+    };
+    let diagnostics = check_tua_source_with_diagnostics_config(
+        "src/game.tua",
+        r#"type Game = { score: number }
+local game: Game = { score = 0 }
+game.socre = 10
+
+local open = {}
+open.extra = true
+
+local dictionary: { [string]: number } = {}
+dictionary.bonus = 10
+"#,
+        &config,
+    )
+    .expect_err("the typoed record write should be reported");
+
+    assert_eq!(
+        diagnostics
+            .iter()
+            .filter(|diagnostic| {
+                diagnostic.code == Some(DiagnosticCode::LINT_UNKNOWN_RECORD_FIELD)
+            })
+            .count(),
+        1,
+        "{diagnostics:#?}"
+    );
+    assert!(diagnostics[0].message.contains("`socre`"));
+}
+
+#[test]
 fn reports_nested_call_argument_mismatch_paths_and_leaf_ranges() {
     let diagnostics = check_tua_source(
         "src/animations.tua",

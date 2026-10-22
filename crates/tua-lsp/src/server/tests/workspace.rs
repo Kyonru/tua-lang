@@ -1081,6 +1081,8 @@ local left, right = 1, 2
 left = right
 right = left
 local mixed = { "player", hp = 10 }
+local game: { score: number } = { score = 0 }
+game.socre = 10
 
 print(callback)
 print(complex(true, false), divided, left, right, mixed)
@@ -1108,7 +1110,8 @@ print(complex(true, false), divided, left, right, mixed)
             "maxCyclomaticComplexity": 2,
             "divideByZero": true,
             "almostSwapped": true,
-            "mixedTables": true
+            "mixedTables": true,
+            "unknownRecordFields": true
         }
     })));
 
@@ -1127,6 +1130,7 @@ print(complex(true, false), divided, left, right, mixed)
     assert!(codes.contains(&"TL4071"));
     assert!(codes.contains(&"TL4072"));
     assert!(codes.contains(&"TL4073"));
+    assert!(codes.contains(&"TL4074"));
 }
 #[test]
 fn did_change_configuration_can_enable_jit_guidance() {
