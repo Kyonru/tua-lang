@@ -38,6 +38,22 @@ Offer a smaller commit-sized alternative.
 - Update docs only when behavior or user-facing workflow changes.
 - Run focused verification first; broaden when the blast radius crosses crates.
 
+## Behavior-Sized History
+
+- When the user requests per-fix commits, keep each independent behavior with
+  its regression tests and user-facing documentation or changelog entry.
+- Verify the behavior before committing it, inspect the staged diff, and avoid
+  sweeping unrelated work into the commit.
+- A shared architectural prerequisite may be its own commit when later fixes
+  depend on it; explain that dependency rather than hiding it in a large patch.
+
+## Temporary Experiments
+
+Treat exploratory games, datasets, reports, and Makefile helpers as temporary
+when the user says they are experiments. Keep them untracked or ignored as
+requested, and do not let experiment-only files leak into production commits.
+Promote only the verified product fixes and permanent regression tests.
+
 ## Skill Maintenance
 
 If this skill is stale, unclear, or missing guidance discovered while using it,

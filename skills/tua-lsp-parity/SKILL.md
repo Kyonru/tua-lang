@@ -31,12 +31,29 @@ Use mature editors as references without copying their entire scope.
 - Watched file changes should update required-module behavior.
 - VS Code behavior should be smoke-tested when activation or protocol shape
   changes.
+- Fast current-file diagnostics should defer facts that require the project
+  model instead of publishing errors that disappear after project analysis.
+
+## Probe Correctness
+
+- Build request positions from the exact document text and LSP encoding. For a
+  multiline search match, compute the line and character from the final byte
+  offset; do not add a flat offset to the first line.
+- Verify the request payload and cursor location before classifying a failed
+  editor replay as a product defect.
+- Prefer direct LSP requests for completion, hover, signature help, definition,
+  and diagnostics, then add a VS Code integration test only for client-specific
+  behavior.
+- Keep harness defects separate from product findings in reports and issue
+  lists.
 
 ## Verification
 
 - Run focused `cargo test -p tua-core <feature>` tests.
 - Run `cargo test -p tua-lsp`.
 - Run `make lsp-features-smoke` when editor-visible behavior changes.
+- Run `make verify` when shared semantic, project, cache, or diagnostic staging
+  behavior changes across crates.
 
 ## Skill Maintenance
 

@@ -17,6 +17,17 @@ Examples are test fixtures and user documentation at the same time.
 - Avoid committing generated `build/` output unless the repo already treats it
   as an explicit fixture.
 
+## Experiments Versus Examples
+
+- A temporary game or DevEx trial is evidence, not automatically a bundled
+  example. Keep it outside production commits when requested.
+- Label persona-based trials as simulated evaluations, not human usability
+  studies.
+- Separate failures in trial scripts, cursor-position helpers, or stubs from
+  Tua product defects before adding them to an improvement plan.
+- When a trial finds a real gap, land the smallest permanent regression fixture
+  that proves the behavior without importing the whole experimental project.
+
 ## What To Check
 
 - Source examples match docs and README descriptions.

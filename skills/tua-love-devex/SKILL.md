@@ -28,6 +28,24 @@ Optimize for what a LOVE developer expects while keeping emitted Lua ordinary.
 - Treat missing autocomplete as a semantic-model bug if the type should already
   be known.
 
+## Game-Scale DevEx Trials
+
+For a temporary LOVE game used to evaluate Tua:
+
+- exercise editing as well as compilation: completion, hover, signature help,
+  definitions, references, diagnostics, formatting, and source maps;
+- run `tua check`, build the project, and use a real LOVE runtime smoke test
+  when LOVE is installed;
+- measure representative update/draw and allocation-sensitive paths rather than
+  judging only toy snippets;
+- validate editor request positions before treating an empty response as a Tua
+  issue;
+- label simulated developer personas honestly and keep temporary experiment
+  artifacts out of production commits when requested.
+
+Convert confirmed findings into focused core/LSP/runtime regression tests. Do
+not make the experimental game itself the only coverage.
+
 ## Challenge Scope
 
 If a request asks for a large LOVE feature, split it into:

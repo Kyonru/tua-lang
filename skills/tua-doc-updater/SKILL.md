@@ -26,6 +26,8 @@ separate docs request when the implementation changed.
 ## Update Rules
 
 - If behavior changed, update the relevant docs in the same work.
+- Put release notes in the top `Unreleased` section of `CHANGELOG.md`; verify
+  the surrounding heading instead of inserting near an older matching entry.
 - For every user-facing language, CLI, LSP, LOVE, Lua interop, or build change,
   decide whether `examples/` needs a new sample or an update to an existing
   sample. Prefer updating `examples/features` for focused feature coverage.
@@ -48,6 +50,9 @@ separate docs request when the implementation changed.
 - If an example source changes, rebuild or explain why generated output is not
   committed.
 - Keep the docs factual: label future work as future work.
+- Label simulated persona evaluations and synthetic editor replays explicitly;
+  do not present them as human studies. Separate product findings from harness
+  defects and distinguish fixed issues from remaining gaps.
 - Remove stale language such as "not implemented" after behavior lands.
 
 ## Verification

@@ -7,6 +7,18 @@ description: Choose and run the right checks for Tua changes. Use before finaliz
 
 Verify according to risk and blast radius.
 
+## Verification Ladder
+
+1. Run the narrow regression test while iterating.
+2. Run the owning crate's complete test suite.
+3. Run affected integration surfaces, especially LSP tests after semantic,
+   module, project, cache, or diagnostic changes.
+4. Run `make verify` before finalizing cross-cutting work. Use `make ci-check`
+   when the request or release risk justifies the longer gate.
+
+Run the final checks after the last edit. An earlier pass does not verify later
+cleanup, docs, packaging, or conflict resolution.
+
 ## Common Commands
 
 - Formatting: `cargo fmt --all`
@@ -18,6 +30,8 @@ Verify according to risk and blast radius.
 - Docs build: `make docs-build`
 - JSON metadata: `make json-check`
 - Whitespace: `make diff-check`
+- Main local gate: `make verify`
+- CI-equivalent local gate: `make ci-check`
 
 ## Feature-Specific Checks
 
@@ -30,6 +44,17 @@ Verify according to risk and blast radius.
 - Docs/nav: run `make docs-build`, `make json-check`, and `make diff-check`.
 - LOVE runtime: run `make love-test` only when LOVE is available and the change
   needs runtime validation.
+- VS Code packaging: run `make extension-package`, verify the resulting archive
+  with `unzip -t`, and report its SHA-256. `extension-check` also validates
+  `.vscode/launch.json` through `launch-config-check.js`.
+
+## Environment Failures
+
+Distinguish a product failure from a sandbox or host limitation. For example,
+the extension activation smoke test binds a loopback port and can fail with
+`EPERM` in a restricted sandbox. Retry the same check with the required local
+permission before reporting a regression. Never describe a partial gate as a
+full pass.
 
 ## Reporting
 

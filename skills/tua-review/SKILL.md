@@ -22,11 +22,17 @@ Review for concrete risk first. Summaries come after findings.
 
 ## Review Method
 
-- Inspect the diff and relevant surrounding code.
+- Inspect staged, unstaged, and untracked work plus the relevant surrounding
+  code. Do not rely on the author's summary as evidence.
 - Prefer exact file/line findings.
 - Separate actual defects from questions and follow-up suggestions.
 - Challenge broad changes that do not pay for their complexity.
 - Check whether a failing surface indicates a general resolver problem.
+- Reproduce important claims with the narrowest useful test, then broaden
+  verification in proportion to the blast radius.
+- Validate test harness inputs before blaming product behavior. Report harness
+  defects separately.
+- In a review-only request, do not edit, stage, commit, or rewrite the work.
 
 ## Expected Output
 

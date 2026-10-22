@@ -30,6 +30,13 @@ Update a skill when:
 - Regenerate `agents/openai.yaml` after renaming a skill or materially changing
   its purpose.
 - Validate every touched skill with `quick_validate.py`.
+- Encode durable project practice, not one incident's filenames, timings, or
+  temporary implementation details.
+- Audit the `.codex/skills/` symlink for every repo-local skill. Its basename,
+  target directory, and frontmatter `name` must agree, and the target must
+  exist.
+- Remove or rename stale aliases when a skill is renamed; a broken alias makes
+  an otherwise valid skill undiscoverable.
 
 ## Commands
 
@@ -53,6 +60,14 @@ Validate all repo-local skills:
 ```sh
 for skill in skills/tua-*; do
   .venv/docs/bin/python /Users/kyonru/.codex/skills/.system/skill-creator/scripts/quick_validate.py "$skill" || exit 1
+done
+```
+
+Check catalog aliases:
+
+```sh
+for alias in .codex/skills/*; do
+  test -e "$alias" || { echo "broken skill alias: $alias"; exit 1; }
 done
 ```
 

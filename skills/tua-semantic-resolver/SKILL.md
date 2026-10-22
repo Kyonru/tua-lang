@@ -28,6 +28,28 @@ resolver problem instead of patching the visible symptom.
   path when possible.
 - Prefer adding resolver tests before LSP protocol tests.
 
+## Project-Boundary Matrix
+
+When a fact crosses a module boundary, cover the meaningful variants rather
+than proving only the original example:
+
+- selected and namespace imports;
+- `.tua`, `.lua`, and `.d.tua` modules where applicable;
+- direct exports and deep re-exports;
+- annotated and inferred values;
+- unknown or `any` values, which must remain permissive.
+
+Keep source fingerprints, revisions, caches, and module indexes in agreement.
+A cached current-file answer must not silently stand in for a missing
+project-aware answer.
+
+## Diagnostic Phases
+
+Tua has fast current-file diagnostics and project-aware diagnostics. Test both
+when imports or exported types are involved. The fast path should defer a
+diagnostic when the required project fact is unavailable; it must not emit a
+transient false error that the later project pass removes.
+
 ## Regression Shape
 
 For each semantic fix, add tests for at least two surfaces when practical:
@@ -39,6 +61,10 @@ For each semantic fix, add tests for at least two surfaces when practical:
 
 If a bug was caused by duplicated inference paths, add a test that would fail if
 only one surface were fixed.
+
+After changing shared semantic or module state, run the cross-crate LSP tests
+even when focused core tests pass. They exercise re-exports, cache adoption, and
+diagnostic staging that core-only tests do not.
 
 ## Skill Maintenance
 
