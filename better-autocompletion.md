@@ -948,6 +948,24 @@ actually closes the known Tua coverage gap without weakening any release gate.
 > aggregate gate is still incomplete, and neither the Phase 2 held-out nor
 > external data has been inspected.
 
+> **Decision (2026-10-22): parked.** On the corrected tuning set the pinned
+> Phase 2 candidate adds no suggestion over Phase 1, so there is nothing to
+> approve. The code stays as groundwork rather than being removed: it is
+> unreachable from contributed settings, and with the project source off the
+> server queues no corpus work and publishes an empty corpus
+> (`project_pattern_corpus_is_disabled_until_explicitly_enabled`,
+> `disabling_project_patterns_publishes_empty_and_queues_storage_for_background_drop`).
+> Until it is unparked:
+>
+> - Do not spend Phase 2 held-out or external data.
+> - Do not extend the corpus, scheduling, or adoption code, except for fixes
+>   that keep the disabled path free.
+> - Unpark only when a new pinned candidate raises tuning characters saved per
+>   eligible position over Phase 1 for Tua or Lua without lowering
+>   correct-prefix precision. Record that candidate in `[phase2_tuning]` first.
+> - If Phase 1 ships and no such candidate appears, remove the project source,
+>   corpus lifecycle, and hidden switch rather than carrying them.
+
 ### Prerequisite: per-file VFS versions
 
 The implementation now stores an opaque version with every effective

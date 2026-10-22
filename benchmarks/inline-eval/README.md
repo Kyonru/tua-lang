@@ -168,7 +168,9 @@ On the corrected tuning set, this candidate adds no suggestions over Phase 1:
 both save `0.149` characters per eligible position, have `0.728`
 correct-prefix precision, and offer `0.395` wrong characters per character
 saved. Phase 2 therefore remains an architectural experiment without tuning
-evidence of utility; no held-out or external result has been read.
+evidence of utility; no held-out or external result has been read. It is
+parked: `better-autocompletion.md` records what would unpark it and when it
+should be removed instead.
 
 The last Phase 1 production-path retune lowered the recall prefix from six to
 four characters and removed whitespace contexts. Tua precision rose to

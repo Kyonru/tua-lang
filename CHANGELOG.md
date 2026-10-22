@@ -34,6 +34,10 @@ language or editor behavior, and migration notes call out those changes.
   tuning run of the production host rather than a handful of representative
   requests, and the menu-replay and cache-hit evidence state what they do and
   do not show.
+- Phase 2 project retrieval is parked. With corrected tuning data it adds no
+  suggestion over Phase 1, so its held-out data stays unspent and its code
+  stays behind the hidden switch, doing no work while disabled. The plan
+  records what would unpark it and when to remove it instead.
 
 ### Added
 
