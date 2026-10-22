@@ -174,6 +174,10 @@ static NEXT_VFS_LINEAGE: AtomicU64 = AtomicU64::new(1);
 
 impl Default for VirtualFileSystem {
     fn default() -> Self {
+        #[allow(
+            deprecated,
+            reason = "AtomicU64::try_update is unavailable on supported pre-1.99 Rust toolchains"
+        )]
         let lineage = NEXT_VFS_LINEAGE
             .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |value| {
                 value.checked_add(1)
@@ -457,6 +461,10 @@ impl VirtualFileSystem {
     }
 
     fn assign_effective_version(&mut self, path: &Path) {
+        #[allow(
+            deprecated,
+            reason = "AtomicU64::try_update is unavailable on supported pre-1.99 Rust toolchains"
+        )]
         let previous = self
             .version_allocator
             .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |version| {
