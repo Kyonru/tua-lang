@@ -313,7 +313,7 @@ The harness must compare:
 ## Phase 1: Minimal vertical slice
 
 > **Implementation status (2026-10-21): implemented, experimental, gate
-> pending.** The core host query, source-only statement snippets,
+> pending only on the frozen quality gates.** The core host query, source-only statement snippets,
 > tuning-selected common-prefix current-file recall, parse-only validation,
 > custom LSP request, newest-wins scheduling, configuration, unified VS Code
 > provider, and focused tests are present in the working implementation.
@@ -323,12 +323,13 @@ The harness must compare:
 > full common prefix requires two supporting lines. The feature remains off by
 > default. Menu-completion performance, the strict inline server gate,
 > real-scheduler cache behavior, and validation parse distribution pass. The
-> held-out quality gate and representative real menu-state replay have not
-> been claimed as passed. The same-machine, 100-sample-per-fixture diagnostics
+> held-out and external quality gates have not been run. The real menu-state
+> replay and linked client-timeout cancellation checks pass. The same-machine,
+> 100-sample-per-fixture diagnostics
 > comparison against pre-Phase-1 commit `65cb4a6` passes all seven fixtures.
-> Client-observed
-> contention remains as high as 869.41 ms, so the separate responsiveness
-> prerequisite is also pending even though the 1,500 ms no-stall gate passes.
+> Representative synthetic contention reaches 869.41 ms, but the separate
+> real-editor replay proves the provider cancels local work at its 250 ms
+> timeout and renders no late result.
 > Phase 2 must not ship merely because the implementation exists.
 
 The representative profiler now emits schema-version-2 queue, worker,
@@ -336,7 +337,7 @@ scheduler-dispatch-to-response server/request, core, end-to-end request-age,
 inline-counter, and diagnostics-freshness measurements. That instrumentation
 makes the remaining performance gates measurable. The strict seven-fixture
 server/worker/backend and client no-stall gates pass; the aggregate Phase 1
-gate remains pending on responsiveness, quality, and menu replay.
+gate remains pending only on the frozen held-out and external quality checks.
 
 Implement only:
 
@@ -728,8 +729,9 @@ measurements. Each one must exist before its gate is checked.
   source-derived names, so capture files are potentially sensitive local
   evaluation data and must not be committed. Capture normalizes CRLF to the
   evaluator's canonical LF before hashing. Valid but unrelated edits are
-  reported as unmatched. Actual tuning-set replay results are still required
-  before the gate can be claimed as passed.
+  reported as unmatched. The committed clean-tree tuning replay described
+  below satisfies this prerequisite; it does not substitute for the still
+  unspent held-out and external quality checks.
   `make inline-editor-replay` now automates that evidence on macOS: it performs
   hash-pinned `.tua` tuning edits one character at a time through VS Code's
   editor API, uses CDP to observe the real suggestion widget in matched

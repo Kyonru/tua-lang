@@ -387,7 +387,7 @@ to exercise baseline-plus-candidate parsing. Later rounds use valid documents;
 only those valid rounds gate semantic menu-completion correctness. The invalid
 round's menu result is recorded separately because incomplete syntax can
 legitimately suppress semantic candidates.
-aggregate `make inline-eval-phase-gate` target depends on that representative
+The aggregate `make inline-eval-phase-gate` target depends on that representative
 run, then validates every prerequisite and its evidence in
 `benchmarks/inline-eval/phase1-gate.toml`; missing, pending, or evidence-free
 items still fail. Server/request latency starts at scheduler dispatch; the

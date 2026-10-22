@@ -206,11 +206,11 @@ Rules that keep the gates honest:
   separate held-out/external quality, real menu replay, menu-completion
   performance, strict inline-server performance, client no-stall and
   responsiveness evidence, diagnostics freshness, scheduler cache-hit, and
-  parse-distribution evidence. The 1,500 ms no-stall ceiling does not satisfy
-  the pending interactive-responsiveness prerequisite. The extension separately
-  cancels and abstains after a local backend waits 250 ms beyond its 65 ms
-  debounce; that client protection and the synthetic contention gate measure
-  different boundaries.
+  parse-distribution evidence. The 1,500 ms no-stall ceiling is separate from
+  interactive responsiveness. The passing real-editor replay proves that the
+  extension cancels and abstains after a local backend waits 250 ms beyond its
+  65 ms debounce; that client protection and the synthetic contention gate
+  measure different boundaries.
   Its checker fails on missing, pending, or evidence-free prerequisites.
 - **Results stay local.** Reports go to `target/tua-speed/`; don't commit
   machine-specific numbers.
