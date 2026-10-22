@@ -208,13 +208,6 @@
       "editor": "tua.diagnostics.duplicateParameters"
     },
     {
-      "path": "diagnostics.wrong_argument_count",
-      "type": "boolean",
-      "default": false,
-      "description": "Report calls with the wrong number of arguments.",
-      "editor": "tua.diagnostics.wrongArgumentCount"
-    },
-    {
       "path": "diagnostics.bad_requires",
       "type": "boolean",
       "default": false,
@@ -255,20 +248,6 @@
       "default": false,
       "description": "Report assignments to values marked as constant.",
       "editor": "tua.diagnostics.constAssignments"
-    },
-    {
-      "path": "diagnostics.parameter_type_mismatches",
-      "type": "boolean",
-      "default": false,
-      "description": "Report function argument type mismatches.",
-      "editor": "tua.diagnostics.parameterTypeMismatches"
-    },
-    {
-      "path": "diagnostics.return_type_mismatches",
-      "type": "boolean",
-      "default": false,
-      "description": "Report function return type mismatches.",
-      "editor": "tua.diagnostics.returnTypeMismatches"
     },
     {
       "path": "diagnostics.assignment_arity",
@@ -337,6 +316,12 @@
       "default": [],
       "description": "Additional global names accepted by diagnostics.",
       "editor": "tua.diagnostics.globals"
+    },
+    {
+      "path": "diagnostics.severity",
+      "type": "severity-map",
+      "default": {},
+      "description": "Exact diagnostic-code overrides: allow, hint, info, warning, or error."
     }
   ]
 }

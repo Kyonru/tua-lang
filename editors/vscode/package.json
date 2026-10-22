@@ -236,14 +236,6 @@
           "default": null,
           "description": "Report duplicate function parameter names as TL4043."
         },
-        "tua.diagnostics.wrongArgumentCount": {
-          "type": [
-            "boolean",
-            "null"
-          ],
-          "default": null,
-          "description": "Report calls with the wrong number of arguments."
-        },
         "tua.diagnostics.badRequires": {
           "type": [
             "boolean",
@@ -291,22 +283,6 @@
           ],
           "default": null,
           "description": "Report assignments to values marked as constant."
-        },
-        "tua.diagnostics.parameterTypeMismatches": {
-          "type": [
-            "boolean",
-            "null"
-          ],
-          "default": null,
-          "description": "Report function argument type mismatches."
-        },
-        "tua.diagnostics.returnTypeMismatches": {
-          "type": [
-            "boolean",
-            "null"
-          ],
-          "default": null,
-          "description": "Report function return type mismatches."
         },
         "tua.diagnostics.assignmentArity": {
           "type": [

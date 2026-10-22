@@ -30,6 +30,7 @@ Options:
   --emit-on-error   With build, emit parseable/lowerable files even if errors exist
   --check           With fmt, report files that would change without writing
   --strict          With lint, enable all lint diagnostics
+  --deny-warnings   With check, fail when warning diagnostics are present
   --maps <path>     With traceback, source-map directory or .lua.map.json file
   --target <kind>   With package, love (default), windows, or macos
   --love <path>     With package, the LOVE for Windows directory or love.app to fuse with;
@@ -57,6 +58,7 @@ pub struct CommandOptions {
     pub package: PackageOptions,
     pub fmt_check: bool,
     pub lint_strict: bool,
+    pub deny_warnings: bool,
     pub traceback_maps: Option<PathBuf>,
     pub traceback_input: Option<PathBuf>,
     pub workspace: Option<PathBuf>,
@@ -156,6 +158,7 @@ where
             }
             "--check" if command == CommandName::Fmt => options.fmt_check = true,
             "--strict" if command == CommandName::Lint => options.lint_strict = true,
+            "--deny-warnings" if command == CommandName::Check => options.deny_warnings = true,
             "--maps" if command == CommandName::Traceback => {
                 index += 1;
 
@@ -217,6 +220,11 @@ where
             }
             "--strict" => {
                 return Err(CliError::usage("`--strict` is only valid with `tua lint`"));
+            }
+            "--deny-warnings" => {
+                return Err(CliError::usage(
+                    "`--deny-warnings` is only valid with `tua check`",
+                ));
             }
             "--maps" => {
                 return Err(CliError::usage(

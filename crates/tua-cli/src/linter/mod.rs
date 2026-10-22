@@ -21,5 +21,6 @@ pub(crate) fn run_lint(
         ProjectDiagnosticMode::Lint,
         "linted",
         "project lint failed",
+        false,
     )
 }

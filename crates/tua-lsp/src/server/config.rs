@@ -297,6 +297,7 @@ fn toml_value(value: &serde_json::Value) -> String {
             "[{}]",
             values.iter().map(toml_value).collect::<Vec<_>>().join(", ")
         ),
+        serde_json::Value::Object(values) if values.is_empty() => "{}".to_owned(),
         _ => String::new(),
     }
 }

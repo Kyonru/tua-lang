@@ -30,7 +30,7 @@ pub enum DiagnosticCategory {
     Domain,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct DiagnosticCode(u16);
 
 impl DiagnosticCode {
@@ -72,15 +72,12 @@ impl DiagnosticCode {
     pub const LINT_USE_BEFORE_DEFINITION: Self = Self(4007);
     // Retained for source compatibility; duplicate parameters now emit LINT_DUPLICATE_LOCAL.
     pub const LINT_DUPLICATE_PARAMETER: Self = Self(4008);
-    pub const LINT_WRONG_ARGUMENT_COUNT: Self = Self(4009);
     pub const LINT_BAD_REQUIRE: Self = Self(4010);
     pub const LINT_IMPOSSIBLE_BOOLEAN: Self = Self(4011);
     pub const LINT_DUPLICATE_IF_CONDITION: Self = Self(4012);
     pub const LINT_DUPLICATE_BINARY_OPERAND: Self = Self(4013);
     pub const LINT_FLOAT_EQUALITY: Self = Self(4014);
     pub const LINT_CONST_ASSIGNMENT: Self = Self(4015);
-    pub const LINT_PARAMETER_TYPE_MISMATCH: Self = Self(4016);
-    pub const LINT_RETURN_TYPE_MISMATCH: Self = Self(4017);
     pub const LINT_DOT_METHOD_CALL: Self = Self(4018);
     pub const LINT_DUPLICATE_REQUIRE_CANDIDATE: Self = Self(4019);
     pub const LINT_REQUIRE_CYCLE: Self = Self(4020);
@@ -193,15 +190,12 @@ impl DiagnosticCode {
                 | Self::LINT_UNUSED_PARAMETER
                 | Self::LINT_USE_BEFORE_DEFINITION
                 | Self::LINT_DUPLICATE_PARAMETER
-                | Self::LINT_WRONG_ARGUMENT_COUNT
                 | Self::LINT_BAD_REQUIRE
                 | Self::LINT_IMPOSSIBLE_BOOLEAN
                 | Self::LINT_DUPLICATE_IF_CONDITION
                 | Self::LINT_DUPLICATE_BINARY_OPERAND
                 | Self::LINT_FLOAT_EQUALITY
                 | Self::LINT_CONST_ASSIGNMENT
-                | Self::LINT_PARAMETER_TYPE_MISMATCH
-                | Self::LINT_RETURN_TYPE_MISMATCH
                 | Self::LINT_DOT_METHOD_CALL
                 | Self::LINT_DUPLICATE_REQUIRE_CANDIDATE
                 | Self::LINT_REQUIRE_CYCLE

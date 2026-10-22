@@ -2842,7 +2842,7 @@ MAX_HP = 20
 }
 
 #[test]
-fn checker_backed_function_lints_do_not_duplicate_type_diagnostics() {
+fn checker_function_contracts_are_always_type_diagnostics() {
     let diagnostics = check_tua_source_with_diagnostics_config(
         "src/main.tua",
         r#"
@@ -2853,12 +2853,7 @@ end
 damage()
 damage("bad")
 "#,
-        &DiagnosticsConfig {
-            wrong_argument_count: true,
-            parameter_type_mismatches: true,
-            return_type_mismatches: true,
-            ..diagnostics_without_standard_rules()
-        },
+        &diagnostics_without_standard_rules(),
     )
     .expect_err("checker-backed function diagnostics should report");
 
@@ -2868,18 +2863,6 @@ damage("bad")
         1
     );
     assert_eq!(count_code(&diagnostics, DiagnosticCode::TYPE_MISMATCH), 2);
-    assert_eq!(
-        count_code(&diagnostics, DiagnosticCode::LINT_WRONG_ARGUMENT_COUNT),
-        0
-    );
-    assert_eq!(
-        count_code(&diagnostics, DiagnosticCode::LINT_PARAMETER_TYPE_MISMATCH),
-        0
-    );
-    assert_eq!(
-        count_code(&diagnostics, DiagnosticCode::LINT_RETURN_TYPE_MISMATCH),
-        0
-    );
 }
 
 #[test]

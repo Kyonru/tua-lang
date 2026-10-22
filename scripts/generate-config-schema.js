@@ -176,6 +176,9 @@ function tomlValue(value) {
   if (Array.isArray(value)) {
     return `[${value.map(tomlValue).join(", ")}]`;
   }
+  if (value && typeof value === "object" && Object.keys(value).length === 0) {
+    return "{}";
+  }
 
   throw new Error(`unsupported TOML template value: ${JSON.stringify(value)}`);
 }

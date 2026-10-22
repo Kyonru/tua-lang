@@ -4,7 +4,7 @@ use crate::asset_pipeline::run_asset_pipelines;
 use crate::diagnostics::sorted_diagnostics;
 use crate::error::CliError;
 use crate::source::{discover_build_files, load_type_libraries, read_source_file, SourceKind};
-use tua_core::DiagnosticCategory;
+use tua_core::{format_diagnostics_for_cli, DiagnosticCategory, DiagnosticSeverity};
 use tua_core::{profile, AnalysisHost, AnalysisSourceKind, LoadedConfig, ProjectWorkspace};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -13,13 +13,18 @@ pub(crate) enum ProjectDiagnosticMode {
     Lint,
 }
 
-pub(crate) fn run_check(cwd: impl AsRef<Path>, loaded: LoadedConfig) -> Result<String, CliError> {
+pub(crate) fn run_check(
+    cwd: impl AsRef<Path>,
+    loaded: LoadedConfig,
+    deny_warnings: bool,
+) -> Result<String, CliError> {
     run_project_diagnostics(
         cwd,
         loaded,
         ProjectDiagnosticMode::Check,
         "checked",
         "project check failed",
+        deny_warnings,
     )
 }
 
@@ -29,6 +34,7 @@ pub(crate) fn run_project_diagnostics(
     mode: ProjectDiagnosticMode,
     success_verb: &str,
     error_message: &str,
+    deny_warnings: bool,
 ) -> Result<String, CliError> {
     let cwd = cwd.as_ref();
     let pipeline_outcome = if mode == ProjectDiagnosticMode::Check {
@@ -87,6 +93,14 @@ pub(crate) fn run_project_diagnostics(
         diagnostics.extend(snapshot.pipeline_diagnostics(&source_file.path));
     }
 
+    // Snapshot diagnostics have already passed through this policy. Applying
+    // it once more is idempotent and also covers CLI-owned diagnostics such as
+    // source I/O and asset-pipeline results.
+    diagnostics = workspace
+        .config()
+        .diagnostics
+        .apply_severity_policy(diagnostics);
+
     if mode == ProjectDiagnosticMode::Lint {
         diagnostics.retain(|diagnostic| {
             diagnostic.code.is_none_or(|code| {
@@ -103,12 +117,29 @@ pub(crate) fn run_project_diagnostics(
         diagnostics.len()
     ));
 
-    if diagnostics.is_empty() {
-        Ok(format!("{success_verb} {checked} file(s)"))
-    } else {
+    let fails = diagnostics.iter().any(|diagnostic| match mode {
+        ProjectDiagnosticMode::Check => {
+            diagnostic.severity == DiagnosticSeverity::Error
+                || (deny_warnings && diagnostic.severity == DiagnosticSeverity::Warning)
+        }
+        ProjectDiagnosticMode::Lint => matches!(
+            diagnostic.severity,
+            DiagnosticSeverity::Error | DiagnosticSeverity::Warning
+        ),
+    });
+
+    if fails {
         Err(CliError::from_diagnostics(
             error_message,
             sorted_diagnostics(diagnostics),
+        ))
+    } else if diagnostics.is_empty() {
+        Ok(format!("{success_verb} {checked} file(s)"))
+    } else {
+        let diagnostics = sorted_diagnostics(diagnostics);
+        Ok(format!(
+            "{}\n{success_verb} {checked} file(s)",
+            format_diagnostics_for_cli(&diagnostics)
         ))
     }
 }

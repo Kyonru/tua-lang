@@ -919,12 +919,12 @@ fn check_enables_standard_lints_by_default() {
         .output()
         .expect("failed to run tua check");
 
-    assert!(!output.status.success());
+    assert!(output.status.success());
 
-    let stderr = String::from_utf8(output.stderr).expect("stderr should be valid UTF-8");
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be valid UTF-8");
 
-    assert!(stderr.contains("warning TL4043"));
-    assert!(stderr.contains("variable `first` already defined on column 7"));
+    assert!(stdout.contains("warning TL4043"));
+    assert!(stdout.contains("variable `first` already defined on column 7"));
 }
 
 #[test]
@@ -3584,6 +3584,100 @@ self_assignments = true
     assert!(stderr.contains("main.tua:2"));
     assert!(stderr.contains("warning TL4003"));
     assert!(stderr.contains("self-assignment of `hp`"));
+}
+
+#[test]
+fn check_reports_configured_warnings_without_failing() {
+    let temp = TempDir::new("check-warning-policy");
+
+    fs::write(
+        temp.path().join(CONFIG_FILE),
+        r#"source = "src"
+
+[diagnostics.severity]
+TL1003 = "warning"
+"#,
+    )
+    .expect("failed to write config");
+    fs::create_dir_all(temp.path().join("src")).expect("failed to create source");
+    fs::write(
+        temp.path().join("src/main.tua"),
+        "local value: number = \"wrong\"\nreturn value\n",
+    )
+    .expect("failed to write source");
+
+    let output = tua()
+        .arg("check")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tua check");
+
+    assert!(output.status.success(), "{output:?}");
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be valid UTF-8");
+    assert!(stdout.contains("warning TL1003"), "{stdout}");
+    assert!(stdout.contains("checked 1 file(s)"), "{stdout}");
+}
+
+#[test]
+fn check_deny_warnings_enforces_configured_warning_policy() {
+    let temp = TempDir::new("check-deny-warnings");
+
+    fs::write(
+        temp.path().join(CONFIG_FILE),
+        r#"source = "src"
+
+[diagnostics.severity]
+TL1003 = "warning"
+"#,
+    )
+    .expect("failed to write config");
+    fs::create_dir_all(temp.path().join("src")).expect("failed to create source");
+    fs::write(
+        temp.path().join("src/main.tua"),
+        "local value: number = \"wrong\"\nreturn value\n",
+    )
+    .expect("failed to write source");
+
+    let output = tua()
+        .args(["check", "--deny-warnings"])
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tua check --deny-warnings");
+
+    assert!(!output.status.success());
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be valid UTF-8");
+    assert!(stderr.contains("warning TL1003"), "{stderr}");
+}
+
+#[test]
+fn exact_code_allow_policy_suppresses_a_diagnostic() {
+    let temp = TempDir::new("check-allow-policy");
+
+    fs::write(
+        temp.path().join(CONFIG_FILE),
+        r#"source = "src"
+
+[diagnostics.severity]
+TL1003 = "allow"
+"#,
+    )
+    .expect("failed to write config");
+    fs::create_dir_all(temp.path().join("src")).expect("failed to create source");
+    fs::write(
+        temp.path().join("src/main.tua"),
+        "local value: number = \"wrong\"\nreturn value\n",
+    )
+    .expect("failed to write source");
+
+    let output = tua()
+        .arg("check")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tua check");
+
+    assert!(output.status.success(), "{output:?}");
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be valid UTF-8");
+    assert!(!stdout.contains("TL1003"), "{stdout}");
 }
 
 #[test]

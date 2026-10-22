@@ -136,6 +136,20 @@ fn lint_accepts_strict() {
 }
 
 #[test]
+fn check_accepts_deny_warnings() {
+    assert_eq!(
+        parse_args(["check", "--deny-warnings"]),
+        Ok(CliAction::Command {
+            name: CommandName::Check,
+            options: CommandOptions {
+                deny_warnings: true,
+                ..CommandOptions::default()
+            },
+        })
+    );
+}
+
+#[test]
 fn lsp_accepts_stdio_for_editor_client_compatibility() {
     assert_eq!(
         parse_args(["lsp", "--stdio"]),
@@ -163,6 +177,13 @@ fn other_commands_reject_check() {
 #[test]
 fn other_commands_reject_strict() {
     let error = parse_args(["check", "--strict"]).unwrap_err();
+
+    assert!(error.message.contains("only valid"));
+}
+
+#[test]
+fn other_commands_reject_deny_warnings() {
+    let error = parse_args(["lint", "--deny-warnings"]).unwrap_err();
 
     assert!(error.message.contains("only valid"));
 }

@@ -221,6 +221,27 @@ fn unknown_setting_error(
     span: Option<Range<usize>>,
     schema: &ConfigSchema,
 ) -> ConfigParseError {
+    if prefix == "diagnostics"
+        && matches!(
+            name,
+            "wrong_argument_count" | "parameter_type_mismatches" | "return_type_mismatches"
+        )
+    {
+        let replacement = if name == "wrong_argument_count" {
+            "TL1004"
+        } else {
+            "TL1003"
+        };
+
+        return parse_error(
+            input,
+            span,
+            format!(
+                "diagnostics.{name} was removed because function contracts are always checked; use `severity = {{ {replacement} = \"warning\" }}` to override its severity"
+            ),
+        );
+    }
+
     let is_section = prefix.is_empty() && table;
     let mut message = if is_section {
         format!("unknown config section `{name}`")
@@ -447,6 +468,11 @@ mod tests {
             paths.insert(prefix.to_owned());
             return;
         };
+
+        if table.is_empty() {
+            paths.insert(prefix.to_owned());
+            return;
+        }
 
         for (name, value) in table {
             collect_leaf_paths(value, &join_path(prefix, name), paths);

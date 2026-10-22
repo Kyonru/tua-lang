@@ -126,6 +126,11 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Added
 
+- Exact-code diagnostic severity policy through `[diagnostics.severity]`, with
+  `allow`, `hint`, `info`, `warning`, and `error` levels shared by CLI and
+  editor diagnostics. `tua check --deny-warnings` provides an explicit strict
+  CI gate.
+
 - Added `examples/starfall`, a small complete game that uses the built-in
   `Camera` and `tween` modules with `input`, `stateMachine`, `objectPool`,
   and `vec2`, and is set up for `tua dev` and `tua package`.
@@ -358,6 +363,13 @@ language or editor behavior, and migration notes call out those changes.
   when referenced.
 
 ### Changed
+
+- `tua check` now fails on errors while still printing non-blocking diagnostics;
+  `tua lint` fails on configured warning and error diagnostics. The inert
+  `wrong_argument_count`, `parameter_type_mismatches`, and
+  `return_type_mismatches` settings and never-emitted TL4009/TL4016/TL4017
+  codes were removed. Function contracts remain TL1003/TL1004 type diagnostics,
+  and removed settings produce an actionable migration error.
 
 - `TL1004` now explains the common case of a method called with `.` instead of
   `:`. When a dot call is short of arguments, the method's first parameter is

@@ -66,15 +66,12 @@ unused_locals = false
 unused_parameters = false
 use_before_definition = false
 duplicate_parameters = false
-wrong_argument_count = false
 bad_requires = false
 impossible_boolean_expressions = false
 duplicate_if_conditions = false
 duplicate_binary_operands = false
 float_equality = false
 const_assignments = false
-parameter_type_mismatches = false
-return_type_mismatches = false
 assignment_arity = false
 local_declaration_arity = false
 unused_assignments = false
@@ -84,6 +81,7 @@ inline_ignores = true
 inline_ignore_scopes = ["tua-ignore-line", "tua-ignore-next-line", "tua-ignore-file"]
 inline_ignore_max_per_file = 0
 globals = []
+severity = {}
 ```
 
 ## Schema Reference
@@ -124,15 +122,12 @@ the behavior and tradeoffs of each option.
 | `diagnostics.unused_parameters` | boolean | `false` | `tua.diagnostics.unusedParameters` |
 | `diagnostics.use_before_definition` | boolean | `false` | `tua.diagnostics.useBeforeDefinition` |
 | `diagnostics.duplicate_parameters` | boolean | `false` | `tua.diagnostics.duplicateParameters` |
-| `diagnostics.wrong_argument_count` | boolean | `false` | `tua.diagnostics.wrongArgumentCount` |
 | `diagnostics.bad_requires` | boolean | `false` | `tua.diagnostics.badRequires` |
 | `diagnostics.impossible_boolean_expressions` | boolean | `false` | `tua.diagnostics.impossibleBooleanExpressions` |
 | `diagnostics.duplicate_if_conditions` | boolean | `false` | `tua.diagnostics.duplicateIfConditions` |
 | `diagnostics.duplicate_binary_operands` | boolean | `false` | `tua.diagnostics.duplicateBinaryOperands` |
 | `diagnostics.float_equality` | boolean | `false` | `tua.diagnostics.floatEquality` |
 | `diagnostics.const_assignments` | boolean | `false` | `tua.diagnostics.constAssignments` |
-| `diagnostics.parameter_type_mismatches` | boolean | `false` | `tua.diagnostics.parameterTypeMismatches` |
-| `diagnostics.return_type_mismatches` | boolean | `false` | `tua.diagnostics.returnTypeMismatches` |
 | `diagnostics.assignment_arity` | boolean | `false` | `tua.diagnostics.assignmentArity` |
 | `diagnostics.local_declaration_arity` | boolean | `false` | `tua.diagnostics.localDeclarationArity` |
 | `diagnostics.unused_assignments` | boolean | `false` | `tua.diagnostics.unusedAssignments` |
@@ -142,6 +137,7 @@ the behavior and tradeoffs of each option.
 | `diagnostics.inline_ignore_scopes` | string-array | `["tua-ignore-line","tua-ignore-next-line","tua-ignore-file"]` | `tua.diagnostics.inlineIgnoreScopes` |
 | `diagnostics.inline_ignore_max_per_file` | integer | `0` | `tua.diagnostics.inlineIgnoreMaxPerFile` |
 | `diagnostics.globals` | string-array | `[]` | `tua.diagnostics.globals` |
+| `diagnostics.severity` | severity-map | `{}` | - |
 <!-- tua-config-schema:end -->
 
 ## Root Options
@@ -405,15 +401,12 @@ unused_locals = true
 unused_parameters = true
 use_before_definition = true
 duplicate_parameters = true
-wrong_argument_count = true
 bad_requires = true
 impossible_boolean_expressions = true
 duplicate_if_conditions = true
 duplicate_binary_operands = true
 float_equality = true
 const_assignments = true
-parameter_type_mismatches = true
-return_type_mismatches = true
 assignment_arity = true
 local_declaration_arity = true
 unused_assignments = true
@@ -423,6 +416,10 @@ inline_ignores = true
 inline_ignore_scopes = ["tua-ignore-line", "tua-ignore-next-line", "tua-ignore-file"]
 inline_ignore_max_per_file = 0
 globals = ["love", "_G"]
+
+[diagnostics.severity]
+TL4035 = "allow"
+TL4045 = "error"
 
 [emit]
 annotation_mode = "luacats"
@@ -469,9 +466,6 @@ ordering.
 : Reports repeated parameter names as `TL4043` without enabling every standard
 rule.
 
-`wrong_argument_count`
-: Reports calls to known functions with the wrong number of arguments.
-
 `bad_requires`
 : Reports invalid require/import paths, including `import("../...")` parent
 traversal and malformed import specifiers.
@@ -491,12 +485,6 @@ traversal and malformed import specifiers.
 
 `const_assignments`
 : Reports assignments to values Tua treats as constant.
-
-`parameter_type_mismatches`
-: Reports known function argument type mismatches through the lint pipeline.
-
-`return_type_mismatches`
-: Reports known function return type mismatches through the lint pipeline.
 
 `assignment_arity`
 : Reports assignments whose explicit value count does not match the target
@@ -520,6 +508,16 @@ as `1 + "hp"`. Dynamic or `any` operands remain permissive.
 : Reports local functions that are referenced as values but never directly
 called. Indirect callback patterns can stay quiet by leaving this opt-in lint
 disabled.
+
+`severity`
+: Overrides individual diagnostic codes with `allow`, `hint`, `info`,
+  `warning`, or `error`. `allow` suppresses the diagnostic. Keys must be exact,
+  known codes such as `TL1003`; unknown codes or levels make configuration
+  loading fail. Function argument-count errors are always produced as `TL1004`,
+  while argument and return type mismatches use `TL1003`. The removed
+  `wrong_argument_count`, `parameter_type_mismatches`, and
+  `return_type_mismatches` switches never controlled those checker errors; use
+  exact-code severity instead.
 
 `inline_ignores`
 : Enables exact-code diagnostic suppression comments. This is enabled by

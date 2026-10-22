@@ -32,15 +32,12 @@ pub(super) struct DiagnosticOverrides {
     pub(super) unused_parameters: Option<bool>,
     pub(super) use_before_definition: Option<bool>,
     pub(super) duplicate_parameters: Option<bool>,
-    pub(super) wrong_argument_count: Option<bool>,
     pub(super) bad_requires: Option<bool>,
     pub(super) impossible_boolean_expressions: Option<bool>,
     pub(super) duplicate_if_conditions: Option<bool>,
     pub(super) duplicate_binary_operands: Option<bool>,
     pub(super) float_equality: Option<bool>,
     pub(super) const_assignments: Option<bool>,
-    pub(super) parameter_type_mismatches: Option<bool>,
-    pub(super) return_type_mismatches: Option<bool>,
     pub(super) assignment_arity: Option<bool>,
     pub(super) local_declaration_arity: Option<bool>,
     pub(super) unused_assignments: Option<bool>,
@@ -267,11 +264,6 @@ impl DiagnosticOverrides {
                 "duplicate_parameters",
                 "duplicateParameters",
             ),
-            wrong_argument_count: bool_setting(
-                settings,
-                "wrong_argument_count",
-                "wrongArgumentCount",
-            ),
             bad_requires: bool_setting(settings, "bad_requires", "badRequires"),
             impossible_boolean_expressions: bool_setting(
                 settings,
@@ -290,16 +282,6 @@ impl DiagnosticOverrides {
             ),
             float_equality: bool_setting(settings, "float_equality", "floatEquality"),
             const_assignments: bool_setting(settings, "const_assignments", "constAssignments"),
-            parameter_type_mismatches: bool_setting(
-                settings,
-                "parameter_type_mismatches",
-                "parameterTypeMismatches",
-            ),
-            return_type_mismatches: bool_setting(
-                settings,
-                "return_type_mismatches",
-                "returnTypeMismatches",
-            ),
             assignment_arity: bool_setting(settings, "assignment_arity", "assignmentArity"),
             local_declaration_arity: bool_setting(
                 settings,
@@ -352,10 +334,6 @@ impl DiagnosticOverrides {
             self.duplicate_parameters,
             &mut diagnostics.duplicate_parameters,
         );
-        apply_bool(
-            self.wrong_argument_count,
-            &mut diagnostics.wrong_argument_count,
-        );
         apply_bool(self.bad_requires, &mut diagnostics.bad_requires);
         apply_bool(
             self.impossible_boolean_expressions,
@@ -371,14 +349,6 @@ impl DiagnosticOverrides {
         );
         apply_bool(self.float_equality, &mut diagnostics.float_equality);
         apply_bool(self.const_assignments, &mut diagnostics.const_assignments);
-        apply_bool(
-            self.parameter_type_mismatches,
-            &mut diagnostics.parameter_type_mismatches,
-        );
-        apply_bool(
-            self.return_type_mismatches,
-            &mut diagnostics.return_type_mismatches,
-        );
         apply_bool(self.assignment_arity, &mut diagnostics.assignment_arity);
         apply_bool(
             self.local_declaration_arity,

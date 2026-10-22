@@ -171,3 +171,33 @@ fn comments_inside_strings_are_ignored() {
     assert_eq!(output.len(), 1, "{output:?}");
     assert_eq!(output[0].code, Some(DiagnosticCode::LINT_DOT_METHOD_CALL));
 }
+
+#[test]
+fn exact_code_policy_runs_after_inline_suppression() {
+    let config = DiagnosticsConfig {
+        severity: std::collections::BTreeMap::from([
+            (
+                DiagnosticCode::LINT_DOT_METHOD_CALL,
+                crate::DiagnosticLevel::Allow,
+            ),
+            (
+                DiagnosticCode::LINT_INLINE_IGNORE_UNUSED,
+                crate::DiagnosticLevel::Error,
+            ),
+        ]),
+        ..config()
+    };
+    let output = apply_inline_ignores(
+        Path::new("src/main.tua"),
+        "-- tua-ignore-next-line TL4018\nplayer:setFilter()\n",
+        Vec::new(),
+        &config,
+    );
+
+    assert_eq!(output.len(), 1, "{output:?}");
+    assert_eq!(
+        output[0].code,
+        Some(DiagnosticCode::LINT_INLINE_IGNORE_UNUSED)
+    );
+    assert_eq!(output[0].severity, DiagnosticSeverity::Error);
+}

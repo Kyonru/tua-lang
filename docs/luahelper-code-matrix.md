@@ -80,9 +80,9 @@ valid unless it is listed below.
 stable inferred locals, fields, arguments, returns, and compatible container
 operations. Nested failures report the field, dictionary, tuple, callback
 parameter, or callback-return path and the incompatible leaf types; table
-literals highlight the deepest corresponding value Tua can identify. More
-specialized optional lint codes such as `TL4016` and `TL4017` are used by the
-configurable lint pipeline.
+literals highlight the deepest corresponding value Tua can identify. Use an
+exact `diagnostics.severity.TL1003` override to tune this shared contract
+diagnostic instead of enabling a duplicate lint.
 
 ## Build And Asset Codes
 
@@ -126,15 +126,12 @@ enforced separately with `tua fmt --check`.
 | `TL4006` | A function parameter is never used. | `unused_parameters` |
 | `TL4007` | A local is read before its declaration. | `use_before_definition` |
 | `TL4008` | Legacy duplicate-parameter code retained for source compatibility; new diagnostics use `TL4043`. | No longer emitted. |
-| `TL4009` | A lint-known call has the wrong argument count. | `wrong_argument_count` |
 | `TL4010` | A static module specifier is invalid or resolves through an unsupported form. | `bad_requires` |
 | `TL4011` | A boolean expression is provably constant or impossible. | `impossible_boolean_expressions` |
 | `TL4012` | An `if` or `elseif` chain structurally repeats a condition. | `rules`; can also use `duplicate_if_conditions` |
 | `TL4013` | A flattened `and`/`or` chain or optional suspicious binary check structurally repeats an operand. | `rules`; broader operators can also use `duplicate_binary_operands` |
 | `TL4014` | Code compares a floating-point literal for exact equality. | `float_equality` |
 | `TL4015` | Code assigns to a name recognized as constant. | `const_assignments` |
-| `TL4016` | A known function argument does not match its parameter type. | `parameter_type_mismatches` |
-| `TL4017` | A function return does not match its declared return type. | `return_type_mismatches` |
 | `TL4018` | A known LOVE object method uses `.` instead of `:`, so `self` would not be passed. | Always enabled; warning with quick fix. |
 | `TL4019` | More than one project file can satisfy the same module specifier. | `bad_requires` |
 | `TL4020` | The static module graph contains a require/import cycle. | `bad_requires` |
@@ -201,7 +198,9 @@ Optional lints can be enabled individually:
 undefined_variables = true
 unused_locals = true
 missing_requires = true
-parameter_type_mismatches = true
+
+[diagnostics.severity]
+TL1003 = "warning"
 ```
 
 Use `tua lint --strict` to enable every optional lint for that command. Inline

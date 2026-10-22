@@ -9,7 +9,7 @@ use serde::de::Error as _;
 use serde::{Deserialize, Deserializer};
 
 use crate::formatter::{FormatOptions, QuoteStyle};
-use crate::{Diagnostic, DiagnosticCode};
+use crate::{Diagnostic, DiagnosticCode, DiagnosticSeverity};
 
 mod parser;
 
@@ -60,15 +60,12 @@ unused_locals = false
 unused_parameters = false
 use_before_definition = false
 duplicate_parameters = false
-wrong_argument_count = false
 bad_requires = false
 impossible_boolean_expressions = false
 duplicate_if_conditions = false
 duplicate_binary_operands = false
 float_equality = false
 const_assignments = false
-parameter_type_mismatches = false
-return_type_mismatches = false
 assignment_arity = false
 local_declaration_arity = false
 unused_assignments = false
@@ -78,6 +75,7 @@ inline_ignores = true
 inline_ignore_scopes = [\"tua-ignore-line\", \"tua-ignore-next-line\", \"tua-ignore-file\"]
 inline_ignore_max_per_file = 0
 globals = []
+severity = {}
 ";
 
 pub const DEFAULT_MAIN_TEXT: &str = "\
@@ -293,15 +291,12 @@ pub struct DiagnosticsConfig {
     pub unused_parameters: bool,
     pub use_before_definition: bool,
     pub duplicate_parameters: bool,
-    pub wrong_argument_count: bool,
     pub bad_requires: bool,
     pub impossible_boolean_expressions: bool,
     pub duplicate_if_conditions: bool,
     pub duplicate_binary_operands: bool,
     pub float_equality: bool,
     pub const_assignments: bool,
-    pub parameter_type_mismatches: bool,
-    pub return_type_mismatches: bool,
     pub assignment_arity: bool,
     pub local_declaration_arity: bool,
     pub unused_assignments: bool,
@@ -311,6 +306,18 @@ pub struct DiagnosticsConfig {
     pub inline_ignore_scopes: Vec<String>,
     pub inline_ignore_max_per_file: usize,
     pub globals: Vec<String>,
+    #[serde(deserialize_with = "deserialize_diagnostic_severity")]
+    pub severity: BTreeMap<DiagnosticCode, DiagnosticLevel>,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum DiagnosticLevel {
+    Allow,
+    Hint,
+    Info,
+    Warning,
+    Error,
 }
 
 impl Default for DiagnosticsConfig {
@@ -326,15 +333,12 @@ impl Default for DiagnosticsConfig {
             unused_parameters: false,
             use_before_definition: false,
             duplicate_parameters: false,
-            wrong_argument_count: false,
             bad_requires: false,
             impossible_boolean_expressions: false,
             duplicate_if_conditions: false,
             duplicate_binary_operands: false,
             float_equality: false,
             const_assignments: false,
-            parameter_type_mismatches: false,
-            return_type_mismatches: false,
             assignment_arity: false,
             local_declaration_arity: false,
             unused_assignments: false,
@@ -348,6 +352,7 @@ impl Default for DiagnosticsConfig {
             ],
             inline_ignore_max_per_file: 0,
             globals: Vec::new(),
+            severity: BTreeMap::new(),
         }
     }
 }
@@ -364,21 +369,78 @@ impl DiagnosticsConfig {
         self.unused_parameters = true;
         self.use_before_definition = true;
         self.duplicate_parameters = true;
-        self.wrong_argument_count = true;
         self.bad_requires = true;
         self.impossible_boolean_expressions = true;
         self.duplicate_if_conditions = true;
         self.duplicate_binary_operands = true;
         self.float_equality = true;
         self.const_assignments = true;
-        self.parameter_type_mismatches = true;
-        self.return_type_mismatches = true;
         self.assignment_arity = true;
         self.local_declaration_arity = true;
         self.unused_assignments = true;
         self.binary_operator_type_mismatches = true;
         self.uncalled_local_functions = true;
     }
+
+    pub fn apply_severity_policy(&self, diagnostics: Vec<Diagnostic>) -> Vec<Diagnostic> {
+        diagnostics
+            .into_iter()
+            .filter_map(|mut diagnostic| {
+                let level = diagnostic.code.and_then(|code| self.severity.get(&code));
+
+                match level {
+                    Some(DiagnosticLevel::Allow) => None,
+                    Some(DiagnosticLevel::Hint) => {
+                        diagnostic.severity = DiagnosticSeverity::Hint;
+                        Some(diagnostic)
+                    }
+                    Some(DiagnosticLevel::Info) => {
+                        diagnostic.severity = DiagnosticSeverity::Info;
+                        Some(diagnostic)
+                    }
+                    Some(DiagnosticLevel::Warning) => {
+                        diagnostic.severity = DiagnosticSeverity::Warning;
+                        Some(diagnostic)
+                    }
+                    Some(DiagnosticLevel::Error) => {
+                        diagnostic.severity = DiagnosticSeverity::Error;
+                        Some(diagnostic)
+                    }
+                    None => Some(diagnostic),
+                }
+            })
+            .collect()
+    }
+}
+
+fn deserialize_diagnostic_severity<'de, D>(
+    deserializer: D,
+) -> Result<BTreeMap<DiagnosticCode, DiagnosticLevel>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let entries = BTreeMap::<String, DiagnosticLevel>::deserialize(deserializer)?;
+    let mut severity = BTreeMap::new();
+
+    for (raw, level) in entries {
+        let Some(number) = raw
+            .strip_prefix("TL")
+            .and_then(|value| value.parse::<u16>().ok())
+        else {
+            return Err(D::Error::custom(format!(
+                "diagnostic severity key `{raw}` must be an exact code such as `TL4035`"
+            )));
+        };
+        let Some(code) = DiagnosticCode::new(number).filter(|code| code.is_known()) else {
+            return Err(D::Error::custom(format!(
+                "unknown diagnostic severity code `{raw}`"
+            )));
+        };
+
+        severity.insert(code, level);
+    }
+
+    Ok(severity)
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

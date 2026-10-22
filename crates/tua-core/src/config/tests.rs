@@ -198,15 +198,12 @@ unused_locals = true
 unused_parameters = true
 use_before_definition = true
 duplicate_parameters = true
-wrong_argument_count = true
 bad_requires = true
 impossible_boolean_expressions = true
 duplicate_if_conditions = true
 duplicate_binary_operands = true
 float_equality = true
 const_assignments = true
-parameter_type_mismatches = true
-return_type_mismatches = true
 assignment_arity = true
 local_declaration_arity = true
 unused_assignments = true
@@ -216,6 +213,7 @@ inline_ignores = true
 inline_ignore_scopes = ["tua-ignore-line", "tua-ignore-next-line", "tua-ignore-file"]
 inline_ignore_max_per_file = 4
 globals = ["Game", "World"]
+severity = { TL1003 = "warning", TL4035 = "allow" }
 "#,
     )
     .expect("config should parse");
@@ -261,15 +259,12 @@ globals = ["Game", "World"]
                 unused_parameters: true,
                 use_before_definition: true,
                 duplicate_parameters: true,
-                wrong_argument_count: true,
                 bad_requires: true,
                 impossible_boolean_expressions: true,
                 duplicate_if_conditions: true,
                 duplicate_binary_operands: true,
                 float_equality: true,
                 const_assignments: true,
-                parameter_type_mismatches: true,
-                return_type_mismatches: true,
                 assignment_arity: true,
                 local_declaration_arity: true,
                 unused_assignments: true,
@@ -283,6 +278,10 @@ globals = ["Game", "World"]
                 ],
                 inline_ignore_max_per_file: 4,
                 globals: vec!["Game".to_owned(), "World".to_owned()],
+                severity: BTreeMap::from([
+                    (DiagnosticCode::TYPE_MISMATCH, DiagnosticLevel::Warning),
+                    (DiagnosticCode::LINT_LOCAL_SHADOW, DiagnosticLevel::Allow),
+                ]),
             },
         }
     );
@@ -361,15 +360,12 @@ duplicate_keys = true
     assert!(!config.diagnostics.unused_parameters);
     assert!(!config.diagnostics.use_before_definition);
     assert!(!config.diagnostics.duplicate_parameters);
-    assert!(!config.diagnostics.wrong_argument_count);
     assert!(!config.diagnostics.bad_requires);
     assert!(!config.diagnostics.impossible_boolean_expressions);
     assert!(!config.diagnostics.duplicate_if_conditions);
     assert!(!config.diagnostics.duplicate_binary_operands);
     assert!(!config.diagnostics.float_equality);
     assert!(!config.diagnostics.const_assignments);
-    assert!(!config.diagnostics.parameter_type_mismatches);
-    assert!(!config.diagnostics.return_type_mismatches);
     assert!(!config.diagnostics.assignment_arity);
     assert!(!config.diagnostics.local_declaration_arity);
     assert!(!config.diagnostics.unused_assignments);
@@ -386,6 +382,69 @@ duplicate_keys = true
     );
     assert_eq!(config.diagnostics.inline_ignore_max_per_file, 0);
     assert!(config.diagnostics.globals.is_empty());
+}
+
+#[test]
+fn parses_exact_diagnostic_severity_policy() {
+    let config = parse_config(
+        r#"
+[diagnostics.severity]
+TL1003 = "warning"
+TL4035 = "allow"
+TL4045 = "error"
+"#,
+    )
+    .expect("severity policy should parse");
+
+    assert_eq!(
+        config.diagnostics.severity,
+        BTreeMap::from([
+            (DiagnosticCode::TYPE_MISMATCH, DiagnosticLevel::Warning),
+            (DiagnosticCode::LINT_LOCAL_SHADOW, DiagnosticLevel::Allow),
+            (
+                DiagnosticCode::LINT_UNINITIALIZED_LOCAL,
+                DiagnosticLevel::Error,
+            ),
+        ])
+    );
+}
+
+#[test]
+fn rejects_unknown_diagnostic_severity_codes_and_levels() {
+    let unknown_code = parse_config(
+        r#"
+[diagnostics.severity]
+TL4999 = "warning"
+"#,
+    )
+    .expect_err("unknown code should fail");
+    assert!(unknown_code
+        .message
+        .contains("unknown diagnostic severity code"));
+
+    let unknown_level = parse_config(
+        r#"
+[diagnostics.severity]
+TL1003 = "fatal"
+"#,
+    )
+    .expect_err("unknown level should fail");
+    assert!(unknown_level.message.contains("unknown variant `fatal`"));
+}
+
+#[test]
+fn removed_checker_lint_switches_have_actionable_migrations() {
+    for (setting, replacement) in [
+        ("wrong_argument_count", "TL1004"),
+        ("parameter_type_mismatches", "TL1003"),
+        ("return_type_mismatches", "TL1003"),
+    ] {
+        let source = format!("[diagnostics]\n{setting} = true\n");
+        let error = parse_config(&source).expect_err("removed setting should fail explicitly");
+
+        assert!(error.message.contains("was removed"), "{}", error.message);
+        assert!(error.message.contains(replacement), "{}", error.message);
+    }
 }
 
 #[test]

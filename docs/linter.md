@@ -14,6 +14,10 @@ tua lint
 tua lint --strict
 ```
 
+`tua lint` fails on warning and error diagnostics after applying the project's
+exact-code severity policy. By contrast, `tua check` fails only on errors; use
+`tua check --deny-warnings` for a warnings-as-errors CI gate.
+
 `--strict` adds every Tua-specific optional lint to the standard rules. The
 standard rules are also enabled by default in `tua check` and the editor. A
 project can opt out of that default without changing `tua lint`:
@@ -22,6 +26,20 @@ project can opt out of that default without changing `tua lint`:
 [diagnostics]
 rules = false
 ```
+
+Individual diagnostic codes can be hidden or assigned a different severity:
+
+```toml title="tua.toml"
+[diagnostics.severity]
+TL4035 = "allow"
+TL4045 = "error"
+TL4056 = "info"
+```
+
+Accepted levels are `allow`, `hint`, `info`, `warning`, and `error`. Overrides
+apply consistently to the CLI and editor after inline suppression. Unknown
+codes and levels are configuration errors, preventing misspelled policy from
+silently doing nothing.
 
 ## Rules
 

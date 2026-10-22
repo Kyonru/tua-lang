@@ -26,6 +26,16 @@ pub(crate) fn apply_inline_ignores(
 ) -> Vec<Diagnostic> {
     let _trace = profile::diagnostics_span(DiagnosticsTraceCategory::InlineIgnores);
 
+    let diagnostics = apply_inline_ignores_before_policy(path, source, diagnostics, config);
+    config.apply_severity_policy(diagnostics)
+}
+
+fn apply_inline_ignores_before_policy(
+    path: &Path,
+    source: &str,
+    diagnostics: Vec<Diagnostic>,
+    config: &DiagnosticsConfig,
+) -> Vec<Diagnostic> {
     if !config.inline_ignores {
         return diagnostics;
     }

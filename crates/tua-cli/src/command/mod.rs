@@ -42,7 +42,7 @@ pub fn run_command(
             let loaded =
                 tua_core::load_config_from_dir(&cwd).map_err(CliError::from_config_error)?;
 
-            run_check(cwd, loaded)
+            run_check(cwd, loaded, options.deny_warnings)
         }
         CommandName::Fmt => {
             let loaded =

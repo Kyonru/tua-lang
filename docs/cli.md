@@ -29,7 +29,8 @@ cargo run -p tua-cli -- check
 Loads project config, parses sources, runs type checking and configured project
 diagnostics, and prints them. Standard lint rules are enabled by default; set
 `diagnostics.rules = false` for a type/project-only check. The command exits
-non-zero when any diagnostic is reported.
+non-zero for errors and still prints non-blocking warnings, information, and
+hints. Use `tua check --deny-warnings` when CI should reject warnings too.
 
 ## `fmt`
 
@@ -54,7 +55,9 @@ Runs syntax diagnostics and the standard lint rules, reporting success as
 `linted N file(s)`. Type, project, and domain diagnostics remain the
 responsibility of `tua check`. `--strict` additionally enables every
 Tua-specific optional lint while keeping inline-ignore settings controlled by
-project/editor configuration. See [Linter](linter.md) for rule compatibility.
+project/editor configuration. Lint exits non-zero for warning or error
+diagnostics; information and hints remain advisory. See [Linter](linter.md) for
+rule compatibility.
 
 ## Diagnostic Timings
 
