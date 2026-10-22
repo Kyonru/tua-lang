@@ -16,6 +16,7 @@ pub mod corpus;
 pub mod eligibility;
 #[cfg(any(test, feature = "test-fixture"))]
 pub mod eval;
+mod policy;
 mod project_corpus;
 mod recall;
 #[doc(hidden)]
@@ -319,45 +320,47 @@ pub(crate) fn complete(
         // policy disables it, and Phase 2 retrieval evaluation does not add
         // it. Keep production semantic behavior limited to the measured
         // statement-snippet source until callbacks pass their own gate.
-        semantic::statement_snippet(input.source, offset, context, input.include_ecs, 3)
-            .map(|text| (text, true))
-            .map(|(text, is_snippet)| InlineCompletionCandidate {
-                insert_text: text,
-                range,
-                is_snippet,
-                source: InlineCompletionSource::Semantic,
-                score: InlineCompletionScore(1.0),
-                pattern_id: None,
-            })
+        semantic::statement_snippet(
+            input.source,
+            offset,
+            context,
+            input.include_ecs,
+            policy::SNIPPET_MIN_PREFIX_CHARS,
+        )
+        .map(|text| (text, true))
+        .map(|(text, is_snippet)| InlineCompletionCandidate {
+            insert_text: text,
+            range,
+            is_snippet,
+            source: InlineCompletionSource::Semantic,
+            score: InlineCompletionScore(1.0),
+            pattern_id: None,
+        })
     } else {
         None
     };
     let raw = semantic
         .or_else(|| {
             let _profile = crate::profile::span("inline.recall");
-            (options.current_file
-                && !matches!(
-                    context,
-                    eligibility::CursorContext::Assignment | eligibility::CursorContext::Member
-                ))
-            .then(|| {
-                recall::common_prefix_checked(
-                    input.source,
-                    offset,
-                    input.position.line.saturating_sub(1),
-                    recall::RecallOptions::phase1(),
-                    || cancelled.load(Ordering::Relaxed) || budget.is_expired(),
-                )
-                .map(|suggestion| InlineCompletionCandidate {
-                    insert_text: suggestion.text,
-                    range,
-                    is_snippet: false,
-                    source: InlineCompletionSource::CurrentFile,
-                    score: InlineCompletionScore(suggestion.score),
-                    pattern_id: None,
+            (options.current_file && policy::recall_allowed(context))
+                .then(|| {
+                    recall::common_prefix_checked(
+                        input.source,
+                        offset,
+                        input.position.line.saturating_sub(1),
+                        policy::RECALL,
+                        || cancelled.load(Ordering::Relaxed) || budget.is_expired(),
+                    )
+                    .map(|suggestion| InlineCompletionCandidate {
+                        insert_text: suggestion.text,
+                        range,
+                        is_snippet: false,
+                        source: InlineCompletionSource::CurrentFile,
+                        score: InlineCompletionScore(suggestion.score),
+                        pattern_id: None,
+                    })
                 })
-            })
-            .flatten()
+                .flatten()
         })
         .or_else(|| {
             let project = project.as_ref()?;
@@ -371,21 +374,14 @@ pub(crate) fn complete(
                 .rfind('\n')
                 .map_or(0, |index| index + 1);
             let prefix = &input.source[line_start..offset];
-            if !options.project
-                || !matches!(
-                    context,
-                    eligibility::CursorContext::Comma
-                        | eligibility::CursorContext::Operator
-                        | eligibility::CursorContext::Other
-                )
-            {
+            if !options.project || !policy::PROJECT_CONTEXTS.contains(&context) {
                 return None;
             }
             if prefix
                 .chars()
                 .filter(|character| !character.is_whitespace())
                 .count()
-                < 6
+                < policy::PROJECT_MIN_PREFIX_CHARS
             {
                 return None;
             }
@@ -407,8 +403,8 @@ pub(crate) fn complete(
                     budget: *budget,
                     cancelled,
                 },
-                2,
-                2,
+                policy::PROJECT_MIN_SUPPORT,
+                policy::PROJECT_MIN_FULL_PREFIX_SUPPORT,
                 |path| versions.get(path),
             )?;
             Some(InlineCompletionCandidate {

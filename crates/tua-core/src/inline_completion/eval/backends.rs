@@ -420,21 +420,23 @@ impl Phase1Config {
     /// must name this exact policy; exploratory tuning uses the separately
     /// labelled `phase1-prototype` backend.
     pub fn production() -> Self {
+        use super::super::policy;
         Self {
             recall_variant: RecallVariant::CommonPrefix,
-            contexts: Some(BTreeSet::from([
-                CursorContext::OpenParen,
-                CursorContext::Comma,
-                CursorContext::Operator,
-                CursorContext::Whitespace,
-                CursorContext::StatementPrefix,
-                CursorContext::Identifier,
-                CursorContext::Other,
-            ])),
-            recall: RecallOptions::phase1(),
+            // Statement snippets match only statement prefixes, which recall
+            // also allows, so the recall contexts bound every production
+            // suggestion.
+            contexts: Some(
+                CursorContext::ALL
+                    .into_iter()
+                    .filter(|context| policy::recall_allowed(*context))
+                    .collect(),
+            ),
+            recall: policy::RECALL,
+            // The host query has no callback source.
             love_callbacks: false,
             statement_snippets: true,
-            snippet_min_prefix_chars: 3,
+            snippet_min_prefix_chars: policy::SNIPPET_MIN_PREFIX_CHARS,
         }
     }
 }
@@ -547,16 +549,14 @@ pub struct Phase2TuningConfig {
 }
 
 impl Phase2TuningConfig {
+    /// The project-retrieval policy compiled into the host query.
     pub fn pinned() -> Self {
+        use super::super::policy;
         Self {
-            contexts: BTreeSet::from([
-                CursorContext::Comma,
-                CursorContext::Operator,
-                CursorContext::Other,
-            ]),
-            min_prefix_chars: 6,
-            min_support: 2,
-            min_full_prefix_support: 2,
+            contexts: BTreeSet::from(policy::PROJECT_CONTEXTS),
+            min_prefix_chars: policy::PROJECT_MIN_PREFIX_CHARS,
+            min_support: policy::PROJECT_MIN_SUPPORT,
+            min_full_prefix_support: policy::PROJECT_MIN_FULL_PREFIX_SUPPORT,
         }
     }
 }

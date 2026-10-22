@@ -1288,3 +1288,28 @@ fn peeking_never_builds_and_matches_only_the_current_source() {
         "a stale entry is never returned"
     );
 }
+
+#[test]
+fn committed_thresholds_pin_the_host_policy() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../benchmarks/inline-eval/thresholds.toml");
+    let text = std::fs::read_to_string(&path).expect("read thresholds");
+    let thresholds: Thresholds = toml::from_str(&text).expect("parse thresholds");
+
+    assert_eq!(
+        thresholds
+            .phase1
+            .expect("[phase1] table")
+            .config()
+            .expect("phase1 config"),
+        backends::Phase1Config::production()
+    );
+    assert_eq!(
+        thresholds
+            .phase2_tuning
+            .expect("[phase2_tuning] table")
+            .config()
+            .expect("phase2 config"),
+        Phase2TuningConfig::pinned()
+    );
+}
