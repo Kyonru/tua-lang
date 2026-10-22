@@ -43,6 +43,7 @@ pub mod module_graph;
 pub mod module_index;
 pub mod module_link;
 mod module_path_index;
+mod must_use;
 mod narrowing;
 mod object_pool;
 pub mod parser;

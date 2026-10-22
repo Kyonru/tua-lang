@@ -17,6 +17,7 @@ use crate::config::{DiagnosticsConfig, JitConfig};
 use crate::control_flow::block_fallthrough_position;
 use crate::deprecation::{deprecated_api_uses, Deprecation};
 use crate::module_index::resolve_required_module;
+use crate::must_use::discarded_must_use_calls;
 use crate::profile::{self, DiagnosticsTraceCategory};
 use crate::runtime_type;
 use crate::scope::{scope_map_parsed_source_with_globals, ScopeGlobalKind, ScopeResolution};
@@ -110,6 +111,17 @@ pub(crate) fn lint_parsed_source(
                     &usage.deprecation,
                 )
             }),
+        );
+        diagnostics.extend(
+            discarded_must_use_calls(
+                parsed,
+                environment,
+                scope
+                    .as_ref()
+                    .expect("standard rules should build a scope map"),
+            )
+            .into_iter()
+            .map(|call| must_use_result_diagnostic(&parsed.path, call.span.start, &call.name)),
         );
     }
 
@@ -3645,6 +3657,17 @@ fn deprecated_api_diagnostic(
         message,
     )
     .with_code(DiagnosticCode::LINT_DEPRECATED_API)
+}
+
+fn must_use_result_diagnostic(path: &Path, position: SourcePosition, name: &str) -> Diagnostic {
+    Diagnostic::new(
+        path,
+        position.line,
+        position.column,
+        DiagnosticSeverity::Warning,
+        format!("result of `{name}` must be used"),
+    )
+    .with_code(DiagnosticCode::LINT_MUST_USE_RESULT)
 }
 
 #[derive(Clone, Copy)]

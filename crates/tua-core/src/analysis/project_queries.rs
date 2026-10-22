@@ -440,6 +440,7 @@ impl AnalysisSnapshot {
             .with_alias_types(self.project_imported_alias_types(parsed))
             .with_local_types(self.project_module_binding_types(parsed))
             .with_deprecated_accesses(self.project_module_binding_deprecations(parsed))
+            .with_must_use_accesses(self.project_module_binding_must_use_accesses(parsed))
             .with_local_types(project_inference.local_types.clone())
             .with_local_types(self.project_local_annotation_types(parsed));
 
@@ -512,6 +513,29 @@ impl AnalysisSnapshot {
         }
 
         deprecations
+    }
+
+    fn project_module_binding_must_use_accesses(&self, parsed: &ParsedSource) -> Vec<Vec<String>> {
+        let mut accesses = Vec::new();
+
+        for binding in require_bindings_for_parsed_source(parsed) {
+            let Some(module_path) = self.indexed_required_module_path(parsed, &binding.alias)
+            else {
+                continue;
+            };
+            let Some(exports) = self.indexed_module_export_fields(module_path) else {
+                continue;
+            };
+
+            accesses.extend(
+                exports
+                    .iter()
+                    .filter(|(_, field)| field.must_use)
+                    .map(|(name, _)| vec![binding.alias.clone(), name.clone()]),
+            );
+        }
+
+        accesses
     }
 
     pub(super) fn project_local_annotation_types(

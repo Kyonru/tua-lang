@@ -12,6 +12,7 @@ use full_moon::node::Node;
 use crate::ast_utils::plain_field_chain_from_var;
 use crate::deprecation::{deprecated_declarations, Deprecation};
 use crate::module_link::ModuleSpecifierKind;
+use crate::must_use::must_use_paths;
 use crate::parser::{LuaDocAnnotation, LuaDocAnnotationKind};
 use crate::project_model::ProjectModel;
 use crate::semantic::SemanticModel;
@@ -48,6 +49,7 @@ pub struct ModuleExportField {
     pub ty: Type,
     pub documentation: Option<String>,
     pub deprecation: Option<Deprecation>,
+    pub must_use: bool,
     pub parameter_names: Vec<String>,
     pub parameter_documentation: Vec<Option<String>>,
 }
@@ -138,6 +140,7 @@ pub fn exported_field_for_fields(
         ty,
         documentation: None,
         deprecation: None,
+        must_use: false,
         parameter_names: Vec::new(),
         parameter_documentation: Vec::new(),
     })
@@ -373,6 +376,7 @@ struct ExportInferer<'a> {
     locals: BTreeMap<String, Type>,
     function_docs: BTreeMap<String, String>,
     deprecations: BTreeMap<String, Deprecation>,
+    must_use_paths: std::collections::BTreeSet<Vec<String>>,
     function_parameter_names: BTreeMap<String, Vec<String>>,
     function_parameter_docs: BTreeMap<String, Vec<Option<String>>>,
     table_members: BTreeMap<String, BTreeMap<String, ModuleExportField>>,
@@ -393,6 +397,7 @@ impl<'a> ExportInferer<'a> {
             })
             .map(|declaration| (declaration.path.join("."), declaration.deprecation))
             .collect();
+        let must_use_paths = must_use_paths(parsed);
 
         Self {
             parsed,
@@ -401,6 +406,7 @@ impl<'a> ExportInferer<'a> {
             locals: BTreeMap::new(),
             function_docs: BTreeMap::new(),
             deprecations,
+            must_use_paths,
             function_parameter_names: BTreeMap::new(),
             function_parameter_docs: BTreeMap::new(),
             table_members: BTreeMap::new(),
@@ -429,6 +435,9 @@ impl<'a> ExportInferer<'a> {
                                 ty,
                                 documentation: function.documentation.clone(),
                                 deprecation: self.deprecations.get(name).cloned(),
+                                must_use: self
+                                    .must_use_paths
+                                    .contains(&normalized_export_path(name)),
                                 parameter_names: parameter_names(function),
                                 parameter_documentation: parameter_documentation(function),
                             },
@@ -505,6 +514,9 @@ impl<'a> ExportInferer<'a> {
                                 .deprecations
                                 .get(&function_name.replace(':', "."))
                                 .cloned(),
+                            must_use: self
+                                .must_use_paths
+                                .contains(&normalized_export_path(&function_name)),
                             parameter_names: parameter_names_from_body(function.body()),
                             parameter_documentation: Vec::new(),
                         });
@@ -589,6 +601,7 @@ impl<'a> ExportInferer<'a> {
                 ty: Type::empty_table(),
                 documentation: None,
                 deprecation: None,
+                must_use: false,
                 parameter_names: Vec::new(),
                 parameter_documentation: Vec::new(),
             });
@@ -596,6 +609,7 @@ impl<'a> ExportInferer<'a> {
         if nested.is_empty() {
             entry.ty = ty;
             entry.deprecation = self.deprecations.get(&parts.join(".")).cloned();
+            entry.must_use = self.must_use_paths.contains(parts);
         } else {
             insert_nested_field(&mut entry.ty, nested, ty);
         }
@@ -725,6 +739,8 @@ impl<'a> ExportInferer<'a> {
 
                     self.deprecations.get(&token_text(name)).cloned()
                 });
+                let must_use = self.field_must_use(field)
+                    || matches!(value, Expression::Var(Var::Name(name)) if self.must_use_paths.contains(&vec![token_text(name)]));
 
                 Some((
                     name,
@@ -732,6 +748,7 @@ impl<'a> ExportInferer<'a> {
                         ty,
                         documentation,
                         deprecation,
+                        must_use,
                         parameter_names,
                         parameter_documentation,
                     },
@@ -971,6 +988,7 @@ impl<'a> ExportInferer<'a> {
             ),
             documentation: self.field_documentation(field),
             deprecation: self.field_deprecation(field),
+            must_use: self.field_must_use(field),
             parameter_names: parameter_names_from_body(body),
             parameter_documentation,
         })
@@ -997,6 +1015,15 @@ impl<'a> ExportInferer<'a> {
         let docs = self.lua_doc_annotations_for_field(&token_text(key), field);
 
         Deprecation::from_annotations(&docs)
+    }
+
+    fn field_must_use(&self, field: &Field) -> bool {
+        let Field::NameKey { key, .. } = field else {
+            return false;
+        };
+        self.lua_doc_annotations_for_field(&token_text(key), field)
+            .iter()
+            .any(|annotation| matches!(annotation.kind, LuaDocAnnotationKind::NoDiscard(_)))
     }
 
     fn lua_doc_annotations_for_field(
@@ -1035,6 +1062,7 @@ fn collect_table_fields(ty: &Type, fields: &mut BTreeMap<String, ModuleExportFie
                         ty: field.ty.clone(),
                         documentation: None,
                         deprecation: None,
+                        must_use: false,
                         parameter_names: Vec::new(),
                         parameter_documentation: Vec::new(),
                     },
@@ -1063,6 +1091,15 @@ fn module_value_is_informative(ty: &Type) -> bool {
         Type::Table(table) => !table.is_plain_empty(),
         _ => true,
     }
+}
+
+fn normalized_export_path(name: &str) -> Vec<String> {
+    name.replace(':', ".")
+        .split('.')
+        .map(str::trim)
+        .filter(|part| !part.is_empty())
+        .map(str::to_owned)
+        .collect()
 }
 
 fn function_returns_only_any(ty: &Type) -> bool {

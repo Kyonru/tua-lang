@@ -4004,6 +4004,65 @@ oldGlobal()
 }
 
 #[test]
+fn nodiscard_reports_only_discarded_direct_call_results() {
+    let diagnostics = check_standard_rules_source(
+        r#"
+---@nodiscard
+local function acquire(): number return 1 end
+
+acquire()
+local value = acquire()
+print(acquire())
+return value
+"#,
+    );
+    let messages = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_MUST_USE_RESULT))
+        .map(|diagnostic| diagnostic.message.as_str())
+        .collect::<Vec<_>>();
+
+    assert_eq!(messages, vec!["result of `acquire` must be used"]);
+}
+
+#[test]
+fn nodiscard_respects_members_methods_shadowing_and_dynamic_calls() {
+    let diagnostics = check_standard_rules_source(
+        r#"
+local handles = {}
+---@nodiscard
+function handles.create(): number return 1 end
+---@nodiscard
+function handles:clone(): number return 1 end
+
+handles.create()
+handles:clone()
+
+do
+  local handles = dynamic()
+  handles.create()
+end
+
+unknown.create()
+"#,
+    );
+    let messages = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_MUST_USE_RESULT))
+        .map(|diagnostic| diagnostic.message.as_str())
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        messages,
+        vec![
+            "result of `handles.create` must be used",
+            "result of `handles.clone` must be used",
+        ],
+        "{diagnostics:#?}"
+    );
+}
+
+#[test]
 fn reports_dead_initial_values_overwrites_and_final_assignments() {
     let diagnostics = check_tua_source_with_diagnostics_config(
         "src/main.tua",

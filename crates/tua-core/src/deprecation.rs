@@ -330,7 +330,7 @@ pub(crate) fn deprecated_declarations(parsed: &ParsedSource) -> Vec<DeprecatedDe
         .collect()
 }
 
-fn starts_at_first_code_column(parsed: &ParsedSource, span: SourceSpan) -> bool {
+pub(crate) fn starts_at_first_code_column(parsed: &ParsedSource, span: SourceSpan) -> bool {
     let Some(line) = parsed.source.lines().nth(span.start.line.saturating_sub(1)) else {
         return false;
     };
@@ -380,7 +380,7 @@ pub(crate) fn leading_lua_doc_annotations(
         .collect()
 }
 
-fn normalized_symbol_path(name: &str) -> Vec<String> {
+pub(crate) fn normalized_symbol_path(name: &str) -> Vec<String> {
     name.replace(':', ".")
         .split('.')
         .map(str::trim)

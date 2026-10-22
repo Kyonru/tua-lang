@@ -562,6 +562,7 @@ impl ProjectTypeDatabase {
             ty: current,
             documentation: None,
             deprecation: None,
+            must_use: false,
             parameter_names: Vec::new(),
             parameter_documentation: Vec::new(),
         })

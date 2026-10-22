@@ -439,6 +439,7 @@ impl ModuleGraph {
             ty,
             documentation: None,
             deprecation: None,
+            must_use: false,
             parameter_names: Vec::new(),
             parameter_documentation: Vec::new(),
         })
@@ -1141,6 +1142,7 @@ fn merge_forwarded_field(
     if existing.deprecation.is_some() {
         forwarded.deprecation.clone_from(&existing.deprecation);
     }
+    forwarded.must_use |= existing.must_use;
     if !existing.parameter_names.is_empty() {
         forwarded
             .parameter_names

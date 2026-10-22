@@ -4246,6 +4246,57 @@ return {
 }
 
 #[test]
+fn snapshot_diagnostics_follow_nodiscard_lua_module_exports() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+local Api = require("api")
+do
+  local Api = { acquire = function() return 1 end }
+  Api.acquire()
+end
+Api.<|discarded|>acquire()
+local handle = Api.acquire()
+print(handle)
+-- file: src/api.lua
+---@nodiscard
+local function acquire()
+  return 1
+end
+
+return {
+  acquire = acquire,
+}
+"#,
+    );
+    let mut host = AnalysisHost::new();
+
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        let kind = if file
+            .path
+            .extension()
+            .and_then(|extension| extension.to_str())
+            == Some("lua")
+        {
+            AnalysisSourceKind::Lua
+        } else {
+            AnalysisSourceKind::Tua
+        };
+        host.set_file_with_kind(&file.path, file.source.clone(), kind);
+    }
+
+    let diagnostics = host.snapshot().diagnostics("src/main.tua");
+    let nodiscard = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_MUST_USE_RESULT))
+        .collect::<Vec<_>>();
+
+    assert_eq!(nodiscard.len(), 1, "{diagnostics:#?}");
+    assert_eq!(nodiscard[0].message, "result of `Api.acquire` must be used");
+    assert_eq!(nodiscard[0].line, fixture.position("discarded").line);
+}
+
+#[test]
 fn snapshot_hover_prefers_project_type_aliases_in_type_annotations() {
     let fixture = Fixture::parse(
         r#"-- file: src/main.tua
