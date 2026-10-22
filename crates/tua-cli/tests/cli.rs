@@ -493,7 +493,11 @@ fn package_writes_a_reproducible_love_archive_without_source_maps() {
         .expect("failed to run tua package");
     assert!(package.status.success(), "{package:?}");
     let stdout = String::from_utf8_lossy(&package.stdout);
-    assert!(stdout.contains("packaged dist/Star Dust.love"), "{stdout}");
+    let archive_path = Path::new("dist").join("Star Dust.love");
+    assert!(
+        stdout.contains(&format!("packaged {}", archive_path.display())),
+        "{stdout}"
+    );
 
     let archive = fs::read(temp.path().join("dist/Star Dust.love")).expect("archive");
     let names = stored_zip_names(&archive);
