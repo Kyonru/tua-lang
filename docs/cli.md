@@ -54,9 +54,10 @@ cargo run -p tua-cli -- lint --strict
 Runs syntax diagnostics and the standard lint rules, reporting success as
 `linted N file(s)`. Type, project, and domain diagnostics remain the
 responsibility of `tua check`. `--strict` additionally enables every broadly
-applicable Tua-specific optional lint while keeping the noisy
-direct-call-only `uncalled_local_functions` heuristic opt-in and inline-ignore
-settings controlled by project/editor configuration. Lint exits non-zero for warning or error
+applicable Tua-specific optional lint while keeping noisy project-policy rules
+such as direct-call-only function use, complexity, literal-zero division,
+failed swaps, and mixed tables opt-in. Inline-ignore settings remain controlled
+by project/editor configuration. Lint exits non-zero for warning or error
 diagnostics; information and hints remain advisory. See [Linter](linter.md) for
 rule compatibility.
 

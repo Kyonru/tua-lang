@@ -209,6 +209,10 @@ local_declaration_arity = true
 unused_assignments = true
 binary_operator_type_mismatches = true
 uncalled_local_functions = true
+max_cyclomatic_complexity = 12
+divide_by_zero = true
+almost_swapped = true
+mixed_tables = true
 inline_ignores = true
 inline_ignore_scopes = ["tua-ignore-line", "tua-ignore-next-line", "tua-ignore-file"]
 inline_ignore_max_per_file = 4
@@ -270,6 +274,10 @@ severity = { TL1003 = "warning", TL4035 = "allow" }
                 unused_assignments: true,
                 binary_operator_type_mismatches: true,
                 uncalled_local_functions: true,
+                max_cyclomatic_complexity: 12,
+                divide_by_zero: true,
+                almost_swapped: true,
+                mixed_tables: true,
                 inline_ignores: true,
                 inline_ignore_scopes: vec![
                     "tua-ignore-line".to_owned(),
@@ -371,6 +379,10 @@ duplicate_keys = true
     assert!(!config.diagnostics.unused_assignments);
     assert!(!config.diagnostics.binary_operator_type_mismatches);
     assert!(!config.diagnostics.uncalled_local_functions);
+    assert_eq!(config.diagnostics.max_cyclomatic_complexity, 0);
+    assert!(!config.diagnostics.divide_by_zero);
+    assert!(!config.diagnostics.almost_swapped);
+    assert!(!config.diagnostics.mixed_tables);
     assert!(config.diagnostics.inline_ignores);
     assert_eq!(
         config.diagnostics.inline_ignore_scopes,
@@ -385,12 +397,16 @@ duplicate_keys = true
 }
 
 #[test]
-fn strict_lints_leave_the_direct_call_heuristic_opt_in() {
+fn strict_lints_leave_noisy_project_policy_rules_opt_in() {
     let mut diagnostics = DiagnosticsConfig::default();
 
     diagnostics.enable_all_lints();
 
     assert!(!diagnostics.uncalled_local_functions);
+    assert_eq!(diagnostics.max_cyclomatic_complexity, 0);
+    assert!(!diagnostics.divide_by_zero);
+    assert!(!diagnostics.almost_swapped);
+    assert!(!diagnostics.mixed_tables);
     assert!(diagnostics.self_assignments);
     assert!(diagnostics.undefined_variables);
 }

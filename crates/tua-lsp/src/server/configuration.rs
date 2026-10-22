@@ -43,6 +43,10 @@ pub(super) struct DiagnosticOverrides {
     pub(super) unused_assignments: Option<bool>,
     pub(super) binary_operator_type_mismatches: Option<bool>,
     pub(super) uncalled_local_functions: Option<bool>,
+    pub(super) max_cyclomatic_complexity: Option<usize>,
+    pub(super) divide_by_zero: Option<bool>,
+    pub(super) almost_swapped: Option<bool>,
+    pub(super) mixed_tables: Option<bool>,
     pub(super) inline_ignores: Option<bool>,
     pub(super) inline_ignore_scopes: Option<Vec<String>>,
     pub(super) inline_ignore_max_per_file: Option<usize>,
@@ -299,6 +303,14 @@ impl DiagnosticOverrides {
                 "uncalled_local_functions",
                 "uncalledLocalFunctions",
             ),
+            max_cyclomatic_complexity: usize_setting(
+                settings,
+                "max_cyclomatic_complexity",
+                "maxCyclomaticComplexity",
+            ),
+            divide_by_zero: bool_setting(settings, "divide_by_zero", "divideByZero"),
+            almost_swapped: bool_setting(settings, "almost_swapped", "almostSwapped"),
+            mixed_tables: bool_setting(settings, "mixed_tables", "mixedTables"),
             inline_ignores: bool_setting(settings, "inline_ignores", "inlineIgnores"),
             inline_ignore_scopes: string_array_value(
                 settings
@@ -363,6 +375,12 @@ impl DiagnosticOverrides {
             self.uncalled_local_functions,
             &mut diagnostics.uncalled_local_functions,
         );
+        if let Some(maximum) = self.max_cyclomatic_complexity {
+            diagnostics.max_cyclomatic_complexity = maximum;
+        }
+        apply_bool(self.divide_by_zero, &mut diagnostics.divide_by_zero);
+        apply_bool(self.almost_swapped, &mut diagnostics.almost_swapped);
+        apply_bool(self.mixed_tables, &mut diagnostics.mixed_tables);
         apply_bool(self.inline_ignores, &mut diagnostics.inline_ignores);
 
         if let Some(scopes) = &self.inline_ignore_scopes {

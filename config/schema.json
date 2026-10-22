@@ -285,6 +285,35 @@
       "editor": "tua.diagnostics.uncalledLocalFunctions"
     },
     {
+      "path": "diagnostics.max_cyclomatic_complexity",
+      "type": "integer",
+      "default": 0,
+      "minimum": 0,
+      "description": "Report functions whose cyclomatic complexity exceeds this value; zero disables the rule.",
+      "editor": "tua.diagnostics.maxCyclomaticComplexity"
+    },
+    {
+      "path": "diagnostics.divide_by_zero",
+      "type": "boolean",
+      "default": false,
+      "description": "Report division by a nonzero or dynamic value and a literal zero denominator.",
+      "editor": "tua.diagnostics.divideByZero"
+    },
+    {
+      "path": "diagnostics.almost_swapped",
+      "type": "boolean",
+      "default": false,
+      "description": "Report consecutive assignments that look like a failed value swap.",
+      "editor": "tua.diagnostics.almostSwapped"
+    },
+    {
+      "path": "diagnostics.mixed_tables",
+      "type": "boolean",
+      "default": false,
+      "description": "Report table literals that mix sequential array entries with keyed fields.",
+      "editor": "tua.diagnostics.mixedTables"
+    },
+    {
       "path": "diagnostics.inline_ignores",
       "type": "boolean",
       "default": true,

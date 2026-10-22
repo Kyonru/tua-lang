@@ -1069,7 +1069,21 @@ local bad = 1 + "hp"
 local function callback()
 end
 
+local function complex(first: boolean, second: boolean)
+  if first and second then
+    return 1
+  end
+  return 0
+end
+
+local divided = 1 / 0
+local left, right = 1, 2
+left = right
+right = left
+local mixed = { "player", hp = 10 }
+
 print(callback)
+print(complex(true, false), divided, left, right, mixed)
 "#;
 
     temp.write(
@@ -1090,7 +1104,11 @@ print(callback)
             "localDeclarationArity": true,
             "unusedAssignments": true,
             "binaryOperatorTypeMismatches": true,
-            "uncalledLocalFunctions": true
+            "uncalledLocalFunctions": true,
+            "maxCyclomaticComplexity": 2,
+            "divideByZero": true,
+            "almostSwapped": true,
+            "mixedTables": true
         }
     })));
 
@@ -1105,6 +1123,10 @@ print(callback)
     assert!(codes.contains(&"TL4029"));
     assert!(codes.contains(&"TL4030"));
     assert!(codes.contains(&"TL4031"));
+    assert!(codes.contains(&"TL4070"));
+    assert!(codes.contains(&"TL4071"));
+    assert!(codes.contains(&"TL4072"));
+    assert!(codes.contains(&"TL4073"));
 }
 #[test]
 fn did_change_configuration_can_enable_jit_guidance() {

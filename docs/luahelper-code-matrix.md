@@ -181,6 +181,10 @@ enforced separately with `tua fmt --check`.
 | `TL4067` | A loop unconditionally terminates during its first iteration. | `rules`; enabled by default |
 | `TL4068` | A direct call discards the result of a resolved function or module export marked `---@nodiscard`. | `rules`; enabled by default |
 | `TL4069` | Two static module references resolve to the same file but use different final Lua runtime keys, which can duplicate module state. | `rules`; enabled by default |
+| `TL4070` | A function exceeds the configured cyclomatic-complexity maximum. | `max_cyclomatic_complexity`; zero disables it |
+| `TL4071` | Division uses a literal-zero denominator without the intentional literal `0 / 0` NaN form. | `divide_by_zero`; opt-in |
+| `TL4072` | Two adjacent simple assignments look like a failed swap and reuse an overwritten value. | `almost_swapped`; opt-in |
+| `TL4073` | A table literal mixes sequential entries with keyed fields. | `mixed_tables`; opt-in |
 
 Configuration keys in this table live under `[diagnostics]` unless they start
 with `jit.`. VS Code can override matching diagnostic settings for the running
@@ -214,9 +218,9 @@ TL1003 = "warning"
 ```
 
 Use `tua lint --strict` to enable the broadly applicable optional lints for that
-command. The direct-call-only `uncalled_local_functions` heuristic remains
-opt-in. Inline ignore behavior remains controlled by project or editor
-configuration.
+command. Direct-call-only and project-policy rules (`TL4031`, `TL4070` through
+`TL4073`) remain opt-in. Inline ignore behavior remains controlled by project
+or editor configuration.
 
 See [Configuration](configuration.md#diagnostics) for every setting and its
 VS Code override.

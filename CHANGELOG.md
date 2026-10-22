@@ -167,6 +167,11 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Added
 
+- Added project-opt-in lint policy for high cyclomatic complexity (`TL4070`),
+  literal-zero division (`TL4071`), failed sequential swaps (`TL4072`), and
+  mixed array/map table literals (`TL4073`). Complexity uses a configurable
+  maximum; all four remain disabled by default and under `tua lint --strict`.
+
 - Added `TL4068` for discarded results from resolved `---@nodiscard` functions
   and module exports. Assigned, returned, nested, unresolved, and dynamic calls
   remain valid.

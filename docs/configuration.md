@@ -133,6 +133,10 @@ the behavior and tradeoffs of each option.
 | `diagnostics.unused_assignments` | boolean | `false` | `tua.diagnostics.unusedAssignments` |
 | `diagnostics.binary_operator_type_mismatches` | boolean | `false` | `tua.diagnostics.binaryOperatorTypeMismatches` |
 | `diagnostics.uncalled_local_functions` | boolean | `false` | `tua.diagnostics.uncalledLocalFunctions` |
+| `diagnostics.max_cyclomatic_complexity` | integer | `0` | `tua.diagnostics.maxCyclomaticComplexity` |
+| `diagnostics.divide_by_zero` | boolean | `false` | `tua.diagnostics.divideByZero` |
+| `diagnostics.almost_swapped` | boolean | `false` | `tua.diagnostics.almostSwapped` |
+| `diagnostics.mixed_tables` | boolean | `false` | `tua.diagnostics.mixedTables` |
 | `diagnostics.inline_ignores` | boolean | `true` | `tua.diagnostics.inlineIgnores` |
 | `diagnostics.inline_ignore_scopes` | string-array | `["tua-ignore-line","tua-ignore-next-line","tua-ignore-file"]` | `tua.diagnostics.inlineIgnoreScopes` |
 | `diagnostics.inline_ignore_max_per_file` | integer | `0` | `tua.diagnostics.inlineIgnoreMaxPerFile` |
@@ -386,7 +390,7 @@ Formatting and linting are independent: `[format]` controls `tua fmt`, while
 standard rules for that command. Those rules are enabled by default for
 `tua check` and editor diagnostics; set `rules = false` to opt out there.
 `tua lint --strict` adds the broadly applicable Tua-specific optional lints;
-the direct-call-only `uncalled_local_functions` heuristic remains opt-in. See
+the direct-call-only and project-policy heuristics remain opt-in. See
 [Formatter](formatter.md), [Linter](linter.md), and
 [Diagnostic Codes](luahelper-code-matrix.md).
 
@@ -413,6 +417,10 @@ local_declaration_arity = true
 unused_assignments = true
 binary_operator_type_mismatches = true
 uncalled_local_functions = false
+max_cyclomatic_complexity = 0
+divide_by_zero = false
+almost_swapped = false
+mixed_tables = false
 inline_ignores = true
 inline_ignore_scopes = ["tua-ignore-line", "tua-ignore-next-line", "tua-ignore-file"]
 inline_ignore_max_per_file = 0
@@ -518,6 +526,27 @@ called. Passing a function to a callback, signal, ECS system, or event API still
 counts as uncalled because the heuristic only recognizes direct call syntax.
 It remains opt-in even under `tua lint --strict` to avoid predictable callback
 false positives.
+
+`max_cyclomatic_complexity`
+: Reports `TL4070` when one function exceeds the configured cyclomatic
+complexity. `if`/`elseif`, loops, `and`/`or`, and conditional expressions add
+decision points; nested functions are measured separately. Zero disables the
+rule. It remains opt-in under `tua lint --strict`.
+
+`divide_by_zero`
+: Reports `TL4071` for division by a literal zero unless both operands are
+literal zero. This is style guidance because supported Lua runtimes can produce
+infinities instead of throwing. It remains opt-in under `tua lint --strict`.
+
+`almost_swapped`
+: Reports `TL4072` for adjacent simple-name assignments such as `a = b`
+followed by `b = a`. Field, index, call, and multi-target assignments remain
+permissive. It remains opt-in under `tua lint --strict`.
+
+`mixed_tables`
+: Reports `TL4073` when one table literal contains both sequential entries and
+keyed fields. Mixed tables are valid Lua, so this project-policy rule remains
+opt-in under `tua lint --strict`.
 
 `severity`
 : Overrides individual diagnostic codes with `allow`, `hint`, `info`,

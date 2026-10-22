@@ -127,6 +127,10 @@ impl DiagnosticCode {
     pub const LINT_SINGLE_ITERATION_LOOP: Self = Self(4067);
     pub const LINT_CANONICAL_MODULE_SPELLING: Self = Self(4069);
     pub const LINT_MUST_USE_RESULT: Self = Self(4068);
+    pub const LINT_HIGH_CYCLOMATIC_COMPLEXITY: Self = Self(4070);
+    pub const LINT_DIVIDE_BY_ZERO: Self = Self(4071);
+    pub const LINT_ALMOST_SWAPPED: Self = Self(4072);
+    pub const LINT_MIXED_TABLE: Self = Self(4073);
     pub const DOMAIN_ECS_COMPONENT_VALUE: Self = Self(5002);
     pub const DOMAIN_ECS_QUERY: Self = Self(5003);
     pub const DOMAIN_SPRITE: Self = Self(5004);
@@ -255,6 +259,10 @@ impl DiagnosticCode {
                 | Self::LINT_SINGLE_ITERATION_LOOP
                 | Self::LINT_CANONICAL_MODULE_SPELLING
                 | Self::LINT_MUST_USE_RESULT
+                | Self::LINT_HIGH_CYCLOMATIC_COMPLEXITY
+                | Self::LINT_DIVIDE_BY_ZERO
+                | Self::LINT_ALMOST_SWAPPED
+                | Self::LINT_MIXED_TABLE
                 | Self::DOMAIN_ECS_COMPONENT_VALUE
                 | Self::DOMAIN_ECS_QUERY
                 | Self::DOMAIN_SPRITE

@@ -315,6 +315,120 @@ fn unscoped_global_write_stays_permissive_for_lua() {
 }
 
 #[test]
+fn cyclomatic_complexity_is_thresholded_per_function_and_excludes_nested_bodies() {
+    let diagnostics = check_optional_rules_source(
+        r#"local function complex(a: boolean, b: boolean, c: boolean)
+  if a and b then
+    print(a)
+  elseif c then
+    print(c)
+  end
+
+  while a do
+    break
+  end
+
+  local function nested(x: boolean)
+    if x then
+      return 1
+    end
+    return 0
+  end
+  return nested(b)
+end
+print(complex(true, true, false))
+"#,
+        DiagnosticsConfig {
+            max_cyclomatic_complexity: 4,
+            ..diagnostics_without_standard_rules()
+        },
+    );
+
+    let complexity = diagnostics
+        .iter()
+        .filter(|diagnostic| {
+            diagnostic.code == Some(DiagnosticCode::LINT_HIGH_CYCLOMATIC_COMPLEXITY)
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(complexity.len(), 1, "{diagnostics:#?}");
+    assert!(complexity[0].message.contains("complexity is 5"));
+}
+
+#[test]
+fn divide_by_zero_is_opt_in_and_preserves_intentional_nan() {
+    let diagnostics = check_optional_rules_source(
+        r#"local function divide(value: number, denominator: number)
+  local infinity = value / 0
+  local parenthesized = value / (0)
+  local nan = 0 / 0
+  local dynamic = value / denominator
+  return infinity, parenthesized, nan, dynamic
+end
+print(divide(1, 2))
+"#,
+        DiagnosticsConfig {
+            divide_by_zero: true,
+            ..diagnostics_without_standard_rules()
+        },
+    );
+
+    assert_eq!(
+        count_code(&diagnostics, DiagnosticCode::LINT_DIVIDE_BY_ZERO),
+        2,
+        "{diagnostics:#?}"
+    );
+}
+
+#[test]
+fn almost_swapped_reports_only_adjacent_simple_name_assignments() {
+    let diagnostics = check_optional_rules_source(
+        r#"local left, right = 1, 2
+left = right
+right = left
+
+local first, second = 3, 4
+first, second = second, first
+
+local tableValue = { left = 1, right = 2 }
+tableValue.left = tableValue.right
+tableValue.right = tableValue.left
+print(left, right, first, second, tableValue)
+"#,
+        DiagnosticsConfig {
+            almost_swapped: true,
+            ..diagnostics_without_standard_rules()
+        },
+    );
+
+    assert_eq!(
+        count_code(&diagnostics, DiagnosticCode::LINT_ALMOST_SWAPPED),
+        1,
+        "{diagnostics:#?}"
+    );
+}
+
+#[test]
+fn mixed_table_policy_is_opt_in_and_requires_both_field_kinds() {
+    let diagnostics = check_optional_rules_source(
+        r#"local mixed = { "player", hp = 10 }
+local array = { "player", 10 }
+local record = { name = "player", hp = 10 }
+print(mixed, array, record)
+"#,
+        DiagnosticsConfig {
+            mixed_tables: true,
+            ..diagnostics_without_standard_rules()
+        },
+    );
+
+    assert_eq!(
+        count_code(&diagnostics, DiagnosticCode::LINT_MIXED_TABLE),
+        1,
+        "{diagnostics:#?}"
+    );
+}
+
+#[test]
 fn builtin_global_write_reports_direct_target_writes_with_guidance() {
     let diagnostics = check_standard_rules_source(
         r#"
@@ -4674,6 +4788,12 @@ fn check_standard_rules_source(source: &str) -> Vec<crate::Diagnostic> {
     )
     .err()
     .unwrap_or_default()
+}
+
+fn check_optional_rules_source(source: &str, config: DiagnosticsConfig) -> Vec<crate::Diagnostic> {
+    check_tua_source_with_diagnostics_config("src/main.tua", source, &config)
+        .err()
+        .unwrap_or_default()
 }
 
 fn diagnostics_without_standard_rules() -> DiagnosticsConfig {

@@ -71,6 +71,10 @@ local_declaration_arity = false
 unused_assignments = false
 binary_operator_type_mismatches = false
 uncalled_local_functions = false
+max_cyclomatic_complexity = 0
+divide_by_zero = false
+almost_swapped = false
+mixed_tables = false
 inline_ignores = true
 inline_ignore_scopes = [\"tua-ignore-line\", \"tua-ignore-next-line\", \"tua-ignore-file\"]
 inline_ignore_max_per_file = 0
@@ -302,6 +306,10 @@ pub struct DiagnosticsConfig {
     pub unused_assignments: bool,
     pub binary_operator_type_mismatches: bool,
     pub uncalled_local_functions: bool,
+    pub max_cyclomatic_complexity: usize,
+    pub divide_by_zero: bool,
+    pub almost_swapped: bool,
+    pub mixed_tables: bool,
     pub inline_ignores: bool,
     pub inline_ignore_scopes: Vec<String>,
     pub inline_ignore_max_per_file: usize,
@@ -344,6 +352,10 @@ impl Default for DiagnosticsConfig {
             unused_assignments: false,
             binary_operator_type_mismatches: false,
             uncalled_local_functions: false,
+            max_cyclomatic_complexity: 0,
+            divide_by_zero: false,
+            almost_swapped: false,
+            mixed_tables: false,
             inline_ignores: true,
             inline_ignore_scopes: vec![
                 "tua-ignore-line".to_owned(),

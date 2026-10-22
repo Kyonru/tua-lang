@@ -324,6 +324,39 @@
           "default": null,
           "description": "Report local functions that are referenced but never directly called; callback uses still count as uncalled."
         },
+        "tua.diagnostics.maxCyclomaticComplexity": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "default": null,
+          "minimum": 0,
+          "description": "Report functions whose cyclomatic complexity exceeds this value; zero disables the rule."
+        },
+        "tua.diagnostics.divideByZero": {
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "default": null,
+          "description": "Report division by a nonzero or dynamic value and a literal zero denominator."
+        },
+        "tua.diagnostics.almostSwapped": {
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "default": null,
+          "description": "Report consecutive assignments that look like a failed value swap."
+        },
+        "tua.diagnostics.mixedTables": {
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "default": null,
+          "description": "Report table literals that mix sequential array entries with keyed fields."
+        },
         "tua.diagnostics.inlineIgnores": {
           "type": [
             "boolean",

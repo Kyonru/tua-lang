@@ -29,6 +29,7 @@ use crate::{
 };
 
 mod class_rules;
+mod optional_rules;
 mod rules;
 
 pub(crate) fn lint_parsed_source(
@@ -45,6 +46,7 @@ pub(crate) fn lint_parsed_source(
         && !config.self_assignments
         && !symbol_lints_enabled(config)
         && !correctness_lints_enabled(config)
+        && !optional_lints_enabled(config)
         && !jit_config.enabled
     {
         return Vec::new();
@@ -125,6 +127,10 @@ pub(crate) fn lint_parsed_source(
         );
     }
 
+    if optional_lints_enabled(config) {
+        diagnostics.extend(optional_rules::lint(parsed, config));
+    }
+
     if symbol_lints_enabled(config) {
         diagnostics.extend(SymbolAnalyzer::new(parsed, config).analyze().diagnostics);
     }
@@ -178,6 +184,13 @@ fn correctness_lints_enabled(config: &DiagnosticsConfig) -> bool {
         || config.assignment_arity
         || config.local_declaration_arity
         || config.binary_operator_type_mismatches
+}
+
+fn optional_lints_enabled(config: &DiagnosticsConfig) -> bool {
+    config.max_cyclomatic_complexity > 0
+        || config.divide_by_zero
+        || config.almost_swapped
+        || config.mixed_tables
 }
 
 struct LintVisitor<'a> {

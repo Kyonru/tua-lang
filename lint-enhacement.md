@@ -35,20 +35,18 @@ default-policy item is now implemented:
 - Unused generic and numeric loop bindings and unused varargs participate in
   the existing unused-symbol diagnostics.
 
-Two optional ideas do not warrant new diagnostics yet. Numeric `for` direction
-mistakes are already covered by `ForRange` (`TL4042`), including an implicit
-positive step whose bounds descend. Cyclomatic complexity needs a separately
-designed, opt-in threshold configuration; a universal default would turn a
-maintainability preference into noisy editor feedback.
+Numeric `for` direction mistakes are already covered by `ForRange` (`TL4042`),
+including an implicit positive step whose bounds descend. The remaining
+high-confidence project policies are now explicit opt-ins: configurable
+cyclomatic complexity (`TL4070`), literal-zero division (`TL4071`), failed
+simple-name swaps (`TL4072`), and mixed table literals (`TL4073`). None is
+enabled by the standard rules or `--strict`.
 
-The lower-priority ideas remain intentionally unimplemented. Mixed array/map
-tables and flexible naming are normal Lua patterns, while “almost swapped”
-assignments are too speculative for a default diagnostic. Division by a
-literal zero follows Lua's numeric semantics rather than consistently failing:
-Lua 5.4 and LuaJIT may produce infinities, while vector implementations can
-choose stricter behavior. If project-specific policy is added later, these
-belong behind individually configurable opt-in rules rather than the standard
-ruleset.
+A naming-convention diagnostic remains intentionally unimplemented. Tua
+projects legitimately mix snake_case Lua APIs, camelCase game code, PascalCase
+types and modules, and uppercase constants. A useful naming feature needs
+category-specific patterns and generated/builtin exemptions; a single boolean
+would create predictable noise.
 
 ## Original confirmed findings
 

@@ -19,11 +19,11 @@ exact-code severity policy. By contrast, `tua check` fails only on errors; use
 `tua check --deny-warnings` for a warnings-as-errors CI gate.
 
 `--strict` adds the broadly applicable Tua-specific optional lints to the
-standard rules. It deliberately leaves `uncalled_local_functions` opt-in:
-passing a function to an event system or callback API is a normal use even
-though the heuristic cannot see a direct call. The standard rules are also
-enabled by default in `tua check` and the editor. A project can opt out of that
-default without changing `tua lint`:
+standard rules. It deliberately leaves project-policy rules such as
+`uncalled_local_functions`, complexity, literal-zero division, failed swaps,
+and mixed tables opt-in. The standard rules are also enabled by default in
+`tua check` and the editor. A project can opt out of that default without
+changing `tua lint`:
 
 ```toml title="tua.toml"
 [diagnostics]
@@ -93,6 +93,16 @@ share an existing Tua code because they are the same analysis.
 | `MustUseResult` | `TL4068` |
 | `CanonicalModuleSpelling` | `TL4069` |
 
+The following opinionated rules are available only through their explicit
+project or editor settings:
+
+| Rule | Tua diagnostic |
+| --- | --- |
+| `HighCyclomaticComplexity` | `TL4070` |
+| `DivideByZero` | `TL4071` |
+| `AlmostSwapped` | `TL4072` |
+| `MixedTable` | `TL4073` |
+
 `UnknownGlobal` considers plain global assignments and simple global function
 declarations anywhere in the current Tua file to be definitions, regardless of
 source order. Qualified writes still require a known root, and compound
@@ -138,6 +148,25 @@ treated as deliberate stubs.
 returns, breaks, or calls a resolved terminating builtin during its first
 iteration. Conditional exits and loops with a reachable continuing path remain
 valid.
+
+`HighCyclomaticComplexity` starts each function at one and counts `if` and
+`elseif` branches, loops, `and`/`or` decision points, and Tua conditional
+expressions. Nested functions are measured independently. Set
+`max_cyclomatic_complexity` to a positive threshold to enable it; zero disables
+the rule.
+
+`DivideByZero` reports `/` with a literal-zero denominator when the numerator
+is not also literal zero. `0 / 0` remains available as an intentional NaN
+idiom, and dynamic denominators remain permissive.
+
+`AlmostSwapped` recognizes adjacent, single-name assignments such as `a = b`
+followed by `b = a`, where the second statement reads the already overwritten
+value. It stays conservative around fields, indexes, calls, and multi-target
+assignments.
+
+`MixedTable` reports a literal that contains both implicit sequential entries
+and keyed fields. Mixed tables are valid and common Lua, so this is a
+project-policy warning rather than a standard rule.
 
 `BuiltinGlobalWrite` reports direct assignments, compound assignments, and
 simple global function declarations that overwrite protected Lua 5.1/LuaJIT,
