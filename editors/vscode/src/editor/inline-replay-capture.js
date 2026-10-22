@@ -21,6 +21,9 @@ function createInlineReplayCapture(options = {}) {
     const outputPath = path.resolve(outputSetting);
     fs.mkdirSync(path.dirname(outputPath), { recursive: true });
     descriptor = fs.openSync(outputPath, "a", 0o600);
+    // The open mode applies only when the file is created. Captures record
+    // local editing activity, so tighten an existing file as well.
+    fs.fchmodSync(descriptor, 0o600);
     return new InlineReplayCapture({
       datasetRoot,
       dispose: () => fs.closeSync(descriptor),

@@ -154,6 +154,31 @@ test("factory capture hashes an unsaved edit instead of the dataset file", () =>
   }
 });
 
+test(
+  "factory capture restricts an existing output file to its owner",
+  { skip: process.platform === "win32" },
+  () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "tua-inline-replay-"));
+    const outputPath = path.join(root, "menu.jsonl");
+    fs.writeFileSync(outputPath, "", { mode: 0o644 });
+    fs.chmodSync(outputPath, 0o644);
+
+    try {
+      const capture = createInlineReplayCapture({
+        env: {
+          TUA_INLINE_REPLAY_ROOT: root,
+          TUA_INLINE_REPLAY_CAPTURE: outputPath,
+        },
+      });
+      assert(capture);
+      capture.dispose();
+      assert.equal(fs.statSync(outputPath).mode & 0o777, 0o600);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  },
+);
+
 test("capture hashes CRLF exactly like the evaluator's normalized scenario", () => {
   const crlf = "local value = player.vel\r\nreturn value\r\n";
   const lf = "local value = player.vel\nreturn value\n";
