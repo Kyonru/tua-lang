@@ -94,6 +94,28 @@ language or editor behavior, and migration notes call out those changes.
   the edited-document hash and position to an exact evaluation scenario,
   rejects invalid records, reports unmatched edits, and splits Phase 1 results
   by real menu-open and menu-closed state. Nothing is uploaded.
+- Added `make inline-editor-replay`, a macOS-only real-editor harness that uses
+  VS Code's editor API for exact, per-character, hash-pinned `.tua` tuning
+  scenarios and Chromium DevTools Protocol to observe the actual suggestion
+  widget. It triggers Tua's inline provider and replays the local captures
+  through the evaluator. Isolated Code
+  profiles run under `sandbox-exec`; every extension host must prove loopback
+  access and denied direct outbound access. A delayed mock-server case also
+  proves that the provider sends a linked `$/cancelRequest` around its 250 ms
+  timeout. Widget, capture, evaluator, cancellation, or isolation drift fails
+  closed, and held-out/external data is never evaluated. Each successful replay
+  also requires one or more expected deterministic source-counter increments
+  around the captured request, with no return from a competing local source.
+  This distinguishes a Tua result from identical text that
+  VS Code may already show through suggestion preview. Evidence records native
+  preview overlap, the Code build, host platform/architecture, repository
+  revision, and artifact hashes; stale outputs are invalidated before startup
+  and successful artifacts are atomically written with owner-only permissions.
+  Tua now defaults `editor.suggest.preview` to `true`, so a selected menu item
+  can be extended as ghost text. A unit test guards the product default, while
+  the isolated replay workspace pins the same value for reproducible evidence.
+  It does not force `.lua` files into Tua language mode because the
+  production provider is not registered there.
 - An offline evaluator for local inline completion (Phase 0 of the local
   inline-completion plan) measures candidate sources against real projects
   before any of them ships: precision, characters saved, wrong characters,

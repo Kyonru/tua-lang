@@ -314,6 +314,13 @@ inline-eval-smoke: ## Check the inline-completion evaluator against its committe
 inline-eval-smoke-update: ## Rewrite the inline-completion smoke expectations after an intended change.
 	$(INLINE_EVAL_DEBUG) --manifest $(INLINE_EVAL_MANIFEST) --set smoke --max-positions 0 --write-expected $(INLINE_EVAL_SMOKE_EXPECTED)
 
+.PHONY: inline-editor-replay
+inline-editor-replay: ## Replay exact tuning edits through real VS Code UI and the Tua inline provider (macOS only).
+	@test -d $(VSCODE_DIR)/node_modules/@vscode/test-electron || { echo "error: extension dependencies missing; run make extension-deps first"; exit 1; }
+	$(CARGO) build --package tua-cli
+	$(NPM) --prefix $(VSCODE_DIR) run build
+	node editors/vscode/scripts/inline-editor-replay.js $(DEBUG_TUA)
+
 .PHONY: inline-eval-phase-gate-check
 inline-eval-phase-gate-check: ## Check recorded Phase 1 prerequisites without refreshing expensive evidence.
 	$(INLINE_EVAL_DEBUG) --check-phase-gate benchmarks/inline-eval/phase1-gate.toml

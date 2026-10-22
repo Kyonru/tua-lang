@@ -730,6 +730,29 @@ measurements. Each one must exist before its gate is checked.
   evaluator's canonical LF before hashing. Valid but unrelated edits are
   reported as unmatched. Actual tuning-set replay results are still required
   before the gate can be claimed as passed.
+  `make inline-editor-replay` now automates that evidence on macOS: it performs
+  hash-pinned `.tua` tuning edits one character at a time through VS Code's
+  editor API, uses CDP to observe the real suggestion widget in matched
+  open/closed cases, triggers the actual provider,
+  requires one or more expected deterministic returned-counter increments with
+  no return from a competing local source, and replays every captured record
+  through the evaluator. The counter proof keeps
+  VS Code's own matching suggestion-preview text from being mistaken for Tua
+  rendering; native preview overlap is retained in the report. It also verifies
+  the provider's 250 ms timeout with a delayed mock server. Code runs in an isolated
+  profile under `sandbox-exec`, and each extension-host process must actively
+  prove loopback works while direct non-loopback outbound access is denied.
+  The target fails on missing widget, capture, evaluator, cancellation, or
+  network-isolation evidence. The gate prerequisite remains pending until a
+  completed report is reviewed and recorded.
+  Evidence is invalidated before prerequisites, written atomically with mode
+  `0600`, bound by content hashes and a run ID, and tagged with the Code build,
+  host platform/architecture, and repository revision.
+  The extension now defaults `editor.suggest.preview` to `true` for Tua. A unit
+  test asserts that product default, while the replay workspace pins it for the
+  `selectedCompletionInfo` path. It does not relabel `.lua` documents as Tua:
+  that would not represent the production provider's current Tua-only selector,
+  and Lua stays covered by offline evaluation.
 - **Parses per request.** There is nothing to count until parse-only
   validation exists. Once it does, the evaluator reports parses per request
   and how often the edited text alone was enough. The Phase 1 gate's "common-case
@@ -1308,7 +1331,8 @@ Only after preceding gates:
 - Revisit speculative-lane sizing only if later contention measurements show
   the single-worker/latest-queued design is insufficient.
 - Feed pattern information into menu ranking only if menu benchmarks improve.
-- Consider `editor.suggest.preview` as a separate UX change.
+- Keep the language-scoped `editor.suggest.preview` default as a separate UX
+  choice, measured by the real-editor replay rather than treated as engine behavior.
 - Deprecate old multi-token settings only after replacement stability.
 - Remove hardcoded multi-token rules only after measured parity or improvement.
 

@@ -13,6 +13,7 @@ make inline-eval-phase2     # opt-in Phase 2 exact retrieval, tuning data only
 make inline-eval-phase3     # evaluator-only n-gram experiment, tuning data only
 make inline-eval-phase3-smoke # exercise Phase 3 on committed smoke data
 make inline-eval-smoke      # committed fixtures, compared with smoke/expected.json (CI)
+make inline-editor-replay   # real VS Code menu/provider replay, tuning data only (macOS)
 make inline-eval-holdout    # held-out gate, checked against thresholds.toml
 make inline-eval-external   # fetch pinned third-party projects, then gate on them
 make inline-eval-phase-gate # aggregate decision; fails while any prerequisite is pending
@@ -30,6 +31,43 @@ dispatch-to-response latency, worker execution, and core/backend work, plus a
 `target/tua-speed/representative-phase1-gate.json`. It is a dependency of
 `make inline-eval-phase-gate`, which then checks every prerequisite and its
 evidence in `phase1-gate.toml`; a passing quality dataset alone is insufficient.
+
+`make inline-editor-replay` applies exact curated `edit` scenarios one character
+at a time through VS Code's editor API and uses Chromium DevTools Protocol to
+inspect the rendered editor and suggestion widget. The scenarios cover
+menu-open and menu-closed requests in more than one cursor context. Each
+descriptor pins the original `.tua` source hash, line, edited source
+hash, cursor, and expected selected menu item; any drift or unmatched evaluator
+record fails the run. Each scenario also snapshots the extension's
+deterministic returned counters around its explicit request and requires one or
+more increments from the expected source, with no increment from another local
+source. VS Code may invoke a provider more than once for one editor action. This
+is the provider-attribution proof:
+VS Code suggestion preview can independently display identical text, and the
+report records that overlap instead of attributing it to Tua. When no native
+preview overlaps a closed-menu candidate, the exact rendered DOM suffix is
+required too. The target also uses a delayed mock language server to
+prove that the actual provider sends a linked `$/cancelRequest` around its
+250 ms timeout. Cancellation timing uses the mock server process's monotonic
+high-resolution clock rather than wall-clock timestamps. It does not evaluate
+the held-out or external datasets.
+
+The replay is macOS-only because it launches Code through `sandbox-exec` with
+non-loopback outbound networking denied. Every extension-host process actively
+proves both that loopback works and that a direct `1.1.1.1:53` connection is
+denied; missing or inconclusive proof fails closed. This is a manual developer
+measurement, not an ordinary CI target. It writes local evidence under
+`target/tua-speed/inline-editor-replay*.json`; set
+`TUA_EDITOR_REPLAY_KEEP_TEMP=1` only when debugging a failed run.
+The harness invalidates those outputs before any fallible prerequisite check;
+successful files are atomic, mode `0600`, content-hash bound, and tagged with
+the Code build, host platform/architecture, and repository revision.
+The extension defaults `editor.suggest.preview` to `true` for Tua. A unit test
+guards that product default, while the isolated replay workspace pins the same
+value before measuring the `selectedCompletionInfo` path. Lua remains
+covered by the protocol-neutral offline evaluator:
+the production extension does not currently register its provider for `.lua`,
+so forcing that language mode here would not represent product behavior.
 
 `make representative-diagnostics-baseline` closes the separate diagnostic
 freshness comparison with a binary built from pre-Phase-1 commit `65cb4a6`.
@@ -182,9 +220,10 @@ zero/one/two-parse distribution diagnoses worst-case cost and is report-only;
 `check_gates` does not mix it into held-out or external quality acceptance.
 The aggregate validation prerequisite is decided from the representative LSP
 run under real scheduling. That prerequisite requires complete counter
-coverage, no two-parse scheduled attempts, and at most one parse for every
-returned candidate. A zero-parse cancellation or deadline expiration is a safe
-abstention, not a returned completion. Candidate-attempt and returned-candidate
+coverage, deliberately exercises one temporarily invalid edit through its
+two-parse validation path, and requires at least half of returned candidates to
+use at most one parse. A zero-parse cancellation or deadline expiration is a
+safe abstention, not a returned completion. Candidate-attempt and returned-candidate
 parse distributions are reported separately; returned counts use request-local
 parse counts, so concurrent requests cannot distort them.
 

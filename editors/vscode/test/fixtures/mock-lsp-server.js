@@ -286,17 +286,46 @@ function complete(message) {
 
 function localInlineCompletion(message) {
   const context = requestContext(message);
+  const delayMs = inlineCompletionDelay();
   log({
     type: "inline-completion.request",
     ...context,
     documentVersion: message.params.documentVersion,
     id: message.id,
     selectedCompletion: message.params.selectedCompletion,
+    delayMs,
   });
-  respond(message.id, {
-    documentVersion: context.docVersion,
-    items: [],
-  });
+  setTimeout(() => {
+    log({
+      type: "inline-completion.response",
+      cancelled: cancelledRequests.has(message.id),
+      id: message.id,
+    });
+    respond(message.id, {
+      documentVersion: context.docVersion,
+      items: [
+        {
+          insertText: "late_result",
+          isSnippet: false,
+          range: {
+            start: context.position,
+            end: context.position,
+          },
+          source: "current-file",
+        },
+      ],
+    });
+  }, delayMs);
+}
+
+function inlineCompletionDelay() {
+  const value = process.env.TUA_TEST_INLINE_DELAY_MS;
+  if (value === undefined) return 0;
+  const delayMs = Number(value);
+  if (!Number.isInteger(delayMs) || delayMs < 0 || delayMs > 10_000) {
+    throw new Error(`Invalid TUA_TEST_INLINE_DELAY_MS: ${value}`);
+  }
+  return delayMs;
 }
 
 function hover(message) {
@@ -1109,6 +1138,7 @@ function log(event) {
     logPath,
     `${JSON.stringify({
       ...event,
+      monotonicMs: Number(process.hrtime.bigint()) / 1_000_000,
       sequence: eventSequence,
       timestamp: new Date().toISOString(),
     })}\n`,

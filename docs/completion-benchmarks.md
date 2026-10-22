@@ -24,6 +24,7 @@ Use Tua's benchmark targets to answer three different questions:
 | Are results fresh under load? | `make representative-benchmark-smoke` | CI-sized cold, warm, and contended requests with stale-result and semantic validation gates. |
 | How does scale affect the LSP? | `make profile-representative` | Full 1,000/5,000-line and 100/1,000-file profiles. |
 | Would local inline completion help? | `make inline-eval` | Offline precision, characters saved, latency, parse cost, and warm-up hit rates for candidate inline sources on the tuning projects. |
+| Does real VS Code expose the menu/provider state we modeled? | `make inline-editor-replay` | macOS-only, network-isolated CDP replay of exact tuning edits through the real widget and inline provider, plus provider-timeout cancellation evidence. |
 | Do all benchmark lanes still work? | `make benchmark-smoke` | Ranking correctness, bundled-example timing, representative completion freshness, and the inline-evaluation smoke fixtures. |
 | Do I need every performance report? | `make profile-all` | General LSP, completion, examples, and representative-scale profiles. |
 
@@ -91,6 +92,34 @@ cargo run -p tua-core --features test-fixture --example inline_eval -- \
   --menu-replay /absolute/path/to/menu-replay.jsonl \
   --out target/tua-speed/inline-eval-menu-replay.json
 ```
+
+For a deterministic real-editor capture, run `make inline-editor-replay` on
+macOS. It opens isolated Code profiles, performs pinned edits in `.tua`
+tuning fixtures with the real suggestion widget both open and closed,
+triggers the actual Tua inline provider, and requires every capture to match an
+exact evaluator scenario. A delayed mock-server session must also observe the
+provider request followed by its linked `$/cancelRequest` near the configured
+250 ms timeout, measured by the mock server's monotonic high-resolution clock.
+For every replay, the harness snapshots the extension's deterministic returned
+counters around the explicit request and requires one or more expected-source
+increments with no competing local source. VS Code may invoke the provider more
+than once for one editor action. Its own suggestion preview can render the same
+suffix before Tua answers; that overlap is recorded rather than misreported as provider
+rendering. Closed-menu cases with no overlap additionally require the exact
+ghost text in the editor DOM.
+Code runs under `sandbox-exec`; the extension host itself must
+prove loopback access and denial of direct non-loopback outbound access or the
+run fails. Results stay under `target/tua-speed/` and are not release evidence
+until reviewed and recorded in the Phase 1 gate manifest.
+The extension defaults `editor.suggest.preview` to `true` for Tua. A unit test
+guards that product default, while the isolated replay workspace pins the same
+value for reproducible open-menu evidence. It
+does not force `.lua` documents into Tua mode: the production provider selector
+is Tua only, while Lua remains part of the separate offline evaluator.
+The final report identifies the Code build, platform and architecture, Git
+revision and dirty state, and hashes its capture and evaluator inputs. All
+outputs are invalidated before prerequisite checks and atomically written mode
+`0600`, so a failed rerun cannot leave old passing evidence behind.
 
 For a useful typing replay, work in a tuning fixture without saving changes:
 delete the rest of one code line from a sampled cursor, then type that text
