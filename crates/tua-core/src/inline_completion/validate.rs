@@ -104,11 +104,21 @@ fn validate_with_parser(
     .then_some(parse_count)
 }
 
-fn can_parse(input: &InlineCompletionInput<'_>, budget: &InlineCompletionBudget) -> bool {
-    let cap = match input.kind {
+/// Whether a document of this size can ever be validated. Validation must
+/// parse, so callers check this before spending time generating a candidate.
+pub(crate) fn within_parse_cap(kind: AnalysisSourceKind, source_len: usize) -> bool {
+    source_len <= parse_cap(kind)
+}
+
+fn parse_cap(kind: AnalysisSourceKind) -> usize {
+    match kind {
         AnalysisSourceKind::Lua => LUA_PARSE_CAP,
         AnalysisSourceKind::Tua => TUA_PARSE_CAP,
-    };
+    }
+}
+
+fn can_parse(input: &InlineCompletionInput<'_>, budget: &InlineCompletionBudget) -> bool {
+    let cap = parse_cap(input.kind);
     input.source.len() <= cap
         && budget.has_time_for(PARSE_BUDGET.mul_f64(input.source.len() as f64 / cap as f64))
 }

@@ -271,6 +271,9 @@ pub struct InlineValidationReport {
     /// production host's current-source analysis cache.
     pub cache_state: String,
     pub requests: usize,
+    /// Requests refused before generation because the document exceeds the
+    /// parse cap, so no candidate could ever pass validation.
+    pub skipped_oversized: usize,
     pub cache_peek_hits: usize,
     pub cache_peek_misses: usize,
     pub candidate_attempts: usize,
@@ -292,6 +295,7 @@ pub struct InlineValidationReport {
 impl InlineValidationReport {
     fn add(&mut self, stats: &crate::AnalysisCacheStats) {
         self.requests += stats.inline_completion_requests;
+        self.skipped_oversized += stats.inline_skipped_oversized;
         self.cache_peek_hits += stats.inline_cache_peek_hits;
         self.cache_peek_misses += stats.inline_cache_peek_misses;
         self.candidate_attempts += stats.inline_validation_attempts;

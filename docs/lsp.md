@@ -201,6 +201,11 @@ member-access contexts, where the tuning data was substantially less precise.
 Semantic statement snippets may contain their normal block body, but the
 pattern-recall source is single-line.
 
+Every suggestion must pass a parse check that fits the request budget, so
+deterministic inline completion is unavailable in files larger than about
+6.8 KB of Tua or 31 KB of Lua. Those requests return nothing without scanning
+the file, and the LSP statistics count them as `skippedOversized`.
+
 The server checks cursor eligibility, suffix compatibility, cancellation, and
 parse safety before returning at most one item. Candidate generation and
 validation use a 10 ms core deadline; before starting a non-interruptible parse,

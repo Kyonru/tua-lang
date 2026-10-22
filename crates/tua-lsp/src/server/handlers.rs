@@ -1623,6 +1623,7 @@ impl LspServer {
             },
             "inlineCompletion": {
                 "requests": stats.inline_completion_requests,
+                "skippedOversized": stats.inline_skipped_oversized,
                 "cachePeek": hit_miss(stats.inline_cache_peek_hits, stats.inline_cache_peek_misses),
                 "candidateAttempts": stats.inline_validation_attempts,
                 "candidateParses": stats.inline_candidate_parses,
@@ -1787,6 +1788,7 @@ impl LspServer {
             },
             "inlineCompletion": {
                 "requests": stats.inline_completion_requests,
+                "skippedOversized": stats.inline_skipped_oversized,
                 "candidateAttempts": stats.inline_validation_attempts,
                 "candidateParses": stats.inline_candidate_parses,
                 "baselineParses": stats.inline_baseline_parses,

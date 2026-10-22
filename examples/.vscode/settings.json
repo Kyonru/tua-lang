@@ -3,5 +3,6 @@
   "[tua]": {},
   "tua.diagnostics.rules": true,
   "tua.completion.sequenceRanking.enabled": true,
-  "tua.completion.multiToken.enabled": true
+  "tua.completion.multiToken.enabled": true,
+  "tua.completion.inline.enabled": true
 }

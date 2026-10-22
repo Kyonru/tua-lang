@@ -246,6 +246,7 @@ impl ProjectPatternEligibility {
 #[derive(Debug, Default)]
 pub(crate) struct InlineCompletionRuntimeStats {
     pub requests: AtomicUsize,
+    pub skipped_oversized: AtomicUsize,
     pub cache_peek_hits: AtomicUsize,
     pub cache_peek_misses: AtomicUsize,
     pub validation_attempts: AtomicUsize,
@@ -267,6 +268,16 @@ pub(crate) fn complete(
     baseline_parse_errors: &dyn Fn() -> Option<Vec<crate::Diagnostic>>,
 ) -> Vec<InlineCompletionCandidate> {
     if cancelled.load(Ordering::Relaxed) || budget.is_expired() {
+        return Vec::new();
+    }
+    // Every candidate must pass parse validation, which a document above the
+    // measured parse cap can never do. Refuse before scanning it, and count
+    // the refusal so oversized files are visible in reports.
+    if !validate::within_parse_cap(input.kind, input.source.len()) {
+        input
+            .stats
+            .skipped_oversized
+            .fetch_add(1, Ordering::Relaxed);
         return Vec::new();
     }
     let Some(offset) = crate::source_text::byte_for_position(input.source, input.position) else {

@@ -684,9 +684,10 @@ fn print_summary(report: &eval::EvalReport) {
         }
         let validation = &set.inline_validation;
         println!(
-            "phase1 production ({}): {} requests, {:.3} parses/request; {} candidate attempts: {} zero-, {} one-, {} two-parse ({:.3} parses/attempt); edited parse sufficient {:.0}%, cache peek {}/{} hits, {} candidates returned ({} after zero, {} after one, {} after two parses)",
+            "phase1 production ({}): {} requests ({} skipped as oversized), {:.3} parses/request; {} candidate attempts: {} zero-, {} one-, {} two-parse ({:.3} parses/attempt); edited parse sufficient {:.0}%, cache peek {}/{} hits, {} candidates returned ({} after zero, {} after one, {} after two parses)",
             validation.cache_state,
             validation.requests,
+            validation.skipped_oversized,
             validation.parses_per_request,
             validation.candidate_attempts,
             validation.zero_parse_candidates,

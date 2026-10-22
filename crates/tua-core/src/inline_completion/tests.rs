@@ -17,6 +17,7 @@ fn context_at_end(source: &str) -> Option<CursorContext> {
 
 fn without_inline_stats(mut stats: crate::AnalysisCacheStats) -> crate::AnalysisCacheStats {
     stats.inline_completion_requests = 0;
+    stats.inline_skipped_oversized = 0;
     stats.inline_cache_peek_hits = 0;
     stats.inline_cache_peek_misses = 0;
     stats.inline_validation_attempts = 0;
@@ -629,4 +630,34 @@ fn project_completion_rechecks_the_same_version_epoch_after_validation() {
         returned_before,
         "stale candidates must not increment returned counters"
     );
+}
+
+#[test]
+fn oversized_documents_are_refused_before_recall_and_counted() {
+    let path = PathBuf::from("src/main.tua");
+    let mut source = "print(player.name)\n".repeat(400);
+    source.push_str("print(pla");
+    assert!(!super::validate::within_parse_cap(
+        AnalysisSourceKind::Tua,
+        source.len()
+    ));
+    let mut host = AnalysisHost::new();
+    host.set_file_with_kind(&path, &source, AnalysisSourceKind::Tua);
+    let candidates = host.local_inline_completion(
+        &path,
+        SourcePosition {
+            line: 401,
+            column: 10,
+        },
+        &InlineCompletionOptions::default(),
+        &InlineCompletionBudget::unlimited(),
+        &AtomicBool::new(false),
+    );
+
+    assert!(candidates.is_empty());
+    let stats = host.cache_stats();
+    assert_eq!(stats.inline_completion_requests, 1);
+    assert_eq!(stats.inline_skipped_oversized, 1);
+    assert_eq!(stats.inline_validation_attempts, 0);
+    assert_eq!(stats.inline_candidate_parses, 0);
 }

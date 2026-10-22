@@ -13,6 +13,11 @@ language or editor behavior, and migration notes call out those changes.
   now honored, so generated Lua no longer leaks into tuning corpora or
   duplicates its Tua source. Corrected Phase 1–3 tuning results replace the
   contaminated reports; held-out and external sets remain unread.
+- Deterministic inline completion now refuses files above its parse cap
+  before scanning them for recall, instead of scanning up to 256 KiB and then
+  discarding the result at validation. Refusals are counted as
+  `skippedOversized` in LSP statistics and evaluator reports, and the size
+  limit is documented.
 
 ### Added
 

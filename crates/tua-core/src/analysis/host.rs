@@ -715,6 +715,10 @@ impl AnalysisHost {
             .inline_completion_stats
             .requests
             .load(std::sync::atomic::Ordering::Relaxed);
+        stats.inline_skipped_oversized = self
+            .inline_completion_stats
+            .skipped_oversized
+            .load(std::sync::atomic::Ordering::Relaxed);
         stats.inline_cache_peek_hits = self
             .inline_completion_stats
             .cache_peek_hits

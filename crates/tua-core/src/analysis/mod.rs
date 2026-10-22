@@ -337,6 +337,7 @@ pub struct AnalysisCacheStats {
     pub completion_context_hits: usize,
     pub completion_context_misses: usize,
     pub inline_completion_requests: usize,
+    pub inline_skipped_oversized: usize,
     pub inline_cache_peek_hits: usize,
     pub inline_cache_peek_misses: usize,
     pub inline_validation_attempts: usize,
