@@ -8,6 +8,11 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Calls after the first in a chain are now checked. Misuse such as
+  `builder():add("two")` or `love.graphics.newImage(path):setFilter("bogus")`
+  was previously accepted, and the chain took the first call's result, so
+  `newImage(path):getWidth()` was typed as an `Image` instead of a `number`.
+  An unknown link still leaves the rest of the chain dynamic.
 - Multi-line LuaCATS aliases (a bare `---@alias Name` followed by
   `---| member` lines) now declare their union. They were previously dropped,
   so every value typed with them became `any`.

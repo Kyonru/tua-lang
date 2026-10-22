@@ -1342,6 +1342,98 @@ impl<'a> Checker<'a> {
     }
 
     fn check_function_call_returns(&mut self, function_call: &FunctionCall) -> Vec<Type> {
+        let returns = self.check_first_call_returns(function_call);
+
+        self.check_chained_calls(function_call, returns)
+    }
+
+    /// Keep checking after a chain's first call, as in
+    /// `tween.to(box, 1, values):ease("quadout"):delay(0.5)`. Each later call
+    /// is checked against the type the chain has reached, and the chain takes
+    /// the last call's result. Once a link is unknown, the rest of the chain
+    /// stays dynamic: its arguments are still inferred, but not checked
+    /// against a contract.
+    fn check_chained_calls(&mut self, function_call: &FunctionCall, first: Vec<Type>) -> Vec<Type> {
+        let mut suffixes = function_call
+            .suffixes()
+            .skip_while(|suffix| !matches!(suffix, Suffix::Call(_)));
+        suffixes.next();
+        let rest = suffixes.collect::<Vec<_>>();
+        if rest.is_empty() {
+            return first;
+        }
+
+        let mut current = first.into_iter().next();
+        for suffix in rest {
+            current = match suffix {
+                Suffix::Index(Index::Dot { name, .. }) => {
+                    current.and_then(|ty| self.resolve_table_field_type(&ty, &token_text(name)))
+                }
+                Suffix::Call(call) => self.check_chained_call(suffix, call, current),
+                _ => None,
+            };
+        }
+
+        current.into_iter().collect()
+    }
+
+    fn check_chained_call(
+        &mut self,
+        suffix: &Suffix,
+        call: &Call,
+        current: Option<Type>,
+    ) -> Option<Type> {
+        let (receiver, method, args) = match call {
+            Call::AnonymousCall(args) => (None, None, args),
+            Call::MethodCall(method) => (
+                current.clone(),
+                Some(token_text(method.name())),
+                method.args(),
+            ),
+            _ => return None,
+        };
+        let mut arguments = function_args_call_arguments(args);
+
+        let callable = match (&receiver, &method) {
+            (Some(receiver), Some(method)) => self
+                .resolve_table_field_type(receiver, method)
+                .and_then(|ty| callable_from_type(&ty, self.environment))
+                .or_else(|| {
+                    lua_type_field_item(self.environment, receiver, method)
+                        .and_then(external_function_type_from_lua_item)
+                        .map(Callable::ExternalFunction)
+                }),
+            (None, None) => current
+                .as_ref()
+                .and_then(|ty| callable_from_type(ty, self.environment)),
+            _ => None,
+        };
+
+        match callable {
+            Some(Callable::Function(function)) => {
+                if let Some(receiver) = receiver {
+                    arguments.insert(0, CallArgument::Inferred(receiver));
+                }
+                self.check_argument_list(suffix, arguments, &function, None);
+                function.return_types_or_any().first().cloned()
+            }
+            // LÖVE object methods are catalogued without their receiver.
+            Some(Callable::ExternalFunction(function)) => self
+                .check_external_argument_list(suffix, arguments, &function)
+                .into_iter()
+                .next(),
+            Some(Callable::TypedFunction(_)) | Some(Callable::Any) | None => {
+                for argument in arguments {
+                    if let CallArgument::Expression(expression) = argument {
+                        self.infer_expression(expression);
+                    }
+                }
+                None
+            }
+        }
+    }
+
+    fn check_first_call_returns(&mut self, function_call: &FunctionCall) -> Vec<Type> {
         self.check_asset_loader_call(function_call);
         self.check_dot_love_method_call(function_call);
 
@@ -1729,15 +1821,31 @@ impl<'a> Checker<'a> {
 
     fn check_call_arguments(&mut self, function_call: &FunctionCall, function: &FunctionType) {
         let arguments = self.call_arguments_for_function(function_call);
+        let hint = (arguments.len() < function.required_parameter_count)
+            .then(|| self.missing_self_hint(function_call, function, arguments.len()))
+            .flatten();
 
+        self.check_argument_list(function_call, arguments, function, hint);
+    }
+
+    /// Check `arguments` against `function`, reporting count and type
+    /// mismatches at `node`. `missing_hint` is appended to a too-few-arguments
+    /// message.
+    fn check_argument_list(
+        &mut self,
+        node: &impl Node,
+        arguments: Vec<CallArgument<'_>>,
+        function: &FunctionType,
+        missing_hint: Option<String>,
+    ) {
         if arguments.len() < function.required_parameter_count {
             let mut diagnostic = argument_count_diagnostic(
                 &self.parsed.path,
-                function_call,
+                node,
                 function.required_parameter_count,
                 arguments.len(),
             );
-            if let Some(hint) = self.missing_self_hint(function_call, function, arguments.len()) {
+            if let Some(hint) = missing_hint {
                 diagnostic.message.push_str(&hint);
             }
             self.diagnostics.push(diagnostic);
@@ -1747,7 +1855,7 @@ impl<'a> Checker<'a> {
         if arguments.len() > function.parameters.len() && function.vararg_type.is_none() {
             self.diagnostics.push(argument_count_diagnostic(
                 &self.parsed.path,
-                function_call,
+                node,
                 function.parameters.len(),
                 arguments.len(),
             ));
@@ -1772,7 +1880,7 @@ impl<'a> Checker<'a> {
                     {
                         self.diagnostics.push(mismatch_diagnostic(
                             &self.parsed.path,
-                            function_call,
+                            node,
                             &failure,
                             parameter.1,
                         ));
@@ -2061,6 +2169,16 @@ impl<'a> Checker<'a> {
         function: &ExternalFunctionType,
     ) -> Vec<Type> {
         let arguments = call_arguments(function_call).unwrap_or_default();
+
+        self.check_external_argument_list(function_call, arguments, function)
+    }
+
+    fn check_external_argument_list(
+        &mut self,
+        node: &impl Node,
+        arguments: Vec<CallArgument<'_>>,
+        function: &ExternalFunctionType,
+    ) -> Vec<Type> {
         let argument_types = self.infer_call_argument_types(&arguments);
 
         for variant in &function.variants {
@@ -2082,7 +2200,7 @@ impl<'a> Checker<'a> {
         if let Some(expected) = variant.expected_argument_count(arguments.len()) {
             self.diagnostics.push(argument_count_diagnostic(
                 &self.parsed.path,
-                function_call,
+                node,
                 expected,
                 arguments.len(),
             ));
@@ -2117,7 +2235,7 @@ impl<'a> Checker<'a> {
                 }
                 Some(CallArgument::Inferred(_)) | None => {
                     self.check_external_argument_type(
-                        function_call,
+                        node,
                         argument_type,
                         parameter_type,
                         Some(&argument_label),
@@ -3028,6 +3146,20 @@ fn type_from_lua_label(label: &str) -> Option<Type> {
         }
         other if !other.is_empty() => Some(Type::alias(other)),
         _ => None,
+    }
+}
+
+/// Arguments of one call suffix, for calls after the first in a chain.
+fn function_args_call_arguments(args: &FunctionArgs) -> Vec<CallArgument<'_>> {
+    match args {
+        FunctionArgs::Parentheses { arguments, .. } => {
+            arguments.iter().map(CallArgument::Expression).collect()
+        }
+        FunctionArgs::String(value) => vec![CallArgument::Inferred(Type::string_literal(
+            unquote_string(&value.to_string()),
+        ))],
+        FunctionArgs::TableConstructor(_) => vec![CallArgument::Inferred(Type::empty_table())],
+        _ => Vec::new(),
     }
 }
 

@@ -4074,3 +4074,65 @@ api.run()
         "{diagnostics:#?}"
     );
 }
+
+#[test]
+fn checks_calls_after_the_first_call_in_a_chain() {
+    let diagnostics = check_tua_source(
+        "src/main.tua",
+        r#"type Builder = { add: (self: Builder, amount: number) -> Builder, total: number }
+
+local function builder(): Builder
+  return { add = function(self, amount) return self end, total = 0 }
+end
+
+builder():add(1)
+builder():add("two")
+local unknown: any = nil
+unknown.first(1):second("anything"):third()
+
+function love.load()
+  love.graphics.newImage("assets/player.png"):setFilter("bogus")
+end
+"#,
+    )
+    .expect_err("chained misuse should be reported");
+
+    let messages = diagnostics
+        .iter()
+        .map(|diagnostic| (diagnostic.line, diagnostic.message.as_str()))
+        .collect::<Vec<_>>();
+    assert!(
+        messages.iter().any(|(line, message)| *line == 8
+            && message.contains("type mismatch at amount: expected number, found string")),
+        "{messages:#?}"
+    );
+    assert!(
+        messages
+            .iter()
+            .any(|(line, message)| *line == 13 && message.contains("expected FilterMode")),
+        "{messages:#?}"
+    );
+    assert!(
+        !messages.iter().any(|(line, _)| *line == 7 || *line == 10),
+        "{messages:#?}"
+    );
+}
+
+#[test]
+fn a_chained_call_takes_its_last_call_result() {
+    let diagnostics = check_tua_source(
+        "src/main.tua",
+        r#"function love.load()
+  local width: string = love.graphics.newImage("assets/player.png"):getWidth()
+end
+"#,
+    )
+    .expect_err("the chain is a number, not the image");
+
+    assert!(
+        diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.message.contains("expected string, found number")),
+        "{diagnostics:#?}"
+    );
+}
