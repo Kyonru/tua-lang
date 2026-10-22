@@ -8,6 +8,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- `TL4031` no longer reports local functions that escape through a module
+  return, including nested export tables, conditional returns, returned local
+  module tables, and functions assigned to their fields. Private callbacks that
+  are only stored internally remain reportable.
 - The formatter now indents split `if`, `elseif`, `while`, and `until`
   conditions, including comments and CRLF input, without producing its own
   `TL4037` continuation-layout warning.
