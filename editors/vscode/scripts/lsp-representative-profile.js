@@ -92,7 +92,20 @@ const minimumReturnedAtMostOneParseRate = 0.5;
 
   for (const fixture of manifest.fixtures) {
     const root = path.join(fixtureRoot, fixture.name);
-    const result = await profileFixture(root, fixture);
+    const startedAt = Date.now();
+    console.log(`\nprofiling ${fixture.name}...`);
+    const heartbeat = setInterval(() => {
+      const elapsedSeconds = Math.round((Date.now() - startedAt) / 1000);
+      console.log(`profiling ${fixture.name}... ${elapsedSeconds}s elapsed`);
+    }, 30_000);
+    heartbeat.unref();
+
+    let result;
+    try {
+      result = await profileFixture(root, fixture);
+    } finally {
+      clearInterval(heartbeat);
+    }
 
     fixtures.push(result);
     printFixture(result);
