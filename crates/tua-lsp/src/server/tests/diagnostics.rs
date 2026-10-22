@@ -189,13 +189,13 @@ fn did_open_publishes_uninitialized_local_arity_and_compound_diagnostics() {
     assert_eq!(diagnostics[0]["range"]["start"]["character"], 6);
     assert_eq!(
         diagnostics[0]["message"],
-        "local `missing` defined at line 1 is never initialized or assigned; initialize with `nil` to silence"
+        "local `missing` defined at line 1 may be read before it is initialized; initialize with `nil` to silence"
     );
     assert_eq!(diagnostics[1]["range"]["start"]["line"], 3);
     assert_eq!(diagnostics[1]["range"]["start"]["character"], 0);
     assert_eq!(
         diagnostics[1]["message"],
-        "local `total` defined at line 3 is never initialized or assigned; initialize with `nil` to silence"
+        "local `total` defined at line 3 may be read before it is initialized; initialize with `nil` to silence"
     );
 }
 
