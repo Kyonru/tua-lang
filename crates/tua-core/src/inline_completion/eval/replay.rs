@@ -389,10 +389,21 @@ mod tests {
             record("project/main.lua", &hash, true, Some(&selected_last)),
         ]
         .join("\n");
+        let thread_name = std::thread::current()
+            .name()
+            .unwrap_or("test")
+            .chars()
+            .map(|character| {
+                if character.is_ascii_alphanumeric() || matches!(character, '-' | '_') {
+                    character
+                } else {
+                    '_'
+                }
+            })
+            .collect::<String>();
         let path = std::env::temp_dir().join(format!(
-            "tua-inline-menu-replay-{}-{}.jsonl",
-            std::process::id(),
-            std::thread::current().name().unwrap_or("test")
+            "tua-inline-menu-replay-{}-{thread_name}.jsonl",
+            std::process::id()
         ));
         fs::write(&path, contents).expect("write replay fixture");
         let replay = MenuReplay::load(&path, &sets).expect("load replay fixture");
