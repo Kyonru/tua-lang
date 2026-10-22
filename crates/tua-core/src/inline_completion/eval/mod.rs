@@ -144,6 +144,8 @@ pub enum PrefixKind {
     Partial3,
     /// One character short of the end of a word longer than four characters.
     PartialNear,
+    /// After an internal run of whitespace, before the next token.
+    Whitespace,
     /// A real editor position included from a menu-state replay.
     Captured,
 }
@@ -156,6 +158,7 @@ impl PrefixKind {
             Self::Partial2 => "partial-2",
             Self::Partial3 => "partial-3",
             Self::PartialNear => "partial-near",
+            Self::Whitespace => "whitespace",
             Self::Captured => "captured",
         }
     }
@@ -1029,6 +1032,7 @@ fn document_facts(
 /// comments, and leading indentation:
 ///
 /// - after each whole token, including the end of the line;
+/// - after internal whitespace, before the following token;
 /// - inside each word of two or more characters, after its first one, two,
 ///   and three characters and one character before its end.
 ///
@@ -1045,8 +1049,18 @@ fn sample_positions(source: &str, limit: usize) -> (Vec<Position>, usize) {
         if !code.trim().is_empty() && lexical_region_at(source, line_start) == LexicalRegion::Code {
             let mut candidates = BTreeMap::new();
             let indent = code.len() - code.trim_start().len();
+            let body = &code[indent..];
+            let mut in_whitespace = false;
+            for (relative, character) in body.char_indices() {
+                if character.is_whitespace() {
+                    in_whitespace = true;
+                } else if in_whitespace {
+                    candidates.insert(indent + relative, PrefixKind::Whitespace);
+                    in_whitespace = false;
+                }
+            }
             let mut offset = indent;
-            for token in metrics::tokens(&code[indent..]) {
+            for token in metrics::tokens(body) {
                 let start = code[offset..]
                     .find(token)
                     .map_or(offset, |found| offset + found);

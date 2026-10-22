@@ -3,8 +3,9 @@
 # gate results spends the held-out data.
 #
 # PROVISIONAL, UNSPENT CANDIDATE: the held-out and external sets have not been
-# run. The exact production backend on the tuning set currently reaches 0.823
-# Lua / 0.707 Tua correct-prefix precision and 0.236 / 0.094 characters saved
+# run. After sampling the configured whitespace context and excluding blank
+# snippet literals, the exact production backend on the tuning set reaches
+# 0.777 Lua / 0.621 Tua correct-prefix precision and 0.173 / 0.078 characters saved
 # per eligible position. Tua is therefore still below the 0.10 quality floor;
 # these limits are not a claim that Phase 1 passes. Commit/freeze the final
 # candidate before running either quality gate, then do not change it after

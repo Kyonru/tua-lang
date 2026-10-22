@@ -70,7 +70,11 @@ pub fn score(suggestion: &str, is_snippet: bool, truth: &str) -> Outcome {
         correct_prefix: is_prefix && !offered.trim().is_empty(),
         first_token,
         first_three_tokens,
-        chars_saved: if is_prefix { offered_chars } else { 0 },
+        chars_saved: if is_prefix && !offered.trim().is_empty() {
+            offered_chars
+        } else {
+            0
+        },
         incorrect_chars: offered_chars - common,
     }
 }

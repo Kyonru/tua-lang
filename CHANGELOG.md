@@ -266,6 +266,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- The deterministic inline-completion evaluator now samples pauses after
+  internal whitespace, so its enabled whitespace context contributes to
+  quality results, and it no longer credits whitespace-only snippet literals
+  as saved characters.
 - `tua check`, builds, and the language server no longer overflow the stack on
   an unannotated Lua function that reassigns a parameter from its own method
   call, such as `str = str:gsub(...)`. Name inference resolved the receiver

@@ -240,6 +240,7 @@ cursor on that line and asks every backend for one suggestion.
 - **Positions** are on code lines, outside strings, comments, and leading
   indentation:
   - after each whole token (`token-end`);
+  - after internal whitespace, before the following token (`whitespace`);
   - inside each word of two or more characters, after its first one, two, and
     three characters (`partial-1` to `partial-3`) and one character before its
     end (`partial-near`), where a user is still typing.
@@ -338,8 +339,9 @@ For a suggestion `s` and the author's actual continuation `t`:
   starts with it, so accepting it is never wrong. This is the precision to
   gate partial suggestions on; exact match penalizes a suggestion for
   stopping early.
-- **Characters saved**: the offered length when `t` starts with it, otherwise
-  0.
+- **Characters saved**: the offered length when it contains a non-whitespace
+  character and `t` starts with it, otherwise 0. Whitespace-only snippet
+  literals are not useful saved text.
 - **Incorrect characters**: offered characters past the common prefix with
   `t`, which a user would delete. The **wrong-to-saved ratio** divides them by
   the characters saved.

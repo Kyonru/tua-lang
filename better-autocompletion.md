@@ -285,7 +285,7 @@ Report:
 - Exact full-suggestion precision
 - First-token precision
 - First-three-token precision
-- Characters saved per eligible position
+- Characters saved per eligible position, excluding whitespace-only literals
 - Incorrect characters offered per eligible position
 - Precision/coverage curves
 - p50/p95/p99 backend-only latency (candidate generation/validation, excluding
@@ -813,10 +813,12 @@ weaken the gates or inspect held-out results.
 Requiring two supporting lines makes long recall precise, but leaves the Tua
 slice below its coverage floor. The current candidate keeps full common-prefix
 continuations at support two or higher and limits a one-line match to its
-first token. On the tuning set this reaches 0.80 correct-prefix precision
-overall, with 0.24 wrong characters per character saved. Split by language,
-Lua reaches 0.82 precision, 0.21 wrong/saved, and 0.236 characters saved per
-eligible position; Tua reaches 0.71, 0.41, and 0.094 respectively. Broadening
+first token. After the evaluator began sampling the configured whitespace
+context and stopped crediting blank snippet literals, the tuning set reaches
+0.740 correct-prefix precision overall, with 0.417 wrong characters per
+character saved. Split by language, Lua reaches 0.777 precision, 0.350
+wrong/saved, and 0.173 characters saved per eligible position; Tua reaches
+0.621, 0.733, and 0.078 respectively. Broadening
 assignment/member recall, allowing full one-line continuations, two-letter
 snippet exceptions, and ambiguous snippet common-prefix fallback were all
 tested only on tuning data and rejected. The candidate remains below the

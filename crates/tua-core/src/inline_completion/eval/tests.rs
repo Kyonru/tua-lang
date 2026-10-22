@@ -88,9 +88,10 @@ fn scoring_rewards_correct_prefixes_and_counts_wrong_characters() {
     assert!(!prefix.first_three_tokens);
     assert_eq!((prefix.chars_saved, prefix.incorrect_chars), (3, 0));
 
-    // Whitespace alone saves characters but is never a useful suggestion.
+    // Whitespace alone is neither a correct prefix nor useful saved text.
     let blank = score(" ", false, " x + 1)");
     assert!(!blank.correct_prefix);
+    assert_eq!(blank.chars_saved, 0);
 
     let wrong = score("y - 2", false, "x + 1)");
     assert!(!wrong.first_token && !wrong.correct_prefix);
@@ -283,13 +284,20 @@ fn positions_cover_token_ends_partial_words_and_line_ends() {
     assert_eq!(kind_at(line + "lo".len()), Some(PrefixKind::Partial2));
     assert_eq!(kind_at(line + "loc".len()), Some(PrefixKind::Partial3));
     assert_eq!(kind_at(line + "loca".len()), Some(PrefixKind::PartialNear));
+    assert_eq!(kind_at(line + "local ".len()), Some(PrefixKind::Whitespace));
+    assert_eq!(
+        cursor_context(source, line + "local ".len()),
+        Some(CursorContext::Whitespace)
+    );
     // The end of the line is sampled; the comment and blank line aren't.
     assert_eq!(
         kind_at(line + "local x = f(a, b)".len()),
         Some(PrefixKind::TokenEnd)
     );
     assert!(!positions.iter().any(|position| position.offset < line));
-    assert_eq!(ineligible, 0);
+    // The internal space immediately before a string is sampled, then counted
+    // as ineligible because the cursor is already at the string boundary.
+    assert_eq!(ineligible, 1);
 }
 
 #[test]

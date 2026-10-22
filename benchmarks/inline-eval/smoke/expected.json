@@ -2,15 +2,15 @@
   "smoke": {
     "current-file": {
       "overall": {
-        "eligible": 2053,
-        "suggested": 235,
-        "exact": 140,
-        "template_match": 140,
-        "correct_prefix": 146,
-        "first_token": 198,
-        "first_three_tokens": 110,
-        "chars_saved": 2678,
-        "incorrect_chars": 1118
+        "eligible": 2415,
+        "suggested": 301,
+        "exact": 191,
+        "template_match": 191,
+        "correct_prefix": 197,
+        "first_token": 254,
+        "first_three_tokens": 153,
+        "chars_saved": 3734,
+        "incorrect_chars": 1222
       },
       "abstain": {
         "eligible": 132,
@@ -25,61 +25,61 @@
       },
       "by_language": {
         "lua": {
-          "eligible": 1039,
-          "suggested": 141,
-          "exact": 96,
-          "template_match": 96,
-          "correct_prefix": 102,
-          "first_token": 127,
-          "first_three_tokens": 75,
-          "chars_saved": 2364,
-          "incorrect_chars": 323
+          "eligible": 1238,
+          "suggested": 191,
+          "exact": 132,
+          "template_match": 132,
+          "correct_prefix": 138,
+          "first_token": 167,
+          "first_three_tokens": 108,
+          "chars_saved": 3351,
+          "incorrect_chars": 421
         },
         "tua": {
-          "eligible": 1014,
-          "suggested": 94,
-          "exact": 44,
-          "template_match": 44,
-          "correct_prefix": 44,
-          "first_token": 71,
-          "first_three_tokens": 35,
-          "chars_saved": 314,
-          "incorrect_chars": 795
+          "eligible": 1177,
+          "suggested": 110,
+          "exact": 59,
+          "template_match": 59,
+          "correct_prefix": 59,
+          "first_token": 87,
+          "first_three_tokens": 45,
+          "chars_saved": 383,
+          "incorrect_chars": 801
         }
       },
       "by_scenario": {
         "auto-close": {
-          "eligible": 151,
-          "suggested": 14,
-          "exact": 14,
-          "template_match": 14,
-          "correct_prefix": 14,
-          "first_token": 14,
-          "first_three_tokens": 10,
-          "chars_saved": 86,
+          "eligible": 187,
+          "suggested": 20,
+          "exact": 20,
+          "template_match": 20,
+          "correct_prefix": 20,
+          "first_token": 20,
+          "first_three_tokens": 14,
+          "chars_saved": 110,
           "incorrect_chars": 0
         },
         "cut": {
-          "eligible": 951,
-          "suggested": 85,
-          "exact": 42,
-          "template_match": 42,
-          "correct_prefix": 45,
-          "first_token": 71,
-          "first_three_tokens": 34,
-          "chars_saved": 866,
-          "incorrect_chars": 417
+          "eligible": 1114,
+          "suggested": 107,
+          "exact": 57,
+          "template_match": 57,
+          "correct_prefix": 60,
+          "first_token": 89,
+          "first_three_tokens": 47,
+          "chars_saved": 1210,
+          "incorrect_chars": 465
         },
         "edit": {
-          "eligible": 951,
-          "suggested": 136,
-          "exact": 84,
-          "template_match": 84,
-          "correct_prefix": 87,
-          "first_token": 113,
-          "first_three_tokens": 66,
-          "chars_saved": 1726,
-          "incorrect_chars": 701
+          "eligible": 1114,
+          "suggested": 174,
+          "exact": 114,
+          "template_match": 114,
+          "correct_prefix": 117,
+          "first_token": 145,
+          "first_three_tokens": 92,
+          "chars_saved": 2414,
+          "incorrect_chars": 757
         }
       },
       "by_prefix": {
@@ -137,20 +137,31 @@
           "first_three_tokens": 76,
           "chars_saved": 1598,
           "incorrect_chars": 466
+        },
+        "whitespace": {
+          "eligible": 362,
+          "suggested": 66,
+          "exact": 51,
+          "template_match": 51,
+          "correct_prefix": 51,
+          "first_token": 56,
+          "first_three_tokens": 43,
+          "chars_saved": 1056,
+          "incorrect_chars": 104
         }
       }
     },
     "current-file-prefix": {
       "overall": {
-        "eligible": 2053,
-        "suggested": 333,
-        "exact": 140,
-        "template_match": 140,
-        "correct_prefix": 253,
-        "first_token": 296,
-        "first_three_tokens": 114,
-        "chars_saved": 3068,
-        "incorrect_chars": 727
+        "eligible": 2415,
+        "suggested": 409,
+        "exact": 191,
+        "template_match": 191,
+        "correct_prefix": 313,
+        "first_token": 362,
+        "first_three_tokens": 157,
+        "chars_saved": 4164,
+        "incorrect_chars": 832
       },
       "abstain": {
         "eligible": 132,
@@ -165,61 +176,61 @@
       },
       "by_language": {
         "lua": {
-          "eligible": 1039,
-          "suggested": 202,
-          "exact": 96,
-          "template_match": 96,
-          "correct_prefix": 150,
-          "first_token": 185,
-          "first_three_tokens": 75,
-          "chars_saved": 2501,
-          "incorrect_chars": 354
+          "eligible": 1238,
+          "suggested": 258,
+          "exact": 132,
+          "template_match": 132,
+          "correct_prefix": 191,
+          "first_token": 231,
+          "first_three_tokens": 108,
+          "chars_saved": 3508,
+          "incorrect_chars": 453
         },
         "tua": {
-          "eligible": 1014,
-          "suggested": 131,
-          "exact": 44,
-          "template_match": 44,
-          "correct_prefix": 103,
-          "first_token": 111,
-          "first_three_tokens": 39,
-          "chars_saved": 567,
-          "incorrect_chars": 373
+          "eligible": 1177,
+          "suggested": 151,
+          "exact": 59,
+          "template_match": 59,
+          "correct_prefix": 122,
+          "first_token": 131,
+          "first_three_tokens": 49,
+          "chars_saved": 656,
+          "incorrect_chars": 379
         }
       },
       "by_scenario": {
         "auto-close": {
-          "eligible": 151,
-          "suggested": 14,
-          "exact": 14,
-          "template_match": 14,
-          "correct_prefix": 14,
-          "first_token": 14,
-          "first_three_tokens": 10,
-          "chars_saved": 86,
+          "eligible": 187,
+          "suggested": 20,
+          "exact": 20,
+          "template_match": 20,
+          "correct_prefix": 20,
+          "first_token": 20,
+          "first_three_tokens": 14,
+          "chars_saved": 110,
           "incorrect_chars": 0
         },
         "cut": {
-          "eligible": 951,
-          "suggested": 115,
-          "exact": 42,
-          "template_match": 42,
-          "correct_prefix": 79,
-          "first_token": 101,
-          "first_three_tokens": 35,
-          "chars_saved": 981,
-          "incorrect_chars": 337
+          "eligible": 1114,
+          "suggested": 140,
+          "exact": 57,
+          "template_match": 57,
+          "correct_prefix": 97,
+          "first_token": 122,
+          "first_three_tokens": 48,
+          "chars_saved": 1338,
+          "incorrect_chars": 385
         },
         "edit": {
-          "eligible": 951,
-          "suggested": 204,
-          "exact": 84,
-          "template_match": 84,
-          "correct_prefix": 160,
-          "first_token": 181,
-          "first_three_tokens": 69,
-          "chars_saved": 2001,
-          "incorrect_chars": 390
+          "eligible": 1114,
+          "suggested": 249,
+          "exact": 114,
+          "template_match": 114,
+          "correct_prefix": 196,
+          "first_token": 220,
+          "first_three_tokens": 95,
+          "chars_saved": 2716,
+          "incorrect_chars": 447
         }
       },
       "by_prefix": {
@@ -277,12 +288,23 @@
           "first_three_tokens": 76,
           "chars_saved": 1667,
           "incorrect_chars": 347
+        },
+        "whitespace": {
+          "eligible": 362,
+          "suggested": 76,
+          "exact": 51,
+          "template_match": 51,
+          "correct_prefix": 60,
+          "first_token": 66,
+          "first_three_tokens": 43,
+          "chars_saved": 1096,
+          "incorrect_chars": 105
         }
       }
     },
     "noop": {
       "overall": {
-        "eligible": 2053,
+        "eligible": 2415,
         "suggested": 0,
         "exact": 0,
         "template_match": 0,
@@ -305,7 +327,7 @@
       },
       "by_language": {
         "lua": {
-          "eligible": 1039,
+          "eligible": 1238,
           "suggested": 0,
           "exact": 0,
           "template_match": 0,
@@ -316,7 +338,7 @@
           "incorrect_chars": 0
         },
         "tua": {
-          "eligible": 1014,
+          "eligible": 1177,
           "suggested": 0,
           "exact": 0,
           "template_match": 0,
@@ -329,7 +351,7 @@
       },
       "by_scenario": {
         "auto-close": {
-          "eligible": 151,
+          "eligible": 187,
           "suggested": 0,
           "exact": 0,
           "template_match": 0,
@@ -340,7 +362,7 @@
           "incorrect_chars": 0
         },
         "cut": {
-          "eligible": 951,
+          "eligible": 1114,
           "suggested": 0,
           "exact": 0,
           "template_match": 0,
@@ -351,7 +373,7 @@
           "incorrect_chars": 0
         },
         "edit": {
-          "eligible": 951,
+          "eligible": 1114,
           "suggested": 0,
           "exact": 0,
           "template_match": 0,
@@ -417,20 +439,31 @@
           "first_three_tokens": 0,
           "chars_saved": 0,
           "incorrect_chars": 0
+        },
+        "whitespace": {
+          "eligible": 362,
+          "suggested": 0,
+          "exact": 0,
+          "template_match": 0,
+          "correct_prefix": 0,
+          "first_token": 0,
+          "first_three_tokens": 0,
+          "chars_saved": 0,
+          "incorrect_chars": 0
         }
       }
     },
     "phase1": {
       "overall": {
-        "eligible": 2053,
-        "suggested": 214,
-        "exact": 14,
-        "template_match": 38,
-        "correct_prefix": 185,
-        "first_token": 186,
+        "eligible": 2415,
+        "suggested": 255,
+        "exact": 18,
+        "template_match": 42,
+        "correct_prefix": 222,
+        "first_token": 223,
         "first_three_tokens": 0,
-        "chars_saved": 488,
-        "incorrect_chars": 80
+        "chars_saved": 547,
+        "incorrect_chars": 91
       },
       "abstain": {
         "eligible": 132,
@@ -445,61 +478,61 @@
       },
       "by_language": {
         "lua": {
-          "eligible": 1039,
-          "suggested": 144,
-          "exact": 9,
-          "template_match": 27,
-          "correct_prefix": 132,
-          "first_token": 136,
+          "eligible": 1238,
+          "suggested": 168,
+          "exact": 11,
+          "template_match": 29,
+          "correct_prefix": 152,
+          "first_token": 156,
           "first_three_tokens": 0,
-          "chars_saved": 343,
-          "incorrect_chars": 19
+          "chars_saved": 381,
+          "incorrect_chars": 30
         },
         "tua": {
-          "eligible": 1014,
-          "suggested": 70,
-          "exact": 5,
-          "template_match": 11,
-          "correct_prefix": 53,
-          "first_token": 50,
+          "eligible": 1177,
+          "suggested": 87,
+          "exact": 7,
+          "template_match": 13,
+          "correct_prefix": 70,
+          "first_token": 67,
           "first_three_tokens": 0,
-          "chars_saved": 145,
+          "chars_saved": 166,
           "incorrect_chars": 61
         }
       },
       "by_scenario": {
         "auto-close": {
-          "eligible": 151,
-          "suggested": 8,
-          "exact": 2,
-          "template_match": 2,
-          "correct_prefix": 8,
-          "first_token": 8,
+          "eligible": 187,
+          "suggested": 14,
+          "exact": 4,
+          "template_match": 4,
+          "correct_prefix": 14,
+          "first_token": 14,
           "first_three_tokens": 0,
-          "chars_saved": 14,
+          "chars_saved": 20,
           "incorrect_chars": 0
         },
         "cut": {
-          "eligible": 951,
-          "suggested": 81,
+          "eligible": 1114,
+          "suggested": 92,
           "exact": 1,
           "template_match": 16,
-          "correct_prefix": 68,
-          "first_token": 68,
+          "correct_prefix": 77,
+          "first_token": 77,
           "first_three_tokens": 0,
-          "chars_saved": 187,
-          "incorrect_chars": 9
+          "chars_saved": 195,
+          "incorrect_chars": 14
         },
         "edit": {
-          "eligible": 951,
-          "suggested": 125,
-          "exact": 11,
-          "template_match": 20,
-          "correct_prefix": 109,
-          "first_token": 110,
+          "eligible": 1114,
+          "suggested": 149,
+          "exact": 13,
+          "template_match": 22,
+          "correct_prefix": 131,
+          "first_token": 132,
           "first_three_tokens": 0,
-          "chars_saved": 287,
-          "incorrect_chars": 71
+          "chars_saved": 332,
+          "incorrect_chars": 77
         }
       },
       "by_prefix": {
@@ -555,22 +588,33 @@
           "correct_prefix": 53,
           "first_token": 53,
           "first_three_tokens": 0,
-          "chars_saved": 125,
+          "chars_saved": 115,
           "incorrect_chars": 9
+        },
+        "whitespace": {
+          "eligible": 362,
+          "suggested": 41,
+          "exact": 4,
+          "template_match": 4,
+          "correct_prefix": 37,
+          "first_token": 37,
+          "first_three_tokens": 0,
+          "chars_saved": 69,
+          "incorrect_chars": 11
         }
       }
     },
     "phase1-prototype": {
       "overall": {
-        "eligible": 2053,
-        "suggested": 311,
-        "exact": 140,
-        "template_match": 180,
-        "correct_prefix": 188,
-        "first_token": 236,
-        "first_three_tokens": 109,
-        "chars_saved": 2902,
-        "incorrect_chars": 1164
+        "eligible": 2415,
+        "suggested": 377,
+        "exact": 191,
+        "template_match": 231,
+        "correct_prefix": 239,
+        "first_token": 292,
+        "first_three_tokens": 152,
+        "chars_saved": 3944,
+        "incorrect_chars": 1268
       },
       "abstain": {
         "eligible": 132,
@@ -585,61 +629,61 @@
       },
       "by_language": {
         "lua": {
-          "eligible": 1039,
-          "suggested": 195,
-          "exact": 96,
-          "template_match": 128,
-          "correct_prefix": 126,
-          "first_token": 149,
-          "first_three_tokens": 75,
-          "chars_saved": 2492,
-          "incorrect_chars": 381
+          "eligible": 1238,
+          "suggested": 245,
+          "exact": 132,
+          "template_match": 164,
+          "correct_prefix": 162,
+          "first_token": 189,
+          "first_three_tokens": 108,
+          "chars_saved": 3471,
+          "incorrect_chars": 479
         },
         "tua": {
-          "eligible": 1014,
-          "suggested": 116,
-          "exact": 44,
-          "template_match": 52,
-          "correct_prefix": 62,
-          "first_token": 87,
-          "first_three_tokens": 34,
-          "chars_saved": 410,
-          "incorrect_chars": 783
+          "eligible": 1177,
+          "suggested": 132,
+          "exact": 59,
+          "template_match": 67,
+          "correct_prefix": 77,
+          "first_token": 103,
+          "first_three_tokens": 44,
+          "chars_saved": 473,
+          "incorrect_chars": 789
         }
       },
       "by_scenario": {
         "auto-close": {
-          "eligible": 151,
-          "suggested": 14,
-          "exact": 14,
-          "template_match": 14,
-          "correct_prefix": 14,
-          "first_token": 14,
-          "first_three_tokens": 10,
-          "chars_saved": 86,
+          "eligible": 187,
+          "suggested": 20,
+          "exact": 20,
+          "template_match": 20,
+          "correct_prefix": 20,
+          "first_token": 20,
+          "first_three_tokens": 14,
+          "chars_saved": 110,
           "incorrect_chars": 0
         },
         "cut": {
-          "eligible": 951,
-          "suggested": 121,
-          "exact": 42,
-          "template_match": 62,
-          "correct_prefix": 66,
-          "first_token": 88,
-          "first_three_tokens": 33,
-          "chars_saved": 978,
-          "incorrect_chars": 415
+          "eligible": 1114,
+          "suggested": 143,
+          "exact": 57,
+          "template_match": 77,
+          "correct_prefix": 81,
+          "first_token": 106,
+          "first_three_tokens": 46,
+          "chars_saved": 1315,
+          "incorrect_chars": 463
         },
         "edit": {
-          "eligible": 951,
-          "suggested": 176,
-          "exact": 84,
-          "template_match": 104,
-          "correct_prefix": 108,
-          "first_token": 134,
-          "first_three_tokens": 66,
-          "chars_saved": 1838,
-          "incorrect_chars": 749
+          "eligible": 1114,
+          "suggested": 214,
+          "exact": 114,
+          "template_match": 134,
+          "correct_prefix": 138,
+          "first_token": 166,
+          "first_three_tokens": 92,
+          "chars_saved": 2519,
+          "incorrect_chars": 805
         }
       },
       "by_prefix": {
@@ -695,21 +739,32 @@
           "correct_prefix": 89,
           "first_token": 109,
           "first_three_tokens": 76,
-          "chars_saved": 1612,
+          "chars_saved": 1598,
           "incorrect_chars": 441
+        },
+        "whitespace": {
+          "eligible": 362,
+          "suggested": 66,
+          "exact": 51,
+          "template_match": 51,
+          "correct_prefix": 51,
+          "first_token": 56,
+          "first_three_tokens": 43,
+          "chars_saved": 1056,
+          "incorrect_chars": 104
         }
       }
     },
     "semantic": {
       "overall": {
-        "eligible": 2053,
+        "eligible": 2415,
         "suggested": 80,
         "exact": 0,
         "template_match": 40,
         "correct_prefix": 42,
         "first_token": 42,
         "first_three_tokens": 0,
-        "chars_saved": 224,
+        "chars_saved": 210,
         "incorrect_chars": 96
       },
       "abstain": {
@@ -725,31 +780,31 @@
       },
       "by_language": {
         "lua": {
-          "eligible": 1039,
+          "eligible": 1238,
           "suggested": 56,
           "exact": 0,
           "template_match": 32,
           "correct_prefix": 24,
           "first_token": 24,
           "first_three_tokens": 0,
-          "chars_saved": 128,
+          "chars_saved": 120,
           "incorrect_chars": 96
         },
         "tua": {
-          "eligible": 1014,
+          "eligible": 1177,
           "suggested": 24,
           "exact": 0,
           "template_match": 8,
           "correct_prefix": 18,
           "first_token": 18,
           "first_three_tokens": 0,
-          "chars_saved": 96,
+          "chars_saved": 90,
           "incorrect_chars": 0
         }
       },
       "by_scenario": {
         "auto-close": {
-          "eligible": 151,
+          "eligible": 187,
           "suggested": 0,
           "exact": 0,
           "template_match": 0,
@@ -760,25 +815,25 @@
           "incorrect_chars": 0
         },
         "cut": {
-          "eligible": 951,
+          "eligible": 1114,
           "suggested": 40,
           "exact": 0,
           "template_match": 20,
           "correct_prefix": 21,
           "first_token": 21,
           "first_three_tokens": 0,
-          "chars_saved": 112,
+          "chars_saved": 105,
           "incorrect_chars": 48
         },
         "edit": {
-          "eligible": 951,
+          "eligible": 1114,
           "suggested": 40,
           "exact": 0,
           "template_match": 20,
           "correct_prefix": 21,
           "first_token": 21,
           "first_three_tokens": 0,
-          "chars_saved": 112,
+          "chars_saved": 105,
           "incorrect_chars": 48
         }
       },
@@ -835,7 +890,18 @@
           "correct_prefix": 0,
           "first_token": 0,
           "first_three_tokens": 0,
-          "chars_saved": 14,
+          "chars_saved": 0,
+          "incorrect_chars": 0
+        },
+        "whitespace": {
+          "eligible": 362,
+          "suggested": 0,
+          "exact": 0,
+          "template_match": 0,
+          "correct_prefix": 0,
+          "first_token": 0,
+          "first_three_tokens": 0,
+          "chars_saved": 0,
           "incorrect_chars": 0
         }
       }
