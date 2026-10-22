@@ -11,7 +11,7 @@ before their default or source scope expands. It lives behind the
 make inline-eval            # tuning sets -> target/tua-speed/inline-eval-tune.json
 make inline-eval-phase2     # opt-in Phase 2 exact retrieval, tuning data only
 make inline-eval-phase3     # evaluator-only n-gram experiment, tuning data only
-make inline-eval-phase3-smoke # exercise Phase 3 on committed smoke data
+make inline-eval-phase3-smoke # check the filtered Phase 3 source on its synthetic smoke set
 make inline-eval-smoke      # committed fixtures, compared with smoke/expected.json (CI)
 make inline-editor-replay   # real VS Code menu/provider replay, tuning data only (macOS)
 make inline-eval-holdout    # held-out gate, checked against thresholds.toml
@@ -121,11 +121,16 @@ changes from `0.728` to `0.745`, and wrong-to-saved improves from `0.395` to
 requests, saves 0.013 characters per eligible request, and has 0.913
 correct-prefix precision. The raw predictor is not usable (`0.100`
 correct-prefix precision and `26.14` wrong characters per character saved).
-Phase 3 smoke produced no filtered suggestions, so it only exercises the code
-path and provides no quality corroboration. These tune-only gains may be
-overfit; they are not release approval. No Phase 3 held-out or external set has
-been read, and no n-gram code is compiled into production, the LSP, or the
-extension.
+The dedicated synthetic Phase 3 smoke set currently produces two filtered
+suggestions, both exact correct continuations with no incorrect characters.
+The Make target and a focused core assertion fail if the pinned source silently
+becomes a no-op or if any suggestion stops being a correct prefix. The repeated
+training pattern is deliberately constructed to cross the confidence filter,
+so this proves only end-to-end wiring, target-file exclusion, and deterministic
+correctness on that controlled pattern. It is not quality corroboration. The
+tune-only gains may be overfit; they are not release approval. No Phase 3
+held-out or external set has been read, and no n-gram code is compiled into
+production, the LSP, or the extension.
 
 The report keeps `same-directory` and `project` as separate standalone tiers.
 The clearly named `phase2-tuning-phase1-plus-project-common-prefix` backend
@@ -397,3 +402,10 @@ The report also measures:
 `smoke/expected.json` pins the timing-independent counts for the smoke set.
 After an intended change to the evaluator or a backend, run
 `make inline-eval-smoke-update` and review the diff.
+
+`make inline-eval-phase3-smoke` separately requires the filtered statistical
+backend to produce at least one suggestion and requires every suggestion to be
+a correct prefix on its synthetic set. It runs under `benchmark-smoke`. The
+synthetic fixture is not part of the Phase 1 smoke set or its quality baseline;
+its full report is written under `target/tua-speed/` rather than committed as a
+second snapshot of all Phase 1 and Phase 2 backends.

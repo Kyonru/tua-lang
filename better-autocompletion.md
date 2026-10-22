@@ -1318,11 +1318,16 @@ With that correction, Phase 2 adds no suggestions over Phase 1 on the tuning
 set, so project retrieval has no current quality evidence despite its completed
 production-path architecture.
 
-The smoke fixture produced no filtered suggestions, so it corroborates only
-execution, not quality. The small tuning gain may be overfit and is not an
-approval to ship. The Phase 3 configuration must be reviewed and frozen before
-either gate dataset is used; until that happens, the production decision
-remains unchanged and exact retrieval is the last implemented source.
+A separate synthetic smoke set now crosses the pinned confidence filter: it
+currently produces two filtered suggestions, both exact correct continuations
+with no incorrect characters. Its Make check and a focused assertion fail if
+the source silently becomes a no-op or if any suggestion stops being a correct
+prefix. Its repeated training pattern is constructed for that plumbing
+invariant, so it does not corroborate general quality. The small tuning gain
+may be overfit and is not an approval to ship. The Phase 3 configuration must
+be reviewed and frozen before either gate dataset is used; until that happens,
+the production decision remains unchanged and exact retrieval is the last
+implemented source.
 
 ---
 

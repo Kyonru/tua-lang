@@ -304,7 +304,7 @@ inline-eval-phase3: ## Evaluate the offline Phase 3 n-gram experiment on tuning 
 
 .PHONY: inline-eval-phase3-smoke
 inline-eval-phase3-smoke: ## Exercise the Phase 3 predictor on committed smoke fixtures without spending gate data.
-	$(INLINE_EVAL_DEBUG) --manifest $(INLINE_EVAL_MANIFEST) --set smoke --max-positions 0 --phase3-ngram --thresholds $(INLINE_EVAL_THRESHOLDS) --out target/tua-speed/inline-eval-smoke-phase3.json
+	$(INLINE_EVAL_DEBUG) --manifest $(INLINE_EVAL_MANIFEST) --set phase3-smoke --max-positions 0 --phase3-ngram --thresholds $(INLINE_EVAL_THRESHOLDS) --require-correct-backend phase3-ngram --out target/tua-speed/inline-eval-smoke-phase3.json
 
 .PHONY: inline-eval-smoke
 inline-eval-smoke: ## Check the inline-completion evaluator against its committed smoke expectations (offline).
@@ -339,7 +339,7 @@ inline-eval-external: ## Fetch pinned third-party LOVE projects and gate inline 
 	$(INLINE_EVAL) --manifest $(INLINE_EVAL_MANIFEST) --set external --thresholds $(INLINE_EVAL_THRESHOLDS) --out target/tua-speed/inline-eval-external.json
 
 .PHONY: benchmark-smoke
-benchmark-smoke: completion-ranking-smoke profile-examples-smoke representative-benchmark-smoke inline-eval-smoke ## Exercise deterministic ranking, timing, completion-freshness, and inline-evaluation gates.
+benchmark-smoke: completion-ranking-smoke profile-examples-smoke representative-benchmark-smoke inline-eval-smoke inline-eval-phase3-smoke ## Exercise deterministic ranking, timing, completion-freshness, and inline-evaluation gates.
 
 .PHONY: profile-all
 profile-all: profile-lsp profile-completion profile-examples profile-representative ## Run all LSP, completion, representative, and bundled-example profiles.

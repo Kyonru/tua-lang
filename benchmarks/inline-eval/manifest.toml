@@ -45,6 +45,11 @@ role = "smoke"
 description = "Small committed fixtures for CI; results are pinned in smoke/expected.json."
 projects = ["benchmarks/inline-eval/smoke"]
 
+[sets.phase3-smoke]
+role = "smoke"
+description = "Synthetic CI fixture proving the filtered Phase 3 backend remains live and correct on one controlled pattern."
+projects = ["benchmarks/inline-eval/phase3-smoke"]
+
 [sets.external]
 role = "external"
 description = "Pinned third-party LOVE projects: the external Lua test set. Fetch with `make inline-eval-external`."

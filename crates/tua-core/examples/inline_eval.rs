@@ -64,6 +64,7 @@ const USAGE: &str =
   [--records] [--max-positions N] [--no-menu] [--no-warmup] [--thresholds FILE]
   [--menu-replay FILE]
   [--phase2-retrieval] [--phase3-ngram]
+  [--require-correct-backend NAME]...
   [--check-phase-gate FILE]
   [--check-expected FILE] [--write-expected FILE] [--min-prefix N] [--min-support N]
   [--min-full-prefix-support N] [--dominance R]
@@ -85,6 +86,7 @@ struct Arguments {
     write_expected: Option<PathBuf>,
     menu_replay: Option<PathBuf>,
     phase_gate: Option<PathBuf>,
+    required_correct_backends: Vec<String>,
     options: EvalOptions,
 }
 
@@ -100,6 +102,7 @@ fn parse_arguments() -> Result<Arguments, String> {
         write_expected: None,
         menu_replay: None,
         phase_gate: None,
+        required_correct_backends: Vec::new(),
         options: EvalOptions {
             allocated_bytes: Some(allocated_bytes),
             ..EvalOptions::default()
@@ -127,6 +130,9 @@ fn parse_arguments() -> Result<Arguments, String> {
                 arguments.options.phase2_retrieval = true;
                 arguments.options.phase3_ngram = true;
             }
+            "--require-correct-backend" => arguments
+                .required_correct_backends
+                .push(value("--require-correct-backend")?),
             "--check-phase-gate" => {
                 arguments.phase_gate = Some(value("--check-phase-gate")?.into())
             }
@@ -323,6 +329,7 @@ fn run() -> Result<ExitCode, String> {
 
     let mut failed = false;
     let deterministic = report.deterministic();
+    require_correct_backends(&deterministic, &arguments.required_correct_backends)?;
     if let Some(path) = &arguments.write_expected {
         write_json(path, &deterministic)?;
         eprintln!("inline_eval: wrote expectations to {}", path.display());
@@ -404,6 +411,34 @@ fn ensure_phase3_sets_are_tuning_only(
     }
 }
 
+fn require_correct_backends(
+    results: &BTreeMap<String, BTreeMap<String, DeterministicTotals>>,
+    required: &[String],
+) -> Result<(), String> {
+    if !required.is_empty() && results.is_empty() {
+        return Err("cannot require a correct backend without an evaluated set".to_owned());
+    }
+    for name in required {
+        for (set, backends) in results {
+            let totals = backends
+                .get(name)
+                .ok_or_else(|| format!("set `{set}` has no backend named `{name}`"))?;
+            if totals.overall.suggested == 0 {
+                return Err(format!(
+                    "backend `{name}` produced no suggestions for set `{set}`"
+                ));
+            }
+            if totals.overall.correct_prefix != totals.overall.suggested {
+                return Err(format!(
+                    "backend `{name}` produced only {}/{} correct-prefix suggestions for set `{set}`",
+                    totals.overall.correct_prefix, totals.overall.suggested
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -423,6 +458,44 @@ mod tests {
         assert!(ensure_phase3_sets_are_tuning_only(false, [SetRole::Holdout]).is_ok());
         assert!(ensure_phase3_sets_are_tuning_only(true, [SetRole::Holdout]).is_err());
         assert!(ensure_phase3_sets_are_tuning_only(true, [SetRole::External]).is_err());
+    }
+
+    #[test]
+    fn required_correct_backend_fails_closed() {
+        let required = ["phase3-ngram".to_owned()];
+        assert!(require_correct_backends(&BTreeMap::new(), &required)
+            .unwrap_err()
+            .contains("without an evaluated set"));
+        let mut backends = BTreeMap::new();
+        backends.insert("phase3-ngram".to_owned(), DeterministicTotals::default());
+        let mut results = BTreeMap::new();
+        results.insert("phase3-smoke".to_owned(), backends);
+
+        assert!(require_correct_backends(&results, &required)
+            .unwrap_err()
+            .contains("produced no suggestions"));
+
+        let totals = results
+            .get_mut("phase3-smoke")
+            .unwrap()
+            .get_mut("phase3-ngram")
+            .unwrap();
+        totals.overall.suggested = 1;
+        assert!(require_correct_backends(&results, &required)
+            .unwrap_err()
+            .contains("produced only 0/1 correct-prefix suggestions"));
+
+        results
+            .get_mut("phase3-smoke")
+            .unwrap()
+            .get_mut("phase3-ngram")
+            .unwrap()
+            .overall
+            .correct_prefix = 1;
+        assert!(require_correct_backends(&results, &required).is_ok());
+        assert!(require_correct_backends(&results, &["missing".to_owned()])
+            .unwrap_err()
+            .contains("has no backend"));
     }
 }
 

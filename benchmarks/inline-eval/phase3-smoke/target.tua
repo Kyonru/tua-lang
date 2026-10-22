@@ -1,0 +1,3 @@
+-- Synthetic Phase 3 smoke target. Its single significant line stays below
+-- the near-duplicate minimum while the target file is still held out.
+score = score + 1

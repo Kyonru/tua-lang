@@ -31,7 +31,11 @@ language or editor behavior, and migration notes call out those changes.
   targets compare the raw predictor, a pinned high-confidence candidate, and a
   Phase 2-first fallback. The command hard-refuses held-out and external sets;
   no statistical predictor is compiled into production, the LSP, or the VS
-  Code extension.
+  Code extension. A separate committed synthetic smoke set now crosses the
+  pinned confidence filter and runs under `benchmark-smoke`; its Make check
+  and a focused assertion fail if the filtered source becomes a no-op or if
+  any synthetic suggestion stops being a correct continuation, without
+  changing the Phase 1 smoke baseline.
 
 - VS Code now exposes **Tua: Toggle Deterministic Inline Completions** for the
   existing default-off workspace gate. Its inline-completion status reports

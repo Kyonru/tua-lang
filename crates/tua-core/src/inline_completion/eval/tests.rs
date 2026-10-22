@@ -926,6 +926,7 @@ fn phase3_ngram_cannot_evaluate_gate_sets_through_the_core_api() {
 
 #[test]
 fn phase3_reports_model_costs_and_both_experimental_backends() {
+    let training = "score = score + 1\n".repeat(32);
     let project = EvalProject {
         name: "phase3-fixture".to_owned(),
         config: crate::ProjectConfig::default(),
@@ -936,12 +937,12 @@ fn phase3_reports_model_costs_and_both_experimental_backends() {
             EvalFile {
                 path: PathBuf::from("src/main.tua"),
                 kind: AnalysisSourceKind::Tua,
-                source: "value = value + 1\n".to_owned(),
+                source: "score = score + 1\n".to_owned(),
             },
             EvalFile {
                 path: PathBuf::from("src/other.tua"),
                 kind: AnalysisSourceKind::Tua,
-                source: "score = score + 1\n".to_owned(),
+                source: training,
             },
         ],
     };
@@ -969,6 +970,20 @@ fn phase3_reports_model_costs_and_both_experimental_backends() {
     assert!(set
         .backends
         .contains_key("phase3-phase2-plus-ngram-fallback"));
+    let filtered = &set.backends["phase3-ngram"].overall;
+    assert!(
+        filtered.suggested > 0,
+        "the pinned Phase 3 filter must not silently become a no-op"
+    );
+    assert!(
+        filtered.correct_prefix > 0,
+        "the pinned Phase 3 filter must retain a correct synthetic suggestion"
+    );
+    assert_eq!(
+        filtered.correct_prefix, filtered.suggested,
+        "every filtered suggestion in the synthetic fixture must be correct"
+    );
+    assert_eq!(filtered.incorrect_chars, 0);
 }
 
 #[test]
