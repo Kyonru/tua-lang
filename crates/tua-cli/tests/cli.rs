@@ -584,6 +584,41 @@ return { new = new, shake = shake }
 }
 
 #[test]
+fn check_reports_bad_arguments_in_calls_assigned_to_unannotated_locals() {
+    let temp = TempDir::new("check-local-call-arguments");
+
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).expect("failed to write config");
+    fs::create_dir_all(temp.path().join("src")).expect("failed to create source");
+    fs::write(
+        temp.path().join("src/main.tua"),
+        "local M = require(\"m\")\n\nlocal one = M.double(\"x\")\nlocal two, three = M.double(\"y\")\nlocal fine = M.double(2)\nprint(one, two, three, fine)\n",
+    )
+    .expect("failed to write main source");
+    fs::write(
+        temp.path().join("src/m.lua"),
+        r#"---@param n number
+---@return number
+local function double(n) return n * 2 end
+
+return { double = double }
+"#,
+    )
+    .expect("failed to write Lua module");
+
+    let output = tua()
+        .arg("check")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tua check");
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be valid UTF-8");
+
+    assert_eq!(stderr.matches("main.tua:3:").count(), 1, "{stderr}");
+    assert_eq!(stderr.matches("main.tua:4:").count(), 1, "{stderr}");
+    assert!(!stderr.contains("main.tua:5:"), "{stderr}");
+}
+
+#[test]
 fn check_enables_standard_lints_by_default() {
     let temp = TempDir::new("check-default-lints");
 

@@ -8,6 +8,12 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Calls assigned to an unannotated local, such as
+  `local cam = camera.new({ style = "orbit" })`, now have their arguments
+  checked when the callee comes from another module. The local's type was
+  taken from the project environment without evaluating the call. The
+  `project-model` example's `legacy.lua` annotation, hidden by this gap, now
+  says `string`.
 - Trailing LuaDoc parameters marked optional, as `---@param name? T` or
   `---@param name T?`, can now be omitted. Every annotated parameter was
   previously required, so `Camera.new()` against `---@param options? Options`

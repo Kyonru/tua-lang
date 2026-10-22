@@ -538,7 +538,18 @@ impl<'a> Checker<'a> {
                 .get(index)
                 .and_then(|specifier| *specifier)
                 .is_some();
-            let ty = self.environment.local(&name).cloned().or_else(|| {
+            let environment_type = self.environment.local(&name).cloned();
+            if environment_type.is_some() && !has_annotation {
+                // The environment already typed this local, so the value is
+                // not inferred below. A call still has to have its arguments
+                // checked; do it once per expression, at its first return.
+                if let Some((expression @ Expression::FunctionCall(_), 0)) =
+                    assignment_expression_for_local(&expressions, index)
+                {
+                    self.infer_expression(expression);
+                }
+            }
+            let ty = environment_type.or_else(|| {
                 match assignment_expression_for_local(&expressions, index) {
                     Some((expression, return_index)) => {
                         self.infer_expression_return(expression, return_index)

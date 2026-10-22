@@ -3,7 +3,7 @@
 local M = {}
 
 --- Create player label
----@param name number
+---@param name string
 ---@return string
 function M.label(name)
 	return "player:" .. name
