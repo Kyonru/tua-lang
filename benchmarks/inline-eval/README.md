@@ -250,20 +250,24 @@ Rules that keep the gates honest:
   interactive responsiveness. The passing real-editor replay proves that the
   extension cancels and abstains after a local backend waits 250 ms beyond its
   65 ms debounce; that client protection and the synthetic contention gate
-  measure different boundaries.
-  Its checker fails on missing, pending, or evidence-free prerequisites.
+  measure different boundaries. A separate `inline_contended_delivery`
+  prerequisite requires contended request age within that 250 ms timeout.
+  Its checker fails on missing, pending, or evidence-free prerequisites, and
+  each passed prerequisite names the `check` in its report that decides it.
 - **Results stay local.** Reports go to `target/tua-speed/`; don't commit
   machine-specific numbers.
 
-The offline `phase1` backend is intentionally cold. Its validation
-zero/one/two-parse distribution diagnoses worst-case cost and is report-only;
-`check_gates` does not mix it into held-out or external quality acceptance.
-The aggregate validation prerequisite is decided from the representative LSP
-run under real scheduling. That prerequisite requires complete counter
-coverage, deliberately exercises one temporarily invalid edit through its
-two-parse validation path, and requires at least half of returned candidates to
-use at most one parse. A zero-parse cancellation or deadline expiration is a
-safe abstention, not a returned completion. Candidate-attempt and returned-candidate
+The offline `phase1` backend is cold, and so is the production request: the
+representative run observed no cache-peek hits under real scheduling. Its
+validation zero/one/two-parse distribution therefore decides the aggregate
+validation prerequisite. `--out` reports record it as
+`checks.validationParseDistribution`, which needs at least 100 returned
+candidates, none returned without parsing, and at least half returned after
+at most one parse. `check_gates` still keeps it out of held-out and external
+quality acceptance. The representative LSP run keeps a smaller sanity check:
+complete counter coverage, one temporarily invalid edit through the two-parse
+path, and no zero-parse returns. A zero-parse cancellation or deadline
+expiration is a safe abstention, not a returned completion. Candidate-attempt and returned-candidate
 parse distributions are reported separately; returned counts use request-local
 parse counts, so concurrent requests cannot distort them.
 

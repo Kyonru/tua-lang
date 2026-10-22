@@ -177,6 +177,19 @@ profile-completion: ## Profile completion latency, ranking overhead, and complet
 	$(CARGO) build --package tua-cli
 	TUA_PROFILE_REPEAT=$${TUA_PROFILE_REPEAT:-20} node editors/vscode/scripts/lsp-completion-profile.js $(DEBUG_TUA) benchmarks/lsp/medium
 
+.PHONY: profile-completion-phase1-gate
+profile-completion-phase1-gate: ## Gate menu completion p95 at exactly 5% over a pre-Phase-1 report from this machine (set TUA_COMPLETION_BASELINE).
+	@test -n "$(TUA_COMPLETION_BASELINE)" || { \
+		echo "set TUA_COMPLETION_BASELINE to a pre-Phase-1 completion profile recorded on this machine" >&2; \
+		exit 2; \
+	}
+	$(CARGO) build --package tua-cli
+	TUA_PROFILE_REPEAT=$${TUA_PROFILE_REPEAT:-100} \
+	TUA_COMPLETION_BASELINE="$(TUA_COMPLETION_BASELINE)" \
+	TUA_COMPLETION_BASELINE_SLACK_MS=0 \
+	TUA_COMPLETION_PROFILE_OUT=target/tua-speed/completion-phase1-gate.json \
+	node editors/vscode/scripts/lsp-completion-profile.js $(DEBUG_TUA) benchmarks/lsp/medium
+
 .PHONY: completion-ranking-smoke
 completion-ranking-smoke: ## Check fixture-driven completion ranking order.
 	$(CARGO) build --package tua-cli
@@ -229,6 +242,7 @@ representative-phase1-gate: ## Run the representative Phase 1 inline gate with s
 	TUA_REPRESENTATIVE_INLINE_WORKER_P95_BUDGET_MS=10 \
 	TUA_REPRESENTATIVE_INLINE_BACKEND_P95_BUDGET_MS=10 \
 	TUA_REPRESENTATIVE_INLINE_E2E_P95_BUDGET_MS=1500 \
+	TUA_REPRESENTATIVE_INLINE_DELIVERY_P95_BUDGET_MS=250 \
 	TUA_REPRESENTATIVE_PROFILE_OUT=target/tua-speed/representative-phase1-gate.json \
 	$(MAKE) profile-representative
 

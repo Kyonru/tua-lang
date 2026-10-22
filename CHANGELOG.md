@@ -25,6 +25,15 @@ language or editor behavior, and migration notes call out those changes.
   from before a later change to shipped code, harnesses, or benchmark inputs.
   Earlier evidence carried no revision, so those prerequisites are pending
   until rerun.
+- Each Phase 1 prerequisite is now decided by a named check in its report
+  rather than by the whole report passing. Completion performance uses a new
+  `make profile-completion-phase1-gate` with exactly 5% tolerance instead of
+  the ordinary profile's 1 ms floor. A new `inline_contended_delivery`
+  prerequisite requires contended request age within the extension's 250 ms
+  timeout. The validation parse distribution is now read from the evaluator's
+  tuning run of the production host rather than a handful of representative
+  requests, and the menu-replay and cache-hit evidence state what they do and
+  do not show.
 
 ### Added
 

@@ -217,15 +217,35 @@ fails. So does one whose report was not produced from a clean tree at its
 recorded revision, or whose shipped code, harness, or benchmark inputs changed
 after that revision.
 
-The evaluator's production backend deliberately starts cold, so its
-zero/one/two-parse distribution is a report-only diagnostic worst case; it is
-not part of held-out or external quality acceptance. The aggregate validation
-prerequisite instead uses the representative LSP run to measure the production
-request under real scheduling. It may be
-marked passed only when counters cover every attempt and returned candidate,
-no candidate returns without a successful parse, a temporarily-invalid edit
-exercises the two-parse baseline-comparison path, and at least half of returned
-candidates use at most one parse. A zero-parse cancellation or deadline
+Each passed prerequisite also names the entry in its report's `checks` map
+that decides it, and:
+
+- **Completion performance** comes from `make profile-completion-phase1-gate`,
+  which allows exactly 5% over a pre-Phase-1 baseline from the same machine,
+  with no absolute slack and 100 repeats. The ordinary profile's 1 ms floor
+  let a 7.7% regression on a 6 ms p95 pass.
+- **Contended delivery** (`inline_contended_delivery`) is separate from the
+  1,500 ms no-stall ceiling: contended request-age p95 must stay within the
+  extension's 250 ms local timeout. Beyond it the feature is effectively
+  absent under load even though nothing stalls.
+- **Validation parse distribution** is read from the evaluator's tuning run
+  (`checks.validationParseDistribution` in `inline-eval-tune.json`), which
+  calls the production host on thousands of requests, instead of the handful
+  the representative run returns. The evaluator's host starts cold, but so
+  does the production request: real scheduling observed no cache-peek hits.
+  It needs at least 100 returned candidates, none returned without parsing,
+  and at least half returned after at most one parse.
+- **Menu replay** proves that both menu states reach the provider and match
+  the evaluator on exact curated captures. It is plumbing evidence, not a
+  measurement of how often either state occurs.
+- **Scheduler cache hit** records a negative result: the cache peek is
+  observed and almost never hits, so Phase 1 ships no candidate that depends
+  on it. Passing it means that decision is supported, not that the cache helps.
+
+The representative run still checks its own parse distribution as a sanity
+check: counters cover every attempt and returned candidate, no candidate
+returns without a successful parse, and a temporarily-invalid edit exercises
+the two-parse baseline-comparison path. A zero-parse cancellation or deadline
 abstention is safe and is reported rather than treated as a returned
 completion.
 
@@ -858,7 +878,9 @@ Proceed only if:
   request-age ceiling catches coordinator/transport stalls; it is not UX
   acceptance for a suggestion that arrives that late. The extension's separate
   250 ms local-request timeout protects interactive responsiveness after its
-  65 ms debounce; it is not replaced by the synthetic 1,500 ms gate.
+  65 ms debounce; it is not replaced by the synthetic 1,500 ms gate. The
+  same run separately requires contended request-age p95 within that 250 ms
+  timeout, so results arrive while the editor still wants them.
 - Current-file recall adds measurable characters saved per eligible position.
 - Held-out precision meets the committed thresholds, separately for:
   - the Tua held-out projects plus the frozen holdout fixtures

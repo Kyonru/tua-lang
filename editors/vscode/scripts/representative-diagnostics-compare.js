@@ -224,6 +224,7 @@ function buildComparison(baselineReports, candidateReports, options) {
     fixtures,
     failures,
     passed: failures.length === 0,
+    checks: { diagnosticsFreshness: { passed: failures.length === 0, failures } },
   };
 }
 

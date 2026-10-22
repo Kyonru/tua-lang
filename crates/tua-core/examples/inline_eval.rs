@@ -339,6 +339,9 @@ fn run() -> Result<ExitCode, String> {
     if let Some(path) = &arguments.out {
         let mut stamped = serde_json::to_value(&report).map_err(|error| error.to_string())?;
         stamped["repository"] = repository_state();
+        stamped["checks"] = serde_json::json!({
+            "validationParseDistribution": eval::validation_parse_check(&report),
+        });
         write_json(path, &stamped)?;
         eprintln!("inline_eval: wrote {}", path.display());
     }
@@ -617,6 +620,16 @@ fn verify_evidence(root: &Path, item: &eval::PhaseGatePrerequisite) -> Result<()
     }
     if repository["dirty"].as_bool() != Some(false) {
         return Err(format!("{artifact} was not produced from a clean tree"));
+    }
+    let Some(check) = &item.check else {
+        return Err("no check recorded".to_owned());
+    };
+    let outcome = &report["checks"][check.as_str()];
+    if outcome["passed"].as_bool() != Some(true) {
+        return Err(format!(
+            "{artifact} check `{check}` did not pass: {}",
+            outcome["failures"]
+        ));
     }
     let mut diff = vec!["diff", "--quiet", revision.as_str(), "--"];
     diff.extend(EVIDENCE_PATHSPEC);

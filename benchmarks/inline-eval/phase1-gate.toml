@@ -5,7 +5,8 @@
 # relative to the repository root) and the commit that report records
 # (`revision`). `make inline-eval-phase-gate-check` rejects it unless that
 # report was produced from a clean tree at that commit and no shipped code,
-# harness, or benchmark input has changed since.
+# harness, or benchmark input has changed since. It also names the entry in
+# that report's `checks` map (`check`) that decides the prerequisite.
 version = 2
 
 [prerequisites.heldout_quality]
@@ -31,6 +32,10 @@ evidence = "unbound: recorded before reports carried a revision, so it may preda
 [prerequisites.inline_client_no_stall]
 passed = false
 evidence = "unbound: recorded before reports carried a revision, so it may predate the shipped code; rerun. Previously: the full 2026-10-21 target/tua-speed/representative-phase1-gate.json records client-observed contended request-age p95 of 56.10, 359.28, 35.26, 869.41, 35.79, 12.41, and 11.19 ms, all within the 1,500 ms stall ceiling"
+
+[prerequisites.inline_contended_delivery]
+passed = false
+evidence = "not yet measured against the 250 ms client timeout; the unbound 2026-10-21 representative run recorded contended request-age p95 of 359.28 and 869.41 ms on two fixtures, where the editor would discard the result"
 
 [prerequisites.inline_client_responsiveness]
 passed = false

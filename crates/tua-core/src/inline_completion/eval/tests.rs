@@ -983,6 +983,7 @@ fn aggregate_phase_gate_fails_closed_for_missing_pending_or_evidence_free_items(
                         evidence: "measured".to_owned(),
                         artifact: Some("target/tua-speed/artifact.json".to_owned()),
                         revision: Some("abc1234".to_owned()),
+                        check: Some("named".to_owned()),
                     },
                 )
             })
@@ -1010,6 +1011,19 @@ fn aggregate_phase_gate_fails_closed_for_missing_pending_or_evidence_free_items(
     let failures = check_phase_gate(&artifact, &current).join("\n");
     assert!(failures.contains("missing prerequisite `menu_replay`"));
     assert!(failures.contains("`diagnostics_freshness` is passed without naming its artifact"));
+    artifact
+        .prerequisites
+        .get_mut("diagnostics_freshness")
+        .expect("diagnostics prerequisite")
+        .revision = Some("abc1234".to_owned());
+    artifact
+        .prerequisites
+        .get_mut("inline_contended_delivery")
+        .expect("delivery prerequisite")
+        .check = None;
+    let failures = check_phase_gate(&artifact, &current).join("\n");
+    assert!(!failures.contains("`diagnostics_freshness`"));
+    assert!(failures.contains("`inline_contended_delivery` is passed without naming"));
     assert!(failures.contains("scheduler_cache_hit` is not passed"));
     assert!(failures.contains("completion_performance` has no evidence"));
 }
@@ -1337,6 +1351,7 @@ fn aggregate_phase_gate_rejects_evidence_the_verifier_reports_as_stale() {
                         evidence: "measured".to_owned(),
                         artifact: Some(format!("target/tua-speed/{name}.json")),
                         revision: Some("abc1234".to_owned()),
+                        check: Some("named".to_owned()),
                     },
                 )
             })
@@ -1352,11 +1367,40 @@ fn aggregate_phase_gate_rejects_evidence_the_verifier_reports_as_stale() {
     let failures = check_phase_gate(&artifact, &stale);
     assert_eq!(
         failures,
-        ["prerequisite `menu_replay` evidence is stale: shipped code changed since abc1234"]
+        ["prerequisite `menu_replay` evidence does not hold: shipped code changed since abc1234"]
     );
 
     let mut old = artifact.clone();
     old.version = 1;
     assert!(check_phase_gate(&old, &|_| Ok(()))
         .contains(&"unsupported phase-gate version 1".to_owned()));
+}
+
+#[test]
+fn validation_parse_check_needs_enough_mostly_one_parse_returns() {
+    let report_with = |one: usize, two: usize| {
+        let mut set = SetReport::default();
+        set.inline_validation.candidate_attempts = one + two;
+        set.inline_validation.candidate_parses = one + two;
+        set.inline_validation.baseline_parses = two;
+        set.inline_validation.candidates_returned = one + two;
+        set.inline_validation.returned_after_one_parse = one;
+        set.inline_validation.returned_after_two_parses = two;
+        EvalReport {
+            sets: vec![set],
+            ..EvalReport::default()
+        }
+    };
+
+    let passing = validation_parse_check(&report_with(60, 40));
+    assert!(passing.passed, "{:?}", passing.failures);
+    assert_eq!(passing.returned, 100);
+
+    let too_few = validation_parse_check(&report_with(3, 1));
+    assert!(!too_few.passed);
+    assert!(too_few.failures[0].contains("only 4 returned candidates"));
+
+    let mostly_two = validation_parse_check(&report_with(240, 271));
+    assert!(!mostly_two.passed);
+    assert!(mostly_two.failures[0].contains("47.0% of returned candidates"));
 }

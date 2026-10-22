@@ -23,6 +23,9 @@ const outputPath =
   path.resolve("target", "tua-speed", "completion-profile.json");
 const baselinePath = process.env.TUA_COMPLETION_BASELINE;
 const baselineTolerance = Number(process.env.TUA_COMPLETION_BASELINE_TOLERANCE || "0.05");
+// Absolute slack added to the ratio for sub-20 ms baselines. The Phase 1 gate
+// sets it to 0 so its 5% tolerance means exactly 5%.
+const baselineSlackMs = Number(process.env.TUA_COMPLETION_BASELINE_SLACK_MS ?? "1");
 const p95TargetMs = Number(process.env.TUA_COMPLETION_P95_TARGET_MS || "50");
 const rankingP95TargetMs = Number(process.env.TUA_COMPLETION_RANKING_P95_TARGET_MS || "5");
 
@@ -39,10 +42,20 @@ const rankingP95TargetMs = Number(process.env.TUA_COMPLETION_RANKING_P95_TARGET_
     },
   });
   const report = buildReport(result);
+  const comparison = compareBaseline(report);
+  if (comparison) {
+    report.checks = { completionBaseline: comparison };
+  }
 
   printReport(report);
   writeReport(report);
-  compareBaseline(report);
+  if (comparison && !comparison.passed) {
+    throw new Error(
+      `completion p95 regressed: current ${comparison.currentP95Ms.toFixed(2)}ms, ` +
+        `baseline ${comparison.baselineP95Ms.toFixed(2)}ms, ` +
+        `allowed ${comparison.allowedP95Ms.toFixed(2)}ms`,
+    );
+  }
 })().catch((error) => {
   console.error(error.stack || error.message);
   process.exit(1);
@@ -166,7 +179,7 @@ function writeReport(report) {
 
 function compareBaseline(report) {
   if (!baselinePath) {
-    return;
+    return null;
   }
 
   const baseline = JSON.parse(fs.readFileSync(baselinePath, "utf8"));
@@ -176,17 +189,30 @@ function compareBaseline(report) {
   if (typeof baselineP95 !== "number") {
     throw new Error(`baseline ${baselinePath} does not include completionLatency.completion.p95Ms`);
   }
-
-  const allowed = Math.max(baselineP95 * (1 + baselineTolerance), baselineP95 + 1);
-
-  if (currentP95 > allowed) {
-    throw new Error(
-      `completion p95 regressed: current ${currentP95.toFixed(2)}ms, ` +
-        `baseline ${baselineP95.toFixed(2)}ms, allowed ${allowed.toFixed(2)}ms`,
-    );
+  if (!Number.isFinite(baselineSlackMs) || baselineSlackMs < 0) {
+    throw new Error("TUA_COMPLETION_BASELINE_SLACK_MS must be a nonnegative number");
   }
 
-  console.log(
-    `baseline ok: completion p95 ${currentP95.toFixed(2)}ms <= ${allowed.toFixed(2)}ms`,
+  const allowed = Math.max(
+    baselineP95 * (1 + baselineTolerance),
+    baselineP95 + baselineSlackMs,
   );
+  const passed = currentP95 <= allowed;
+
+  if (passed) {
+    console.log(
+      `baseline ok: completion p95 ${currentP95.toFixed(2)}ms <= ${allowed.toFixed(2)}ms`,
+    );
+  }
+  return {
+    passed,
+    currentP95Ms: currentP95,
+    baselineP95Ms: baselineP95,
+    allowedP95Ms: allowed,
+    tolerance: baselineTolerance,
+    slackMs: baselineSlackMs,
+    baseline: path.relative(process.cwd(), path.resolve(baselinePath)),
+    baselineRepository: baseline.repository ?? null,
+    repeat: report.repeat,
+  };
 }

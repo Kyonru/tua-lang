@@ -183,6 +183,21 @@ async function main() {
     evaluator,
     cancellation,
     passed: true,
+    // A report is written only after every assertion above held. The curated
+    // scenarios prove that both menu states reach the provider and match the
+    // evaluator; they are too few to measure how often either state occurs.
+    checks: {
+      menuReplay: {
+        passed: evaluator.replayOpen > 0 && evaluator.replayClosed > 0,
+        scope: "plumbing: exact curated captures, not a menu-state frequency measurement",
+        selectedMenuCaptures: evaluator.replayOpen,
+        closedMenuCaptures: evaluator.replayClosed,
+      },
+      clientResponsiveness: {
+        passed: true,
+        cancelAfterMs: cancellation.cancelAfterMs,
+      },
+    },
   };
   writePrivateAtomic(REPORT_PATH, `${JSON.stringify(report, null, 2)}\n`);
   console.log(

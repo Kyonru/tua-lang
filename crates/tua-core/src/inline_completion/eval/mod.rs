@@ -1757,13 +1757,14 @@ pub struct GateResult {
     pub passed: bool,
 }
 
-pub const PHASE1_REQUIRED_PREREQUISITES: [&str; 10] = [
+pub const PHASE1_REQUIRED_PREREQUISITES: [&str; 11] = [
     "heldout_quality",
     "external_quality",
     "menu_replay",
     "completion_performance",
     "inline_server_performance",
     "inline_client_no_stall",
+    "inline_contended_delivery",
     "inline_client_responsiveness",
     "diagnostics_freshness",
     "scheduler_cache_hit",
@@ -1793,6 +1794,11 @@ pub struct PhaseGatePrerequisite {
     /// a passed prerequisite.
     #[serde(default)]
     pub revision: Option<String>,
+    /// The entry in the report's `checks` map that decides this
+    /// prerequisite. Required for a passed prerequisite, so one report's
+    /// unrelated passing checks never stand in for it.
+    #[serde(default)]
+    pub check: Option<String>,
 }
 
 pub const PHASE_GATE_VERSION: u32 = 2;
@@ -1823,19 +1829,97 @@ pub fn check_phase_gate(
                     item.evidence
                 ));
             }
-            Some(item) if item.artifact.is_none() || item.revision.is_none() => {
+            Some(item)
+                if item.artifact.is_none() || item.revision.is_none() || item.check.is_none() =>
+            {
                 failures.push(format!(
-                    "prerequisite `{name}` is passed without naming its artifact and revision"
+                    "prerequisite `{name}` is passed without naming its artifact, revision, and check"
                 ));
             }
             Some(item) => {
                 if let Err(reason) = verify(item) {
-                    failures.push(format!("prerequisite `{name}` evidence is stale: {reason}"));
+                    failures.push(format!(
+                        "prerequisite `{name}` evidence does not hold: {reason}"
+                    ));
                 }
             }
         }
     }
     failures
+}
+
+/// Returned candidates the parse-distribution check needs before its rate is
+/// worth reading.
+pub const MIN_VALIDATION_RETURNED: usize = 100;
+/// The share of returned candidates that must need at most one parse for
+/// one-parse validation to be the common case.
+pub const MIN_RETURNED_AT_MOST_ONE_PARSE_RATE: f64 = 0.5;
+
+/// Whether the production host's validation usually needs one parse, over
+/// every set in an evaluator report. The evaluator's host never has a warm
+/// current-file cache, which matches the zero cache hits observed under real
+/// scheduling.
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ValidationParseCheck {
+    pub passed: bool,
+    pub candidate_attempts: usize,
+    pub returned: usize,
+    pub returned_after_zero_parses: usize,
+    pub returned_after_one_parse: usize,
+    pub returned_after_two_parses: usize,
+    pub at_most_one_parse_rate: f64,
+    pub parses_per_candidate_attempt: f64,
+    pub failures: Vec<String>,
+}
+
+pub fn validation_parse_check(report: &EvalReport) -> ValidationParseCheck {
+    let mut validation = InlineValidationReport::default();
+    for set in &report.sets {
+        let set = &set.inline_validation;
+        validation.candidate_attempts += set.candidate_attempts;
+        validation.candidate_parses += set.candidate_parses;
+        validation.baseline_parses += set.baseline_parses;
+        validation.candidates_returned += set.candidates_returned;
+        validation.returned_after_zero_parses += set.returned_after_zero_parses;
+        validation.returned_after_one_parse += set.returned_after_one_parse;
+        validation.returned_after_two_parses += set.returned_after_two_parses;
+    }
+    let returned = validation.candidates_returned;
+    let at_most_one = validation.returned_after_zero_parses + validation.returned_after_one_parse;
+    let rate = at_most_one as f64 / returned.max(1) as f64;
+    let mut failures = Vec::new();
+    if returned < MIN_VALIDATION_RETURNED {
+        failures.push(format!(
+            "only {returned} returned candidates; at least {MIN_VALIDATION_RETURNED} are needed"
+        ));
+    }
+    if validation.returned_after_zero_parses != 0 {
+        failures.push(format!(
+            "{} candidates were returned without parsing",
+            validation.returned_after_zero_parses
+        ));
+    }
+    if rate < MIN_RETURNED_AT_MOST_ONE_PARSE_RATE {
+        failures.push(format!(
+            "{:.1}% of returned candidates used at most one parse; at least {:.0}% is required",
+            rate * 100.0,
+            MIN_RETURNED_AT_MOST_ONE_PARSE_RATE * 100.0
+        ));
+    }
+    ValidationParseCheck {
+        passed: failures.is_empty(),
+        candidate_attempts: validation.candidate_attempts,
+        returned,
+        returned_after_zero_parses: validation.returned_after_zero_parses,
+        returned_after_one_parse: validation.returned_after_one_parse,
+        returned_after_two_parses: validation.returned_after_two_parses,
+        at_most_one_parse_rate: rate,
+        parses_per_candidate_attempt: (validation.candidate_parses + validation.baseline_parses)
+            as f64
+            / validation.candidate_attempts.max(1) as f64,
+        failures,
+    }
 }
 
 /// Checks every gate set (held-out and external) against the thresholds.

@@ -66,6 +66,11 @@ const diagnosticsP95BudgetMs = numberEnv(
 );
 const baselineOnly = booleanEnv("TUA_REPRESENTATIVE_BASELINE_ONLY", false);
 const diagnosticsOnly = booleanEnv("TUA_REPRESENTATIVE_DIAGNOSTICS_ONLY", false);
+// The client's local request timeout. When set, contended request age above it
+// fails the delivery check: the editor would already have discarded the result.
+const inlineDeliveryP95BudgetMs = optionalNumberEnv(
+  "TUA_REPRESENTATIVE_INLINE_DELIVERY_P95_BUDGET_MS",
+);
 const minimumReturnedAtMostOneParseRate = 0.5;
 
 (async () => {
@@ -114,6 +119,7 @@ const minimumReturnedAtMostOneParseRate = 0.5;
       inlineWorkerP95BudgetMs,
       inlineBackendP95BudgetMs,
       inlineEndToEndP95BudgetMs,
+      inlineDeliveryP95BudgetMs,
       diagnosticsP95BudgetMs,
       minimumReturnedAtMostOneParseRate,
       maximumStaleResults: 0,
@@ -122,7 +128,9 @@ const minimumReturnedAtMostOneParseRate = 0.5;
     fixtureManifest: manifest,
     fixtures,
   };
-  const failures = regressionFailures(report);
+  report.checks = regressionChecks(report);
+  report.passed = Object.values(report.checks).every((check) => check.passed);
+  const failures = Object.values(report.checks).flatMap((check) => check.failures);
 
   fs.mkdirSync(path.dirname(outputPath), { recursive: true });
   fs.writeFileSync(outputPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
@@ -764,8 +772,28 @@ function cacheHitRates(stats) {
   };
 }
 
-function regressionFailures(report) {
-  const failures = [];
+// Groups regression failures by the gate prerequisite they decide. A check
+// appears only when this mode evaluates it, so a missing check never reads as
+// a pass.
+function regressionChecks(report) {
+  const inlineEvaluated = !baselineOnly && !diagnosticsOnly;
+  const names = ["general"];
+  if (inlineEvaluated) {
+    names.push(
+      "inlineServerPerformance",
+      "inlineClientNoStall",
+      "inlineCachePeekObserved",
+      "validationParseDistribution",
+    );
+    if (report.thresholds.inlineDeliveryP95BudgetMs !== null) {
+      names.push("inlineContendedDelivery");
+    }
+  }
+  const checks = Object.fromEntries(names.map((name) => [name, { passed: true, failures: [] }]));
+  const fail = (name, message) => {
+    checks[name].passed = false;
+    checks[name].failures.push(message);
+  };
 
   for (const fixture of report.fixtures) {
     const warmCompletionP95 = fixture.latency.completion.warm.p95Ms;
@@ -773,13 +801,13 @@ function regressionFailures(report) {
     const diagnosticsP95 = fixture.diagnostics.firstPublishAfterChange.p95Ms;
 
     if (!diagnosticsOnly && warmCompletionP95 > report.thresholds.completionP95BudgetMs) {
-      failures.push(
+      fail("general", 
         `${fixture.name}: warm completion p95 ${warmCompletionP95.toFixed(2)}ms exceeds ` +
           `${report.thresholds.completionP95BudgetMs}ms`,
       );
     }
     if (contentionCompletionP95 > report.thresholds.completionP95BudgetMs) {
-      failures.push(
+      fail("general", 
         `${fixture.name}: completion-under-contention p95 ` +
           `${contentionCompletionP95.toFixed(2)}ms exceeds ` +
           `${report.thresholds.completionP95BudgetMs}ms`,
@@ -791,39 +819,50 @@ function regressionFailures(report) {
       const inlineWorkerP95 = fixture.inlineCompletion.profile.workerExecution.p95Ms;
       const inlineBackendP95 = fixture.inlineCompletion.profile.coreBackend.p95Ms;
 
+      if (
+        report.thresholds.inlineDeliveryP95BudgetMs !== null &&
+        inlineEndToEndP95 > report.thresholds.inlineDeliveryP95BudgetMs
+      ) {
+        fail(
+          "inlineContendedDelivery",
+          `${fixture.name}: contended inline request-age p95 ${inlineEndToEndP95.toFixed(2)}ms ` +
+            `exceeds the ${report.thresholds.inlineDeliveryP95BudgetMs}ms client timeout, so ` +
+            `the editor discards most results under load`,
+        );
+      }
       if (inlineEndToEndP95 > report.thresholds.inlineEndToEndP95BudgetMs) {
-        failures.push(
+        fail("inlineClientNoStall", 
           `${fixture.name}: inline end-to-end p95 ${inlineEndToEndP95.toFixed(2)}ms exceeds ` +
             `${report.thresholds.inlineEndToEndP95BudgetMs}ms`,
         );
       }
       if (inlineServerP95 > report.thresholds.inlineServerP95BudgetMs) {
-        failures.push(
+        fail("inlineServerPerformance", 
           `${fixture.name}: inline server/request p95 ${inlineServerP95.toFixed(2)}ms exceeds ` +
             `${report.thresholds.inlineServerP95BudgetMs}ms`,
         );
       }
       if (inlineBackendP95 > report.thresholds.inlineBackendP95BudgetMs) {
-        failures.push(
+        fail("inlineServerPerformance", 
           `${fixture.name}: inline core/backend p95 ${inlineBackendP95.toFixed(2)}ms exceeds ` +
             `${report.thresholds.inlineBackendP95BudgetMs}ms`,
         );
       }
       if (inlineWorkerP95 > report.thresholds.inlineWorkerP95BudgetMs) {
-        failures.push(
+        fail("inlineServerPerformance", 
           `${fixture.name}: inline worker execution p95 ${inlineWorkerP95.toFixed(2)}ms exceeds ` +
             `${report.thresholds.inlineWorkerP95BudgetMs}ms`,
         );
       }
     }
     if (diagnosticsP95 > report.thresholds.diagnosticsP95BudgetMs) {
-      failures.push(
+      fail("general", 
         `${fixture.name}: first diagnostics p95 ${diagnosticsP95.toFixed(2)}ms exceeds ` +
           `${report.thresholds.diagnosticsP95BudgetMs}ms`,
       );
     }
     if (!baselineOnly && fixture.inlineCompletion.requestErrors !== 0) {
-      failures.push(
+      fail("general", 
         `${fixture.name}: ${fixture.inlineCompletion.requestErrors} inline request(s) failed`,
       );
     }
@@ -839,7 +878,7 @@ function regressionFailures(report) {
         fixture.inlineCompletion.profile.coreBackend.runs !==
           fixture.inlineCompletion.responses)
     ) {
-      failures.push(
+      fail("general", 
         `${fixture.name}: inline profile spans did not cover every request ` +
           `(responses ${fixture.inlineCompletion.responses}, server ` +
           `${fixture.inlineCompletion.serverRequest.count}, queue ` +
@@ -852,7 +891,7 @@ function regressionFailures(report) {
     const inlineCounters = fixture.inlineCompletion?.counters;
     if (!baselineOnly && !diagnosticsOnly) {
       if (!inlineCounters || Number(inlineCounters.requests || 0) === 0) {
-        failures.push(`${fixture.name}: no inline completion reached the core backend`);
+        fail("general", `${fixture.name}: no inline completion reached the core backend`);
       } else {
         const distribution = inlineCounters.candidateParseDistribution || {};
         const distributed =
@@ -860,13 +899,13 @@ function regressionFailures(report) {
           Number(distribution.one || 0) +
           Number(distribution.two || 0);
         if (distributed !== Number(inlineCounters.candidateAttempts || 0)) {
-          failures.push(
+          fail("validationParseDistribution", 
             `${fixture.name}: inline parse distribution does not match candidate attempts`,
           );
         }
         const peek = inlineCounters.cachePeek || {};
         if (Number(peek.hits || 0) + Number(peek.misses || 0) === 0) {
-          failures.push(`${fixture.name}: inline cache-peek counters were not observed`);
+          fail("inlineCachePeekObserved", `${fixture.name}: inline cache-peek counters were not observed`);
         }
         const returned = inlineCounters.returnedParseDistribution || {};
         const returnedZero = Number(returned.zero || 0);
@@ -874,23 +913,23 @@ function regressionFailures(report) {
         const returnedTwo = Number(returned.two || 0);
         const returnedTotal = returnedZero + returnedOne + returnedTwo;
         if (returnedTotal !== Number(inlineCounters.candidatesReturned || 0)) {
-          failures.push(
+          fail("validationParseDistribution", 
             `${fixture.name}: returned parse distribution does not match returned candidates`,
           );
         }
         if (returnedZero !== 0) {
-          failures.push(`${fixture.name}: ${returnedZero} candidate(s) returned without parsing`);
+          fail("validationParseDistribution", `${fixture.name}: ${returnedZero} candidate(s) returned without parsing`);
         }
         if (returnedTotal > 0) {
           const atMostOneRate = (returnedZero + returnedOne) / returnedTotal;
           if (atMostOneRate < report.thresholds.minimumReturnedAtMostOneParseRate) {
-            failures.push(
+            fail("validationParseDistribution", 
               `${fixture.name}: only ${(atMostOneRate * 100).toFixed(1)}% of returned candidates ` +
                 `used at most one parse`,
             );
           }
           if (returnedTwo === 0) {
-            failures.push(
+            fail("validationParseDistribution", 
               `${fixture.name}: temporarily-invalid scenario did not exercise a returned ` +
                 `two-parse candidate`,
             );
@@ -899,24 +938,24 @@ function regressionFailures(report) {
       }
     }
     if (fixture.contention.staleResultCount > report.thresholds.maximumStaleResults) {
-      failures.push(
+      fail("general", 
         `${fixture.name}: observed ${fixture.contention.staleResultCount} stale background results`,
       );
     }
     if (fixture.contention.invalidDocumentCompletionCount === 0) {
-      failures.push(`${fixture.name}: temporarily-invalid contention round was not exercised`);
+      fail("general", `${fixture.name}: temporarily-invalid contention round was not exercised`);
     }
     if (fixture.contention.validDocumentCompletionCount === 0) {
-      failures.push(`${fixture.name}: no valid-document contention completion was checked`);
+      fail("general", `${fixture.name}: no valid-document contention completion was checked`);
     }
     if (fixture.validationFailures.total > report.thresholds.maximumValidationFailures) {
-      failures.push(
+      fail("general", 
         `${fixture.name}: ${fixture.validationFailures.total} semantic result validations failed ` +
           `(${JSON.stringify(fixture.validationFailures.byRequest)})`,
       );
     }
     if (!fixture.workspaceWarm.completed) {
-      failures.push(
+      fail("general", 
         `${fixture.name}: workspace did not finish warming within ` +
           `${report.configuration.workspaceWarmTimeoutMs}ms ` +
           `(${JSON.stringify(fixture.workspaceWarm.state)})`,
@@ -924,7 +963,7 @@ function regressionFailures(report) {
     }
   }
 
-  return failures;
+  return checks;
 }
 
 function printFixture(fixture) {
@@ -982,6 +1021,10 @@ function numberEnv(name, fallback) {
   }
 
   return value;
+}
+
+function optionalNumberEnv(name) {
+  return process.env[name] ? numberEnv(name, 1) : null;
 }
 
 function booleanEnv(name, fallback) {

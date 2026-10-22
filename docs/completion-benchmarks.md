@@ -256,7 +256,14 @@ make profile-completion
 
 The comparison uses `completionLatency.completion.p95Ms`. By default, current
 p95 may be at most 5% slower than baseline, with at least 1ms of slack for very
-short runs.
+short runs. Set `TUA_COMPLETION_BASELINE_SLACK_MS` to change that slack. The
+result is written to the report as `checks.completionBaseline`.
+
+`make profile-completion-phase1-gate` is the Phase 1 version: it requires
+`TUA_COMPLETION_BASELINE` (a pre-Phase-1 profile from the same machine), uses
+100 repeats and no absolute slack, so 5% means exactly 5%, and writes
+`target/tua-speed/completion-phase1-gate.json`. Record the baseline with the
+same repeat count.
 
 Set `TUA_COMPLETION_BASELINE_TOLERANCE` to a decimal ratio such as `0.10` for
 10%. Prefer increasing repeats before increasing tolerance.
@@ -374,8 +381,14 @@ are safe abstentions and remain visible in the report.
 `make representative-phase1-gate` runs the full representative fixture matrix
 with independent strict 10 ms limits for dispatch-to-response server/request
 latency, worker execution, and core/backend work, plus a 1,500 ms p95 ceiling
-for client-observed contended request age, and
-writes `target/tua-speed/representative-phase1-gate.json`. It leaves the broad
+for client-observed contended request age, and a separate 250 ms delivery
+budget for that request age (`TUA_REPRESENTATIVE_INLINE_DELIVERY_P95_BUDGET_MS`),
+and writes `target/tua-speed/representative-phase1-gate.json`. The report
+groups its failures into named `checks` (`inlineServerPerformance`,
+`inlineClientNoStall`, `inlineContendedDelivery`, `inlineCachePeekObserved`,
+`validationParseDistribution`, and `general`), each with its own pass state.
+The delivery check fails when a result typically arrives after the extension
+has already given up on it. It leaves the broad
 completion and diagnostics stall ceilings in place. The
 1,500 ms request-age bound is a contention stall ceiling, not a claim that
 one-second ghost text is acceptable interactive UX. Independently, the VS Code
@@ -392,7 +405,9 @@ run, then validates every prerequisite and its evidence in
 `benchmarks/inline-eval/phase1-gate.toml`; missing, pending, or evidence-free
 items still fail. Every report records the commit and dirty state it was
 produced from in a top-level `repository` field, and a passed prerequisite
-names its `artifact` and `revision`. The check rejects evidence from a dirty
+names its `artifact`, `revision`, and the `check` in that report that decides
+it, so one report's unrelated passing checks never stand in for a failing one.
+The check rejects evidence from a dirty
 tree, from another commit, or from a commit after which shipped code, the
 measuring harness, or benchmark inputs changed. Server/request latency starts at scheduler dispatch; the
 separate client request-age metric includes coordinator input waiting and
