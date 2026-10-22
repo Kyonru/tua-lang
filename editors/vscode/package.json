@@ -578,6 +578,11 @@
         "category": "Tua"
       },
       {
+        "command": "tua.completion.toggleLocalInline",
+        "title": "Toggle Deterministic Inline Completions",
+        "category": "Tua"
+      },
+      {
         "command": "tua.completion.toggleOllama",
         "title": "Toggle Local Ollama Completions",
         "category": "Tua"

@@ -169,6 +169,10 @@ directions. See [Input](input.md).
     ranking and compiler-generated multi-token suggestions for the workspace.
     Both are off by default.
 
+    **Tua: Toggle Deterministic Inline Completions** controls source-only ghost
+    text for the workspace. It is also off by default and does not enable
+    Ollama.
+
     **Tua: Toggle Local Ollama Completions** separately opts into model-backed
     inline ghost text. The extension sends a bounded prefix, suffix, language
     contract, and visible type facts directly to a configured loopback Ollama
@@ -177,9 +181,11 @@ directions. See [Input](input.md).
 
 ### Deterministic Local Inline Completion
 
-Set `tua.completion.inline.enabled` to `true` to try deterministic ghost text
-without a model. It is experimental and off by default. The public extension
-configuration has two independently configurable sources:
+Run **Tua: Toggle Deterministic Inline Completions**, or set
+`tua.completion.inline.enabled` to `true`, to try deterministic ghost text
+without a model. The command changes only that workspace gate. The feature is
+experimental and off by default. The public extension configuration has two
+independently configurable sources:
 
 - `tua.completion.inline.sources.semantic` reuses unique, source-only statement
   snippets after at least three prefix characters;
@@ -222,6 +228,14 @@ timed-out, cancelled, stale, capacity-limited, or otherwise transient local
 request abstains instead of starting model work. Neither deterministic source
 sends code over the network.
 
+The inline-completion language status uses neutral backend names: `Local`,
+`Ollama`, `Local + Ollama`, or `off`. Deterministic counters are likewise kept
+separate by source as `semanticReturned`/`semanticAccepted` and
+`currentFileReturned`/`currentFileAccepted`. "Returned" means an item was
+returned to VS Code; it does not claim that the item was visible. These
+counters store no completion text and do not feed ranking or candidate
+generation.
+
 ### Local Ollama Inline Completion
 
 Install Ollama separately, then pull the default model:
@@ -262,14 +276,15 @@ Cursor-specific expected types and visible bindings appear before that
 inventory. Existing unrelated diagnostics and gradual `any` are preserved. The
 live document and analysis host are never mutated.
 
-The extension stores only source-free local counters: request/cancellation/
-timeout/empty/rejection counts, suggestions shown and accepted, and accepted
-character totals. They appear in copied debug information and are cleared by
-**Tua: Reset Completion Learning Stats**.
+The extension stores only source-free Ollama counters: request/cancellation/
+timeout/empty/rejection counts, suggestions returned and accepted, and
+accepted character totals. They appear alongside the deterministic counters in
+copied debug information and are cleared by **Tua: Reset Completion Learning
+Stats**.
 
 The feature remains experimental and disabled by default. It should not be
 considered for a different default until local dogfooding records at least 100
-shown suggestions, at least 15% acceptance, and no regression in ordinary
+returned suggestions, at least 15% acceptance, and no regression in ordinary
 completion latency.
 
 To measure language knowledge separately from editor acceptance telemetry, run

@@ -1246,6 +1246,14 @@ If exact retrieval wins, stop here and do not ship the n-gram engine.
 
 Only after preceding gates:
 
+> **Safe DX preparation (2026-10-21): implemented without changing candidate
+> behavior.** The extension exposes a workspace-scoped toggle for the existing
+> default-off deterministic backend, reports `Local`, `Ollama`, both, or off in
+> its language status, and records source-free returned/accepted counters for
+> semantic and current-file candidates. The counters are observational only:
+> they neither rank nor generate suggestions. Project, corpus, n-gram, and
+> multiline settings remain unexposed.
+
 - Evaluate multiline block completion and expose `maxLines`.
 - Evaluate empty-statement completion.
 - Require balanced `end` and delimiter structure for multiline output.

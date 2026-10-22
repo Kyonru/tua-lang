@@ -1346,6 +1346,19 @@ async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
       "experimental completion toggle should report the new state",
     );
 
+    await state.commands.get("tua.completion.toggleLocalInline")();
+
+    assert.deepStrictEqual(
+      state.configurationUpdates.at(-1),
+      {
+        section: "tua",
+        key: "completion.inline.enabled",
+        value: true,
+        target: state.vscode.ConfigurationTarget.Workspace,
+      },
+      "deterministic inline completion toggle should update only its workspace gate",
+    );
+
     await state.commands.get("tua.saveCpuProfile")();
 
     const cpuProfileRequest = state.clients[1].requests.find(
@@ -3351,6 +3364,7 @@ function assertRegisteredCommands(state) {
     "tua.showServerHealth",
     "tua.resetCompletionStats",
     "tua.completion.toggleExperimental",
+    "tua.completion.toggleLocalInline",
     "tua.saveCpuProfile",
     "tua.saveHeapSummary",
     "tua.runLoveProject",

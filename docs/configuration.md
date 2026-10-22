@@ -641,5 +641,8 @@ Run **Tua: Toggle Experimental Completions** to switch both
 `tua.completion.multiToken.enabled` for the current workspace. If either
 feature is off, the command enables both; if both are on, it disables both.
 Advanced multi-token and model-integration policy settings are not changed.
+Use **Tua: Toggle Deterministic Inline Completions** to switch only
+`tua.completion.inline.enabled` for the current workspace. The command leaves
+the semantic/current-file source choices and Ollama policy unchanged.
 Use **Tua: Toggle Local Ollama Completions** for the separate model-integration
 gate and consent flow.

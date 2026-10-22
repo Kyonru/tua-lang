@@ -649,8 +649,8 @@ async function resetCompletionStats() {
       result && Number.isFinite(result.removedFiles) ? Number(result.removedFiles) : 0;
     const message =
       removedFiles === 1
-        ? "Tua completion stats reset. Removed 1 workspace learning-stats file; local Ollama counters were reset."
-        : `Tua completion stats reset. Removed ${removedFiles} workspace learning-stats files; local Ollama counters were reset.`;
+        ? "Tua completion stats reset. Removed 1 workspace learning-stats file; deterministic and Ollama counters were reset."
+        : `Tua completion stats reset. Removed ${removedFiles} workspace learning-stats files; deterministic and Ollama counters were reset.`;
 
     outputChannel?.appendLine(message);
     vscode.window.showInformationMessage(message);
@@ -792,7 +792,7 @@ function debugInfoText() {
     lines.push(`Last server error: ${currentServerInfo.error}`);
   }
   lines.push(
-    `Local Ollama completion counters: ${editorDevex?.inlineCompletion?.debugInfo() || "{}"}`,
+    `Inline completion counters: ${editorDevex?.inlineCompletion?.debugInfo() || "{}"}`,
   );
 
   return lines.join("\n");
@@ -907,6 +907,7 @@ function registerBuiltinDocumentProvider(outputChannel) {
 
 async function deactivate() {
   debugLogger?.flush();
+  await editorDevex?.flushStats?.();
 
   return stopLanguageServer();
 }

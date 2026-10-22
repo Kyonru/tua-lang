@@ -48,6 +48,7 @@ const expected = [
   "tua.showServerHealth",
   "tua.resetCompletionStats",
   "tua.completion.toggleExperimental",
+  "tua.completion.toggleLocalInline",
   "tua.saveCpuProfile",
   "tua.saveHeapSummary",
   "tua.openGeneratedLua",

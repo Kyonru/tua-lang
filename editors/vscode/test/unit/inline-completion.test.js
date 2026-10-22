@@ -5,6 +5,7 @@ const Module = require("module");
 const test = require("node:test");
 
 const settings = new Map();
+const configurationUpdates = [];
 
 class CancellationTokenSource {
   constructor() {
@@ -61,7 +62,7 @@ class InlineCompletionItem {
 
 const vscodeMock = {
   CancellationTokenSource,
-  ConfigurationTarget: { Global: 1 },
+  ConfigurationTarget: { Global: 1, Workspace: 2 },
   InlineCompletionItem,
   LanguageStatusSeverity: { Information: 1, Warning: 2 },
   Range,
@@ -82,7 +83,10 @@ const vscodeMock = {
   workspace: {
     getConfiguration: () => ({
       get: (key, fallback) => (settings.has(key) ? settings.get(key) : fallback),
-      update: async (key, value) => settings.set(key, value),
+      update: async (key, value, target) => {
+        settings.set(key, value);
+        configurationUpdates.push({ key, target, value });
+      },
     }),
     onDidChangeConfiguration: () => disposable(),
     onDidChangeTextDocument: () => disposable(),
@@ -104,6 +108,7 @@ Module._load = originalLoad;
 
 test.beforeEach(() => {
   settings.clear();
+  configurationUpdates.length = 0;
   CancellationTokenSource.instances = [];
   vscodeMock.window.activeTextEditor = { selections: [{}] };
 });
@@ -133,6 +138,246 @@ test("local completion runs before Ollama and creates snippet items", async () =
   assert(result[0].insertText instanceof SnippetString);
   assert.equal(result[0].insertText.value, "for ${1:item} in ${2:items} do");
   assert.equal(result[0].command, undefined);
+});
+
+test("deterministic completion status names the configured backend mode", () => {
+  const off = makeController(async () => undefined);
+  assert.match(off.status.text, /inline off/);
+
+  settings.set("completion.inline.enabled", true);
+  const local = makeController(async () => undefined);
+  assert.match(local.status.text, /inline: Local$/);
+
+  settings.set("completion.inline.enabled", false);
+  settings.set("completion.multiToken.allowModelIntegration", true);
+  const ollama = makeController(async () => undefined);
+  assert.match(ollama.status.text, /inline: Ollama$/);
+  assert.match(ollama.status.detail, /Ollama inline completion is enabled/);
+  assert.doesNotMatch(ollama.status.detail, /fallback/);
+
+  settings.set("completion.inline.enabled", true);
+  const both = makeController(async () => undefined);
+  assert.match(both.status.text, /inline: Local \+ Ollama$/);
+});
+
+test("local toggle changes only deterministic completion for the workspace", async () => {
+  const controller = makeController(async () => undefined);
+
+  await controller.toggleLocal();
+
+  assert.equal(settings.get("completion.inline.enabled"), true);
+  assert.deepEqual(configurationUpdates, [
+    {
+      key: "completion.inline.enabled",
+      target: vscodeMock.ConfigurationTarget.Workspace,
+      value: true,
+    },
+  ]);
+  assert.match(controller.status.text, /inline: Local$/);
+  assert.equal(settings.has("completion.multiToken.allowModelIntegration"), false);
+});
+
+test("local counters record returned and accepted semantic and current-file items only", async () => {
+  settings.set("completion.inline.enabled", true);
+  const state = memento();
+  const sources = ["semantic", "currentFile"];
+  const controller = makeController(
+    async () => localResponse("update(dt)", false, sources.shift()),
+    [],
+    { context: { workspaceState: state } },
+  );
+
+  const [semantic] = await controller.provide(document(), position(), {}, token());
+  assert.equal(semantic.command.command, "tua.completion.localInlineAccepted");
+  assert.deepEqual(semantic.command.arguments, ["semantic"]);
+  await controller.recordLocalAcceptance("semantic");
+
+  const [currentFile] = await controller.provide(document(), position(), {}, token());
+  assert.deepEqual(currentFile.command.arguments, ["currentFile"]);
+  await controller.recordLocalAcceptance("currentFile");
+  await controller.flushLocalStats();
+
+  assert.deepEqual(JSON.parse(controller.debugInfo()).deterministic, {
+    semanticReturned: 1,
+    semanticAccepted: 1,
+    currentFileReturned: 1,
+    currentFileAccepted: 1,
+  });
+  assert.equal(
+    JSON.stringify([...state.values.entries()]).includes("update(dt)"),
+    false,
+    "counter persistence must not retain completion text",
+  );
+});
+
+test("local counter persistence batches many returned items into one update", async () => {
+  const state = memento();
+  const timers = fakeStatsTimers();
+  const controller = makeController(async () => undefined, [], {
+    context: { workspaceState: state },
+    ...timers.options,
+  });
+  const range = completionRange();
+
+  controller.localInlineItem("first", range, false, "semantic");
+  controller.localInlineItem("second", range, false, "semantic");
+  controller.localInlineItem("third", range, false, "currentFile");
+
+  assert.equal(state.updateCalls.length, 0);
+  assert.equal(timers.pending.size, 1);
+  timers.fire();
+  await controller.localCounterWrite;
+
+  assert.equal(state.updateCalls.length, 1);
+  assert.deepEqual(state.updateCalls[0].value, {
+    semanticReturned: 2,
+    semanticAccepted: 0,
+    currentFileReturned: 1,
+    currentFileAccepted: 0,
+  });
+});
+
+test("acceptance followed by reset cannot replay a stale delayed snapshot", async () => {
+  const state = memento({
+    "tua.ollamaCompletionStats.v1": {
+      shownSuggestions: 9,
+      acceptedSuggestions: 3,
+    },
+  });
+  const timers = fakeStatsTimers();
+  const controller = makeController(async () => undefined, [], {
+    context: { workspaceState: state },
+    ...timers.options,
+  });
+
+  controller.localInlineItem("update(dt)", completionRange(), false, "semantic");
+  await controller.recordLocalAcceptance("semantic");
+  assert.equal(timers.pending.size, 1);
+
+  await controller.resetStats();
+  assert.equal(timers.pending.size, 0);
+  await controller.flushLocalStats();
+
+  const localUpdates = state.updateCalls.filter(
+    (entry) => entry.key === "tua.localInlineCompletionStats.v1",
+  );
+  assert.equal(localUpdates.length, 1);
+  assert.deepEqual(localUpdates[0].value, {
+    semanticReturned: 0,
+    semanticAccepted: 0,
+    currentFileReturned: 0,
+    currentFileAccepted: 0,
+  });
+  assert.equal(state.values.has("tua.ollamaCompletionStats.v1"), false);
+  assert.deepEqual(state.values.get("tua.ollamaCompletionStats.v2"), {
+    requests: 0,
+    cancellations: 0,
+    timeouts: 0,
+    emptyResponses: 0,
+    validationRejections: 0,
+    returnedSuggestions: 0,
+    acceptedSuggestions: 0,
+    acceptedCharacters: 0,
+  });
+  assert.deepEqual(
+    state.values.get("tua.localInlineCompletionStats.v1"),
+    localUpdates[0].value,
+  );
+});
+
+test("dispose flushes a pending local counter batch", async () => {
+  const state = memento();
+  const timers = fakeStatsTimers();
+  const controller = makeController(async () => undefined, [], {
+    context: { workspaceState: state },
+    ...timers.options,
+  });
+
+  controller.localInlineItem("update(dt)", completionRange(), false, "semantic");
+  controller.dispose();
+  await controller.localCounterWrite;
+
+  assert.equal(timers.pending.size, 0);
+  assert.equal(state.updateCalls.length, 1);
+  assert.equal(state.updateCalls[0].value.semanticReturned, 1);
+});
+
+test("legacy Ollama shown counts migrate to returned counts without leaking the old name", async () => {
+  const state = memento({
+    "tua.ollamaCompletionStats.v1": {
+      requests: 4,
+      shownSuggestions: 7,
+      acceptedSuggestions: 2,
+      acceptedCharacters: 19,
+    },
+  });
+  const controller = makeController(async () => undefined, [], {
+    context: { workspaceState: state },
+  });
+
+  const ollama = JSON.parse(controller.debugInfo()).ollama;
+  assert.equal(ollama.requests, 4);
+  assert.equal(ollama.returnedSuggestions, 7);
+  assert.equal(ollama.acceptedSuggestions, 2);
+  assert.equal(Object.hasOwn(ollama, "shownSuggestions"), false);
+
+  await controller.incrementStat("acceptedSuggestions");
+  assert.equal(
+    state.values.get("tua.ollamaCompletionStats.v2").returnedSuggestions,
+    7,
+  );
+  assert.equal(
+    Object.hasOwn(state.values.get("tua.ollamaCompletionStats.v2"), "shownSuggestions"),
+    false,
+  );
+});
+
+test("stored local counters allowlist finite nonnegative numeric fields", () => {
+  const timers = fakeStatsTimers();
+  const state = memento({
+    "tua.localInlineCompletionStats.v1": {
+      semanticReturned: 4,
+      semanticAccepted: Number.POSITIVE_INFINITY,
+      currentFileReturned: "7",
+      currentFileAccepted: -2,
+      sourceText: "must not escape",
+      projectReturned: 99,
+    },
+  });
+  const controller = makeController(async () => undefined, [], {
+    context: { workspaceState: state },
+    ...timers.options,
+  });
+
+  assert.deepEqual(JSON.parse(controller.debugInfo()).deterministic, {
+    semanticReturned: 4,
+    semanticAccepted: 0,
+    currentFileReturned: 0,
+    currentFileAccepted: 0,
+  });
+  controller.incrementLocalCounter("semanticReturned");
+  assert.equal(controller.localCounters.semanticReturned, 5);
+  assert.equal(timers.pending.size, 1);
+});
+
+test("a filtered local candidate is not counted as returned", async () => {
+  settings.set("completion.inline.enabled", true);
+  const state = memento();
+  const controller = makeController(
+    async () => localResponse("update", false, "semantic"),
+    [],
+    { context: { workspaceState: state } },
+  );
+  const selectedCompletionInfo = {
+    text: "update",
+    range: new Range(2, 1, 2, 7),
+  };
+
+  assert.equal(
+    await controller.provide(document(), position(), { selectedCompletionInfo }, token()),
+    undefined,
+  );
+  assert.equal(JSON.parse(controller.debugInfo()).deterministic.semanticReturned, 0);
 });
 
 test("developer replay capture observes the real menu state before the local request", async () => {
@@ -466,6 +711,50 @@ function makeController(sendRequest, output = [], options = {}) {
   });
 }
 
+function memento(initial = {}) {
+  const values = new Map(Object.entries(initial));
+  const updateCalls = [];
+  return {
+    updateCalls,
+    values,
+    get(key) {
+      return values.get(key);
+    },
+    async update(key, value) {
+      if (value === undefined) {
+        values.delete(key);
+      } else {
+        values.set(key, value);
+      }
+      updateCalls.push({ key, value });
+    },
+  };
+}
+
+function fakeStatsTimers() {
+  const pending = new Map();
+  let nextId = 0;
+  return {
+    pending,
+    options: {
+      clearLocalStatsFlush(id) {
+        pending.delete(id);
+      },
+      scheduleLocalStatsFlush(callback) {
+        nextId += 1;
+        pending.set(nextId, callback);
+        return nextId;
+      },
+    },
+    fire() {
+      const [id, callback] = pending.entries().next().value || [];
+      assert(id, "a local counter flush should be scheduled");
+      pending.delete(id);
+      callback();
+    },
+  };
+}
+
 function fakeLocalTimers() {
   const pending = new Map();
   let nextId = 0;
@@ -508,17 +797,22 @@ function token() {
   return new CancellationTokenSource().token;
 }
 
-function localResponse(insertText, isSnippet) {
+function completionRange() {
+  return {
+    start: { line: 2, character: 0 },
+    end: { line: 2, character: 7 },
+  };
+}
+
+function localResponse(insertText, isSnippet, source) {
   return {
     documentVersion: 7,
     items: [
       {
         insertText,
         isSnippet,
-        range: {
-          start: { line: 2, character: 0 },
-          end: { line: 2, character: 7 },
-        },
+        source,
+        range: completionRange(),
       },
     ],
   };

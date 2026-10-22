@@ -8,6 +8,15 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Added
 
+- VS Code now exposes **Tua: Toggle Deterministic Inline Completions** for the
+  existing default-off workspace gate. Its inline-completion status reports
+  `Local`, `Ollama`, `Local + Ollama`, or `off` instead of presenting every
+  mode as Ollama. Source-free deterministic counters separately record items
+  returned and accepted for semantic and current-file sources; the counters
+  store no completion text, are persisted in 30-second batches with shutdown
+  and reset flushes, and do not affect generation or ranking. Ollama's former
+  `shownSuggestions` counter is reported more accurately as
+  `returnedSuggestions`, with existing local counts migrated intact.
 - Added a hidden, disabled-by-default Phase 2 project-retrieval source for
   deterministic inline completion. It uses monotonic effective-source versions
   scoped to a VFS lineage, a background-only module resolver supplied with the

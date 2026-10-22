@@ -18,6 +18,9 @@ function registerEditorDevex(options) {
   return {
     middleware: inlayHints.middleware,
     inlineCompletion,
+    flushStats() {
+      return inlineCompletion.flushLocalStats();
+    },
     dispose() {
       generatedLua.dispose();
       hoverActions.dispose();

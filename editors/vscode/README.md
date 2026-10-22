@@ -157,6 +157,9 @@ From there you can:
 - `Tua: Explain Type / Why Is This Any?`
 - `Tua: Select Inlay Hint Mode`
 - `Tua: Toggle Experimental Completions`
+- `Tua: Toggle Deterministic Inline Completions`
+- `Tua: Toggle Local Ollama Completions`
+- `Tua: Test and Warm Ollama Model`
 - `Tua: Copy Fully Qualified Symbol Name`
 - `Tua: Workspace Symbols by Module`
 - `Tua: Organize Imports`
@@ -210,10 +213,18 @@ Important VS Code settings:
 - `tua.completion.inline.enabled`: opts into experimental deterministic inline
   completion. `tua.completion.inline.sources.semantic` and
   `tua.completion.inline.sources.currentFile` independently control its two
-  Phase 1 sources.
+  Phase 1 sources. Use `Tua: Toggle Deterministic Inline Completions` to change
+  only this gate for the current workspace.
 - `tua.completion.multiToken.allowModelIntegration`: separately opts into the
   loopback Ollama fallback. Deterministic completion runs first when both are
   enabled.
+
+The Tua inline-completion language status reports `Local`, `Ollama`,
+`Local + Ollama`, or `off`, so enabling one backend never makes the other look
+enabled. Copied debug information includes only source-free counters. For the
+deterministic backend, `semanticReturned`/`semanticAccepted` and
+`currentFileReturned`/`currentFileAccepted` mean items returned to VS Code and
+items accepted by the user; they do not affect ranking.
 
 Project behavior still comes primarily from `tua.toml`, and the extension
 attaches to that file directly for configuration authoring.

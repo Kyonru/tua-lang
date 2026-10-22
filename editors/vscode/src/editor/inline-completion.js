@@ -13,19 +13,28 @@ const {
 } = require("./ollama-client");
 const { createInlineReplayCapture } = require("./inline-replay-capture");
 
-const STATS_KEY = "tua.ollamaCompletionStats.v1";
+const STATS_KEY = "tua.ollamaCompletionStats.v2";
+const LEGACY_STATS_KEY = "tua.ollamaCompletionStats.v1";
+const LOCAL_STATS_KEY = "tua.localInlineCompletionStats.v1";
 const LOCAL_INLINE_METHOD = "tua/localInlineCompletion";
 const DEBOUNCE_MS = 65;
 const LOCAL_REQUEST_TIMEOUT_MS = 250;
+const LOCAL_STATS_FLUSH_MS = 30_000;
 const EMPTY_STATS = Object.freeze({
   requests: 0,
   cancellations: 0,
   timeouts: 0,
   emptyResponses: 0,
   validationRejections: 0,
-  shownSuggestions: 0,
+  returnedSuggestions: 0,
   acceptedSuggestions: 0,
   acceptedCharacters: 0,
+});
+const EMPTY_LOCAL_STATS = Object.freeze({
+  semanticReturned: 0,
+  semanticAccepted: 0,
+  currentFileReturned: 0,
+  currentFileAccepted: 0,
 });
 
 function registerInlineCompletion(options) {
@@ -43,6 +52,8 @@ class InlineCompletionController {
       options.localRequestTimeoutMs ?? LOCAL_REQUEST_TIMEOUT_MS;
     this.scheduleLocalTimeout = options.scheduleLocalTimeout || setTimeout;
     this.clearLocalTimeout = options.clearLocalTimeout || clearTimeout;
+    this.scheduleLocalStatsFlush = options.scheduleLocalStatsFlush || setTimeout;
+    this.clearLocalStatsFlush = options.clearLocalStatsFlush || clearTimeout;
     this.replayCapture = createInlineReplayCapture({
       appendOutputLine: this.appendOutputLine,
       env: options.env,
@@ -51,12 +62,19 @@ class InlineCompletionController {
     this.sequence = 0;
     this.cache = new Map();
     this.disposables = [];
+    this.localCounters = normalizedLocalStats(
+      this.context.workspaceState.get(LOCAL_STATS_KEY) || {},
+    );
+    this.ollamaCounters = loadOllamaStats(this.context.workspaceState);
+    this.localStatsDirty = false;
+    this.localStatsTimer = undefined;
+    this.localCounterWrite = Promise.resolve();
     this.status = vscode.languages.createLanguageStatusItem(
-      "tua.ollamaCompletions",
+      "tua.inlineCompletions",
       STATUS_SELECTOR,
     );
-    this.status.name = "Tua Local Ollama Completions";
-    this.updateStatus("disabled");
+    this.status.name = "Tua Inline Completions";
+    this.updateStatus("ready");
   }
 
   register() {
@@ -85,8 +103,14 @@ class InlineCompletionController {
           this.updateStatus(this.modelEnabled() ? "ready" : "disabled");
         }
       }),
+      vscode.commands.registerCommand(COMMANDS.toggleLocalInlineCompletions, () =>
+        this.toggleLocal(),
+      ),
       vscode.commands.registerCommand(COMMANDS.toggleOllamaCompletions, () => this.toggle()),
       vscode.commands.registerCommand(COMMANDS.warmOllamaModel, () => this.warm()),
+      vscode.commands.registerCommand(COMMANDS.localInlineCompletionAccepted, (source) =>
+        this.recordLocalAcceptance(source),
+      ),
       vscode.commands.registerCommand(COMMANDS.ollamaCompletionAccepted, (characters) =>
         this.recordAcceptance(characters),
       ),
@@ -95,6 +119,7 @@ class InlineCompletionController {
 
   dispose() {
     this.cancel("dispose");
+    void this.flushLocalStats();
     this.replayCapture?.dispose();
     for (const disposable of this.disposables.splice(0)) {
       disposable.dispose();
@@ -303,7 +328,12 @@ class InlineCompletionController {
 
     return {
       status: "candidate",
-      item: this.inlineItem(candidate.insertText, candidate.range, candidate.isSnippet, false),
+      item: this.localInlineItem(
+        candidate.insertText,
+        candidate.range,
+        candidate.isSnippet,
+        candidate.source,
+      ),
     };
   }
 
@@ -356,7 +386,7 @@ class InlineCompletionController {
       const cached = this.cache.get(cacheKey);
       if (cached) {
         touchCache(this.cache, cacheKey, cached);
-        await this.incrementStat("shownSuggestions");
+        await this.incrementStat("returnedSuggestions");
         return this.inlineItem(cached.insertText, cached.range, false, true);
       }
 
@@ -419,7 +449,7 @@ class InlineCompletionController {
 
       const value = { insertText: validation.insertText, range: validation.range };
       touchCache(this.cache, cacheKey, value);
-      await this.incrementStat("shownSuggestions");
+      await this.incrementStat("returnedSuggestions");
       this.updateStatus("ready");
       return this.inlineItem(value.insertText, value.range, false, true);
     } catch (error) {
@@ -492,6 +522,36 @@ class InlineCompletionController {
       };
     }
     return item;
+  }
+
+  localInlineItem(insertText, range, isSnippet, source) {
+    const item = this.inlineItem(insertText, range, isSnippet, false);
+    const returnedCounter = localCounterName(source, "Returned");
+    if (!returnedCounter) {
+      return item;
+    }
+
+    this.incrementLocalCounter(returnedCounter);
+    item.command = {
+      command: COMMANDS.localInlineCompletionAccepted,
+      title: "Record Tua deterministic completion acceptance",
+      arguments: [source],
+    };
+    return item;
+  }
+
+  async toggleLocal() {
+    const configuration = vscode.workspace.getConfiguration("tua");
+    const enabled = this.localEnabled();
+    await configuration.update(
+      "completion.inline.enabled",
+      !enabled,
+      vscode.ConfigurationTarget.Workspace,
+    );
+    this.updateStatus("ready");
+    vscode.window.showInformationMessage(
+      `Tua deterministic inline completions ${enabled ? "disabled" : "enabled"} for this workspace.`,
+    );
   }
 
   async toggle() {
@@ -584,13 +644,12 @@ class InlineCompletionController {
   }
 
   stats() {
-    return { ...EMPTY_STATS, ...(this.context.workspaceState.get(STATS_KEY) || {}) };
+    return { ...this.ollamaCounters };
   }
 
   async incrementStat(name, amount = 1) {
-    const stats = this.stats();
-    stats[name] += amount;
-    await this.context.workspaceState.update(STATS_KEY, stats);
+    this.ollamaCounters[name] += amount;
+    await this.context.workspaceState.update(STATS_KEY, { ...this.ollamaCounters });
   }
 
   async recordAcceptance(characters) {
@@ -601,16 +660,75 @@ class InlineCompletionController {
     );
   }
 
+  incrementLocalCounter(name) {
+    this.localCounters[name] += 1;
+    this.localStatsDirty = true;
+    if (this.localStatsTimer === undefined) {
+      this.localStatsTimer = this.scheduleLocalStatsFlush(
+        () => {
+          this.localStatsTimer = undefined;
+          void this.flushLocalStats();
+        },
+        LOCAL_STATS_FLUSH_MS,
+      );
+    }
+  }
+
+  recordLocalAcceptance(source) {
+    const counter = localCounterName(source, "Accepted");
+    if (counter) {
+      this.incrementLocalCounter(counter);
+    }
+    return Promise.resolve();
+  }
+
+  flushLocalStats() {
+    this.cancelLocalStatsFlush();
+    if (!this.localStatsDirty) {
+      return this.localCounterWrite;
+    }
+
+    this.localStatsDirty = false;
+    const snapshot = { ...this.localCounters };
+    this.localCounterWrite = this.localCounterWrite
+      .then(() => this.context.workspaceState.update(LOCAL_STATS_KEY, snapshot))
+      .catch((error) => {
+        this.appendOutputLine?.(
+          `Could not persist Tua inline completion counters: ${formatError(error)}`,
+        );
+      });
+    return this.localCounterWrite;
+  }
+
+  cancelLocalStatsFlush() {
+    if (this.localStatsTimer !== undefined) {
+      this.clearLocalStatsFlush(this.localStatsTimer);
+      this.localStatsTimer = undefined;
+    }
+  }
+
   async resetStats() {
-    await this.context.workspaceState.update(STATS_KEY, { ...EMPTY_STATS });
+    this.cancelLocalStatsFlush();
+    this.localStatsDirty = false;
+    await this.localCounterWrite;
+    this.cancelLocalStatsFlush();
+    this.localCounters = { ...EMPTY_LOCAL_STATS };
+    this.ollamaCounters = { ...EMPTY_STATS };
+    await this.context.workspaceState.update(STATS_KEY, { ...this.ollamaCounters });
+    await this.context.workspaceState.update(LEGACY_STATS_KEY, undefined);
+    await this.context.workspaceState.update(LOCAL_STATS_KEY, { ...EMPTY_LOCAL_STATS });
   }
 
   debugInfo() {
-    return JSON.stringify(this.stats());
+    return JSON.stringify({
+      deterministic: { ...this.localCounters },
+      ollama: this.stats(),
+    });
   }
 
   updateStatus(state, detail) {
     const config = this.configuration();
+    const mode = this.inlineMode();
     this.status.busy = state === "loading";
     this.status.severity =
       state === "missing_server" ||
@@ -620,37 +738,37 @@ class InlineCompletionController {
       state === "invalid_endpoint"
         ? vscode.LanguageStatusSeverity.Warning
         : vscode.LanguageStatusSeverity.Information;
-    this.status.command =
-      state === "language_server"
-        ? undefined
-        : {
-            command:
-              state === "disabled"
-                ? COMMANDS.toggleOllamaCompletions
-                : COMMANDS.warmOllamaModel,
-            title:
-              state === "disabled"
-                ? "Enable Tua Local Ollama Completions"
-                : "Test and Warm Ollama Model",
-          };
+    this.status.command = statusCommand(mode, state);
 
     const labels = {
-      disabled: ["$(circle-slash) Tua Ollama off", "Local model completions are disabled."],
-      loading: ["$(sync~spin) Tua Ollama loading", `Loading ${config.model}.`],
-      ready: ["$(check) Tua Ollama", `${config.model} is ready.`],
+      disabled: configuredStatus(mode, config),
+      loading: [
+        `$(sync~spin) Tua inline: ${mode === "both" ? "Local + Ollama" : "Ollama"} loading`,
+        `Loading ${config.model}.`,
+      ],
+      ready: configuredStatus(mode, config),
       language_server: [
         "$(warning) Tua completion unavailable",
         "The Tua language server is unavailable.",
       ],
-      missing_server: ["$(warning) Tua Ollama unavailable", "Ollama server is unavailable."],
+      missing_server: [
+        `$(warning) Tua inline: ${mode === "both" ? "Local (Ollama unavailable)" : "Ollama unavailable"}`,
+        "Ollama server is unavailable.",
+      ],
       missing_model: [
-        "$(warning) Tua Ollama model missing",
+        `$(warning) Tua inline: ${mode === "both" ? "Local (Ollama model missing)" : "Ollama model missing"}`,
         `Run: ollama pull ${config.model}`,
       ],
-      timeout: ["$(watch) Tua Ollama timeout", `No response within ${config.timeoutMs} ms.`],
-      rejected: ["$(info) Tua Ollama rejected", "The semantic validator rejected a candidate."],
+      timeout: [
+        `$(watch) Tua inline: ${mode === "both" ? "Local (Ollama timeout)" : "Ollama timeout"}`,
+        `No response within ${config.timeoutMs} ms.`,
+      ],
+      rejected: [
+        `$(info) Tua inline: ${mode === "both" ? "Local (Ollama rejected)" : "Ollama rejected"}`,
+        "The semantic validator rejected an Ollama candidate.",
+      ],
       invalid_endpoint: [
-        "$(warning) Tua Ollama endpoint blocked",
+        `$(warning) Tua inline: ${mode === "both" ? "Local (Ollama endpoint blocked)" : "Ollama endpoint blocked"}`,
         "Only loopback HTTP endpoints are allowed.",
       ],
     };
@@ -658,9 +776,116 @@ class InlineCompletionController {
     this.status.text = text;
     this.status.detail = detail ? `${baseDetail}\n${detail}` : baseDetail;
     if (detail) {
-      this.appendOutputLine?.(`Tua Ollama: ${state}: ${detail}`);
+      this.appendOutputLine?.(`Tua inline completion: ${state}: ${detail}`);
     }
   }
+
+  inlineMode() {
+    const local = this.localEnabled();
+    const model = this.modelEnabled();
+    if (local && model) {
+      return "both";
+    }
+    if (local) {
+      return "local";
+    }
+    if (model) {
+      return "ollama";
+    }
+    return "off";
+  }
+}
+
+function configuredStatus(mode, config) {
+  switch (mode) {
+    case "local":
+      return [
+        "$(check) Tua inline: Local",
+        "Deterministic local inline completion is enabled; Ollama is off.",
+      ];
+    case "ollama":
+      return [
+        "$(check) Tua inline: Ollama",
+        `Ollama inline completion is enabled with ${config.model}; deterministic local completion is off.`,
+      ];
+    case "both":
+      return [
+        "$(check) Tua inline: Local + Ollama",
+        `Deterministic local completion runs first; ${config.model} is the fallback.`,
+      ];
+    default:
+      return [
+        "$(circle-slash) Tua inline off",
+        "Deterministic local and Ollama inline completions are off.",
+      ];
+  }
+}
+
+function loadOllamaStats(workspaceState) {
+  const current = workspaceState.get(STATS_KEY);
+  if (current) {
+    return normalizedOllamaStats(current, current.returnedSuggestions);
+  }
+
+  const legacy = workspaceState.get(LEGACY_STATS_KEY) || {};
+  return normalizedOllamaStats(
+    legacy,
+    legacy.returnedSuggestions ?? legacy.shownSuggestions,
+  );
+}
+
+function normalizedOllamaStats(stats, returnedSuggestions) {
+  return {
+    requests: numericCounter(stats.requests),
+    cancellations: numericCounter(stats.cancellations),
+    timeouts: numericCounter(stats.timeouts),
+    emptyResponses: numericCounter(stats.emptyResponses),
+    validationRejections: numericCounter(stats.validationRejections),
+    returnedSuggestions: numericCounter(returnedSuggestions),
+    acceptedSuggestions: numericCounter(stats.acceptedSuggestions),
+    acceptedCharacters: numericCounter(stats.acceptedCharacters),
+  };
+}
+
+function normalizedLocalStats(stats) {
+  return {
+    semanticReturned: numericCounter(stats.semanticReturned),
+    semanticAccepted: numericCounter(stats.semanticAccepted),
+    currentFileReturned: numericCounter(stats.currentFileReturned),
+    currentFileAccepted: numericCounter(stats.currentFileAccepted),
+  };
+}
+
+function numericCounter(value) {
+  return Number.isFinite(value) ? Math.max(0, Number(value)) : 0;
+}
+
+function statusCommand(mode, state) {
+  if (state === "language_server") {
+    return undefined;
+  }
+  if (mode === "ollama" || mode === "both") {
+    return {
+      command: COMMANDS.warmOllamaModel,
+      title: "Test and Warm Ollama Model",
+    };
+  }
+  return {
+    command: COMMANDS.toggleLocalInlineCompletions,
+    title: mode === "local"
+      ? "Disable Tua Deterministic Inline Completions"
+      : "Enable Tua Deterministic Inline Completions",
+  };
+}
+
+function localCounterName(source, suffix) {
+  if (source === "semantic") {
+    return `semantic${suffix}`;
+  }
+  if (source === "currentFile") {
+    return `currentFile${suffix}`;
+  }
+  return undefined;
 }
 
 function protocolRange(range) {
@@ -695,6 +920,7 @@ module.exports = {
   EMPTY_STATS,
   InlineCompletionController,
   LOCAL_REQUEST_TIMEOUT_MS,
+  LOCAL_STATS_FLUSH_MS,
   isSilentLocalError,
   protocolRange,
   registerInlineCompletion,
