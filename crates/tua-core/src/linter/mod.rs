@@ -14,6 +14,7 @@ use crate::ast_utils::{
     field_chain_before_first_call, plain_field_chain_from_expression, plain_field_chain_from_var,
 };
 use crate::config::{DiagnosticsConfig, JitConfig};
+use crate::control_flow::block_fallthrough_position;
 use crate::deprecation::{deprecated_api_uses, Deprecation};
 use crate::module_index::resolve_required_module;
 use crate::profile::{self, DiagnosticsTraceCategory};
@@ -791,7 +792,7 @@ struct Declaration {
     externally_reachable: bool,
     contained_local_functions: BTreeSet<usize>,
     initialized: bool,
-    assigned: bool,
+    warned_uninitialized: bool,
     first_read: Option<SourcePosition>,
     assignment_positions: Vec<SourcePosition>,
 }
@@ -981,6 +982,19 @@ impl<'a> SymbolAnalyzer<'a> {
         }
     }
 
+    fn initialization_state(&self) -> Vec<bool> {
+        self.declarations
+            .iter()
+            .map(|declaration| declaration.initialized)
+            .collect()
+    }
+
+    fn restore_initialization_state(&mut self, state: &[bool]) {
+        for (declaration, initialized) in self.declarations.iter_mut().zip(state) {
+            declaration.initialized = *initialized;
+        }
+    }
+
     fn exit_conditional_execution(&mut self) {
         if let Some(function) = self.function_stack.last_mut() {
             function.conditional_depth = function.conditional_depth.saturating_sub(1);
@@ -1012,21 +1026,41 @@ impl<'a> SymbolAnalyzer<'a> {
             ast::Stmt::If(if_stmt) => {
                 self.enter_conditional_execution();
                 self.analyze_expression(if_stmt.condition());
+                let before = self.initialization_state();
+                let mut branch_states = Vec::new();
                 self.analyze_child_block(if_stmt.block());
+                if block_reaches_following_statement(if_stmt.block()) {
+                    branch_states.push(self.initialization_state());
+                }
 
                 if let Some(else_ifs) = if_stmt.else_if() {
                     for else_if in else_ifs {
+                        self.restore_initialization_state(&before);
                         self.analyze_expression(else_if.condition());
                         self.analyze_child_block(else_if.block());
+                        if block_reaches_following_statement(else_if.block()) {
+                            branch_states.push(self.initialization_state());
+                        }
                     }
                 }
 
                 if let Some(else_block) = if_stmt.else_block() {
+                    self.restore_initialization_state(&before);
                     self.analyze_child_block(else_block);
+                    if block_reaches_following_statement(else_block) {
+                        branch_states.push(self.initialization_state());
+                    }
+                } else {
+                    branch_states.push(before.clone());
                 }
+                self.restore_initialization_state(&intersect_initialization_states(
+                    &before,
+                    &branch_states,
+                ));
                 self.exit_conditional_execution();
             }
             ast::Stmt::GenericFor(for_stmt) => {
+                let before = self.initialization_state();
                 self.enter_conditional_execution();
                 for expression in for_stmt.expressions() {
                     self.analyze_expression(expression);
@@ -1056,8 +1090,10 @@ impl<'a> SymbolAnalyzer<'a> {
 
                 self.exit_scope();
                 self.exit_conditional_execution();
+                self.restore_initialization_state(&before);
             }
             ast::Stmt::NumericFor(for_stmt) => {
+                let before = self.initialization_state();
                 self.enter_conditional_execution();
                 self.analyze_expression(for_stmt.start());
                 self.analyze_expression(for_stmt.end());
@@ -1087,6 +1123,7 @@ impl<'a> SymbolAnalyzer<'a> {
 
                 self.exit_scope();
                 self.exit_conditional_execution();
+                self.restore_initialization_state(&before);
             }
             ast::Stmt::Repeat(repeat) => {
                 self.enter_conditional_execution();
@@ -1107,10 +1144,12 @@ impl<'a> SymbolAnalyzer<'a> {
                 self.exit_conditional_execution();
             }
             ast::Stmt::While(while_stmt) => {
+                let before = self.initialization_state();
                 self.enter_conditional_execution();
                 self.analyze_expression(while_stmt.condition());
                 self.analyze_child_block(while_stmt.block());
                 self.exit_conditional_execution();
+                self.restore_initialization_state(&before);
             }
             _ => {}
         }
@@ -1202,7 +1241,7 @@ impl<'a> SymbolAnalyzer<'a> {
                     self.declarations[id]
                         .assignment_positions
                         .push(token_position(name));
-                    self.declarations[id].assigned |= initializes_local;
+                    self.declarations[id].initialized |= initializes_local;
                 }
             }
             Var::Expression(expression) => self.analyze_var_expression_base(expression),
@@ -1320,7 +1359,7 @@ impl<'a> SymbolAnalyzer<'a> {
                     self.declarations[id]
                         .assignment_positions
                         .push(token_position(root));
-                    self.declarations[id].assigned = true;
+                    self.declarations[id].initialized = true;
                 } else {
                     if self.config.rules && Self::is_builtin_global(&root_name) {
                         self.diagnostics.push(builtin_global_write_diagnostic(
@@ -1349,6 +1388,7 @@ impl<'a> SymbolAnalyzer<'a> {
         body: &ast::FunctionBody,
         implicit_self: Option<SourcePosition>,
     ) {
+        let outer_initialization = self.initialization_state();
         for specifier in body.type_specifiers().flatten() {
             let ty = crate::parser::tua_type_from_type_info(specifier.type_info());
             self.mark_imports_used_in_type(&ty);
@@ -1410,6 +1450,7 @@ impl<'a> SymbolAnalyzer<'a> {
 
         self.exit_scope();
         self.function_stack.pop();
+        self.restore_initialization_state(&outer_initialization);
     }
 
     fn analyze_expression(&mut self, expression: &Expression) {
@@ -1586,20 +1627,6 @@ impl<'a> SymbolAnalyzer<'a> {
         for declaration_id in &scope.declarations {
             let declaration = &self.declarations[*declaration_id];
 
-            if self.config.rules
-                && declaration.kind == DeclarationKind::Local
-                && !declaration.initialized
-                && !declaration.assigned
-                && declaration.first_read.is_some()
-            {
-                self.diagnostics.push(uninitialized_local_diagnostic(
-                    &self.parsed.path,
-                    declaration.first_read.unwrap_or(declaration.position),
-                    declaration.position,
-                    &declaration.name,
-                ));
-            }
-
             if declaration.used || should_ignore_unused(&declaration.name) {
                 continue;
             }
@@ -1716,7 +1743,7 @@ impl<'a> SymbolAnalyzer<'a> {
                 externally_reachable: false,
                 contained_local_functions: BTreeSet::new(),
                 initialized,
-                assigned: false,
+                warned_uninitialized: false,
                 first_read: None,
                 assignment_positions: Vec::new(),
             });
@@ -1745,7 +1772,7 @@ impl<'a> SymbolAnalyzer<'a> {
                 externally_reachable: false,
                 contained_local_functions: BTreeSet::new(),
                 initialized: true,
-                assigned: false,
+                warned_uninitialized: false,
                 first_read: None,
                 assignment_positions: Vec::new(),
             });
@@ -1768,6 +1795,21 @@ impl<'a> SymbolAnalyzer<'a> {
         }
 
         if let Some(id) = self.resolve_local(name) {
+            if self.config.rules
+                && self.declarations[id].kind == DeclarationKind::Local
+                && self.declarations[id].function_id == self.current_function_id()
+                && !self.declarations[id].initialized
+                && !self.declarations[id].warned_uninitialized
+            {
+                let declaration = &mut self.declarations[id];
+                declaration.warned_uninitialized = true;
+                self.diagnostics.push(uninitialized_local_diagnostic(
+                    &self.parsed.path,
+                    position,
+                    declaration.position,
+                    &declaration.name,
+                ));
+            }
             self.declarations[id].used = true;
             let is_local_function = self.declarations[id].kind == DeclarationKind::LocalFunction;
             let contained = self.declarations[id].contained_local_functions.clone();
@@ -2529,6 +2571,23 @@ fn assigned_local_name(variable: &Var) -> Option<String> {
     }
 }
 
+fn intersect_initialization_states(before: &[bool], branches: &[Vec<bool>]) -> Vec<bool> {
+    before
+        .iter()
+        .enumerate()
+        .map(|(index, initialized)| {
+            *initialized
+                || branches
+                    .iter()
+                    .all(|branch| branch.get(index).copied().unwrap_or(false))
+        })
+        .collect()
+}
+
+fn block_reaches_following_statement(block: &ast::Block) -> bool {
+    block_fallthrough_position(block, SourcePosition { line: 1, column: 1 }, &|_| false).is_some()
+}
+
 fn position_before(position: SourcePosition) -> SourcePosition {
     if position.column > 1 {
         SourcePosition {
@@ -3134,7 +3193,7 @@ fn uninitialized_local_diagnostic(
         position.column,
         DiagnosticSeverity::Warning,
         format!(
-            "local `{name}` defined at line {} is never initialized or assigned; initialize with `nil` to silence",
+            "local `{name}` defined at line {} may be read before it is initialized; initialize with `nil` to silence",
             declaration.line
         ),
     )

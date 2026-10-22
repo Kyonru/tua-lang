@@ -262,12 +262,12 @@ fn uninitialized_local_tracks_initializer_arity_and_compound_reads() {
     assert_eq!((diagnostics[0].line, diagnostics[0].column), (2, 7));
     assert_eq!(
         diagnostics[0].message,
-        "local `missing` defined at line 1 is never initialized or assigned; initialize with `nil` to silence"
+        "local `missing` defined at line 1 may be read before it is initialized; initialize with `nil` to silence"
     );
     assert_eq!((diagnostics[1].line, diagnostics[1].column), (4, 1));
     assert_eq!(
         diagnostics[1].message,
-        "local `total` defined at line 3 is never initialized or assigned; initialize with `nil` to silence"
+        "local `total` defined at line 3 may be read before it is initialized; initialize with `nil` to silence"
     );
 }
 
@@ -301,12 +301,12 @@ consume(1, 2)
     assert_eq!((diagnostics[0].line, diagnostics[0].column), (13, 18));
     assert_eq!(
         diagnostics[0].message,
-        "local `missing` defined at line 12 is never initialized or assigned; initialize with `nil` to silence"
+        "local `missing` defined at line 12 may be read before it is initialized; initialize with `nil` to silence"
     );
 }
 
 #[test]
-fn uninitialized_local_respects_shadowing_and_plain_assignments_anywhere() {
+fn uninitialized_local_uses_forward_definite_assignment() {
     let diagnostics = check_standard_rules_source(
         r#"local outer
 do
@@ -319,6 +319,49 @@ local later
 print(later)
 later = nil
 
+local conditional
+if ready then
+  conditional = 1
+end
+print(conditional)
+
+local complete
+if ready then
+  complete = 1
+else
+  complete = 2
+end
+print(complete)
+
+local loopOnly
+while ready do
+  loopOnly = 1
+end
+print(loopOnly)
+
+local repeated
+repeat
+  repeated = 1
+until ready
+print(repeated)
+
+local captured
+local function initializeCaptured()
+  captured = 1
+end
+print(captured)
+
+local function reachableBranches()
+  local result
+  if ready then
+    return
+  else
+    result = 1
+  end
+  print(result)
+end
+reachableBranches()
+
 local callback
 function callback() end
 callback()
@@ -329,12 +372,28 @@ callback()
         .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_UNINITIALIZED_LOCAL))
         .collect::<Vec<_>>();
 
-    assert_eq!(diagnostics.len(), 1, "{diagnostics:#?}");
-    assert_eq!((diagnostics[0].line, diagnostics[0].column), (6, 7));
-    assert_eq!(
-        diagnostics[0].message,
-        "local `outer` defined at line 1 is never initialized or assigned; initialize with `nil` to silence"
-    );
+    let messages = diagnostics
+        .iter()
+        .map(|diagnostic| diagnostic.message.as_str())
+        .collect::<Vec<_>>();
+
+    assert_eq!(diagnostics.len(), 5, "{diagnostics:#?}");
+    for name in ["outer", "later", "conditional", "loopOnly", "captured"] {
+        assert!(
+            messages
+                .iter()
+                .any(|message| message.contains(&format!("`{name}`"))),
+            "expected `{name}` in {diagnostics:#?}"
+        );
+    }
+    for name in ["complete", "repeated", "result", "callback"] {
+        assert!(
+            messages
+                .iter()
+                .all(|message| !message.contains(&format!("`{name}`"))),
+            "did not expect `{name}` in {diagnostics:#?}"
+        );
+    }
 }
 
 #[test]

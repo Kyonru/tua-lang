@@ -224,8 +224,13 @@ independently. Missing initializer slots remain uninitialized unless the final
 expression is a direct function call or varargs, which can supply additional
 Lua values. A plain assignment or function declaration initializes a local;
 compound assignment does not, because it reads the previous value first. The
-diagnostic points to the first read, identifies the declaration line, and can
-be silenced by explicitly initializing the binding with `nil`.
+analysis follows source order and only carries an assignment past an `if` when
+every branch assigns it. Assignments inside a `while` or `for` do not initialize
+the value after the loop, while `repeat` assignments do because its body runs
+at least once. Assignments captured inside a nested function do not initialize
+the outer value merely because the function is declared. The diagnostic points
+to the first unsafe read, identifies the declaration line, and can be silenced
+by explicitly initializing the binding with `nil`.
 
 `LocalUnused` treats reads in default-parameter expressions and nested closures
 as uses, but does not report unused numeric or generic `for` bindings. Prefix an
