@@ -439,6 +439,7 @@ impl AnalysisSnapshot {
         let environment = base_environment
             .with_alias_types(self.project_imported_alias_types(parsed))
             .with_local_types(self.project_module_binding_types(parsed))
+            .with_exact_module_bindings(self.project_exact_module_bindings(parsed))
             .with_deprecated_accesses(self.project_module_binding_deprecations(parsed))
             .with_must_use_accesses(self.project_module_binding_must_use_accesses(parsed))
             .with_local_types(project_inference.local_types.clone())
@@ -467,6 +468,22 @@ impl AnalysisSnapshot {
                         .resolve_type(&self.module_graph, module_path, &module_type);
 
                 Some((binding.alias, ty))
+            })
+            .collect()
+    }
+
+    fn project_exact_module_bindings(&self, parsed: &ParsedSource) -> Vec<(String, String)> {
+        require_bindings_for_parsed_source(parsed)
+            .into_iter()
+            .filter_map(|binding| {
+                let module_path = self.indexed_required_module_path(parsed, &binding.alias)?;
+                let module_type = self.indexed_module_value_type(module_path)?;
+                matches!(
+                    self.type_database
+                        .resolve_type(&self.module_graph, module_path, &module_type),
+                    Type::Table(_)
+                )
+                .then_some((binding.alias, binding.module))
             })
             .collect()
     }

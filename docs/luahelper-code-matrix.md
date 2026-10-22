@@ -75,6 +75,7 @@ valid unless it is listed below.
 | `TL1009` | An imported type collides with another visible type name. | Always enabled. |
 | `TL1010` | Imported type aliases form a cycle. | Always enabled. |
 | `TL1011` | A field, index, method, or call operation is not supported by every member of a union. Narrow the value before using the operation. | Always enabled. |
+| `TL1012` | A statically resolved module table has no exported member with that name. Unresolved, dynamic, and `any` modules stay permissive. | Always enabled. |
 
 `TL1003` is the general type-contract error used for annotated assignments,
 stable inferred locals, fields, arguments, returns, and compatible container

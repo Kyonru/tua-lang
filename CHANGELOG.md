@@ -8,6 +8,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Accessing a missing member on a statically resolved module table now reports
+  `TL1012` before a call can fail on `nil` at runtime. Unresolved modules,
+  dynamic `__index` proxies, `any`, and shadowed locals remain permissive.
+
 - Corrected the native typing documentation to stop advertising LuaCATS
   `[T, U]` tuple syntax in `.tua` annotations; fixed-length positional table
   types remain available only in LuaDoc interop today.

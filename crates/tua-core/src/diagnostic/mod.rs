@@ -49,6 +49,7 @@ impl DiagnosticCode {
     pub const TYPE_IMPORT_COLLISION: Self = Self(1009);
     pub const TYPE_IMPORT_CYCLE: Self = Self(1010);
     pub const TYPE_UNSAFE_UNION_OPERATION: Self = Self(1011);
+    pub const TYPE_UNKNOWN_MODULE_EXPORT: Self = Self(1012);
     pub const LOWERING_COMPOUND_ASSIGNMENT: Self = Self(2001);
     pub const EMIT_IO: Self = Self(2002);
     pub const EMIT_OUTPUT_COLLISION: Self = Self(2003);
@@ -177,6 +178,7 @@ impl DiagnosticCode {
                 | Self::TYPE_IMPORT_COLLISION
                 | Self::TYPE_IMPORT_CYCLE
                 | Self::TYPE_UNSAFE_UNION_OPERATION
+                | Self::TYPE_UNKNOWN_MODULE_EXPORT
                 | Self::LOWERING_COMPOUND_ASSIGNMENT
                 | Self::EMIT_IO
                 | Self::EMIT_OUTPUT_COLLISION

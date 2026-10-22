@@ -41,6 +41,7 @@ pub struct TypeEnvironment {
     functions: Vec<TypedFunction>,
     deprecated_accesses: BTreeMap<Vec<String>, Deprecation>,
     must_use_accesses: BTreeSet<Vec<String>>,
+    exact_module_bindings: BTreeMap<String, String>,
 }
 
 impl TypeEnvironment {
@@ -187,6 +188,10 @@ impl TypeEnvironment {
         self.must_use_accesses.iter().map(Vec::as_slice)
     }
 
+    pub(crate) fn exact_module_binding(&self, name: &str) -> Option<&str> {
+        self.exact_module_bindings.get(name).map(String::as_str)
+    }
+
     pub fn to_type_context(&self) -> TypeContext {
         let mut context = self
             .aliases
@@ -254,6 +259,14 @@ impl TypeEnvironment {
         accesses: impl IntoIterator<Item = Vec<String>>,
     ) -> Self {
         self.must_use_accesses.extend(accesses);
+        self
+    }
+
+    pub(crate) fn with_exact_module_bindings(
+        mut self,
+        bindings: impl IntoIterator<Item = (String, String)>,
+    ) -> Self {
+        self.exact_module_bindings.extend(bindings);
         self
     }
 }
@@ -656,6 +669,7 @@ pub(crate) fn build_type_environment_with_domain_registry(
             functions,
             deprecated_accesses: BTreeMap::new(),
             must_use_accesses: BTreeSet::new(),
+            exact_module_bindings: BTreeMap::new(),
         },
         diagnostics,
     )

@@ -137,7 +137,10 @@ enemy.hp -= 5
 
 The editor can complete `Legacy.makeEnemy`, show its signature and
 documentation, infer `enemy` as `Enemy`, and complete `enemy.name`, `enemy.hp`,
-and `enemy.kind`.
+and `enemy.kind`. When that returned table is statically known, accessing a
+field outside its export surface reports `TL1012` instead of allowing a call
+that would read `nil` at runtime. Unresolved modules, `any` values, and modules
+with a dynamic `__index` remain permissive.
 
 !!! tip "Keep exports statically visible"
     Return a table literal, or return a local that contains a clear table

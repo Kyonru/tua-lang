@@ -4297,6 +4297,116 @@ return {
 }
 
 #[test]
+fn snapshot_diagnostics_reject_unknown_members_on_exact_module_exports() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+local BoardModule = require("board")
+BoardModule.rotate()
+BoardModule.<|missing|>missingFunction()
+-- file: src/board.tua
+local function rotate()
+end
+
+return {
+  rotate = rotate,
+}
+"#,
+    );
+    let mut host = AnalysisHost::new();
+
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, &file.source);
+    }
+
+    let snapshot = host.snapshot();
+    let diagnostics = snapshot.diagnostics("src/main.tua");
+    let unknown_exports = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::TYPE_UNKNOWN_MODULE_EXPORT))
+        .collect::<Vec<_>>();
+
+    assert_eq!(unknown_exports.len(), 1, "{diagnostics:#?}");
+    assert_eq!(unknown_exports[0].line, fixture.position("missing").line);
+    assert_eq!(
+        unknown_exports[0].column,
+        fixture.position("missing").column
+    );
+    assert_eq!(
+        unknown_exports[0].message,
+        "module `board` has no exported member `missingFunction`"
+    );
+
+    let completion_position = SourcePosition {
+        line: 2,
+        column: "BoardModule.".len() + 1,
+    };
+    assert!(snapshot
+        .completion("src/main.tua", completion_position)
+        .iter()
+        .any(|completion| completion.label == "rotate"));
+}
+
+#[test]
+fn snapshot_unknown_module_members_stay_permissive_for_dynamic_and_shadowed_values() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+local Missing = require("not-installed")
+Missing.anything()
+
+local Dynamic = require("dynamic")
+Dynamic.anything()
+
+local Proxy = require("proxy")
+Proxy.generatedAtRuntime()
+
+local Board = require("board")
+do
+  local Board: any = plugin
+  Board.anything()
+end
+-- file: src/dynamic.lua
+return load("return plugin")()
+-- file: src/proxy.lua
+local Proxy = { known = true }
+return setmetatable(Proxy, {
+  __index = function(_, key)
+    return key
+  end,
+})
+-- file: src/board.tua
+return {
+  rotate = function() end,
+}
+"#,
+    );
+    let mut host = AnalysisHost::new();
+
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        let kind = if file
+            .path
+            .extension()
+            .and_then(|extension| extension.to_str())
+            == Some("lua")
+        {
+            AnalysisSourceKind::Lua
+        } else {
+            AnalysisSourceKind::Tua
+        };
+        host.set_file_with_kind(&file.path, &file.source, kind);
+    }
+
+    let diagnostics = host.snapshot().diagnostics("src/main.tua");
+    assert!(
+        diagnostics.iter().all(|diagnostic| {
+            diagnostic.code != Some(DiagnosticCode::TYPE_UNKNOWN_MODULE_EXPORT)
+        }),
+        "{diagnostics:#?}"
+    );
+}
+
+#[test]
 fn snapshot_hover_prefers_project_type_aliases_in_type_annotations() {
     let fixture = Fixture::parse(
         r#"-- file: src/main.tua

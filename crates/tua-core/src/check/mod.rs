@@ -25,13 +25,16 @@ use crate::narrowing::{directly_assigned_name, narrowed_locals_for_condition};
 use crate::parser::{parse_tua_source, ParsedLanguage, ParsedSource, SourcePosition, SourceSpan};
 use crate::profile::{self, DiagnosticsTraceCategory};
 use crate::runtime_type;
-use crate::scope::{scope_map_parsed_source_with_globals, ScopeGlobalKind, ScopeResolution};
+use crate::scope::{
+    scope_map_parsed_source_with_globals, ScopeDeclarationKind, ScopeGlobalKind, ScopeResolution,
+};
 use crate::semantic::{resolve_index_type, resolve_table_field_type, SemanticModel};
 use crate::semantic_domains::{BuiltinConstructor, BuiltinDomain, BuiltinDomainRegistry};
 use crate::types::{
     build_type_environment_with_domain_registry, deduplicate_inferred_types,
     has_leading_lua_doc_type, widen_inferred_type, AssignabilityFailure, AssignabilityFailureKind,
-    FunctionType, MetatableFacts, TableField, Type, TypeContext, TypeEnvironment, TypedFunction,
+    FunctionType, IndexFallback, MetatableFacts, TableField, Type, TypeContext, TypeEnvironment,
+    TypedFunction,
 };
 use crate::{asset, love_callback, lua, signal, sprite, state_machine};
 use crate::{Diagnostic, DiagnosticCode, DiagnosticSeverity};
@@ -193,6 +196,7 @@ struct Checker<'a> {
     reported_method_style_diagnostics: BTreeSet<(usize, usize, String)>,
     checked_function_bodies: BTreeSet<(usize, usize)>,
     terminating_builtin_references: BTreeSet<(usize, usize)>,
+    exact_module_references: BTreeMap<(usize, usize), String>,
     diagnostics: Vec<Diagnostic>,
 }
 
@@ -221,6 +225,30 @@ impl<'a> Checker<'a> {
                 .then_some((reference.span.start.line, reference.span.start.column))
             })
             .collect();
+        let exact_module_symbols = scope
+            .declarations()
+            .iter()
+            .filter_map(|declaration| {
+                let ScopeDeclarationKind::ModuleAlias { module } = &declaration.kind else {
+                    return None;
+                };
+                environment
+                    .exact_module_binding(&declaration.name)
+                    .is_some()
+                    .then_some((declaration.id, module.clone()))
+            })
+            .collect::<BTreeMap<_, _>>();
+        let exact_module_references = scope
+            .references()
+            .iter()
+            .filter_map(|reference| {
+                let module = exact_module_symbols.get(&reference.resolution.symbol_id()?)?;
+                Some((
+                    (reference.span.start.line, reference.span.start.column),
+                    module.clone(),
+                ))
+            })
+            .collect();
 
         Self {
             parsed,
@@ -243,6 +271,7 @@ impl<'a> Checker<'a> {
             reported_method_style_diagnostics: BTreeSet::new(),
             checked_function_bodies: BTreeSet::new(),
             terminating_builtin_references,
+            exact_module_references,
             diagnostics: Vec::new(),
         }
     }
@@ -1327,6 +1356,9 @@ impl<'a> Checker<'a> {
                             &format!("access field `{field}` on"),
                         );
                         self.report_unknown_class_member(name, &current, &field);
+                        if let Prefix::Name(root) = expression.prefix() {
+                            self.report_unknown_module_export(name, root, &current, &field);
+                        }
                         return None;
                     };
                     current = next;
@@ -1361,6 +1393,11 @@ impl<'a> Checker<'a> {
         };
 
         self.report_unknown_class_member(variable, &receiver_type, field);
+        if let Var::Expression(expression) = variable {
+            if let Prefix::Name(root) = expression.prefix() {
+                self.report_unknown_module_export(variable, root, &receiver_type, field);
+            }
+        }
     }
 
     fn report_unknown_class_member(&mut self, node: &impl Node, ty: &Type, field: &str) {
@@ -1381,6 +1418,53 @@ impl<'a> Checker<'a> {
             format!("unknown member `{field}` on class `{class_name}`"),
         )
         .with_code(DiagnosticCode::TYPE_CLASS);
+
+        if !self.diagnostics.iter().any(|existing| {
+            existing.line == diagnostic.line
+                && existing.column == diagnostic.column
+                && existing.message == diagnostic.message
+        }) {
+            self.diagnostics.push(diagnostic);
+        }
+    }
+
+    fn report_unknown_module_export(
+        &mut self,
+        node: &impl Node,
+        root: &impl Node,
+        receiver_type: &Type,
+        field: &str,
+    ) {
+        let Type::Table(table) = resolve_aliases(receiver_type, self.environment, 0) else {
+            return;
+        };
+        if table.metatable_facts().is_some_and(|facts| {
+            matches!(
+                facts.index,
+                IndexFallback::Function(_) | IndexFallback::Unknown
+            )
+        }) {
+            return;
+        }
+
+        let root_position = node_position(root);
+        let Some(module) = self
+            .exact_module_references
+            .get(&(root_position.line, root_position.column))
+        else {
+            return;
+        };
+
+        let position = node_span(node)
+            .map(|span| span.start)
+            .unwrap_or_else(|| node_position(node));
+        let diagnostic = Diagnostic::error(
+            &self.parsed.path,
+            position.line,
+            position.column,
+            format!("module `{module}` has no exported member `{field}`"),
+        )
+        .with_code(DiagnosticCode::TYPE_UNKNOWN_MODULE_EXPORT);
 
         if !self.diagnostics.iter().any(|existing| {
             existing.line == diagnostic.line
@@ -1622,6 +1706,9 @@ impl<'a> Checker<'a> {
                             &current,
                             &format!("access field `{field}` on"),
                         );
+                        if let Prefix::Name(root) = function_call.prefix() {
+                            self.report_unknown_module_export(name, root, &current, &field);
+                        }
                         return;
                     };
                     current = next;
@@ -1645,6 +1732,14 @@ impl<'a> Checker<'a> {
                             &current,
                             &format!("access method `{field}` on"),
                         );
+                        if let Prefix::Name(root) = function_call.prefix() {
+                            self.report_unknown_module_export(
+                                method.name(),
+                                root,
+                                &current,
+                                &field,
+                            );
+                        }
                         return;
                     };
                     current = next;
