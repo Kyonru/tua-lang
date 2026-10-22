@@ -144,6 +144,7 @@ fn did_open_publishes_nested_type_mismatch_paths_and_leaf_ranges() {
     let source = r#"type Animation = { row: number }
 type Config = { animations: { [string]: Animation } }
 local function configure(config: Config)
+  -- The body is irrelevant to this nested type-mismatch fixture.
 end
 
 configure({
@@ -164,9 +165,9 @@ configure({
         diagnostics[0]["message"],
         "type mismatch at config.animations.green.row: expected number, found string"
     );
-    assert_eq!(diagnostics[0]["range"]["start"]["line"], 7);
+    assert_eq!(diagnostics[0]["range"]["start"]["line"], 8);
     assert_eq!(diagnostics[0]["range"]["start"]["character"], 20);
-    assert_eq!(diagnostics[0]["range"]["end"]["line"], 7);
+    assert_eq!(diagnostics[0]["range"]["end"]["line"], 8);
     assert_eq!(diagnostics[0]["range"]["end"]["character"], 25);
 }
 

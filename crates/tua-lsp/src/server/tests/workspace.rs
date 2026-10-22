@@ -960,7 +960,10 @@ fn watched_config_change_republishes_open_diagnostics_with_new_settings() {
 return Missing
 "#;
 
-    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write(
+        "tua.toml",
+        "source = \"src\"\n\n[diagnostics]\nmissing_requires = false\n",
+    );
     temp.write("src/main.tua", main);
 
     let config_uri = temp.uri_for("tua.toml");
@@ -969,10 +972,8 @@ return Missing
 
     server.send(initialize_with_root(1, temp.uri()));
     server.send(did_open(&main_uri, main));
-    assert_eq!(
-        last_published_diagnostics(server.output(), &main_uri).len(),
-        0
-    );
+    let initial_diagnostics = last_published_diagnostics(server.output(), &main_uri);
+    assert_eq!(initial_diagnostics.len(), 0, "{initial_diagnostics:#?}");
 
     temp.write(
         "tua.toml",
