@@ -122,8 +122,8 @@ enforced separately with `tua fmt --check`.
 | `TL4002` | A literal `require` or static `import` target cannot be resolved. | `missing_requires`; enabled by default |
 | `TL4003` | An assignment writes a value back to the same variable or field. | `self_assignments` |
 | `TL4004` | A variable read has no known declaration or allowed global. Error in Tua; warning in Lua. | `undefined_variables` |
-| `TL4005` | A non-function local is declared but never used. | `unused_locals` |
-| `TL4006` | A function parameter is never used. | `unused_parameters` |
+| `TL4005` | A non-function local or loop binding is declared but never used. `_`-prefixed bindings are exempt. | `unused_locals`; local/loop checks also belong to `rules` |
+| `TL4006` | A named function parameter or declared varargs are never used. `_`-prefixed named parameters are exempt. | `unused_parameters` |
 | `TL4007` | A local is read before its declaration. | `use_before_definition` |
 | `TL4008` | Legacy duplicate-parameter code retained for source compatibility; new diagnostics use `TL4043`. | No longer emitted. |
 | `TL4010` | A static module specifier is malformed or resolves through an unsupported form. | Always enabled for malformed static imports |

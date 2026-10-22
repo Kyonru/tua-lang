@@ -3615,7 +3615,7 @@ print(pick()())
 }
 
 #[test]
-fn excludes_loop_bindings_from_unused_local_diagnostics() {
+fn reports_unused_loop_bindings_and_honors_underscore_exemptions() {
     let diagnostics = check_tua_source_with_diagnostics_config(
         "src/main.tua",
         r#"
@@ -3628,6 +3628,10 @@ for index = 1, 3 do
   print("tick")
 end
 
+for _ignored, _value in pairs(items) do
+  print("again")
+end
+
 local explicit = 1
 "#,
         &DiagnosticsConfig {
@@ -3635,11 +3639,57 @@ local explicit = 1
             ..diagnostics_without_standard_rules()
         },
     )
-    .expect_err("the explicit unused local should still be reported");
+    .expect_err("unused loop bindings and the explicit local should be reported");
 
-    assert_eq!(diagnostics.len(), 1);
-    assert_eq!(diagnostics[0].code, Some(DiagnosticCode::LINT_UNUSED_LOCAL));
-    assert!(diagnostics[0].message.contains("unused local `explicit`"));
+    let messages = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_UNUSED_LOCAL))
+        .map(|diagnostic| diagnostic.message.as_str())
+        .collect::<Vec<_>>();
+
+    assert_eq!(messages.len(), 3, "{diagnostics:#?}");
+    assert!(messages
+        .iter()
+        .any(|message| message.contains("binding `key`")));
+    assert!(messages
+        .iter()
+        .any(|message| message.contains("binding `index`")));
+    assert!(messages
+        .iter()
+        .any(|message| message.contains("local `explicit`")));
+    assert!(!messages.iter().any(|message| message.contains("_ignored")));
+    assert!(!messages.iter().any(|message| message.contains("_value")));
+}
+
+#[test]
+fn reports_unused_varargs_but_not_consumed_varargs() {
+    let diagnostics = check_tua_source_with_diagnostics_config(
+        "src/main.tua",
+        r#"
+local function ignored(...)
+  return 1
+end
+
+local function consumed(...)
+  return ...
+end
+
+print(ignored(), consumed("value"))
+"#,
+        &DiagnosticsConfig {
+            unused_parameters: true,
+            ..diagnostics_without_standard_rules()
+        },
+    )
+    .expect_err("an unused vararg declaration should be reported");
+
+    let diagnostics = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_UNUSED_PARAMETER))
+        .collect::<Vec<_>>();
+
+    assert_eq!(diagnostics.len(), 1, "{diagnostics:#?}");
+    assert!(diagnostics[0].message.contains("unused varargs"));
 }
 
 #[test]

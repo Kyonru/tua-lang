@@ -56,7 +56,8 @@ share an existing Tua code because they are the same analysis.
 | `LocalShadow` | `TL4035` |
 | `SameLineStatement` | `TL4036` |
 | `MultiLineStatement` | `TL4037` |
-| `LocalUnused` | `TL4005` |
+| `LocalUnused` | `TL4005` (locals and loop bindings) |
+| `ParameterUnused` | `TL4006` (named parameters and varargs) |
 | `FunctionUnused` | `TL4055` |
 | `DeprecatedApi` | `TL4056` |
 | `ParentConstructorPath` | `TL4057` |
@@ -298,10 +299,15 @@ to the first unsafe read, identifies the declaration line, and can be silenced
 by explicitly initializing the binding with `nil`.
 
 `LocalUnused` treats reads in default-parameter expressions and nested closures
-as uses, but does not report unused numeric or generic `for` bindings. Prefix an
-intentionally unused local with `_` to silence the warning. The editor only
-offers to remove an unused declaration when its initializer is safe to discard;
-calls and other potentially effectful expressions are preserved.
+as uses, and reports unused numeric or generic `for` bindings. Prefix an
+intentionally unused local or loop binding with `_` to silence the warning. The
+editor only offers to remove an unused declaration when its initializer is safe
+to discard; calls and other potentially effectful expressions are preserved.
+
+`ParameterUnused` also reports a declared `...` when the function body never
+reads its varargs. Named parameters retain the `_`-prefix exemption; Lua does
+not give a vararg declaration a name, so an intentionally ignored `...` should
+either be removed or the diagnostic should be configured by exact code.
 
 `FunctionUnused` reports direct local and unqualified user-global function
 declarations that are never read. Nested declarations participate in their

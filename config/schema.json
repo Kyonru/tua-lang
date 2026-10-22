@@ -183,14 +183,14 @@
       "path": "diagnostics.unused_locals",
       "type": "boolean",
       "default": false,
-      "description": "Report unused local variables and direct function declarations.",
+      "description": "Report unused local variables, loop bindings, and direct function declarations. Prefix an intentionally unused binding with `_` to silence it.",
       "editor": "tua.diagnostics.unusedLocals"
     },
     {
       "path": "diagnostics.unused_parameters",
       "type": "boolean",
       "default": false,
-      "description": "Report unused function parameters.",
+      "description": "Report unused function parameters and unused `...` varargs. Prefix an intentionally unused named parameter with `_` to silence it.",
       "editor": "tua.diagnostics.unusedParameters"
     },
     {

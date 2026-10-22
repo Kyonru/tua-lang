@@ -836,6 +836,7 @@ enum DeclarationKind {
     LocalFunction,
     Import,
     Parameter,
+    Vararg,
     ImplicitSelf,
 }
 
@@ -847,6 +848,7 @@ fn pending_write_for_declaration(
         DeclarationKind::Local => PendingWriteKind::InitialValue,
         DeclarationKind::Parameter => PendingWriteKind::Parameter,
         DeclarationKind::Loop
+        | DeclarationKind::Vararg
         | DeclarationKind::LocalFunction
         | DeclarationKind::Import
         | DeclarationKind::ImplicitSelf => return None,
@@ -1498,13 +1500,20 @@ impl<'a> SymbolAnalyzer<'a> {
         }
 
         for parameter in body.parameters() {
-            if let Parameter::Name(name) = parameter {
-                self.declare(
+            match parameter {
+                Parameter::Name(name) => self.declare(
                     token_text(name),
                     token_position(name),
                     DeclarationKind::Parameter,
                     declaration_group,
-                );
+                ),
+                Parameter::Ellipsis(token) => self.declare(
+                    "...".to_owned(),
+                    token_position(token),
+                    DeclarationKind::Vararg,
+                    declaration_group,
+                ),
+                _ => {}
             }
         }
 
@@ -1559,6 +1568,9 @@ impl<'a> SymbolAnalyzer<'a> {
             Expression::FunctionCall(function_call) => self.analyze_function_call(function_call),
             Expression::TableConstructor(table) => self.analyze_table_constructor(table),
             Expression::Var(var) => self.analyze_var(var),
+            Expression::Symbol(symbol) if token_text(symbol) == "..." => {
+                self.read_name("...", token_position(symbol));
+            }
             _ => {}
         }
     }
@@ -1725,6 +1737,13 @@ impl<'a> SymbolAnalyzer<'a> {
                         &declaration.name,
                     ));
                 }
+                DeclarationKind::Loop if self.config.unused_locals || self.config.rules => {
+                    self.diagnostics.push(unused_loop_binding_diagnostic(
+                        &self.parsed.path,
+                        declaration.position,
+                        &declaration.name,
+                    ));
+                }
                 DeclarationKind::LocalFunction
                     if self.config.unused_locals || self.config.rules =>
                 {
@@ -1746,6 +1765,12 @@ impl<'a> SymbolAnalyzer<'a> {
                         &self.parsed.path,
                         declaration.position,
                         &declaration.name,
+                    ));
+                }
+                DeclarationKind::Vararg if self.config.unused_parameters => {
+                    self.diagnostics.push(unused_vararg_diagnostic(
+                        &self.parsed.path,
+                        declaration.position,
                     ));
                 }
                 _ => {}
@@ -3153,6 +3178,17 @@ fn unused_local_diagnostic(path: &Path, position: SourcePosition, name: &str) ->
     .with_code(DiagnosticCode::LINT_UNUSED_LOCAL)
 }
 
+fn unused_loop_binding_diagnostic(path: &Path, position: SourcePosition, name: &str) -> Diagnostic {
+    Diagnostic::new(
+        path,
+        position.line,
+        position.column,
+        DiagnosticSeverity::Warning,
+        format!("unused loop binding `{name}`; prefix with `_` to silence"),
+    )
+    .with_code(DiagnosticCode::LINT_UNUSED_LOCAL)
+}
+
 fn unused_function_diagnostic(path: &Path, position: SourcePosition, name: &str) -> Diagnostic {
     Diagnostic::new(
         path,
@@ -3366,6 +3402,17 @@ fn unused_parameter_diagnostic(path: &Path, position: SourcePosition, name: &str
         position.column,
         DiagnosticSeverity::Warning,
         format!("unused parameter `{name}`"),
+    )
+    .with_code(DiagnosticCode::LINT_UNUSED_PARAMETER)
+}
+
+fn unused_vararg_diagnostic(path: &Path, position: SourcePosition) -> Diagnostic {
+    Diagnostic::new(
+        path,
+        position.line,
+        position.column,
+        DiagnosticSeverity::Warning,
+        "unused varargs; remove `...` when the function does not accept extra arguments",
     )
     .with_code(DiagnosticCode::LINT_UNUSED_PARAMETER)
 }
