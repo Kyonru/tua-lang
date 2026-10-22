@@ -4553,6 +4553,74 @@ export type Bullet = {
 }
 
 #[test]
+fn game_module_queries_share_exported_array_and_function_types() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+local Bullets = require("bullets")
+local spawnFn = Bullets.<|complete|>spawn
+Bullets.<|spawn_use|>spawn(10, 20)
+local bullet = Bullets.active[1]
+local damage = bullet.<|damage_use|>damage
+print(damage)
+print(spawnFn)
+-- file: src/bullets.tua
+import type Shared from "./types"
+local active: Shared.Bullet[] = {}
+
+local function <|spawn_def|>spawn<|/spawn_def|>(x: number, y: number)
+  table.insert(active, { x = x, y = y, damage = 1, active = true })
+end
+
+local function update(dt: number)
+  for _, bullet in ipairs(active) do
+    bullet.x += dt
+  end
+end
+
+return { active = active, spawn = spawn, update = update }
+-- file: src/types.tua
+export type Bullet = {
+  x: number,
+  y: number,
+  damage: number,
+  active: boolean,
+}
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+
+    let snapshot = host.snapshot();
+    let labels =
+        completion_labels(&snapshot.completion("src/main.tua", fixture.position("complete")));
+    let hover = snapshot
+        .hover("src/main.tua", fixture.position("damage_use"))
+        .expect("exported array element field should hover");
+    let definition = snapshot
+        .definition("src/main.tua", fixture.position("spawn_use"))
+        .expect("exported function should navigate");
+    let references = snapshot.references("src/bullets.tua", fixture.position("spawn_def"), true);
+
+    assert!(labels.contains(&"active".to_owned()), "{labels:?}");
+    assert!(labels.contains(&"spawn".to_owned()), "{labels:?}");
+    assert!(labels.contains(&"update".to_owned()), "{labels:?}");
+    assert_eq!(hover.contents, "(field) damage: number");
+    assert_eq!(definition.path, PathBuf::from("src/bullets.tua"));
+    assert_eq!(definition.span, fixture.range("spawn_def"));
+    assert!(references.len() >= 3, "{references:#?}");
+    assert!(
+        snapshot
+            .diagnostics("src/main.tua")
+            .iter()
+            .all(|diagnostic| diagnostic.severity != crate::DiagnosticSeverity::Error),
+        "game module consumer should stay diagnostic-clean"
+    );
+}
+
+#[test]
 fn snapshot_implementation_resolves_functions_and_stays_conservative() {
     let fixture = Fixture::parse(
         r#"-- file: src/main.tua

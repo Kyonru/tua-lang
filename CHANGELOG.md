@@ -85,6 +85,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Added
 
+- Added a permanent game-scale regression fixture that checks and builds a
+  1,000-projectile typed simulation, runs its emitted Lua when an interpreter
+  is available, bounds steady-update allocation growth, and exercises module
+  completion, hover, definitions, and references across exported game types.
 - Added a production-safe, default-off Phase 3 statistical inline-completion
   source for Tua. It reuses the immutable project corpus and speculative
   request lane and adds bounded token tables and compact scope facts. When

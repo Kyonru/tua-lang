@@ -1,0 +1,79 @@
+type Bullet = {
+  x: number,
+  y: number,
+  dx: number,
+  dy: number,
+  active: boolean,
+}
+
+local active: Bullet[] = {}
+local pool = objectPool({
+  create = function(): Bullet
+    return { x = 0, y = 0, dx = 0, dy = 0, active = false }
+  end,
+  reset = function(bullet: Bullet)
+    bullet.x = 0
+    bullet.y = 0
+    bullet.dx = 0
+    bullet.dy = 0
+    bullet.active = false
+  end,
+  initial = 1000,
+})
+
+local function spawn(index: number)
+  local bullet = pool:acquire()
+  bullet.x = index % 100
+  bullet.y = math.floor(index / 100)
+  bullet.dx = index % 7 + 1
+  bullet.dy = index % 5 - 2
+  bullet.active = true
+  table.insert(active, bullet)
+end
+
+local function removeAt(index: number)
+  local bullet = active[index]
+  bullet.active = false
+  pool:release(bullet)
+  active[index] = active[#active]
+  table.remove(active)
+end
+
+local function update(dt: number)
+  local index = #active
+  while index >= 1 do
+    local bullet = active[index]
+    bullet.x += bullet.dx * dt
+    bullet.y += bullet.dy * dt
+    if bullet.x > 110 then
+      removeAt(index)
+    end
+    index -= 1
+  end
+end
+
+for index = 1, 1000 do
+  spawn(index)
+end
+
+local first: Bullet | nil = rawget(active, 1)
+assert(first ~= nil, "the active array should contain spawned bullets")
+
+collectgarbage("collect")
+local before = collectgarbage("count")
+for _ = 1, 240 do
+  update(1 / 60)
+end
+local allocated = collectgarbage("count") - before
+
+assert(#active > 0 and #active < 1000, "the simulation should remove some bullets")
+assert(pool:activeCount() == #active, "the pool and active array must stay synchronized")
+assert(allocated < 64, "steady gameplay update allocated too much memory")
+
+local checksum = 0
+for _, bullet in ipairs(active) do
+  checksum += bullet.x + bullet.y
+end
+assert(checksum > 0, "the simulation checksum should advance")
+
+print("gameplay regression passed")
