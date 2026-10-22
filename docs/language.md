@@ -581,6 +581,12 @@ local values: (number | string)[] = {}
 local callbacks: ((dt: number) -> nil)[] = {}
 ```
 
+An ordinary indexed read assumes the dense-array contract and has type `T`.
+Use `rawget(values, index)` when an index may be absent; its result is `T |
+nil`. Tua also permits direct checks such as `values[index] ~= nil`, since Lua
+can return `nil` for an out-of-range index even when the declared element type
+is non-nilable.
+
 ## Union Types
 
 ```tua

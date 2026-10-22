@@ -2215,7 +2215,7 @@ const MATH_ITEMS: &[LuaItem] = &[
     item(
         "random",
         LuaItemKind::Function,
-        "function math.random(m?, n?): number",
+        "function math.random(m?: number, n?: number): number",
         "Returns a pseudo-random number.",
     ),
     item(

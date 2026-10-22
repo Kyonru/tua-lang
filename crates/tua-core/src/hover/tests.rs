@@ -599,6 +599,20 @@ end
 }
 
 #[test]
+fn hovers_rawget_array_results_as_optional() {
+    let source = r#"
+local colors: number[] = { 1, 0.5, 0 }
+local alpha = rawget(colors, 4)
+"#;
+
+    let alpha = hover_tua_source("src/colors.tua", source, position_at(source, "alpha ="))
+        .expect("hover should not fail")
+        .expect("rawget result should hover");
+
+    assert_eq!(alpha.contents, "local alpha: number | nil");
+}
+
+#[test]
 fn hovers_indexed_assignment_parts_without_treating_assignment_as_comparison() {
     let source = r#"local actors: number[] = {}
 

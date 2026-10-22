@@ -248,6 +248,20 @@ impl<'a> SemanticModel<'a> {
             return Vec::new();
         };
 
+        if parts.as_slice() == ["rawget"]
+            && self.environment.local("rawget").is_none()
+            && self.environment.function("rawget").is_none()
+        {
+            if let Some(value) = rawget_collection_argument(function_call)
+                .and_then(|argument| {
+                    self.type_of_expression_return_at_depth(argument, position, 0, 1)
+                })
+                .and_then(|collection| self.environment.optional_index_value_type(&collection))
+            {
+                return vec![value];
+            }
+        }
+
         if parts.len() == 1
             && sprite::is_helper(&parts[0])
             && self.environment.local(&parts[0]).is_none()
@@ -2348,6 +2362,19 @@ fn first_parenthesized_call_argument(function_call: &FunctionCall) -> Option<&Ex
     };
 
     arguments.iter().next()
+}
+
+fn rawget_collection_argument(function_call: &FunctionCall) -> Option<&Expression> {
+    let Suffix::Call(Call::AnonymousCall(FunctionArgs::Parentheses { arguments, .. })) =
+        function_call.suffixes().next()?
+    else {
+        return None;
+    };
+    let mut arguments = arguments.iter();
+    let collection = arguments.next()?;
+    arguments.next()?;
+
+    Some(collection)
 }
 
 fn function_type_from_body(body: &ast::FunctionBody) -> Type {

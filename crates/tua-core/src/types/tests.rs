@@ -988,6 +988,53 @@ end
 }
 
 #[test]
+fn infers_branched_multi_return_slots_without_nil() {
+    let parsed = parse_tua_source(
+        "src/normalize.tua",
+        r#"
+local function normalize(dx: number, dy: number)
+  local length = math.sqrt(dx * dx + dy * dy)
+  if length <= 0.0001 then
+    return 0, 0
+  end
+  return dx / length, dy / length
+end
+"#,
+    )
+    .expect("typed source should parse");
+    let environment =
+        build_type_environment(&parsed).expect("type environment should infer returns");
+    let normalize = environment
+        .function("normalize")
+        .expect("normalize should have an inferred function type");
+
+    assert_eq!(normalize.return_types, vec![Type::number(), Type::number()]);
+}
+
+#[test]
+fn infers_rawget_array_results_as_optional() {
+    let parsed = parse_tua_source(
+        "src/safe_index.tua",
+        r#"
+local function safeIndex(values: number[], index: number)
+  return rawget(values, index)
+end
+"#,
+    )
+    .expect("typed source should parse");
+    let environment =
+        build_type_environment(&parsed).expect("type environment should infer returns");
+    let safe_index = environment
+        .function("safeIndex")
+        .expect("safeIndex should have an inferred function type");
+
+    assert_eq!(
+        safe_index.return_types,
+        vec![Type::union([Type::number(), Type::nil()])]
+    );
+}
+
+#[test]
 fn infers_love_method_function_returns_from_inferred_locals() {
     let parsed = parse_tua_source(
         "src/love_returns.tua",

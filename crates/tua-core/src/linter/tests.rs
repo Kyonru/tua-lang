@@ -3742,6 +3742,57 @@ called()
 }
 
 #[test]
+fn accepts_local_functions_exported_from_module_returns() {
+    let diagnostics = check_tua_source_with_diagnostics_config(
+        "src/module.tua",
+        r#"
+local function direct()
+end
+
+local function shorthand()
+end
+
+local function conditional()
+end
+
+local function assignedField()
+end
+
+local function privateCallback()
+end
+
+local internal = { callback = privateCallback }
+print(internal)
+
+local module = { conditional = conditional }
+module.assignedField = assignedField
+
+if featureFlag then
+  return {
+    direct = direct,
+    nested = { shorthand },
+  }
+end
+
+return module
+"#,
+        &DiagnosticsConfig {
+            uncalled_local_functions: true,
+            ..diagnostics_without_standard_rules()
+        },
+    )
+    .expect_err("only the private callback should remain uncalled");
+
+    let uncalled = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_UNCALLED_LOCAL_FUNCTION))
+        .collect::<Vec<_>>();
+
+    assert_eq!(uncalled.len(), 1, "{diagnostics:#?}");
+    assert!(uncalled[0].message.contains("`privateCallback`"));
+}
+
+#[test]
 fn jit_lints_are_disabled_by_default() {
     check_tua_source(
         "src/main.tua",

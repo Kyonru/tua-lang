@@ -84,11 +84,29 @@ fn prepare_output(out_dir: &Path) -> io::Result<()> {
     Ok(())
 }
 
-/// Written last and atomically, so the game reloads only finished output.
+/// Written last, so the game reloads only finished output. Unix can replace
+/// the signal atomically; Windows requires removing the previous tiny signal
+/// file before renaming its replacement.
 fn write_signal(out_dir: &Path, generation: u64) -> io::Result<()> {
     let temporary = out_dir.join(format!("{SIGNAL_FILE}.tmp"));
+    let signal = out_dir.join(SIGNAL_FILE);
     fs::write(&temporary, format!("{generation}\n"))?;
-    fs::rename(&temporary, out_dir.join(SIGNAL_FILE))
+    replace_signal(&temporary, &signal)
+}
+
+#[cfg(not(windows))]
+fn replace_signal(temporary: &Path, signal: &Path) -> io::Result<()> {
+    fs::rename(temporary, signal)
+}
+
+#[cfg(windows)]
+fn replace_signal(temporary: &Path, signal: &Path) -> io::Result<()> {
+    match fs::remove_file(signal) {
+        Ok(()) => {}
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+        Err(error) => return Err(error),
+    }
+    fs::rename(temporary, signal)
 }
 
 fn launch(love: Option<&Path>, out_dir: &Path) -> Result<Child, CliError> {

@@ -1509,6 +1509,57 @@ local label: string = "width: " .. z
 }
 
 #[test]
+fn accepts_matching_branched_multi_return_slots() {
+    check_tua_source(
+        "src/normalize.tua",
+        r#"
+local function normalize(dx: number, dy: number)
+  local length = math.sqrt(dx * dx + dy * dy)
+  if length <= 0.0001 then
+    return 0, 0
+  end
+  return dx / length, dy / length
+end
+
+local x, y = normalize(3, 4)
+local checked_x: number = x
+local checked_y: number = y
+"#,
+    )
+    .expect("matching branched multi-return slots should type-check");
+}
+
+#[test]
+fn accepts_numeric_arguments_for_optional_math_random_bounds() {
+    check_tua_source(
+        "src/random.tua",
+        r#"
+local upper = math.random(5)
+local ranged = math.random(1, 5)
+local checked_upper: number = upper
+local checked_ranged: number = ranged
+"#,
+    )
+    .expect("math.random bounds and returns should be numeric");
+}
+
+#[test]
+fn untyped_standard_library_parameter_names_remain_permissive() {
+    check_tua_source(
+        "src/catalog.tua",
+        r#"
+local substring = string.sub("abcdef", 2, 4)
+local worker = coroutine.create(function() return "done" end)
+local timestamp = os.time()
+local checked_substring: string = substring
+local checked_timestamp: number = timestamp
+print(worker)
+"#,
+    )
+    .expect("catalog parameter names without annotations should be any-typed");
+}
+
+#[test]
 fn accepts_required_module_function_returns_in_checked_function_bodies() {
     let temp = TempProject::new("required-module-check-return");
     let source = r#"local Functions = require("functions")
@@ -3059,6 +3110,53 @@ end
 "#,
     )
     .expect("comparisons through any should stay permissive");
+}
+
+#[test]
+fn array_bounds_checks_remain_runtime_valid() {
+    check_tua_source(
+        "src/colors.tua",
+        r#"
+local color: number[] = { 1, 0.5, 0 }
+
+if color[4] ~= nil then
+  print(color[4])
+end
+
+local alpha: number | nil = rawget(color, 4)
+"#,
+    )
+    .expect("unchecked array reads may still be absent at runtime");
+}
+
+#[test]
+fn rawget_array_results_require_an_optional_contract() {
+    let diagnostics = check_tua_source(
+        "src/colors.tua",
+        r#"
+local color: number[] = { 1, 0.5, 0 }
+local alpha: number = rawget(color, 4)
+"#,
+    )
+    .expect_err("rawget should expose a possibly absent array item");
+
+    assert_single_mismatch(&diagnostics, "expected number, found nil");
+}
+
+#[test]
+fn shadowed_rawget_keeps_its_declared_return_type() {
+    check_tua_source(
+        "src/colors.tua",
+        r#"
+local function rawget(values: number[], index: number): number
+  return values[index]
+end
+
+local color: number[] = { 1, 0.5, 0 }
+local alpha: number = rawget(color, 1)
+"#,
+    )
+    .expect("a local rawget function should shadow the Lua builtin");
 }
 
 #[test]

@@ -16,7 +16,7 @@ end
 
 files["main.lua"] = "-- main"
 files[".tuahotreload"] = "1\n"
-files["game/enemy.lua"] = "local M = { hp = 3 }\nfunction M.speed() return 1 end\nreturn M\n"
+files["game/enemy.lua"] = "local M = { hp = 3 }\nfunction M.speed() return 1 end\nfunction M.damage(amount) M.hp = M.hp - amount return M.hp end\nreturn M\n"
 package.loaded["game.enemy"] = assert(loadstring(files["game/enemy.lua"]))()
 local enemy = package.loaded["game.enemy"]
 enemy.hp = 7
@@ -35,12 +35,14 @@ tick()
 assert(updates == 11, "reassigned update is called through the wrapper")
 
 -- An edit swaps new functions into the same table and keeps its data.
-files["game/enemy.lua"] = "local M = { hp = 3 }\nfunction M.speed() return 2 end\nreturn M\n"
+files["game/enemy.lua"] = "local M = { hp = 3 }\nfunction M.speed() return 2 end\nfunction M.damage(amount) M.hp = M.hp - amount return M.hp end\nreturn M\n"
 files[".tuahotreload"] = "2\n"
 tick()
 assert(package.loaded["game.enemy"] == enemy, "module identity is kept")
 assert(enemy.speed() == 2, "new function is used")
 assert(enemy.hp == 7, "existing data is kept")
+assert(enemy.damage(2) == 5 and enemy.hp == 5,
+  "new functions keep using the preserved module table")
 
 -- A broken reload pauses the game's callbacks instead of ending it.
 files["game/enemy.lua"] = "local M = {\nreturn M\n"
@@ -52,7 +54,7 @@ assert(updates == before, "callbacks pause while a reload error is shown")
 assert(enemy.speed() == 2, "old code keeps running after a failed reload")
 
 -- Saving a fix resumes the game.
-files["game/enemy.lua"] = "local M = { hp = 3 }\nfunction M.speed() return 3 end\nreturn M\n"
+files["game/enemy.lua"] = "local M = { hp = 3 }\nfunction M.speed() return 3 end\nfunction M.damage(amount) M.hp = M.hp - amount return M.hp end\nreturn M\n"
 files[".tuahotreload"] = "4\n"
 tick()
 assert(enemy.speed() == 3 and updates > before, "a fixed reload resumes the game")

@@ -91,6 +91,37 @@ local function swap(old, new, seen)
   end
 end
 
+-- Functions compiled by a reload close over the new module table. Rebind that
+-- root upvalue before installing them into the old table, or conventional
+-- `local M = {}; function M.update() M.state = ... end; return M` modules
+-- would mutate an invisible second copy instead of their preserved state.
+local function rebind_module_upvalues(value, new_root, old_root, seen)
+  local kind = type(value)
+  if kind == "function" then
+    local index = 1
+    while true do
+      local name, upvalue = debug.getupvalue(value, index)
+      if not name then
+        break
+      end
+      if upvalue == new_root then
+        debug.setupvalue(value, index, old_root)
+      end
+      index = index + 1
+    end
+    return
+  end
+  if kind ~= "table" or seen[value] then
+    return
+  end
+  seen[value] = true
+  for key, nested in pairs(value) do
+    rebind_module_upvalues(key, new_root, old_root, seen)
+    rebind_module_upvalues(nested, new_root, old_root, seen)
+  end
+  rebind_module_upvalues(getmetatable(value), new_root, old_root, seen)
+end
+
 local function reload(name, source)
   local chunk, load_error = loadstring(source, "@" .. module_path(name))
   if not chunk then
@@ -104,6 +135,7 @@ local function reload(name, source)
   end
   local old = package.loaded[name]
   if type(old) == "table" and type(result) == "table" then
+    rebind_module_upvalues(result, result, old, {})
     swap(old, result, {})
   elseif result ~= nil then
     package.loaded[name] = result

@@ -8,6 +8,13 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Hot-reloaded module functions now keep referring to the preserved module
+  table. Conventional `local M = {}; function M.update() ... end; return M`
+  modules previously received the new function bodies, but those functions
+  mutated a newly loaded private table instead of the table held by callers.
+- `tua dev` now replaces its reload signal correctly on Windows. Windows does
+  not let `rename` overwrite the previous signal file, so the second successful
+  rebuild previously stopped the dev loop.
 - `return tonumber(text) or 0` and other returned expressions of unknown type
   no longer report "expected number, found nil". The return check treated an
   unknown type as `nil`; it is now dynamic, as it already was for locals.
@@ -37,6 +44,23 @@ language or editor behavior, and migration notes call out those changes.
   `tween.to(box, 1, { x = 10 }):ease("quadout")`, reporting a false argument
   count error. The checker treated the inner `to(...)` as a `:` call and
   counted the module table as an extra `self` argument.
+- Array bounds checks such as `values[index] ~= nil` are no longer reported as
+  impossible. Ordinary `T[]` indexing keeps its ergonomic `T` contract, while
+  unshadowed `rawget(values, index)` now infers `T | nil` in checking, function
+  return inference, and hover.
+- `TL4031` no longer reports local functions that escape through a module
+  return, including nested export tables, conditional returns, returned local
+  module tables, and functions assigned to their fields. Private callbacks that
+  are only stored internally remain reportable.
+- The formatter now indents split `if`, `elseif`, `while`, and `until`
+  conditions, including comments and CRLF input, without producing its own
+  `TL4037` continuation-layout warning.
+- Standard-library calls such as `math.sqrt(...)` now retain their return types
+  inside checked function bodies. This prevents valid branched multi-return
+  functions from reporting inferred `nil` values on later return paths. The
+  `math.random` catalog signature now also types both optional bounds as
+  numbers, and unannotated catalog parameter names remain permissive instead
+  of being misread as type aliases.
 - VS Code Extension Host launch profiles now build the executed extension
   bundle before launch, emit source maps for JavaScript breakpoints, and stage
   the bundled server through a cross-platform Node script that selects `tua`
@@ -129,6 +153,10 @@ language or editor behavior, and migration notes call out those changes.
   independent smoothing, look-ahead, world bounds, zoom, rotation,
   trauma-based shake, pixel-perfect rounding, split-screen viewports, and
   screen/world conversion. Games with more specific needs write their own.
+- Added a permanent game-scale regression fixture that checks and builds a
+  1,000-projectile typed simulation, runs its emitted Lua when an interpreter
+  is available, bounds steady-update allocation growth, and exercises module
+  completion, hover, definitions, and references across exported game types.
 - Added a production-safe, default-off Phase 3 statistical inline-completion
   source for Tua. It reuses the immutable project corpus and speculative
   request lane and adds bounded token tables and compact scope facts. When

@@ -727,6 +727,8 @@ struct SymbolAnalyzer<'a> {
     unresolved_global_reads: Vec<UnresolvedGlobalRead>,
     user_globals: BTreeMap<String, GlobalUsage>,
     function_stack: Vec<FunctionContext>,
+    module_export_depth: usize,
+    value_reference_captures: Vec<BTreeSet<usize>>,
     next_function_id: usize,
     next_declaration_group: usize,
 }
@@ -786,6 +788,8 @@ struct Declaration {
     shadowed_local: Option<usize>,
     used: bool,
     called: bool,
+    externally_reachable: bool,
+    contained_local_functions: BTreeSet<usize>,
     initialized: bool,
     assigned: bool,
     first_read: Option<SourcePosition>,
@@ -837,6 +841,8 @@ impl<'a> SymbolAnalyzer<'a> {
             unresolved_global_reads: Vec::new(),
             user_globals: BTreeMap::new(),
             function_stack: Vec::new(),
+            module_export_depth: 0,
+            value_reference_captures: Vec::new(),
             next_function_id: 0,
             next_declaration_group: 0,
         }
@@ -951,7 +957,7 @@ impl<'a> SymbolAnalyzer<'a> {
 
         if let Some(LastStmt::Return(return_stmt)) = block.last_stmt() {
             for expression in return_stmt.returns() {
-                self.analyze_expression(expression);
+                self.analyze_return_expression(expression);
             }
         }
 
@@ -960,6 +966,13 @@ impl<'a> SymbolAnalyzer<'a> {
 
     fn analyze_child_block(&mut self, block: &ast::Block) {
         self.analyze_block(block);
+    }
+
+    fn analyze_return_expression(&mut self, expression: &Expression) {
+        let is_module_export = self.function_stack.is_empty();
+        self.module_export_depth += usize::from(is_module_export);
+        self.analyze_expression(expression);
+        self.module_export_depth -= usize::from(is_module_export);
     }
 
     fn enter_conditional_execution(&mut self) {
@@ -1104,12 +1117,61 @@ impl<'a> SymbolAnalyzer<'a> {
     }
 
     fn analyze_assignment(&mut self, assignment: &ast::Assignment) {
-        for expression in assignment.expressions() {
-            self.analyze_expression(expression);
+        let value_references = assignment
+            .expressions()
+            .iter()
+            .map(|expression| self.analyze_expression_capturing_functions(expression))
+            .collect::<Vec<_>>();
+
+        for (index, variable) in assignment.variables().iter().enumerate() {
+            self.analyze_assignment_target(variable, true, true);
+            if let Some(references) = value_references.get(index) {
+                self.record_contained_functions(variable, references);
+            }
+        }
+    }
+
+    fn analyze_expression_capturing_functions(
+        &mut self,
+        expression: &Expression,
+    ) -> BTreeSet<usize> {
+        self.value_reference_captures.push(BTreeSet::new());
+        self.analyze_expression(expression);
+        let references = self
+            .value_reference_captures
+            .pop()
+            .expect("value reference capture should remain balanced");
+
+        if let Some(parent) = self.value_reference_captures.last_mut() {
+            parent.extend(references.iter().copied());
         }
 
-        for variable in assignment.variables() {
-            self.analyze_assignment_target(variable, true, true);
+        references
+    }
+
+    fn record_contained_functions(&mut self, variable: &Var, references: &BTreeSet<usize>) {
+        let (name, replaces_value) = match variable {
+            Var::Name(name) => (token_text(name), true),
+            _ => {
+                let Some(parts) = plain_field_chain_from_var(variable) else {
+                    return;
+                };
+                let Some(root) = parts.first() else {
+                    return;
+                };
+                (root.clone(), false)
+            }
+        };
+        let Some(id) = self.resolve_local(&name) else {
+            return;
+        };
+
+        if replaces_value {
+            self.declarations[id].contained_local_functions = references.clone();
+        } else {
+            self.declarations[id]
+                .contained_local_functions
+                .extend(references.iter().copied());
         }
     }
 
@@ -1169,17 +1231,22 @@ impl<'a> SymbolAnalyzer<'a> {
             .then(|| self.import_call_kind(expressions[0]))
             .flatten();
 
+        let mut value_references = Vec::with_capacity(expressions.len());
         for expression in &expressions {
-            match import_kind {
+            let references = match import_kind {
                 Some(ImportCallKind::StaticImport) => {
                     let Expression::FunctionCall(call) = expression else {
                         continue;
                     };
 
                     self.analyze_suffixes(call.suffixes());
+                    BTreeSet::new()
                 }
-                Some(ImportCallKind::Require) | None => self.analyze_expression(expression),
-            }
+                Some(ImportCallKind::Require) | None => {
+                    self.analyze_expression_capturing_functions(expression)
+                }
+            };
+            value_references.push(references);
         }
 
         for specifier in local.type_specifiers().flatten() {
@@ -1189,8 +1256,9 @@ impl<'a> SymbolAnalyzer<'a> {
 
         let declaration_group = self.next_declaration_group();
         for (index, name) in names.into_iter().enumerate() {
+            let name_text = token_text(name);
             self.declare_with_initialization(
-                token_text(name),
+                name_text.clone(),
                 token_position(name),
                 if import_kind.is_some() {
                     DeclarationKind::Import
@@ -1200,6 +1268,11 @@ impl<'a> SymbolAnalyzer<'a> {
                 expression_initializes_local(&expressions, index),
                 declaration_group,
             );
+            if let (Some(id), Some(references)) =
+                (self.resolve_local(&name_text), value_references.get(index))
+            {
+                self.declarations[id].contained_local_functions = references.clone();
+            }
         }
     }
 
@@ -1590,6 +1663,7 @@ impl<'a> SymbolAnalyzer<'a> {
             if declaration.kind != DeclarationKind::LocalFunction
                 || !declaration.used
                 || declaration.called
+                || declaration.externally_reachable
                 || should_ignore_unused(&declaration.name)
             {
                 continue;
@@ -1639,6 +1713,8 @@ impl<'a> SymbolAnalyzer<'a> {
                 shadowed_local,
                 used: false,
                 called: false,
+                externally_reachable: false,
+                contained_local_functions: BTreeSet::new(),
                 initialized,
                 assigned: false,
                 first_read: None,
@@ -1666,6 +1742,8 @@ impl<'a> SymbolAnalyzer<'a> {
                 shadowed_local,
                 used: false,
                 called: false,
+                externally_reachable: false,
+                contained_local_functions: BTreeSet::new(),
                 initialized: true,
                 assigned: false,
                 first_read: None,
@@ -1691,6 +1769,26 @@ impl<'a> SymbolAnalyzer<'a> {
 
         if let Some(id) = self.resolve_local(name) {
             self.declarations[id].used = true;
+            let is_local_function = self.declarations[id].kind == DeclarationKind::LocalFunction;
+            let contained = self.declarations[id].contained_local_functions.clone();
+
+            if let Some(capture) = self.value_reference_captures.last_mut() {
+                if is_local_function {
+                    capture.insert(id);
+                }
+                capture.extend(contained.iter().copied());
+            }
+
+            if self.module_export_depth > 0 {
+                if is_local_function {
+                    self.declarations[id].externally_reachable = true;
+                }
+                for function_id in contained {
+                    if let Some(function) = self.declarations.get_mut(function_id) {
+                        function.externally_reachable = true;
+                    }
+                }
+            }
             self.declarations[id].first_read.get_or_insert(position);
             return;
         }

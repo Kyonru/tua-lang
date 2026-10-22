@@ -85,6 +85,27 @@ pub fn love_executable() -> Option<OsString> {
     .find(love_version_works)
 }
 
+pub fn lua_executable() -> Option<OsString> {
+    [
+        env::var_os("TUA_LUAJIT_BIN"),
+        env::var_os("TUA_LUA_BIN"),
+        Some(OsString::from("luajit")),
+        Some(OsString::from("lua5.1")),
+        Some(OsString::from("lua")),
+        Some(OsString::from("lua5.4")),
+        Some(OsString::from("lua5.3")),
+        Some(OsString::from("lua5.2")),
+    ]
+    .into_iter()
+    .flatten()
+    .find(|candidate| {
+        Command::new(candidate)
+            .arg("-v")
+            .output()
+            .is_ok_and(|output| output.status.success())
+    })
+}
+
 fn love_version_works(candidate: &OsString) -> bool {
     Command::new(candidate)
         .arg("--version")
