@@ -213,7 +213,9 @@ completion performance, internal inline performance, client no-stall and
 responsiveness evidence, diagnostics freshness, real-scheduler cache behavior,
 and the validation parse distribution must each be passed with evidence. Run
 `make inline-eval-phase-gate`; a missing, pending, or evidence-free prerequisite
-fails.
+fails. So does one whose report was not produced from a clean tree at its
+recorded revision, or whose shipped code, harness, or benchmark inputs changed
+after that revision.
 
 The evaluator's production backend deliberately starts cold, so its
 zero/one/two-parse distribution is a report-only diagnostic worst case; it is

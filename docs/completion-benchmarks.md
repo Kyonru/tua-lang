@@ -390,7 +390,11 @@ legitimately suppress semantic candidates.
 The aggregate `make inline-eval-phase-gate` target depends on that representative
 run, then validates every prerequisite and its evidence in
 `benchmarks/inline-eval/phase1-gate.toml`; missing, pending, or evidence-free
-items still fail. Server/request latency starts at scheduler dispatch; the
+items still fail. Every report records the commit and dirty state it was
+produced from in a top-level `repository` field, and a passed prerequisite
+names its `artifact` and `revision`. The check rejects evidence from a dirty
+tree, from another commit, or from a commit after which shipped code, the
+measuring harness, or benchmark inputs changed. Server/request latency starts at scheduler dispatch; the
 separate client request-age metric includes coordinator input waiting and
 transport, so a fast backend alone cannot pass both gates. Use
 `make inline-eval-phase-gate-check` for the cheap

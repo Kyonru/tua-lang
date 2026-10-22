@@ -7,6 +7,7 @@ const {
   formatCacheStats,
   profileLspProject,
   profileSpans,
+  repositoryState,
   resolveCommand,
   spanStatsByName,
   timingsByLabel,
@@ -53,6 +54,7 @@ function buildReport(result) {
   const completionContext = result.stats.completionContext || { hits: 0, misses: 0 };
 
   return {
+    repository: repositoryState(),
     root,
     repeat,
     warmup,

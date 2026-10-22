@@ -972,7 +972,7 @@ fn gate_sets_check_only_their_configured_languages() {
 #[test]
 fn aggregate_phase_gate_fails_closed_for_missing_pending_or_evidence_free_items() {
     let mut artifact = PhaseGateArtifact {
-        version: 1,
+        version: PHASE_GATE_VERSION,
         prerequisites: PHASE1_REQUIRED_PREREQUISITES
             .into_iter()
             .map(|name| {
@@ -980,13 +980,16 @@ fn aggregate_phase_gate_fails_closed_for_missing_pending_or_evidence_free_items(
                     name.to_owned(),
                     PhaseGatePrerequisite {
                         passed: true,
-                        evidence: "artifact.json".to_owned(),
+                        evidence: "measured".to_owned(),
+                        artifact: Some("target/tua-speed/artifact.json".to_owned()),
+                        revision: Some("abc1234".to_owned()),
                     },
                 )
             })
             .collect(),
     };
-    assert!(check_phase_gate(&artifact).is_empty());
+    let current = |_: &PhaseGatePrerequisite| Ok(());
+    assert!(check_phase_gate(&artifact, &current).is_empty());
     artifact.prerequisites.remove("menu_replay");
     artifact
         .prerequisites
@@ -999,8 +1002,14 @@ fn aggregate_phase_gate_fails_closed_for_missing_pending_or_evidence_free_items(
         .expect("performance prerequisite")
         .evidence
         .clear();
-    let failures = check_phase_gate(&artifact).join("\n");
+    artifact
+        .prerequisites
+        .get_mut("diagnostics_freshness")
+        .expect("diagnostics prerequisite")
+        .revision = None;
+    let failures = check_phase_gate(&artifact, &current).join("\n");
     assert!(failures.contains("missing prerequisite `menu_replay`"));
+    assert!(failures.contains("`diagnostics_freshness` is passed without naming its artifact"));
     assert!(failures.contains("scheduler_cache_hit` is not passed"));
     assert!(failures.contains("completion_performance` has no evidence"));
 }
@@ -1312,4 +1321,42 @@ fn committed_thresholds_pin_the_host_policy() {
             .expect("phase2 config"),
         Phase2TuningConfig::pinned()
     );
+}
+
+#[test]
+fn aggregate_phase_gate_rejects_evidence_the_verifier_reports_as_stale() {
+    let artifact = PhaseGateArtifact {
+        version: PHASE_GATE_VERSION,
+        prerequisites: PHASE1_REQUIRED_PREREQUISITES
+            .into_iter()
+            .map(|name| {
+                (
+                    name.to_owned(),
+                    PhaseGatePrerequisite {
+                        passed: true,
+                        evidence: "measured".to_owned(),
+                        artifact: Some(format!("target/tua-speed/{name}.json")),
+                        revision: Some("abc1234".to_owned()),
+                    },
+                )
+            })
+            .collect(),
+    };
+    let stale = |item: &PhaseGatePrerequisite| {
+        if item.artifact.as_deref() == Some("target/tua-speed/menu_replay.json") {
+            Err("shipped code changed since abc1234".to_owned())
+        } else {
+            Ok(())
+        }
+    };
+    let failures = check_phase_gate(&artifact, &stale);
+    assert_eq!(
+        failures,
+        ["prerequisite `menu_replay` evidence is stale: shipped code changed since abc1234"]
+    );
+
+    let mut old = artifact.clone();
+    old.version = 1;
+    assert!(check_phase_gate(&old, &|_| Ok(()))
+        .contains(&"unsupported phase-gate version 1".to_owned()));
 }

@@ -18,6 +18,13 @@ language or editor behavior, and migration notes call out those changes.
   discarding the result at validation. Refusals are counted as
   `skippedOversized` in LSP statistics and evaluator reports, and the size
   limit is documented.
+- The Phase 1 gate now binds evidence to the code it measured. Representative,
+  diagnostics-comparison, completion, editor-replay, and evaluator reports
+  record their commit and dirty state, and each passed prerequisite names its
+  artifact and revision. The gate check rejects evidence from a dirty tree or
+  from before a later change to shipped code, harnesses, or benchmark inputs.
+  Earlier evidence carried no revision, so those prerequisites are pending
+  until rerun.
 
 ### Added
 

@@ -14,7 +14,7 @@ use std::alloc::{GlobalAlloc, Layout, System};
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::ExitCode;
+use std::process::{Command, ExitCode};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use tua_core::inline_completion::eval::backends::RecallVariant;
@@ -337,7 +337,9 @@ fn run() -> Result<ExitCode, String> {
         print_summary(&report);
     }
     if let Some(path) = &arguments.out {
-        write_json(path, &report)?;
+        let mut stamped = serde_json::to_value(&report).map_err(|error| error.to_string())?;
+        stamped["repository"] = repository_state();
+        write_json(path, &stamped)?;
         eprintln!("inline_eval: wrote {}", path.display());
     }
 
@@ -564,7 +566,8 @@ fn check_phase_gate_file(path: &Path) -> Result<ExitCode, String> {
         .map_err(|error| format!("cannot read {}: {error}", path.display()))?;
     let artifact: eval::PhaseGateArtifact =
         toml::from_str(&text).map_err(|error| format!("{}: {error}", path.display()))?;
-    let failures = eval::check_phase_gate(&artifact);
+    let root = PathBuf::from(git(None, &["rev-parse", "--show-toplevel"])?.trim());
+    let failures = eval::check_phase_gate(&artifact, &|item| verify_evidence(&root, item));
     if failures.is_empty() {
         eprintln!("inline_eval: aggregate Phase 1 gate passes");
         Ok(ExitCode::SUCCESS)
@@ -573,6 +576,102 @@ fn check_phase_gate_file(path: &Path) -> Result<ExitCode, String> {
             eprintln!("phase gate FAIL: {failure}");
         }
         Ok(ExitCode::from(1))
+    }
+}
+
+/// Paths whose changes invalidate recorded performance and replay evidence:
+/// everything that ships, plus the harnesses and fixtures that measured it.
+/// Documentation and the gate file itself are excluded.
+const EVIDENCE_PATHSPEC: &[&str] = &[
+    "Cargo.toml",
+    "Cargo.lock",
+    "crates",
+    "editors/vscode/package.json",
+    "editors/vscode/src",
+    "editors/vscode/scripts",
+    "scripts/generate-lsp-benchmarks.js",
+    "benchmarks",
+    ":(exclude)benchmarks/inline-eval/phase1-gate.toml",
+    ":(exclude,glob)**/*.md",
+];
+
+/// Accepts a passed prerequisite only when its artifact records a clean tree
+/// at the recorded revision and nothing it measured has changed since.
+fn verify_evidence(root: &Path, item: &eval::PhaseGatePrerequisite) -> Result<(), String> {
+    let (Some(artifact), Some(revision)) = (&item.artifact, &item.revision) else {
+        return Err("no artifact or revision recorded".to_owned());
+    };
+    let path = root.join(artifact);
+    let text =
+        fs::read_to_string(&path).map_err(|error| format!("cannot read {artifact}: {error}"))?;
+    let report: serde_json::Value =
+        serde_json::from_str(&text).map_err(|error| format!("{artifact}: {error}"))?;
+    let repository = &report["repository"];
+    let Some(head) = repository["head"].as_str() else {
+        return Err(format!("{artifact} records no repository revision"));
+    };
+    if revision.len() < 7 || !head.starts_with(revision.as_str()) {
+        return Err(format!(
+            "{artifact} was produced from {head}, not {revision}"
+        ));
+    }
+    if repository["dirty"].as_bool() != Some(false) {
+        return Err(format!("{artifact} was not produced from a clean tree"));
+    }
+    let mut diff = vec!["diff", "--quiet", revision.as_str(), "--"];
+    diff.extend(EVIDENCE_PATHSPEC);
+    if Command::new("git")
+        .current_dir(root)
+        .args(&diff)
+        .status()
+        .map_err(|error| format!("cannot run git diff: {error}"))?
+        .code()
+        != Some(0)
+    {
+        return Err(format!(
+            "shipped code or its harness changed since {revision}"
+        ));
+    }
+    let mut untracked = vec!["ls-files", "--others", "--exclude-standard", "--"];
+    untracked.extend(EVIDENCE_PATHSPEC);
+    if !git(Some(root), &untracked)?.trim().is_empty() {
+        return Err(format!(
+            "untracked files would change what {revision} measured"
+        ));
+    }
+    Ok(())
+}
+
+fn git(directory: Option<&Path>, arguments: &[&str]) -> Result<String, String> {
+    let mut command = Command::new("git");
+    if let Some(directory) = directory {
+        command.current_dir(directory);
+    }
+    let output = command
+        .args(arguments)
+        .output()
+        .map_err(|error| format!("cannot run git: {error}"))?;
+    if !output.status.success() {
+        return Err(format!(
+            "git {} failed: {}",
+            arguments.join(" "),
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+    String::from_utf8(output.stdout).map_err(|error| error.to_string())
+}
+
+/// The commit and dirty state a report was produced from, so the Phase 1 gate
+/// can reject evidence that no longer describes the code under review.
+fn repository_state() -> serde_json::Value {
+    let head = git(None, &["rev-parse", "HEAD"]);
+    let status = git(None, &["status", "--porcelain=v1", "--untracked-files=all"]);
+    match (head, status) {
+        (Ok(head), Ok(status)) => serde_json::json!({
+            "head": head.trim(),
+            "dirty": !status.is_empty(),
+        }),
+        _ => serde_json::Value::Null,
     }
 }
 

@@ -31,6 +31,10 @@ dispatch-to-response latency, worker execution, and core/backend work, plus a
 `target/tua-speed/representative-phase1-gate.json`. It is a dependency of
 `make inline-eval-phase-gate`, which then checks every prerequisite and its
 evidence in `phase1-gate.toml`; a passing quality dataset alone is insufficient.
+Each passed prerequisite names the report it came from and the commit that
+report records. Evidence from a dirty tree, another commit, or a commit
+followed by changes to shipped code, harnesses, or benchmark inputs is
+rejected as stale.
 
 `make inline-editor-replay` applies exact curated `edit` scenarios one character
 at a time through VS Code's editor API and uses Chromium DevTools Protocol to

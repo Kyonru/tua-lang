@@ -3,6 +3,7 @@
 const childProcess = require("child_process");
 const fs = require("fs");
 const path = require("path");
+const { repositoryState } = require("./lsp-profile-common");
 
 const repoRoot = path.resolve(__dirname, "../../..");
 const profiler = path.join(__dirname, "lsp-representative-profile.js");
@@ -208,6 +209,7 @@ function buildComparison(baselineReports, candidateReports, options) {
 
   return {
     schemaVersion: 1,
+    repository: repositoryState(repoRoot),
     baselineCommand: options.baselineCommand,
     candidateCommand: options.candidateCommand,
     configuration: {

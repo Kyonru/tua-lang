@@ -10,6 +10,7 @@ const {
   pathToFileURL,
   positionAfter,
   profileSpans,
+  repositoryState,
   resolveCommand,
   statsForValues,
 } = require("./lsp-profile-common");
@@ -94,6 +95,7 @@ const minimumReturnedAtMostOneParseRate = 0.5;
   const report = {
     schemaVersion: 2,
     command,
+    repository: repositoryState(repoRoot),
     mode: diagnosticsOnly ? "diagnostics-only" : "full",
     baselineCompatibility: baselineOnly,
     configuration: {

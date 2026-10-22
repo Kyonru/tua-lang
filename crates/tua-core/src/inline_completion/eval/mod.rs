@@ -1785,11 +1785,27 @@ pub struct PhaseGateArtifact {
 pub struct PhaseGatePrerequisite {
     pub passed: bool,
     pub evidence: String,
+    /// The report the evidence was read from, relative to the repository
+    /// root. Required for a passed prerequisite.
+    #[serde(default)]
+    pub artifact: Option<String>,
+    /// The commit that report records as its clean source tree. Required for
+    /// a passed prerequisite.
+    #[serde(default)]
+    pub revision: Option<String>,
 }
 
-pub fn check_phase_gate(artifact: &PhaseGateArtifact) -> Vec<String> {
+pub const PHASE_GATE_VERSION: u32 = 2;
+
+/// Checks the recorded prerequisites. `verify` inspects a passed
+/// prerequisite's artifact (normally its recorded revision against the
+/// repository) and returns why the evidence no longer applies.
+pub fn check_phase_gate(
+    artifact: &PhaseGateArtifact,
+    verify: &dyn Fn(&PhaseGatePrerequisite) -> Result<(), String>,
+) -> Vec<String> {
     let mut failures = Vec::new();
-    if artifact.version != 1 {
+    if artifact.version != PHASE_GATE_VERSION {
         failures.push(format!(
             "unsupported phase-gate version {}",
             artifact.version
@@ -1807,7 +1823,16 @@ pub fn check_phase_gate(artifact: &PhaseGateArtifact) -> Vec<String> {
                     item.evidence
                 ));
             }
-            Some(_) => {}
+            Some(item) if item.artifact.is_none() || item.revision.is_none() => {
+                failures.push(format!(
+                    "prerequisite `{name}` is passed without naming its artifact and revision"
+                ));
+            }
+            Some(item) => {
+                if let Err(reason) = verify(item) {
+                    failures.push(format!("prerequisite `{name}` evidence is stale: {reason}"));
+                }
+            }
         }
     }
     failures

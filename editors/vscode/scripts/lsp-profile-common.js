@@ -791,6 +791,18 @@ function resolveCommand(command) {
   return path.resolve(command);
 }
 
+// The commit and dirty state a report was produced from, so the Phase 1 gate
+// can reject evidence that no longer describes the code under review.
+function repositoryState(root = path.resolve(__dirname, "..", "..", "..")) {
+  const git = (args) => childProcess.spawnSync("git", args, { cwd: root, encoding: "utf8" });
+  const head = git(["rev-parse", "HEAD"]);
+  const status = git(["status", "--porcelain=v1", "--untracked-files=all"]);
+  if (head.status !== 0 || status.status !== 0) {
+    return null;
+  }
+  return { head: head.stdout.trim(), dirty: status.stdout.length > 0 };
+}
+
 module.exports = {
   LspClient,
   cacheHitRate,
@@ -804,6 +816,7 @@ module.exports = {
   printRequestReport,
   profileLspProject,
   profileSpans,
+  repositoryState,
   requestPlan,
   resolveCommand,
   sourceFiles,

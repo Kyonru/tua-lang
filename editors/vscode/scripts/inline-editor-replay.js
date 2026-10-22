@@ -160,6 +160,8 @@ async function main() {
     startedAt,
     finishedAt: new Date().toISOString(),
     dataset: "tune",
+    // The gate reads provenance from the same top-level field in every report.
+    repository: { head: environment.repository.head, dirty: environment.repository.dirty },
     environment,
     artifacts: {
       capture: { path: path.relative(REPO_ROOT, CAPTURE_PATH), sha256: sha256File(CAPTURE_PATH) },

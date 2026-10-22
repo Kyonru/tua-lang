@@ -1,7 +1,12 @@
 # Aggregate Phase 1 acceptance state. A dataset quality gate passing is not
-# enough to advance or enable the feature. Update a prerequisite to `passed =
-# true` only with a reproducible local artifact or committed CI result.
-version = 1
+# enough to advance or enable the feature.
+#
+# A passed prerequisite names the report it was read from (`artifact`,
+# relative to the repository root) and the commit that report records
+# (`revision`). `make inline-eval-phase-gate-check` rejects it unless that
+# report was produced from a clean tree at that commit and no shipped code,
+# harness, or benchmark input has changed since.
+version = 2
 
 [prerequisites.heldout_quality]
 passed = false
@@ -12,33 +17,33 @@ passed = false
 evidence = "not run; frozen external data remains unspent"
 
 [prerequisites.menu_replay]
-passed = true
-evidence = "the clean-tree 2026-10-21 target/tua-speed/inline-editor-replay.json from commit 95c9000 (run 533668ad-de48-4880-8e45-51ec238464ec) matches 4/4 hash-pinned Tua tuning captures: one real selected-menu request and three closed-menu requests across identifier/comma contexts; capture SHA-256 591477a46dce3ef355520a166513d13cd548970269359e8e26d4301b2649d89f and evaluator SHA-256 f50a9c119697f5205a6550f8e3828afb84074e7f177d96a18c1c67ed16c2e41a"
+passed = false
+evidence = "unbound: recorded before reports carried a revision, so it may predate the shipped code; rerun. Previously: the clean-tree 2026-10-21 target/tua-speed/inline-editor-replay.json from commit 95c9000 (run 533668ad-de48-4880-8e45-51ec238464ec) matches 4/4 hash-pinned Tua tuning captures: one real selected-menu request and three closed-menu requests across identifier/comma contexts; capture SHA-256 591477a46dce3ef355520a166513d13cd548970269359e8e26d4301b2649d89f and evaluator SHA-256 f50a9c119697f5205a6550f8e3828afb84074e7f177d96a18c1c67ed16c2e41a"
 
 [prerequisites.completion_performance]
-passed = true
-evidence = "the complete 2026-10-21 Phase 1 diff records completion p95 6.05 ms against the clean-main allowance of 6.62 ms (5% or 1 ms, whichever is larger); completion-context cache hit rate remained 98.5%"
+passed = false
+evidence = "unbound: recorded before reports carried a revision, so it may predate the shipped code; rerun. Previously: the complete 2026-10-21 Phase 1 diff records completion p95 6.05 ms against the clean-main allowance of 6.62 ms (5% or 1 ms, whichever is larger); completion-context cache hit rate remained 98.5%"
 
 [prerequisites.inline_server_performance]
-passed = true
-evidence = "the full 2026-10-21 target/tua-speed/representative-phase1-gate.json records dispatch-to-response p95 0-7 ms, worker p95 0.236-7.371 ms, and core/backend p95 0.225-1.208 ms across all seven fixtures within each strict 10 ms budget"
+passed = false
+evidence = "unbound: recorded before reports carried a revision, so it may predate the shipped code; rerun. Previously: the full 2026-10-21 target/tua-speed/representative-phase1-gate.json records dispatch-to-response p95 0-7 ms, worker p95 0.236-7.371 ms, and core/backend p95 0.225-1.208 ms across all seven fixtures within each strict 10 ms budget"
 
 [prerequisites.inline_client_no_stall]
-passed = true
-evidence = "the full 2026-10-21 target/tua-speed/representative-phase1-gate.json records client-observed contended request-age p95 of 56.10, 359.28, 35.26, 869.41, 35.79, 12.41, and 11.19 ms, all within the 1,500 ms stall ceiling"
+passed = false
+evidence = "unbound: recorded before reports carried a revision, so it may predate the shipped code; rerun. Previously: the full 2026-10-21 target/tua-speed/representative-phase1-gate.json records client-observed contended request-age p95 of 56.10, 359.28, 35.26, 869.41, 35.79, 12.41, and 11.19 ms, all within the 1,500 ms stall ceiling"
 
 [prerequisites.inline_client_responsiveness]
-passed = true
-evidence = "the clean-tree 2026-10-21 target/tua-speed/inline-editor-replay.json from commit 95c9000 records linked $/cancelRequest after 251.08 ms for the production 250 ms timeout, observes the delayed mock server's nonempty 900 ms response as cancelled, and proves no late ghost text rendered"
+passed = false
+evidence = "unbound: recorded before reports carried a revision, so it may predate the shipped code; rerun. Previously: the clean-tree 2026-10-21 target/tua-speed/inline-editor-replay.json from commit 95c9000 records linked $/cancelRequest after 251.08 ms for the production 250 ms timeout, observes the delayed mock server's nonempty 900 ms response as cancelled, and proves no late ghost text rendered"
 
 [prerequisites.diagnostics_freshness]
-passed = true
-evidence = "the 2026-10-21 target/tua-speed/representative-diagnostics-compare.json alternates five runs of commit 65cb4a6 and the inline-enabled candidate, pools 100 content-bound samples per fixture with internal profiling disabled, and records candidate/baseline p95 in ms of 59.25/59.88, 370.07/382.19, 20.46/19.97, 668.37/907.82, 16.08/16.84, 5.82/6.04, and 6.75/6.88; all seven pass the larger-of-5%-or-10-ms allowance"
+passed = false
+evidence = "unbound: recorded before reports carried a revision, so it may predate the shipped code; rerun. Previously: the 2026-10-21 target/tua-speed/representative-diagnostics-compare.json alternates five runs of commit 65cb4a6 and the inline-enabled candidate, pools 100 content-bound samples per fixture with internal profiling disabled, and records candidate/baseline p95 in ms of 59.25/59.88, 370.07/382.19, 20.46/19.97, 668.37/907.82, 16.08/16.84, 5.82/6.04, and 6.75/6.88; all seven pass the larger-of-5%-or-10-ms allowance"
 
 [prerequisites.scheduler_cache_hit]
-passed = true
-evidence = "target/tua-speed/representative-phase1-gate.json records 0 cache-peek hits and 21 misses under real scheduling; Phase 1 therefore excludes callbacks and other cache-dependent candidates instead of relying on unavailable cached analysis"
+passed = false
+evidence = "unbound: recorded before reports carried a revision, so it may predate the shipped code; rerun. Previously: target/tua-speed/representative-phase1-gate.json records 0 cache-peek hits and 21 misses under real scheduling; Phase 1 therefore excludes callbacks and other cache-dependent candidates instead of relying on unavailable cached analysis"
 
 [prerequisites.validation_parse_distribution]
-passed = true
-evidence = "the full 2026-10-21 representative report records four returning fixtures with returned-after-parse counts 0/2/1 (zero/one/two), 66.7% at most one parse, and the temporarily-invalid two-parse path; three capped large-file fixtures safely returned nothing"
+passed = false
+evidence = "unbound: recorded before reports carried a revision, so it may predate the shipped code; rerun. Previously: the full 2026-10-21 representative report records four returning fixtures with returned-after-parse counts 0/2/1 (zero/one/two), 66.7% at most one parse, and the temporarily-invalid two-parse path; three capped large-file fixtures safely returned nothing"
