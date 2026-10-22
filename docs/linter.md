@@ -18,9 +18,12 @@ tua lint --strict
 exact-code severity policy. By contrast, `tua check` fails only on errors; use
 `tua check --deny-warnings` for a warnings-as-errors CI gate.
 
-`--strict` adds every Tua-specific optional lint to the standard rules. The
-standard rules are also enabled by default in `tua check` and the editor. A
-project can opt out of that default without changing `tua lint`:
+`--strict` adds the broadly applicable Tua-specific optional lints to the
+standard rules. It deliberately leaves `uncalled_local_functions` opt-in:
+passing a function to an event system or callback API is a normal use even
+though the heuristic cannot see a direct call. The standard rules are also
+enabled by default in `tua check` and the editor. A project can opt out of that
+default without changing `tua lint`:
 
 ```toml title="tua.toml"
 [diagnostics]

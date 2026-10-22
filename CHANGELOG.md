@@ -364,6 +364,15 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Changed
 
+- Literal missing `require` and static `import` targets are now reported by
+  default, while dynamic module names remain permissive. Malformed static
+  imports remain correctness diagnostics; ambiguous candidates and module
+  cycles stay opt-in through `bad_requires`.
+- `tua lint --strict` no longer enables `uncalled_local_functions`. That rule
+  only recognizes direct call syntax and predictably flags callback, signal,
+  ECS, and event-handler uses, so it remains available as an explicit opt-in
+  with its existing configuration key.
+
 - `tua check` now fails on errors while still printing non-blocking diagnostics;
   `tua lint` fails on configured warning and error diagnostics. The inert
   `wrong_argument_count`, `parameter_type_mismatches`, and

@@ -178,7 +178,7 @@
             "null"
           ],
           "default": null,
-          "description": "Report require calls that cannot be resolved."
+          "description": "Report literal require and import targets that cannot be resolved."
         },
         "tua.diagnostics.selfAssignments": {
           "type": [
@@ -322,7 +322,7 @@
             "null"
           ],
           "default": null,
-          "description": "Report local functions that are referenced but never called."
+          "description": "Report local functions that are referenced but never directly called; callback uses still count as uncalled."
         },
         "tua.diagnostics.inlineIgnores": {
           "type": [

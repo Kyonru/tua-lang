@@ -119,14 +119,14 @@ enforced separately with `tua fmt --check`.
 | Code | Meaning | Configuration |
 | --- | --- | --- |
 | `TL4001` | A table constructor repeats a runtime-equivalent literal key, or a table type repeats a named field. | `duplicate_keys` |
-| `TL4002` | A static `require` or `import` target cannot be resolved. | `missing_requires` |
+| `TL4002` | A literal `require` or static `import` target cannot be resolved. | `missing_requires`; enabled by default |
 | `TL4003` | An assignment writes a value back to the same variable or field. | `self_assignments` |
 | `TL4004` | A variable read has no known declaration or allowed global. Error in Tua; warning in Lua. | `undefined_variables` |
 | `TL4005` | A non-function local is declared but never used. | `unused_locals` |
 | `TL4006` | A function parameter is never used. | `unused_parameters` |
 | `TL4007` | A local is read before its declaration. | `use_before_definition` |
 | `TL4008` | Legacy duplicate-parameter code retained for source compatibility; new diagnostics use `TL4043`. | No longer emitted. |
-| `TL4010` | A static module specifier is invalid or resolves through an unsupported form. | `bad_requires` |
+| `TL4010` | A static module specifier is malformed or resolves through an unsupported form. | Always enabled for malformed static imports |
 | `TL4011` | A boolean expression is provably constant or impossible. | `impossible_boolean_expressions` |
 | `TL4012` | An `if` or `elseif` chain structurally repeats a condition. | `rules`; can also use `duplicate_if_conditions` |
 | `TL4013` | A flattened `and`/`or` chain or optional suspicious binary check structurally repeats an operand. | `rules`; broader operators can also use `duplicate_binary_operands` |
@@ -141,7 +141,7 @@ enforced separately with `tua fmt --check`.
 | `TL4028` | Local count differs from the explicit initializer count, excluding multi-value and intentional-`nil` tails. | `local_declaration_arity` |
 | `TL4029` | A value assigned to a local is never read. | `unused_assignments` |
 | `TL4030` | A binary operator receives statically incompatible operand types. | `binary_operator_type_mismatches` |
-| `TL4031` | A local function is referenced but never directly called. | `uncalled_local_functions` |
+| `TL4031` | A local function is referenced but never directly called; callback uses still count as uncalled. | `uncalled_local_functions`; opt-in even under `--strict` |
 | `TL4032` | A local changes between LuaJIT-unfriendly value types. | `jit.enabled` and `jit.variable_type_drift` |
 | `TL4033` | A table gains late fields or changes known field types in a LuaJIT-unfriendly way. | `jit.enabled` and `jit.table_shape_drift` |
 | `TL4034` | A hot loop writes through a dynamic table key. | `jit.enabled` and `jit.hot_loop_hints` |
@@ -203,8 +203,10 @@ missing_requires = true
 TL1003 = "warning"
 ```
 
-Use `tua lint --strict` to enable every optional lint for that command. Inline
-ignore behavior remains controlled by project or editor configuration.
+Use `tua lint --strict` to enable the broadly applicable optional lints for that
+command. The direct-call-only `uncalled_local_functions` heuristic remains
+opt-in. Inline ignore behavior remains controlled by project or editor
+configuration.
 
 See [Configuration](configuration.md#diagnostics) for every setting and its
 VS Code override.

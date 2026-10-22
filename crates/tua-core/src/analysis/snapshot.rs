@@ -86,6 +86,20 @@ impl AnalysisSnapshot {
         diagnostics.extend(project_type_diagnostics);
         diagnostics.extend(self.usage_index.signal_event_diagnostics(path.as_ref()));
 
+        // Source-only checking can validate on-disk modules, but it cannot see
+        // VFS overlays or the complete workspace module map. The graph below
+        // is authoritative inside a snapshot and republishes missing/invalid
+        // static module diagnostics with project-aware resolution.
+        diagnostics.retain(|diagnostic| {
+            !matches!(
+                diagnostic.code,
+                Some(
+                    crate::DiagnosticCode::LINT_MISSING_REQUIRE
+                        | crate::DiagnosticCode::LINT_BAD_REQUIRE
+                )
+            )
+        });
+
         diagnostics.extend(
             self.module_graph
                 .diagnostics(path.as_ref())

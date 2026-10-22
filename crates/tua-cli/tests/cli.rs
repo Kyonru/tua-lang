@@ -3806,6 +3806,29 @@ fn lint_strict_enables_all_lints() {
 }
 
 #[test]
+fn lint_strict_keeps_direct_call_only_function_guidance_opt_in() {
+    let temp = TempDir::new("lint-strict-callback");
+
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).expect("failed to write config");
+    fs::create_dir_all(temp.path().join("src")).expect("failed to create source");
+    fs::write(
+        temp.path().join("src/main.tua"),
+        "local function callback()\nend\nprint(callback)\n",
+    )
+    .expect("failed to write source");
+
+    let output = tua()
+        .args(["lint", "--strict"])
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tua lint --strict");
+
+    assert!(output.status.success(), "{output:?}");
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be valid UTF-8");
+    assert!(stdout.contains("linted 1 file(s)"), "{stdout}");
+}
+
+#[test]
 fn watch_rebuilds_after_debounced_source_change() {
     let _guard = watch_test_guard();
     let temp = TempDir::new("watch-rebuild");

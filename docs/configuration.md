@@ -58,7 +58,7 @@ backend = "tua"
 [diagnostics]
 rules = true
 duplicate_keys = false
-missing_requires = false
+missing_requires = true
 self_assignments = false
 doc_annotations = false
 undefined_variables = false
@@ -114,7 +114,7 @@ the behavior and tradeoffs of each option.
 | `ecs.backend` | string | `"tua"` | - |
 | `diagnostics.rules` | boolean | `true` | `tua.diagnostics.rules` |
 | `diagnostics.duplicate_keys` | boolean | `false` | `tua.diagnostics.duplicateKeys` |
-| `diagnostics.missing_requires` | boolean | `false` | `tua.diagnostics.missingRequires` |
+| `diagnostics.missing_requires` | boolean | `true` | `tua.diagnostics.missingRequires` |
 | `diagnostics.self_assignments` | boolean | `false` | `tua.diagnostics.selfAssignments` |
 | `diagnostics.doc_annotations` | boolean | `false` | `tua.diagnostics.docAnnotations` |
 | `diagnostics.undefined_variables` | boolean | `false` | `tua.diagnostics.undefinedVariables` |
@@ -385,7 +385,8 @@ Formatting and linting are independent: `[format]` controls `tua fmt`, while
 `[diagnostics]` controls code-quality guidance. `tua lint` always enables the
 standard rules for that command. Those rules are enabled by default for
 `tua check` and editor diagnostics; set `rules = false` to opt out there.
-`tua lint --strict` adds every Tua-specific optional lint. See
+`tua lint --strict` adds the broadly applicable Tua-specific optional lints;
+the direct-call-only `uncalled_local_functions` heuristic remains opt-in. See
 [Formatter](formatter.md), [Linter](linter.md), and
 [Diagnostic Codes](luahelper-code-matrix.md).
 
@@ -411,7 +412,7 @@ assignment_arity = true
 local_declaration_arity = true
 unused_assignments = true
 binary_operator_type_mismatches = true
-uncalled_local_functions = true
+uncalled_local_functions = false
 inline_ignores = true
 inline_ignore_scopes = ["tua-ignore-line", "tua-ignore-next-line", "tua-ignore-file"]
 inline_ignore_max_per_file = 0
@@ -437,8 +438,9 @@ its own run regardless of the configured value. See [Linter](linter.md) for
 the rule map and target-specific exclusions.
 
 `missing_requires`
-: Reports `require("module")` and static `import(...)` bindings that Tua cannot
-resolve from the current project layout.
+: Reports literal `require("module")` and static `import(...)` bindings that Tua
+  cannot resolve from the current project layout. This high-confidence runtime
+  failure is enabled by default; dynamic module names remain permissive.
 
 `self_assignments`
 : Reports assignments such as `player.hp = player.hp`.
@@ -467,8 +469,10 @@ ordering.
 rule.
 
 `bad_requires`
-: Reports invalid require/import paths, including `import("../...")` parent
-traversal and malformed import specifiers.
+: Enables broader module-graph guidance such as ambiguous candidates and
+  require cycles. Malformed static import specifiers, including
+  `import("../...")` parent traversal, are correctness diagnostics and do not
+  depend on this optional setting.
 
 `impossible_boolean_expressions`
 : Reports boolean/equality expressions that Tua can prove are impossible.
@@ -506,8 +510,10 @@ as `1 + "hp"`. Dynamic or `any` operands remain permissive.
 
 `uncalled_local_functions`
 : Reports local functions that are referenced as values but never directly
-called. Indirect callback patterns can stay quiet by leaving this opt-in lint
-disabled.
+called. Passing a function to a callback, signal, ECS system, or event API still
+counts as uncalled because the heuristic only recognizes direct call syntax.
+It remains opt-in even under `tua lint --strict` to avoid predictable callback
+false positives.
 
 `severity`
 : Overrides individual diagnostic codes with `allow`, `hint`, `info`,

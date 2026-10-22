@@ -29,7 +29,7 @@ backend = "tua"
 [diagnostics]
 rules = true
 duplicate_keys = false
-missing_requires = false
+missing_requires = true
 self_assignments = false
 doc_annotations = false
 undefined_variables = false

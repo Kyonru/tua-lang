@@ -1232,7 +1232,7 @@ fn invalid_module_specifier_diagnostic(edge: &RequireGraphEdge, reason: &str) ->
         edge.source.clone(),
         edge.span.start.line,
         edge.span.start.column,
-        DiagnosticSeverity::Warning,
+        DiagnosticSeverity::Error,
         format!(
             "invalid {} specifier `{}`: {reason}",
             edge.kind.label(),

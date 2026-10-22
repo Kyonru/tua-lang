@@ -52,7 +52,7 @@ backend = \"tua\"
 [diagnostics]
 rules = true
 duplicate_keys = false
-missing_requires = false
+missing_requires = true
 self_assignments = false
 doc_annotations = false
 undefined_variables = false
@@ -325,7 +325,7 @@ impl Default for DiagnosticsConfig {
         Self {
             rules: true,
             duplicate_keys: false,
-            missing_requires: false,
+            missing_requires: true,
             self_assignments: false,
             doc_annotations: false,
             undefined_variables: false,
@@ -379,7 +379,6 @@ impl DiagnosticsConfig {
         self.local_declaration_arity = true;
         self.unused_assignments = true;
         self.binary_operator_type_mismatches = true;
-        self.uncalled_local_functions = true;
     }
 
     pub fn apply_severity_policy(&self, diagnostics: Vec<Diagnostic>) -> Vec<Diagnostic> {

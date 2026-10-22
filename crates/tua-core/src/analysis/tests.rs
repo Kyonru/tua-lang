@@ -1,5 +1,5 @@
 use super::*;
-use crate::{DiagnosticCode, Fixture, SemanticTokenModifier};
+use crate::{DiagnosticCode, DiagnosticSeverity, Fixture, SemanticTokenModifier};
 use std::env;
 use std::fs;
 use std::path::Path;
@@ -134,7 +134,8 @@ fn a_lua_parameter_reassigned_from_its_own_method_call_does_not_recurse() {
     );
 
     let snapshot = host.snapshot();
-    assert!(snapshot.pipeline_diagnostics(&main).is_empty());
+    let diagnostics = snapshot.pipeline_diagnostics(&main);
+    assert!(diagnostics.is_empty(), "{diagnostics:#?}");
     let _ = snapshot.pipeline_diagnostics(&module);
 }
 
@@ -1696,13 +1697,9 @@ return feel
 }
 
 #[test]
-fn pipeline_diagnostics_deduplicate_overlapping_project_require_diagnostics() {
+fn pipeline_diagnostics_report_literal_missing_modules_by_default_without_duplicates() {
     let path = PathBuf::from("src/main.tua");
-    let mut config = ProjectConfig::default();
-
-    config.diagnostics.missing_requires = true;
-
-    let mut host = AnalysisHost::with_config(config);
+    let mut host = AnalysisHost::with_config(ProjectConfig::default());
     host.set_source_roots([PathBuf::from("src")]);
     host.set_file(&path, "local Missing = require(\"missing\")\n");
 
@@ -1713,6 +1710,55 @@ fn pipeline_diagnostics_deduplicate_overlapping_project_require_diagnostics() {
         .collect::<Vec<_>>();
 
     assert_eq!(missing_requires.len(), 1, "{diagnostics:?}");
+}
+
+#[test]
+fn pipeline_diagnostics_report_malformed_static_imports_by_default() {
+    let path = PathBuf::from("src/main.tua");
+    let mut host = AnalysisHost::with_config(ProjectConfig::default());
+    host.set_source_roots([PathBuf::from("src")]);
+    host.set_file(&path, "local Player = import(\"../player\")\n");
+
+    let diagnostics = host.snapshot().pipeline_diagnostics(&path);
+
+    let module_diagnostics = diagnostics
+        .iter()
+        .filter(|diagnostic| {
+            matches!(
+                diagnostic.code,
+                Some(DiagnosticCode::LINT_BAD_REQUIRE | DiagnosticCode::LINT_MISSING_REQUIRE)
+            )
+        })
+        .collect::<Vec<_>>();
+
+    assert_eq!(module_diagnostics.len(), 1, "{diagnostics:?}");
+    assert_eq!(
+        module_diagnostics[0].code,
+        Some(DiagnosticCode::LINT_BAD_REQUIRE)
+    );
+    assert_eq!(module_diagnostics[0].severity, DiagnosticSeverity::Error);
+    assert!(module_diagnostics[0]
+        .message
+        .contains("cannot traverse parent directories"));
+}
+
+#[test]
+fn pipeline_diagnostics_allow_missing_module_guidance_to_be_disabled() {
+    let path = PathBuf::from("src/main.tua");
+    let mut config = ProjectConfig::default();
+    config.diagnostics.missing_requires = false;
+    let mut host = AnalysisHost::with_config(config);
+    host.set_source_roots([PathBuf::from("src")]);
+    host.set_file(&path, "local Missing = require(\"missing\")\n");
+
+    let diagnostics = host.snapshot().pipeline_diagnostics(&path);
+
+    assert!(
+        diagnostics
+            .iter()
+            .all(|diagnostic| { diagnostic.code != Some(DiagnosticCode::LINT_MISSING_REQUIRE) }),
+        "{diagnostics:?}"
+    );
 }
 
 #[test]

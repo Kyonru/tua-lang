@@ -351,7 +351,7 @@ duplicate_keys = true
     .expect("config should parse");
 
     assert!(config.diagnostics.duplicate_keys);
-    assert!(!config.diagnostics.missing_requires);
+    assert!(config.diagnostics.missing_requires);
     assert!(!config.diagnostics.self_assignments);
     assert!(!config.diagnostics.doc_annotations);
     assert!(!config.diagnostics.undefined_variables);
@@ -382,6 +382,17 @@ duplicate_keys = true
     );
     assert_eq!(config.diagnostics.inline_ignore_max_per_file, 0);
     assert!(config.diagnostics.globals.is_empty());
+}
+
+#[test]
+fn strict_lints_leave_the_direct_call_heuristic_opt_in() {
+    let mut diagnostics = DiagnosticsConfig::default();
+
+    diagnostics.enable_all_lints();
+
+    assert!(!diagnostics.uncalled_local_functions);
+    assert!(diagnostics.self_assignments);
+    assert!(diagnostics.undefined_variables);
 }
 
 #[test]

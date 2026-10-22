@@ -154,8 +154,8 @@
     {
       "path": "diagnostics.missing_requires",
       "type": "boolean",
-      "default": false,
-      "description": "Report require calls that cannot be resolved.",
+      "default": true,
+      "description": "Report literal require and import targets that cannot be resolved.",
       "editor": "tua.diagnostics.missingRequires"
     },
     {
@@ -281,7 +281,7 @@
       "path": "diagnostics.uncalled_local_functions",
       "type": "boolean",
       "default": false,
-      "description": "Report local functions that are referenced but never called.",
+      "description": "Report local functions that are referenced but never directly called; callback uses still count as uncalled.",
       "editor": "tua.diagnostics.uncalledLocalFunctions"
     },
     {
