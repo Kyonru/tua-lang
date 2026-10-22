@@ -735,16 +735,18 @@ measurements. Each one must exist before its gate is checked.
   editor API, uses CDP to observe the real suggestion widget in matched
   open/closed cases, triggers the actual provider,
   requires one or more expected deterministic returned-counter increments with
-  no return from a competing local source, and replays every captured record
-  through the evaluator. The counter proof keeps
+  no return from a competing local source, and replays one exact final capture
+  per scenario through the evaluator. Transitional invocations remain counted
+  separately. The counter proof keeps
   VS Code's own matching suggestion-preview text from being mistaken for Tua
   rendering; native preview overlap is retained in the report. It also verifies
   the provider's 250 ms timeout with a delayed mock server. Code runs in an isolated
   profile under `sandbox-exec`, and each extension-host process must actively
   prove loopback works while direct non-loopback outbound access is denied.
   The target fails on missing widget, capture, evaluator, cancellation, or
-  network-isolation evidence. The gate prerequisite remains pending until a
-  completed report is reviewed and recorded.
+  network-isolation evidence. A clean-tree run on commit `95c9000` matched all
+  four curated captures and cancelled delayed local work after 251 ms; the menu
+  replay and client-responsiveness prerequisites are recorded as passing.
   Evidence is invalidated before prerequisites, written atomically with mode
   `0600`, bound by content hashes and a run ID, and tagged with the Code build,
   host platform/architecture, and repository revision.

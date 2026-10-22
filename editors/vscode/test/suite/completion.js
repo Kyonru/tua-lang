@@ -27,10 +27,10 @@ async function runCompletionTests() {
   );
 
   const inlineConfiguration = vscode.workspace.getConfiguration("tua", document);
-  await inlineConfiguration.update(
-    "completion.inline.enabled",
+  assert.equal(
+    inlineConfiguration.get("completion.inline.enabled"),
     true,
-    vscode.ConfigurationTarget.Workspace,
+    "the integration workspace must enable local inline completion before activation",
   );
   const beforeInline = eventSequence();
   await vscode.commands.executeCommand("editor.action.inlineSuggest.trigger");

@@ -116,6 +116,11 @@ language or editor behavior, and migration notes call out those changes.
   the isolated replay workspace pins the same value for reproducible evidence.
   It does not force `.lua` files into Tua language mode because the
   production provider is not registered there.
+  The reviewed clean-tree run matched all four curated tuning captures and
+  cancelled delayed local work after 251 ms without rendering its late result.
+- VS Code integration fixtures now preseed deterministic inline-completion
+  settings before extension activation and wait for asynchronous editor-group
+  switches, removing configuration and focus races on current Code builds.
 - An offline evaluator for local inline completion (Phase 0 of the local
   inline-completion plan) measures candidate sources against real projects
   before any of them ships: precision, characters saved, wrong characters,

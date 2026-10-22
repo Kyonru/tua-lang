@@ -12,8 +12,8 @@ passed = false
 evidence = "not run; frozen external data remains unspent"
 
 [prerequisites.menu_replay]
-passed = false
-evidence = "capture/replay works, but a representative tuning-set typing replay is still required"
+passed = true
+evidence = "the clean-tree 2026-10-21 target/tua-speed/inline-editor-replay.json from commit 95c9000 (run 533668ad-de48-4880-8e45-51ec238464ec) matches 4/4 hash-pinned Tua tuning captures: one real selected-menu request and three closed-menu requests across identifier/comma contexts; capture SHA-256 591477a46dce3ef355520a166513d13cd548970269359e8e26d4301b2649d89f and evaluator SHA-256 f50a9c119697f5205a6550f8e3828afb84074e7f177d96a18c1c67ed16c2e41a"
 
 [prerequisites.completion_performance]
 passed = true
@@ -28,8 +28,8 @@ passed = true
 evidence = "the full 2026-10-21 target/tua-speed/representative-phase1-gate.json records client-observed contended request-age p95 of 56.10, 359.28, 35.26, 869.41, 35.79, 12.41, and 11.19 ms, all within the 1,500 ms stall ceiling"
 
 [prerequisites.inline_client_responsiveness]
-passed = false
-evidence = "client-observed contended request-age reaches 869.41 ms on project-1000; the extension now abstains after 250 ms, but representative editor replay must verify that protection before responsive ghost text is claimed"
+passed = true
+evidence = "the clean-tree 2026-10-21 target/tua-speed/inline-editor-replay.json from commit 95c9000 records linked $/cancelRequest after 251.08 ms for the production 250 ms timeout, observes the delayed mock server's nonempty 900 ms response as cancelled, and proves no late ghost text rendered"
 
 [prerequisites.diagnostics_freshness]
 passed = true

@@ -24,6 +24,8 @@ async function main() {
         folders: [{ path: workspaceOne }, { path: workspaceTwo }],
         settings: {
           "tua.preview.enabled": true,
+          "tua.completion.inline.enabled": true,
+          "tua.completion.multiToken.allowModelIntegration": false,
         },
       },
       null,
