@@ -1,0 +1,200 @@
+//! `tua dev`: watch, rebuild, and hot reload a running LOVE game.
+//!
+//! After each error-free build, the output's main.lua ends with
+//! `require("tuahotreload").install()` and `.tuahotreload` is rewritten. The
+//! runtime in the game watches that file and swaps changed modules in place.
+
+use std::fs;
+use std::io;
+use std::path::{Path, PathBuf};
+use std::process::{Child, Command};
+
+use tua_core::{tuahotreload_runtime_source, LoadedConfig, ProjectWorkspace};
+
+use crate::build::{has_errors, BuildOutcome};
+use crate::error::CliError;
+use crate::watch::run_watch_with_hook;
+
+pub(crate) const RUNTIME_FILE: &str = "tuahotreload.lua";
+const SIGNAL_FILE: &str = ".tuahotreload";
+const HOOK: &str = "require(\"tuahotreload\").install()";
+#[cfg(target_os = "macos")]
+const MACOS_LOVE: &str = "/Applications/love.app/Contents/MacOS/love";
+
+pub(crate) fn run_dev(
+    cwd: impl AsRef<Path>,
+    loaded: LoadedConfig,
+    love: Option<PathBuf>,
+) -> Result<(), CliError> {
+    let cwd = cwd.as_ref();
+    let workspace = ProjectWorkspace::from_loaded(cwd, loaded.clone());
+    let out_dir = workspace.primary_output_root().to_path_buf();
+    let mut generation = 0u64;
+    let mut launched = false;
+
+    run_watch_with_hook(cwd, loaded, &mut |outcome: &BuildOutcome| {
+        if has_errors(&outcome.diagnostics) {
+            println!(
+                "{}",
+                if launched {
+                    "dev: keeping the running game on its last good build"
+                } else {
+                    "dev: fix the errors above to start the game"
+                }
+            );
+            return Ok(());
+        }
+        prepare_output(&out_dir).map_err(|error| io_error(&out_dir, error))?;
+        generation += 1;
+        write_signal(&out_dir, generation).map_err(|error| io_error(&out_dir, error))?;
+        if !launched {
+            let child = launch(love.as_deref(), &out_dir)?;
+            exit_with_game(child);
+            launched = true;
+        } else {
+            println!("dev: sent reload {generation} to the game");
+        }
+        Ok(())
+    })
+}
+
+/// Make the build output hot reloadable: the runtime beside it and the
+/// install hook at the end of main.lua, where it does not shift source-map
+/// lines.
+fn prepare_output(out_dir: &Path) -> io::Result<()> {
+    let runtime = out_dir.join(RUNTIME_FILE);
+    if fs::read_to_string(&runtime).ok().as_deref() != Some(tuahotreload_runtime_source()) {
+        fs::write(&runtime, tuahotreload_runtime_source())?;
+    }
+
+    let main = out_dir.join("main.lua");
+    let source = fs::read_to_string(&main).map_err(|error| {
+        io::Error::new(
+            error.kind(),
+            format!(
+                "{} must exist for LOVE to start the game: {error}",
+                main.display()
+            ),
+        )
+    })?;
+    if !source.lines().any(|line| line.trim() == HOOK) {
+        let separator = if source.ends_with('\n') { "" } else { "\n" };
+        fs::write(&main, format!("{source}{separator}{HOOK}\n"))?;
+    }
+    Ok(())
+}
+
+/// Written last and atomically, so the game reloads only finished output.
+fn write_signal(out_dir: &Path, generation: u64) -> io::Result<()> {
+    let temporary = out_dir.join(format!("{SIGNAL_FILE}.tmp"));
+    fs::write(&temporary, format!("{generation}\n"))?;
+    fs::rename(&temporary, out_dir.join(SIGNAL_FILE))
+}
+
+fn launch(love: Option<&Path>, out_dir: &Path) -> Result<Child, CliError> {
+    let explicit = love
+        .map(Path::to_path_buf)
+        .or_else(|| std::env::var_os("TUA_LOVE").map(PathBuf::from));
+    let candidates = match explicit {
+        Some(command) => vec![command],
+        None => default_love_commands(),
+    };
+    for command in &candidates {
+        match Command::new(command).arg(out_dir).spawn() {
+            Ok(child) => {
+                println!("dev: started {} {}", command.display(), out_dir.display());
+                return Ok(child);
+            }
+            Err(error) if error.kind() == io::ErrorKind::NotFound => continue,
+            Err(error) => {
+                return Err(CliError::usage(format!(
+                    "cannot start {}: {error}",
+                    command.display()
+                )))
+            }
+        }
+    }
+    Err(CliError::usage(
+        "cannot find LOVE; put `love` on PATH, set TUA_LOVE, or pass --love PATH",
+    ))
+}
+
+fn default_love_commands() -> Vec<PathBuf> {
+    #[allow(unused_mut)]
+    let mut commands = vec![PathBuf::from("love")];
+    #[cfg(target_os = "macos")]
+    commands.push(PathBuf::from(MACOS_LOVE));
+    commands
+}
+
+/// End `tua dev` with the game's exit status when the window closes. The
+/// watch loop holds stdout and stderr for its whole run, so this thread exits
+/// without printing.
+fn exit_with_game(mut child: Child) {
+    std::thread::spawn(move || {
+        let code = child
+            .wait()
+            .ok()
+            .and_then(|status| status.code())
+            .unwrap_or(1);
+        std::process::exit(code);
+    });
+}
+
+fn io_error(path: &Path, error: io::Error) -> CliError {
+    CliError::usage(format!("{}: {error}", path.display()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn temp_dir(name: &str) -> PathBuf {
+        let path = std::env::temp_dir().join(format!(
+            "tua-dev-{name}-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir_all(&path).unwrap();
+        path
+    }
+
+    #[test]
+    fn output_gets_the_runtime_and_one_install_hook() {
+        let out = temp_dir("prepare");
+        fs::write(out.join("main.lua"), "print('hi')").unwrap();
+
+        prepare_output(&out).unwrap();
+        prepare_output(&out).unwrap();
+
+        let main = fs::read_to_string(out.join("main.lua")).unwrap();
+        assert_eq!(main, format!("print('hi')\n{HOOK}\n"));
+        assert_eq!(
+            fs::read_to_string(out.join(RUNTIME_FILE)).unwrap(),
+            tuahotreload_runtime_source()
+        );
+        fs::remove_dir_all(out).unwrap();
+    }
+
+    #[test]
+    fn signals_replace_the_previous_generation() {
+        let out = temp_dir("signal");
+        write_signal(&out, 1).unwrap();
+        write_signal(&out, 2).unwrap();
+
+        assert_eq!(fs::read_to_string(out.join(SIGNAL_FILE)).unwrap(), "2\n");
+        assert!(!out.join(format!("{SIGNAL_FILE}.tmp")).exists());
+        fs::remove_dir_all(out).unwrap();
+    }
+
+    #[test]
+    fn a_missing_main_lua_is_explained() {
+        let out = temp_dir("missing-main");
+        let error = prepare_output(&out).unwrap_err();
+        assert!(error.to_string().contains("main.lua must exist"), "{error}");
+        fs::remove_dir_all(out).unwrap();
+    }
+}

@@ -95,6 +95,12 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Added
 
+- Added `tua dev`, which watches and rebuilds like `tua watch`, starts LOVE on
+  the output, and hot reloads the running game. Changed modules are swapped
+  into their existing tables so game state survives, `main` and `conf`
+  changes restart the game, builds with errors never reach it, and errors in
+  `love.update` or `love.draw` show an overlay until a fix is saved instead
+  of ending the session. Packages never include the development hook.
 - Added `tua package`, which builds the project and writes a reproducible
   `dist/<name>.love`. `--target windows` and `--target macos` also fuse a
   standalone game with a LOVE runtime passed to `--love`: a Windows folder with

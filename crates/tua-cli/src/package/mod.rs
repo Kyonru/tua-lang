@@ -179,7 +179,8 @@ fn collect_entries(
 }
 
 fn is_excluded_file(file_name: &str, extension: &str) -> bool {
-    file_name.ends_with(".lua.map")
+    file_name == crate::dev::RUNTIME_FILE
+        || file_name.ends_with(".lua.map")
         || file_name.ends_with(".lua.map.json")
         || file_name.ends_with(&format!(".{extension}"))
         || file_name == CONFIG_FILE

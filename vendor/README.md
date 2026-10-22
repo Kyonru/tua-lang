@@ -34,6 +34,8 @@ generated project output.
   built-in `tween` module, which Tua types from these annotations.
 - `runtime/tuacamera.lua` is Tua's MIT-licensed 2D camera behind the built-in
   `Camera` module, typed from its own annotations.
+- `runtime/tuahotreload.lua` is Tua's MIT-licensed live-reload runtime, which
+  `tua dev` writes beside a development build.
 - `tests/` holds plain-Lua runtime tests, run by `make runtime-test`.
 
 Vendored files should keep their upstream license headers intact.

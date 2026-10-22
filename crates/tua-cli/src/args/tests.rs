@@ -27,6 +27,7 @@ fn parses_known_commands() {
         ("build", CommandName::Build),
         ("traceback", CommandName::Traceback),
         ("watch", CommandName::Watch),
+        ("dev", CommandName::Dev),
         ("lsp", CommandName::Lsp),
         ("api", CommandName::Api),
         ("mcp", CommandName::Mcp),

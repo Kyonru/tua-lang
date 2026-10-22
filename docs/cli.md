@@ -193,6 +193,18 @@ Input roots declared by [asset pipelines](asset-pipelines.md) are watched even
 when they live outside `source`. A changed input reruns its content-addressed
 importer before Tua rebuilds the generated module consumers.
 
+## `dev`
+
+```bash
+cargo run -p tua-cli -- dev
+cargo run -p tua-cli -- dev --love /path/to/love
+```
+
+Builds like `watch`, starts LOVE on the output, and hot reloads the running
+game after every error-free rebuild. `--love` or `TUA_LOVE` chooses the LOVE
+executable; otherwise `love` on `PATH` is used, then `/Applications/love.app`
+on macOS. Closing the game ends the command. See [Hot Reload](hot-reload.md).
+
 ## `lsp`
 
 ```bash

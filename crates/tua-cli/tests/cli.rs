@@ -519,6 +519,62 @@ fn package_fuses_a_windows_build_with_the_supplied_runtime() {
     assert!(!game.join("lovec.exe").exists());
 }
 
+#[cfg(unix)]
+#[test]
+fn dev_prepares_a_hot_reloadable_build_and_exits_with_the_game() {
+    let temp = TempDir::new("dev-hot-reload");
+
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).expect("failed to write config");
+    fs::create_dir_all(temp.path().join("src")).expect("failed to create source");
+    fs::write(
+        temp.path().join("src/main.tua"),
+        "function love.draw()\n  love.graphics.print(\"hi\", 10, 10)\nend\n",
+    )
+    .expect("failed to write main source");
+
+    // `true` stands in for LOVE: it starts and exits at once, so `tua dev`
+    // stops after the initial build.
+    let output = tua()
+        .arg("dev")
+        .env("TUA_LOVE", "true")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tua dev");
+
+    assert!(output.status.success(), "{output:?}");
+    let main = fs::read_to_string(temp.path().join("build/main.lua")).expect("main.lua");
+    assert!(
+        main.ends_with("require(\"tuahotreload\").install()\n"),
+        "{main}"
+    );
+    assert!(temp.path().join("build/tuahotreload.lua").exists());
+    assert_eq!(
+        fs::read_to_string(temp.path().join("build/.tuahotreload")).expect("signal"),
+        "1\n"
+    );
+
+    let package = tua()
+        .arg("package")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tua package");
+    assert!(package.status.success(), "{package:?}");
+    let name = temp
+        .path()
+        .file_name()
+        .expect("temp name")
+        .to_string_lossy()
+        .into_owned();
+    let archive = fs::read(temp.path().join(format!("dist/{name}.love"))).expect("archive");
+    let names = stored_zip_names(&archive);
+    assert_eq!(names, ["main.lua"], "dev artifacts stay out of packages");
+    let main = fs::read_to_string(temp.path().join("build/main.lua")).expect("main.lua");
+    assert!(
+        !main.contains("tuahotreload"),
+        "a normal build drops the hook"
+    );
+}
+
 #[test]
 fn check_prints_config_diagnostics() {
     let temp = TempDir::new("check-invalid-config");

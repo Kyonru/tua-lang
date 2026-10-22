@@ -19,6 +19,7 @@ Commands:
   package   Build, then package the game as a .love (and optionally a fused app)
   traceback Remap generated Lua traceback lines to Tua source
   watch     Rebuild when source files change
+  dev       Rebuild on change and hot reload the running LOVE game
   lsp       Start the tua language server over stdio
   api       Start the read-only Tua JSON-RPC API over stdio
   mcp       Start the read-only Tua MCP server over stdio
@@ -31,7 +32,8 @@ Options:
   --strict          With lint, enable all lint diagnostics
   --maps <path>     With traceback, source-map directory or .lua.map.json file
   --target <kind>   With package, love (default), windows, or macos
-  --love <path>     With package, the LOVE for Windows directory or love.app to fuse with
+  --love <path>     With package, the LOVE for Windows directory or love.app to fuse with;
+                    with dev, the LOVE executable to run
   --name <name>     With package, the game name (default: project directory name)
   --identifier <id> With package --target macos, the app bundle identifier
   -h, --help        Print command help
@@ -50,6 +52,7 @@ pub enum CliAction {
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct CommandOptions {
+    pub dev_love: Option<PathBuf>,
     pub emit_on_error: bool,
     pub package: PackageOptions,
     pub fmt_check: bool,
@@ -69,6 +72,7 @@ pub enum CommandName {
     Package,
     Traceback,
     Watch,
+    Dev,
     Lsp,
     Api,
     Mcp,
@@ -105,6 +109,7 @@ where
         "package" => CommandName::Package,
         "traceback" => CommandName::Traceback,
         "watch" => CommandName::Watch,
+        "dev" => CommandName::Dev,
         "lsp" => CommandName::Lsp,
         "api" => CommandName::Api,
         "mcp" => CommandName::Mcp,
@@ -122,6 +127,13 @@ where
 
         match arg.as_str() {
             "--emit-on-error" if command == CommandName::Build => options.emit_on_error = true,
+            "--love" if command == CommandName::Dev => {
+                index += 1;
+                let Some(path) = args.get(index) else {
+                    return Err(CliError::usage("`--love` expects a path"));
+                };
+                options.dev_love = Some(PathBuf::from(path));
+            }
             flag @ ("--target" | "--love" | "--name" | "--identifier")
                 if command == CommandName::Package =>
             {

@@ -3,6 +3,7 @@ use std::path::Path;
 use crate::args::{CommandName, CommandOptions};
 use crate::build::run_build;
 use crate::check::run_check;
+use crate::dev::run_dev;
 use crate::error::CliError;
 use crate::formatter::run_fmt;
 use crate::linter::run_lint;
@@ -59,6 +60,13 @@ pub fn run_command(
             run_watch_command(cwd)?;
 
             Ok("watch stopped".to_owned())
+        }
+        CommandName::Dev => {
+            let loaded =
+                tua_core::load_config_from_dir(&cwd).map_err(CliError::from_config_error)?;
+            run_dev(cwd, loaded, options.dev_love)?;
+
+            Ok("dev stopped".to_owned())
         }
         CommandName::Lsp => {
             run_lsp_command()?;

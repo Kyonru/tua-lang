@@ -308,6 +308,11 @@ pub fn tuaaudio_runtime_source() -> &'static str {
     audio::runtime_source()
 }
 
+/// The live-reload runtime `tua dev` writes beside a development build.
+pub fn tuahotreload_runtime_source() -> &'static str {
+    include_str!("../../../vendor/runtime/tuahotreload.lua")
+}
+
 pub fn tuatween_runtime_source() -> &'static str {
     builtin_module::TWEEN.source
 }

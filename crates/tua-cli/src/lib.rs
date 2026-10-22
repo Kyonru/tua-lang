@@ -4,6 +4,7 @@ mod asset_pipeline;
 mod build;
 mod check;
 mod command;
+mod dev;
 mod diagnostics;
 mod error;
 mod formatter;
