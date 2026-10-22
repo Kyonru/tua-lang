@@ -3726,6 +3726,35 @@ end
 }
 
 #[test]
+fn hover_uses_nilable_post_guard_narrowing() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+type Piece = { x: number }
+local active: Piece | nil = nil
+local function update()
+  if not active then
+    return
+  end
+  local current = active
+  return <|hover|>current.x
+end
+return update
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+
+    let hover = host
+        .snapshot()
+        .hover("src/main.tua", fixture.position("hover"))
+        .expect("the guarded value should hover");
+    assert!(hover.contents.contains("{ x: number }"), "{hover:#?}");
+    assert!(!hover.contents.contains("| nil"), "{hover:#?}");
+}
+
+#[test]
 fn snapshot_completion_uses_class_constructor_instance_fields() {
     let fixture = Fixture::parse(
         r#"-- file: src/main.tua

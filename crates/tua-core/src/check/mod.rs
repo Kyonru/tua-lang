@@ -21,7 +21,9 @@ use crate::module_index::{
     require_bindings_for_parsed_source, required_module_export_type_for_fields,
     required_module_exports_for_receiver,
 };
-use crate::narrowing::{directly_assigned_name, narrowed_locals_for_condition};
+use crate::narrowing::{
+    directly_assigned_name, narrowed_locals_after_false_condition, narrowed_locals_for_condition,
+};
 use crate::parser::{parse_tua_source, ParsedLanguage, ParsedSource, SourcePosition, SourceSpan};
 use crate::profile::{self, DiagnosticsTraceCategory};
 use crate::runtime_type;
@@ -339,6 +341,7 @@ impl<'a> Checker<'a> {
 
         for stmt in block.stmts() {
             self.check_stmt(stmt, current_return);
+            self.record_guard_clause_narrowing(stmt);
         }
 
         if let Some(LastStmt::Return(return_stmt)) = block.last_stmt() {
@@ -347,6 +350,36 @@ impl<'a> Checker<'a> {
 
         self.scoped_locals.pop();
         self.scoped_local_contracts.pop();
+    }
+
+    fn record_guard_clause_narrowing(&mut self, statement: &ast::Stmt) {
+        let ast::Stmt::If(statement) = statement else {
+            return;
+        };
+        if statement.else_if().is_some() || statement.else_block().is_some() {
+            return;
+        }
+        let empty_position = node_position(statement);
+        if block_fallthrough_position(statement.block(), empty_position, &|statement| {
+            statement_is_terminating_builtin(statement, &self.terminating_builtin_references)
+        })
+        .is_some()
+        {
+            return;
+        }
+
+        let aliases = self
+            .environment
+            .aliases()
+            .map(|(name, ty)| (name.to_owned(), ty.clone()))
+            .collect::<BTreeMap<_, _>>();
+        let narrowed =
+            narrowed_locals_after_false_condition(statement.condition(), &aliases, |name| {
+                self.infer_named_value(name)
+            });
+        if let Some(scope) = self.scoped_locals.last_mut() {
+            scope.extend(narrowed);
+        }
     }
 
     fn check_stmt(&mut self, stmt: &ast::Stmt, current_return: Option<&[Type]>) {

@@ -601,6 +601,26 @@ type MaybeNumber = number | nil
 A value can be assigned to a union when it is compatible with at least one union
 member.
 
+Nilable locals, including mutable state captured from an outer scope, narrow
+inside truthy branches and after terminating guard clauses:
+
+```tua
+local active: Piece | nil = nil
+
+local function update()
+  if not active then
+    return
+  end
+
+  active.x += 1 -- active is Piece here
+end
+```
+
+`if active == nil then return end` has the same effect. The postcondition is
+cleared by a later direct assignment to `active`; a nonterminating branch does
+not establish it. When mutation is intentionally indirect or difficult to
+follow, copy the guarded value into a local before calling other code.
+
 ## Runtime `is` Checks
 
 Use `value is Type` in `if`, `elseif`, and `while` conditions when a cheap

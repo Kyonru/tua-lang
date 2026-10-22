@@ -4154,6 +4154,73 @@ end
 }
 
 #[test]
+fn terminating_guards_narrow_mutable_nilable_state_after_the_branch() {
+    check_tua_source(
+        "src/game.tua",
+        r#"type Piece = { x: number }
+local active: Piece | nil = nil
+
+local function move()
+  if not active then
+    return
+  end
+  active.x += 1
+end
+
+local function move_explicitly()
+  if active == nil then
+    return
+  end
+  active.x += 1
+end
+
+print(move, move_explicitly)
+"#,
+    )
+    .expect("terminating nil guards should narrow mutable outer state");
+}
+
+#[test]
+fn nonterminating_guards_do_not_narrow_following_mutable_state() {
+    let diagnostics = check_tua_source(
+        "src/game.tua",
+        r#"type Piece = { x: number }
+local active: Piece | nil = nil
+if not active then
+  print("waiting")
+end
+print(active.x)
+"#,
+    )
+    .expect_err("a branch that falls through cannot establish a postcondition");
+
+    assert!(diagnostics.iter().any(|diagnostic| {
+        diagnostic.code == Some(DiagnosticCode::TYPE_UNSAFE_UNION_OPERATION)
+    }));
+}
+
+#[test]
+fn assignment_after_a_terminating_guard_invalidates_the_postcondition() {
+    let diagnostics = check_tua_source(
+        "src/game.tua",
+        r#"type Piece = { x: number }
+local active: Piece | nil = nil
+if not active then
+  return
+end
+active = nil
+local after: Piece = active
+print(after)
+"#,
+    )
+    .expect_err("a later assignment must invalidate guard-clause narrowing");
+
+    assert!(diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.code == Some(DiagnosticCode::TYPE_MISMATCH)));
+}
+
+#[test]
 fn rejects_operations_not_supported_by_every_union_member() {
     let diagnostics = check_tua_source(
         "src/union_operations.tua",

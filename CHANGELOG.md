@@ -14,6 +14,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Nilable mutable state now narrows after terminating guard clauses such as
+  `if not piece then return end`, across checking and semantic inference, and
+  later assignments correctly invalidate the postcondition.
+
 - Prevented transient type-mismatch squiggles while related project files are
   opened or updated by deferring import-dependent mismatches to the
   project-aware diagnostic pass.

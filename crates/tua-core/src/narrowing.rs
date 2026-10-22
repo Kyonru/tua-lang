@@ -4,6 +4,7 @@ use full_moon::ast::{self, Call, Expression, FunctionArgs, FunctionCall, Prefix,
 use full_moon::node::Node;
 
 use crate::ast_utils::plain_field_chain_from_var_expression;
+use crate::control_flow::block_fallthrough_position;
 use crate::runtime_type;
 use crate::types::MetatableFacts;
 use crate::{ParsedSource, PrimitiveType, SourcePosition, SourceSpan, Type};
@@ -38,6 +39,26 @@ pub(crate) fn narrowed_locals_for_condition(
             continue;
         };
 
+        locals.insert(narrowing.name, narrowed);
+    }
+
+    locals
+}
+
+pub(crate) fn narrowed_locals_after_false_condition(
+    condition: &Expression,
+    aliases: &BTreeMap<String, Type>,
+    lookup: impl Fn(&str) -> Option<Type> + Copy,
+) -> BTreeMap<String, Type> {
+    let mut locals = BTreeMap::new();
+
+    for narrowing in false_condition_narrowings(condition) {
+        let Some(base) = lookup(&narrowing.name) else {
+            continue;
+        };
+        let Some(narrowed) = apply_narrowing(aliases, &base, &narrowing.kind, lookup) else {
+            continue;
+        };
         locals.insert(narrowing.name, narrowed);
     }
 
@@ -90,6 +111,21 @@ fn collect_narrowed_type_at_position(
     lookup: impl Fn(&str) -> Option<Type> + Copy,
     narrowed: &mut Option<Type>,
 ) {
+    for stmt in block.stmts() {
+        let Some(span) = node_span(stmt) else {
+            continue;
+        };
+        if !starts_before(span.end, position) {
+            break;
+        }
+        if stmt_mutates_name_before(stmt, name, position) {
+            *narrowed = None;
+        }
+        if let Some(guarded) = narrowed_type_after_guard(stmt, aliases, name, lookup) {
+            *narrowed = Some(guarded);
+        }
+    }
+
     for stmt in block.stmts() {
         let Some(stmt_span) = node_span(stmt) else {
             continue;
@@ -191,6 +227,26 @@ fn collect_narrowed_type_at_position(
             _ => {}
         }
     }
+}
+
+fn narrowed_type_after_guard(
+    statement: &ast::Stmt,
+    aliases: &BTreeMap<String, Type>,
+    name: &str,
+    lookup: impl Fn(&str) -> Option<Type> + Copy,
+) -> Option<Type> {
+    let ast::Stmt::If(statement) = statement else {
+        return None;
+    };
+    if statement.else_if().is_some() || statement.else_block().is_some() {
+        return None;
+    }
+    let empty_position = node_start(statement)?;
+    if block_fallthrough_position(statement.block(), empty_position, &|_| false).is_some() {
+        return None;
+    }
+
+    narrowed_locals_after_false_condition(statement.condition(), aliases, lookup).remove(name)
 }
 
 fn collect_if_branch_narrowing(
@@ -304,6 +360,36 @@ fn condition_narrowings(condition: &Expression) -> Vec<TypeNarrowing> {
             .collect(),
         Expression::Parentheses { expression, .. }
         | Expression::TypeAssertion { expression, .. } => condition_narrowings(expression),
+        _ => Vec::new(),
+    }
+}
+
+fn false_condition_narrowings(condition: &Expression) -> Vec<TypeNarrowing> {
+    match condition {
+        Expression::UnaryOperator {
+            unop: ast::UnOp::Not(_),
+            expression,
+        } => condition_narrowings(expression),
+        Expression::BinaryOperator { lhs, binop, rhs } if is_equality_operator(binop) => {
+            equality_narrowing(lhs, binop, rhs)
+                .into_iter()
+                .chain(equality_narrowing(rhs, binop, lhs))
+                .filter_map(|mut narrowing| {
+                    narrowing.kind = match narrowing.kind {
+                        TypeNarrowingKind::NonNil => TypeNarrowingKind::Nil,
+                        TypeNarrowingKind::Nil => TypeNarrowingKind::NonNil,
+                        _ => return None,
+                    };
+                    Some(narrowing)
+                })
+                .collect()
+        }
+        Expression::Var(Var::Name(name)) => vec![TypeNarrowing {
+            name: token_text(name),
+            kind: TypeNarrowingKind::Nil,
+        }],
+        Expression::Parentheses { expression, .. }
+        | Expression::TypeAssertion { expression, .. } => false_condition_narrowings(expression),
         _ => Vec::new(),
     }
 }
