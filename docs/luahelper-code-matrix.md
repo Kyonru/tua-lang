@@ -171,6 +171,9 @@ enforced separately with `tua fmt --check`.
 | `TL4058` | An open class constructor directly calls an overridable method on `self`. | `rules` |
 | `TL4059` | A type-only child field declaration redundantly repeats an inherited field contract. | `rules` |
 | `TL4060` | `#` is applied to a built-in `Vec2`, which is `0` when vectors are plain tables; use `.length`. | `rules` |
+| `TL4061` | A call begins on a new line and Lua parses it as continuation of the preceding expression. | `rules`; enabled by default |
+| `TL4062` | A table field begins with call syntax after a missing comma, so Lua parses it as a call on the preceding field. | `rules`; enabled by default |
+| `TL4063` | A plain module-scope assignment or function declaration creates an unscoped global in a Tua file. | `rules`; enabled by default |
 
 Configuration keys in this table live under `[diagnostics]` unless they start
 with `jit.`. VS Code can override matching diagnostic settings for the running

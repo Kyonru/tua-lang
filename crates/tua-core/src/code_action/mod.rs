@@ -249,6 +249,28 @@ fn diagnostic_quick_fix_actions(
                     actions.push(action);
                 }
             }
+            Some(DiagnosticCode::LINT_NEWLINE_CALL) => {
+                if let Some(action) = separate_newline_construct_action(
+                    parsed,
+                    diagnostic,
+                    ';',
+                    "Separate newline call with `;`",
+                    true,
+                ) {
+                    actions.push(action);
+                }
+            }
+            Some(DiagnosticCode::LINT_NEWFIELD_CALL) => {
+                if let Some(action) = separate_newline_construct_action(
+                    parsed,
+                    diagnostic,
+                    ',',
+                    "Separate table fields with `,`",
+                    false,
+                ) {
+                    actions.push(action);
+                }
+            }
             Some(DiagnosticCode::DOMAIN_LOVE_CALLBACK) => {
                 if let Some(action) = rename_love_callback_action(parsed, diagnostic) {
                     actions.push(action);
@@ -566,7 +588,16 @@ fn fix_all_action(
     let full_range = full_document_range(&parsed.source);
     let safe_diagnostics = diagnostics
         .iter()
-        .filter(|diagnostic| diagnostic.code != Some(DiagnosticCode::LINT_DUPLICATE_TABLE_KEY))
+        .filter(|diagnostic| {
+            !matches!(
+                diagnostic.code,
+                Some(
+                    DiagnosticCode::LINT_DUPLICATE_TABLE_KEY
+                        | DiagnosticCode::LINT_NEWLINE_CALL
+                        | DiagnosticCode::LINT_NEWFIELD_CALL
+                )
+            )
+        })
         .cloned()
         .collect::<Vec<_>>();
 
@@ -620,6 +651,58 @@ fn fix_all_action(
         kind: AssistKind::SourceFixAll,
         edit,
     })
+}
+
+fn separate_newline_construct_action(
+    parsed: &ParsedSource,
+    diagnostic: &Diagnostic,
+    punctuation: char,
+    title: &str,
+    require_complete_call: bool,
+) -> Option<Assist> {
+    let mut line_number = diagnostic.line.checked_sub(1)?;
+
+    while line_number > 0 {
+        let line = line_at(&parsed.source, line_number)?;
+        let comment = line_comment_start(line).unwrap_or(line.len());
+        let code = line.get(..comment)?.trim_end();
+
+        if code.is_empty() {
+            line_number -= 1;
+            continue;
+        }
+
+        if require_complete_call && !matches!(code.chars().last(), Some(')' | '}' | '\'' | '"')) {
+            return None;
+        }
+
+        let column = code.chars().count() + 1;
+        let span = SourceSpan {
+            start: SourcePosition {
+                line: line_number,
+                column,
+            },
+            end: SourcePosition {
+                line: line_number,
+                column,
+            },
+        };
+
+        return Some(Assist {
+            title: title.to_owned(),
+            kind: AssistKind::QuickFix,
+            edit: edit_for(
+                parsed.path.clone(),
+                TextEdit {
+                    path: parsed.path.clone(),
+                    span,
+                    new_text: punctuation.to_string(),
+                },
+            ),
+        });
+    }
+
+    None
 }
 
 fn source_document_action(

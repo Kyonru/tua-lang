@@ -5,7 +5,7 @@
 //! guessed here.
 
 use full_moon::ast::{
-    self, Call, Expression, FunctionArgs, FunctionCall, LastStmt, Prefix, Stmt, Suffix,
+    self, Call, Expression, Field, FunctionArgs, FunctionCall, LastStmt, Prefix, Stmt, Suffix,
 };
 use full_moon::node::Node;
 use full_moon::tokenizer::{TokenReference, TokenType};
@@ -56,6 +56,7 @@ pub(super) fn lint<'a>(
         diagnostics: comment_directive_diagnostics(parsed),
         multiline_statements: Vec::new(),
         multiline_table_depth: 0,
+        newfield_call_boundaries: BTreeSet::new(),
         function_names: Vec::new(),
         terminating_builtin_references,
         lua_builtin_references,
@@ -71,6 +72,7 @@ struct LintRuleVisitor<'a> {
     diagnostics: Vec<Diagnostic>,
     multiline_statements: Vec<MultiLineStatement>,
     multiline_table_depth: usize,
+    newfield_call_boundaries: BTreeSet<(usize, usize)>,
     function_names: Vec<Option<String>>,
     terminating_builtin_references: BTreeSet<(usize, usize)>,
     lua_builtin_references: BTreeSet<(usize, usize)>,
@@ -135,8 +137,22 @@ impl Visitor for LintRuleVisitor<'_> {
         self.multiline_statements.pop();
     }
 
-    fn visit_table_constructor(&mut self, _table: &ast::TableConstructor) {
+    fn visit_table_constructor(&mut self, table: &ast::TableConstructor) {
         self.multiline_table_depth += 1;
+
+        for field in table.fields() {
+            let Field::NoKey(expression) = field else {
+                continue;
+            };
+            let Expression::FunctionCall(call) = unparenthesized_expression(expression) else {
+                continue;
+            };
+
+            for position in ambiguous_call_boundaries(call) {
+                self.newfield_call_boundaries
+                    .insert((position.line, position.column));
+            }
+        }
     }
 
     fn visit_table_constructor_end(&mut self, _table: &ast::TableConstructor) {
@@ -253,6 +269,25 @@ impl Visitor for LintRuleVisitor<'_> {
     }
 
     fn visit_function_call(&mut self, call: &FunctionCall) {
+        for position in ambiguous_call_boundaries(call) {
+            let newfield = self
+                .newfield_call_boundaries
+                .contains(&(position.line, position.column));
+            self.push(
+                position,
+                if newfield {
+                    DiagnosticCode::LINT_NEWFIELD_CALL
+                } else {
+                    DiagnosticCode::LINT_NEWLINE_CALL
+                },
+                if newfield {
+                    "call continues a preceding table field across a newline; add a comma if these are separate fields"
+                } else {
+                    "call continues the preceding expression across a newline; add a semicolon if these are separate statements"
+                },
+            );
+        }
+
         self.check_literal_format_method(call);
 
         let Some(parts) = field_chain_before_first_call(call) else {
@@ -1522,6 +1557,47 @@ fn integer_loses_precision(token: &TokenReference) -> bool {
 fn number_text(token: &TokenReference) -> Option<String> {
     match token.token().token_type() {
         TokenType::Number { text } => Some(text.to_string()),
+        _ => None,
+    }
+}
+
+fn ambiguous_call_boundaries(call: &FunctionCall) -> Vec<SourcePosition> {
+    let mut boundaries = Vec::new();
+    let mut previous_line = node_end_position(call.prefix()).line;
+
+    for suffix in call.suffixes() {
+        match suffix {
+            Suffix::Call(Call::AnonymousCall(arguments)) => {
+                if let Some(position) = function_args_start(arguments) {
+                    if position.line > previous_line {
+                        boundaries.push(position);
+                    }
+                }
+            }
+            Suffix::Call(Call::MethodCall(method)) => {
+                let method_line = node_end_position(method.name()).line;
+                if let Some(position) = function_args_start(method.args()) {
+                    if position.line > method_line {
+                        boundaries.push(position);
+                    }
+                }
+            }
+            _ => {}
+        }
+
+        previous_line = node_end_position(suffix).line;
+    }
+
+    boundaries
+}
+
+fn function_args_start(arguments: &FunctionArgs) -> Option<SourcePosition> {
+    match arguments {
+        FunctionArgs::Parentheses { parentheses, .. } => {
+            Some(token_position(parentheses.tokens().0))
+        }
+        FunctionArgs::String(token) => Some(token_position(token)),
+        FunctionArgs::TableConstructor(table) => Some(node_position(table)),
         _ => None,
     }
 }

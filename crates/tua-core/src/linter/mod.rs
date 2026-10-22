@@ -1232,6 +1232,7 @@ impl<'a> SymbolAnalyzer<'a> {
                             &name_text,
                         ));
                     }
+                    self.report_unscoped_global_write(&name_text, token_position(name));
                     self.record_global_assignment(&name_text, token_position(name));
                     if defines_global {
                         self.defined_globals.insert(name_text.clone());
@@ -1368,6 +1369,7 @@ impl<'a> SymbolAnalyzer<'a> {
                             &root_name,
                         ));
                     }
+                    self.report_unscoped_global_write(&root_name, token_position(root));
                     self.record_global_assignment(&root_name, token_position(root));
                     self.record_global_function_definition(&root_name, token_position(root));
                     self.defined_globals.insert(root_name.clone());
@@ -1956,6 +1958,26 @@ impl<'a> SymbolAnalyzer<'a> {
                 function.dominated_globals.insert(name.to_owned());
             }
         }
+    }
+
+    fn report_unscoped_global_write(&mut self, name: &str, position: SourcePosition) {
+        if !self.config.rules
+            || self.parsed.raw.language != ParsedLanguage::Tua
+            || !self.function_stack.is_empty()
+            || self.configured_globals.contains(name)
+            || Self::is_builtin_global(name)
+            || name == "love"
+            || self.defined_globals.contains(name)
+            || self.user_globals.contains_key(name)
+        {
+            return;
+        }
+
+        self.diagnostics.push(unscoped_global_write_diagnostic(
+            &self.parsed.path,
+            position,
+            name,
+        ));
     }
 
     fn record_global_function_definition(&mut self, name: &str, position: SourcePosition) {
@@ -3116,6 +3138,23 @@ fn builtin_global_write_diagnostic(
         ),
     )
     .with_code(DiagnosticCode::LINT_BUILTIN_GLOBAL_WRITE)
+}
+
+fn unscoped_global_write_diagnostic(
+    path: &Path,
+    position: SourcePosition,
+    name: &str,
+) -> Diagnostic {
+    Diagnostic::new(
+        path,
+        position.line,
+        position.column,
+        DiagnosticSeverity::Warning,
+        format!(
+            "assignment creates unscoped global `{name}`; add `local` or configure it in `diagnostics.globals`"
+        ),
+    )
+    .with_code(DiagnosticCode::LINT_UNSCOPED_GLOBAL_WRITE)
 }
 
 fn unknown_luajit_type_diagnostic(path: &Path, position: SourcePosition, name: &str) -> Diagnostic {

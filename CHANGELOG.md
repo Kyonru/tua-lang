@@ -126,6 +126,13 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Added
 
+- Added enabled-by-default `TL4061`/`TL4062` diagnostics for Lua's ambiguous
+  newline-call and table newfield-call syntax, with intent-dependent `;` and
+  `,` editor fixes that are excluded from safe fix-all.
+- Added `TL4063` for accidental unscoped module-global writes in `.tua` files.
+  Configured globals, builtins, qualified LÖVE callbacks, explicit `_G` writes,
+  and ordinary `.lua` files remain permissive.
+
 - Exact-code diagnostic severity policy through `[diagnostics.severity]`, with
   `allow`, `hint`, `info`, `warning`, and `error` levels shared by CLI and
   editor diagnostics. `tua check --deny-warnings` provides an explicit strict

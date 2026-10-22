@@ -40,6 +40,131 @@ fn formatting_is_not_a_lint() {
 }
 
 #[test]
+fn newline_and_newfield_calls_report_ambiguous_runtime_chaining() {
+    let diagnostics = check_standard_rules_source(
+        r#"print("first")
+  ("second"):upper()
+
+local callbacks = {
+  print
+  ("third"),
+}
+
+local invoke = print
+invoke
+"fourth"
+"#,
+    );
+
+    assert_eq!(
+        count_code(&diagnostics, DiagnosticCode::LINT_NEWLINE_CALL),
+        2,
+        "{diagnostics:#?}"
+    );
+    assert_eq!(
+        count_code(&diagnostics, DiagnosticCode::LINT_NEWFIELD_CALL),
+        1,
+        "{diagnostics:#?}"
+    );
+    assert!(diagnostics.iter().any(|diagnostic| {
+        diagnostic.code == Some(DiagnosticCode::LINT_NEWFIELD_CALL)
+            && diagnostic.line == 6
+            && diagnostic.message.contains("add a comma")
+    }));
+}
+
+#[test]
+fn newline_call_accepts_unambiguous_multiline_layout() {
+    let diagnostics = check_standard_rules_source(
+        r#"print(
+  "first"
+)
+
+local callbacks = {
+  print,
+  ("third"),
+}
+
+local value = ready and
+  print("value")
+local sameLine = print("left")("right")
+print(value, sameLine, callbacks)
+"#,
+    );
+
+    assert_eq!(
+        count_code(&diagnostics, DiagnosticCode::LINT_NEWLINE_CALL),
+        0,
+        "{diagnostics:#?}"
+    );
+    assert_eq!(
+        count_code(&diagnostics, DiagnosticCode::LINT_NEWFIELD_CALL),
+        0,
+        "{diagnostics:#?}"
+    );
+}
+
+#[test]
+fn unscoped_global_write_reports_only_new_module_globals_in_tua() {
+    let diagnostics = check_tua_source_with_diagnostics_config(
+        "src/main.tua",
+        r#"Player = {}
+Player = { hp = 10 }
+function update() end
+
+love.load = function() end
+print = function() end
+ConfiguredGlobal = 1
+
+local function callback()
+  NestedWrite = true
+end
+callback()
+"#,
+        &DiagnosticsConfig {
+            rules: true,
+            globals: vec!["ConfiguredGlobal".to_owned()],
+            ..diagnostics_without_standard_rules()
+        },
+    )
+    .expect_err("new module globals should be linted");
+
+    let messages = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_UNSCOPED_GLOBAL_WRITE))
+        .map(|diagnostic| diagnostic.message.as_str())
+        .collect::<Vec<_>>();
+
+    assert_eq!(messages.len(), 2, "{diagnostics:#?}");
+    assert!(messages.iter().any(|message| message.contains("`Player`")));
+    assert!(messages.iter().any(|message| message.contains("`update`")));
+}
+
+#[test]
+fn unscoped_global_write_stays_permissive_for_lua() {
+    let parsed = parse_lua_source("src/main.lua", "Player = {}\nfunction update() end\n")
+        .expect("Lua source should parse");
+    let diagnostics = check_parsed_source_with_asset_roots_diagnostics_jit_and_ecs_config(
+        &parsed,
+        &[std::path::PathBuf::from("src")],
+        &DiagnosticsConfig {
+            rules: true,
+            ..diagnostics_without_standard_rules()
+        },
+        &JitConfig::default(),
+        &EcsConfig::default(),
+    )
+    .err()
+    .unwrap_or_default();
+
+    assert_eq!(
+        count_code(&diagnostics, DiagnosticCode::LINT_UNSCOPED_GLOBAL_WRITE),
+        0,
+        "{diagnostics:#?}"
+    );
+}
+
+#[test]
 fn builtin_global_write_reports_direct_target_writes_with_guidance() {
     let diagnostics = check_standard_rules_source(
         r#"
@@ -3304,7 +3429,7 @@ print(outer(), usedGlobal(), usedLocal())
 
     messages.sort_unstable();
 
-    assert_eq!(diagnostics.len(), 3, "{diagnostics:#?}");
+    assert_eq!(messages.len(), 3, "{diagnostics:#?}");
     assert_eq!(
         messages,
         vec![

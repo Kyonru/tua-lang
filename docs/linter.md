@@ -82,12 +82,27 @@ share an existing Tua code because they are the same analysis.
 | `IntegerParsing` | `TL4050` |
 | `ComparisonPrecedence` | `TL4051` |
 | `VectorLength` | `TL4060` |
+| `NewlineCall` | `TL4061` |
+| `NewfieldCall` | `TL4062` |
+| `UnscopedGlobalWrite` | `TL4063` |
 
 `UnknownGlobal` considers plain global assignments and simple global function
 declarations anywhere in the current Tua file to be definitions, regardless of
 source order. Qualified writes still require a known root, and compound
 assignment reads its target before writing it. Runtime-provided or cross-file
 globals should be listed in [`diagnostics.globals`](configuration.md#diagnostics).
+In `.tua` files, `UnscopedGlobalWrite` separately warns on the first plain
+module-scope assignment or unqualified function declaration that creates a
+global. Builtins, configured globals, and qualified `love.*` callbacks are
+exempt. Ordinary `.lua` files remain permissive, and an explicit `_G.name`
+write continues to communicate deliberate global state.
+
+`NewlineCall` reports a call whose argument opener begins on a later line than
+the expression it calls. Lua treats the lines as one chained expression even
+when they look like separate statements. `NewfieldCall` is the table-field
+variant, where a missing comma can silently turn adjacent-looking fields into
+one call. The editor offers `;` or `,` separator fixes when they are safe to
+place; both diagnostics always offer the standard exact-code suppression.
 
 `BuiltinGlobalWrite` reports direct assignments, compound assignments, and
 simple global function declarations that overwrite protected Lua 5.1/LuaJIT,

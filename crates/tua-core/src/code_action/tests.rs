@@ -786,6 +786,70 @@ player.setFilter("nearest")
 }
 
 #[test]
+fn separates_ambiguous_newline_calls_and_table_fields() {
+    let parsed = parse_tua_source(
+        "src/main.tua",
+        "print(\"first\") -- keep\n  (\"second\"):upper()\nlocal callbacks = {\n  print\n  (\"third\"),\n}\n",
+    )
+    .expect("source should parse");
+    let diagnostics = diagnostics(&parsed, DiagnosticsConfig::default());
+
+    let newline_actions = code_actions_parsed_source(
+        &parsed,
+        &diagnostics,
+        range_line(2),
+        std::path::Path::new("src"),
+        "tua",
+    );
+    let newline = newline_actions
+        .iter()
+        .find(|action| action.title == "Separate newline call with `;`")
+        .expect("newline-call separator should be offered");
+    let newline_edit = &newline.edit.changes[&parsed.path][0];
+    assert_eq!(newline_edit.new_text, ";");
+    assert_eq!(
+        newline_edit.span.start,
+        SourcePosition {
+            line: 1,
+            column: 15
+        }
+    );
+
+    let field_actions = code_actions_parsed_source(
+        &parsed,
+        &diagnostics,
+        range_line(5),
+        std::path::Path::new("src"),
+        "tua",
+    );
+    let field = field_actions
+        .iter()
+        .find(|action| action.title == "Separate table fields with `,`")
+        .expect("newfield-call separator should be offered");
+    assert_eq!(field.edit.changes[&parsed.path][0].new_text, ",");
+
+    let ambiguous = diagnostics
+        .iter()
+        .filter(|diagnostic| {
+            matches!(
+                diagnostic.code,
+                Some(DiagnosticCode::LINT_NEWLINE_CALL | DiagnosticCode::LINT_NEWFIELD_CALL)
+            )
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+    let fix_all = code_actions_parsed_source_with_kinds(
+        &parsed,
+        &ambiguous,
+        full_document_range(&parsed.source),
+        std::path::Path::new("src"),
+        "tua",
+        &[AssistKind::SourceFixAll],
+    );
+    assert!(fix_all.is_empty(), "separator choices are intent-dependent");
+}
+
+#[test]
 fn rewrites_vector_hash_length_to_the_length_property() {
     let parsed = parse_tua_source(
         "src/main.tua",
