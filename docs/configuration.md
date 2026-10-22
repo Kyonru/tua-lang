@@ -248,6 +248,9 @@ behavior, and security guidance.
 
 LuaCATS output includes:
 
+- resolved structural contracts for imported aliases, so generated Lua does
+  not refer to Tua-only namespace names that downstream Lua tools cannot see;
+
 - `---@alias` for exported type aliases.
 - `---@type` for annotated locals.
 - `---@param` and `---@return` for function signatures.

@@ -2411,6 +2411,54 @@ return {
 }
 
 #[test]
+fn build_makes_imported_luacats_aliases_self_contained() {
+    let temp = TempDir::new("build-imported-luacats");
+    fs::write(
+        temp.path().join(CONFIG_FILE),
+        "source = \"src\"\nout = \"build\"\n\n[emit]\nannotation_mode = \"luacats\"\n",
+    )
+    .expect("failed to write config");
+    fs::create_dir_all(temp.path().join("src")).expect("failed to create source");
+    fs::write(
+        temp.path().join("src/types.tua"),
+        "export type Kind = \"I\" | \"O\"\nexport type Game = { score: number, next: Kind }\n",
+    )
+    .expect("failed to write types");
+    fs::write(
+        temp.path().join("src/main.tua"),
+        r#"import type Types from "./types"
+import type { Kind as PieceKind } from "./types"
+local game: Types.Game = { score = 0, next = "I" }
+local function set_next(kind: PieceKind): Types.Game
+  print(kind)
+  return game
+end
+return { game = game, set_next = set_next }
+"#,
+    )
+    .expect("failed to write source");
+
+    let output = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tua build");
+    assert!(
+        output.status.success(),
+        "stdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let emitted =
+        fs::read_to_string(temp.path().join("build/main.lua")).expect("failed to read output");
+
+    assert!(emitted.contains("---@type { next: \"I\" | \"O\", score: number }"));
+    assert!(emitted.contains("---@param kind \"I\" | \"O\""));
+    assert!(!emitted.contains("Types.Game"));
+    assert!(!emitted.contains("PieceKind"));
+}
+
+#[test]
 fn build_accepts_project_aware_types_from_tua_and_lua_modules() {
     let temp = TempDir::new("build-project-types");
 

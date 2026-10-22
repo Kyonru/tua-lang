@@ -14,6 +14,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- LuaCATS emission now resolves selected and namespace-qualified imported type
+  aliases into self-contained structural annotations instead of leaking
+  Tua-only names such as `Types.Game` into generated Lua.
+
 - Nilable mutable state now narrows after terminating guard clauses such as
   `if not piece then return end`, across checking and semantic inference, and
   later assignments correctly invalidate the postcondition.

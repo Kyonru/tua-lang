@@ -556,6 +556,59 @@ return {
 }
 
 #[test]
+fn project_luacats_annotations_inline_imported_alias_contracts() {
+    let types = r#"export type Kind = "I" | "O"
+export type Game = { score: number, next: Kind }
+"#;
+    let source = r#"import type Types from "./types"
+import type { Kind as PieceKind } from "./types"
+
+local game: Types.Game = { score = 0, next = "I" }
+local function next_kind(kind: PieceKind): Types.Game
+  game.next = kind
+  return game
+end
+
+return { game = game, next_kind = next_kind }
+"#;
+    let mut host = crate::AnalysisHost::new();
+    host.set_source_roots([std::path::PathBuf::from("src")]);
+    host.set_file("src/types.tua", types);
+    host.set_file("src/main.tua", source);
+    let snapshot = host.snapshot();
+    let environment = snapshot
+        .project_type_environment("src/main.tua")
+        .expect("project environment should resolve imported aliases");
+    let parsed =
+        crate::parse_tua_source("src/main.tua", source).expect("annotated module should parse");
+
+    let emitted = emit_lua_artifact_with_mode_import_resolver_and_environment(
+        &parsed,
+        AnnotationMode::Luacats,
+        None,
+        true,
+        Some(&environment),
+    )
+    .expect("project LuaCATS annotations should emit")
+    .code;
+
+    assert!(
+        emitted.contains("---@type { next: \"I\" | \"O\", score: number }"),
+        "{emitted}"
+    );
+    assert!(
+        emitted.contains("---@param kind \"I\" | \"O\""),
+        "{emitted}"
+    );
+    assert!(
+        emitted.contains("---@return { next: \"I\" | \"O\", score: number }"),
+        "{emitted}"
+    );
+    assert!(!emitted.contains("Types.Game"), "{emitted}");
+    assert!(!emitted.contains("PieceKind"), "{emitted}");
+}
+
+#[test]
 fn snapshot_emits_luacats_type_only_alias_without_runtime_code() {
     let emitted = emit_tua_source_with_mode(
         "src/types.tua",

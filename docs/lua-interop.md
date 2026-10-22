@@ -378,6 +378,12 @@ return {
 LuaCATS mode affects generated documentation comments only. It does not add a
 runtime dependency or change Lua behavior.
 
+When an annotation references a selected or namespace-qualified type import,
+project builds emit the resolved structural contract instead of leaving names
+such as `Types.Game` in the Lua output. Generated annotations are therefore
+self-contained for downstream LuaLS/LuaCATS tooling even though Tua's
+type-only imports have no runtime representation.
+
 ## LuaDoc Support
 
 Tua parses LuaHelper/LuaLS-style annotations in both `.lua` and `.tua` files.

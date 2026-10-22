@@ -210,7 +210,7 @@ fn emit_lua_artifact_with_mode_import_resolver_and_environment(
         apply_lowering_operations(&mut document, operations, parsed)?;
 
         if annotation_mode == AnnotationMode::Luacats {
-            let operations = luacats_annotation_operations(&document, parsed);
+            let operations = luacats_annotation_operations(&document, parsed, environment);
             apply_lowering_operations(&mut document, operations, parsed)?;
         }
 
@@ -697,6 +697,7 @@ struct LuacatsComments {
 fn luacats_annotation_operations(
     document: &lowering::LoweringDocument,
     parsed: &ParsedSource,
+    environment: &TypeEnvironment,
 ) -> Vec<lowering::LoweringOperation> {
     let runtime_output = document.code();
     let runtime_start =
@@ -710,9 +711,14 @@ fn luacats_annotation_operations(
     let mut local_export_types = BTreeMap::<String, String>::new();
     let mut function_annotations = BTreeMap::<String, VecDeque<LuacatsComments>>::new();
     let mut function_export_types = BTreeMap::<String, String>::new();
+    let type_renderer = LuacatsTypeRenderer::new(parsed, environment);
 
     for (index, alias) in parsed.type_aliases.iter().enumerate() {
-        let mut text = format!("---@alias {} {}\n", alias.name, luacats_type(&alias.ty));
+        let mut text = format!(
+            "---@alias {} {}\n",
+            alias.name,
+            type_renderer.tua_type(&alias.ty, 0)
+        );
         if index + 1 == parsed.type_aliases.len() && !runtime_is_empty {
             text.push('\n');
         }
@@ -725,7 +731,7 @@ fn luacats_annotation_operations(
     }
 
     for local in &parsed.local_annotations {
-        let type_label = luacats_type(&local.ty);
+        let type_label = type_renderer.tua_type(&local.ty, 0);
         local_annotations
             .entry(local.name.clone())
             .or_default()
@@ -746,12 +752,15 @@ fn luacats_annotation_operations(
                 comments.push(format!(
                     "---@param {} {}",
                     param.name,
-                    luacats_type(&param.ty)
+                    type_renderer.tua_type(&param.ty, 0)
                 ));
             }
 
             if let Some(return_type) = function.return_type.as_ref() {
-                comments.push(format!("---@return {}", luacats_type(return_type)));
+                comments.push(format!(
+                    "---@return {}",
+                    type_renderer.tua_type(return_type, 0)
+                ));
             }
 
             if !comments.is_empty() {
@@ -766,12 +775,16 @@ fn luacats_annotation_operations(
 
             function_export_types
                 .entry(name.to_owned())
-                .or_insert_with(|| luacats_function_type(function));
+                .or_insert_with(|| type_renderer.function_annotation(function));
         }
     }
 
-    let export_annotations =
-        module_export_annotations(parsed, &local_export_types, &function_export_types);
+    let export_annotations = module_export_annotations(
+        parsed,
+        &local_export_types,
+        &function_export_types,
+        &type_renderer,
+    );
     let lines = runtime_output
         .split_inclusive('\n')
         .map(|line| line.trim_end_matches(['\r', '\n']))
@@ -909,6 +922,7 @@ fn module_export_annotations(
     parsed: &ParsedSource,
     local_export_types: &BTreeMap<String, String>,
     function_export_types: &BTreeMap<String, String>,
+    type_renderer: &LuacatsTypeRenderer<'_>,
 ) -> Vec<String> {
     let Some(return_fields) = returned_module_table_fields(parsed) else {
         return Vec::new();
@@ -929,7 +943,7 @@ fn module_export_annotations(
                 inferred_exports
                     .as_ref()
                     .and_then(|exports| exports.fields.get(&field_name))
-                    .and_then(|field| luacats_export_type(&field.ty))
+                    .and_then(|field| type_renderer.export_type(&field.ty))
             })?;
 
             Some(format!("---@field {field_name} {type_label}"))
@@ -1007,6 +1021,172 @@ fn luacats_export_class_name(parsed: &ParsedSource) -> String {
 
     output.push_str("Exports");
     output
+}
+
+struct LuacatsTypeRenderer<'a> {
+    environment: &'a TypeEnvironment,
+    imported_names: BTreeSet<String>,
+    imported_namespaces: Vec<String>,
+}
+
+impl<'a> LuacatsTypeRenderer<'a> {
+    fn new(parsed: &ParsedSource, environment: &'a TypeEnvironment) -> Self {
+        let mut imported_names = BTreeSet::new();
+        let mut imported_namespaces = Vec::new();
+        for import in &parsed.type_imports {
+            if import.reexport {
+                continue;
+            }
+            if !import.namespace.is_empty() {
+                imported_namespaces.push(format!("{}.", import.namespace));
+            }
+            imported_names.extend(import.bindings.iter().map(|binding| binding.local.clone()));
+        }
+        Self {
+            environment,
+            imported_names,
+            imported_namespaces,
+        }
+    }
+
+    fn imported(&self, name: &str) -> bool {
+        self.imported_names.contains(name)
+            || self
+                .imported_namespaces
+                .iter()
+                .any(|namespace| name.starts_with(namespace))
+    }
+
+    fn resolved_import(&self, name: &str, depth: usize) -> Option<Type> {
+        if depth >= 32 || !self.imported(name) {
+            return None;
+        }
+        let resolved = self.environment.resolve_aliases(&Type::alias(name));
+        (!matches!(&resolved, Type::Alias(resolved_name) if resolved_name == name))
+            .then_some(resolved)
+    }
+
+    fn tua_type(&self, ty: &TuaType, depth: usize) -> String {
+        if self.imported_names.is_empty() && self.imported_namespaces.is_empty() {
+            return luacats_type(ty);
+        }
+        match ty {
+            TuaType::Named(name) => self
+                .resolved_import(name.trim(), depth)
+                .map(|resolved| self.inferred_type(&resolved, depth + 1))
+                .unwrap_or_else(|| name.trim().to_owned()),
+            TuaType::StringLiteral(value) => format!("{value:?}"),
+            TuaType::Union(types) => types
+                .iter()
+                .map(|ty| self.tua_type(ty, depth + 1))
+                .collect::<Vec<_>>()
+                .join(" | "),
+            TuaType::Table(fields) => {
+                let fields = fields
+                    .iter()
+                    .map(|field| {
+                        format!(
+                            "{}{}: {}",
+                            field.name,
+                            if field.optional { "?" } else { "" },
+                            self.tua_type(&field.ty, depth + 1)
+                        )
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                if fields.is_empty() {
+                    "{}".to_owned()
+                } else {
+                    format!("{{ {fields} }}")
+                }
+            }
+            TuaType::Array(item) => {
+                let item_text = self.tua_type(item, depth + 1);
+                if matches!(item.as_ref(), TuaType::Union(_) | TuaType::Function { .. }) {
+                    format!("({item_text})[]")
+                } else {
+                    format!("{item_text}[]")
+                }
+            }
+            TuaType::Tuple(items) => format!(
+                "[{}]",
+                items
+                    .iter()
+                    .map(|ty| self.tua_type(ty, depth + 1))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+            TuaType::Dictionary { key, value } => format!(
+                "{{ [{}]: {} }}",
+                self.tua_type(key, depth + 1),
+                self.tua_type(value, depth + 1)
+            ),
+            TuaType::Function {
+                parameters,
+                returns,
+            } => {
+                let parameters = parameters
+                    .iter()
+                    .map(|parameter| {
+                        if parameter.variadic {
+                            return format!("...: {}", self.tua_type(&parameter.ty, depth + 1));
+                        }
+                        let name = parameter
+                            .name
+                            .as_ref()
+                            .map(|name| {
+                                format!("{name}{}: ", if parameter.optional { "?" } else { "" })
+                            })
+                            .unwrap_or_default();
+                        format!("{name}{}", self.tua_type(&parameter.ty, depth + 1))
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                let returns = returns
+                    .iter()
+                    .map(|ty| self.tua_type(ty, depth + 1))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                if returns.is_empty() {
+                    format!("fun({parameters})")
+                } else {
+                    format!("fun({parameters}): {returns}")
+                }
+            }
+        }
+    }
+
+    fn inferred_type(&self, ty: &Type, depth: usize) -> String {
+        if let Type::Alias(name) = ty {
+            if let Some(resolved) = self.resolved_import(name, depth) {
+                return luacats_type_from_type(&resolved);
+            }
+        }
+        luacats_type_from_type(ty)
+    }
+
+    fn function_annotation(&self, function: &crate::FunctionAnnotation) -> String {
+        if self.imported_names.is_empty() && self.imported_namespaces.is_empty() {
+            return luacats_function_type(function);
+        }
+        let parameters = function
+            .parameters
+            .iter()
+            .map(|parameter| format!("{}: {}", parameter.name, self.tua_type(&parameter.ty, 0)))
+            .collect::<Vec<_>>()
+            .join(", ");
+        function.return_type.as_ref().map_or_else(
+            || format!("fun({parameters})"),
+            |return_type| format!("fun({parameters}): {}", self.tua_type(return_type, 0)),
+        )
+    }
+
+    fn export_type(&self, ty: &Type) -> Option<String> {
+        if self.imported_names.is_empty() && self.imported_namespaces.is_empty() {
+            return luacats_export_type(ty);
+        }
+        (!matches!(ty, Type::Any)).then(|| self.inferred_type(ty, 0))
+    }
 }
 
 fn luacats_type(ty: &TuaType) -> String {
