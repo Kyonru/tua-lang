@@ -1509,6 +1509,27 @@ local label: string = "width: " .. z
 }
 
 #[test]
+fn accepts_matching_branched_multi_return_slots() {
+    check_tua_source(
+        "src/normalize.tua",
+        r#"
+local function normalize(dx: number, dy: number)
+  local length = math.sqrt(dx * dx + dy * dy)
+  if length <= 0.0001 then
+    return 0, 0
+  end
+  return dx / length, dy / length
+end
+
+local x, y = normalize(3, 4)
+local checked_x: number = x
+local checked_y: number = y
+"#,
+    )
+    .expect("matching branched multi-return slots should type-check");
+}
+
+#[test]
 fn accepts_required_module_function_returns_in_checked_function_bodies() {
     let temp = TempProject::new("required-module-check-return");
     let source = r#"local Functions = require("functions")

@@ -1628,6 +1628,20 @@ impl<'a> Checker<'a> {
                 return Some(callable);
             }
 
+            // Standard-library calls participate in local flow inference just
+            // like LOVE calls. Resolve user locals first so a shadowing table
+            // keeps its own callable fields instead of inheriting the global
+            // catalog signature.
+            if self.infer_named_value(root).is_none() {
+                if let Some(function) = lua::hover_item(&parts)
+                    .filter(|item| item.kind == lua::LuaItemKind::Function)
+                    .and_then(external_function_type_from_lua_item)
+                    .filter(external_function_has_known_return)
+                {
+                    return Some(Callable::ExternalFunction(function));
+                }
+            }
+
             if let Some(export) = required_module_export_type_for_fields(self.parsed, root, fields)
             {
                 return callable_from_type(&export, self.environment);
@@ -2610,6 +2624,15 @@ struct DotMethodCall {
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct ExternalFunctionType {
     variants: Vec<ExternalFunctionVariant>,
+}
+
+fn external_function_has_known_return(function: &ExternalFunctionType) -> bool {
+    function.variants.iter().any(|variant| {
+        variant
+            .return_types
+            .iter()
+            .any(|ty| !matches!(ty, Type::Any))
+    })
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

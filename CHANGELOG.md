@@ -8,6 +8,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Standard-library calls such as `math.sqrt(...)` now retain their return types
+  inside checked function bodies. This prevents valid branched multi-return
+  functions from reporting inferred `nil` values on later return paths.
 - VS Code Extension Host launch profiles now build the executed extension
   bundle before launch, emit source maps for JavaScript breakpoints, and stage
   the bundled server through a cross-platform Node script that selects `tua`
