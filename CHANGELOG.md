@@ -8,6 +8,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- The formatter now preserves UTF-8 text in strings, long-bracket text, and
+  comments instead of expanding each non-ASCII byte into mojibake on every
+  formatting pass.
+
 - Corrected the generated LOVE catalog for `love.window.setMode`: its `flags`
   table is optional in checking, completion, hover, and signature help, matching
   LOVE's supported two-argument form.

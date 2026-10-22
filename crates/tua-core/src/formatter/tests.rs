@@ -435,6 +435,31 @@ end
 }
 
 #[test]
+fn preserves_utf8_in_strings_comments_and_long_brackets() {
+    let source = concat!(
+        "local directions=\"← → move\" -- 日本語のコメント\n",
+        "local greeting='Olá, 世界 👋'\n",
+        "local description=[[\n",
+        "Zażółć gęślą jaźń\n",
+        "]]\n",
+        "--[[ Ελληνικό σχόλιο ]]\n",
+    );
+    let expected = concat!(
+        "local directions = \"← → move\" -- 日本語のコメント\n",
+        "local greeting = 'Olá, 世界 👋'\n",
+        "local description = [[\n",
+        "Zażółć gęślą jaźń\n",
+        "]]\n",
+        "--[[ Ελληνικό σχόλιο ]]\n",
+    );
+
+    let formatted = format(source);
+
+    assert_eq!(formatted, expected);
+    assert_eq!(format(&formatted), formatted);
+}
+
+#[test]
 fn returns_parse_diagnostics_without_formatting_invalid_source() {
     let diagnostics = format_tua_source(
         "src/main.tua",

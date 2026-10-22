@@ -697,6 +697,16 @@ fn normalize_spacing(line: &str) -> String {
     let mut index = 0;
 
     while index < bytes.len() {
+        if !bytes[index].is_ascii() {
+            let character = line[index..]
+                .chars()
+                .next()
+                .expect("formatter index should remain on a UTF-8 boundary");
+            output.push(character);
+            index += character.len_utf8();
+            continue;
+        }
+
         match &mut state {
             MaskState::Code => {
                 if bytes[index] == b'-' && bytes.get(index + 1) == Some(&b'-') {
