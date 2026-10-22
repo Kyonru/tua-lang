@@ -7,15 +7,15 @@
   <style>
     :root {
       color-scheme: light;
-      --ink: #19231f;
-      --muted: #607069;
-      --paper: #f4f1e8;
-      --panel: #fffdf7;
-      --line: #d7d3c7;
+      --ink: #14211c;
+      --muted: #53675f;
+      --paper: #edf3f0;
+      --panel: #ffffff;
+      --line: #cbd9d3;
       --accent: #0b6b57;
-      --accent-soft: #dceee8;
+      --accent-soft: #d7ebe4;
       --warn: #985a14;
-      --warn-soft: #f8ead2;
+      --warn-soft: #f6e8cf;
       --danger: #a33c35;
       --danger-soft: #f5dedb;
       --code: #18221e;
@@ -34,15 +34,13 @@
     h2 { margin: 56px 0 18px; font-size: clamp(1.65rem, 3vw, 2.35rem); }
     h3 { margin: 0 0 8px; font-size: 1.12rem; }
     p { max-width: 78ch; }
-    .eyebrow { color: var(--accent); font-weight: 750; letter-spacing: .12em; text-transform: uppercase; }
     .lede { max-width: 78ch; color: var(--muted); font-size: 1.15rem; }
     .notice, .card, .finding, .metric {
       background: var(--panel);
       border: 1px solid var(--line);
       border-radius: 14px;
-      box-shadow: 0 10px 28px rgba(25, 35, 31, .05);
     }
-    .notice { margin-top: 28px; padding: 18px 20px; border-left: 5px solid var(--accent); }
+    .notice { margin-top: 28px; padding: 18px 20px; background: var(--accent-soft); border-color: #afd1c5; }
     .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
     .card { padding: 22px; }
     .card p:last-child, .finding p:last-child { margin-bottom: 0; }
@@ -62,15 +60,12 @@
     .metric span { color: var(--muted); font-size: .88rem; }
     table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); }
     th, td { padding: 12px 14px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
-    th { background: #ebe7dc; font-size: .82rem; letter-spacing: .04em; text-transform: uppercase; }
-    code { padding: .08em .32em; border-radius: 5px; background: #e8e5dc; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    th { background: #dfe9e5; font-size: .82rem; letter-spacing: .04em; text-transform: uppercase; }
+    code { padding: .08em .32em; border-radius: 5px; background: #dfe8e4; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
     pre { overflow: auto; padding: 18px; border-radius: 12px; color: #e8f1ed; background: var(--code); }
     pre code { padding: 0; background: transparent; }
     .findings { display: grid; gap: 12px; }
-    .finding { padding: 18px 20px; border-left: 5px solid var(--line); }
-    .finding.fixed { border-left-color: var(--accent); }
-    .finding.open { border-left-color: var(--warn); }
-    .finding.policy { border-left-color: #65738e; }
+    .finding { padding: 18px 20px; }
     .status-fixed { color: var(--accent); }
     .status-open { color: var(--warn); }
     .small { color: var(--muted); font-size: .9rem; }
@@ -87,7 +82,6 @@
 <body>
 <main>
   <header>
-    <div class="eyebrow">Tua developer experience · October 2026</div>
     <h1>Three engineers build Tetris</h1>
     <p class="lede">A practical evaluation of Tua as a typed Lua and LOVE game-development toolchain. Three simulated engineering personas independently built and ran small falling-block games, then exercised the compiler, linter, formatter, package flow, runtime, language server, documentation, and completion APIs.</p>
     <div class="notice"><strong>Study boundary:</strong> these were agent-simulated personas, not recruited human participants. The games and trial notes were intentionally created in temporary directories and were not committed. Findings were accepted only when backed by a minimal reproduction, a real command result, or a direct LSP probe.</div>
