@@ -174,6 +174,12 @@ enforced separately with `tua fmt --check`.
 | `TL4061` | A call begins on a new line and Lua parses it as continuation of the preceding expression. | `rules`; enabled by default |
 | `TL4062` | A table field begins with call syntax after a missing comma, so Lua parses it as a call on the preceding field. | `rules`; enabled by default |
 | `TL4063` | A plain module-scope assignment or function declaration creates an unscoped global in a Tua file. | `rules`; enabled by default |
+| `TL4064` | Equality compares two separately created table or function values, making the result constant by identity. | `rules`; enabled by default |
+| `TL4065` | A direct `if` and `else` execute identical non-empty runtime tokens. | `rules`; enabled by default |
+| `TL4066` | A control-flow or named-function body is empty without a comment or conventional stub exemption. | `rules`; enabled by default |
+| `TL4067` | A loop unconditionally terminates during its first iteration. | `rules`; enabled by default |
+| `TL4068` | A direct call discards the result of a resolved function or module export marked `---@nodiscard`. | `rules`; enabled by default |
+| `TL4069` | Two static module references resolve to the same file but use different final Lua runtime keys, which can duplicate module state. | `rules`; enabled by default |
 
 Configuration keys in this table live under `[diagnostics]` unless they start
 with `jit.`. VS Code can override matching diagnostic settings for the running

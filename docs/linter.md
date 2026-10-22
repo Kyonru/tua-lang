@@ -86,6 +86,12 @@ share an existing Tua code because they are the same analysis.
 | `NewlineCall` | `TL4061` |
 | `NewfieldCall` | `TL4062` |
 | `UnscopedGlobalWrite` | `TL4063` |
+| `ConstantIdentity` | `TL4064` |
+| `IdenticalBranches` | `TL4065` |
+| `EmptyBlock` | `TL4066` |
+| `SingleIterationLoop` | `TL4067` |
+| `MustUseResult` | `TL4068` |
+| `CanonicalModuleSpelling` | `TL4069` |
 
 `UnknownGlobal` considers plain global assignments and simple global function
 declarations anywhere in the current Tua file to be definitions, regardless of
@@ -97,6 +103,13 @@ module-scope assignment or unqualified function declaration that creates a
 global. Builtins, configured globals, and qualified `love.*` callbacks are
 exempt. Ordinary `.lua` files remain permissive, and an explicit `_G.name`
 write continues to communicate deliberate global state.
+
+`CanonicalModuleSpelling` compares the final keys passed to Lua's runtime
+`require`, after static `import` calls have been resolved and lowered. It warns
+when two spellings resolve to the same file but would occupy different
+`package.loaded` entries, which can initialize stateful modules twice. It does
+not compare raw import text, so a child-relative `import("./shared")` and its
+lowered `require("shared")` key agree.
 
 `NewlineCall` reports a call whose argument opener begins on a later line than
 the expression it calls. Lua treats the lines as one chained expression even

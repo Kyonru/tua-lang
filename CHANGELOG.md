@@ -134,6 +134,22 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Added
 
+- Added `TL4068` for discarded results from resolved `---@nodiscard` functions
+  and module exports. Assigned, returned, nested, unresolved, and dynamic calls
+  remain valid.
+- Added conservative standard diagnostics for comparisons between separate
+  fresh table or function values (`TL4064`), identical direct `if`/`else`
+  branches (`TL4065`), unexplained empty control-flow or named-function bodies
+  (`TL4066`), and loops that unconditionally stop on their first iteration
+  (`TL4067`). Comments and conventional callback or no-op names preserve
+  deliberate empty stubs.
+- Unused-symbol analysis now reports unused generic/numeric loop bindings
+  (`TL4005`) and unused varargs (`TL4006`), while preserving the `_` prefix
+  exemption for intentionally unused named bindings.
+- Added `TL4069` for static module references that resolve to one file but use
+  different final Lua `require` keys. Module resolution, import lowering, and
+  this diagnostic now share the same runtime module-key fact, avoiding false
+  positives from child-relative `import` spelling.
 - Added enabled-by-default `TL4061`/`TL4062` diagnostics for Lua's ambiguous
   newline-call and table newfield-call syntax, with intent-dependent `;` and
   `,` editor fixes that are excluded from safe fix-all.

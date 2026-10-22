@@ -11,7 +11,50 @@ more opinionated rules.
 
 Fix the semantic and configuration issues before expanding the catalog.
 
-## Confirmed findings
+## Implementation status
+
+The review was completed in October 2026. Every recommended correctness and
+default-policy item is now implemented:
+
+- Union field, index, method, and call operations require every live union
+  member to support the operation. Completion uses the same intersection rule.
+- The inert checker-backed lint switches and their unused codes were removed.
+  Exact diagnostic-code severity overrides, error-only `check`, lint policy,
+  and `--deny-warnings` now provide one consistent policy mechanism.
+- `TL4045` uses source-order and branch-aware definite assignment.
+- `TL4061` through `TL4063` cover ambiguous newline calls, ambiguous table
+  fields, and accidental Tua module globals, with intent-specific editor fixes.
+- Reliable literal missing-module diagnostics are enabled by default, while
+  dynamic module loads remain permissive.
+- The direct-call-only function rule is no longer part of strict mode.
+- Dead local writes are analyzed in source order, and the documentation now
+  states the deliberately narrower scope of float-equality checking.
+- `TL4064` through `TL4069` implement the high-confidence rules proposed
+  below, including `---@nodiscard` propagation through Lua module exports and
+  final-runtime-key comparison for canonical module spelling.
+- Unused generic and numeric loop bindings and unused varargs participate in
+  the existing unused-symbol diagnostics.
+
+Two optional ideas do not warrant new diagnostics yet. Numeric `for` direction
+mistakes are already covered by `ForRange` (`TL4042`), including an implicit
+positive step whose bounds descend. Cyclomatic complexity needs a separately
+designed, opt-in threshold configuration; a universal default would turn a
+maintainability preference into noisy editor feedback.
+
+The lower-priority ideas remain intentionally unimplemented. Mixed array/map
+tables and flexible naming are normal Lua patterns, while “almost swapped”
+assignments are too speculative for a default diagnostic. Division by a
+literal zero follows Lua's numeric semantics rather than consistently failing:
+Lua 5.4 and LuaJIT may produce infinities, while vector implementations can
+choose stricter behavior. If project-specific policy is added later, these
+belong behind individually configurable opt-in rules rather than the standard
+ruleset.
+
+## Original confirmed findings
+
+The sections below preserve the evidence and rationale from the review. Their
+present-tense descriptions refer to the pre-implementation baseline; the
+completion status above is authoritative for current behavior.
 
 ### Blocker: unsafe union access is accepted
 
