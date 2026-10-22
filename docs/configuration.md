@@ -485,7 +485,9 @@ rule.
   expressions such as `value == value`.
 
 `float_equality`
-: Reports direct equality checks between known numeric values.
+: Reports direct equality checks where either operand is a floating-point
+  literal. It does not currently propagate non-integral facts through names or
+  arithmetic expressions.
 
 `const_assignments`
 : Reports assignments to values Tua treats as constant.
@@ -501,8 +503,10 @@ intentional.
 : Applies the same explicit-value-count check to local declarations.
 
 `unused_assignments`
-: Reports assignments to locals that are never otherwise read. This complements
-`unused_locals`, which reports the declaration itself.
+: Reports initial values, parameter values, and reassignments that are
+  overwritten before being read, plus final local assignments whose value is
+  never read. This complements `unused_locals`, which reports the declaration
+  itself.
 
 `binary_operator_type_mismatches`
 : Reports binary operators used with statically incompatible operand types, such
