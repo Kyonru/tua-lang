@@ -414,8 +414,10 @@ impl FormatOverrides {
         };
 
         Self {
-            indent_width: usize_setting(settings, "indent_width", "indentWidth"),
-            line_width: usize_setting(settings, "line_width", "lineWidth"),
+            indent_width: usize_setting(settings, "indent_width", "indentWidth")
+                .filter(|value| *value >= 1),
+            line_width: usize_setting(settings, "line_width", "lineWidth")
+                .filter(|value| *value >= 1),
             quote_style: quote_style_setting(settings, "quote_style", "quoteStyle"),
             final_newline: bool_setting(settings, "final_newline", "finalNewline"),
         }
@@ -821,5 +823,21 @@ mod tests {
                 expected
             );
         }
+    }
+
+    #[test]
+    fn formatter_width_overrides_reject_zero() {
+        let settings = WorkspaceSettings::from_did_change_configuration(&json!({
+            "params": {
+                "settings": {
+                    "tua": { "format": { "indentWidth": 0, "lineWidth": 0 } }
+                }
+            }
+        }));
+
+        assert_eq!(
+            settings.format_options(FormatConfig::default()),
+            FormatConfig::default().options()
+        );
     }
 }

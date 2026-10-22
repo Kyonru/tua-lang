@@ -75,6 +75,19 @@ fn parses_all_formatter_quote_styles() {
 }
 
 #[test]
+fn rejects_zero_formatter_widths() {
+    for setting in ["indent_width", "line_width"] {
+        let error = parse_config(&format!("[format]\n{setting} = 0\n"))
+            .expect_err("zero formatter widths should be rejected");
+        assert!(
+            error.message.contains("greater than or equal to 1"),
+            "{}",
+            error.message
+        );
+    }
+}
+
+#[test]
 fn parses_declaration_only_type_libraries() {
     let config = parse_config(
         r#"

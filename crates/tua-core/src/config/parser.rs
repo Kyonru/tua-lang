@@ -103,6 +103,20 @@ where
     }
 }
 
+pub(super) fn deserialize_positive_usize<'de, D>(deserializer: D) -> Result<usize, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = usize::deserialize(deserializer)?;
+    if value == 0 {
+        Err(D::Error::custom(
+            "expected an integer greater than or equal to 1",
+        ))
+    } else {
+        Ok(value)
+    }
+}
+
 fn config_schema() -> &'static ConfigSchema {
     static SCHEMA: OnceLock<ConfigSchema> = OnceLock::new();
 

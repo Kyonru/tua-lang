@@ -21,6 +21,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- `format.indent_width` and `format.line_width` now consistently reject zero
+  in `tua.toml` and ignore invalid zero-valued LSP overrides, matching their
+  schema and VS Code constraints.
+
 - Long table literals wrapped inside calls and index expressions no longer
   gain an invalid-looking gap before `{`, and automatic call/table wrapping is
   now covered by second-pass idempotence checks.

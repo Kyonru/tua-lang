@@ -220,7 +220,9 @@ impl<'de> Deserialize<'de> for AnnotationMode {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 #[serde(default, deny_unknown_fields)]
 pub struct FormatConfig {
+    #[serde(deserialize_with = "parser::deserialize_positive_usize")]
     pub indent_width: usize,
+    #[serde(deserialize_with = "parser::deserialize_positive_usize")]
     pub line_width: usize,
     #[serde(deserialize_with = "parser::deserialize_quote_style")]
     pub quote_style: QuoteStyle,

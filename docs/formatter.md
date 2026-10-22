@@ -44,6 +44,10 @@ quote_style = "preserve"
 final_newline = true
 ```
 
+`indent_width` and `line_width` must both be at least 1. Invalid TOML values
+are reported as configuration errors; invalid editor overrides are ignored in
+favor of the project/default setting.
+
 `quote_style` accepts `preserve`, `double`, or `single`. Forced styles rewrite
 only complete short-string literals and update delimiter escapes without
 changing the string value. Long-bracket strings, multiline literal bodies,
