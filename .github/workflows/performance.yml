@@ -30,11 +30,16 @@ jobs:
         env:
           # The full representative profile is a trend artifact, and GitHub's
           # shared runners are substantially slower and noisier on the 1k-file
-          # workspace. Give trend requests time to finish and retain a broad
-          # runaway ceiling; PR freshness gating remains at 3s in
+          # workspace. Keep five warm samples for the primary latency trend,
+          # but limit cold starts and contention fan-out so the shared runner
+          # can finish every fixture. PR freshness gating remains stricter in
           # benchmark-smoke.
           TUA_LSP_REQUEST_TIMEOUT_MS: 180000
           TUA_REPRESENTATIVE_COMPLETION_P95_BUDGET_MS: 60000
+          TUA_REPRESENTATIVE_COLD_REPEAT: 1
+          TUA_REPRESENTATIVE_WARM_REPEAT: 5
+          TUA_REPRESENTATIVE_CONTENTION_REPEAT: 2
+          TUA_REPRESENTATIVE_BACKGROUND_BURST: 16
       - name: Upload profile reports
         if: always()
         uses: actions/upload-artifact@v6
