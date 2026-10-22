@@ -767,6 +767,31 @@ fn print_summary(report: &eval::EvalReport) {
                 summary.backend_latency_us.p95,
             );
         }
+        if let Some(slate) = &set.candidate_slate {
+            println!(
+                "candidate slate: {}/{} requests have candidates ({} independent positions); {} disagreements ({} independent: {} mixed, {} all-correct, {} all-wrong)",
+                slate.requests_with_candidates,
+                slate.eligible_requests,
+                slate.independent_candidate_positions,
+                slate.disagreement_requests,
+                slate.independent_disagreement_positions,
+                slate.disagreement_mixed_quality,
+                slate.disagreement_all_correct,
+                slate.disagreement_all_wrong,
+            );
+            println!(
+                "candidate slate utility: production {:.3} saved/eligible, {:.3} precision, {:.2} wrong/saved; first {:.3}, {:.3}, {:.2}; oracle {:.3}, {:.3}, {:.2}",
+                slate.production_baseline.chars_saved_per_eligible,
+                slate.production_baseline.correct_prefix_precision,
+                slate.production_baseline.wrong_to_saved_ratio,
+                slate.slate_first.chars_saved_per_eligible,
+                slate.slate_first.correct_prefix_precision,
+                slate.slate_first.wrong_to_saved_ratio,
+                slate.oracle_best.chars_saved_per_eligible,
+                slate.oracle_best.correct_prefix_precision,
+                slate.oracle_best.wrong_to_saved_ratio,
+            );
+        }
         for (language, warmup) in &set.warmup_by_language {
             let rates = warmup
                 .hit_rate_by_delay_ms

@@ -1169,6 +1169,97 @@ fn phase2_retrieval_reports_holdouts_states_tiers_and_index_costs() {
     let complete = &set.backends["project-line-holdout-complete"];
     assert!(complete.by_index_state["complete"].eligible > 0);
     assert!(complete.by_tier.contains_key("current-file"));
+    let slate = set
+        .candidate_slate
+        .as_ref()
+        .expect("Phase 2 reports the evaluator-only candidate slate");
+    assert_eq!(slate.backend_order, HISTORY_SLATE_BACKENDS);
+    assert_eq!(
+        slate.requests_with_candidates,
+        slate.all_correct_requests + slate.mixed_quality_requests + slate.all_wrong_requests
+    );
+    assert_eq!(
+        slate.candidates_per_request.values().sum::<usize>(),
+        slate.eligible_requests
+    );
+    assert!(slate.disagreement_requests <= slate.requests_with_candidates);
+    assert_eq!(
+        slate.disagreement_requests,
+        slate.disagreement_mixed_quality
+            + slate.disagreement_all_correct
+            + slate.disagreement_all_wrong
+    );
+    assert!(slate.independent_disagreement_positions <= slate.disagreement_requests);
+    assert!(slate.oracle_best.chars_saved >= slate.production_baseline.chars_saved);
+    assert_eq!(slate.oracle_best.incorrect_chars, 0);
+}
+
+#[test]
+fn candidate_slate_deduplicates_edits_and_oracle_abstains_when_all_are_wrong() {
+    let candidate = |text: &str, source: &'static str| Candidate {
+        text: text.to_owned(),
+        is_snippet: false,
+        source,
+        score: 1.0,
+        tier: None,
+    };
+    let keys = |offset| Keys {
+        abstain: false,
+        language: "tua",
+        scenario: "edit",
+        menu: "closed",
+        context: "other",
+        prefix: "token-end",
+        document: "parses",
+        project: "project",
+        file: "main.tua",
+        original_offset: offset,
+    };
+    let correct = score("world:update(dt)", false, "world:update(dt)");
+    let wrong = score("world:draw()", false, "world:update(dt)");
+
+    let mut slate = CandidateSlateAccumulator::default();
+    slate.add(
+        &keys(10),
+        Some(correct),
+        vec![
+            (candidate("world:update(dt)", "semantic"), correct),
+            // The duplicate is rediscovered by another source but is not a
+            // second ranking choice.
+            (candidate("world:update(dt)", "project"), correct),
+            (candidate("world:draw()", "corpus"), wrong),
+        ],
+    );
+    slate.add(
+        &keys(20),
+        Some(wrong),
+        vec![(candidate("world:draw()", "project"), wrong)],
+    );
+    slate.add(&keys(30), None, vec![]);
+
+    let report = slate.finish();
+    assert_eq!(report.eligible_requests, 3);
+    assert_eq!(report.requests_with_candidates, 2);
+    assert_eq!(report.disagreement_requests, 1);
+    assert_eq!(report.disagreement_mixed_quality, 1);
+    assert_eq!(report.disagreement_all_correct, 0);
+    assert_eq!(report.disagreement_all_wrong, 0);
+    assert_eq!(report.mixed_quality_requests, 1);
+    assert_eq!(report.all_wrong_requests, 1);
+    assert_eq!(report.all_correct_requests, 0);
+    assert_eq!(
+        report.candidates_per_request,
+        BTreeMap::from([(0, 1), (1, 1), (2, 1)])
+    );
+    assert_eq!(report.independent_candidate_positions, 2);
+    assert_eq!(report.independent_disagreement_positions, 1);
+    assert_eq!(report.production_baseline.suggested, 2);
+    assert_eq!(report.production_baseline.correct_prefix, 1);
+    assert_eq!(report.slate_first.suggested, 2);
+    assert_eq!(report.slate_first.correct_prefix, 1);
+    assert_eq!(report.oracle_best.suggested, 1);
+    assert_eq!(report.oracle_best.correct_prefix, 1);
+    assert_eq!(report.oracle_best.incorrect_chars, 0);
 }
 
 #[test]

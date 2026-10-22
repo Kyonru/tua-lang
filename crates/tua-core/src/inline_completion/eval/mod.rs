@@ -48,6 +48,19 @@ use crate::{
 
 const PRODUCTION_EVAL_CORPUS_GENERATION: u64 = 1;
 
+/// Evaluator-only source order for the personal-history feasibility slate.
+///
+/// This deliberately names standalone sources instead of changing the
+/// production fallback chain. The report first has to establish that choosing
+/// among the candidate sources has useful headroom; the standalone prototypes
+/// are intentionally not treated as production-safe.
+const HISTORY_SLATE_BACKENDS: [&str; 4] = [
+    "semantic",
+    "current-file-prefix",
+    "project-only-file-holdout-complete",
+    "bundled-corpus",
+];
+
 /// Delays after the last keystroke at which a request fires: the inline
 /// debounce during continuous typing, then the pauses the plan asks about.
 pub const REQUEST_DELAYS_MS: [u64; 4] = [60, 150, 300, 1000];
@@ -223,6 +236,32 @@ pub struct BackendReport {
     pub precision_coverage: Vec<CurvePoint>,
 }
 
+/// Evaluator-only evidence for whether a history-backed ranker has anything
+/// useful to choose between. "Oracle" knows the hidden continuation and
+/// abstains when every candidate is wrong; it is a ceiling, not a shippable
+/// ranker.
+#[derive(Clone, Debug, Default, Serialize)]
+pub struct CandidateSlateReport {
+    pub backend_order: Vec<&'static str>,
+    pub eligible_requests: usize,
+    pub requests_with_candidates: usize,
+    pub disagreement_requests: usize,
+    pub disagreement_mixed_quality: usize,
+    pub disagreement_all_correct: usize,
+    pub disagreement_all_wrong: usize,
+    pub mixed_quality_requests: usize,
+    pub all_correct_requests: usize,
+    pub all_wrong_requests: usize,
+    pub independent_candidate_positions: usize,
+    pub independent_disagreement_positions: usize,
+    pub candidates_per_request: BTreeMap<usize, usize>,
+    /// The existing production Phase 1 query, measured on the same requests.
+    pub production_baseline: Summary,
+    /// The first available candidate in `backend_order`, before any ranker.
+    pub slate_first: Summary,
+    pub oracle_best: Summary,
+}
+
 #[derive(Clone, Debug, Default, Serialize)]
 pub struct WarmupReport {
     pub samples: usize,
@@ -350,6 +389,9 @@ pub struct SetReport {
     pub bundled_corpus: Option<BundledCorpusReport>,
     /// Phase 3 evaluator-only model construction measurements.
     pub ngram_indexes: Vec<(String, ngram::NgramIndexReport)>,
+    /// Present for Phase 2 tuning/smoke runs, where all standalone sources in
+    /// the evaluator-only personal-history slate are available.
+    pub candidate_slate: Option<CandidateSlateReport>,
     pub records: Vec<Record>,
 }
 
@@ -517,6 +559,115 @@ struct BackendAccumulator {
     independent_suggestions: BTreeMap<String, BTreeSet<(String, String, usize)>>,
 }
 
+#[derive(Default)]
+struct CandidateSlateAccumulator {
+    eligible_requests: usize,
+    requests_with_candidates: usize,
+    disagreement_requests: usize,
+    disagreement_mixed_quality: usize,
+    disagreement_all_correct: usize,
+    disagreement_all_wrong: usize,
+    mixed_quality_requests: usize,
+    all_correct_requests: usize,
+    all_wrong_requests: usize,
+    candidates_per_request: BTreeMap<usize, usize>,
+    production_baseline: Summary,
+    slate_first: Summary,
+    oracle_best: Summary,
+    independent_candidate_positions: BTreeSet<(String, String, usize)>,
+    independent_disagreement_positions: BTreeSet<(String, String, usize)>,
+}
+
+impl CandidateSlateAccumulator {
+    fn add(
+        &mut self,
+        keys: &Keys<'_>,
+        production_baseline: Option<Outcome>,
+        mut candidates: Vec<(Candidate, Outcome)>,
+    ) {
+        if keys.abstain {
+            return;
+        }
+        self.eligible_requests += 1;
+
+        // Backends often rediscover the same edit. A ranker has no choice to
+        // make between identical text, so preserve source priority and count
+        // the edit only once.
+        let mut seen = BTreeSet::new();
+        candidates
+            .retain(|(candidate, _)| seen.insert((candidate.text.clone(), candidate.is_snippet)));
+
+        let count = candidates.len();
+        *self.candidates_per_request.entry(count).or_default() += 1;
+        self.production_baseline.add(production_baseline, 0);
+        self.slate_first
+            .add(candidates.first().map(|(_, outcome)| *outcome), 0);
+
+        let oracle = candidates
+            .iter()
+            .map(|(_, outcome)| *outcome)
+            .filter(|outcome| outcome.correct_prefix)
+            .max_by_key(|outcome| (outcome.chars_saved, outcome.exact));
+        self.oracle_best.add(oracle, 0);
+
+        if candidates.is_empty() {
+            return;
+        }
+        self.requests_with_candidates += 1;
+        let position = (
+            keys.project.to_owned(),
+            keys.file.to_owned(),
+            keys.original_offset,
+        );
+        self.independent_candidate_positions
+            .insert(position.clone());
+
+        let correct = candidates
+            .iter()
+            .filter(|(_, outcome)| outcome.correct_prefix)
+            .count();
+        if correct == 0 {
+            self.all_wrong_requests += 1;
+        } else if correct == count {
+            self.all_correct_requests += 1;
+        } else {
+            self.mixed_quality_requests += 1;
+        }
+        if count > 1 {
+            self.disagreement_requests += 1;
+            if correct == 0 {
+                self.disagreement_all_wrong += 1;
+            } else if correct == count {
+                self.disagreement_all_correct += 1;
+            } else {
+                self.disagreement_mixed_quality += 1;
+            }
+            self.independent_disagreement_positions.insert(position);
+        }
+    }
+
+    fn finish(self) -> CandidateSlateReport {
+        CandidateSlateReport {
+            backend_order: HISTORY_SLATE_BACKENDS.to_vec(),
+            eligible_requests: self.eligible_requests,
+            requests_with_candidates: self.requests_with_candidates,
+            disagreement_requests: self.disagreement_requests,
+            disagreement_mixed_quality: self.disagreement_mixed_quality,
+            disagreement_all_correct: self.disagreement_all_correct,
+            disagreement_all_wrong: self.disagreement_all_wrong,
+            mixed_quality_requests: self.mixed_quality_requests,
+            all_correct_requests: self.all_correct_requests,
+            all_wrong_requests: self.all_wrong_requests,
+            independent_candidate_positions: self.independent_candidate_positions.len(),
+            independent_disagreement_positions: self.independent_disagreement_positions.len(),
+            candidates_per_request: self.candidates_per_request,
+            production_baseline: self.production_baseline.finish(),
+            slate_first: self.slate_first.finish(),
+            oracle_best: self.oracle_best.finish(),
+        }
+    }
+}
+
 impl BackendAccumulator {
     fn add(
         &mut self,
@@ -655,6 +806,9 @@ fn evaluate_set(set: &EvalSet, backends: &[Box<dyn Backend>], options: &EvalOpti
         .iter()
         .map(|_| BackendAccumulator::default())
         .collect::<Vec<_>>();
+    let mut candidate_slate = options
+        .phase2_retrieval
+        .then(CandidateSlateAccumulator::default);
     let mut warmups = BTreeMap::<&'static str, WarmupAccumulator>::new();
     let mut parse_samples = BTreeMap::<&'static str, Vec<(usize, Option<Vec<u64>>)>>::new();
 
@@ -706,6 +860,7 @@ fn evaluate_set(set: &EvalSet, backends: &[Box<dyn Backend>], options: &EvalOpti
                 &mut accumulators,
                 &mut warmups,
                 &mut report,
+                candidate_slate.as_mut(),
                 retrieval_index.as_ref(),
                 ngram_index.as_ref(),
             );
@@ -729,6 +884,7 @@ fn evaluate_set(set: &EvalSet, backends: &[Box<dyn Backend>], options: &EvalOpti
         .zip(accumulators)
         .map(|(backend, accumulator)| (backend.name().to_owned(), accumulator.finish()))
         .collect();
+    report.candidate_slate = candidate_slate.map(CandidateSlateAccumulator::finish);
     report.warmup_by_language = warmups
         .into_iter()
         .map(|(language, mut warmup)| {
@@ -874,6 +1030,7 @@ fn evaluate_file(
     accumulators: &mut [BackendAccumulator],
     warmups: &mut BTreeMap<&'static str, WarmupAccumulator>,
     report: &mut SetReport,
+    mut candidate_slate: Option<&mut CandidateSlateAccumulator>,
     retrieval_index: Option<&EvalProjectRetrievalIndex>,
     ngram_index: Option<&ngram::EvalNgramIndex>,
 ) {
@@ -997,6 +1154,8 @@ fn evaluate_file(
                 original_offset: position.offset,
             };
 
+            let mut slate_candidates = Vec::new();
+            let mut production_baseline = None;
             for (backend, accumulator) in backends.iter().zip(accumulators.iter_mut()) {
                 let started = Instant::now();
                 let raw = backend.suggest_with_host(
@@ -1021,6 +1180,14 @@ fn evaluate_file(
                 let outcome = candidate.as_ref().map(|candidate| {
                     metrics::score(&candidate.text, candidate.is_snippet, expected)
                 });
+                if HISTORY_SLATE_BACKENDS.contains(&backend.name()) {
+                    if let (Some(candidate), Some(outcome)) = (&candidate, outcome) {
+                        slate_candidates.push((candidate.clone(), outcome));
+                    }
+                }
+                if backend.name() == "phase1" {
+                    production_baseline = outcome;
+                }
                 accumulator.add(
                     &keys,
                     candidate.as_ref(),
@@ -1045,6 +1212,9 @@ fn evaluate_file(
                         outcome,
                     });
                 }
+            }
+            if let Some(slate) = candidate_slate.as_deref_mut() {
+                slate.add(&keys, production_baseline, slate_candidates);
             }
         }
     }

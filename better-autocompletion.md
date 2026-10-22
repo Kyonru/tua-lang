@@ -1496,67 +1496,231 @@ unapproved source by default.
 
 ## Later proposal: personal history across projects
 
-Personal history remains outside the main implementation sequence.
+Personal history remains outside the main implementation sequence. A
+2026-10-22 feasibility spike found that the storage is easy, but the current
+product does not yet have a useful ranking surface. Production returns the
+first candidate from a fixed source order, every production candidate has
+`pattern_id: None`, and the extension records only aggregate per-source
+returned and accepted counters. A database cannot improve ranking until those
+three constraints change.
 
-### Initial behavior
+The tune-only evaluator does show that ranking could eventually matter. Its
+implemented candidate-slate report combines the semantic,
+current-file-prefix, project-only-file-holdout-complete, and bundled prototype
+backends without changing production. Across 4,234 eligible scenario requests,
+1,042 had at least one candidate, representing 557 independent original cursor
+positions. There were 116 requests with two or more different edits, at 69
+independent positions. Forty-six disagreements contained both a correct-prefix
+and an incorrect candidate, 68 had no correct candidate, and two contained
+only correct candidates. Equal edits rediscovered by multiple sources count
+once.
 
-It ranks candidates produced by semantic, project, and bundled sources. It does
-not generate new text.
+The same report compares the shipping Phase 1 result, the first candidate in
+the exploratory slate, and an oracle that knows the hidden continuation and
+abstains if every candidate is wrong. Production saves `0.149` characters per
+eligible request at `0.728` correct-prefix precision and `0.395` wrong
+characters per saved character. The oracle reaches `0.362`, `1.0`, and `0.0`
+respectively. Naively returning the slate's first result reaches `0.331` saved
+characters but only `0.241` precision and `9.33` wrong characters per saved
+character. This establishes theoretical selection headroom and also proves
+that exposing more raw candidates would be unsafe. These are prototype/tuning
+observations, not release evidence and not evidence that personal history can
+approach the oracle.
 
-### Persisted data
+### Decision
+
+Personal history is feasible, but persistence is **not** the next step. First
+build and evaluate a small candidate slate with stable identities. Continue to
+a persistent experiment only if history can improve that slate in chronological
+replay without weakening the existing safety policy.
+
+The feature remains ranking-only. It can reorder or positively boost
+candidates already admitted by semantic, current-file, project, statistical,
+or bundled policy. It never generates text, lowers a source's safety threshold,
+revives a rejected candidate, or bypasses validation. Unique semantic results
+such as missing LÖVE callbacks keep priority unless evaluation proves a safer
+rule.
+
+### Prerequisite 1: a candidate slate
+
+> **Evaluator slice implemented (2026-10-22).** Phase 2 tuning and smoke
+> reports now include the bounded source order, edit deduplication, candidate
+> count distribution, request-level and independent-position disagreements,
+> disagreement quality, the production baseline, slate-first utility, and the
+> abstaining oracle. Production candidate selection is unchanged.
+
+Refactor fixed `.or_else(...)` source selection into a bounded internal slate:
+
+- At most one candidate per source and at most three candidates in total.
+- Deduplicate equal edits before ranking.
+- Preserve the existing source order as the baseline rank.
+- Apply eligibility and source policy before history.
+- Rank before expensive parse validation, then validate candidates in rank
+  order and stop after the first accepted candidate.
+- Keep automatic VS Code requests at one returned item. Multiple results are
+  useful in the evaluator and for explicit invocation, not as extra automatic
+  ghost text.
+
+The evaluator must report slate size, disagreement rate, production-baseline
+utility, slate-first utility, oracle-best utility, and ranker-selected utility.
+Do not implement storage if the oracle-best slate cannot materially beat the
+current fixed-order baseline.
+
+### Prerequisite 2: stable structural identity
+
+Every rankable candidate needs a versioned structural identity produced by
+`tua-core`. The canonical identity includes:
+
+- identity schema and tokenizer versions
+- source family and semantic rule identifier, where applicable
+- normalized enclosing context
+- normalized candidate token shape
+
+It excludes paths, project names, source lines, literal values, and retrieval
+origin. Alpha-equivalent local names use the same slots. Semantic candidates
+use named stable rule IDs rather than hashes of rendered snippet text. Tests
+must prove stability across formatting, local renames, restarts, and source
+tiers, and separation across structurally different candidates.
+
+Do not persist a plain or merely salted hash. Structural keys still contain
+guessable API, field, and method shapes, and a salt stored next to the database
+does not prevent dictionary recovery. When history is enabled in a trusted
+workspace, the extension creates a 256-bit secret in VS Code `SecretStorage`
+and supplies it to the bundled local server through its process environment at
+launch, never through logged LSP configuration. The server returns an
+HMAC-SHA-256 identity; protocol payloads and logs therefore contain neither the
+secret nor the canonical key. Rotating or deleting the secret makes the old
+history unaddressable.
+
+### Feedback semantics
+
+VS Code's stable inline-completion API provides a command after an item is
+accepted, but no reliable "item became visible" callback. Therefore:
+
+- Keep calling provider results **returned**, never shown or exposed.
+- Do not interpret a non-acceptance as rejection. Automatic requests can be
+  repeated, cancelled, superseded, or hidden by the suggestion menu.
+- The first experiment uses accepted events only as positive evidence. It
+  never demotes a candidate because it was returned but not accepted.
+- Deduplicate accepted commands by request ID and pattern ID so a retry cannot
+  count twice.
+- If returned counts are retained for observability, deduplicate them by
+  document version, position, request kind, and pattern ID; they do not enter
+  the ranking formula.
+
+An accepted event records the pattern HMAC, a project HMAC, source family, and
+timestamp. "Distinct-project support" means projects in which the pattern was
+accepted, not projects in which it was merely returned or happened to occur in
+an index.
+
+### Ranking experiment
+
+Start with a deliberately bounded positive boost, not an acceptance ratio:
+
+```text
+history_boost = min(MAX_BOOST,
+                    recency_decay * log1p(accepted_count)
+                    * project_support_factor)
+```
+
+Apply the boost only within the same safety class. Cap it below the gap between
+unique semantic candidates and learned pattern candidates. Require a minimum
+of three acceptances across at least two projects before cross-project history
+can change an ordering. The exact formula and constants come from chronological
+evaluation; the expression above defines behavior, not release values.
+
+Evaluation must compare:
+
+1. Existing fixed source order.
+2. The best possible candidate in the same slate (oracle ceiling).
+3. A frequency-only ranker.
+4. The personal-history ranker.
+
+Process projects chronologically. At each request, rank using only earlier
+accepted events, score the result, and then reveal the current event. Split by
+source, context, language, cold start, and number of prior projects. Required
+release metrics are characters saved per eligible position, correct-prefix
+precision, wrong-to-saved ratio, abstention rate, and p95/p99 rank latency.
+Neither the held-out nor external gate set may be used while designing the
+ranker.
+
+Proceed to an opt-in dogfood release only if all of these hold on independent
+chronological projects:
+
+- personal history beats the fixed-order and frequency-only baselines in
+  characters saved per eligible position
+- correct-prefix precision and wrong-to-saved do not regress
+- at least five prior projects and 100 history-influenced decisions contribute
+  evidence
+- ranking p95 is at most 0.25 ms and causes no measurable menu-completion or
+  diagnostics regression
+- disabling history is bit-for-bit equivalent to the baseline ranker
+
+### Ownership and data flow
+
+- `tua-core` owns canonical structural identities and ranking.
+- `tua-lsp` owns an immutable `Arc<PersonalHistorySnapshot>` outside
+  `AnalysisSnapshot`. Updating history atomically replaces that value; inline
+  requests only read the snapshot captured when they are prepared.
+- The extension owns consent, workspace trust, `SecretStorage`, persistence,
+  batching, reset, and user-visible status.
+- On startup or a batched update, the extension sends a bounded history
+  snapshot to the server. Inline requests never read disk, extension storage,
+  or a database.
+- Other LSP clients get baseline behavior unless they explicitly implement the
+  same opt-in history protocol.
+
+### Persisted data and limits
+
+Use a versioned JSON file under the extension's `globalStorageUri` for the
+first experiment. A synthetic 20,000-pattern representation was about 2.3 MiB
+and took about 7.4 ms to parse and 5.1 ms to encode on the development machine;
+this is startup/background work, not request-path work. That result is a
+feasibility measurement, not a cross-platform budget guarantee.
 
 Store only:
 
-- Locally salted structural-key hashes
-- Returned counts
-- Accepted counts
-- Last-seen time
-- Distinct-project support
-- Schema and tokenizer versions
+- HMAC pattern identity
+- accepted count and last-accepted time
+- up to eight HMAC project identities, or an equivalent bounded support count
+- schema, identity, tokenizer, and ranking-policy versions
 
-Do not store:
+Use atomic replace, best-effort owner-only permissions, a 20,000-pattern cap,
+time-based eviction, and debounced writes. Do not store source lines, candidate
+text, paths, literal values, module paths, project names, or canonical
+structural keys. A reset removes the file and secret. Expose the path, entry
+count, approximate bytes, and last write in Tua's status/reporting UI.
 
-- Source lines
-- Paths
-- String literals
-- Module paths
-- Project names
-- Candidate insert text
+SQLite is unnecessary at this scale. Reconsider it only if transactional
+per-project deletion, substantially larger histories, concurrent writers, or
+queryable migrations become real requirements.
 
-To count each project once when tracking how many projects support a pattern,
-store:
+### Privacy, trust, and reproducibility
 
-- A locally salted project fingerprint
-- Salted `(project, structural pattern)` membership
+- One explicit setting, disabled by default.
+- Never initialize, load, or learn in an untrusted workspace.
+- No telemetry, upload, or network access.
+- Dedicated reset and secret-rotation commands.
+- `TUA_INLINE_COMPLETION_HISTORY=0` overrides configuration for benchmarks and
+  reproducible tests.
+- Unit tests use a fixed injected key; production creates the secret in the
+  extension and never checks it into configuration or logs it.
+- Corrupt, oversized, unknown-version, or partially written files fail closed
+  to empty history without affecting completion.
 
-Alternatively, use an approximate distinct-project sketch if exact deletion is
-not needed.
+### Implementation sequence
 
-### Storage
-
-Begin with a versioned compact file in Tua's OS-specific user-data directory.
-
-Move to SQLite only when requirements such as these justify it:
-
-- Per-project deletion
-- Transactions
-- Large-scale eviction
-- Schema migrations
-- Efficient inspection
-
-Database or file contents are loaded into an immutable in-memory snapshot.
-Inline requests never read persistent storage.
-
-### Privacy and trust
-
-- Disabled by default
-- Dedicated reset command
-- Location and size visible to the user
-- Workspace trust supplied by the extension
-- No learning from untrusted workspaces
-- No telemetry or upload
-- `TUA_INLINE_COMPLETION_HISTORY=0` for benchmarks and reproducible tests
-- Chronological cross-project evaluation before release
+1. ~~Add candidate-slate and oracle reporting to the tuning evaluator only.~~
+   Implemented without changing production selection.
+2. Add and test stable structural identities, still without persistence.
+3. Implement an in-memory chronological ranker and compare it with fixed-order
+   and frequency-only baselines.
+4. Stop if the oracle ceiling or ranker does not clear the quality gates.
+5. Add the trusted extension-owned JSON store and immutable server snapshot.
+6. Dogfood opt-in; inspect private local metrics and cross-platform startup,
+   corruption, reset, and cancellation behavior.
+7. Freeze policy, then request explicit authorization for independent gate
+   evaluation.
 
 ---
 
