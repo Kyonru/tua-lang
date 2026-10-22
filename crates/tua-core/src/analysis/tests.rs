@@ -2731,6 +2731,52 @@ local missing: MissingType = second
 }
 
 #[test]
+fn imported_record_aliases_accept_values_with_nested_exported_aliases() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+import type Shared from "./types"
+
+local function unit(): Shared.Unit
+  return { position = { x = 1, y = 2 }, color = { 1, 0.5, 0 } }
+end
+
+local function consume(value: Shared.Unit): Shared.Unit
+  return value
+end
+
+local local_unit: Shared.Unit = {
+  position = { x = 3, y = 4 },
+  color = { 0, 0.5, 1 },
+}
+local units: Shared.Unit[] = {
+  { position = { x = 5, y = 6 }, color = { 1, 1, 1 } },
+}
+
+return consume(unit()), local_unit, units
+-- file: src/types.tua
+export type Point = { x: number, y: number }
+export type Color = number[]
+export type Unit = { position: Point, color: Color }
+"#,
+    );
+    let mut host = AnalysisHost::new();
+
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+
+    let diagnostics = host.snapshot().diagnostics("src/main.tua");
+
+    assert!(
+        diagnostics
+            .iter()
+            .all(|diagnostic| diagnostic.code != Some(DiagnosticCode::TYPE_MISMATCH)),
+        "nested exported aliases should resolve before structural assignability: {diagnostics:#?}"
+    );
+}
+
+#[test]
 fn fast_diagnostics_include_inferred_local_reassignment_errors() {
     let path = PathBuf::from("src/main.tua");
     let mut host = AnalysisHost::new();
