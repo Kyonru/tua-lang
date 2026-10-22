@@ -4136,3 +4136,31 @@ end
         "{diagnostics:#?}"
     );
 }
+
+#[test]
+fn returning_an_expression_of_unknown_type_is_not_nil() {
+    let diagnostics = check_tua_source(
+        "src/main.tua",
+        r#"local function parse(text: string?): number
+  return tonumber(text) or 0
+end
+
+local function wrong(): number
+  return "text"
+end
+
+local function empty(): number
+  return
+end
+
+print(parse, wrong, empty)
+"#,
+    )
+    .expect_err("real return mismatches should still be reported");
+
+    let lines = diagnostics
+        .iter()
+        .map(|diagnostic| diagnostic.line)
+        .collect::<Vec<_>>();
+    assert_eq!(lines, [6, 10], "{diagnostics:#?}");
+}

@@ -1095,9 +1095,14 @@ impl<'a> Checker<'a> {
                 self.check_type_assignable(return_stmt, &Type::nil(), target);
                 continue;
             };
-            let source = self
-                .infer_expression_return(expression, return_index)
-                .unwrap_or_else(Type::nil);
+            let source = match self.infer_expression_return(expression, return_index) {
+                Some(source) => source,
+                // A call that yields fewer values leaves the rest nil. An
+                // expression whose type is unknown, such as `tonumber(s) or 0`,
+                // is dynamic here as it is in a local assignment.
+                None if return_index > 0 => Type::nil(),
+                None => Type::Any,
+            };
 
             self.check_inferred_expression_assignable_at(expression, &source, target, None);
         }

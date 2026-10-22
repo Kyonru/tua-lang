@@ -8,6 +8,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- `return tonumber(text) or 0` and other returned expressions of unknown type
+  no longer report "expected number, found nil". The return check treated an
+  unknown type as `nil`; it is now dynamic, as it already was for locals.
 - Calls assigned to an unannotated local, such as
   `local cam = camera.new({ style = "orbit" })`, now have their arguments
   checked when the callee comes from another module. The local's type was
