@@ -647,7 +647,7 @@ pub(super) fn referenced_type_names(parsed: &ParsedSource) -> BTreeSet<String> {
     fn collect(ty: &TuaType, names: &mut BTreeSet<String>) {
         match ty {
             TuaType::Named(name) => {
-                names.insert(name.clone());
+                names.insert(name.trim().to_owned());
             }
             TuaType::StringLiteral(_) => {}
             TuaType::Union(types) | TuaType::Tuple(types) => {

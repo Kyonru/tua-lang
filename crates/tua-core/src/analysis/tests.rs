@@ -105,7 +105,6 @@ fn snapshot_prefers_open_document_over_file_contents() {
     host.open_document(&path, "local value: number = \"open\"\nprint(value)\n");
 
     let snapshot = host.snapshot();
-
     assert!(snapshot.is_open_document(&path));
     assert_eq!(
         snapshot.source(&path),
@@ -2841,6 +2840,7 @@ local local_unit: Shared.Unit = {
   position = { x = 3, y = 4 },
   color = { 0, 0.5, 1 },
 }
+
 local units: Shared.Unit[] = {
   { position = { x = 5, y = 6 }, color = { 1, 1, 1 } },
 }
@@ -2866,6 +2866,42 @@ export type Unit = { position: Point, color: Color }
             .iter()
             .all(|diagnostic| diagnostic.code != Some(DiagnosticCode::TYPE_MISMATCH)),
         "nested exported aliases should resolve before structural assignability: {diagnostics:#?}"
+    );
+}
+
+#[test]
+fn namespace_imported_declaration_records_accept_array_literals() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+import type Types from "./types"
+
+local function points(kind: Types.Kind): Types.Point[]
+  if kind == "A" then
+    return { { x = 1 } }
+  end
+  return { { x = 2 } }
+end
+
+return points("A")
+-- file: src/types.d.tua
+export type Kind = "A" | "B"
+export type Point = { x: number }
+"#,
+    );
+    let mut host = AnalysisHost::new();
+
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+
+    let diagnostics = host.snapshot().diagnostics("src/main.tua");
+
+    assert!(
+        diagnostics
+            .iter()
+            .all(|diagnostic| diagnostic.code != Some(DiagnosticCode::TYPE_MISMATCH)),
+        "namespace declaration aliases should resolve for array items: {diagnostics:#?}"
     );
 }
 

@@ -8,6 +8,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Array literals returned through namespace-imported declaration aliases now
+  resolve their record element contracts before structural checking.
+
 - Named functions with an explicit parenthesized return list now check each
   returned Lua value against its matching slot instead of treating the whole
   list as one tuple-valued result.

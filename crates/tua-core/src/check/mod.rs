@@ -674,6 +674,7 @@ impl<'a> Checker<'a> {
         let Type::Array(item_type) = resolved else {
             return false;
         };
+        let item_type = self.environment.resolve_aliases(&item_type);
 
         for field in table.fields() {
             let value = match field {
