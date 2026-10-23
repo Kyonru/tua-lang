@@ -34,6 +34,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Editor diagnostics that identify a variable or name now underline the whole
+  identifier instead of only its first character.
+
 - **Tua: Run LOVE Project** now focuses its dedicated task terminal and keeps
   game stdout and stderr there instead of duplicating `print()` output into the
   Tua language-server channel.

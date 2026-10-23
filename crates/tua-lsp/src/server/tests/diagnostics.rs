@@ -39,6 +39,31 @@ fn diagnostic_ranges_round_trip_through_lsp() {
     assert_eq!(round_tripped.end_line, 2);
     assert_eq!(round_tripped.end_column, 18);
 }
+
+#[test]
+fn code_diagnostics_underline_complete_identifier_tokens() {
+    let uri = "file:///tmp/full-diagnostic-range.tua";
+    let source = "local unusedPlayer = 1\nprint(missingPlayer)\n";
+    let mut server = TestServer::new();
+
+    server.send(did_open(uri, source));
+
+    let diagnostics = last_published_diagnostics(server.output(), uri);
+    let unused = diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic["code"] == "TL4005")
+        .expect("unused local warning should be published");
+    let undefined = diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic["code"] == "TL4004")
+        .expect("undefined variable error should be published");
+
+    assert_eq!(unused["range"]["start"]["character"], 6);
+    assert_eq!(unused["range"]["end"]["character"], 18);
+    assert_eq!(undefined["range"]["start"]["character"], 6);
+    assert_eq!(undefined["range"]["end"]["character"], 19);
+}
+
 #[test]
 fn did_open_publishes_matching_core_diagnostics() {
     let uri = "file:///tmp/player.tua";

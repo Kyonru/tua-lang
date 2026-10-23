@@ -80,3 +80,58 @@ fn formats_multiple_cli_diagnostics_snapshot() {
 src/player.tua:4:7 info: inferred type number"
     );
 }
+
+#[test]
+fn expands_only_default_ranges_that_start_on_identifiers() {
+    let source = "local unusedPlayer = missingPlayer + 1\n";
+    let mut diagnostics = vec![
+        Diagnostic::new(
+            "src/player.tua",
+            1,
+            7,
+            DiagnosticSeverity::Warning,
+            "unused local `unusedPlayer`",
+        ),
+        Diagnostic::new(
+            "src/player.tua",
+            1,
+            22,
+            DiagnosticSeverity::Error,
+            "undefined variable `missingPlayer`",
+        ),
+        Diagnostic::new(
+            "src/player.tua",
+            1,
+            36,
+            DiagnosticSeverity::Error,
+            "operator error",
+        ),
+        Diagnostic::new(
+            "src/player.tua",
+            1,
+            7,
+            DiagnosticSeverity::Warning,
+            "already precise",
+        )
+        .with_range(1, 7, 1, 12),
+    ];
+
+    expand_identifier_ranges(source, &mut diagnostics);
+
+    assert_eq!(
+        (diagnostics[0].end_line, diagnostics[0].end_column),
+        (1, 19)
+    );
+    assert_eq!(
+        (diagnostics[1].end_line, diagnostics[1].end_column),
+        (1, 35)
+    );
+    assert_eq!(
+        (diagnostics[2].end_line, diagnostics[2].end_column),
+        (1, 37)
+    );
+    assert_eq!(
+        (diagnostics[3].end_line, diagnostics[3].end_column),
+        (1, 12)
+    );
+}

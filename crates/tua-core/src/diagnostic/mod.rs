@@ -365,6 +365,41 @@ impl Diagnostic {
     }
 }
 
+pub(crate) fn expand_identifier_ranges(source: &str, diagnostics: &mut [Diagnostic]) {
+    if !diagnostics.iter().any(|diagnostic| {
+        diagnostic.line == diagnostic.end_line
+            && diagnostic.end_column == diagnostic.column.saturating_add(1)
+    }) {
+        return;
+    }
+
+    let identifiers = crate::source_text::source_identifiers(source)
+        .into_iter()
+        .map(|identifier| {
+            (
+                (identifier.span.start.line, identifier.span.start.column),
+                identifier.span.end,
+            )
+        })
+        .collect::<std::collections::BTreeMap<_, _>>();
+
+    for diagnostic in diagnostics {
+        let has_default_range = diagnostic.line == diagnostic.end_line
+            && diagnostic.end_column == diagnostic.column.saturating_add(1);
+        if !has_default_range {
+            continue;
+        }
+
+        let start = (diagnostic.line, diagnostic.column);
+        let Some(end) = identifiers.get(&start) else {
+            continue;
+        };
+
+        diagnostic.end_line = end.line;
+        diagnostic.end_column = end.column;
+    }
+}
+
 pub fn format_diagnostics_for_cli(diagnostics: &[Diagnostic]) -> String {
     diagnostics
         .iter()

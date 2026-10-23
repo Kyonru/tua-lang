@@ -26,6 +26,8 @@ pub(crate) fn apply_inline_ignores(
 ) -> Vec<Diagnostic> {
     let _trace = profile::diagnostics_span(DiagnosticsTraceCategory::InlineIgnores);
 
+    let mut diagnostics = diagnostics;
+    crate::diagnostic::expand_identifier_ranges(source, &mut diagnostics);
     let diagnostics = apply_inline_ignores_before_policy(path, source, diagnostics, config);
     config.apply_severity_policy(diagnostics)
 }
