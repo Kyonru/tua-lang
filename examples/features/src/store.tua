@@ -21,11 +21,11 @@ local stopScore = game:watch(
 )
 
 -- Feature: update keeps one state table and notifies after the mutator returns.
-game:update(function(state: GameState)
+game:update(function(state)
   state.score += 10
 end)
 
-local state: GameState = game:get()
+local state = game:get()
 stopScore()
 
 return {

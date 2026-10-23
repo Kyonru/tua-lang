@@ -12,23 +12,17 @@ a generic annotation or package install.
 === "Tua"
 
     ```tua
-    type GameState = {
-      score: number,
-      paused: boolean,
-      playerName: string,
-    }
-
     local game = store({
       score = 0,
       paused = false,
       playerName = "Ada",
     })
 
-    game:update(function(state: GameState)
+    game:update(function(state)
       state.score += 10
     end)
 
-    local state: GameState = game:get()
+    local state = game:get()
     print(state.score)
     ```
 
@@ -82,7 +76,9 @@ Completion after `game:get().` offers `score` and `paused`. Signature help for
 `watch` derives one overload per field, so the key and callback value type stay
 connected. Hovering `"score"` shows its state-field type, and definition on the
 key returns to `score` in the initial table. The returned unsubscribe function
-is idempotent.
+is idempotent. The inferred state contract is preserved when the Store is
+returned directly or nested in a required module table, so `update(function(state)`
+does not need a repeated annotation at the use site.
 
 !!! warning "Updates are shallow"
     When whole-store subscribers exist, `update` takes a shallow snapshot

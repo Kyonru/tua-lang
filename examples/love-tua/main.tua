@@ -1,4 +1,3 @@
-import type { GameState } from "./types"
 local Globals = require('global')
 local ECS = require('ecs')
 local Renderer = require("renderer")
@@ -28,7 +27,7 @@ local controller = input({
 
 local function onRingSpawned()
   local wave = Renderer.spawnRing()
-  Globals.game:update(function(state: GameState)
+  Globals.game:update(function(state)
     state.shots += #wave
     state.score += 10
   end)

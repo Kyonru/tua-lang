@@ -21,6 +21,11 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Contextual callback typing now follows function-valued fields through
+  required module tables. In particular, a Store nested in a shared module
+  infers the `state` parameter of `update(function(state) ... end)` without a
+  repeated type annotation.
+
 - Completion now keeps using the last valid semantic facts during incomplete
   edits, including the fast identifier and member-access paths used on each
   keystroke. Ordinary type errors no longer suppress suggestions elsewhere.

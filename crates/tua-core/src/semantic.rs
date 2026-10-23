@@ -55,6 +55,11 @@ struct FunctionBodyCollector {
 }
 
 #[derive(Default)]
+struct FunctionCallCollector {
+    calls: Vec<FunctionCall>,
+}
+
+#[derive(Default)]
 struct ShadowedNameCollector {
     names: BTreeSet<String>,
 }
@@ -62,6 +67,12 @@ struct ShadowedNameCollector {
 impl Visitor for FunctionBodyCollector {
     fn visit_function_body(&mut self, body: &ast::FunctionBody) {
         self.bodies.push(body.clone());
+    }
+}
+
+impl Visitor for FunctionCallCollector {
+    fn visit_function_call(&mut self, call: &FunctionCall) {
+        self.calls.push(call.clone());
     }
 }
 
@@ -1540,6 +1551,7 @@ impl<'a> SemanticModel<'a> {
             })
             .next_back()
             .map(|parameter| type_from_tua_type(&parameter.ty))
+            .or_else(|| self.contextual_call_parameter_type(name, position))
             .or_else(|| {
                 let mut collector = FunctionBodyCollector::default();
                 collector.visit_ast(&self.parsed.ast);
@@ -1558,6 +1570,59 @@ impl<'a> SemanticModel<'a> {
                     (parameter.name.as_deref() == Some(name)).then_some(parameter.ty)
                 })
             })
+    }
+
+    fn contextual_call_parameter_type(&self, name: &str, position: SourcePosition) -> Option<Type> {
+        let mut collector = FunctionCallCollector::default();
+        collector.visit_ast(&self.parsed.ast);
+
+        collector
+            .calls
+            .iter()
+            .filter_map(|call| {
+                let call_span = node_span(call)?;
+                if !contains_position(call_span, position) {
+                    return None;
+                }
+                let (argument_index, body) = function_call_expression_arguments(call)
+                    .enumerate()
+                    .find_map(|(index, expression)| {
+                    let Expression::Function(function) = expression else {
+                        return None;
+                    };
+                    let body = function.body();
+
+                    node_span(body)
+                        .is_some_and(|span| contains_position(span, position))
+                        .then_some((index, body))
+                })?;
+                let callback_parameter_index =
+                    body.parameters()
+                        .iter()
+                        .enumerate()
+                        .find_map(|(index, parameter)| match parameter {
+                            ast::Parameter::Name(parameter) if token_text(parameter) == name => {
+                                Some(index)
+                            }
+                            ast::Parameter::Name(_) | ast::Parameter::Ellipsis(_) => None,
+                            _ => None,
+                        })?;
+                let function = self.typed_function_for_call(call, call_span.start)?;
+                let argument_index = argument_index + usize::from(function_call_is_method(call));
+                let expected = &function.parameters.get(argument_index)?.ty;
+                let Type::Function(callback) = resolve_aliases(self.environment, expected, 0)
+                else {
+                    return None;
+                };
+                let ty = callback
+                    .parameters
+                    .get(callback_parameter_index)
+                    .map(|parameter| parameter.ty.clone())?;
+
+                Some((span_size(call_span), ty))
+            })
+            .min_by_key(|(size, _)| *size)
+            .map(|(_, ty)| ty)
     }
 
     fn loop_variable_type_at_position(
@@ -2205,6 +2270,30 @@ fn index_type_from_expression(expression: &Expression) -> Option<Type> {
     let fields = index_fields_from_expression(expression);
 
     (!fields.is_empty()).then(|| Type::table(fields))
+}
+
+fn function_call_expression_arguments(call: &FunctionCall) -> impl Iterator<Item = &Expression> {
+    call.suffixes()
+        .find_map(|suffix| match suffix {
+            Suffix::Call(Call::AnonymousCall(FunctionArgs::Parentheses { arguments, .. })) => {
+                Some(arguments.iter().collect::<Vec<_>>())
+            }
+            Suffix::Call(Call::MethodCall(method)) => match method.args() {
+                FunctionArgs::Parentheses { arguments, .. } => {
+                    Some(arguments.iter().collect::<Vec<_>>())
+                }
+                FunctionArgs::String(_) | FunctionArgs::TableConstructor(_) => Some(Vec::new()),
+                _ => Some(Vec::new()),
+            },
+            _ => None,
+        })
+        .unwrap_or_default()
+        .into_iter()
+}
+
+fn function_call_is_method(call: &FunctionCall) -> bool {
+    call.suffixes()
+        .any(|suffix| matches!(suffix, Suffix::Call(Call::MethodCall(_))))
 }
 
 fn index_fields_from_expression(expression: &Expression) -> Vec<(String, TableField)> {

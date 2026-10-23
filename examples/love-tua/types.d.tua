@@ -19,9 +19,3 @@ export type Bullet = {
   dy: number,
   active: boolean,
 }
-
-export type GameState = {
-  score: number,
-  shots: number,
-  wave: number,
-}

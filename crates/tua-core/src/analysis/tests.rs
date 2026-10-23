@@ -4772,6 +4772,45 @@ return {
 }
 
 #[test]
+fn snapshot_preserves_store_callback_state_through_nested_module_exports() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+local Globals = require("global")
+
+Globals.game:update(function(<|hover|>state)
+  state.<|complete|>
+end)
+-- file: src/global.tua
+local game = store({ score = 0, paused = false })
+
+return {
+  game = game,
+}
+"#,
+    );
+    let mut host = AnalysisHost::new();
+
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+
+    let snapshot = host.snapshot();
+    let hover = snapshot
+        .hover("src/main.tua", fixture.position("hover"))
+        .expect("Store callback parameter should hover through a module field");
+    let fields =
+        completion_labels(&snapshot.completion("src/main.tua", fixture.position("complete")));
+
+    assert_eq!(
+        hover.contents,
+        "parameter state: { paused: boolean, score: number }"
+    );
+    assert!(fields.contains(&"paused".to_owned()), "{fields:?}");
+    assert!(fields.contains(&"score".to_owned()), "{fields:?}");
+}
+
+#[test]
 fn snapshot_uses_imported_return_alias_fields_for_inferred_local_completion_and_definition() {
     let fixture = Fixture::parse(
         r#"-- file: src/main.tua

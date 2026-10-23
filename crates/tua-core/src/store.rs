@@ -242,7 +242,7 @@ pub(crate) const fn documentation() -> &'static str {
 }
 
 pub(crate) const fn workflow_snippet() -> &'static str {
-    "type ${1:GameState} = { ${2:score}: number, ${3:paused}: boolean }\n\nlocal ${4:game} = store({\n  ${2:score} = ${5:0},\n  ${3:paused} = false,\n})\n\n${4:game}:update(function(state: ${1:GameState})\n  state.${2:score} += ${6:1}\nend)\n${0}"
+    "local ${1:game} = store({\n  ${2:score} = ${3:0},\n  ${4:paused} = false,\n})\n\n${1:game}:update(function(state)\n  state.${2:score} += ${5:1}\nend)\n${0}"
 }
 
 pub(crate) fn runtime_source() -> &'static str {
