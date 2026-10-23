@@ -2703,6 +2703,85 @@ fn build_writes_brinevector_runtime_when_vec2_is_used() {
 }
 
 #[test]
+fn build_bundles_runtimes_required_only_by_lua_sources() {
+    let temp = TempDir::new("lua-explicit-runtime-imports");
+
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).expect("failed to write config");
+    fs::create_dir_all(temp.path().join("src")).expect("failed to create source");
+    let source = r#"local store = require('tuastore')
+local audioSystem = require("tuaaudio")
+
+return {
+  store = store,
+  audioSystem = audioSystem,
+}
+"#;
+    fs::write(temp.path().join("src/main.lua"), source).expect("failed to write Lua source");
+
+    let output = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tua build");
+
+    assert!(
+        output.status.success(),
+        "stdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        fs::read_to_string(temp.path().join("build/main.lua"))
+            .expect("failed to read copied Lua source"),
+        source
+    );
+    for runtime in ["tuastore.lua", "tuaaudio.lua", "tuasignal.lua"] {
+        assert!(
+            temp.path().join("build").join(runtime).is_file(),
+            "expected {runtime} to be bundled"
+        );
+    }
+}
+
+#[test]
+fn in_place_build_bundles_runtimes_required_only_by_lua_sources() {
+    let temp = TempDir::new("lua-explicit-runtime-imports-in-place");
+
+    fs::write(
+        temp.path().join(CONFIG_FILE),
+        r#"
+source = "game"
+out = "game"
+target = "love11-luajit"
+extension = "tua"
+"#,
+    )
+    .expect("failed to write config");
+    fs::create_dir_all(temp.path().join("game")).expect("failed to create source");
+    let source = "local Store = require('tuastore')\nreturn Store({ score = 0 })\n";
+    fs::write(temp.path().join("game/main.lua"), source).expect("failed to write Lua source");
+
+    let output = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tua build");
+
+    assert!(
+        output.status.success(),
+        "stdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        fs::read_to_string(temp.path().join("game/main.lua"))
+            .expect("failed to read original Lua source"),
+        source
+    );
+    assert!(temp.path().join("game/tuastore.lua").is_file());
+}
+
+#[test]
 fn build_does_not_overwrite_project_brinevector_runtime() {
     let temp = TempDir::new("build-custom-vec2-runtime");
 
@@ -3985,6 +4064,51 @@ return hp
     assert!(emitted.contains("local hp = 2"));
     assert!(emitted.contains("hp = hp + 3"));
     assert!(!emitted.contains(": number"));
+}
+
+#[test]
+fn watch_bundles_a_runtime_added_to_a_lua_source() {
+    let _guard = watch_test_guard();
+    let temp = TempDir::new("watch-lua-runtime-import");
+
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).expect("failed to write config");
+    fs::create_dir_all(temp.path().join("src")).expect("failed to create source");
+    fs::write(temp.path().join("src/main.lua"), "return {}\n")
+        .expect("failed to write initial source");
+
+    let mut child = tua()
+        .arg("watch")
+        .current_dir(temp.path())
+        .env("TUA_INTERNAL_WATCH_POLL_MS", "20")
+        .env("TUA_INTERNAL_WATCH_DEBOUNCE_MS", "40")
+        .env("TUA_INTERNAL_WATCH_RECONCILE_MS", "100")
+        .env("TUA_INTERNAL_WATCH_EXIT_AFTER_REBUILDS", "1")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("failed to run tua watch");
+    let stdout_capture = CapturedChildStdout::wait_for_watch_ready(
+        &mut child,
+        "watch did not finish its initial build",
+    );
+
+    assert!(!temp.path().join("build/tuastore.lua").exists());
+    fs::write(
+        temp.path().join("src/main.lua"),
+        "local Store = require('tuastore')\nreturn Store({ score = 0 })\n",
+    )
+    .expect("failed to add runtime import");
+
+    let mut output = wait_for_child_output(child, Duration::from_secs(5));
+    output.stdout = stdout_capture.finish();
+
+    assert!(
+        output.status.success(),
+        "stdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(temp.path().join("build/tuastore.lua").is_file());
 }
 
 #[test]

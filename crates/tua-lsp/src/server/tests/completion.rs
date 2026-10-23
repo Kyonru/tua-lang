@@ -359,7 +359,7 @@ fn project_import_completion_is_scoped_to_the_active_workspace() {
 #[test]
 fn completion_indexes_sibling_modules_without_a_project_config() {
     let temp = TempProject::new("configless-module-completion");
-    let source = r#"local Player = require("")"#;
+    let source = r#"local Player = require("pla")"#;
     let uri = temp.uri_for("main.tua");
 
     temp.write("main.tua", source);
@@ -369,7 +369,7 @@ fn completion_indexes_sibling_modules_without_a_project_config() {
     let output = run_messages(vec![
         initialize_with_root(1, temp.uri()),
         did_open(&uri, source),
-        completion_request(2, &uri, source, "require(\""),
+        completion_request(2, &uri, source, "require(\"pla"),
     ]);
 
     assert_completion_labels(&output, 2, ["player"]);

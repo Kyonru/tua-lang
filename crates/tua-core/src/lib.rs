@@ -3,6 +3,7 @@ mod asset;
 mod ast_utils;
 mod audio;
 mod builtin_module;
+mod bundled_runtime;
 pub mod call_hierarchy;
 pub mod check;
 mod classes;
@@ -83,6 +84,10 @@ pub use asset::{
     AssetValidationStatus, ProjectAsset,
 };
 pub use audio::{AudioGraph, AudioGraphSystem};
+pub use bundled_runtime::{
+    bundled_runtime, bundled_runtime_requirements, is_bundled_runtime_module, BundledRuntime,
+    RUNTIMES as BUNDLED_RUNTIMES,
+};
 pub use call_hierarchy::{
     call_hierarchy_calls_parsed_source, call_hierarchy_exports_parsed_source,
     call_hierarchy_prepare_parsed_source, call_hierarchy_symbols_parsed_source,

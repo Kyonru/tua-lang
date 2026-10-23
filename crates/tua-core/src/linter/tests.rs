@@ -3382,6 +3382,28 @@ fn missing_require_lint_accepts_resolved_project_modules() {
 }
 
 #[test]
+fn missing_require_lint_accepts_bundled_runtime_modules() {
+    let diagnostics = check_tua_source_with_diagnostics_config(
+        "src/main.lua",
+        r#"local store = require("tuastore")
+local controls = require("baton").new({ controls = {} })
+print(store, controls)
+"#,
+        &DiagnosticsConfig {
+            missing_requires: true,
+            ..DiagnosticsConfig::default()
+        },
+    )
+    .err()
+    .unwrap_or_default();
+
+    assert!(diagnostics.iter().all(|diagnostic| {
+        diagnostic.code != Some(DiagnosticCode::LINT_MISSING_REQUIRE)
+            && diagnostic.code != Some(DiagnosticCode::LINT_BAD_REQUIRE)
+    }));
+}
+
+#[test]
 fn reports_undefined_variables_independently() {
     let diagnostics = check_tua_source_with_diagnostics_config(
         "src/main.tua",

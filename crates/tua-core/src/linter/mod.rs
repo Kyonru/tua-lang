@@ -439,6 +439,10 @@ impl Visitor for LintVisitor<'_> {
             return;
         };
 
+        if crate::is_bundled_runtime_module(&module) {
+            return;
+        }
+
         if resolve_required_module(&self.parsed.path, &module).is_none() {
             if self.config.bad_requires {
                 self.diagnostics

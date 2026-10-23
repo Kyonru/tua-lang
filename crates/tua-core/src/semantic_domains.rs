@@ -3,7 +3,7 @@ use full_moon::ast::{Expression, FunctionCall};
 use crate::types::{FunctionType, Type, TypeEnvironment, TypedFunction};
 use crate::{
     audio, ecs, input, object_pool, signal, sprite, state_machine, store, vector, Diagnostic,
-    ParsedSource,
+    ParsedSource, TableField,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -95,6 +95,72 @@ impl BuiltinDomainRegistry {
     pub(crate) fn constructor(self, name: &str) -> Option<BuiltinConstructor> {
         let domain = self.constructor_domain(name)?;
         domain.constructor()
+    }
+
+    pub(crate) fn runtime_module_type(self, module: &str) -> Option<Type> {
+        let constructor = |domain: BuiltinDomain| {
+            self.domains()
+                .any(|candidate| candidate == domain)
+                .then_some(domain)
+                .and_then(BuiltinDomain::constructor)
+                .map(|constructor| Type::Function(constructor.function_type()))
+        };
+
+        match module {
+            vector::RUNTIME_MODULE => constructor(BuiltinDomain::Vector),
+            signal::RUNTIME_MODULE => constructor(BuiltinDomain::Signal),
+            object_pool::RUNTIME_MODULE => constructor(BuiltinDomain::ObjectPool),
+            store::RUNTIME_MODULE => constructor(BuiltinDomain::Store),
+            audio::RUNTIME_MODULE => constructor(BuiltinDomain::Audio),
+            state_machine::RUNTIME_MODULE => constructor(BuiltinDomain::StateMachine)
+                .map(|ty| Type::table([("create", TableField::required(ty))])),
+            input::RUNTIME_MODULE => constructor(BuiltinDomain::Input)
+                .map(|ty| Type::table([("new", TableField::required(ty))])),
+            ecs::RUNTIME_MODULE if self.ecs_enabled => ecs::builtin_locals()
+                .into_iter()
+                .find_map(|(name, ty)| (name == ecs::MODULE_NAME).then_some(ty)),
+            runtime if runtime == crate::builtin_module::TWEEN.runtime => Some(
+                crate::builtin_module::module_type(&crate::builtin_module::TWEEN),
+            ),
+            runtime if runtime == crate::builtin_module::CAMERA.runtime => Some(
+                crate::builtin_module::module_type(&crate::builtin_module::CAMERA),
+            ),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn runtime_module_type_from_call(self, call: &FunctionCall) -> Option<Type> {
+        let module = crate::bundled_runtime::required_module_from_call(call)?;
+        self.runtime_module_type(&module)
+    }
+
+    pub(crate) fn imported_constructor_domain_from_bindings(
+        self,
+        bindings: &std::collections::BTreeMap<String, String>,
+        parts: &[String],
+    ) -> Option<BuiltinDomain> {
+        let (receiver, fields) = parts.split_first()?;
+        self.imported_constructor_domain_for_module(bindings.get(receiver)?, fields)
+    }
+
+    fn imported_constructor_domain_for_module(
+        self,
+        module: &str,
+        fields: &[String],
+    ) -> Option<BuiltinDomain> {
+        let (domain, expected_fields) = match module {
+            vector::RUNTIME_MODULE => (BuiltinDomain::Vector, &[][..]),
+            signal::RUNTIME_MODULE => (BuiltinDomain::Signal, &[][..]),
+            object_pool::RUNTIME_MODULE => (BuiltinDomain::ObjectPool, &[][..]),
+            store::RUNTIME_MODULE => (BuiltinDomain::Store, &[][..]),
+            audio::RUNTIME_MODULE => (BuiltinDomain::Audio, &[][..]),
+            state_machine::RUNTIME_MODULE => (BuiltinDomain::StateMachine, &["create"][..]),
+            input::RUNTIME_MODULE => (BuiltinDomain::Input, &["new"][..]),
+            _ => return None,
+        };
+
+        (fields == expected_fields && self.domains().any(|candidate| candidate == domain))
+            .then_some(domain)
     }
 
     pub(crate) fn typed_member(
@@ -253,7 +319,7 @@ impl BuiltinDomain {
         }
     }
 
-    fn constructor(self) -> Option<BuiltinConstructor> {
+    pub(crate) fn constructor(self) -> Option<BuiltinConstructor> {
         match self {
             Self::Vector => Some(BuiltinConstructor::Function(vector::constructor_type())),
             Self::Sprite => Some(BuiltinConstructor::Typed(

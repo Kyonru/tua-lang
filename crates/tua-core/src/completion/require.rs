@@ -14,11 +14,35 @@ pub(crate) fn complete_require_paths(
     let current_path = normalize_path(path);
 
     collect_project_module_paths(&current_path, module_paths, "module", &mut completions);
+    collect_bundled_runtime_paths(&mut completions);
 
     completions
         .into_values()
         .filter(|completion| completion_text_matches(&completion.label, prefix))
         .collect()
+}
+
+fn collect_bundled_runtime_paths(completions: &mut BTreeMap<String, Completion>) {
+    for runtime in crate::bundled_runtime::RUNTIMES
+        .iter()
+        .filter(|runtime| runtime.explicit_import)
+    {
+        completions
+            .entry(runtime.module.to_owned())
+            .or_insert_with(|| Completion {
+                label: runtime.module.to_owned(),
+                kind: CompletionKind::Module,
+                detail: Some("bundled Tua runtime".to_owned()),
+                documentation: None,
+                deprecation: None,
+                insert_text: None,
+                filter_text: None,
+                is_snippet: false,
+                module_path: None,
+                source_module: None,
+                additional_text_edits: Vec::new(),
+            });
+    }
 }
 
 pub(crate) fn complete_import_paths(

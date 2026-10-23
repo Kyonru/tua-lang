@@ -4811,6 +4811,80 @@ return {
 }
 
 #[test]
+fn lua_explicit_runtime_imports_keep_domain_inference() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.lua
+local makeStore = require("tuastore")
+local StateMachine = require("tuastatemachine")
+local Baton = require("baton")
+
+local game = makeStore({ score = 0, paused = false })
+game:update(function(<|state_hover|>state)
+  state.<|state_complete|>
+end)
+
+local <|flow_hover|>flow = StateMachine.create({
+  initial = "menu",
+  events = {
+    { name = "start", from = "menu", to = "playing" },
+  },
+})
+local <|controls_hover|>controls = Baton.new({ controls = { move = { "key:left", "key:right" } } })
+flow:start()
+controls:get("move")
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    let file = fixture
+        .file("src/main.lua")
+        .expect("fixture should contain Lua file");
+    host.set_file_with_kind(&file.path, file.source.clone(), AnalysisSourceKind::Lua);
+
+    let snapshot = host.snapshot();
+    let hover = snapshot
+        .hover("src/main.lua", fixture.position("state_hover"))
+        .expect("explicitly imported Store callback should be typed");
+    let fields =
+        completion_labels(&snapshot.completion("src/main.lua", fixture.position("state_complete")));
+    let flow_hover = snapshot
+        .hover("src/main.lua", fixture.position("flow_hover"))
+        .expect("explicitly imported state machine should be typed");
+    let controls_hover = snapshot
+        .hover("src/main.lua", fixture.position("controls_hover"))
+        .expect("explicitly imported input should be typed");
+
+    assert_eq!(
+        hover.contents,
+        "parameter state: { paused: boolean, score: number }"
+    );
+    assert!(fields.contains(&"paused".to_owned()), "{fields:?}");
+    assert!(fields.contains(&"score".to_owned()), "{fields:?}");
+    assert_eq!(flow_hover.contents, "local flow: StateMachine");
+    assert!(
+        flow_hover
+            .documentation
+            .as_deref()
+            .is_some_and(|documentation| {
+                documentation.contains("`\"menu\" | \"playing\"`")
+                    && documentation.contains("`\"start\"`")
+            }),
+        "{flow_hover:?}"
+    );
+    assert_eq!(controls_hover.contents, "local controls: Input");
+    assert!(
+        controls_hover
+            .documentation
+            .as_deref()
+            .is_some_and(|documentation| documentation.contains("`move`")),
+        "{controls_hover:?}"
+    );
+    assert!(snapshot
+        .pipeline_diagnostics("src/main.lua")
+        .iter()
+        .all(|diagnostic| diagnostic.code != Some(DiagnosticCode::LINT_MISSING_REQUIRE)));
+}
+
+#[test]
 fn snapshot_uses_imported_return_alias_fields_for_inferred_local_completion_and_definition() {
     let fixture = Fixture::parse(
         r#"-- file: src/main.tua

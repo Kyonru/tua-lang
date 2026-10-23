@@ -36,6 +36,7 @@ pub(crate) struct SemanticModel<'a> {
     parsed: &'a ParsedSource,
     environment: &'a TypeEnvironment,
     shadowed_names: OnceCell<BTreeSet<String>>,
+    runtime_imports: OnceCell<BTreeMap<String, String>>,
     /// Names being resolved right now, by line, column, and an exact interned
     /// name identity. Some paths re-enter name inference without carrying the
     /// depth, so a value that depends on itself would otherwise recurse until
@@ -111,9 +112,20 @@ impl<'a> SemanticModel<'a> {
             parsed,
             environment,
             shadowed_names: OnceCell::new(),
+            runtime_imports: OnceCell::new(),
             resolving_names: RefCell::new(BTreeSet::new()),
             resolution_name_ids: RefCell::new(BTreeMap::new()),
         }
+    }
+
+    fn runtime_imports(&self) -> &BTreeMap<String, String> {
+        self.runtime_imports.get_or_init(|| {
+            crate::module_index::require_bindings_for_parsed_source(self.parsed)
+                .into_iter()
+                .filter(|binding| crate::is_bundled_runtime_module(&binding.module))
+                .map(|binding| (binding.alias, binding.module))
+                .collect()
+        })
     }
 
     fn unshadowed_lua_function(&self, parts: &[String]) -> Option<LuaItem> {
@@ -251,6 +263,12 @@ impl<'a> SemanticModel<'a> {
         function_call: &FunctionCall,
         position: SourcePosition,
     ) -> Vec<Type> {
+        let domains =
+            BuiltinDomainRegistry::with_ecs(self.environment.alias(ecs::WORLD_TYPE).is_some());
+        if let Some(ty) = domains.runtime_module_type_from_call(function_call) {
+            return vec![ty];
+        }
+
         if let Some(ty) = self.setmetatable_return_type(function_call, position) {
             return vec![ty];
         }
@@ -258,6 +276,23 @@ impl<'a> SemanticModel<'a> {
         let Some(parts) = field_chain_before_first_call(function_call) else {
             return Vec::new();
         };
+
+        if let Some(domain) =
+            domains.imported_constructor_domain_from_bindings(self.runtime_imports(), &parts)
+        {
+            let argument = first_parenthesized_call_argument(function_call).and_then(|argument| {
+                self.type_of_expression_return_at_depth(argument, position, 0, 1)
+            });
+            if let Some(ty) =
+                domain.inferred_constructor_return_type(function_call, argument.as_ref())
+            {
+                return vec![ty];
+            }
+            return domain
+                .constructor()
+                .map(|constructor| constructor.function_type().return_types_or_any().to_vec())
+                .unwrap_or_default();
+        }
 
         if parts.as_slice() == ["rawget"]
             && self.environment.local("rawget").is_none()
@@ -483,6 +518,19 @@ impl<'a> SemanticModel<'a> {
     ) -> Option<TypedFunction> {
         let (root, fields) = parts.split_first()?;
         let qualified_name = parts.join(".");
+
+        let domains =
+            BuiltinDomainRegistry::with_ecs(self.environment.alias(ecs::WORLD_TYPE).is_some());
+        if let Some(domain) =
+            domains.imported_constructor_domain_from_bindings(self.runtime_imports(), parts)
+        {
+            return domain.constructor().map(|constructor| {
+                typed_function_from_function_type(
+                    Some(qualified_name.clone()),
+                    constructor.function_type(),
+                )
+            });
+        }
 
         if let Some(function) = self.environment.function(&qualified_name) {
             return Some(function.clone());

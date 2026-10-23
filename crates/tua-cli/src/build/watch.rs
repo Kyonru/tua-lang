@@ -83,10 +83,6 @@ impl WatchBuildSession {
                         continue;
                     }
 
-                    if session.in_place {
-                        continue;
-                    }
-
                     if analysis_kind_for_path(
                         &source_file.path,
                         &session.workspace.config().extension,
@@ -342,6 +338,15 @@ impl WatchBuildSession {
         }
 
         for source_path in asset_paths {
+            if source_path
+                .extension()
+                .and_then(|extension| extension.to_str())
+                == Some("lua")
+            {
+                if let Some(source) = snapshot.source(&source_path) {
+                    collect_required_bundled_runtimes(source, &mut required_bundled_runtimes);
+                }
+            }
             if self.in_place {
                 continue;
             }

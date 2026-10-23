@@ -180,6 +180,12 @@ Never answer with TypeScript, JavaScript, Luau, Python, or Markdown.
   `requestAnalysis` is explicit rather than automatic.
 - Use native LOVE freely. Use a Tua helper when nearby code uses it or its
   typed configuration fits the task; do not force helpers into ordinary LOVE.
+- Plain `.lua` files access bundled Tua runtimes through explicit imports such
+  as `require("tuastore")`, `require("brinevector")`,
+  `require("tuaobjectpool")`, `require("tuaaudio")`,
+  `require("tuastatemachine").create`, and `require("baton").new`. Literal
+  runtime imports are typed and make `tua build` emit the required runtime;
+  compiler-only helpers and syntax remain `.tua`-only.
 
 ## Never emit
 

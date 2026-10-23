@@ -472,6 +472,11 @@ impl ModuleGraph {
     fn collect_require_diagnostics(&mut self) {
         for module in self.modules.values() {
             for edge in &module.require_edges {
+                if edge.kind == ModuleSpecifierKind::Require
+                    && crate::is_bundled_runtime_module(&edge.module)
+                {
+                    continue;
+                }
                 match &edge.resolution {
                     RequireResolution::Missing { search_roots } => self
                         .diagnostics

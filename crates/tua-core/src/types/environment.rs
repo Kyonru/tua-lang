@@ -2226,6 +2226,7 @@ struct FunctionReturnQuery<'a> {
     aliases: &'a BTreeMap<String, Type>,
     function_types: &'a BTreeMap<String, Type>,
     parameters: &'a BTreeMap<String, Vec<TypedParameter>>,
+    runtime_imports: &'a BTreeMap<String, String>,
 }
 
 #[derive(Clone, Copy)]
@@ -2235,6 +2236,7 @@ struct InferenceQueryContext<'a> {
     function_types: &'a BTreeMap<String, Type>,
     current_function: &'a str,
     domains: BuiltinDomainRegistry,
+    runtime_imports: &'a BTreeMap<String, String>,
 }
 
 impl<'a> InferenceQueryContext<'a> {
@@ -2243,6 +2245,7 @@ impl<'a> InferenceQueryContext<'a> {
         aliases: &'a BTreeMap<String, Type>,
         function_types: &'a BTreeMap<String, Type>,
         current_function: &'a str,
+        runtime_imports: &'a BTreeMap<String, String>,
     ) -> Self {
         Self {
             parsed,
@@ -2250,6 +2253,7 @@ impl<'a> InferenceQueryContext<'a> {
             function_types,
             current_function,
             domains: BuiltinDomainRegistry::standard(),
+            runtime_imports,
         }
     }
 
@@ -2292,6 +2296,7 @@ fn infer_function_return_types(
 ) -> BTreeMap<String, Vec<Type>> {
     let mut returns = BTreeMap::new();
     let parameters = function_parameters_by_name(functions);
+    let runtime_imports = runtime_import_bindings(parsed);
 
     for _ in 0..8 {
         let previous_returns = returns.clone();
@@ -2302,6 +2307,7 @@ fn infer_function_return_types(
             aliases,
             function_types: &function_types,
             parameters: &parameters,
+            runtime_imports: &runtime_imports,
         };
         collect_function_return_types(parsed.ast.nodes(), query, locals, &mut returns);
 
@@ -2346,7 +2352,9 @@ pub(crate) fn inferred_function_type_from_body(
         }
     }
 
-    let context = InferenceQueryContext::new(parsed, &aliases, &function_types, "");
+    let runtime_imports = runtime_import_bindings(parsed);
+    let context =
+        InferenceQueryContext::new(parsed, &aliases, &function_types, "", &runtime_imports);
     if let Some(return_types) = infer_block_return_types(body.block(), context, &locals) {
         *function.return_type = return_types.first().cloned().unwrap_or(Type::Any);
         function.return_types = return_types;
@@ -2365,6 +2373,14 @@ fn function_parameters_by_name(
 
             Some((name.clone(), function.parameters.clone()))
         })
+        .collect()
+}
+
+fn runtime_import_bindings(parsed: &ParsedSource) -> BTreeMap<String, String> {
+    crate::module_index::require_bindings_for_parsed_source(parsed)
+        .into_iter()
+        .filter(|binding| crate::is_bundled_runtime_module(&binding.module))
+        .map(|binding| (binding.alias, binding.module))
         .collect()
 }
 
@@ -2409,8 +2425,13 @@ fn collect_function_return_types(
     returns: &mut BTreeMap<String, Vec<Type>>,
 ) {
     let mut scoped_locals = locals.clone();
-    let root_inference =
-        InferenceQueryContext::new(query.parsed, query.aliases, query.function_types, "");
+    let root_inference = InferenceQueryContext::new(
+        query.parsed,
+        query.aliases,
+        query.function_types,
+        "",
+        query.runtime_imports,
+    );
 
     for stmt in block.stmts() {
         match stmt {
@@ -2429,6 +2450,7 @@ fn collect_function_return_types(
                     query.aliases,
                     query.function_types,
                     &name,
+                    query.runtime_imports,
                 );
 
                 if let Some(return_types) =
@@ -2454,6 +2476,7 @@ fn collect_function_return_types(
                     query.aliases,
                     query.function_types,
                     &name,
+                    query.runtime_imports,
                 );
 
                 if let Some(return_types) =
@@ -2767,14 +2790,22 @@ fn infer_local_assignment_types(
         let preserve_literal_unions = match assignment_expression_for_local(&expressions, index) {
             Some((Expression::FunctionCall(call), _)) => field_chain_before_first_call(call)
                 .and_then(|parts| {
-                    let [name] = parts.as_slice() else {
-                        return None;
-                    };
-                    let domain = context.domains.constructor_domain(name)?;
+                    let imported = context
+                        .domains
+                        .imported_constructor_domain_from_bindings(context.runtime_imports, &parts);
+                    let domain = imported.or_else(|| {
+                        let [name] = parts.as_slice() else {
+                            return None;
+                        };
+                        context.domains.constructor_domain(name)
+                    })?;
 
                     (domain.preserves_literal_unions()
-                        && !locals.contains_key(name)
-                        && !context.function_types.contains_key(name))
+                        && (imported.is_some()
+                            || parts.first().is_some_and(|name| {
+                                !locals.contains_key(name)
+                                    && !context.function_types.contains_key(name)
+                            })))
                     .then_some(())
                 })
                 .is_some(),
@@ -3074,6 +3105,14 @@ fn infer_function_call_return_types(
     query: ExpressionInferenceQuery<'_, '_>,
     function_call: &FunctionCall,
 ) -> Vec<Type> {
+    if let Some(ty) = query
+        .context
+        .domains
+        .runtime_module_type_from_call(function_call)
+    {
+        return vec![ty];
+    }
+
     if let Some(ty) = setmetatable_return_type(query, function_call) {
         return vec![ty];
     }
@@ -3092,6 +3131,25 @@ fn infer_function_call_return_types(
             .is_some_and(|name| name == query.context.current_function)
     {
         return Vec::new();
+    }
+
+    if let Some(domain) = query
+        .context
+        .domains
+        .imported_constructor_domain_from_bindings(query.context.runtime_imports, &parts)
+    {
+        if let Some(ty) = infer_builtin_constructor_return_type(query, domain, function_call) {
+            return vec![ty];
+        }
+        return domain
+            .constructor()
+            .map(|constructor| {
+                function_return_types(
+                    query.context.aliases,
+                    &Type::Function(constructor.function_type()),
+                )
+            })
+            .unwrap_or_default();
     }
 
     if parts.len() == 1 {

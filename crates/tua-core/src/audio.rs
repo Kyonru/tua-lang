@@ -117,7 +117,9 @@ pub(crate) fn runtime_source() -> &'static str {
 }
 
 pub(crate) fn audio_type_from_call(call: &FunctionCall) -> Option<Type> {
-    let config = config_from_call(call)?;
+    let Expression::TableConstructor(config) = first_parenthesized_argument(call)? else {
+        return None;
+    };
     let spec = spec_from_config(config);
     Some(system_type(&spec, true))
 }

@@ -199,6 +199,7 @@ struct Checker<'a> {
     checked_function_bodies: BTreeSet<(usize, usize)>,
     terminating_builtin_references: BTreeSet<(usize, usize)>,
     exact_module_references: BTreeMap<(usize, usize), String>,
+    runtime_imports: BTreeMap<String, String>,
     unknown_record_fields: bool,
     diagnostics: Vec<Diagnostic>,
 }
@@ -252,6 +253,11 @@ impl<'a> Checker<'a> {
                 ))
             })
             .collect();
+        let runtime_imports = require_bindings_for_parsed_source(parsed)
+            .into_iter()
+            .filter(|binding| crate::is_bundled_runtime_module(&binding.module))
+            .map(|binding| (binding.alias, binding.module))
+            .collect();
 
         Self {
             parsed,
@@ -272,6 +278,7 @@ impl<'a> Checker<'a> {
             checked_function_bodies: BTreeSet::new(),
             terminating_builtin_references,
             exact_module_references,
+            runtime_imports,
             unknown_record_fields: diagnostics_config.unknown_record_fields,
             diagnostics: Vec::new(),
         }
@@ -1900,15 +1907,18 @@ impl<'a> Checker<'a> {
         function_call: &FunctionCall,
     ) -> Option<Type> {
         let parts = field_chain_before_first_call(function_call)?;
-        let [name] = parts.as_slice() else {
-            return None;
-        };
-        if self.environment.local(&parts[0]).is_some()
-            || self.environment.function(&parts[0]).is_some()
-        {
-            return None;
-        }
-        let domain = BuiltinDomainRegistry::standard().constructor_domain(name)?;
+        let domains = BuiltinDomainRegistry::standard();
+        let imported =
+            domains.imported_constructor_domain_from_bindings(&self.runtime_imports, &parts);
+        let domain = imported.or_else(|| {
+            let [name] = parts.as_slice() else {
+                return None;
+            };
+            if self.environment.local(name).is_some() || self.environment.function(name).is_some() {
+                return None;
+            }
+            domains.constructor_domain(name)
+        })?;
         let argument = if matches!(domain, BuiltinDomain::ObjectPool | BuiltinDomain::Store) {
             call_arguments(function_call)
                 .and_then(|arguments| arguments.into_iter().next())

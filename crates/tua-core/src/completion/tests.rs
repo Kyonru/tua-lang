@@ -2574,6 +2574,32 @@ fn completes_require_paths_from_workspace_require_roots() {
 }
 
 #[test]
+fn completes_explicitly_importable_bundled_runtime_paths() {
+    let src = PathBuf::from("project/src");
+    let main_path = src.join("main.lua");
+    let module_paths = ModulePathIndex::build(
+        &[ProjectModuleWorkspace::new("project", [src])],
+        [main_path.as_path()],
+        &[],
+        ModulePathSeparator::Dot,
+    );
+    let source = "local pool = require(\"tuao\")\n";
+    let completions = complete_indexed_module_paths(
+        &main_path,
+        source,
+        position_after(source, "require(\"tuao"),
+        &module_paths,
+    )
+    .expect("bundled runtime completion context should be detected");
+
+    assert_eq!(labels(&completions), vec!["tuaobjectpool".to_owned()]);
+    assert_eq!(
+        completions[0].detail.as_deref(),
+        Some("bundled Tua runtime")
+    );
+}
+
+#[test]
 fn completes_import_paths_for_child_and_project_modules_from_indexed_paths() {
     let src = PathBuf::from("project/src");
     let systems = src.join("systems");

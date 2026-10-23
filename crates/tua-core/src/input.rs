@@ -118,7 +118,9 @@ pub(crate) fn runtime_source() -> &'static str {
 }
 
 pub(crate) fn input_type_from_call(call: &FunctionCall) -> Option<Type> {
-    let config = config_from_call(call)?;
+    let Expression::TableConstructor(config) = first_parenthesized_argument(call)? else {
+        return None;
+    };
     if !config_has_static_names(config) {
         return Some(Type::alias(TYPE_NAME));
     }

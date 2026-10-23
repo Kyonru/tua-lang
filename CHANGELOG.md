@@ -8,6 +8,12 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Added
 
+- Plain Lua files can now explicitly import Tua's bundled runtimes with normal
+  `require(...)` calls. These imports are typed, preserve domain-specific
+  inference for Stores, state machines, input, audio, and object pools, avoid
+  false missing-module diagnostics, and cause both regular and in-place builds
+  to emit the required runtime and its transitive dependencies.
+
 - Standard diagnostics now warn about unused type-only imports and private type
   aliases. Exported types, re-exports, classes, underscore-prefixed names, and
   transitive dependencies of used types are exempt.

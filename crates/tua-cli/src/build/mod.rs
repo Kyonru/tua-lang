@@ -12,83 +12,11 @@ use crate::source::{
 };
 use crate::source_map::{debugger_source_map_path_for, source_map_path_for, write_source_map};
 use tua_core::{
-    anim8_runtime_source, baton_runtime_source, brinevector_runtime_source,
-    emit_tua_source_with_workspace_artifact, emit_tua_source_with_workspace_environment_artifact,
-    format_diagnostics_for_cli, tuaaudio_runtime_source, tuacamera_runtime_source,
-    tuaecs_runtime_source, tuaobjectpool_runtime_source, tuasignal_runtime_source,
-    tuasprite_runtime_source, tuastatemachine_runtime_source, tuastore_runtime_source,
-    tuatween_runtime_source, AnalysisHost, AnalysisSourceKind, AnnotationMode, Diagnostic,
-    DiagnosticCategory, DiagnosticCode, DiagnosticSeverity, LoadedConfig, ProjectWorkspace,
+    bundled_runtime_requirements, emit_tua_source_with_workspace_artifact,
+    emit_tua_source_with_workspace_environment_artifact, format_diagnostics_for_cli, AnalysisHost,
+    AnalysisSourceKind, AnnotationMode, BundledRuntime, Diagnostic, DiagnosticCategory,
+    DiagnosticCode, DiagnosticSeverity, LoadedConfig, ProjectWorkspace, BUNDLED_RUNTIMES,
 };
-
-struct BundledRuntime {
-    file_name: &'static str,
-    require_literal: &'static str,
-    source: fn() -> &'static str,
-}
-
-const BUNDLED_RUNTIMES: &[BundledRuntime] = &[
-    BundledRuntime {
-        file_name: "brinevector.lua",
-        require_literal: "require(\"brinevector\")",
-        source: brinevector_runtime_source,
-    },
-    BundledRuntime {
-        file_name: "anim8.lua",
-        require_literal: "require(\"anim8\")",
-        source: anim8_runtime_source,
-    },
-    BundledRuntime {
-        file_name: "tuasprite.lua",
-        require_literal: "require(\"tuasprite\")",
-        source: tuasprite_runtime_source,
-    },
-    BundledRuntime {
-        file_name: "tuasignal.lua",
-        require_literal: "require(\"tuasignal\")",
-        source: tuasignal_runtime_source,
-    },
-    BundledRuntime {
-        file_name: "tuaecs.lua",
-        require_literal: "require(\"tuaecs\")",
-        source: tuaecs_runtime_source,
-    },
-    BundledRuntime {
-        file_name: "tuaobjectpool.lua",
-        require_literal: "require(\"tuaobjectpool\")",
-        source: tuaobjectpool_runtime_source,
-    },
-    BundledRuntime {
-        file_name: "tuastatemachine.lua",
-        require_literal: "require(\"tuastatemachine\")",
-        source: tuastatemachine_runtime_source,
-    },
-    BundledRuntime {
-        file_name: "tuastore.lua",
-        require_literal: "require(\"tuastore\")",
-        source: tuastore_runtime_source,
-    },
-    BundledRuntime {
-        file_name: "tuaaudio.lua",
-        require_literal: "require(\"tuaaudio\")",
-        source: tuaaudio_runtime_source,
-    },
-    BundledRuntime {
-        file_name: "tuatween.lua",
-        require_literal: "require(\"tuatween\")",
-        source: tuatween_runtime_source,
-    },
-    BundledRuntime {
-        file_name: "tuacamera.lua",
-        require_literal: "require(\"tuacamera\")",
-        source: tuacamera_runtime_source,
-    },
-    BundledRuntime {
-        file_name: "baton.lua",
-        require_literal: "require(\"baton\")",
-        source: baton_runtime_source,
-    },
-];
 
 #[derive(Debug, Default)]
 pub(crate) struct BuildOutcome {
@@ -109,6 +37,7 @@ enum SourceUnit {
     Asset {
         source_path: PathBuf,
         output_path: PathBuf,
+        lua_source: Option<String>,
     },
 }
 
@@ -241,13 +170,20 @@ fn build_project_files(
                 continue;
             }
 
-            if in_place {
-                continue;
-            }
-
+            let lua_source = (source_path
+                .extension()
+                .and_then(|extension| extension.to_str())
+                == Some("lua"))
+            .then(|| read_source_file(&source_path))
+            .transpose()
+            .unwrap_or_else(|diagnostic| {
+                diagnostics.push(diagnostic);
+                None
+            });
             units.push(SourceUnit::Asset {
                 source_path,
                 output_path,
+                lua_source,
             });
             continue;
         }
@@ -282,20 +218,13 @@ fn build_project_files(
             } => {
                 host.set_file_with_kind(source_path, source.clone(), AnalysisSourceKind::Tua);
             }
-            SourceUnit::Asset { source_path, .. } => {
-                if source_path
-                    .extension()
-                    .and_then(|extension| extension.to_str())
-                    != Some("lua")
-                {
-                    continue;
-                }
-
-                match read_source_file(source_path) {
-                    Ok(source) => {
-                        host.set_file_with_kind(source_path, source, AnalysisSourceKind::Lua);
-                    }
-                    Err(diagnostic) => diagnostics.push(diagnostic),
+            SourceUnit::Asset {
+                source_path,
+                lua_source,
+                ..
+            } => {
+                if let Some(source) = lua_source {
+                    host.set_file_with_kind(source_path, source.clone(), AnalysisSourceKind::Lua);
                 }
             }
         }
@@ -415,10 +344,19 @@ fn build_project_files(
             SourceUnit::Asset {
                 source_path,
                 output_path,
-            } => match copy_output(&output_guard, &source_path, &output_path) {
-                Ok(()) => emitted += 1,
-                Err(diagnostic) => diagnostics.push(diagnostic),
-            },
+                lua_source,
+            } => {
+                if let Some(source) = lua_source {
+                    collect_required_bundled_runtimes(&source, &mut required_bundled_runtimes);
+                }
+                if in_place {
+                    continue;
+                }
+                match copy_output(&output_guard, &source_path, &output_path) {
+                    Ok(()) => emitted += 1,
+                    Err(diagnostic) => diagnostics.push(diagnostic),
+                }
+            }
         }
     }
 
@@ -491,15 +429,7 @@ fn write_output(guard: &OutputGuard, output_path: &Path, output: String) -> Resu
 }
 
 fn collect_required_bundled_runtimes(output: &str, required: &mut BTreeSet<&'static str>) {
-    for runtime in BUNDLED_RUNTIMES {
-        if output.contains(runtime.require_literal) {
-            required.insert(runtime.file_name);
-        }
-    }
-    if output.contains("require(\"tuaaudio\")") {
-        required.insert("tuasignal.lua");
-        required.insert("tuastore.lua");
-    }
+    required.extend(bundled_runtime_requirements(output));
 }
 
 fn write_required_bundled_runtimes(
@@ -510,7 +440,7 @@ fn write_required_bundled_runtimes(
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     for runtime in BUNDLED_RUNTIMES {
-        if required.contains(runtime.file_name) {
+        if required.contains(runtime.module) {
             write_bundled_runtime(guard, runtime, out_dir, emitted, diagnostics);
         }
     }

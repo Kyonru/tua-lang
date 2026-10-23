@@ -46,6 +46,68 @@ before Tua returns an emission artifact; `TL2010` is the blocking safety
 diagnostic if compiler lowering or emission violates that invariant. Plain
 `.lua` files remain outside this transpilation step and are copied unchanged.
 
+## Use Tua Runtimes From Lua
+
+Plain Lua does not receive Tua's compiler-injected globals. Import the runtime
+you need with a literal `require(...)` instead:
+
+```lua title="src/game.lua"
+local vec2 = require("brinevector")
+local store = require("tuastore")
+local StateMachine = require("tuastatemachine")
+local input = require("baton")
+
+local position = vec2(20, 40)
+local game = store({ score = 0 })
+local flow = StateMachine.create({
+  initial = "menu",
+  events = {
+    { name = "start", from = "menu", to = "playing" },
+  },
+})
+local controls = input.new({
+  controls = { jump = { "key:space" } },
+})
+```
+
+This is a supported source boundary, not a manual vendoring workaround. The
+language server types the imported APIs and preserves configuration-derived
+Store state, state-machine names, input controls, audio names, and object-pool
+values. `tua build` detects the static import in copied Lua and writes the
+required bundled runtime beside the project output. This also works for
+in-place builds and for transitive runtime dependencies such as
+`tuaaudio`'s signal and Store modules.
+
+As with other unannotated Lua, these inferred shapes improve hover, completion,
+signatures, and typed member access without making every local assignment
+rigid. Add LuaDoc when the Lua file itself needs an enforced variable or
+parameter contract.
+
+| Tua source helper | Explicit Lua import and call |
+| --- | --- |
+| `vec2(x, y)` | `local vec2 = require("brinevector")`; `vec2(x, y)` |
+| `signal()` | `local signal = require("tuasignal")`; `signal()` |
+| `store(initial)` | `local store = require("tuastore")`; `store(initial)` |
+| `objectPool(options)` | `local objectPool = require("tuaobjectpool")`; `objectPool(options)` |
+| `stateMachine(options)` | `local StateMachine = require("tuastatemachine")`; `StateMachine.create(options)` |
+| `input(config)` | `local input = require("baton")`; `input.new(config)` |
+| `audioSystem(config)` | `local audioSystem = require("tuaaudio")`; `audioSystem(config)` |
+| `ecs` | `local ecs = require("tuaecs")` |
+| `tween` | `local tween = require("tuatween")` |
+| `Camera` | `local Camera = require("tuacamera")` |
+
+The local name is your choice; Tua recognizes the required module, not a
+special alias. Runtime discovery intentionally requires a statically visible
+string literal. A computed call such as `require(runtimeName)` remains dynamic
+and must provide its dependency separately. A project-owned runtime file with
+the same module name takes precedence and is never overwritten.
+
+Compiler transformations remain Tua-only. Asset helpers, `spriteSheet`,
+generated game-math helpers, native type syntax, and vector-expression fusion
+cannot change a `.lua` file because builds preserve that file byte for byte.
+Keep those operations in a `.tua` module and export ordinary Lua values when a
+Lua caller needs them.
+
 ## Use A Lua Module From Tua
 
 Tua can infer simple Lua module exports, but LuaDoc annotations provide stable
