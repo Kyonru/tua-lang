@@ -160,7 +160,7 @@ enforced separately with `tua fmt --check`.
 | `TL4051` | Comparison precedence is ambiguous or behaves unlike a chained comparison. | `rules` |
 | `TL4052` | A global can be local to its common enclosing function, or every read follows a definite function-local write. | `rules` |
 | `TL4053` | A function returns values on one path and has a reachable fallthrough path, including through a breakable loop. | `rules` |
-| `TL4054` | A direct global `require` or static `import` binding is unused. | `rules` |
+| `TL4054` | A direct global `require`, static runtime import, or type-only import binding is unused. | `rules` |
 | `TL4055` | A direct local or user-global function declaration is never used. | `unused_locals` |
 | `TL4056` | A resolved function or field explicitly marked `---@deprecated` is used. | `rules` |
 | `TL4057` | An explicit child constructor can return without calling its parent constructor. | `rules` |
@@ -181,6 +181,7 @@ enforced separately with `tua fmt --check`.
 | `TL4072` | Two adjacent simple assignments look like a failed swap and reuse an overwritten value. | `almost_swapped`; opt-in |
 | `TL4073` | A table literal mixes sequential entries with keyed fields. | `mixed_tables`; opt-in |
 | `TL4074` | A write targets a field absent from a statically known record shape. | `unknown_record_fields`; opt-in |
+| `TL4075` | A private type alias is not reachable from an annotation, class, or exported type. | `rules`; enabled by default |
 
 Configuration keys in this table live under `[diagnostics]` unless they start
 with `jit.`. VS Code can override matching diagnostic settings for the running

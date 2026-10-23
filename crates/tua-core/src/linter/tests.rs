@@ -869,6 +869,112 @@ print(value, readNested())
 }
 
 #[test]
+fn reports_unused_type_imports_and_private_type_aliases() {
+    let diagnostics = check_standard_rules_source(
+        r#"
+import type UnusedTypes from "./types"
+import type _IntentionalTypes from "./intentional"
+import type { Player, Room as LevelRoom, _Ignored } from "./models"
+
+type DeadPlayer = Player
+type UsedRoom = LevelRoom
+local room: UsedRoom = nil
+
+type UnusedLocal = { score: number }
+export type PublicContract = { player: Player }
+export type { SharedState } from "./shared"
+
+print(room)
+"#,
+    );
+    let unused_imports = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_UNUSED_IMPORT))
+        .map(|diagnostic| diagnostic.message.as_str())
+        .collect::<Vec<_>>();
+    let unused_types = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_UNUSED_TYPE))
+        .map(|diagnostic| diagnostic.message.as_str())
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        unused_imports,
+        vec!["type import `UnusedTypes` is never used; prefix with `_` to silence"]
+    );
+    assert_eq!(
+        unused_types,
+        vec![
+            "type `DeadPlayer` is never used; prefix with `_` to silence",
+            "type `UnusedLocal` is never used; prefix with `_` to silence",
+        ]
+    );
+}
+
+#[test]
+fn unused_types_do_not_keep_their_import_dependencies_alive() {
+    let diagnostics = check_standard_rules_source(
+        r#"
+import type { Ghost } from "./types"
+type Dead = Ghost
+"#,
+    );
+
+    assert!(diagnostics.iter().any(|diagnostic| {
+        diagnostic.code == Some(DiagnosticCode::LINT_UNUSED_IMPORT)
+            && diagnostic.message.contains("`Ghost`")
+    }));
+    assert!(diagnostics.iter().any(|diagnostic| {
+        diagnostic.code == Some(DiagnosticCode::LINT_UNUSED_TYPE)
+            && diagnostic.message.contains("`Dead`")
+    }));
+}
+
+#[test]
+fn namespace_type_imports_are_live_through_reachable_qualified_types() {
+    let parsed = parse_tua_source(
+        "src/main.tua",
+        r#"
+import type Shared from "./shared"
+type Position = Shared.Position
+local position: Position = nil
+print(position)
+"#,
+    )
+    .expect("source should parse");
+    let diagnostics = super::unused_type_diagnostics(&parsed);
+
+    assert!(diagnostics.is_empty(), "{diagnostics:#?}");
+}
+
+#[test]
+fn type_usage_tracks_unused_namespaces_and_exempts_classes() {
+    let diagnostics = check_standard_rules_source(
+        r#"
+import type Unused from "./unused"
+
+class Player {
+  target: number
+}
+
+print(Player)
+"#,
+    );
+
+    assert!(
+        diagnostics.iter().any(|diagnostic| {
+            diagnostic.code == Some(DiagnosticCode::LINT_UNUSED_IMPORT)
+                && diagnostic.message.contains("`Unused`")
+        }),
+        "{diagnostics:#?}"
+    );
+    assert!(!diagnostics.iter().any(|diagnostic| {
+        diagnostic.code == Some(DiagnosticCode::LINT_UNUSED_TYPE)
+            && diagnostic.message.contains("`Player`")
+    }));
+}
+
+#[test]
 fn local_shadow_reports_same_function_redeclarations_and_parameters() {
     let diagnostics = check_standard_rules_source(
         r#"

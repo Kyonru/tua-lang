@@ -136,6 +136,7 @@ pub(crate) fn lint_parsed_source(
     }
 
     if config.rules {
+        diagnostics.extend(unused_type_diagnostics(parsed));
         diagnostics.extend(class_rules::lint(parsed, environment));
         diagnostics.extend(rules::lint(
             parsed,
@@ -148,6 +149,146 @@ pub(crate) fn lint_parsed_source(
 
     if jit_config.enabled {
         diagnostics.extend(JitAnalyzer::new(parsed, jit_config, environment).analyze());
+    }
+
+    diagnostics
+}
+
+fn unused_type_diagnostics(parsed: &ParsedSource) -> Vec<Diagnostic> {
+    fn collect(ty: &TuaType, names: &mut BTreeSet<String>) {
+        match ty {
+            TuaType::Named(name) => {
+                names.insert(name.trim().to_owned());
+            }
+            TuaType::StringLiteral(_) => {}
+            TuaType::Union(types) | TuaType::Tuple(types) => {
+                for ty in types {
+                    collect(ty, names);
+                }
+            }
+            TuaType::Table(fields) => {
+                for field in fields {
+                    collect(&field.ty, names);
+                }
+            }
+            TuaType::Array(item) => collect(item, names),
+            TuaType::Dictionary { key, value } => {
+                collect(key, names);
+                collect(value, names);
+            }
+            TuaType::Function {
+                parameters,
+                returns,
+            } => {
+                for parameter in parameters {
+                    collect(&parameter.ty, names);
+                }
+                for ty in returns {
+                    collect(ty, names);
+                }
+            }
+        }
+    }
+
+    let aliases = parsed
+        .type_aliases
+        .iter()
+        .map(|alias| (alias.name.as_str(), alias))
+        .collect::<BTreeMap<_, _>>();
+    let class_names = parsed
+        .class_declarations
+        .iter()
+        .map(|class| class.name.as_str())
+        .collect::<BTreeSet<_>>();
+    let mut live = BTreeSet::new();
+
+    for ty in parsed
+        .local_annotations
+        .iter()
+        .map(|annotation| &annotation.ty)
+        .chain(parsed.function_annotations.iter().flat_map(|function| {
+            function
+                .parameters
+                .iter()
+                .map(|parameter| &parameter.ty)
+                .chain(function.return_type.iter())
+        }))
+    {
+        collect(ty, &mut live);
+    }
+
+    live.extend(
+        parsed
+            .type_aliases
+            .iter()
+            .filter(|alias| alias.exported || class_names.contains(alias.name.as_str()))
+            .map(|alias| alias.name.clone()),
+    );
+
+    let mut pending = live.iter().cloned().collect::<Vec<_>>();
+    while let Some(name) = pending.pop() {
+        let Some(alias) = aliases.get(name.as_str()) else {
+            continue;
+        };
+        let mut dependencies = BTreeSet::new();
+        collect(&alias.ty, &mut dependencies);
+        for dependency in dependencies {
+            if live.insert(dependency.clone()) {
+                pending.push(dependency);
+            }
+        }
+    }
+
+    let mut diagnostics = Vec::new();
+    for alias in &parsed.type_aliases {
+        if alias.exported
+            || class_names.contains(alias.name.as_str())
+            || alias.name.starts_with('_')
+            || live.contains(&alias.name)
+        {
+            continue;
+        }
+        let Some(span) = alias.name_span.or(alias.span) else {
+            continue;
+        };
+        diagnostics.push(unused_type_diagnostic(
+            &parsed.path,
+            span.start,
+            &alias.name,
+        ));
+    }
+
+    for import in &parsed.type_imports {
+        if import.reexport {
+            continue;
+        }
+        if import.bindings.is_empty() {
+            if import.namespace.starts_with('_')
+                || live.iter().any(|name| {
+                    name.strip_prefix(&import.namespace)
+                        .is_some_and(|suffix| suffix.starts_with('.'))
+                })
+            {
+                continue;
+            }
+            diagnostics.push(unused_type_import_diagnostic(
+                &parsed.path,
+                import.namespace_span.start,
+                &import.namespace,
+            ));
+            continue;
+        }
+
+        for binding in &import.bindings {
+            if binding.local.starts_with('_') || live.contains(&binding.local) {
+                continue;
+            }
+            diagnostics.push(unused_type_import_diagnostic(
+                &parsed.path,
+                binding.local_span.start,
+                &binding.local,
+            ));
+        }
     }
 
     diagnostics
@@ -3234,6 +3375,28 @@ fn unused_import_diagnostic(path: &Path, position: SourcePosition, name: &str) -
         format!("import `{name}` is never used; prefix with `_` to silence"),
     )
     .with_code(DiagnosticCode::LINT_UNUSED_IMPORT)
+}
+
+fn unused_type_import_diagnostic(path: &Path, position: SourcePosition, name: &str) -> Diagnostic {
+    Diagnostic::new(
+        path,
+        position.line,
+        position.column,
+        DiagnosticSeverity::Warning,
+        format!("type import `{name}` is never used; prefix with `_` to silence"),
+    )
+    .with_code(DiagnosticCode::LINT_UNUSED_IMPORT)
+}
+
+fn unused_type_diagnostic(path: &Path, position: SourcePosition, name: &str) -> Diagnostic {
+    Diagnostic::new(
+        path,
+        position.line,
+        position.column,
+        DiagnosticSeverity::Warning,
+        format!("type `{name}` is never used; prefix with `_` to silence"),
+    )
+    .with_code(DiagnosticCode::LINT_UNUSED_TYPE)
 }
 
 fn local_shadow_diagnostic(

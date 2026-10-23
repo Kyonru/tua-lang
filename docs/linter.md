@@ -63,7 +63,8 @@ share an existing Tua code because they are the same analysis.
 | `ParentConstructorPath` | `TL4057` |
 | `VirtualCallInInit` | `TL4058` |
 | `RedundantInheritedField` | `TL4059` |
-| `ImportUnused` | `TL4054` |
+| `ImportUnused` | `TL4054` (runtime and type-only imports) |
+| `TypeUnused` | `TL4075` |
 | `BuiltinGlobalWrite` | `TL4038` |
 | `PlaceholderRead` | `TL4039` |
 | `UnreachableCode` | `TL4040` |

@@ -8,6 +8,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Added
 
+- Standard diagnostics now warn about unused type-only imports and private type
+  aliases. Exported types, re-exports, classes, underscore-prefixed names, and
+  transitive dependencies of used types are exempt.
+
 - **Tua: Stop LOVE Project** now terminates the active run task, and the editor
   title swaps its Run button for a Stop button while the game is running.
 
