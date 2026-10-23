@@ -243,8 +243,8 @@ LOVE object methods normally use Lua's colon syntax, such as
 warns when a known LOVE method is called with an incorrect dot form.
 
 Run **Tua: Run LOVE Project** from the command palette. The extension builds
-the project, launches LOVE, and mirrors runtime output into both the task
-terminal and the `tua` output channel.
+the project, launches LOVE, and streams runtime output into the focused task
+terminal. Use **Tua: Stop LOVE Project** when you are done.
 
 ## 5. Use Classes When They Fit
 

@@ -54,6 +54,7 @@ const expected = [
   "tua.openGeneratedLua",
   "tua.jumpBetweenSourceAndGenerated",
   "tua.runLoveProject",
+  "tua.stopLoveProject",
   "tua.debugLoveProject",
   "tua.restartLoveProject",
   "tua.runLoveProjectWithHotReload",
@@ -206,11 +207,12 @@ if (!manifest.activationEvents?.includes("workspaceContains:**/tua.toml")) {
 const editorTitle = manifest.contributes?.menus?.["editor/title"] || [];
 for (const command of [
   "tua.runLoveProject",
+  "tua.stopLoveProject",
   "tua.debugLoveProject",
   "tua.restartLoveProject",
   "tua.runLoveProjectWithHotReload",
 ]) {
-  if (!editorTitle.some((item) => item.command === command && item.when === "editorLangId == tua")) {
+  if (!editorTitle.some((item) => item.command === command && item.when.includes("editorLangId == tua"))) {
     console.error(`LOVE editor title command should be scoped to Tua editors: ${command}`);
     process.exit(1);
   }

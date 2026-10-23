@@ -8,6 +8,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Added
 
+- **Tua: Stop LOVE Project** now terminates the active run task, and the editor
+  title swaps its Run button for a Stop button while the game is running.
+
 - Type completion can now discover exported project aliases and add the
   required `import type` declaration. Unknown-type diagnostics offer matching
   quick fixes, while existing named imports, namespaces, equivalent module
@@ -20,6 +23,10 @@ language or editor behavior, and migration notes call out those changes.
   poll the mouse position.
 
 ### Fixed
+
+- **Tua: Run LOVE Project** now focuses its dedicated task terminal and keeps
+  game stdout and stderr there instead of duplicating `print()` output into the
+  Tua language-server channel.
 
 - Contextual callback typing now follows function-valued fields through
   required module tables. In particular, a Store nested in a shared module

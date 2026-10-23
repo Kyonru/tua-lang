@@ -490,15 +490,25 @@ async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
     state.setActiveDocument(loveDocument);
     const loveTerminal = await state.executedTasks[0].task.execution.callback();
     const outputLineCount = state.outputLines.length;
-    loveTerminal.writeLine("hello from love");
+    const terminalLines = [];
+    loveTerminal.onDidWrite((line) => terminalLines.push(line));
+    loveTerminal.writeProcessLine("hello from love");
     assert.deepStrictEqual(
       state.outputLines.slice(outputLineCount),
-      ["hello from love"],
-      "run LOVE task output should also be mirrored to the Tua output channel",
+      [],
+      "game stdout should stay in the task terminal instead of duplicating language-server logs",
     );
+    assert.deepStrictEqual(terminalLines, ["hello from love\r\n"]);
+
+    assert.strictEqual(
+      await state.commands.get("tua.stopLoveProject")(),
+      true,
+      "stop LOVE should report that it terminated the running task",
+    );
+    assert.strictEqual(state.taskTerminations.length, 1, "stop LOVE should terminate the active task");
 
     await state.commands.get("tua.restartLoveProject")();
-    assert.strictEqual(state.taskTerminations.length, 1, "restart LOVE should terminate the active task");
+    assert.strictEqual(state.taskTerminations.length, 1, "restart after stop has no stale task to terminate");
     assert.strictEqual(state.executedTasks.length, 2, "restart LOVE should start a fresh task");
 
     const loveRunner = require(path.join(extensionRoot, "src", "love", "run-project.js"));
@@ -3378,6 +3388,7 @@ function assertRegisteredCommands(state) {
     "tua.saveCpuProfile",
     "tua.saveHeapSummary",
     "tua.runLoveProject",
+    "tua.stopLoveProject",
     "tua.debugLoveProject",
     "tua.restartLoveProject",
     "tua.hover.references",

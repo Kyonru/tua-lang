@@ -690,6 +690,12 @@
         "icon": "$(play)"
       },
       {
+        "command": "tua.stopLoveProject",
+        "title": "Stop LOVE Project",
+        "category": "Tua",
+        "icon": "$(debug-stop)"
+      },
+      {
         "command": "tua.debugLoveProject",
         "title": "Debug LOVE Project",
         "category": "Tua",
@@ -886,7 +892,12 @@
         },
         {
           "command": "tua.runLoveProject",
-          "when": "editorLangId == tua",
+          "when": "editorLangId == tua && !tua.loveProjectRunning",
+          "group": "navigation@48"
+        },
+        {
+          "command": "tua.stopLoveProject",
+          "when": "editorLangId == tua && tua.loveProjectRunning",
           "group": "navigation@48"
         },
         {
@@ -947,6 +958,10 @@
         {
           "command": "tua.runLoveProject",
           "when": "workspaceFolderCount > 0"
+        },
+        {
+          "command": "tua.stopLoveProject",
+          "when": "workspaceFolderCount > 0 && tua.loveProjectRunning"
         },
         {
           "command": "tua.debugLoveProject",

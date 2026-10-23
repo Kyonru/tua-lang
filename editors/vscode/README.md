@@ -105,9 +105,9 @@ From there you can:
   that load files.
 - Baton-backed `input({...})` completion and checking for LOVE keys,
   scancodes, mouse buttons, gamepad axes, buttons, hats, controls, and pairs.
-- `Tua: Run LOVE Project` and `Tua: Restart LOVE Project` as cancellable VS Code
-  tasks. Runtime `print(...)`, stdout, and stderr are mirrored into both the
-  task terminal and the `tua` output channel, and emitted Lua traceback lines
+- `Tua: Run LOVE Project`, `Tua: Stop LOVE Project`, and `Tua: Restart LOVE
+  Project` as cancellable VS Code tasks. Runtime `print(...)`, stdout, and
+  stderr stream into the focused task terminal, and emitted Lua traceback lines
   are mapped back to original Tua files when source maps are enabled.
 - `Tua: Run LOVE Project With Hot Reload` runs `tua dev`, so saved changes
   reload into the running game, and `Tua: Package Game...` builds a `.love`,
@@ -149,6 +149,7 @@ From there you can:
 
 - `Tua: Initialize Tua Project`
 - `Tua: Run LOVE Project`
+- `Tua: Stop LOVE Project`
 - `Tua: Debug LOVE Project`
 - `Tua: Restart LOVE Project`
 - `Tua: Run LOVE Project With Hot Reload`

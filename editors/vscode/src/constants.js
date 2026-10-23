@@ -22,6 +22,7 @@ const COMMANDS = {
   openGeneratedLua: "tua.openGeneratedLua",
   jumpBetweenSourceAndGenerated: "tua.jumpBetweenSourceAndGenerated",
   runLoveProject: "tua.runLoveProject",
+  stopLoveProject: "tua.stopLoveProject",
   debugLoveProject: "tua.debugLoveProject",
   restartLoveProject: "tua.restartLoveProject",
   runLoveProjectWithHotReload: "tua.runLoveProjectWithHotReload",

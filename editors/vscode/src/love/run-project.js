@@ -14,6 +14,7 @@ const { formatError } = require("../shared/errors");
 
 const TASK_TYPE = "tua";
 const TASK_NAME = "Run LOVE Project";
+const RUNNING_CONTEXT = "tua.loveProjectRunning";
 
 function registerLoveProjectRunner({ appendOutputLine, getClient, getServerCommand }) {
   let activeExecution;
@@ -24,13 +25,17 @@ function registerLoveProjectRunner({ appendOutputLine, getClient, getServerComma
     vscode.commands.registerCommand(COMMANDS.restartLoveProject, () =>
       runLoveProject({ getClient, getServerCommand, restart: true }),
     ),
+    vscode.commands.registerCommand(COMMANDS.stopLoveProject, () => stopLoveProject()),
   ];
+
+  void setRunningContext(false);
 
   if (vscode.tasks?.onDidEndTask) {
     disposables.push(
       vscode.tasks.onDidEndTask((event) => {
         if (event.execution === activeExecution) {
           activeExecution = undefined;
+          void setRunningContext(false);
         }
       }),
     );
@@ -41,6 +46,7 @@ function registerLoveProjectRunner({ appendOutputLine, getClient, getServerComma
       vscode.tasks.onDidEndTaskProcess((event) => {
         if (event.execution === activeExecution) {
           activeExecution = undefined;
+          void setRunningContext(false);
         }
       }),
     );
@@ -75,12 +81,26 @@ function registerLoveProjectRunner({ appendOutputLine, getClient, getServerComma
     });
 
     activeExecution = await vscode.tasks.executeTask(task);
+    await setRunningContext(true);
 
     return {
       outputDirectory: layout.outputDirectory,
       taskName: TASK_NAME,
       workspaceRoot: layout.configDirectory,
     };
+  }
+
+  async function stopLoveProject() {
+    if (!activeExecution?.terminate) {
+      await setRunningContext(false);
+      vscode.window.showInformationMessage("No Tua LOVE project is currently running.");
+      return false;
+    }
+
+    activeExecution.terminate();
+    activeExecution = undefined;
+    await setRunningContext(false);
+    return true;
   }
 
   return vscode.Disposable.from(...disposables);
@@ -113,7 +133,7 @@ function createLoveProjectTask({ appendOutputLine, layout, loveCommand, tuaComma
   task.detail = `Build ${layout.configDirectory} and run LOVE from ${layout.outputDirectory}.`;
   task.presentationOptions = {
     clear: false,
-    focus: false,
+    focus: true,
     panel: vscode.TaskPanelKind?.Dedicated,
     reveal: vscode.TaskRevealKind?.Always,
   };
@@ -305,7 +325,7 @@ class LoveProjectTerminal {
   }
 
   writeProcessLine(line) {
-    this.writeLine(line);
+    this.writeTerminalLine(line);
 
     if (this.sourceMaps.length === 0) {
       return;
@@ -343,6 +363,14 @@ class LoveProjectTerminal {
     }
 
     this.appendOutputLine?.(line);
+    this.writeTerminalLine(line);
+  }
+
+  writeTerminalLine(line) {
+    if (this.finished) {
+      return;
+    }
+
     this.writeEmitter.fire(`${line}\r\n`);
   }
 
@@ -364,6 +392,10 @@ class LoveProjectTerminal {
     this.closeEmitter.dispose();
     this.writeEmitter.dispose();
   }
+}
+
+function setRunningContext(running) {
+  return vscode.commands.executeCommand("setContext", RUNNING_CONTEXT, running);
 }
 
 function formatCommand(command, args) {

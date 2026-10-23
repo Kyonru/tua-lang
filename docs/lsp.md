@@ -494,10 +494,12 @@ edits must be saved or discarded before rebuilding.
 maps provide line provenance, so target columns begin at column zero.
 
 **Tua: Run LOVE Project** builds and launches LOVE from the output directory in
-a visible, cancellable VS Code task. **Tua: Restart LOVE Project** replaces the
-tracked task. `print(...)`, stdout, stderr, and mapped runtime traceback
-locations appear in the task terminal and the `tua` output channel. Configure a
-non-standard LOVE executable with `tua.love.command`.
+a focused, cancellable VS Code task. `print(...)`, stdout, stderr, and mapped
+runtime traceback locations appear in its dedicated terminal. **Tua: Stop LOVE
+Project** terminates the active run, and **Tua: Restart LOVE Project** replaces
+it. The editor title shows Run while idle and Stop while the game is active.
+The `tua` output channel remains reserved for extension and language-server
+messages. Configure a non-standard LOVE executable with `tua.love.command`.
 
 **Tua: Run LOVE Project With Hot Reload** runs [`tua dev`](hot-reload.md) in
 a task: the game reloads changed modules each time you save. **Tua: Package
@@ -521,7 +523,7 @@ Open the command palette and type **Tua**. The most useful commands are:
 | **Tua: Select Inlay Hint Mode** | Choose full, compact, filtered, or disabled hints |
 | **Tua: Open Generated Lua Beside Tua** | Rebuild and inspect emitted Lua for the active source |
 | **Tua: Jump Between Tua and Generated Lua** | Navigate through the generated source map |
-| **Tua: Run LOVE Project** / **Restart LOVE Project** | Build and run LOVE in a VS Code task |
+| **Tua: Run LOVE Project** / **Stop LOVE Project** / **Restart LOVE Project** | Build, stop, or restart LOVE in a focused VS Code task terminal |
 | **Tua: Run LOVE Project With Hot Reload** | Run the game and reload code changes while it plays |
 | **Tua: Package Game...** | Build a `.love`, fused Windows, or fused macOS package |
 | **Tua: Debug LOVE Project** | Build and debug generated Lua with breakpoints mapped to Tua |

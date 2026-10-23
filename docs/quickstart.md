@@ -72,10 +72,11 @@ generated files have no Tua runtime dependency.
 ## 3. Run The Project
 
 With LOVE 11.x installed, run **Tua: Run LOVE Project**. The extension builds
-the project, launches LOVE from `build/`, and mirrors `print(...)`, stdout, and
-stderr into both the task terminal and the `tua` output channel.
+the project, launches LOVE from `build/`, and streams `print(...)`, stdout, and
+stderr into its focused task terminal.
 
-Use **Tua: Restart LOVE Project** after changes. If LOVE is not found, set
+Use **Tua: Stop LOVE Project** to terminate it or **Tua: Restart LOVE Project**
+after changes. If LOVE is not found, set
 `tua.love.command` to the LOVE executable path in VS Code settings.
 
 To debug instead of only run, use **Tua: Debug LOVE Project**. See
