@@ -22,6 +22,34 @@ local typed: Pl = nil
 "#;
 
 #[test]
+fn replacement_spans_cover_typed_identifiers_and_string_values() {
+    let identifier_source = "local playerName = 1\nlocal copy = play";
+    let identifier_position = position_after(identifier_source, "local copy = play");
+    let identifier_span = completion_replacement_span(identifier_source, identifier_position)
+        .expect("identifier prefix should have a replacement span");
+
+    assert_eq!(identifier_span.start.line, 2);
+    assert_eq!(identifier_span.start.column, 14);
+    assert_eq!(identifier_span.end, identifier_position);
+
+    let asset_source = "local sprite = image \"assets/img";
+    let asset_position = position_after(asset_source, "assets/img");
+    let asset_span = completion_replacement_span(asset_source, asset_position)
+        .expect("asset path prefix should have a replacement span");
+
+    assert_eq!(asset_span.start.column, 23);
+    assert_eq!(asset_span.end, asset_position);
+
+    let input_source = "local controls = input({ controls = { fire = { \"key:";
+    let input_position = position_after(input_source, "key:");
+    let input_span = completion_replacement_span(input_source, input_position)
+        .expect("input source prefix should have a replacement span");
+
+    assert_eq!(input_span.start.column, input_position.column - 4);
+    assert_eq!(input_span.end, input_position);
+}
+
+#[test]
 fn union_field_completion_only_offers_members_supported_by_every_variant() {
     let source = r#"type Left = { common: number, left: string }
 type Right = { common: number, right: boolean }

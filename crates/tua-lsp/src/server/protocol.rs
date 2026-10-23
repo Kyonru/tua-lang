@@ -694,8 +694,13 @@ pub(super) fn lsp_completion_from_core(
     uri: &str,
     position: SourcePosition,
     completion: Completion,
+    replacement_span: Option<SourceSpan>,
     label_details_support: bool,
 ) -> Value {
+    let replacement_text = completion
+        .insert_text
+        .clone()
+        .unwrap_or_else(|| completion.label.clone());
     let kind = lsp_completion_kind(completion.kind);
     let label = completion.label;
     let insert_text = completion.insert_text;
@@ -722,6 +727,13 @@ pub(super) fn lsp_completion_from_core(
 
     if let Some(insert_text) = insert_text {
         item["insertText"] = json!(insert_text);
+    }
+
+    if let Some(replacement_span) = replacement_span {
+        item["textEdit"] = json!({
+            "range": lsp_range(replacement_span),
+            "newText": replacement_text
+        });
     }
 
     if let Some(filter_text) = filter_text {

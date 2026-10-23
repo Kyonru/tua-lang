@@ -89,6 +89,23 @@ pub(crate) fn complete_indexed_module_paths(
     }
 }
 
+pub fn completion_replacement_span(
+    source: &str,
+    position: SourcePosition,
+) -> Option<crate::SourceSpan> {
+    let context = completion_context(source, position)?;
+    let prefix = context.filter_prefix()?;
+    let prefix_length = prefix.chars().count();
+
+    (prefix_length > 0).then_some(crate::SourceSpan {
+        start: SourcePosition {
+            line: position.line,
+            column: position.column.saturating_sub(prefix_length).max(1),
+        },
+        end: position,
+    })
+}
+
 impl CompletionKind {
     pub fn as_str(self) -> &'static str {
         match self {

@@ -34,6 +34,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Accepting completion after a typed prefix now replaces that prefix instead
+  of appending the full candidate, including asset paths and input sources such
+  as `key:`.
+
 - Multiline calls nested inside callback and control-flow blocks now retain
   their continuation indentation, so formatted code no longer triggers the
   multiline-statement layout warning.

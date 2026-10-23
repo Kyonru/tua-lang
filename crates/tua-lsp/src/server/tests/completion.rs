@@ -43,7 +43,12 @@ local next = image "assets/p"
     server.send(initialize_with_root(1, temp.uri()));
     server.send(did_open(&uri, source));
     server.send(hover_request(2, &uri, source, "player.png"));
-    server.send(completion_request(3, &uri, source, "assets/p"));
+    server.send(completion_request(
+        3,
+        &uri,
+        source,
+        "local next = image \"assets/p",
+    ));
 
     assert_hover_contains(server.output(), 2, "asset `assets/player.png`");
     assert_hover_contains(server.output(), 2, "LOVE type: Image");
@@ -51,6 +56,16 @@ local next = image "assets/p"
     assert_completion_labels(server.output(), 3, ["assets/player.png"]);
 
     let completion = response_with_id(server.output(), 3)["result"][0].clone();
+    assert_eq!(
+        completion["textEdit"],
+        json!({
+            "range": {
+                "start": { "line": 2, "character": 20 },
+                "end": { "line": 2, "character": 28 }
+            },
+            "newText": "assets/player.png"
+        })
+    );
 
     server.send(completion_resolve_request(4, completion));
 
@@ -62,6 +77,49 @@ local next = image "assets/p"
         .expect("asset completion docs should be markdown")
         .contains("Supported image asset"));
 }
+
+#[test]
+fn completion_replaces_typed_identifier_and_input_source_prefixes() {
+    let uri = "file:///tmp/completion-replacement.tua";
+    let source = r#"local playerName = 1
+local copy = play
+local controls = input({
+  controls = {
+    fire = { "key:" },
+  },
+})
+"#;
+    let output = run_messages(vec![
+        did_open(uri, source),
+        invoked_completion_request(2, uri, source, "local copy = play"),
+        completion_request(3, uri, source, "key:"),
+    ]);
+
+    let identifier = completion_with_label(&output, 2, "playerName");
+    assert_eq!(
+        identifier["textEdit"],
+        json!({
+            "range": {
+                "start": { "line": 1, "character": 13 },
+                "end": { "line": 1, "character": 17 }
+            },
+            "newText": "playerName"
+        })
+    );
+
+    let input = completion_with_label(&output, 3, "key:a");
+    assert_eq!(
+        input["textEdit"],
+        json!({
+            "range": {
+                "start": { "line": 4, "character": 14 },
+                "end": { "line": 4, "character": 18 }
+            },
+            "newText": "key:a"
+        })
+    );
+}
+
 #[test]
 fn did_change_configuration_can_enable_completion_sequence_ranking() {
     let temp = TempProject::new("configuration-completion-sequence-ranking");

@@ -1377,11 +1377,10 @@ impl LspServer {
         let Some(position) = request.position() else {
             return json!([]);
         };
+        let Some(source) = self.analysis.document_text(request.uri) else {
+            return json!([]);
+        };
         if is_config_uri(request.uri) {
-            let Some(source) = self.analysis.document_text(request.uri) else {
-                return json!([]);
-            };
-
             return super::config::completion_response(source, position);
         }
 
@@ -1392,6 +1391,7 @@ impl LspServer {
             return lsp_completion_array(
                 request.uri,
                 position,
+                source,
                 completions,
                 self.client_completion_label_details,
             );
@@ -1404,6 +1404,7 @@ impl LspServer {
                 return lsp_completion_array(
                     request.uri,
                     position,
+                    source,
                     completions,
                     self.client_completion_label_details,
                 );
@@ -1432,6 +1433,7 @@ impl LspServer {
         lsp_completion_array(
             request.uri,
             position,
+            source,
             completions,
             self.client_completion_label_details,
         )
@@ -2895,9 +2897,11 @@ fn completion_request_is_invoked(message: &Value) -> bool {
 fn lsp_completion_array(
     uri: &str,
     position: SourcePosition,
+    source: &str,
     completions: Vec<tua_core::Completion>,
     client_completion_label_details: bool,
 ) -> Value {
+    let replacement_span = tua_core::completion::completion_replacement_span(source, position);
     Value::Array(
         completions
             .into_iter()
@@ -2907,6 +2911,7 @@ fn lsp_completion_array(
                     uri,
                     position,
                     completion,
+                    replacement_span,
                     client_completion_label_details,
                 );
                 let label = item
