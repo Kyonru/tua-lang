@@ -959,7 +959,35 @@ impl AnalysisHost {
                 )
             }
             Err(_) => {
-                if let Some(degraded) = &file.degraded_semantics {
+                if let Some(facts) = self.cached_last_good_semantic_facts(path) {
+                    let mut completions =
+                        complete_source_with_parsed_environment_and_ranking_inputs(
+                            &file.source,
+                            &facts.parsed,
+                            position,
+                            &facts.environment,
+                            CompletionRankingInputs::from_sources(
+                                &[],
+                                None,
+                                CompletionAdaptiveStats::file_scope_hash(path),
+                                &self.completion_sequence_ranking,
+                            ),
+                        );
+                    if let Some((_, lossy)) =
+                        complete_lossy_identifier_source(&file.source, position)
+                    {
+                        let mut labels = completions
+                            .iter()
+                            .map(|completion| completion.label.clone())
+                            .collect::<BTreeSet<_>>();
+                        completions.extend(
+                            lossy
+                                .into_iter()
+                                .filter(|completion| labels.insert(completion.label.clone())),
+                        );
+                    }
+                    completions
+                } else if let Some(degraded) = &file.degraded_semantics {
                     complete_source_with_parsed_environment_and_ranking_inputs(
                         &file.source,
                         &degraded.parsed,
@@ -1010,10 +1038,19 @@ impl AnalysisHost {
                     ranking(),
                 )
             }
-            Err(_) => file
-                .degraded_semantics
-                .as_ref()
-                .and_then(|degraded| {
+            Err(_) => self
+                .cached_last_good_semantic_facts(path)
+                .and_then(|facts| {
+                    complete_current_file_field_access_with_environment_and_ranking_inputs(
+                        &file.source,
+                        &facts.parsed,
+                        position,
+                        &facts.environment,
+                        ranking(),
+                    )
+                })
+                .or_else(|| {
+                    let degraded = file.degraded_semantics.as_ref()?;
                     if !degraded.parsed.type_imports.is_empty() {
                         return None;
                     }
@@ -1028,6 +1065,14 @@ impl AnalysisHost {
                 })
                 .or_else(|| complete_current_file_lua_field_access(&file.source, position)),
         }
+    }
+
+    fn cached_last_good_semantic_facts(&self, path: &Path) -> Option<DegradedSemanticFacts> {
+        self.snapshot_cache
+            .lock()
+            .expect("analysis snapshot cache lock poisoned")
+            .as_ref()
+            .and_then(|cached| cached.snapshot.last_good_semantic_facts(path))
     }
 
     pub fn current_file_inlay_hints(

@@ -516,6 +516,47 @@ local account = setmetatable({ balance = 50 }, Account)
 
     completion_with_label(server.output(), 3, "deposit");
 }
+
+#[test]
+fn fast_completion_uses_last_valid_facts_while_an_unrelated_edit_is_incomplete() {
+    let uri = "file:///tmp/recovered-fast-completion.tua";
+    let valid = r#"type Player = {
+  hp: number,
+  name: string,
+}
+
+local player: Player = { hp = 100, name = "Ada" }
+"#;
+    let invalid = format!("{valid}local unfinished = (\nplayer.\nlocal nextPlayer: Pl\n");
+    let mut server = TestServer::new();
+
+    server.send(did_open(uri, valid));
+    server.send(did_change(uri, &invalid, 2));
+    server.send(trigger_character_completion_request(
+        3, uri, &invalid, "player.", ".",
+    ));
+    server.send(completion_request(4, uri, &invalid, "local nextPlayer: Pl"));
+
+    assert_completion_labels(server.output(), 3, ["hp", "name"]);
+    completion_with_label(server.output(), 4, "Player");
+}
+
+#[test]
+fn type_errors_do_not_suppress_completion() {
+    let uri = "file:///tmp/type-error-completion.tua";
+    let source = r#"type Player = { hp: number }
+local player: Player = { hp = "wrong" }
+player.
+"#;
+    let mut server = TestServer::new();
+
+    server.send(did_open(uri, source));
+    server.send(trigger_character_completion_request(
+        2, uri, source, "player.", ".",
+    ));
+
+    assert_completion_labels(server.output(), 2, ["hp"]);
+}
 #[test]
 fn completion_returns_lua_doc_tags_types_and_snippets() {
     let uri = "file:///tmp/doc-completion.tua";

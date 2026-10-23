@@ -19,6 +19,12 @@ language or editor behavior, and migration notes call out those changes.
   movement participates in active-device detection. Disabled instances do not
   poll the mouse position.
 
+### Fixed
+
+- Completion now keeps using the last valid semantic facts during incomplete
+  edits, including the fast identifier and member-access paths used on each
+  keystroke. Ordinary type errors no longer suppress suggestions elsewhere.
+
 ## [0.3.0] - 2026-10-22
 
 ### Changed

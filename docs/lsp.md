@@ -75,8 +75,11 @@ than briefly showing a stale red squiggle.
 
 Open documents retain their last valid semantic facts while syntax is
 temporarily incomplete. Completion uses the current cursor context with those
-facts, while hover and inlay hints remain useful until valid project analysis
-is available again.
+facts on both manually invoked and trigger-character requests, while hover and
+inlay hints remain useful until valid project analysis is available again.
+Parse-independent Lua, LOVE, keyword, snippet, and module-path candidates stay
+available even when no valid semantic snapshot exists yet. Ordinary type
+errors do not reduce completion availability.
 
 Exact-code inline suppressions use the same syntax as `tua check` and are
 enabled by default:
