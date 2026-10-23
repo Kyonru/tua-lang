@@ -1213,7 +1213,7 @@ const INPUT_METHOD_ITEMS: &[LuaItem] = &[
         "update",
         LuaItemKind::Function,
         "function Input:update(): nil",
-        "Poll all configured Baton sources and update control and pair state.",
+        "Poll configured Baton sources and update control, pair, and enabled pointer state.",
     ),
     item(
         "get",
@@ -1250,6 +1250,18 @@ const INPUT_METHOD_ITEMS: &[LuaItem] = &[
         LuaItemKind::Function,
         "function Input:getActiveDevice(): \"kbm\" | \"joy\" | \"none\"",
         "Return the most recently active Baton device category.",
+    ),
+    item(
+        "pointer",
+        LuaItemKind::Function,
+        "function Input:pointer(): number, number",
+        "Return the cached mouse position in window coordinates. Requires pointer tracking.",
+    ),
+    item(
+        "pointerDelta",
+        LuaItemKind::Function,
+        "function Input:pointerDelta(): number, number",
+        "Return mouse movement since the previous input update. Requires pointer tracking.",
     ),
 ];
 

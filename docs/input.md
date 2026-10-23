@@ -117,6 +117,53 @@ local controls = input({
 })
 ```
 
+## Pointer Position And Movement
+
+Set `pointer = true` to cache the mouse position once per input update:
+
+```tua
+local controls = input({
+  controls = {
+    fire = { "mouse:1", "button:rightshoulder" },
+  },
+  pointer = true,
+})
+
+function love.update(dt: number)
+  controls:update()
+
+  local mouseX, mouseY = controls:pointer()
+  local mouseDX, mouseDY = controls:pointerDelta()
+end
+```
+
+`pointer()` returns window coordinates in pixels. `pointerDelta()` returns the
+change since the previous `update()`, with `0, 0` before the first update.
+Mouse movement makes `getActiveDevice()` return `"kbm"`. Pointer tracking uses
+one `love.mouse.getPosition()` call per update and does not allocate. When it
+is disabled, input updates do not poll the mouse position; calling either
+pointer method reports that tracking is not enabled.
+
+Pointer coordinates are deliberately separate from directional pairs. This
+keeps one stable meaning for `controls:get("aim")`: a normalized gamepad vector
+in the `-1..1` range. For mouse aiming, convert the pointer through the active
+camera and calculate the direction from the player or weapon position—the
+input runtime cannot know that world-space origin.
+
+```tua
+local aimX, aimY = controls:get("aim")
+if controls:getActiveDevice() == "kbm" then
+  local mouseX, mouseY = controls:pointer()
+  local worldX, worldY = camera:toWorld(mouseX, mouseY)
+  aimX, aimY = worldX - player.x, worldY - player.y
+
+  local length = math.sqrt(aimX * aimX + aimY * aimY)
+  if length > 0 then
+    aimX, aimY = aimX / length, aimY / length
+  end
+end
+```
+
 ## Runtime API
 
 | Method | Result |
@@ -128,6 +175,8 @@ local controls = input({
 | `pressed(name)` | Whether it became held during this update. |
 | `released(name)` | Whether it stopped being held during this update. |
 | `getActiveDevice()` | `"kbm"`, `"joy"`, or `"none"`. |
+| `pointer()` | Cached mouse position as window-space x and y. Requires `pointer = true`. |
+| `pointerDelta()` | Mouse movement since the previous update. Requires `pointer = true`. |
 
 Call `update()` once near the start of each `love.update`. Separate `input`
 instances are useful for local multiplayer or for keeping gameplay and menu

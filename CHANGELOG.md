@@ -6,6 +6,14 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+### Added
+
+- Input players can opt into allocation-free pointer tracking with
+  `pointer = true`. `pointer()` returns the cached mouse position,
+  `pointerDelta()` returns movement since the previous update, and mouse
+  movement participates in active-device detection. Disabled instances do not
+  poll the mouse position.
+
 ## [0.3.0] - 2026-10-22
 
 ### Changed

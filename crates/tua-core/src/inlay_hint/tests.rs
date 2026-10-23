@@ -178,6 +178,8 @@ fn hints_baton_input_and_name_dependent_values() {
 local x, y = controls:get("move")
 local left = controls:get("left")
 local device = controls:getActiveDevice()
+local pointer_x, pointer_y = controls:pointer()
+local pointer_dx, pointer_dy = controls:pointerDelta()
 "#;
     let hints = inlay_hints_tua_source("src/input.tua", source).expect("input source should parse");
     let type_hints = hints
@@ -194,6 +196,10 @@ local device = controls:getActiveDevice()
             ": number",
             ": number",
             ": \"kbm\" | \"joy\" | \"none\"",
+            ": number",
+            ": number",
+            ": number",
+            ": number",
         ]
     );
 }

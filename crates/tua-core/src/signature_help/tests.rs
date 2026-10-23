@@ -522,9 +522,11 @@ fn returns_typed_baton_input_constructor_and_name_dependent_signatures() {
   },
   pairs = { move = { "left", "right", "up", "down" } },
 })
-controls:get(
 "#;
-    let get = signature_at(source, "controls:get(").expect("Input:get should have help");
+    let get_source = format!("{source}controls:get(\n");
+    let get = signature_at(&get_source, "controls:get(").expect("Input:get should have help");
+    let pointer = signature_at(&format!("{source}controls:pointer(\n"), "controls:pointer(")
+        .expect("Input:pointer should have help");
 
     assert_eq!(
         constructor.signatures[0].label,
@@ -536,6 +538,10 @@ controls:get(
     assert!(get.signatures.iter().any(|signature| {
         signature.label.contains("name: \"move\"") && signature.label.ends_with(": number, number")
     }));
+    assert_eq!(
+        pointer.signatures[0].label,
+        "function controls:pointer(): number, number"
+    );
 }
 
 #[test]

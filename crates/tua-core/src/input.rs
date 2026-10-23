@@ -32,6 +32,8 @@ const METHOD_NAMES: &[&str] = &[
     "pressed",
     "released",
     "getActiveDevice",
+    "pointer",
+    "pointerDelta",
 ];
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -104,7 +106,7 @@ pub(crate) const fn detail() -> &'static str {
 }
 
 pub(crate) const fn documentation() -> &'static str {
-    "Create a typed Baton input player whose configured controls, pairs, and LOVE input sources are available to editor tooling."
+    "Create a typed Baton input player whose configured controls, pairs, optional pointer state, and LOVE input sources are available to editor tooling."
 }
 
 pub(crate) const fn workflow_snippet() -> &'static str {
@@ -206,6 +208,12 @@ pub(crate) fn config_completion_items(
                 "Apply the deadzone independently to pair axes instead of radially.",
                 "squareDeadzone = ${1:false},",
             ),
+            completion_item(
+                "pointer",
+                "boolean",
+                "Cache mouse position and per-update movement, and treat mouse movement as keyboard/mouse activity.",
+                "pointer = ${1:true},",
+            ),
         ],
         ConfigContext::Controls => vec![completion_item(
             "control",
@@ -298,6 +306,7 @@ fn config_type() -> Type {
         ("joystick", TableField::optional(Type::alias("Joystick"))),
         ("deadzone", TableField::optional(Type::number())),
         ("squareDeadzone", TableField::optional(Type::boolean())),
+        ("pointer", TableField::optional(Type::boolean())),
     ])
 }
 
@@ -341,6 +350,7 @@ fn input_type(spec: &InputSpec) -> Type {
         ("joystick", TableField::optional(Type::alias("Joystick"))),
         ("deadzone", TableField::required(Type::number())),
         ("squareDeadzone", TableField::required(Type::boolean())),
+        ("pointer", TableField::required(Type::boolean())),
     ]);
 
     Type::table([
@@ -392,6 +402,14 @@ fn input_type(spec: &InputSpec) -> Type {
                 ])],
             ),
         ),
+        (
+            "pointer",
+            method_field([("self", Type::Any)], [Type::number(), Type::number()]),
+        ),
+        (
+            "pointerDelta",
+            method_field([("self", Type::Any)], [Type::number(), Type::number()]),
+        ),
     ])
 }
 
@@ -435,7 +453,7 @@ fn typed_member_for_spec(member: &str, spec: &InputSpec, exact: bool) -> Option<
             "Input:update",
             [self_parameter],
             [Type::nil()],
-            "Poll all configured Baton sources and update control and pair state.",
+            "Poll configured Baton sources and update control, pair, and enabled pointer state.",
         )),
         "get" | "getRaw" if exact => {
             let mut overloads = Vec::new();
@@ -519,6 +537,18 @@ fn typed_member_for_spec(member: &str, spec: &InputSpec, exact: bool) -> Option<
             ])],
             "Return the most recently active Baton device category.",
         )),
+        "pointer" => Some(typed_function(
+            "Input:pointer",
+            [self_parameter],
+            [Type::number(), Type::number()],
+            "Return the cached mouse position in window coordinates. Requires `pointer = true`.",
+        )),
+        "pointerDelta" => Some(typed_function(
+            "Input:pointerDelta",
+            [self_parameter],
+            [Type::number(), Type::number()],
+            "Return mouse movement since the previous input update. Requires `pointer = true`.",
+        )),
         _ => None,
     }
 }
@@ -535,6 +565,7 @@ fn method_return_types(spec: &InputSpec, exact: bool, call: &FunctionCall) -> Op
             Type::string_literal("joy"),
             Type::string_literal("none"),
         ])]),
+        "pointer" | "pointerDelta" => Some(vec![Type::number(), Type::number()]),
         "get" | "getRaw" => {
             let name = first_parenthesized_argument(call).and_then(string_expression);
             if exact && name.as_ref().is_some_and(|name| spec.pairs.contains(name)) {
@@ -1303,6 +1334,8 @@ mod tests {
         };
         assert!(input.field("pressed").is_some());
         assert!(input.field("getActiveDevice").is_some());
+        assert!(input.field("pointer").is_some());
+        assert!(input.field("pointerDelta").is_some());
     }
 
     #[test]

@@ -92,7 +92,23 @@ function Player:_loadConfig(config)
   config.pairs = config.pairs or {}
   config.deadzone = config.deadzone or .5
   config.squareDeadzone = config.squareDeadzone or false
+  config.pointer = config.pointer or false
   self.config = config
+end
+
+function Player:_initPointer()
+  self._pointerX, self._pointerY = love.mouse.getPosition()
+  self._pointerDX = 0
+  self._pointerDY = 0
+  self.update = Player._updateWithPointer
+end
+
+function Player:_updatePointer()
+  local x, y = love.mouse.getPosition()
+  self._pointerDX = x - self._pointerX
+  self._pointerDY = y - self._pointerY
+  self._pointerX = x
+  self._pointerY = y
 end
 
 function Player:_initControls()
@@ -132,6 +148,9 @@ function Player:_init(config)
   self:_initControls()
   self:_initPairs()
   self._activeDevice = 'none'
+  if self.config.pointer then
+    self:_initPointer()
+  end
 end
 
 function Player:_setActiveDevice()
@@ -216,6 +235,31 @@ function Player:update()
   self:_setActiveDevice()
   self:_updateControls()
   self:_updatePairs()
+end
+
+function Player:_updateWithPointer()
+  self:_updatePointer()
+  if self._pointerDX ~= 0 or self._pointerDY ~= 0 then
+    self._activeDevice = 'kbm'
+  else
+    self:_setActiveDevice()
+  end
+  self:_updateControls()
+  self:_updatePairs()
+end
+
+function Player:pointer()
+  if not self.config.pointer then
+    error('Pointer tracking is not enabled for this input', 2)
+  end
+  return self._pointerX, self._pointerY
+end
+
+function Player:pointerDelta()
+  if not self.config.pointer then
+    error('Pointer tracking is not enabled for this input', 2)
+  end
+  return self._pointerDX, self._pointerDY
 end
 
 function Player:getRaw(name)

@@ -1358,6 +1358,7 @@ fn hovers_typed_baton_input_constructor_local_and_methods() {
   pairs = { move = { "left", "right", "up", "down" } },
 })
 controls:get("move")
+controls:pointerDelta()
 "#;
     let constructor = hover_tua_source("src/input.tua", source, position_at(source, "input"))
         .expect("hover should not fail")
@@ -1368,6 +1369,10 @@ controls:get("move")
     let get = hover_tua_source("src/input.tua", source, position_at(source, "get(\"move"))
         .expect("hover should not fail")
         .expect("Input:get should hover");
+    let pointer_delta =
+        hover_tua_source("src/input.tua", source, position_at(source, "pointerDelta"))
+            .expect("hover should not fail")
+            .expect("Input:pointerDelta should hover");
 
     assert_eq!(
         constructor.contents,
@@ -1380,6 +1385,10 @@ controls:get("move")
     );
     assert!(get.contents.contains("name: \"move\""));
     assert!(get.contents.ends_with(": number, number"));
+    assert_eq!(
+        pointer_delta.contents,
+        "function Input:pointerDelta(): number, number"
+    );
 }
 
 #[test]

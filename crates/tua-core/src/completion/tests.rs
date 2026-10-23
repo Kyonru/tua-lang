@@ -720,6 +720,18 @@ fn completes_baton_input_config_sources_names_and_methods() {
     .expect("input option completion should succeed");
     assert!(labels(&options).contains(&"deadzone".to_owned()));
 
+    let pointer_options_source = r#"local controls = input({
+  poi
+})
+"#;
+    let pointer_options = complete_tua_source(
+        "src/input.tua",
+        pointer_options_source,
+        position_after(pointer_options_source, "  poi"),
+    )
+    .expect("input pointer option completion should succeed");
+    assert!(labels(&pointer_options).contains(&"pointer".to_owned()));
+
     let source = r#"local controls = input({
   controls = {
     left = { "key:le" },
@@ -768,6 +780,8 @@ fn completes_baton_input_config_sources_names_and_methods() {
         "pressed",
         "released",
         "getActiveDevice",
+        "pointer",
+        "pointerDelta",
     ] {
         assert!(
             method_labels.contains(&expected.to_owned()),

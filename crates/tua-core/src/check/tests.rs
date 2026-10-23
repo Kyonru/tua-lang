@@ -3896,6 +3896,7 @@ fn checks_typed_baton_input_controls_pairs_and_devices() {
   pairs = {
     move = { "left", "right", "up", "down" },
   },
+  pointer = true,
 })
 
 controls:update()
@@ -3905,6 +3906,12 @@ local typed_x: number = x
 local typed_y: number = y
 local pressed: boolean = controls:pressed("confirm")
 local device: "kbm" | "joy" | "none" = controls:getActiveDevice()
+local pointer_x, pointer_y = controls:pointer()
+local pointer_dx, pointer_dy = controls:pointerDelta()
+local typed_pointer_x: number = pointer_x
+local typed_pointer_y: number = pointer_y
+local typed_pointer_dx: number = pointer_dx
+local typed_pointer_dy: number = pointer_dy
 "#,
     )
     .expect("static input config should derive valid method types");
