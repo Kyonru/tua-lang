@@ -34,6 +34,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Multiline calls nested inside callback and control-flow blocks now retain
+  their continuation indentation, so formatted code no longer triggers the
+  multiline-statement layout warning.
+
 - Editor diagnostics that identify a variable or name now underline the whole
   identifier instead of only its first character.
 

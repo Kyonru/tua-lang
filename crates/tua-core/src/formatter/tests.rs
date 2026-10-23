@@ -575,6 +575,63 @@ end
 }
 
 #[test]
+fn indents_multiline_calls_nested_in_callback_blocks() {
+    let source = r#"local function update(dt: number)
+shared.player:update(function(state: any)
+if screen_width / 2 > state.pointing.x then
+targetX = 0
+else
+targetX = math.remap(
+state.pointing.x,
+screen_width / 2,
+screen_width,
+screen_width * 0.75,
+screen_width
+)
+end
+end)
+end
+"#;
+    let expected = r#"local function update(dt: number)
+  shared.player:update(function(state: any)
+    if screen_width / 2 > state.pointing.x then
+      targetX = 0
+    else
+      targetX = math.remap(
+        state.pointing.x,
+        screen_width / 2,
+        screen_width,
+        screen_width * 0.75,
+        screen_width
+      )
+    end
+  end)
+end
+"#;
+
+    let output = format(source);
+
+    assert_eq!(output, expected);
+    assert_eq!(format(&output), output);
+    let parsed = parse_tua_source("src/main.tua", output).expect("formatted source should parse");
+    let environment = crate::types::build_type_environment(&parsed)
+        .expect("formatted source should build a type environment");
+    let diagnostics = crate::linter::lint_parsed_source(
+        &parsed,
+        &crate::DiagnosticsConfig::default(),
+        &crate::config::JitConfig::default(),
+        &environment,
+    );
+    assert!(
+        diagnostics
+            .iter()
+            .all(|diagnostic| diagnostic.code
+                != Some(crate::DiagnosticCode::LINT_MULTI_LINE_STATEMENT)),
+        "formatter output must satisfy its continuation-layout lint: {diagnostics:#?}"
+    );
+}
+
+#[test]
 fn removes_unnecessary_empty_lines() {
     let source = "\n\nlocal first=1\n\n\n\nlocal second=2\n\n\n";
 

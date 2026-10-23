@@ -410,7 +410,7 @@ struct Formatter<'a> {
     brace_depth: usize,
     paren_continuation_indents: Vec<usize>,
     pending_continuation: bool,
-    suppressed_paren_block_indents: Vec<usize>,
+    suppressed_paren_blocks: Vec<SuppressedParenBlock>,
     multiline_function_header_depths: Vec<usize>,
     split_control_header: Option<SplitControlHeader>,
     multiline_state: MultilineState,
@@ -439,6 +439,12 @@ enum SplitControlHeader {
     UntilCondition,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct SuppressedParenBlock {
+    depth: usize,
+    promoted_indent: usize,
+}
+
 impl<'a> Formatter<'a> {
     fn new(options: &'a FormatOptions) -> Self {
         Self {
@@ -448,7 +454,7 @@ impl<'a> Formatter<'a> {
             brace_depth: 0,
             paren_continuation_indents: Vec::new(),
             pending_continuation: false,
-            suppressed_paren_block_indents: Vec::new(),
+            suppressed_paren_blocks: Vec::new(),
             multiline_function_header_depths: Vec::new(),
             split_control_header: None,
             multiline_state: MultilineState::Code,
@@ -617,8 +623,11 @@ impl<'a> Formatter<'a> {
         let dedent = line_starts_with_dedent(code);
         let middle_block = line_is_middle_block(code);
         let closes_suppressed_block =
-            dedent && !middle_block && !self.suppressed_paren_block_indents.is_empty();
-        let suppress_paren_for_block = !self.suppressed_paren_block_indents.is_empty();
+            dedent && !middle_block && !self.suppressed_paren_blocks.is_empty();
+        let suppressed_paren_depth = self
+            .suppressed_paren_blocks
+            .last()
+            .map_or(0, |block| block.depth);
 
         if dedent {
             self.indent_level = self.indent_level.saturating_sub(1);
@@ -629,10 +638,12 @@ impl<'a> Formatter<'a> {
         let closes_brace = code.trim_start().starts_with('}');
         let starts_with_continuation = line_starts_with_continuation(code);
         let suppress_paren_for_brace = self.brace_depth > 0 || closes_brace;
-        let paren_indent = if suppress_paren_for_brace || suppress_paren_for_block {
+        let paren_indent = if suppress_paren_for_brace {
             0
         } else {
-            self.paren_depth.saturating_sub(usize::from(closes_paren))
+            self.paren_depth
+                .saturating_sub(usize::from(closes_paren))
+                .saturating_sub(suppressed_paren_depth)
         };
         let paren_extra = self.paren_continuation_indents.iter().sum::<usize>();
         let continuation_indent = usize::from(
@@ -678,17 +689,20 @@ impl<'a> Formatter<'a> {
         self.pending_continuation = self.paren_depth == 0 && line_ends_with_continuation(code);
 
         if closes_suppressed_block {
-            let promoted_indent = self
-                .suppressed_paren_block_indents
+            let suppressed = self
+                .suppressed_paren_blocks
                 .pop()
                 .expect("suppressed block should retain its promoted indent");
-            self.indent_level = self.indent_level.saturating_sub(promoted_indent);
+            self.indent_level = self.indent_level.saturating_sub(suppressed.promoted_indent);
         }
 
         if line_opens_block(code) || closes_split_header {
             if self.paren_depth > 0 {
                 self.indent_level += paren_indent;
-                self.suppressed_paren_block_indents.push(paren_indent);
+                self.suppressed_paren_blocks.push(SuppressedParenBlock {
+                    depth: self.paren_depth,
+                    promoted_indent: paren_indent,
+                });
                 if function_parameter_list_is_open(code) {
                     self.multiline_function_header_depths.push(self.paren_depth);
                 }
