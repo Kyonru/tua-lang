@@ -272,6 +272,7 @@ fn maps_module_paths_back_to_child_import_specifiers() {
     project.write("tua.toml", "source = \"src\"\n");
     project.write("src/main.tua", "");
     project.write("src/player.tua", "return {}\n");
+    project.write("src/types.d.tua", "export type Player = { hp: number }\n");
     project.write("src/shared/init.lua", "return {}\n");
 
     let model = ProjectModel::load([project.path().to_path_buf()]).expect("model should load");
@@ -280,6 +281,10 @@ fn maps_module_paths_back_to_child_import_specifiers() {
     assert_eq!(
         model.import_specifier_for_path(&main, project.path().join("src/player.tua")),
         Some("./player".to_owned())
+    );
+    assert_eq!(
+        model.import_specifier_for_path(&main, project.path().join("src/types.d.tua")),
+        Some("./types".to_owned())
     );
     assert_eq!(
         model.import_specifier_for_path(&main, project.path().join("src/shared/init.lua")),

@@ -1,11 +1,11 @@
-import type Shared from "./types"
+import type { Bullet } from "./types"
 
 -- Object pooling makes projectile reuse explicit without losing Bullet types.
 local bullets = objectPool({
-  create = function(): Shared.Bullet
+  create = function(): Bullet
     return { x = 0, y = 0, dx = 0, dy = 0, active = false }
   end,
-  reset = function(bullet: Shared.Bullet)
+  reset = function(bullet: Bullet)
     bullet.x = 0
     bullet.y = 0
     bullet.dx = 0
@@ -15,7 +15,7 @@ local bullets = objectPool({
   initial = 48,
 })
 
-local activeBullets: Shared.Bullet[] = {}
+local activeBullets: Bullet[] = {}
 
 -- The store owns observable run data instead of spreading globals through the
 -- callbacks. Its shape is inferred from this table.

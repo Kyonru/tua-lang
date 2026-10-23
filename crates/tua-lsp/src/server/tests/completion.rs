@@ -958,6 +958,131 @@ return {
     );
     assert!(completion.get("detail").is_none());
 }
+
+#[test]
+fn completion_auto_imports_exported_types_in_type_positions() {
+    let temp = TempProject::new("type-auto-import-completion");
+    let main = "local player: Pla = nil\n";
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write(
+        "src/types.d.tua",
+        "export type Player = { name: string, health: number }\n",
+    );
+    temp.write(
+        "src/player.tua",
+        "local function PlayerFactory() return {} end\nreturn { PlayerFactory = PlayerFactory }\n",
+    );
+
+    let main_uri = temp.uri_for("src/main.tua");
+    let mut server = TestServer::new();
+    server.send(initialize_with_root_and_completion_label_details(
+        1,
+        temp.uri(),
+    ));
+    server.send(did_open(&main_uri, main));
+    server.send(completion_request(2, &main_uri, main, "Pla"));
+
+    let completion = completion_with_label(server.output(), 2, "Player");
+    let labels = response_with_id(server.output(), 2)["result"]
+        .as_array()
+        .expect("completion result should be an array")
+        .iter()
+        .filter_map(|item| item["label"].as_str())
+        .collect::<Vec<_>>();
+    assert!(!labels.contains(&"PlayerFactory"));
+    assert_eq!(completion["insertText"], "Player");
+    assert_eq!(completion["data"]["sourceModule"], "types");
+    assert!(completion["labelDetails"]["description"]
+        .as_str()
+        .is_some_and(|detail| detail.starts_with("auto import type from types:")));
+
+    server.send(completion_resolve_request(3, completion));
+    let resolved = &response_with_id(server.output(), 3)["result"];
+    assert_eq!(
+        resolved["additionalTextEdits"][0]["newText"],
+        "import type { Player } from \"./types\"\n"
+    );
+    assert_eq!(
+        resolved["additionalTextEdits"][0]["range"],
+        json!({
+            "start": { "line": 0, "character": 0 },
+            "end": { "line": 0, "character": 0 }
+        })
+    );
+}
+
+#[test]
+fn completion_extends_or_reuses_existing_type_imports() {
+    let temp = TempProject::new("type-auto-import-existing");
+    let named = r#"import type { Room } from "types"
+local player: Pla = nil
+"#;
+    let namespaced = r#"import type Shared from "./types"
+local player: Pla = nil
+"#;
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write(
+        "src/types.d.tua",
+        "export type Player = { name: string }\nexport type Room = { name: string }\n",
+    );
+
+    let named_uri = temp.uri_for("src/named.tua");
+    let namespace_uri = temp.uri_for("src/namespaced.tua");
+    let mut server = TestServer::new();
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&named_uri, named));
+    server.send(completion_request(2, &named_uri, named, "Pla"));
+    let named_completion = completion_with_label(server.output(), 2, "Player");
+    server.send(completion_resolve_request(3, named_completion));
+    let named_resolved = &response_with_id(server.output(), 3)["result"];
+    assert_eq!(named_resolved["insertText"], "Player");
+    assert_eq!(
+        named_resolved["additionalTextEdits"][0]["newText"],
+        ", Player"
+    );
+
+    server.send(did_open(&namespace_uri, namespaced));
+    server.send(completion_request(4, &namespace_uri, namespaced, "Pla"));
+    let namespace_completion = completion_with_label(server.output(), 4, "Player");
+    server.send(completion_resolve_request(5, namespace_completion));
+    let namespace_resolved = &response_with_id(server.output(), 5)["result"];
+    assert_eq!(namespace_resolved["insertText"], "Shared.Player");
+    assert!(namespace_resolved.get("additionalTextEdits").is_none());
+}
+
+#[test]
+fn completion_auto_imports_reexported_type_aliases() {
+    let temp = TempProject::new("type-auto-import-reexport");
+    let main = "local player: Her = nil\n";
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write(
+        "src/models.d.tua",
+        "export type Player = { name: string }\n",
+    );
+    temp.write(
+        "src/api.d.tua",
+        "export type { Player as Hero } from \"./models\"\n",
+    );
+
+    let main_uri = temp.uri_for("src/main.tua");
+    let mut server = TestServer::new();
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&main_uri, main));
+    server.send(completion_request(2, &main_uri, main, "Her"));
+
+    let completion = completion_with_label(server.output(), 2, "Hero");
+    assert_eq!(completion["data"]["sourceModule"], "api");
+    server.send(completion_resolve_request(3, completion));
+    let resolved = &response_with_id(server.output(), 3)["result"];
+    assert_eq!(resolved["insertText"], "Hero");
+    assert_eq!(
+        resolved["additionalTextEdits"][0]["newText"],
+        "import type { Hero } from \"./api\"\n"
+    );
+}
 #[test]
 fn completion_skips_auto_imports_for_single_character_prefixes() {
     let temp = TempProject::new("auto-import-short-prefix");

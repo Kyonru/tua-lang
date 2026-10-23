@@ -110,6 +110,8 @@ Completion combines syntax context with local and project semantics. It covers:
 
 - locals, parameters, functions, classes, fields, aliases, arrays, and module
   exports;
+- exported project types, with automatic `import type` insertion and
+  unknown-type import quick fixes;
 - Lua builtins and supported LuaDoc tags, types, and generated annotations;
 - `require(...)` and static `import(...)` paths, module members, and
   auto-import candidates;
@@ -130,6 +132,10 @@ Function and method items can insert argument placeholders. Known literal
 choices become snippet choices, and LOVE object methods prefer colon-call
 syntax. Completion resolve adds documentation, signatures, source context, and
 LOVE wiki links when available.
+
+Type auto-imports are offered only in type positions. They reuse existing
+named imports and namespaces, recognize equivalent specifiers for the same
+module, and include aliases exposed through type re-exports.
 
 Configured declaration-only libraries are indexed during workspace reindexing
 and refreshed for file changes reported by the editor.

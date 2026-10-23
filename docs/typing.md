@@ -296,8 +296,8 @@ inferred type after control flow rejoins.
 
 ## Sharing Types Between Modules
 
-Declare a public alias with `export type`. Consume it with either a namespace
-or named type-only import:
+Declare a public alias with `export type`. Keep declaration-only contracts in a
+`.d.tua` module and consume them with a named type-only import:
 
 ```tua title="src/types.d.tua"
 export type Player = {
@@ -314,19 +314,29 @@ type InternalScratch = { id: number }
 ```
 
 ```tua title="src/world.tua"
-import type Shared from "./types"
 import type { Player, Room as LevelRoom } from "./types"
 
 local current: LevelRoom | nil = nil
 
-local function enter(player: Player, room: Shared.Room)
+local function enter(player: Player, room: LevelRoom)
   current = room
 end
 ```
 
-Namespace imports keep ownership visible (`Shared.Room`) and are a clear
-default when a module exports several related types. Named imports reduce noise
-when only one or two types are used.
+Named imports are the concise default for types used frequently in a file. Use
+a namespace when several modules export the same names or when keeping the
+owner visible improves a large API:
+
+```tua
+import type Shared from "./types"
+local current: Shared.Room | nil = nil
+```
+
+In VS Code, exported project aliases appear in type completion before they are
+imported. Accepting one inserts or extends an `import type` declaration. If an
+unknown type already exists in the file, use the **Import type** quick fix.
+Existing named and namespace imports are reused, including imports written with
+an equivalent module specifier.
 
 Build public facades with type re-exports:
 
@@ -405,8 +415,8 @@ runtime local and therefore do not appear as runtime values.
    state.
 3. Give empty arrays, dictionaries, and initially nil values an explicit type.
 4. Keep related public contracts in a `.d.tua` declaration module.
-5. Prefer namespace type imports when provenance is useful; use named imports
-   for a small, frequently used set.
+5. Prefer named type imports for frequently used contracts; use a namespace
+   when provenance or name disambiguation is useful.
 6. Confine `any` to the smallest dynamic boundary and translate it into typed
    data early.
 7. Use a runtime validator when untrusted data enters the program. Erased types

@@ -644,6 +644,29 @@ pub fn module_name_for_path(
     })
 }
 
+pub(crate) fn module_path_without_runtime_suffix(path: &Path) -> PathBuf {
+    let mut without_extension = path.with_extension("");
+    if without_extension
+        .file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| name.ends_with(".d"))
+    {
+        without_extension.set_extension("");
+    }
+
+    if without_extension
+        .file_name()
+        .is_some_and(|name| name == "init")
+    {
+        return without_extension
+            .parent()
+            .map(normalize_path)
+            .unwrap_or(without_extension);
+    }
+
+    without_extension
+}
+
 fn vfs_file(path: &Path, source: &VfsFileSource, version: VfsSourceVersion, open: bool) -> VfsFile {
     let path = normalize_path(path);
 

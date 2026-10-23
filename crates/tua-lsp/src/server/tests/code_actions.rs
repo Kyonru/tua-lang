@@ -130,6 +130,89 @@ missing_requires = true
         "return {}\n"
     );
 }
+
+#[test]
+fn code_action_imports_unknown_exported_type() {
+    let temp = TempProject::new("code-action-import-type");
+    let source = "local player: Player = nil\n";
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/types.d.tua", "export type Player = { name: string }\n");
+
+    let uri = temp.uri_for("src/main.tua");
+    let mut server = TestServer::new();
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&uri, source));
+    let diagnostic = last_published_diagnostics(server.output(), &uri)
+        .into_iter()
+        .find(|diagnostic| diagnostic["code"] == "TL1001")
+        .expect("unknown type diagnostic should be published");
+
+    server.send(code_action_request(
+        2,
+        &uri,
+        0,
+        0,
+        0,
+        source.trim_end().len(),
+        vec![diagnostic],
+    ));
+
+    let action = response_with_id(server.output(), 2)["result"]
+        .as_array()
+        .expect("code actions should be an array")
+        .iter()
+        .find(|action| action["title"] == "Import type `Player` from `types`")
+        .expect("type import quick fix should be present");
+    assert_eq!(action["kind"], "quickfix");
+    assert_eq!(
+        action["edit"]["changes"][&uri][0]["newText"],
+        "import type { Player } from \"./types\"\n"
+    );
+}
+
+#[test]
+fn code_action_reuses_existing_type_namespace() {
+    let temp = TempProject::new("code-action-type-namespace");
+    let source = r#"import type Shared from "./types"
+local player: Player = nil
+"#;
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/types.d.tua", "export type Player = { name: string }\n");
+
+    let uri = temp.uri_for("src/main.tua");
+    let mut server = TestServer::new();
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&uri, source));
+    let diagnostic = last_published_diagnostics(server.output(), &uri)
+        .into_iter()
+        .find(|diagnostic| diagnostic["code"] == "TL1001")
+        .expect("unknown type diagnostic should be published");
+
+    server.send(code_action_request(
+        2,
+        &uri,
+        0,
+        0,
+        1,
+        source.lines().nth(1).unwrap().len(),
+        vec![diagnostic],
+    ));
+
+    let action = response_with_id(server.output(), 2)["result"]
+        .as_array()
+        .expect("code actions should be an array")
+        .iter()
+        .find(|action| action["title"] == "Use `Shared.Player` from `types`")
+        .expect("namespace reuse quick fix should be present");
+    let edits = action["edit"]["changes"][&uri]
+        .as_array()
+        .expect("quick fix should edit the current document");
+    assert_eq!(edits.len(), 1);
+    assert_eq!(edits[0]["newText"], "Shared.Player");
+    assert_eq!(range_text(source, &edits[0]["range"]), "Player");
+}
 #[test]
 fn code_action_adds_missing_local_annotation() {
     let uri = "file:///tmp/code-action-annotation.tua";

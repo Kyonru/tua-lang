@@ -48,6 +48,13 @@ pub struct ProjectTypeBinding {
     pub origin: ProjectTypeOrigin,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProjectTypeExport {
+    pub module_path: PathBuf,
+    pub name: String,
+    pub ty: Type,
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ProjectTypeOrigin {
     Tua,
@@ -189,6 +196,35 @@ impl ProjectTypeDatabase {
 
     pub fn modules(&self) -> impl Iterator<Item = &ProjectTypeModule> {
         self.modules.values()
+    }
+
+    pub fn exported_types(&self, module_graph: &ModuleGraph) -> Vec<ProjectTypeExport> {
+        self.exported_types_matching(module_graph, |_| true)
+    }
+
+    pub fn exported_types_matching(
+        &self,
+        module_graph: &ModuleGraph,
+        mut matches: impl FnMut(&str) -> bool,
+    ) -> Vec<ProjectTypeExport> {
+        let mut exports = Vec::new();
+
+        for module in self.modules() {
+            for name in module.exported_alias_names().filter(|name| matches(name)) {
+                let Some(binding) =
+                    self.resolve_exported_alias_binding(module_graph, &module.path, name)
+                else {
+                    continue;
+                };
+                exports.push(ProjectTypeExport {
+                    module_path: module.path.clone(),
+                    name: name.to_owned(),
+                    ty: self.resolve_type(module_graph, &binding.module_path, &binding.ty),
+                });
+            }
+        }
+
+        exports
     }
 
     pub fn resolve_type_name(
@@ -586,8 +622,13 @@ impl ProjectTypeModule {
         self.module_aliases.get(name).map(String::as_str)
     }
 
-    pub(crate) fn exported_alias_names(&self) -> impl Iterator<Item = &str> {
-        self.exported_aliases.iter().map(String::as_str)
+    pub fn exported_alias_names(&self) -> impl Iterator<Item = &str> {
+        self.exported_aliases.iter().map(String::as_str).chain(
+            self.reexported_aliases
+                .keys()
+                .filter(|name| !self.exported_aliases.contains(*name))
+                .map(String::as_str),
+        )
     }
 }
 

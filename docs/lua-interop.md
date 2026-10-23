@@ -225,7 +225,7 @@ reads the compiler's module graph instead of parsing source independently.
 ## Share Types Without Runtime Imports
 
 Use `export type` to make selected aliases public and `import type` to consume
-them through a compile-time namespace:
+them without a runtime module load:
 
 This section focuses on the module boundary. For the complete type model,
 including inference, table shapes, functions, unions, narrowing, and practical
@@ -252,16 +252,17 @@ type GeneratorScratch = { id: number }
 ```
 
 ```tua title="src/world.tua"
-import type Shared from "./shared_types"
+import type { Player, Room } from "./shared_types"
 
-local function enter(room: Shared.Room, player: Shared.Player)
+local function enter(room: Room, player: Player)
   player.x = room.spawnX
   player.y = room.spawnY
 end
 ```
 
-Import selected names when a namespace would be noisy, and re-export types to
-build a public declaration facade:
+Named imports are the concise default. Namespace imports remain useful when
+ownership disambiguates common names. Re-export types to build a public
+declaration facade:
 
 ```tua title="src/game_types.d.tua"
 export type { Player, Room as LevelRoom } from "./shared_types"
@@ -292,7 +293,12 @@ invalidation but do not create runtime require-cycle warnings. Editing one
 exported alias rebuilds consumers of that alias rather than every consumer of
 the declaration module. Recursive structural types may be split across modules;
 pure re-export cycles receive a dedicated diagnostic. Namespace imports remain
-the clearest default because ownership stays visible at every use.
+available when ownership should stay visible at every use.
+
+The editor completes exported aliases in type positions and adds the required
+type-only import when a completion is accepted. Unknown-type diagnostics also
+offer an import quick fix. Both paths extend an existing named import or reuse
+an existing namespace instead of adding a duplicate declaration.
 
 ## Use A Tua Module From Lua
 

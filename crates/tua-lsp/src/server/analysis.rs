@@ -11,14 +11,16 @@ use tua_core::{
     CompletionAdaptiveStats, Diagnostic, DocumentHighlight, DocumentSymbol, FoldingRange,
     FormatOptions, InlayHint, InspectorItem, ModelCompletionContext, ModelCompletionValidation,
     ModelCompletionValidationRequest, ModuleDependencyGraph, ModuleLink, ModuleSpecifierKind,
-    PatternCorpusBatchEntry, PatternCorpusBuildInput, PatternCorpusStats, PreparedInlineCompletion,
-    ProjectModel, ProjectModelOptions, ProjectWorkspace, Reference, RenameEdit, RenameTarget,
-    RetrievalLimits, SelectionRange, SemanticToken, SignalGraph, SignatureHelp, SourcePosition,
-    SourceSpan, TextEdit, TypeExplanation, VfsSourceKind, WorkspaceSymbol, CONFIG_FILE,
+    ParsedSource, PatternCorpusBatchEntry, PatternCorpusBuildInput, PatternCorpusStats,
+    PreparedInlineCompletion, ProjectModel, ProjectModelOptions, ProjectWorkspace, Reference,
+    RenameEdit, RenameTarget, RetrievalLimits, SelectionRange, SemanticToken, SignalGraph,
+    SignatureHelp, SourcePosition, SourceSpan, TextEdit, TypeExplanation, VfsSourceKind,
+    WorkspaceSymbol, CONFIG_FILE,
 };
 
 use super::auto_import::{
-    auto_import_completion, identifier_prefix_at, unique_import_alias, AutoImportCandidate,
+    auto_import_completion, identifier_prefix_at, type_auto_import_plan, unique_import_alias,
+    AutoImportCandidate,
 };
 use super::completion_stats::{
     current_epoch, file_scope_hash, load_completion_stats, remove_completion_stats,
@@ -1188,8 +1190,81 @@ impl AnalysisSnapshot {
             .map(|completion| completion.label.clone())
             .collect::<BTreeSet<_>>();
 
-        completions.extend(self.auto_import_completions(path, position, &existing_labels));
+        if self.core.is_type_completion_position(path, position) {
+            completions.extend(self.type_auto_import_completions(path, position, &existing_labels));
+        } else {
+            completions.extend(self.auto_import_completions(path, position, &existing_labels));
+        }
         completions
+    }
+
+    fn type_auto_import_completions(
+        &self,
+        path: &Path,
+        position: SourcePosition,
+        existing_labels: &BTreeSet<String>,
+    ) -> Vec<Completion> {
+        let Some(source) = self.core.source(path) else {
+            return Vec::new();
+        };
+        let Some(Ok(parsed)) = self.core.parse(path) else {
+            return Vec::new();
+        };
+        let Some(prefix) = identifier_prefix_at(source, position) else {
+            return Vec::new();
+        };
+        if prefix.chars().count() < MIN_AUTO_IMPORT_PREFIX_CHARS {
+            return Vec::new();
+        }
+        let Some(model) = self.project_model.as_ref() else {
+            return Vec::new();
+        };
+        let Some(workspace) = model.workspace_for_path(path) else {
+            return Vec::new();
+        };
+
+        self.core
+            .type_import_candidates(path, position)
+            .into_iter()
+            .filter(|candidate| {
+                !existing_labels.contains(&candidate.name)
+                    && project_contains_path(Some(model), &candidate.module_path)
+                    && !self
+                        .settings
+                        .is_ignored(&candidate.module_path, &self.workspace_folders)
+            })
+            .filter_map(|candidate| {
+                let import_specifier =
+                    model.import_specifier_for_path(path, &candidate.module_path)?;
+                let module = workspace.module_name_for_path(&candidate.module_path)?;
+                let equivalent_specifiers = equivalent_type_import_specifiers(
+                    &self.core,
+                    path,
+                    parsed,
+                    &candidate.module_path,
+                );
+                let plan = type_auto_import_plan(
+                    path,
+                    parsed,
+                    &import_specifier,
+                    &equivalent_specifiers,
+                    &candidate.name,
+                );
+                Some(Completion {
+                    label: candidate.name.clone(),
+                    kind: tua_core::CompletionKind::TypeAlias,
+                    detail: Some(format!("auto import type from {module}: {}", candidate.ty)),
+                    documentation: None,
+                    deprecation: None,
+                    insert_text: Some(plan.insert_text),
+                    filter_text: Some(prefix.clone()),
+                    is_snippet: false,
+                    module_path: Some(candidate.module_path),
+                    source_module: Some(module),
+                    additional_text_edits: plan.edit.into_iter().collect(),
+                })
+            })
+            .collect()
     }
 
     pub(super) fn multi_token_completion(
@@ -1403,8 +1478,112 @@ impl AnalysisSnapshot {
         diagnostics: &[Diagnostic],
         requested_kinds: &[tua_core::AssistKind],
     ) -> Vec<CodeAction> {
-        self.core
-            .code_actions(path, range, diagnostics, requested_kinds)
+        let mut actions = self.type_import_code_actions(path, range, diagnostics, requested_kinds);
+        actions.extend(
+            self.core
+                .code_actions(path, range, diagnostics, requested_kinds),
+        );
+        actions
+    }
+
+    fn type_import_code_actions(
+        &self,
+        path: &Path,
+        range: CodeActionRange,
+        diagnostics: &[Diagnostic],
+        requested_kinds: &[tua_core::AssistKind],
+    ) -> Vec<CodeAction> {
+        if !requested_kinds.is_empty() && !requested_kinds.contains(&tua_core::AssistKind::QuickFix)
+        {
+            return Vec::new();
+        }
+        let Some(Ok(parsed)) = self.core.parse(path) else {
+            return Vec::new();
+        };
+        let Some(model) = self.project_model.as_ref() else {
+            return Vec::new();
+        };
+        let Some(workspace) = model.workspace_for_path(path) else {
+            return Vec::new();
+        };
+        let exported_types = self
+            .core
+            .type_database()
+            .exported_types(self.core.module_graph());
+        let mut actions = Vec::new();
+
+        for diagnostic in diagnostics.iter().filter(|diagnostic| {
+            diagnostic.code == Some(tua_core::DiagnosticCode::TYPE_UNKNOWN_NAME)
+                && range.contains(diagnostic_start(diagnostic))
+        }) {
+            let Some(name) = unknown_type_name(&diagnostic.message) else {
+                continue;
+            };
+            if name.contains('.') {
+                continue;
+            }
+
+            for candidate in exported_types.iter().filter(|candidate| {
+                candidate.name == name
+                    && candidate.module_path != path
+                    && project_contains_path(Some(model), &candidate.module_path)
+                    && !self
+                        .settings
+                        .is_ignored(&candidate.module_path, &self.workspace_folders)
+            }) {
+                let Some(import_specifier) =
+                    model.import_specifier_for_path(path, &candidate.module_path)
+                else {
+                    continue;
+                };
+                let Some(module) = workspace.module_name_for_path(&candidate.module_path) else {
+                    continue;
+                };
+                let equivalent_specifiers = equivalent_type_import_specifiers(
+                    &self.core,
+                    path,
+                    parsed,
+                    &candidate.module_path,
+                );
+                let plan = type_auto_import_plan(
+                    path,
+                    parsed,
+                    &import_specifier,
+                    &equivalent_specifiers,
+                    name,
+                );
+                let mut edits = plan.edit.into_iter().collect::<Vec<_>>();
+                if plan.insert_text != name {
+                    let Some(name_span) = unknown_type_span(&parsed.source, diagnostic, name)
+                    else {
+                        continue;
+                    };
+                    edits.push(TextEdit {
+                        path: path.to_path_buf(),
+                        span: name_span,
+                        new_text: plan.insert_text.clone(),
+                    });
+                }
+                if edits.is_empty() {
+                    continue;
+                }
+
+                actions.push(CodeAction {
+                    title: if plan.insert_text == name {
+                        format!("Import type `{name}` from `{module}`")
+                    } else {
+                        format!("Use `{}` from `{module}`", plan.insert_text)
+                    },
+                    kind: tua_core::AssistKind::QuickFix,
+                    edit: tua_core::CodeActionEdit {
+                        changes: BTreeMap::from([(path.to_path_buf(), edits)]),
+                        create_files: Vec::new(),
+                    },
+                });
+            }
+        }
+
+        actions
     }
 
     pub(super) fn code_lenses(&self, path: &Path) -> Vec<CodeLens> {
@@ -1741,6 +1920,72 @@ fn path_sets_differ(left: &[PathBuf], right: &[PathBuf]) -> bool {
         || left
             .iter()
             .any(|path| !right.iter().any(|other| other == path))
+}
+
+fn unknown_type_name(message: &str) -> Option<&str> {
+    message
+        .strip_prefix("unknown type `")?
+        .strip_suffix('`')
+        .map(str::trim)
+}
+
+fn equivalent_type_import_specifiers(
+    core: &CoreAnalysisSnapshot,
+    current_path: &Path,
+    parsed: &ParsedSource,
+    target_path: &Path,
+) -> Vec<String> {
+    parsed
+        .type_imports
+        .iter()
+        .filter(|import| !import.reexport)
+        .filter(|import| {
+            core.resolved_type_import_path(current_path, &import.module)
+                .as_deref()
+                == Some(target_path)
+        })
+        .map(|import| import.module.clone())
+        .collect()
+}
+
+fn diagnostic_start(diagnostic: &Diagnostic) -> SourcePosition {
+    SourcePosition {
+        line: diagnostic.line,
+        column: diagnostic.column,
+    }
+}
+
+fn unknown_type_span(source: &str, diagnostic: &Diagnostic, name: &str) -> Option<SourceSpan> {
+    let line = source.split('\n').nth(diagnostic.line.checked_sub(1)?)?;
+    let (offset, _) = line
+        .match_indices(name)
+        .filter(|(offset, text)| {
+            let before = line[..*offset].chars().next_back();
+            let after = line[*offset + text.len()..].chars().next();
+            before.is_none_or(|character| !is_identifier_character(character))
+                && after.is_none_or(|character| !is_identifier_character(character))
+        })
+        .map(|(offset, _)| {
+            let column = line[..offset].chars().count() + 1;
+            (offset, column.abs_diff(diagnostic.column))
+        })
+        .min_by_key(|(_, distance)| *distance)?;
+    let start_column = line[..offset].chars().count() + 1;
+    let end_column = start_column + name.chars().count();
+    Some(SourceSpan {
+        start: SourcePosition {
+            line: diagnostic.line,
+            column: start_column,
+        },
+        end: SourcePosition {
+            line: diagnostic.line,
+            column: end_column,
+        },
+    })
+}
+
+fn is_identifier_character(character: char) -> bool {
+    character == '_' || character.is_ascii_alphanumeric()
 }
 
 #[cfg(test)]

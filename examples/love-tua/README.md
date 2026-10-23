@@ -8,8 +8,8 @@ showing where Tua adds value:
 - A store owns score, shot, and wave state.
 - A state machine checks pause/resume transitions.
 - Baton-backed input derives control and movement-pair names.
-- `ecs.tua`, `global.tua`, `renderer.tua`, and `types.tua` demonstrate typed
-  module exports shared by the main LOVE callbacks.
+- `types.d.tua` exports shared contracts; `ecs.tua`, `global.tua`, and `main.tua`
+  use concise named type imports without adding runtime module loads.
 - `patterns.lua` stays handwritten Lua and is copied unchanged.
 - `lib/feel/init.lua` stays a vendored Lua runtime while
   `lib/feel/types/feel.lua` supplies declaration-only editor and checker types.

@@ -253,8 +253,8 @@ pub use signature_help::{
     SignatureInformation,
 };
 pub use type_database::{
-    ProjectTypeBinding, ProjectTypeDatabase, ProjectTypeDatabaseInput, ProjectTypeModule,
-    ProjectTypeOrigin,
+    ProjectTypeBinding, ProjectTypeDatabase, ProjectTypeDatabaseInput, ProjectTypeExport,
+    ProjectTypeModule, ProjectTypeOrigin,
 };
 pub use type_explanation::{TypeExplanation, TypeExplanationStep, TypeExplanationStepKind};
 pub use types::{

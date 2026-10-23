@@ -1,4 +1,8 @@
-use std::{fmt::Write as _, path::PathBuf};
+use std::{
+    collections::BTreeSet,
+    fmt::Write as _,
+    path::{Path, PathBuf},
+};
 
 use crate::{AnalysisHost, AnalysisSourceKind, Fixture, ProjectTypeOrigin, TableField, Type};
 
@@ -200,6 +204,17 @@ export type Player = { hp: number }
     assert_eq!(
         player.ty,
         Type::table([("hp", TableField::required(Type::number()))])
+    );
+    let api_exports = snapshot
+        .type_database()
+        .exported_types(snapshot.module_graph())
+        .into_iter()
+        .filter(|candidate| candidate.module_path == Path::new("src/api.d.tua"))
+        .map(|candidate| candidate.name)
+        .collect::<BTreeSet<_>>();
+    assert_eq!(
+        api_exports,
+        BTreeSet::from(["Hero".to_owned(), "PublicRoom".to_owned()])
     );
 }
 

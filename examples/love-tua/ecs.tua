@@ -1,4 +1,4 @@
-import type Shared from "./types"
+import type { Position, Rotation, Velocity } from "./types"
 
 -- Built-in ECS keeps the player data-oriented and gives the movement callback
 -- the exact component shapes requested by the system.
@@ -17,9 +17,9 @@ local movement = ecs.system(
   { PositionComponent, VelocityComponent, RotationComponent},
   function(
     _,
-    position: Shared.Position,
-    velocity: Shared.Velocity,
-    rotation: Shared.Rotation,
+    position: Position,
+    velocity: Velocity,
+    rotation: Rotation,
     dt: number
   )
     position.x = math.max(18, math.min(702, position.x + velocity.x * dt))

@@ -2,7 +2,8 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use tua_core::{
-    Completion, CompletionKind, ModuleExportField, SourcePosition, SourceSpan, TextEdit, Type,
+    Completion, CompletionKind, ModuleExportField, ParsedSource, SourcePosition, SourceSpan,
+    TextEdit, Type,
 };
 
 pub(super) struct AutoImportCandidate<'a> {
@@ -15,6 +16,81 @@ pub(super) struct AutoImportCandidate<'a> {
     pub(super) already_imported: bool,
     pub(super) name: &'a str,
     pub(super) field: &'a ModuleExportField,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(super) struct TypeAutoImportPlan {
+    pub(super) insert_text: String,
+    pub(super) edit: Option<TextEdit>,
+}
+
+pub(super) fn type_auto_import_plan(
+    current_path: &Path,
+    parsed: &ParsedSource,
+    import_specifier: &str,
+    equivalent_specifiers: &[String],
+    name: &str,
+) -> TypeAutoImportPlan {
+    let matches_module = |module: &str| {
+        module == import_specifier || equivalent_specifiers.iter().any(|known| known == module)
+    };
+    for import in parsed
+        .type_imports
+        .iter()
+        .filter(|import| !import.reexport && matches_module(&import.module))
+    {
+        if let Some(binding) = import
+            .bindings
+            .iter()
+            .find(|binding| binding.imported == name)
+        {
+            return TypeAutoImportPlan {
+                insert_text: binding.local.clone(),
+                edit: None,
+            };
+        }
+    }
+
+    if let Some(import) = parsed.type_imports.iter().find(|import| {
+        !import.reexport && matches_module(&import.module) && !import.namespace.is_empty()
+    }) {
+        return TypeAutoImportPlan {
+            insert_text: format!("{}.{}", import.namespace, name),
+            edit: None,
+        };
+    }
+
+    if let Some(import) = parsed.type_imports.iter().find(|import| {
+        !import.reexport && matches_module(&import.module) && !import.bindings.is_empty()
+    }) {
+        if let Some(position) = closing_brace_position(&parsed.source, import) {
+            let multiline = position.line > import.span.start.line;
+            return TypeAutoImportPlan {
+                insert_text: name.to_owned(),
+                edit: Some(TextEdit {
+                    path: current_path.to_path_buf(),
+                    span: SourceSpan {
+                        start: position,
+                        end: position,
+                    },
+                    new_text: if multiline {
+                        format!("  {name},\n")
+                    } else {
+                        format!(", {name}")
+                    },
+                }),
+            };
+        }
+    }
+
+    TypeAutoImportPlan {
+        insert_text: name.to_owned(),
+        edit: Some(TextEdit {
+            path: current_path.to_path_buf(),
+            span: type_import_insert_span(parsed),
+            new_text: format!("import type {{ {name} }} from \"{import_specifier}\"\n"),
+        }),
+    }
 }
 
 pub(super) fn auto_import_completion(candidate: AutoImportCandidate<'_>) -> Completion {
@@ -160,6 +236,75 @@ fn import_insert_span(source: &str) -> SourceSpan {
     }
 }
 
+fn type_import_insert_span(parsed: &ParsedSource) -> SourceSpan {
+    if let Some(line) = parsed
+        .type_imports
+        .iter()
+        .filter(|import| !import.reexport)
+        .map(|import| import.span.end.line)
+        .max()
+    {
+        let position = SourcePosition {
+            line: line.saturating_add(1),
+            column: 1,
+        };
+        return SourceSpan {
+            start: position,
+            end: position,
+        };
+    }
+
+    let mut insert_line = 1;
+    for (index, line) in parsed.source.split('\n').enumerate() {
+        let line_number = index + 1;
+        let trimmed = line.trim();
+        if trimmed.is_empty() || trimmed.starts_with("--") {
+            insert_line = line_number + 1;
+            continue;
+        }
+        break;
+    }
+    let position = SourcePosition {
+        line: insert_line,
+        column: 1,
+    };
+    SourceSpan {
+        start: position,
+        end: position,
+    }
+}
+
+fn closing_brace_position(source: &str, import: &tua_core::TypeImport) -> Option<SourcePosition> {
+    let start = source_offset(source, import.span.start)?;
+    let module_start = source_offset(source, import.module_span.start)?;
+    let offset = source.get(start..module_start)?.rfind('}')? + start;
+    position_for_offset(source, offset)
+}
+
+fn source_offset(source: &str, position: SourcePosition) -> Option<usize> {
+    let mut offset = 0;
+    for (index, line) in source.split_inclusive('\n').enumerate() {
+        if index + 1 == position.line {
+            let line_without_newline = line.strip_suffix('\n').unwrap_or(line);
+            return Some(offset + byte_for_column(line_without_newline, position.column));
+        }
+        offset += line.len();
+    }
+    (position.line == source.lines().count().saturating_add(1) && position.column == 1)
+        .then_some(source.len())
+}
+
+fn position_for_offset(source: &str, target: usize) -> Option<SourcePosition> {
+    if target > source.len() || !source.is_char_boundary(target) {
+        return None;
+    }
+    let before = &source[..target];
+    let line = before.bytes().filter(|byte| *byte == b'\n').count() + 1;
+    let line_start = before.rfind('\n').map_or(0, |offset| offset + 1);
+    let column = source[line_start..target].chars().count() + 1;
+    Some(SourcePosition { line, column })
+}
+
 fn is_local_require_line(trimmed: &str) -> bool {
     trimmed.starts_with("local ")
         && (trimmed.contains(" = require(") || trimmed.contains(" = import("))
@@ -222,4 +367,57 @@ fn is_identifier_start(byte: u8) -> bool {
 
 fn is_identifier_continue(byte: u8) -> bool {
     is_identifier_start(byte) || byte.is_ascii_digit()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tua_core::parse_tua_source;
+
+    #[test]
+    fn type_import_plan_extends_multiline_imports() {
+        let source = r#"import type {
+  Room,
+} from "./types"
+local player: Player = nil
+"#;
+        let parsed = parse_tua_source("src/main.tua", source).expect("source should parse");
+        let plan =
+            type_auto_import_plan(Path::new("src/main.tua"), &parsed, "./types", &[], "Player");
+
+        assert_eq!(plan.insert_text, "Player");
+        let edit = plan.edit.expect("multiline import should be extended");
+        assert_eq!(edit.new_text, "  Player,\n");
+        assert_eq!(edit.span.start, SourcePosition { line: 3, column: 1 });
+    }
+
+    #[test]
+    fn type_import_plan_reuses_aliased_and_equivalent_imports() {
+        let source = r#"import type { Player as Actor } from "types"
+local player: Player = nil
+"#;
+        let parsed = parse_tua_source("src/main.tua", source).expect("source should parse");
+        let plan = type_auto_import_plan(
+            Path::new("src/main.tua"),
+            &parsed,
+            "./types",
+            &["types".to_owned()],
+            "Player",
+        );
+
+        assert_eq!(plan.insert_text, "Actor");
+        assert!(plan.edit.is_none());
+    }
+
+    #[test]
+    fn type_import_plan_preserves_leading_file_comments() {
+        let source = "-- Game state.\n\nlocal player: Player = nil\n";
+        let parsed = parse_tua_source("src/main.tua", source).expect("source should parse");
+        let plan =
+            type_auto_import_plan(Path::new("src/main.tua"), &parsed, "./types", &[], "Player");
+
+        let edit = plan.edit.expect("a new import should be inserted");
+        assert_eq!(edit.span.start, SourcePosition { line: 3, column: 1 });
+        assert_eq!(edit.new_text, "import type { Player } from \"./types\"\n");
+    }
 }

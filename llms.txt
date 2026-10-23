@@ -49,6 +49,8 @@ Never answer with TypeScript, JavaScript, Luau, Python, or Markdown.
   `import type { Player, Room as LevelRoom } from "./types"`; type imports and
   `export type { Player as Hero } from "./types"` re-exports are erased and do
   not load a runtime module. Only explicitly exported aliases cross modules.
+  Editor type completion and unknown-type quick fixes can add or extend these
+  imports automatically.
 - Put declaration-only project modules in `.d.tua` files. They accept type
   aliases, type imports, type exports, and comments, reject runtime statements,
   and never emit Lua or source maps.

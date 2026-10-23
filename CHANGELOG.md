@@ -8,6 +8,11 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Added
 
+- Type completion can now discover exported project aliases and add the
+  required `import type` declaration. Unknown-type diagnostics offer matching
+  quick fixes, while existing named imports, namespaces, equivalent module
+  specifiers, and type re-exports are reused.
+
 - Input players can opt into allocation-free pointer tracking with
   `pointer = true`. `pointer()` returns the cached mouse position,
   `pointerDelta()` returns movement since the previous update, and mouse

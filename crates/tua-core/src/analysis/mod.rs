@@ -63,8 +63,8 @@ use crate::types::{
 };
 use crate::usage_index::{FileUsageIndex, ProjectUsageIndex};
 use crate::vfs::{
-    module_name_for_path, normalize_path, ModulePathSeparator, VfsSnapshot, VfsSourceKind,
-    VirtualFileSystem,
+    module_name_for_path, module_path_without_runtime_suffix, normalize_path, ModulePathSeparator,
+    VfsSnapshot, VfsSourceKind, VirtualFileSystem,
 };
 use crate::{
     call_hierarchy_calls_parsed_source, call_hierarchy_prepare_parsed_source,
@@ -90,11 +90,11 @@ use crate::{
     LuaDocAnnotationKind, ModuleDependencyEdge, ModuleDependencyExport, ModuleDependencyGraph,
     ModuleDependencyModule, ModuleExportField, ModuleExports, ModuleGraph, ModuleGraphInput,
     ModuleGraphOptions, ModuleInclusionPath, ModuleInclusionStep, ModuleLink, ParsedSource,
-    ProjectConfig, ProjectTypeDatabase, ProjectTypeDatabaseInput, ProjectTypeLibrary, Reference,
-    ReferenceKind, RenameEdit, RenameTarget, RequireResolution, ScopeMap, SelectionRange,
-    SemanticIndex, SemanticToken, SignatureHelp, SourcePosition, SourceSpan, SymbolIndex,
-    TableField, TextEdit, TuaType, Type, TypeEnvironment, TypeExplanation, TypeExplanationStep,
-    TypeExplanationStepKind, TypedFunction, WorkspaceSymbol,
+    ProjectConfig, ProjectTypeDatabase, ProjectTypeDatabaseInput, ProjectTypeExport,
+    ProjectTypeLibrary, Reference, ReferenceKind, RenameEdit, RenameTarget, RequireResolution,
+    ScopeMap, SelectionRange, SemanticIndex, SemanticToken, SignatureHelp, SourcePosition,
+    SourceSpan, SymbolIndex, TableField, TextEdit, TuaType, Type, TypeEnvironment, TypeExplanation,
+    TypeExplanationStep, TypeExplanationStepKind, TypedFunction, WorkspaceSymbol,
 };
 
 mod asset_queries;
@@ -2223,22 +2223,6 @@ fn import_module_candidates(base: &Path, extensions: &[&str]) -> Vec<PathBuf> {
     }
 
     candidates
-}
-
-fn module_path_without_runtime_suffix(path: &Path) -> PathBuf {
-    let without_extension = path.with_extension("");
-
-    if without_extension
-        .file_name()
-        .is_some_and(|name| name == "init")
-    {
-        return without_extension
-            .parent()
-            .map(normalize_path)
-            .unwrap_or(without_extension);
-    }
-
-    without_extension
 }
 
 fn relative_path_parts(from_dir: &Path, target: &Path) -> Option<Vec<String>> {

@@ -2,6 +2,55 @@ use super::*;
 use crate::Deprecation;
 
 impl AnalysisSnapshot {
+    pub fn is_type_completion_position(
+        &self,
+        path: impl AsRef<Path>,
+        position: SourcePosition,
+    ) -> bool {
+        let path = normalize_path(path.as_ref());
+        self.file(&path)
+            .and_then(|file| file.parsed.as_ref().ok())
+            .is_some_and(|parsed| {
+                matches!(
+                    crate::completion::context::completion_context(&parsed.source, position),
+                    Some(crate::completion::context::CompletionContext::TypeAnnotation { .. })
+                )
+            })
+    }
+
+    pub fn type_import_candidates(
+        &self,
+        path: impl AsRef<Path>,
+        position: SourcePosition,
+    ) -> Vec<ProjectTypeExport> {
+        let path = normalize_path(path.as_ref());
+        let Some(parsed) = self.file(&path).and_then(|file| file.parsed.as_ref().ok()) else {
+            return Vec::new();
+        };
+        let Some(crate::completion::context::CompletionContext::TypeAnnotation { prefix }) =
+            crate::completion::context::completion_context(&parsed.source, position)
+        else {
+            return Vec::new();
+        };
+
+        self.type_database
+            .exported_types_matching(&self.module_graph, |name| text_matches(name, &prefix))
+            .into_iter()
+            .filter(|candidate| candidate.module_path != path)
+            .collect()
+    }
+
+    pub fn resolved_type_import_path(
+        &self,
+        path: impl AsRef<Path>,
+        specifier: &str,
+    ) -> Option<PathBuf> {
+        let path = normalize_path(path.as_ref());
+        let parsed = self.file(&path)?.parsed.as_ref().ok()?;
+        self.indexed_module_path_for_specifier(parsed, specifier)
+            .map(Path::to_path_buf)
+    }
+
     pub(super) fn project_module_candidates(
         &self,
         current_path: &Path,

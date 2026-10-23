@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 
 use super::{completion_text_matches, Completion, CompletionKind};
 use crate::module_path_index::ModulePathIndex;
+use crate::vfs::module_path_without_runtime_suffix;
 
 pub(crate) fn complete_require_paths(
     path: &Path,
@@ -147,22 +148,6 @@ fn has_parent_path_component(specifier: &str) -> bool {
     Path::new(specifier)
         .components()
         .any(|component| matches!(component, std::path::Component::ParentDir))
-}
-
-fn module_path_without_runtime_suffix(path: &Path) -> PathBuf {
-    let without_extension = path.with_extension("");
-
-    if without_extension
-        .file_name()
-        .is_some_and(|name| name == "init")
-    {
-        return without_extension
-            .parent()
-            .map(normalize_path)
-            .unwrap_or(without_extension);
-    }
-
-    without_extension
 }
 
 fn relative_path_parts(from_dir: &Path, target: &Path) -> Option<Vec<String>> {
