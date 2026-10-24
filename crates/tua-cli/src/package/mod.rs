@@ -13,6 +13,7 @@ use tua_core::{LoadedConfig, ProjectWorkspace, CONFIG_FILE};
 
 use crate::build::run_build;
 use crate::error::CliError;
+use crate::path_security::reject_symlink_path;
 
 mod zip;
 
@@ -70,8 +71,10 @@ pub(crate) fn run_package(
     let extension = workspace.config().extension.clone();
 
     let archive = love_archive(&out_dir, &extension, &dist)?;
+    check_package_path(workspace.root(), &dist)?;
     fs::create_dir_all(&dist).map_err(|error| io_error(&dist, error))?;
     let love_path = dist.join(format!("{name}.love"));
+    check_package_path(workspace.root(), &love_path)?;
     fs::write(&love_path, &archive).map_err(|error| io_error(&love_path, error))?;
     lines.push(format!(
         "packaged {} ({})",
@@ -81,7 +84,7 @@ pub(crate) fn run_package(
 
     match (options.target, love_runtime) {
         (PackageTarget::Windows, Some(runtime)) => {
-            let directory = fuse_windows(&runtime, &archive, &dist, &name)?;
+            let directory = fuse_windows(&runtime, &archive, workspace.root(), &dist, &name)?;
             lines.push(format!("packaged {}", display(cwd, &directory)));
         }
         (PackageTarget::Macos, Some(runtime)) => {
@@ -89,7 +92,14 @@ pub(crate) fn run_package(
                 .identifier
                 .clone()
                 .unwrap_or_else(|| format!("io.tua.{}", slug(&name)));
-            let app = fuse_macos(&runtime, &archive, &dist, &name, &identifier)?;
+            let app = fuse_macos(
+                &runtime,
+                &archive,
+                workspace.root(),
+                &dist,
+                &name,
+                &identifier,
+            )?;
             lines.push(format!("packaged {}", display(cwd, &app)));
             lines.push(macos_signing_note(&app));
             if options.identifier.is_none() {
@@ -191,6 +201,7 @@ fn is_excluded_file(file_name: &str, extension: &str) -> bool {
 fn fuse_windows(
     runtime: &Path,
     archive: &[u8],
+    project_root: &Path,
     dist: &Path,
     name: &str,
 ) -> Result<PathBuf, CliError> {
@@ -202,6 +213,7 @@ fn fuse_windows(
         )));
     }
     let directory = dist.join("windows").join(name);
+    check_package_path(project_root, &directory)?;
     if directory.exists() {
         fs::remove_dir_all(&directory).map_err(|error| io_error(&directory, error))?;
     }
@@ -210,6 +222,7 @@ fn fuse_windows(
     let mut executable = fs::read(&love_exe).map_err(|error| io_error(&love_exe, error))?;
     executable.extend_from_slice(archive);
     let target = directory.join(format!("{name}.exe"));
+    check_package_path(project_root, &target)?;
     fs::write(&target, executable).map_err(|error| io_error(&target, error))?;
 
     for entry in fs::read_dir(runtime).map_err(|error| io_error(runtime, error))? {
@@ -218,6 +231,7 @@ fn fuse_windows(
         let lower = file_name.to_ascii_lowercase();
         if lower.ends_with(".dll") || lower == "license.txt" {
             let target = directory.join(&file_name);
+            check_package_path(project_root, &target)?;
             fs::copy(entry.path(), &target).map_err(|error| io_error(&target, error))?;
         }
     }
@@ -229,6 +243,7 @@ fn fuse_windows(
 fn fuse_macos(
     runtime: &Path,
     archive: &[u8],
+    project_root: &Path,
     dist: &Path,
     name: &str,
     identifier: &str,
@@ -241,17 +256,21 @@ fn fuse_macos(
         )));
     }
     let app = dist.join("macos").join(format!("{name}.app"));
+    check_package_path(project_root, &app)?;
     if app.exists() {
         fs::remove_dir_all(&app).map_err(|error| io_error(&app, error))?;
     }
     copy_tree(runtime, &app).map_err(|error| io_error(&app, error))?;
 
     let resources = app.join("Contents/Resources");
+    check_package_path(project_root, &resources)?;
     fs::create_dir_all(&resources).map_err(|error| io_error(&resources, error))?;
     let love_file = resources.join(format!("{name}.love"));
+    check_package_path(project_root, &love_file)?;
     fs::write(&love_file, archive).map_err(|error| io_error(&love_file, error))?;
 
     let plist = app.join("Contents/Info.plist");
+    check_package_path(project_root, &plist)?;
     let contents = fs::read_to_string(&plist).map_err(|error| io_error(&plist, error))?;
     fs::write(&plist, game_info_plist(&contents, name, identifier))
         .map_err(|error| io_error(&plist, error))?;
@@ -422,9 +441,53 @@ fn io_error(path: &Path, error: io::Error) -> CliError {
     CliError::usage(format!("{}: {error}", path.display()))
 }
 
+fn check_package_path(project_root: &Path, path: &Path) -> Result<(), CliError> {
+    reject_symlink_path(project_root, path).map_err(CliError::usage)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn package_paths_reject_symlinked_files_and_directories() {
+        use std::os::unix::fs::symlink;
+
+        let project = temp_dir("symlink-package");
+        let outside = temp_dir("symlink-package-outside");
+        fs::create_dir_all(project.join("dist")).unwrap();
+        fs::write(outside.join("victim"), "keep me").unwrap();
+
+        symlink(outside.join("victim"), project.join("dist/game.love")).unwrap();
+        assert!(check_package_path(&project, &project.join("dist/game.love")).is_err());
+
+        fs::remove_dir_all(project.join("dist")).unwrap();
+        symlink(&outside, project.join("dist")).unwrap();
+        assert!(check_package_path(&project, &project.join("dist/game.love")).is_err());
+        assert_eq!(
+            fs::read_to_string(outside.join("victim")).unwrap(),
+            "keep me"
+        );
+
+        fs::remove_file(project.join("dist")).unwrap();
+        fs::remove_dir_all(project).unwrap();
+        fs::remove_dir_all(outside).unwrap();
+    }
+
+    #[cfg(unix)]
+    fn temp_dir(name: &str) -> PathBuf {
+        let path = std::env::temp_dir().join(format!(
+            "tua-package-{name}-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir_all(&path).unwrap();
+        path
+    }
 
     const LOVE_PLIST: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
 <plist version="1.0">
