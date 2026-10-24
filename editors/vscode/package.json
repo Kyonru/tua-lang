@@ -1166,7 +1166,7 @@
   "devDependencies": {
     "@vscode/debugadapter-testsupport": "1.68.0",
     "@vscode/test-electron": "^2.5.2",
-    "@vscode/vsce": "4.0.0",
+    "@vscode/vsce": "3.9.2",
     "esbuild": "0.28.2",
     "ovsx": "1.2.0",
     "vscode-languageclient": "10.1.2",
@@ -1175,6 +1175,7 @@
   },
   "overrides": {
     "@vscode/vsce": "$@vscode/vsce",
+    "@azure/identity": "4.12.0",
     "qs": "6.16.0"
   }
 }
