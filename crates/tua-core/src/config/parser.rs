@@ -1,5 +1,6 @@
 use std::collections::BTreeSet;
 use std::ops::Range;
+use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::OnceLock;
 
 use serde::de::Error as _;
@@ -42,6 +43,16 @@ struct ConfigSetting {
 }
 
 pub fn parse_config(input: &str) -> Result<ProjectConfig, ConfigParseError> {
+    catch_unwind(AssertUnwindSafe(|| parse_config_inner(input))).unwrap_or_else(|_| {
+        Err(parse_error(
+            input,
+            None,
+            "configuration parser could not process malformed input",
+        ))
+    })
+}
+
+fn parse_config_inner(input: &str) -> Result<ProjectConfig, ConfigParseError> {
     let document = Document::parse(input)
         .map_err(|error| parse_error(input, error.span(), error.message()))?;
 

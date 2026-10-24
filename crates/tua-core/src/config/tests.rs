@@ -593,6 +593,19 @@ fn rejects_invalid_boolean_values() {
 }
 
 #[test]
+fn malformed_config_dependency_panics_become_parse_errors() {
+    let input = String::from_utf8_lossy(&[
+        61, 61, 91, 34, 10, 10, 123, 46, 0, 0, 0, 0, 0, 0, 255, 255, 61, 255, 61,
+    ]);
+
+    let error = parse_config(&input).expect_err("malformed config should be rejected");
+
+    assert_eq!(error.line, 1);
+    assert_eq!(error.column, 1);
+    assert!(error.message.contains("malformed input"));
+}
+
+#[test]
 fn rejects_invalid_annotation_mode() {
     let error = parse_config("[emit]\nannotation_mode = \"strict\"\n").unwrap_err();
 
