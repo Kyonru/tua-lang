@@ -84,14 +84,16 @@ Open or untrusted pull requests do not run repository code in GitHub Actions.
 Do not propose `pull_request_target` as a substitute. Trusted pushes, manual
 dispatches, and releases run the repository's verification workflows.
 
-Release workflows use least-privilege job permissions. A version tag must
-match repository metadata, trusted verification must pass before packaging,
-and published artifacts are checked against the release checksum manifest.
+Release workflows use least-privilege job permissions and commit-pinned
+external actions. A version tag must match repository metadata, trusted
+verification must pass before packaging, and published artifacts are checked
+against the release checksum manifest. Release builds also produce GitHub
+build-provenance attestations for their archives and VSIX packages.
 Marketplace credentials are exposed only to their publishing step, which uses
 tools installed from the committed npm lockfile.
 
-Published binaries and VSIX files are checksummed but are not currently
-code-signed. Verify downloads as described in
+Published binaries and VSIX files are checksummed and attested but are not
+currently platform code-signed. Verify downloads as described in
 [docs/releases.md](docs/releases.md#verify-a-download).
 
 Routine dependency reports that do not demonstrate a vulnerability in Tua may

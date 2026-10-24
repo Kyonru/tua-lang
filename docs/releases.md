@@ -36,9 +36,10 @@ Standalone server archives include the executable, README, license, and
 changelog. Tua does not download or execute an unverified server after
 extension installation.
 
-Release assets are checksummed rather than code-signed today. Every archive and
-VSIX has an individual `.sha256` file, and the release includes one
-`SHA256SUMS` manifest verified by CI before publication.
+Release assets are checksummed and receive GitHub build-provenance attestations,
+but are not platform code-signed today. Every archive and VSIX has an individual
+`.sha256` file, and the release includes one `SHA256SUMS` manifest verified by
+CI before publication.
 
 ## Verify A Download
 
@@ -61,6 +62,17 @@ shasum -a 256 tua-0.3.0-darwin-arm64.vsix
 
 Compare the printed value with the matching line in `SHA256SUMS`. On Windows,
 use `Get-FileHash <file> -Algorithm SHA256` and compare the result.
+
+With the GitHub CLI installed, verify that an artifact was produced by Tua's
+release workflow from this repository:
+
+```bash
+gh attestation verify tua-0.3.0-aarch64-apple-darwin.tar.gz \
+  --repo Kyonru/tua-lang
+```
+
+Provenance complements the checksum manifest; it is not a substitute for
+platform signing or for reviewing which tagged source was released.
 
 ## Compatibility Policy
 

@@ -52,6 +52,10 @@ jobs:
     needs: [validate, verify]
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 40
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
     strategy:
       fail-fast: false
       matrix:
@@ -89,6 +93,11 @@ jobs:
         run: npm ci --prefix editors/vscode
       - name: Build release server
         run: cargo build --release --locked --package tua-cli --target ${{ matrix.target }}
+      - name: Smoke release server
+        shell: bash
+        run: |
+          output="$("target/${{ matrix.target }}/release/${{ matrix.executable }}" --version)"
+          test "${output}" = "tua ${{ needs.validate.outputs.version }}"
       - name: Stage server for VSIX
         shell: bash
         run: |
@@ -119,6 +128,10 @@ jobs:
         run: |
           python3 scripts/package_release.py checksum \
             "dist/tua-${{ needs.validate.outputs.version }}-${{ matrix.vsce }}.vsix"
+      - name: Attest release artifacts
+        uses: actions/attest-build-provenance@43d14bc2b83dec42d39ecae14e916627a18bb661 # v3
+        with:
+          subject-path: dist/*
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: release-${{ matrix.target }}
