@@ -1,0 +1,29 @@
+[package]
+name = "tua-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+tua-core = { path = "../crates/tua-core" }
+
+[[bin]]
+name = "source_pipeline"
+path = "fuzz_targets/source_pipeline.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "project_config"
+path = "fuzz_targets/project_config.rs"
+test = false
+doc = false
+bench = false
+
+[workspace]
+members = ["."]

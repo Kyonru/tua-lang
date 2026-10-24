@@ -7,6 +7,7 @@ are not part of the public language and toolchain documentation.
 - [Development and verification](development.md)
 - [Completion benchmarks](completion-benchmarks.md)
 - [LLM language evaluation](llm-language-evaluation.md)
+- [Fuzzing](fuzzing.md)
 - [Local inline-completion plan](better-autocompletion.md)
 - [Lint review and enhancement plan](lint-enhancement.md)
 

@@ -1,0 +1,38 @@
+name: Fuzz smoke
+
+on:
+  schedule:
+    - cron: "41 6 * * 2"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fuzz-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fuzz:
+    name: ${{ matrix.target }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [source_pipeline, project_config]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@nightly
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz --locked --version 0.13.2
+      - name: Fuzz trusted input boundary
+        run: cargo fuzz run "${{ matrix.target }}" -- -max_total_time=300 -max_len=65536
+      - name: Upload crash artifacts
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: fuzz-${{ matrix.target }}-${{ github.run_id }}
+          path: fuzz/artifacts/${{ matrix.target }}/
+          if-no-files-found: ignore
+          retention-days: 14
