@@ -751,6 +751,12 @@ pub(crate) fn run_asset_pipelines(cwd: &Path, config: &ProjectConfig) -> AssetPi
         }
         match validated_output_root(cwd, config, pipeline) {
             Ok(root) => {
+                if let Err(message) = reject_symlink_path(cwd, &root) {
+                    outcome
+                        .diagnostics
+                        .push(pipeline_error(cwd, pipeline, message));
+                    continue;
+                }
                 if let Some((owner, _)) = output_roots
                     .iter()
                     .find(|(_, existing)| root.starts_with(existing) || existing.starts_with(&root))
@@ -1421,6 +1427,10 @@ fn materialize_outputs(
             continue;
         };
         let path = output_root.join(relative);
+        if let Err(message) = reject_symlink_path(cwd, &path) {
+            diagnostics.push(pipeline_error(cwd, pipeline, message));
+            continue;
+        }
         match fs::remove_file(&path) {
             Ok(()) => {}
             Err(source) if source.kind() == io::ErrorKind::NotFound => {}
@@ -1819,6 +1829,72 @@ fn display_path(path: &Path) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn stale_outputs_are_not_deleted_through_symlinks() {
+        use std::os::unix::fs::symlink;
+
+        let project = temp_dir("stale-symlink");
+        let outside = temp_dir("stale-symlink-outside");
+        let output_root = project.join("src/generated/audio");
+        let cache_entry = project.join(".tua/cache/asset-pipelines/audio/cache-key");
+        fs::create_dir_all(cache_entry.join("files")).unwrap();
+        fs::create_dir_all(output_root.parent().unwrap()).unwrap();
+        symlink(&outside, &output_root).unwrap();
+        fs::write(outside.join("victim.txt"), "keep me").unwrap();
+        fs::write(
+            cache_entry.parent().unwrap().join("materialized.json"),
+            r#"{"outputs":["victim.txt"]}"#,
+        )
+        .unwrap();
+        let pipeline = test_pipeline("src/generated/audio");
+        let manifest = ImportManifest {
+            version: MANIFEST_VERSION,
+            outputs: Vec::new(),
+            diagnostics: Vec::new(),
+        };
+
+        assert!(materialize_outputs(&project, &pipeline, &cache_entry, &manifest).is_err());
+        assert_eq!(
+            fs::read_to_string(outside.join("victim.txt")).unwrap(),
+            "keep me"
+        );
+
+        fs::remove_file(output_root).unwrap();
+        fs::remove_dir_all(project).unwrap();
+        fs::remove_dir_all(outside).unwrap();
+    }
+
+    #[cfg(unix)]
+    fn test_pipeline(output: &str) -> AssetPipelineConfig {
+        AssetPipelineConfig {
+            name: "audio".to_owned(),
+            inputs: vec!["assets/input.wav".to_owned()],
+            command: Vec::new(),
+            builtin: Some("audio-analysis".to_owned()),
+            output: PathBuf::from(output),
+            version: String::new(),
+            timeout_ms: 60_000,
+            max_manifest_bytes: 1_048_576,
+            max_stderr_bytes: 65_536,
+            options: BTreeMap::new(),
+        }
+    }
+
+    #[cfg(unix)]
+    fn temp_dir(name: &str) -> PathBuf {
+        let path = std::env::temp_dir().join(format!(
+            "tua-asset-{name}-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir_all(&path).unwrap();
+        path
+    }
 
     #[test]
     fn glob_matching_supports_recursive_and_component_wildcards() {
