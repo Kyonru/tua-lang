@@ -44,9 +44,9 @@ CI before publication.
 ## Verify A Download
 
 !!! warning "Verify release artifacts before installing them"
-    Release assets are checksummed rather than code-signed today. Compare the
-    downloaded archive or VSIX against its entry in `SHA256SUMS` before running
-    or installing it.
+    Release assets are checksummed and attested, but are not platform
+    code-signed today. Compare the downloaded archive or VSIX against its entry
+    in `SHA256SUMS` before running or installing it.
 
 On Linux:
 

@@ -10,12 +10,11 @@ workflow pages under `docs/`. Completed work belongs in
 
 ## Now
 
-### Harden The Current 0.2 Release Line
+### Harden The Current 0.3 Release Line
 
-- Exercise the checksummed platform server and VSIX pipeline from a real tag.
+- Ship the filesystem-isolation and malformed-configuration fixes in the next
+  patch release, then publish coordinated security guidance.
 - Keep CLI, server, extension, changelog, and migration notes synchronized.
-- Use representative completion and editor-contention profiles as release
-  gates.
 - Collect independent real-project evidence for deterministic inline
   completion before enabling it by default; keep exact project retrieval
   parked and the sparse statistical fallback explicitly opt-in until then.

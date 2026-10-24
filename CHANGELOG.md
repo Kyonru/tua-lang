@@ -32,7 +32,31 @@ language or editor behavior, and migration notes call out those changes.
   movement participates in active-device detection. Disabled instances do not
   poll the mouse position.
 
+### Changed
+
+- Trusted CI now runs emitted Lua and bundled runtime fixtures on LuaJIT,
+  audits the locked Rust dependency graph with RustSec, and runs scheduled fuzz
+  campaigns against source and project-configuration parsing. External GitHub
+  Actions are commit-pinned and receive weekly dependency update proposals.
+
+- Release jobs now execute each native binary before packaging and publish
+  GitHub build-provenance attestations for standalone archives and platform
+  VSIX packages in addition to checksum manifests.
+
+### Security
+
+- Packaging, asset-pipeline stale cleanup, hot-reload output, completion-stat
+  persistence, and in-place formatting now reject filesystem paths that cross
+  symbolic links instead of writing or deleting through project-controlled
+  links.
+
+- The extension publishing toolchain no longer resolves the high-severity
+  vulnerable Azure authorization-flow dependency reported by `npm audit`.
+
 ### Fixed
+
+- Malformed `tua.toml` input that triggers an internal dependency panic now
+  produces a normal configuration parse error instead of terminating Tua.
 
 - Accepting completion after a typed prefix now replaces that prefix instead
   of appending the full candidate, including asset paths and input sources such

@@ -8,6 +8,7 @@ are not part of the public language and toolchain documentation.
 - [Completion benchmarks](completion-benchmarks.md)
 - [LLM language evaluation](llm-language-evaluation.md)
 - [Fuzzing](fuzzing.md)
+- [Release readiness](release-readiness.md)
 - [Local inline-completion plan](better-autocompletion.md)
 - [Lint review and enhancement plan](lint-enhancement.md)
 
