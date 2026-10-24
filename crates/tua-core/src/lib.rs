@@ -48,6 +48,7 @@ mod must_use;
 mod narrowing;
 mod object_pool;
 pub mod parser;
+pub mod path_security;
 pub mod profile;
 mod project;
 pub mod project_model;

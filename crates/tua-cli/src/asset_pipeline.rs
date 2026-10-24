@@ -18,8 +18,8 @@ use tua_core::{
     AssetPipelineConfig, Diagnostic, DiagnosticCode, DiagnosticSeverity, ProjectConfig,
 };
 
-use crate::path_security::reject_symlink_path;
 use crate::source::io_diagnostic;
+use tua_core::path_security::reject_symlink_path;
 
 const MANIFEST_VERSION: u32 = 1;
 const AUDIO_ANALYZER_VERSION: &str = "3";

@@ -6,8 +6,8 @@ use serde_json::{json, Value};
 use tua_core::{Diagnostic, LuaLineProvenance};
 
 use crate::error::CliError;
-use crate::path_security::reject_symlink_path;
 use crate::source::io_diagnostic;
+use tua_core::path_security::reject_symlink_path;
 
 const SOURCE_MAP_VERSION: u64 = 1;
 const DEBUGGER_SOURCE_MAP_VERSION: u64 = 3;

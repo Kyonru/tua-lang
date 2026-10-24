@@ -5,12 +5,12 @@ use std::path::{Path, PathBuf};
 use crate::asset_pipeline::run_asset_pipelines;
 use crate::diagnostics::sorted_diagnostics;
 use crate::error::CliError;
-use crate::path_security::reject_symlink_path;
 use crate::source::{
     discover_build_files, io_diagnostic, load_type_libraries, paths_same_location,
     read_source_file, SourceFile, SourceKind,
 };
 use crate::source_map::{debugger_source_map_path_for, source_map_path_for, write_source_map};
+use tua_core::path_security::reject_symlink_path;
 use tua_core::{
     bundled_runtime_requirements, emit_tua_source_with_workspace_artifact,
     emit_tua_source_with_workspace_environment_artifact, format_diagnostics_for_cli, AnalysisHost,

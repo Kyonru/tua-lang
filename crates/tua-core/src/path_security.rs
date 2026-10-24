@@ -2,7 +2,10 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
-pub(crate) fn reject_symlink_path(root: &Path, target: &Path) -> Result<(), String> {
+/// Reject a target outside `root` or reached through any existing symbolic
+/// link below it. Callers should validate immediately before filesystem
+/// mutations to keep the check close to the operation it protects.
+pub fn reject_symlink_path(root: &Path, target: &Path) -> Result<(), String> {
     let relative = target
         .strip_prefix(root)
         .map_err(|_| "output path escaped the project root".to_owned())?;

@@ -10,7 +10,6 @@ mod error;
 mod formatter;
 mod linter;
 mod package;
-mod path_security;
 mod source;
 mod source_map;
 mod traceback;

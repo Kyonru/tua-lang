@@ -13,7 +13,7 @@ use tua_core::{LoadedConfig, ProjectWorkspace, CONFIG_FILE};
 
 use crate::build::run_build;
 use crate::error::CliError;
-use crate::path_security::reject_symlink_path;
+use tua_core::path_security::reject_symlink_path;
 
 mod zip;
 
