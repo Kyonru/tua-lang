@@ -48,11 +48,13 @@ pub(crate) struct OutputGuard {
 
 impl OutputGuard {
     pub(crate) fn new(workspace: &ProjectWorkspace) -> Result<Self, Diagnostic> {
-        let guard = Self {
-            root: workspace.root().to_path_buf(),
-        };
+        let guard = Self::for_root(workspace.root());
         guard.check(workspace.primary_output_root())?;
         Ok(guard)
+    }
+
+    pub(crate) fn for_root(root: impl Into<PathBuf>) -> Self {
+        Self { root: root.into() }
     }
 
     pub(crate) fn check(&self, path: &Path) -> Result<(), Diagnostic> {
