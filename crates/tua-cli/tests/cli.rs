@@ -3723,6 +3723,32 @@ fn fmt_check_reports_unformatted_files_without_writing() {
     assert_eq!(current, original);
 }
 
+#[cfg(unix)]
+#[test]
+fn fmt_rejects_symlinked_source_files() {
+    use std::os::unix::fs::symlink;
+
+    let temp = TempDir::new("fmt-symlink");
+    let outside = TempDir::new("fmt-symlink-outside");
+    let victim = outside.path().join("main.tua");
+    let original = "local value=1\n";
+
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).expect("failed to write config");
+    fs::write(&victim, original).expect("failed to write victim");
+    symlink(outside.path(), temp.path().join("src")).expect("failed to create source symlink");
+
+    let output = tua()
+        .arg("fmt")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tua fmt");
+
+    assert!(!output.status.success());
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be valid UTF-8");
+    assert!(stderr.contains("crosses a symbolic link"), "{stderr}");
+    assert_eq!(fs::read_to_string(&victim).unwrap(), original);
+}
+
 #[test]
 fn lint_respects_project_config() {
     let temp = TempDir::new("lint-config");

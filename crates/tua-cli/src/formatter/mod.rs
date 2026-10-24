@@ -1,10 +1,13 @@
 use std::fs;
+use std::io;
 use std::path::{Path, PathBuf};
 
 use crate::diagnostics::sorted_diagnostics;
 use crate::error::CliError;
 use crate::source::{discover_build_files, io_diagnostic, read_source_file, SourceKind};
-use tua_core::{format_tua_source, LoadedConfig, ProjectWorkspace};
+use tua_core::{
+    format_tua_source, path_security::reject_symlink_path, LoadedConfig, ProjectWorkspace,
+};
 
 pub(crate) fn run_fmt(
     cwd: impl AsRef<Path>,
@@ -50,6 +53,13 @@ pub(crate) fn run_fmt(
 
         changed.push(source_file.path.clone());
         if !check {
+            if let Err(message) = reject_symlink_path(workspace.root(), &source_file.path) {
+                diagnostics.push(io_diagnostic(
+                    &source_file.path,
+                    io::Error::new(io::ErrorKind::InvalidInput, message),
+                ));
+                continue;
+            }
             if let Err(source) = fs::write(&source_file.path, formatted) {
                 diagnostics.push(io_diagnostic(&source_file.path, source));
             }
