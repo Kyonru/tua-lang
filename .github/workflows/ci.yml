@@ -70,7 +70,7 @@ jobs:
           node-version: 22
       - name: Install Lua and LOVE runtime test dependencies
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y lua5.4 love xvfb xauth
+        run: sudo apt-get update && sudo apt-get install -y luajit love xvfb xauth
       - name: Install LOVE debugger adapter
         if: runner.os == 'Linux'
         shell: bash
@@ -93,7 +93,13 @@ jobs:
           # Match the explicit analysis-thread stack used by the CLI and LSP.
           # Windows test threads otherwise default too low for debug AST walks.
           RUST_MIN_STACK: "8388608"
+          # Run emitted-Lua and runtime fixtures on the LuaJIT target. A pinned
+          # interpreter fails the tests when missing instead of skipping them.
+          TUA_LUAJIT_BIN: ${{ runner.os == 'Linux' && 'luajit' || '' }}
         run: cargo test --workspace
+      - name: Test bundled runtimes on LuaJIT
+        if: runner.os == 'Linux'
+        run: make runtime-test LUA=luajit
       - name: Build love-minimal
         working-directory: examples/love-minimal
         run: cargo run --quiet --package tua-cli -- build

@@ -1752,12 +1752,11 @@ confidence_warning = 0
 
 #[test]
 fn audio_runtime_priority_fades_pooling_and_snapshots() {
-    let lua = Command::new("lua").arg("-v").output();
-    if lua.is_err() {
+    let Some(lua) = working_lua_runtime() else {
         return;
-    }
+    };
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let output = Command::new("lua")
+    let output = Command::new(&lua)
         .arg(root.join("crates/tua-cli/tests/fixtures/audio_runtime.lua"))
         .arg(&root)
         .output()
@@ -1772,12 +1771,11 @@ fn audio_runtime_priority_fades_pooling_and_snapshots() {
 
 #[test]
 fn signal_runtime_uses_copy_on_write_listener_versions() {
-    let lua = Command::new("lua").arg("-v").output();
-    if lua.is_err() {
+    let Some(lua) = working_lua_runtime() else {
         return;
-    }
+    };
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let output = Command::new("lua")
+    let output = Command::new(&lua)
         .arg(root.join("crates/tua-cli/tests/fixtures/signal_runtime.lua"))
         .arg(&root)
         .output()
@@ -1792,12 +1790,11 @@ fn signal_runtime_uses_copy_on_write_listener_versions() {
 
 #[test]
 fn object_pool_runtime_uses_explicit_counts_and_one_state_map() {
-    let lua = Command::new("lua").arg("-v").output();
-    if lua.is_err() {
+    let Some(lua) = working_lua_runtime() else {
         return;
-    }
+    };
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let output = Command::new("lua")
+    let output = Command::new(&lua)
         .arg(root.join("crates/tua-cli/tests/fixtures/object_pool_runtime.lua"))
         .arg(&root)
         .output()
@@ -1812,12 +1809,11 @@ fn object_pool_runtime_uses_explicit_counts_and_one_state_map() {
 
 #[test]
 fn sprite_runtime_draws_leaves_directly_and_preserves_nested_transforms() {
-    let lua = Command::new("lua").arg("-v").output();
-    if lua.is_err() {
+    let Some(lua) = working_lua_runtime() else {
         return;
-    }
+    };
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let output = Command::new("lua")
+    let output = Command::new(&lua)
         .arg(root.join("crates/tua-cli/tests/fixtures/sprite_runtime.lua"))
         .arg(&root)
         .output()
@@ -1889,11 +1885,11 @@ return { cases = cases }
         "every expression should be fused:\n{emitted}"
     );
 
-    if Command::new("lua").arg("-v").output().is_err() {
+    let Some(lua) = working_lua_runtime() else {
         return;
-    }
+    };
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let output = Command::new("lua")
+    let output = Command::new(&lua)
         .arg(root.join("crates/tua-cli/tests/fixtures/vec2_fusion_check.lua"))
         .arg(temp.path().join("build"))
         .output()
@@ -2046,11 +2042,11 @@ return {
         );
     }
 
-    if Command::new("lua").arg("-v").output().is_err() {
+    let Some(lua) = working_lua_runtime() else {
         return;
-    }
+    };
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let output = Command::new("lua")
+    let output = Command::new(&lua)
         .arg(root.join("crates/tua-cli/tests/fixtures/vec2_hoisting_check.lua"))
         .arg(temp.path().join("build"))
         .output()
@@ -2065,14 +2061,11 @@ return {
 
 #[test]
 fn ecs_runtime_iteration_semantics_and_allocations() {
-    let Ok(lua) = Command::new("lua").arg("-v").output() else {
+    let Some(lua) = working_lua_runtime() else {
         return;
     };
-    if !lua.status.success() {
-        return;
-    }
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let output = Command::new("lua")
+    let output = Command::new(&lua)
         .arg(root.join("crates/tua-cli/tests/fixtures/ecs_runtime.lua"))
         .arg(&root)
         .output()
@@ -2087,14 +2080,11 @@ fn ecs_runtime_iteration_semantics_and_allocations() {
 
 #[test]
 fn store_runtime_notification_semantics_and_allocations() {
-    let Ok(lua) = Command::new("lua").arg("-v").output() else {
+    let Some(lua) = working_lua_runtime() else {
         return;
     };
-    if !lua.status.success() {
-        return;
-    }
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let output = Command::new("lua")
+    let output = Command::new(&lua)
         .arg(root.join("crates/tua-cli/tests/fixtures/store_runtime.lua"))
         .arg(&root)
         .output()
@@ -2857,12 +2847,11 @@ return light
 
 #[test]
 fn state_machine_runtime_preserves_sync_async_and_cancel_semantics() {
-    let lua = Command::new("lua").arg("-v").output();
-    if lua.is_err() {
+    let Some(lua) = working_lua_runtime() else {
         return;
-    }
+    };
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let output = Command::new("lua")
+    let output = Command::new(&lua)
         .arg(root.join("crates/tua-cli/tests/fixtures/state_machine_runtime.lua"))
         .arg(&root)
         .output()
@@ -4635,8 +4624,18 @@ fn wait_for_child_output(mut child: process::Child, timeout: Duration) -> Output
 }
 
 fn working_lua_runtime() -> Option<OsString> {
+    // CI pins the LuaJIT target runtime; a pinned interpreter that does not
+    // run must fail the test instead of falling back or skipping.
+    if let Some(luajit) = std::env::var_os("TUA_LUAJIT_BIN").filter(|value| !value.is_empty()) {
+        assert!(
+            lua_version_works(&luajit),
+            "TUA_LUAJIT_BIN={} is not a working Lua interpreter",
+            luajit.to_string_lossy()
+        );
+        return Some(luajit);
+    }
+
     [
-        std::env::var_os("TUA_LUAJIT_BIN"),
         std::env::var_os("TUA_LUA_BIN"),
         Some(OsString::from("luajit")),
         Some(OsString::from("lua5.1")),
@@ -4647,10 +4646,12 @@ fn working_lua_runtime() -> Option<OsString> {
     ]
     .into_iter()
     .flatten()
-    .find(|candidate| {
-        Command::new(candidate)
-            .arg("-v")
-            .output()
-            .is_ok_and(|output| output.status.success())
-    })
+    .find(lua_version_works)
+}
+
+fn lua_version_works(candidate: &OsString) -> bool {
+    Command::new(candidate)
+        .arg("-v")
+        .output()
+        .is_ok_and(|output| output.status.success())
 }

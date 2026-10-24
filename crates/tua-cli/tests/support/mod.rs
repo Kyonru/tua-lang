@@ -86,8 +86,18 @@ pub fn love_executable() -> Option<OsString> {
 }
 
 pub fn lua_executable() -> Option<OsString> {
+    // CI pins the LuaJIT target runtime; a pinned interpreter that does not
+    // run must fail the test instead of falling back or skipping.
+    if let Some(luajit) = env::var_os("TUA_LUAJIT_BIN").filter(|value| !value.is_empty()) {
+        assert!(
+            lua_version_works(&luajit),
+            "TUA_LUAJIT_BIN={} is not a working Lua interpreter",
+            luajit.to_string_lossy()
+        );
+        return Some(luajit);
+    }
+
     [
-        env::var_os("TUA_LUAJIT_BIN"),
         env::var_os("TUA_LUA_BIN"),
         Some(OsString::from("luajit")),
         Some(OsString::from("lua5.1")),
@@ -98,12 +108,14 @@ pub fn lua_executable() -> Option<OsString> {
     ]
     .into_iter()
     .flatten()
-    .find(|candidate| {
-        Command::new(candidate)
-            .arg("-v")
-            .output()
-            .is_ok_and(|output| output.status.success())
-    })
+    .find(lua_version_works)
+}
+
+fn lua_version_works(candidate: &OsString) -> bool {
+    Command::new(candidate)
+        .arg("-v")
+        .output()
+        .is_ok_and(|output| output.status.success())
 }
 
 fn love_version_works(candidate: &OsString) -> bool {
