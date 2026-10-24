@@ -63,6 +63,13 @@ Useful focused checks are:
 | Main local suite | `make verify` |
 | Full trusted CI-equivalent suite | `make ci-check` |
 
+`make ci-check` also requires `cargo-audit` 0.22.2 so the exact locked Rust
+dependency graph can be checked against RustSec:
+
+```sh
+cargo install cargo-audit --locked --version 0.22.2
+```
+
 Run `make diff-check` before submitting. `make extension-test` launches a VS
 Code Extension Development Host and may download a matching test build of VS
 Code. The generated LOVE catalog has its own pinned-source check; see

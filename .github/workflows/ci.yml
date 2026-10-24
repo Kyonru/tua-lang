@@ -37,6 +37,10 @@ jobs:
         run: make fmt-check
       - name: Run strict Clippy
         run: make clippy
+      - name: Install Rust dependency auditor
+        run: cargo install cargo-audit --locked --version 0.22.2
+      - name: Audit Rust dependencies
+        run: make rust-audit
       - name: Validate JSON
         run: make json-check
       - name: Check synchronized package version

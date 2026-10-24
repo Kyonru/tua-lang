@@ -113,11 +113,15 @@ love-api-drift-check: ## Verify generated LOVE catalogs match the pinned source 
 clippy: ## Run clippy with warnings denied.
 	$(CARGO) clippy --workspace --all-targets -- -D warnings
 
+.PHONY: rust-audit
+rust-audit: ## Audit locked Rust dependencies against the RustSec advisory database.
+	$(CARGO) audit
+
 .PHONY: verify
 verify: fmt-check test clippy version-drift-check release-tool-test config-schema-drift-check llms-drift-check llm-language-eval-test extension-check json-check diff-check ## Run the main local verification suite without modifying files.
 
 .PHONY: ci-check
-ci-check: fmt-check clippy test build-examples editor-regression-smoke version-drift-check release-tool-test config-schema-drift-check llms-drift-check llm-language-eval-test extension-check json-check docs-build benchmark-smoke diff-check ## Run required CI checks that do not need an external catalog checkout or VS Code host.
+ci-check: fmt-check clippy rust-audit test build-examples editor-regression-smoke version-drift-check release-tool-test config-schema-drift-check llms-drift-check llm-language-eval-test extension-check json-check docs-build benchmark-smoke diff-check ## Run required CI checks that do not need an external catalog checkout or VS Code host.
 
 .PHONY: diff-check
 diff-check: ## Check the git diff for whitespace errors.
