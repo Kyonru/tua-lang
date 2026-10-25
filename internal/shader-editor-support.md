@@ -42,9 +42,8 @@ and the macOS app; it does not yet use `tua.love.command` for the server.
 Fake-process timeout/protocol tests, editor synchronization tests, and a blocked
 validator/interactive-hover regression cover the boundaries. Real LÖVE 11.5 on
 macOS was tested; Windows `lovec.exe` remains unverified. Phase 1 editor features
-are also implemented below. Value-shape diagnostics,
-the glslangValidator fallback, setup tooling, and shader hot reload remain
-planned.
+and Phase 2 value-shape diagnostics are also implemented below. The
+glslangValidator fallback, setup tooling, and shader hot reload remain planned.
 
 ## Current state
 
@@ -306,6 +305,17 @@ Tests: core completion, hover, and definition tests, plus LSP protocol tests
 for the URI and range of a definition in a non-Tua file.
 
 ## Phase 2: Value shape checks (`TL2015`)
+
+Implemented (Unreleased), with core and LSP regression coverage. The expanded
+LÖVE 11.5 probe confirms short vectors/matrices and wrong component types are
+rejected, while numeric strings, matrix layout selectors, and raw Data are
+accepted. Unknown values, lengths, heterogeneous dynamic name patterns, raw
+Data sizes, and texture dimensions remain unchecked. Extra ignored values are
+not diagnosed. No external validator is needed for these checks.
+The initial expanded scalar/vector/matrix probe passed on macOS; subsequent
+launches for the additional `bvec3`/`ivec2` cases timed out before producing any
+probe output. Those cases have core regressions but still need a completed
+native probe run.
 
 Check the values passed to `send` against the uniform's GLSL type, which LÖVE
 enforces at runtime:

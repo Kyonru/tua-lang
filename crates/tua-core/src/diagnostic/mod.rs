@@ -65,6 +65,7 @@ impl DiagnosticCode {
     pub const AUDIO_ANALYSIS: Self = Self(2012);
     pub const ASSET_SHADER_UNIFORM: Self = Self(2013);
     pub const ASSET_SHADER_UNREAD_UNIFORM: Self = Self(2014);
+    pub const ASSET_SHADER_VALUE: Self = Self(2015);
     pub const ASSET_SHADER_COMPILE: Self = Self(2016);
     pub const CONFIG_PARSE: Self = Self(3001);
     pub const CONFIG_IO: Self = Self(3002);
@@ -204,6 +205,7 @@ impl DiagnosticCode {
                 | Self::AUDIO_ANALYSIS
                 | Self::ASSET_SHADER_UNIFORM
                 | Self::ASSET_SHADER_UNREAD_UNIFORM
+                | Self::ASSET_SHADER_VALUE
                 | Self::ASSET_SHADER_COMPILE
                 | Self::CONFIG_PARSE
                 | Self::CONFIG_IO

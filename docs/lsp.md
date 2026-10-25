@@ -666,8 +666,8 @@ unread status. Pattern names list matching declarations. Go to Definition
 opens the GLSL declaration; names declared in both stages offer both locations.
 These features work in Tua and Lua without running LÖVE, and follow saved shader
 changes and synchronized unsaved shader buffers. Unknown receivers and
-macro-generated declarations stay unchecked. Value-shape diagnostics are not
-implemented yet.
+macro-generated declarations stay unchecked. Proven uniform value mismatches report `TL2015`; see
+[shader value checks](language.md).
 
 ### Shader compilation diagnostics
 

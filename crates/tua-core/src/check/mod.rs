@@ -44,6 +44,7 @@ use crate::{asset, love_callback, lua, signal, sprite, state_machine};
 use crate::{Diagnostic, DiagnosticCode, DiagnosticSeverity};
 
 mod query;
+mod shader_values;
 mod type_mismatch;
 
 use query::{CheckQuery, CheckQueryOptions};
@@ -188,6 +189,7 @@ pub(crate) fn check_parsed_source_with_environment_asset_roots_diagnostics_jit_c
 
 struct Checker<'a> {
     parsed: &'a ParsedSource,
+    scope: crate::ScopeMap,
     environment: &'a TypeEnvironment,
     context: TypeContext,
     scoped_locals: Vec<BTreeMap<String, Type>>,
@@ -276,6 +278,7 @@ impl<'a> Checker<'a> {
 
         Self {
             parsed,
+            scope,
             environment,
             context: environment.to_type_context(),
             scoped_locals: Vec::new(),
@@ -2126,6 +2129,7 @@ impl<'a> Checker<'a> {
             return;
         };
 
+        self.check_shader_values(function_call, &call, &uniforms);
         match &call.uniform {
             asset::ShaderUniformReference::Exact(name) => {
                 self.check_sent_uniform_names(&call, &uniforms, std::slice::from_ref(name), &[]);

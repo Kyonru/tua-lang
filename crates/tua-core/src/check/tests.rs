@@ -4895,3 +4895,70 @@ vec4 effect(vec4 color, Image tex, vec2 uv, vec2 screen) {
         "{diagnostics:#?}"
     );
 }
+
+#[test]
+fn shader_value_shapes_report_only_proven_runtime_mismatches() {
+    let temp = TempProject::new("shader-values");
+    temp.write("values.glsl", "extern number n; extern bool flag; extern vec4 v; extern vec3 c; extern mat2 m2; extern mat4 m4; extern Image img; extern number arr[2]; extern bvec3 switches; extern ivec2 coords;\nvec4 effect(vec4 c, Image t, vec2 u, vec2 s) { return v * n * float(flag) * m2[0][0] * m4[0][0] * Texel(img,u) * arr[0] * arr[1]; }");
+    let source = r#"local s = shader "values.glsl"
+s:send("n", {}) -- bad
+s:send("flag", 1) -- bad
+s:send("v", 1) -- bad
+s:send("v", { 1, 2, 3 }) -- bad
+s:send("v", { 1, 2, 3, 4, false })
+s:sendColor("n", { 1, 1, 1 }) -- bad
+s:sendColor("v", { 1, 1, 1 })
+s:send("m2", love.math.newTransform()) -- bad
+s:send("m4", love.math.newTransform())
+s:send("m2", { { 1, 0 }, { 0, 1 } })
+s:send("m2", { 1, 0, 0, 1 })
+s:send("m2", { 1, 0 }) -- bad
+s:send("img", 1) -- bad
+s:send("img", love.graphics.newCanvas(2, 2))
+s:send("arr", 1, 2, {})
+s:send("n", 1, {})
+s:send("arr", 1, {}) -- bad
+local function dynamic(values: number[], unknown: any)
+  s:send("v", values)
+  s:send("v", unknown)
+end
+local function shadow(s: any)
+  s:send("v", 1)
+end
+s:send("m2", "column", { 1, 0, 0, 1 })
+s:send("n", "0x10")
+s:send("switches", { true, false, true })
+s:send("switches", { 1, 0, 1 }) -- bad
+s:send("coords", { 1, 2 })
+s:send("coords", { 1 }) -- bad
+s:send("v", love.data.newByteData(16))
+s:send("v", { 1, false, 3, 4 }) -- bad
+s:send("m2", { { 1 }, { 0, 1 } }) -- bad
+local function variadic(...)
+  s:send("v", { ... })
+end
+local function unions(value: number | number[], uncertain: any)
+  s:send("v", value)
+  s:send("n", uncertain)
+end
+"#;
+    let diagnostics = check_tua_source_with_asset_roots_and_diagnostics_config(
+        temp.path.join("main.tua"),
+        source,
+        std::slice::from_ref(&temp.path),
+        &diagnostics_without_standard_rules(),
+    )
+    .expect_err("known shape errors");
+    let lines: Vec<_> = diagnostics
+        .iter()
+        .filter(|d| d.code == Some(DiagnosticCode::ASSET_SHADER_VALUE))
+        .map(|d| d.line)
+        .collect();
+    let expected: Vec<_> = source
+        .lines()
+        .enumerate()
+        .filter(|(_, line)| line.ends_with("-- bad"))
+        .map(|(i, _)| i + 1)
+        .collect();
+    assert_eq!(lines, expected, "{diagnostics:#?}");
+}

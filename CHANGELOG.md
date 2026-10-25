@@ -8,6 +8,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Added
 
+- Shader sends report `TL2015` for proven scalar, vector, matrix, texture, and
+  `sendColor` value mismatches, while preserving dynamic values and LOVE overloads.
+
 - Run, hot-reload, and debug configurations can build once and launch named local
   multiplayer instances with per-player arguments and separate console sessions.
   Hot reload shares one watcher; debug players have independent source-mapped

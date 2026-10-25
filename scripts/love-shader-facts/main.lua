@@ -1,3 +1,5 @@
+-- Flush each result so a driver stall still leaves usable probe evidence.
+io.stdout:setvbuf("no")
 -- Records how LOVE compiles and runs shaders, as evidence for
 -- internal/shader-editor-support.md.
 --
@@ -70,10 +72,12 @@ extern Image img;
 extern mat2 m2;
 extern mat4 m4;
 extern bool flag;
+extern bvec3 switches;
+extern ivec2 coords;
 extern number unread;
 vec4 effect(vec4 color, Image tex, vec2 uv, vec2 screen) {
   return color * n * v * vec4(c, 1.0) * arr[0] * arr[1] * Texel(img, uv)
-    * m2[0][0] * m4[0][0] * float(flag);
+    * m2[0][0] * m4[0][0] * float(flag) * float(switches.x) * float(coords.x);
 }
 ]])
   local canvas = love.graphics.newCanvas(2, 2)
@@ -99,6 +103,16 @@ vec4 effect(vec4 color, Image tex, vec2 uv, vec2 screen) {
     { "mat2 <- Transform", function() shader:send("m2", love.math.newTransform()) end },
     { "mat4 <- Transform", function() shader:send("m4", love.math.newTransform()) end },
     { "bool <- boolean", function() shader:send("flag", true) end },
+    { "vec4 <- wrong component", function() shader:send("v", { 1, true, 1, 1 }) end },
+    { "mat2 <- too short", function() shader:send("m2", { 1, 0 }) end },
+    { "mat2 <- short row", function() shader:send("m2", { { 1 }, { 0, 1 } }) end },
+    { "mat2 <- column layout", function() shader:send("m2", "column", { 1, 0, 0, 1 }) end },
+    { "number <- numeric string", function() shader:send("n", "0x10") end },
+    { "number <- raw Data", function() shader:send("n", love.data.newByteData(4)) end },
+    { "bvec3 <- booleans", function() shader:send("switches", { true, false, true }) end },
+    { "bvec3 <- numbers", function() shader:send("switches", { 1, 0, 1 }) end },
+    { "ivec2 <- numbers", function() shader:send("coords", { 1, 2 }) end },
+    { "ivec2 <- short", function() shader:send("coords", { 1 }) end },
     { "bool <- number", function() shader:send("flag", 1) end },
   }
   for _, case in ipairs(cases) do

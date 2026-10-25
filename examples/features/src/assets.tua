@@ -20,6 +20,7 @@ local mainFont = font("assets/ui.ttf", 18)
 local waveShader = shader "assets/wave.glsl"
 -- Complete or hover "time", or go to its declaration in wave.glsl.
 waveShader:send("time", 0)
+-- Passing a table here would report TL2015: `time` is a scalar number uniform.
 local playerData = imageData "assets/player.png"
 local targetCanvas = canvas(320, 180)
 local playerFrame = quad(0, 0, 16, 16, 64, 64)

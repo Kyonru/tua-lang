@@ -263,3 +263,34 @@ fn shader_uniform_checker_uses_the_same_overlay_as_completion() {
     host.set_shader_source_overlay(temp.path().join("effect.glsl"), None);
     assert!(!missing(host.snapshot()));
 }
+
+#[test]
+fn shader_value_checks_use_project_module_return_types() {
+    for extension in ["tua", "lua"] {
+        let temp = TempProject::new("shader-value-module");
+        let fixture = Fixture::parse(&format!(
+            "-- file: main.tua\nlocal values = require(\"values\")\nlocal effect = shader \"effect.glsl\"\neffect:send(\"tint\", values.scalar())\neffect:send(\"tint\", values.vector())\n-- file: values.{extension}\nlocal M = {{}}\nfunction M.scalar() return 1 end\nfunction M.vector() return {{ 1, 1, 1, 1 }} end\nreturn M\n"
+        ));
+        temp.write("effect.glsl", SHADER);
+        let mut host = AnalysisHost::new();
+        host.set_source_roots([temp.path().to_path_buf()]);
+        host.set_asset_roots([temp.path().to_path_buf()]);
+        for file in fixture.files() {
+            let path = temp.write(file.path.to_str().unwrap(), &file.source);
+            let kind = if path.extension().is_some_and(|e| e == "lua") {
+                AnalysisSourceKind::Lua
+            } else {
+                AnalysisSourceKind::Tua
+            };
+            host.set_file_with_kind(path, file.source.clone(), kind);
+        }
+        host.refresh_asset_index_from_disk();
+        let diagnostics = host.snapshot().diagnostics(temp.path().join("main.tua"));
+        let lines: Vec<_> = diagnostics
+            .iter()
+            .filter(|d| d.code == Some(DiagnosticCode::ASSET_SHADER_VALUE))
+            .map(|d| d.line)
+            .collect();
+        assert_eq!(lines, [3], "{extension}: {diagnostics:#?}");
+    }
+}

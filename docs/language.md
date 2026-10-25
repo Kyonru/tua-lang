@@ -802,6 +802,23 @@ GLSL compiler removes it. Tua reports warning `TL2014` when such a uniform is
 sent; read it in the shader, or guard optional uniforms with
 `Shader:hasUniform`.
 
+Tua reports error `TL2015` when a sent value is provably incompatible with the
+uniform's GLSL type: scalars need numbers or booleans, vectors need component
+tables, matrices accept flat tables or rows (`mat4` also accepts a LOVE
+`Transform`), and texture uniforms need compatible textures or canvases.
+Literal vector and matrix tables are checked for missing components;
+`sendColor` requires `vec3` or `vec4` and accepts three or four components.
+
+```tua
+wave:send("time", {}) -- TL2015: time expects a number
+wave:send("time", 0)  -- accepted
+```
+
+These checks preserve `any` and uncertain unions. Unknown table lengths are
+not checked for component count. Numeric strings, raw `Data` sends, matrix
+layout overloads, and extra values ignored by LOVE remain accepted. Texture
+dimensions and raw-data sizes are not statically checked.
+
 The editor also completes uniform names, shows their declarations and expected
 Lua values on hover, and navigates to GLSL declarations (including both stage
 sections). See [shader uniform editing](lsp.md#shader-uniform-editing).

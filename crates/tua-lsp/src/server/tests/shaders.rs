@@ -296,3 +296,41 @@ fn lua_shader_uniform_editor_features_share_tua_metadata() {
         temp.uri_for("effect.glsl")
     );
 }
+
+#[test]
+fn shader_value_diagnostics_follow_unsaved_uniform_types() {
+    let temp = TempProject::new("shader-value-diagnostics");
+    let source = "local effect = shader \"effect.glsl\"\neffect:send(\"tint\", 1)\n";
+    temp.write("tua.toml", "source = \".\"\n");
+    temp.write("main.tua", source);
+    temp.write(
+        "effect.glsl",
+        "extern vec4 tint;\nvec4 effect(vec4 c, Image t, vec2 uv, vec2 px) { return tint; }\n",
+    );
+    let uri = temp.uri_for("main.tua");
+    let shader_uri = temp.uri_for("effect.glsl");
+    let mut server = TestServer::new();
+    server.send(initialize_with_pull_diagnostics(1, temp.uri(), false));
+    server.send(did_open(&uri, source));
+    server.send(text_document_diagnostic_request(2, &uri));
+    let response = response_with_id(server.output(), 2);
+    let errors: Vec<_> = response["result"]["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|d| d["code"] == "TL2015")
+        .collect();
+    assert_eq!(errors.len(), 1, "{response}");
+    assert_eq!(errors[0]["severity"], 1);
+    assert_eq!(
+        errors[0]["range"]["start"],
+        json!({"line":1,"character":20})
+    );
+    server.send(did_open(&shader_uri, "extern number tint;\nvec4 effect(vec4 c, Image t, vec2 uv, vec2 px) { return c * tint; }\n"));
+    server.send(text_document_diagnostic_request(3, &uri));
+    assert!(!response_with_id(server.output(), 3)["result"]["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|d| d["code"] == "TL2015"));
+}
