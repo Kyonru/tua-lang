@@ -134,3 +134,7 @@ make build-features
 - `src/legacy.lua` is intentionally plain Lua. Builds copy it unchanged into
   `build/`, while the LSP can still infer simple returned module exports from
   it.
+
+The `assets/wave.glsl` sample is a compilable LÖVE pixel shader. With LÖVE
+installed, `tua check` validates it; see `[shaders]` in the configuration reference
+for desktop/GLES targets and disabling external compilation.
