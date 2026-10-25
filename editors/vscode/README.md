@@ -220,6 +220,8 @@ Open **Tua → Runtime Inspector**, click **Enable Runtime Inspection**, then la
 Run, Hot reload, or Debug. Use **Select Runtime Player** to choose a player in a
 multi-instance run. Inspection is off by default and requires a trusted workspace.
 Enabling it applies to new runs; restart an already-running game to attach.
+The setting is `tua.runtimeInspector.enabled` (default `false`). For a custom
+debug launch configuration, use `tuaProject: true` to enable Tua launch preparation.
 
 The view shows live objects from Tua's built-in runtimes:
 
@@ -239,7 +241,7 @@ The inspector is an extension-owned development shim, loaded by a private
 **temporary launcher outside the project**. It wraps runtime constructors only
 inside that game process. It does not modify source files, compiler runtimes,
 normal build output, or packaged games. Run and hot reload mirror current build
-output; debugging retains its isolated build snapshot. Temporary launchers are
+output; multiplayer debugging retains its isolated build snapshot. Temporary launchers are
 removed when their player exits. Disabling inspection disconnects immediately
 and keeps the launcher alive until the game exits so asset loading continues.
 
@@ -358,6 +360,12 @@ inspection. This mode is optional and does not change your global hint settings.
 - `Tua: Restart LOVE Project`
 - `Tua: Run LOVE Project With Hot Reload`
 - `Tua: Package Game...`
+- `Tua: Open Runtime Inspector`
+- `Tua: Enable Runtime Inspection`
+- `Tua: Disable Runtime Inspection`
+- `Tua: Select Runtime Player`
+- `Tua: Pause or Resume Inspector Updates`
+- `Tua: Refresh Runtime Snapshot`
 - `Tua: Focus Output`
 - `Tua: Open Generated Lua Beside Tua`
 - `Tua: Jump Between Tua and Generated Lua`
@@ -412,6 +420,8 @@ Important VS Code settings:
   server.
 - `tua.love.command`: path to the LOVE executable used by
   `Tua: Run LOVE Project`.
+- `tua.runtimeInspector.enabled`: opt into read-only live inspection for new
+  development runs; default `false`. No inspector code is added to release output.
 - `tua.trace.server`: LSP trace level (`off`, `messages`, `verbose`).
 - `tua.log.verbosity`: server log verbosity (`off`, `error`, `info`, `debug`,
   `trace`).

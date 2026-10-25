@@ -5,8 +5,10 @@ icon: lucide/server
 # Language Server
 
 Tua's language server provides compiler-backed editing for `.tua` projects.
-Diagnostics, completion, hover, navigation, refactors, formatting, and project
-inspectors read the same semantic analysis used by `tua check` and `tua build`.
+Diagnostics, completion, hover, navigation, refactors, formatting, and
+static project inspectors read the same semantic analysis used by `tua check` and `tua build`.
+The optional [live Runtime Inspector](debugging.md#live-runtime-inspector) uses a
+separate development-only connection to the running game; it is not an LSP query.
 
 !!! tip "Use the VS Code extension"
     The recommended setup is the [Tua VS Code extension](installation.md).

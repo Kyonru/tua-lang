@@ -100,6 +100,40 @@ editing source, stop the current session and start the configuration again.
 Restarting only the existing Lua debug session does not invoke a new Tua
 build.
 
+## Live Runtime Inspector
+
+The **Runtime Inspector** in the Tua sidebar shows live ECS entities and
+components, active state machines, signal emission/listener counts, and object
+pool usage. It complements source breakpoints and the static project explorers.
+
+1. In a trusted workspace, open **Tua → Runtime Inspector** or run
+   **Tua: Open Runtime Inspector**.
+2. Click **Enable Runtime Inspection**. This sets
+   `tua.runtimeInspector.enabled` to `true`; the default is `false`.
+3. Launch a new Tua Run, Hot reload, or Debug configuration. Existing processes
+   must be restarted. Custom debug configurations need `tuaProject: true`.
+4. Use **Select Runtime Player** to choose a player in a multi-instance run.
+
+Snapshots update twice per second. **Pause or Resume Inspector Updates** pauses
+snapshot updates without stopping the game; **Refresh Runtime Snapshot** also
+works while updates are paused. Debugger pauses suspend snapshots until the game
+resumes. Disconnected or ended players retain their last snapshot, labeled with
+its status and age. Signal history retains the latest 20 event names, not payloads.
+Large worlds and values are sampled and abbreviated to keep inspection bounded.
+
+The inspector is an **editor-owned development shim**, loaded from a private
+temporary launcher outside the project. It connects through authenticated,
+non-blocking localhost TCP using LÖVE's bundled LuaSocket. The compiler and
+production runtimes contain no inspector hooks; ordinary build output and
+packaged games contain no inspector code. It does not upload data or evaluate
+runtime expressions. Disabling inspection disconnects the player; the temporary
+launcher remains until that player exits so ongoing asset loads still work.
+
+Only Tua's built-in ECS, state-machine, signal, and object-pool implementations
+are discovered. An empty category can mean that no such objects are currently
+alive, or that the game uses a different implementation. Inspection supports the
+standard LÖVE loop and custom loops that return a frame function.
+
 ## Inspect Generated Lua
 
 Use **Tua: Open Generated Lua Beside Tua** to save and rebuild the active

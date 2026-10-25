@@ -119,6 +119,10 @@ ECS, and object pools. Experimental deterministic ghost text can be enabled for
 source-only statement snippets and conservative current-file recall; it stays
 local, reads no pattern database, and is off by default.
 
+The opt-in [live Runtime Inspector](docs/debugging.md#live-runtime-inspector)
+shows per-player ECS components, active states, signal activity, and pool counts.
+Its editor-owned development shim leaves build and release output untouched.
+
 When deterministic ghost text is enabled, the extension tries it before
 experimental local Ollama completion. Ollama remains a separate opt-in and is
 compiler validated before display. Trusted local tools can also explicitly
