@@ -14,6 +14,7 @@ const { registerLoveDevex } = require("./love");
 const { registerModuleDevex } = require("./modules");
 const { registerObjectPoolDevex } = require("./object-pools");
 const { registerSetup } = require("./setup");
+const { registerRunConfigurations } = require("./workspace/run-configurations");
 const { registerRunActivity } = require("./workspace/activity");
 const { registerWorkspaceSidebar } = require("./workspace/sidebar");
 const { registerSignalDevex } = require("./signals");
@@ -43,6 +44,7 @@ async function activate(context) {
   context.subscriptions.push(registerBuiltinDocumentProvider(outputChannel));
   context.subscriptions.push(registerLifecycleCommands());
   context.subscriptions.push(registerSetup(context));
+  context.subscriptions.push(registerRunConfigurations(context));
   context.subscriptions.push(registerWorkspaceSidebar({ getClient: () => client }));
   editorDevex = registerEditorDevex({
     appendOutputLine: (line) => outputChannel?.appendLine(line),

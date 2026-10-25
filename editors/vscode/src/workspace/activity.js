@@ -26,6 +26,7 @@ function registerRunActivity() {
   status.name = "Tua run status";
   status.command = "tua.activity.show";
   const update = () => {
+    void vscode.commands.executeCommand("setContext", "tua.hasActiveSession", store.sessions.some(session => session.active));
     const latest = store.sessions[0];
     changed.fire();
     view.message = latest ? undefined : "Run a Tua project to see build and reload status.";

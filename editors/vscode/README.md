@@ -123,6 +123,15 @@ previews or generated Lua. Source items navigate to their declaration. Project
 data loads on expansion and refreshes after saves; the Refresh action retries
 failed requests. Existing commands remain available in the Command Palette.
 
+## Named run configurations
+
+Choose Development, Debug, Hot reload, or Package in **Run Configuration**.
+The choice is remembered per workspace and drives the compact toolbar Run button.
+Customize names and modes in `tua.run.configurations`; packaging configurations
+can specify `packageTarget` (`love`, `windows`, or `macos`). Existing launch
+configurations and direct commands still work. Each action uses the project of
+the active file; in a multi-root workspace, open a file from the desired project.
+
 ## Build and run status
 
 The **Run Sessions** view and status bar show builds, running games, reload
@@ -367,8 +376,9 @@ chain modifiers; existing readonly, modification, and deprecation markers remain
 
 ## Editor toolbar density
 
-The default `tua.editor.toolbarMode: "compact"` provides four primary controls:
-Run/Stop, hot reload, Debug, and **Tua Tools**. The tools menu groups:
+The default `tua.editor.toolbarMode: "compact"` shows **Run Selected Configuration**,
+the configuration picker, Stop while a session is active, and **Tua Tools**.
+The tools menu groups:
 
 - Code: inlay hint mode, generated Lua, and jumping between source and output.
 - Structure: workspace symbols, signal graph, and state-machine preview.

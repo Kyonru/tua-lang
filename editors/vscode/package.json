@@ -600,6 +600,62 @@
           ],
           "default": "compact",
           "description": "Controls the Tua editor toolbar. Compact mode groups code and structure tools to leave room for layout toggles in the title bar."
+        },
+        "tua.run.configurations": {
+          "type": "array",
+          "scope": "window",
+          "minItems": 1,
+          "default": [
+            {
+              "name": "Development",
+              "mode": "run"
+            },
+            {
+              "name": "Debug",
+              "mode": "debug"
+            },
+            {
+              "name": "Hot reload",
+              "mode": "hotReload"
+            },
+            {
+              "name": "Package",
+              "mode": "package",
+              "packageTarget": "love"
+            }
+          ],
+          "description": "Named actions for the Tua Run button. The selected name is remembered for this workspace.",
+          "items": {
+            "type": "object",
+            "required": [
+              "name",
+              "mode"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "mode": {
+                "type": "string",
+                "enum": [
+                  "run",
+                  "debug",
+                  "hotReload",
+                  "package"
+                ]
+              },
+              "packageTarget": {
+                "type": "string",
+                "enum": [
+                  "love",
+                  "windows",
+                  "macos"
+                ]
+              }
+            }
+          }
         }
       }
     },
@@ -960,10 +1016,39 @@
         "title": "Stop Session",
         "category": "Tua",
         "icon": "$(debug-stop)"
+      },
+      {
+        "command": "tua.run.select",
+        "title": "Select Run Configuration",
+        "icon": "$(list-selection)",
+        "category": "Tua"
+      },
+      {
+        "command": "tua.run.selected",
+        "title": "Run Selected Configuration",
+        "icon": "$(play)",
+        "category": "Tua"
+      },
+      {
+        "command": "tua.run.configuration",
+        "title": "Run This Configuration",
+        "icon": "$(play)",
+        "category": "Tua"
+      },
+      {
+        "command": "tua.run.configure",
+        "title": "Edit Run Configurations",
+        "icon": "$(settings-gear)",
+        "category": "Tua"
       }
     ],
     "views": {
       "tua": [
+        {
+          "id": "tua.run",
+          "name": "Run Configuration",
+          "when": "tua.hasProject"
+        },
         {
           "id": "tua.workspace",
           "name": "Project",
@@ -1000,22 +1085,22 @@
         },
         {
           "command": "tua.runLoveProject",
-          "when": "editorLangId == tua && !tua.loveProjectRunning",
+          "when": "editorLangId == tua && !tua.loveProjectRunning && config.tua.editor.toolbarMode != compact",
           "group": "navigation@48"
         },
         {
           "command": "tua.stopLoveProject",
-          "when": "editorLangId == tua && tua.loveProjectRunning",
+          "when": "editorLangId == tua && tua.loveProjectRunning && config.tua.editor.toolbarMode != compact",
           "group": "navigation@48"
         },
         {
           "command": "tua.debugLoveProject",
-          "when": "editorLangId == tua",
+          "when": "editorLangId == tua && config.tua.editor.toolbarMode != compact",
           "group": "navigation@49"
         },
         {
           "command": "tua.runLoveProjectWithHotReload",
-          "when": "editorLangId == tua",
+          "when": "editorLangId == tua && config.tua.editor.toolbarMode != compact",
           "group": "navigation@48"
         },
         {
@@ -1042,6 +1127,21 @@
           "submenu": "tua.editorTools",
           "when": "(editorLangId == tua || resourceExtname == .lua) && config.tua.editor.toolbarMode == compact",
           "group": "navigation@52"
+        },
+        {
+          "command": "tua.run.selected",
+          "when": "editorLangId == tua && config.tua.editor.toolbarMode == compact",
+          "group": "navigation@48"
+        },
+        {
+          "command": "tua.run.select",
+          "when": "editorLangId == tua && config.tua.editor.toolbarMode == compact",
+          "group": "navigation@49"
+        },
+        {
+          "command": "tua.activity.stop",
+          "when": "editorLangId == tua && config.tua.editor.toolbarMode == compact && tua.hasActiveSession",
+          "group": "navigation@50"
         }
       ],
       "commandPalette": [
@@ -1163,6 +1263,10 @@
         {
           "command": "tua.workspace.generated",
           "when": "false"
+        },
+        {
+          "command": "tua.run.configuration",
+          "when": "false"
         }
       ],
       "editor/context": [
@@ -1192,6 +1296,21 @@
           "command": "tua.workspace.refresh",
           "when": "view == tua.workspace",
           "group": "navigation"
+        },
+        {
+          "command": "tua.run.selected",
+          "when": "view == tua.run",
+          "group": "navigation@0"
+        },
+        {
+          "command": "tua.run.select",
+          "when": "view == tua.run",
+          "group": "navigation@1"
+        },
+        {
+          "command": "tua.run.configure",
+          "when": "view == tua.run",
+          "group": "navigation@2"
         }
       ],
       "view/item/context": [
@@ -1233,6 +1352,11 @@
         {
           "command": "tua.activity.stop",
           "when": "view == tua.sessions && viewItem == tuaSession.active",
+          "group": "inline"
+        },
+        {
+          "command": "tua.run.configuration",
+          "when": "view == tua.run && viewItem == tuaRunConfiguration",
           "group": "inline"
         }
       ],

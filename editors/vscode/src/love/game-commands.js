@@ -72,8 +72,8 @@ function registerGameCommands({ appendOutputLine, getClient, getServerCommand, a
         args: () => ["dev", "--love", configuredLoveCommand()],
       }),
     ),
-    vscode.commands.registerCommand(COMMANDS.packageGame, async () => {
-      const choice = await vscode.window.showQuickPick(PACKAGE_TARGETS, {
+    vscode.commands.registerCommand(COMMANDS.packageGame, async (options) => {
+      const choice = options?.target ? PACKAGE_TARGETS.find(item => item.target === options.target) : await vscode.window.showQuickPick(PACKAGE_TARGETS, {
         title: "Package Game",
         placeHolder: "Choose what to build",
       });
