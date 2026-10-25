@@ -1109,3 +1109,85 @@ fn assert_no_multiline_layout_lint(output: &str) {
         "formatter output must satisfy its continuation-layout lint: {diagnostics:#?}"
     );
 }
+
+#[test]
+fn indents_continuations_that_start_with_operators() {
+    let source = r#"type Mode =
+| "idle"
+| "run"
+
+local function measure(a: number, b: number, items: any)
+local sum = a
++ b
+- 1
+local scaled = a
+* b
+/ 2
+% 3
+^ 2
+local valid = a > 0
+and b > 0
+or false
+local same = a
+== b
+local different = a
+~= b
+local before = a
+< b
+local after = a
+>= b
+local total
+= sum + scaled
+local count = items
+:filter()
+:count()
+local first = items
+.first
+local joined = tostring(a)
+.. tostring(b)
+return sum, scaled, valid, same, different, before, after, total, count, first, joined
+end
+"#;
+    let expected = r#"type Mode =
+  | "idle"
+  | "run"
+
+local function measure(a: number, b: number, items: any)
+  local sum = a
+    + b
+    - 1
+  local scaled = a
+    * b
+    / 2
+    % 3
+    ^ 2
+  local valid = a > 0
+    and b > 0
+    or false
+  local same = a
+    == b
+  local different = a
+    ~= b
+  local before = a
+    < b
+  local after = a
+    >= b
+  local total
+    = sum + scaled
+  local count = items
+    :filter()
+    :count()
+  local first = items
+    .first
+  local joined = tostring(a)
+    .. tostring(b)
+  return sum, scaled, valid, same, different, before, after, total, count, first, joined
+end
+"#;
+
+    let output = format(source);
+
+    assert_eq!(output, expected);
+    assert_eq!(format(&output), output);
+    assert_no_multiline_layout_lint(&output);
+}

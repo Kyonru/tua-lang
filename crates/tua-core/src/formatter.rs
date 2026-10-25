@@ -1492,7 +1492,14 @@ fn line_ends_with_continuation(code: &str) -> bool {
 }
 
 fn line_starts_with_continuation(code: &str) -> bool {
-    code.trim_start().starts_with("..")
+    let code = code.trim_start();
+
+    // No statement starts with an operator, field or method access, or a type
+    // union bar, so such a line continues the previous statement.
+    code.starts_with(['.', ':', '+', '-', '*', '/', '%', '^', '=', '<', '>', '|'])
+        || code.starts_with("~=")
+        || starts_with_word(code, "and")
+        || starts_with_word(code, "or")
 }
 
 fn starts_with_word(value: &str, word: &str) -> bool {
