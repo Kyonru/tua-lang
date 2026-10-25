@@ -10,6 +10,7 @@ const {
   projectLayoutForWorkspaceRoot,
 } = require("../editor/project-layout");
 const { loadSourceMapsFromDirectory, remapTracebackLine } = require("../editor/source-maps");
+const { sourceLocation } = require("../workspace/console-buffer");
 const { formatError } = require("../shared/errors");
 
 const TASK_TYPE = "tua";
@@ -213,7 +214,7 @@ class LoveProjectTerminal {
     this.tuaCommand = tuaCommand;
     this.activeProcess = undefined;
     this.finished = false;
-    this.lineBuffer = "";
+    this.lineBuffers = { stdout: "", stderr: "" };
     this.sourceMaps = [];
     this.activity = activity;
     this.session = activity?.begin({ cwd, kind, title });
@@ -290,7 +291,7 @@ class LoveProjectTerminal {
       this.activeProcess = child;
       child.once("spawn", () => onStart?.());
       child.stdout.on("data", (chunk) => this.writeProcessOutput(chunk));
-      child.stderr.on("data", (chunk) => this.writeProcessOutput(chunk));
+      child.stderr.on("data", (chunk) => this.writeProcessOutput(chunk, "stderr"));
       child.once("error", (error) => {
         this.writeLine(`[tua] ${command} failed: ${formatError(error)}`);
         const hint = missingExecutableHint(command, error);
@@ -310,45 +311,33 @@ class LoveProjectTerminal {
     });
   }
 
-  writeProcessOutput(chunk) {
+  writeProcessOutput(chunk, stream = "stdout") {
     if (this.finished) {
       return;
     }
 
     const normalized = chunk.toString("utf8").replace(/\r\n/gu, "\n").replace(/\r/gu, "\n");
-    const lines = `${this.lineBuffer}${normalized}`.split("\n");
-    this.lineBuffer = lines.pop() || "";
+    const lines = `${this.lineBuffers[stream]}${normalized}`.split("\n");
+    this.lineBuffers[stream] = lines.pop() || "";
 
     for (const line of lines) {
-      this.writeProcessLine(line);
+      this.writeProcessLine(line, stream);
     }
   }
 
   flushOutputLine() {
-    if (!this.lineBuffer) {
-      return;
+    for (const stream of ["stdout", "stderr"]) {
+      if (this.lineBuffers[stream]) this.writeProcessLine(this.lineBuffers[stream], stream);
+      this.lineBuffers[stream] = "";
     }
-
-    this.writeProcessLine(this.lineBuffer);
-    this.lineBuffer = "";
   }
 
-  writeProcessLine(line) {
+  writeProcessLine(line, stream = "stdout") {
     this.activity?.line(this.session, line);
     this.writeTerminalLine(line);
-
-    if (this.sourceMaps.length === 0) {
-      return;
-    }
-
-    const mapped = remapTracebackLine(line, this.sourceMaps);
-    if (!mapped) {
-      return;
-    }
-
-    for (const mappedLine of mapped.split("\n")) {
-      this.writeLine(`[tua] ${mappedLine}`);
-    }
+    const mapped = this.sourceMaps.length ? remapTracebackLine(line, this.sourceMaps) : undefined;
+    this.activity?.output(this.session, line, { stream, location: mapped ? sourceLocation(mapped, this.cwd) : undefined });
+    if (mapped) for (const mappedLine of mapped.split("\n")) this.writeLine(`[tua] ${mappedLine}`, false);
   }
 
   loadSourceMaps() {
@@ -367,11 +356,12 @@ class LoveProjectTerminal {
     }
   }
 
-  writeLine(line) {
+  writeLine(line, record = true) {
     if (this.finished) {
       return;
     }
 
+    if (record) this.activity?.output(this.session, line, { module: "build" });
     this.appendOutputLine?.(line);
     this.writeTerminalLine(line);
   }

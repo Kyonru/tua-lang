@@ -1040,6 +1040,42 @@
         "title": "Edit Run Configurations",
         "icon": "$(settings-gear)",
         "category": "Tua"
+      },
+      {
+        "command": "tua.console.open",
+        "title": "Open Game Console",
+        "category": "Tua",
+        "icon": "$(output)"
+      },
+      {
+        "command": "tua.console.clear",
+        "title": "Clear Game Console",
+        "category": "Tua",
+        "icon": "$(clear-all)"
+      },
+      {
+        "command": "tua.console.level",
+        "title": "Filter Console Severity",
+        "category": "Tua",
+        "icon": "$(filter)"
+      },
+      {
+        "command": "tua.console.module",
+        "title": "Filter Console Module",
+        "category": "Tua",
+        "icon": "$(symbol-namespace)"
+      },
+      {
+        "command": "tua.console.session",
+        "title": "Filter Console Session",
+        "category": "Tua",
+        "icon": "$(history)"
+      },
+      {
+        "command": "tua.console.copy",
+        "title": "Copy Console Message",
+        "category": "Tua",
+        "icon": "$(copy)"
       }
     ],
     "views": {
@@ -1062,6 +1098,13 @@
         {
           "id": "tua.sessions",
           "name": "Run Sessions",
+          "when": "tua.hasProject"
+        }
+      ],
+      "tua-console": [
+        {
+          "id": "tua.console",
+          "name": "Game Console",
           "when": "tua.hasProject"
         }
       ]
@@ -1267,6 +1310,10 @@
         {
           "command": "tua.run.configuration",
           "when": "false"
+        },
+        {
+          "command": "tua.console.copy",
+          "when": "false"
         }
       ],
       "editor/context": [
@@ -1311,6 +1358,26 @@
           "command": "tua.run.configure",
           "when": "view == tua.run",
           "group": "navigation@2"
+        },
+        {
+          "command": "tua.console.level",
+          "when": "view == tua.console",
+          "group": "navigation@0"
+        },
+        {
+          "command": "tua.console.module",
+          "when": "view == tua.console",
+          "group": "navigation@1"
+        },
+        {
+          "command": "tua.console.session",
+          "when": "view == tua.console",
+          "group": "navigation@2"
+        },
+        {
+          "command": "tua.console.clear",
+          "when": "view == tua.console",
+          "group": "navigation@3"
         }
       ],
       "view/item/context": [
@@ -1358,6 +1425,11 @@
           "command": "tua.run.configuration",
           "when": "view == tua.run && viewItem == tuaRunConfiguration",
           "group": "inline"
+        },
+        {
+          "command": "tua.console.copy",
+          "when": "view == tua.console && viewItem == tuaConsoleEntry",
+          "group": "navigation"
         }
       ],
       "tua.editorTools": [
@@ -1578,6 +1650,13 @@
         {
           "id": "tua",
           "title": "Tua",
+          "icon": "assets/logo.svg"
+        }
+      ],
+      "panel": [
+        {
+          "id": "tua-console",
+          "title": "Tua Console",
           "icon": "assets/logo.svg"
         }
       ]

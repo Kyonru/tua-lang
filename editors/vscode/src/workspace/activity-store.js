@@ -36,6 +36,9 @@ class ActivityStore {
     if (reloaded && !session.modules.includes(reloaded[1])) session.modules.push(reloaded[1]);
     if (phase) this.update(session, phase);
   }
+  output(session, line, options = {}) {
+    if (session?.active) this.events.emit("output", { session, line, options });
+  }
   finish(session, code, stopped = false) {
     if (!session?.active) return;
     if (stopped) this.update(session, "stopped");

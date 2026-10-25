@@ -14,6 +14,7 @@ const { registerLoveDevex } = require("./love");
 const { registerModuleDevex } = require("./modules");
 const { registerObjectPoolDevex } = require("./object-pools");
 const { registerSetup } = require("./setup");
+const { registerGameConsole } = require("./workspace/console");
 const { registerRunConfigurations } = require("./workspace/run-configurations");
 const { registerRunActivity } = require("./workspace/activity");
 const { registerWorkspaceSidebar } = require("./workspace/sidebar");
@@ -57,6 +58,7 @@ async function activate(context) {
   context.subscriptions.push(editorDevex);
   const runActivity = registerRunActivity();
   context.subscriptions.push(runActivity);
+  context.subscriptions.push(registerGameConsole(runActivity.store));
   loveDevex = registerLoveDevex({
     activity: runActivity.store,
     appendOutputLine: (line) => outputChannel?.appendLine(line),

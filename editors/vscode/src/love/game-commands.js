@@ -51,11 +51,11 @@ class TuaCommandTerminal extends LoveProjectTerminal {
     }
   }
 
-  writeProcessLine(line) {
+  writeProcessLine(line, stream) {
     if (line.startsWith("dev: started") || line.startsWith("dev: sent reload")) {
       this.sourceMaps = this.loadSourceMaps();
     }
-    super.writeProcessLine(line);
+    super.writeProcessLine(line, stream);
   }
 }
 

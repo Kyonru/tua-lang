@@ -140,6 +140,16 @@ code running. Select a session to inspect project diagnostics and reloaded
 modules. Stop beside an active session cancels that run, including hot reload.
 Recent sessions stay in memory for this editor window; they are not uploaded.
 
+## Game console
+
+Open **Tua: Open Game Console** for run, hot-reload, build, and debugger output.
+Filter by severity, module, or session; consecutive identical messages collapse
+into a count. Source-mapped errors open their Tua location. Structured tags such
+as `[warn] [combat] low health` identify severity and module; untagged output uses
+conservative text/stderr classification. The original task terminal stays available.
+The console keeps the latest 2,000 entries in memory and caps each message at
+16,000 characters. Clear removes captured messages; nothing is transmitted.
+
 ## What You Get
 
 ### Core Tua Editing

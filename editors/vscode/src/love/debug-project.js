@@ -7,6 +7,7 @@ const vscode = require("vscode");
 const { COMMANDS } = require("../constants");
 const { projectLayoutForWorkspaceRoot } = require("../editor/project-layout");
 const { sourceMapPathForGeneratedPath } = require("../editor/source-maps");
+const { sourceLocation } = require("../workspace/console-buffer");
 const { formatError } = require("../shared/errors");
 const {
   activeProjectLayout,
@@ -31,6 +32,21 @@ function registerLoveProjectDebugger({ appendOutputLine, getClient, getServerCom
         activity?.update(prepared.activitySession, "running");
       }
     }
+  }) || { dispose() {} };
+  const trackerDisposable = vscode.debug.registerDebugAdapterTrackerFactory?.(DEBUGGER_TYPE, {
+    createDebugAdapterTracker(session) {
+      return { onDidSendMessage(message) {
+        if (message.type !== "event" || message.event !== "output" || typeof message.body?.output !== "string") return;
+        for (const prepared of preparedOutputs) {
+          if (!debugSessionTargetsOutput(session, prepared.outputDirectory)) continue;
+          for (const line of message.body.output.split(/\r?\n/)) {
+            const source = message.body.source?.path;
+            const location = source?.endsWith(".tua") ? { path: source, line: Math.max(0, (message.body.line || 1) - 1), character: 0 } : sourceLocation(line, prepared.activitySession?.cwd || prepared.outputDirectory);
+            activity?.output(prepared.activitySession, line, { location, stream: message.body.category });
+          }
+        }
+      } };
+    },
   }) || { dispose() {} };
   const terminationDisposable = vscode.debug.onDidTerminateDebugSession((session) => {
     for (const prepared of preparedOutputs) {
@@ -157,6 +173,7 @@ function registerLoveProjectDebugger({ appendOutputLine, getClient, getServerCom
     configurationProviderDisposable,
     terminationDisposable,
     startDisposable,
+    trackerDisposable,
     {
       dispose() {
         for (const prepared of preparedOutputs) {
@@ -188,13 +205,14 @@ async function ensureDebuggerExtension() {
 }
 
 async function buildAndPrepareLoveDebugProject({
-  appendOutputLine,
+  appendOutputLine: writeOutput,
   activity,
   getServerCommand,
   layout,
   preparedOutputs,
 }) {
   const activitySession = activity?.begin({ kind: "debug", title: "Debug LOVE Project", cwd: layout.configDirectory });
+  const appendOutputLine = line => { writeOutput?.(line); activity?.output(activitySession, line, { module: "build" }); };
   const tuaCommand = getServerCommand?.() || "tua";
   appendOutputLine?.(`[tua] Building debug project in ${layout.configDirectory}`);
   const buildCode = await runBuildCommand({

@@ -41,7 +41,7 @@ function registerRunActivity() {
     vscode.commands.registerCommand("tua.activity.show", async selected => {
       const session = selected || store.sessions[0];
       if (!session) return vscode.commands.executeCommand("tua.sessions.focus");
-      const items = [{ label: "Open Problems", description: session.label, command: "workbench.actions.view.problems" }];
+      const items = [{ label: "Open Console", command: "tua.console.open" }, { label: "Open Problems", description: session.label, command: "workbench.actions.view.problems" }];
       for (const [uri, diagnostics] of vscode.languages.getDiagnostics()) {
         if (uri.scheme !== "file" || !isPathInside(session.cwd, uri.fsPath)) continue;
         for (const diagnostic of diagnostics) items.push({ label: `${path.basename(uri.fsPath)}:${diagnostic.range.start.line + 1}`, description: diagnostic.message, uri, range: diagnostic.range });
