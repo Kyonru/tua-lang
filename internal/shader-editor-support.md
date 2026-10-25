@@ -492,9 +492,10 @@ plain-Lua runtime test for reload-on-asset with a stub `love.graphics`.
 - **Missing entry point (`TL2017`, implemented)**: a shader with no `effect` (pixel) or
   `position` (vertex) fails in `newShader`. Cheap to check from the uniform
   model; reported at the `shader "…"` call. Useful without a validator.
-- **Uniforms never sent (`TL2018`, opt-in)**: a uniform that is read but sent
-  by no Tua file keeps its default of zero. This needs project-wide asset
-  references and is a lint, not a type check.
+- **Uniforms never sent (`TL2018`, opt-in, implemented)**: a uniform that is read but sent
+  by no traced project code retains its initial value. Explicit initializers,
+  unread uniforms, escaped shaders and dynamic loaders are excluded. Results
+  are cached per snapshot and computed only by diagnostics when enabled.
 - **Inline shaders**: apply the uniform model, Phases 1–3, and `TL2017` to
   `love.graphics.newShader([[ … ]])` with literal source. Diagnostics map into
   the long string's lines.

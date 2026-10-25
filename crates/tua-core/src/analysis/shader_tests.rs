@@ -294,3 +294,95 @@ fn shader_value_checks_use_project_module_return_types() {
         assert_eq!(lines, [3], "{extension}: {diagnostics:#?}");
     }
 }
+
+#[test]
+fn unsent_shader_uniform_lint_is_opt_in_and_tracks_project_sends() {
+    let temp = TempProject::new("shader-unsent");
+    let fixture = Fixture::parse("-- file: main.tua\nlocal effect = shader \"effect.glsl\"\nlove.graphics.setShader(effect)\n");
+    let mut host = shader_host(&temp, &fixture);
+    let unsent = |host: &AnalysisHost| {
+        host.snapshot()
+            .diagnostics("main.tua")
+            .into_iter()
+            .filter(|d| d.code == Some(crate::DiagnosticCode::ASSET_SHADER_UNSENT_UNIFORM))
+            .collect::<Vec<_>>()
+    };
+    assert!(unsent(&host).is_empty());
+    let mut config = host.config().clone();
+    config.shaders.warn_unsent = true;
+    host.set_config(config);
+    let warnings = unsent(&host);
+    assert_eq!(warnings.len(), 1, "{warnings:?}");
+    for name in ["alpha", "ripple1", "ripple2", "tint"] {
+        assert!(warnings[0].message.contains(name));
+    }
+    host.set_file("other.tua", "local other = shader \"effect.glsl\"\nother:send(\"alpha\", 1)\nother:sendColor(\"tint\", {})\nother:send(\"ripple\" .. i, {})\n");
+    assert!(
+        unsent(&host).is_empty(),
+        "sends in another file and static patterns count"
+    );
+    host.set_file(
+        "other.tua",
+        "local other = shader \"effect.glsl\"\nreturn other\n",
+    );
+    assert!(
+        unsent(&host).is_empty(),
+        "escaping in another file suppresses the asset"
+    );
+    host.set_file("other.tua", "");
+    assert_eq!(
+        unsent(&host).len(),
+        1,
+        "new snapshots invalidate aggregate usage"
+    );
+}
+
+#[test]
+fn unsent_shader_uniform_lint_suppresses_dynamic_or_escaped_uses() {
+    for suffix in [
+        "return effect",
+        "unknown(effect)",
+        "local alias = effect",
+        "effect = other",
+        "effect:send(dynamic, 1)",
+        "effect:unknown()",
+        "local another = shader path",
+        "local effect = 1",
+        "holder.effect = effect",
+        "local current = love.graphics.getShader()",
+    ] {
+        let temp = TempProject::new("shader-unsent-escape");
+        let fixture = Fixture::parse(&format!(
+            "-- file: main.tua\nlocal effect = shader \"effect.glsl\"\n{suffix}\n"
+        ));
+        let mut host = shader_host(&temp, &fixture);
+        let mut config = host.config().clone();
+        config.shaders.warn_unsent = true;
+        host.set_config(config);
+        assert!(
+            !host
+                .snapshot()
+                .diagnostics("main.tua")
+                .iter()
+                .any(|d| d.code == Some(crate::DiagnosticCode::ASSET_SHADER_UNSENT_UNIFORM)),
+            "{suffix}"
+        );
+    }
+}
+
+#[test]
+fn unsent_shader_uniform_lint_ignores_initializers_and_unread_uniforms() {
+    let temp = TempProject::new("shader-unsent-initialized");
+    let fixture = Fixture::parse("-- file: main.tua\nlocal effect = shader \"effect.glsl\"\nlove.graphics.setShader(effect)\n");
+    let mut host = shader_host(&temp, &fixture);
+    temp.write("effect.glsl", "uniform float scale = 1.0;\nextern number unread;\nvec4 effect(vec4 c, Image t, vec2 u, vec2 p) { return c * scale; }\n");
+    host.refresh_asset_index_from_disk();
+    let mut config = host.config().clone();
+    config.shaders.warn_unsent = true;
+    host.set_config(config);
+    assert!(!host
+        .snapshot()
+        .diagnostics("main.tua")
+        .iter()
+        .any(|d| d.code == Some(crate::DiagnosticCode::ASSET_SHADER_UNSENT_UNIFORM)));
+}

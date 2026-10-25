@@ -690,6 +690,7 @@ impl AnalysisHost {
             completion_cache: Arc::clone(&self.completion_cache),
             completion_cache_stats: Arc::clone(&self.completion_cache_stats),
             definition_cache: Arc::clone(&self.definition_cache),
+            shader_lint_cache: Arc::new(OnceLock::new()),
             project_diagnostics_cache: Arc::new(Mutex::new(BTreeMap::new())),
             reverse_reference_index: Arc::new(OnceLock::new()),
             call_hierarchy_symbols,

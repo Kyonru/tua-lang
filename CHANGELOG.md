@@ -14,6 +14,8 @@ language or editor behavior, and migration notes call out those changes.
 - Contextual declaration tools for local state machines, input players, stores,
   and object pools: existing previews, API references, and direct selection of
   source-matched runtime instances, including a multi-player/instance picker.
+- Opt-in `[shaders] warn_unsent` reports `TL2018` for read uniforms with no traced project sends, suppressing escaped/dynamic shaders and explicit initializers.
+
 - Shader loaders report `TL2017` for missing entry points without starting a validator; unsupported macro/include sources remain conservative.
 
 - Runtime Inspector objects show recognizable binding names and creation-site

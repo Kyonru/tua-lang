@@ -116,6 +116,7 @@ the behavior and tradeoffs of each option.
 | `ecs.backend` | string | `"tua"` | - |
 | `shaders.validate` | string | `"auto"` | - |
 | `shaders.targets` | string-array | `["desktop"]` | - |
+| `shaders.warn_unsent` | boolean | `false` | - |
 | `diagnostics.rules` | boolean | `true` | `tua.diagnostics.rules` |
 | `diagnostics.duplicate_keys` | boolean | `false` | `tua.diagnostics.duplicateKeys` |
 | `diagnostics.missing_requires` | boolean | `true` | `tua.diagnostics.missingRequires` |

@@ -16,6 +16,7 @@ pub(crate) struct ShaderUniform {
     pub declarations: Vec<SourceSpan>,
     pub declaration: String,
     pub read: bool,
+    pub initialized: bool,
 }
 impl ShaderUniform {
     pub(crate) fn detail(&self) -> String {
@@ -249,11 +250,13 @@ pub(crate) fn shader_uniforms(source: &str) -> Option<ShaderUniformSet> {
                     declarations: Vec::new(),
                     declaration: format!("{header} {}{};", name.text, array_suffix),
                     read: false,
+                    initialized: false,
                 });
             if uniform.glsl_type != glsl_type || uniform.array_suffix != array_suffix {
                 return None;
             }
             uniform.declarations.push(span);
+            uniform.initialized |= tokens.get(index).is_some_and(|token| token.text == "=");
             // Initializers are not part of the name list; delimit nested constructors.
             let mut depth = 0usize;
             while let Some(token) = tokens.get(index) {

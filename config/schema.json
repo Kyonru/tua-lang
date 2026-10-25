@@ -184,6 +184,12 @@
       "description": "Shader targets to validate: desktop OpenGL, and gles for Android, iOS, and the web."
     },
     {
+      "path": "shaders.warn_unsent",
+      "type": "boolean",
+      "default": false,
+      "description": "Warn about read uniforms never sent by statically traceable project code. Escaped shaders and dynamic loaders suppress this optional lint."
+    },
+    {
       "path": "diagnostics.rules",
       "type": "boolean",
       "default": true,

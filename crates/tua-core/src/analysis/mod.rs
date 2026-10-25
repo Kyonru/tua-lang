@@ -110,6 +110,7 @@ mod object_pool_queries;
 mod project_queries;
 mod recovery;
 mod shader_queries;
+mod shader_unsent;
 mod snapshot;
 mod type_explanation_queries;
 
@@ -210,6 +211,7 @@ pub struct AnalysisSnapshot {
     completion_cache: Arc<Mutex<BTreeMap<CompletionRequestKey, Vec<Completion>>>>,
     completion_cache_stats: Arc<Mutex<CompletionCacheStats>>,
     definition_cache: Arc<Mutex<BTreeMap<DefinitionRequestKey, Option<Definition>>>>,
+    shader_lint_cache: Arc<OnceLock<BTreeMap<PathBuf, Vec<Diagnostic>>>>,
     project_diagnostics_cache: Arc<Mutex<BTreeMap<PathBuf, Vec<Diagnostic>>>>,
     reverse_reference_index: Arc<OnceLock<ReverseReferenceIndex>>,
     call_hierarchy_symbols: BTreeMap<PathBuf, Vec<CallHierarchySymbol>>,

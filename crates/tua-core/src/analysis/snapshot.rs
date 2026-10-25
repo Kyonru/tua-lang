@@ -90,6 +90,7 @@ impl AnalysisSnapshot {
             });
         }
         diagnostics.extend(project_type_diagnostics);
+        diagnostics.extend(self.unsent_shader_diagnostics(path.as_ref()));
         diagnostics.extend(self.usage_index.signal_event_diagnostics(path.as_ref()));
 
         // Source-only checking can validate on-disk modules, but it cannot see

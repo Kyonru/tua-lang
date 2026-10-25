@@ -58,6 +58,7 @@ backend = \"tua\"
 [shaders]
 validate = \"auto\"
 targets = [\"desktop\"]
+warn_unsent = false
 
 [diagnostics]
 # rules enables Tua's standard diagnostics. The individual switches below
@@ -310,6 +311,7 @@ impl Default for EcsConfig {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 #[serde(default, deny_unknown_fields)]
 pub struct ShadersConfig {
+    pub warn_unsent: bool,
     pub validate: ShaderValidationMode,
     pub targets: Vec<crate::shader_validation::ShaderTarget>,
 }
@@ -317,6 +319,7 @@ pub struct ShadersConfig {
 impl Default for ShadersConfig {
     fn default() -> Self {
         Self {
+            warn_unsent: false,
             validate: ShaderValidationMode::Auto,
             targets: vec![crate::shader_validation::ShaderTarget::Desktop],
         }

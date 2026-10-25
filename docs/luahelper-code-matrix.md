@@ -98,6 +98,7 @@ diagnostic instead of enabling a duplicate lint.
 | `TL2013` | `Shader:send` or `Shader:sendColor` names a uniform that the shader asset does not declare. | Always enabled for locals initialized from a shader asset. |
 | `TL2015` | A sent shader value is provably incompatible with its uniform type, or `sendColor` targets a non-color uniform. | Always enabled for statically recognized shader locals; unknown values and lengths stay permissive. |
 | `TL2016` | LÖVE or glslang rejects a referenced shader during compilation. | `tua check` and trusted editor workspaces with shader validation enabled and a validator installed. |
+| `TL2018` | A read uniform has no traced send in the project. | Opt-in `[shaders] warn_unsent = true`; escaped shaders, dynamic loads, and initialized uniforms are excluded. |
 | `TL2017` | A shader lacks both `effect` and `position` entry points. | Checked without an external validator; macro-generated and unsupported sources stay conservative. |
 | `TL2014` | A sent uniform is declared but never read, so the GLSL compiler removes it and LOVE reports it missing. | Always enabled for locals initialized from a shader asset. |
 | `TL2009` | A statically indexed asset has no known source reference. | Asset Explorer analysis; hint. |

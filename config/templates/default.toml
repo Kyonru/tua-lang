@@ -31,6 +31,7 @@ backend = "tua"
 [shaders]
 validate = "auto"
 targets = ["desktop"]
+warn_unsent = false
 
 [diagnostics]
 # rules enables Tua's standard diagnostics. The individual switches below

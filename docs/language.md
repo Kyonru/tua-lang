@@ -981,3 +981,11 @@ Shader files with neither an `effect` nor a `position` entry point report
 `TL2017` at their loader, including when external shader validation is disabled.
 Macro-generated declarations and unsupported shader constructs are left to the
 external validator. This check does not require LÖVE to be installed.
+
+Enable `[shaders] warn_unsent = true` for the optional `TL2018` warning when a
+read uniform has no traced send anywhere in the project. Uniform initializers
+and unread uniforms are excluded. Returning, storing, aliasing, reassigning,
+or passing a shader to unknown code suppresses this warning for that asset;
+dynamic shader loading suppresses the project-wide lint. Static sends in other
+files and matching dynamic-name patterns count as possible sends. This is a
+conservative hint about the initial value, not proof of a rendering bug.
