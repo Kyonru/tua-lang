@@ -37,5 +37,10 @@ generated project output.
 - `runtime/tuahotreload.lua` is Tua's MIT-licensed live-reload runtime, which
   `tua dev` writes beside a development build.
 - `tests/` holds plain-Lua runtime tests, run by `make runtime-test`.
+- `love/11.5/wrap_GraphicsShader.lua` is LÖVE 11.5's zlib-licensed shader
+  wrapper, unmodified, from `src/modules/graphics/wrap_GraphicsShader.lua`.
+  It is reference material for shader checking, not a runtime file, and is
+  never copied into build output. `scripts/love-shader-facts/wrap.lua` loads it
+  to reproduce LÖVE's stage code; see `internal/shader-editor-support.md`.
 
 Vendored files should keep their upstream license headers intact.
