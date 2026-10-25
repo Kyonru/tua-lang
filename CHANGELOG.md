@@ -21,6 +21,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Compound guards now narrow the right operand of `and` and `or`, so
+  `target ~= nil and target.x > 0` type-checks. The narrowing stays within the
+  expression, and guards that access a known nil value still report an error.
+
 - Function return inference now uses the Lua/LOVE catalog, including `math.tan`,
   and preserves narrowing after an early nil return. Imported projection helpers
   retain numeric coordinates instead of producing false nil arithmetic errors;

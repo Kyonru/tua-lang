@@ -469,7 +469,9 @@ impl<'a> Checker<'a> {
                 }
 
                 self.check_condition_expression(lhs);
-                self.check_condition_expression(rhs);
+                self.with_short_circuit_narrowing(lhs, binop, |checker| {
+                    checker.check_condition_expression(rhs);
+                });
             }
             Expression::Parentheses { expression, .. }
             | Expression::TypeAssertion { expression, .. } => {
@@ -1267,7 +1269,9 @@ impl<'a> Checker<'a> {
             _ if return_index > 0 => None,
             Expression::BinaryOperator { lhs, binop, rhs } => {
                 let left = self.infer_expression(lhs)?;
-                let right = self.infer_expression(rhs)?;
+                let right = self.with_short_circuit_narrowing(lhs, binop, |checker| {
+                    checker.infer_expression(rhs)
+                })?;
 
                 self.check_binary_metamethod_operand(lhs, binop, rhs, &left, &right);
                 self.check_primitive_binary_operands(expression, binop, &left, &right);
@@ -1585,20 +1589,26 @@ impl<'a> Checker<'a> {
     }
 
     fn report_unsafe_union_operation(&mut self, node: &impl Node, ty: &Type, operation: &str) {
-        if !matches!(resolve_aliases(ty, self.environment, 0), Type::Union(_)) {
-            return;
-        }
+        let (message, code) = match resolve_aliases(ty, self.environment, 0) {
+            Type::Union(_) => (
+                format!(
+                    "cannot {operation} union type `{ty}`; narrow it to a supported member first"
+                ),
+                DiagnosticCode::TYPE_UNSAFE_UNION_OPERATION,
+            ),
+            resolved if resolved == Type::nil() => (
+                format!("cannot {operation} nil"),
+                DiagnosticCode::TYPE_MISMATCH,
+            ),
+            _ => return,
+        };
 
         let position = node_span(node)
             .map(|span| span.start)
             .unwrap_or_else(|| node_position(node));
-        let diagnostic = Diagnostic::error(
-            &self.parsed.path,
-            position.line,
-            position.column,
-            format!("cannot {operation} union type `{ty}`; narrow it to a supported member first"),
-        )
-        .with_code(DiagnosticCode::TYPE_UNSAFE_UNION_OPERATION);
+        let diagnostic =
+            Diagnostic::error(&self.parsed.path, position.line, position.column, message)
+                .with_code(code);
 
         if !self.diagnostics.iter().any(|existing| {
             existing.line == diagnostic.line
@@ -2860,6 +2870,34 @@ impl<'a> Checker<'a> {
             &resolve_aliases(left, self.environment, 0),
             &resolve_aliases(right, self.environment, 0),
         )
+    }
+
+    fn with_short_circuit_narrowing<T>(
+        &mut self,
+        lhs: &Expression,
+        operator: &ast::BinOp,
+        check_rhs: impl FnOnce(&mut Self) -> T,
+    ) -> T {
+        let narrowed = match operator {
+            ast::BinOp::And(_) => self.narrowed_locals_for_condition(lhs),
+            ast::BinOp::Or(_) => {
+                let aliases = self
+                    .environment
+                    .aliases()
+                    .map(|(name, ty)| (name.to_owned(), ty.clone()))
+                    .collect::<BTreeMap<_, _>>();
+                narrowed_locals_after_false_condition(lhs, &aliases, |name| {
+                    self.infer_named_value(name)
+                })
+            }
+            _ => return check_rhs(self),
+        };
+        self.scoped_locals.push(narrowed);
+        self.scoped_local_contracts.push(BTreeMap::new());
+        let result = check_rhs(self);
+        self.scoped_local_contracts.pop();
+        self.scoped_locals.pop();
+        result
     }
 
     fn narrowed_locals_for_condition(&self, condition: &Expression) -> BTreeMap<String, Type> {

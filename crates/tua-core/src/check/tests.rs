@@ -4500,3 +4500,44 @@ print(parse, wrong, empty)
         .collect::<Vec<_>>();
     assert_eq!(lines, [6, 10], "{diagnostics:#?}");
 }
+
+#[test]
+fn narrows_optional_records_on_short_circuit_rhs() {
+    check_tua_source(
+        "src/guards.tua",
+        r#"
+local function test(target: { x: number } | nil)
+  if target ~= nil and target.x > 0 then print(target.x) end
+  if target == nil or target.x > 0 then print("ok") end
+  local a = target ~= nil and target.x > 0
+  local b = target == nil or target.x > 0
+  return a, b
+end
+"#,
+    )
+    .unwrap();
+}
+
+#[test]
+fn short_circuit_narrowing_does_not_escape_or_accept_unsafe_guards() {
+    for condition in [
+        "target == nil and target.x > 0",
+        "target ~= nil or target.x > 0",
+    ] {
+        let source = format!("local function test(target: {{ x: number }} | nil)\nif {condition} then print(1) end\nend");
+        assert!(
+            check_tua_source("src/guards.tua", source).is_err(),
+            "{condition}"
+        );
+    }
+    assert!(check_tua_source(
+        "src/guards.tua",
+        r#"
+local function test(target: { x: number } | nil)
+  local valid = target ~= nil and target.x > 0
+  return target.x
+end
+"#
+    )
+    .is_err());
+}

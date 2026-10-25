@@ -276,6 +276,11 @@ if player and target then
 end
 ```
 
+Short-circuit guards also narrow the right operand: `target ~= nil and
+target.x > 0` accesses `x` only when `target` exists. With `target == nil or
+target.x > 0`, the right operand is checked under the opposite condition.
+This applies to expressions in assignments as well as `if` conditions.
+
 A truthy value can still be `true`, so truthiness removes `nil` but keeps
 `boolean`. The `else` branch keeps the original type.
 
