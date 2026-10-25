@@ -16,8 +16,8 @@ function spritePreviewRuntime(sprites, source) {
     const savedSprites = saved?.source === source ? saved.sprites || {} : {};
     const captures = new Map();
     const frameCache = new WeakMap();
-    ${expandAnimationFrames.toString()}
-    ${advancePlayback.toString()}
+    const expandAnimationFrames = (${expandAnimationFrames.toString()});
+    const advancePlayback = (${advancePlayback.toString()});
     function saveState() {
       for (const [key, capture] of captures) savedSprites[key] = capture();
       vscode?.setState?.({ source, sprites: savedSprites });

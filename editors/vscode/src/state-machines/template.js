@@ -14,6 +14,8 @@ const GRAPH_LAYOUT = {
   rowHeight: 148,
 };
 
+// Serialize the whole helper closure so bundled names and dependencies stay together.
+function graphHelpers() {
 function statePastelHue(index) {
   return (210 + index * 137.508) % 360;
 }
@@ -345,6 +347,10 @@ function connectionGeometry(edge, route, source, target, layout, canvas, config)
   return { labelX, labelY, pathData, points };
 }
 
+  return { statePastelHue, connectionRoutes, stateLayout, orthogonalPath, connectionGeometry };
+}
+const { statePastelHue, connectionRoutes, stateLayout, orthogonalPath, connectionGeometry } = graphHelpers();
+
 function stateMachinePreviewLoadingHtml(webview, source) {
   return previewDocument(
     webview,
@@ -412,7 +418,7 @@ function stateMachinePreviewHtml(webview, viewModel) {
     const connections = document.getElementById("connections");
     const edgeLabels = document.getElementById("edge-labels");
     const inspector = document.getElementById("inspector");
-    ${restoreGraphState.toString()}
+    const restoreGraphState = (${restoreGraphState.toString()});
     const restored = restoreGraphState(preview, vscode.getState());
     let machineIndex = restored.machineIndex;
     let selection = restored.selection;
@@ -422,11 +428,7 @@ function stateMachinePreviewHtml(webview, viewModel) {
     let renderedLayout;
 
     const graphLayoutConfig = ${jsonForHtml(GRAPH_LAYOUT)};
-    ${statePastelHue.toString()}
-    ${connectionRoutes.toString()}
-    ${stateLayout.toString()}
-    ${orthogonalPath.toString()}
-    ${connectionGeometry.toString()}
+    const { statePastelHue, connectionRoutes, stateLayout, orthogonalPath, connectionGeometry } = (${graphHelpers.toString()})();
 
     for (const [index, machine] of preview.machines.entries()) {
       const option = document.createElement("option");
