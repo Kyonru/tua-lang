@@ -13,13 +13,12 @@ use tua_core::{tuahotreload_runtime_source, LoadedConfig, ProjectWorkspace};
 
 use crate::build::{has_errors, BuildOutcome, OutputGuard};
 use crate::error::CliError;
+use crate::love::{love_commands, LOVE_NOT_FOUND};
 use crate::watch::run_watch_with_hook;
 
 pub(crate) const RUNTIME_FILE: &str = "tuahotreload.lua";
 const SIGNAL_FILE: &str = ".tuahotreload";
 const HOOK: &str = "require(\"tuahotreload\").install()";
-#[cfg(target_os = "macos")]
-const MACOS_LOVE: &str = "/Applications/love.app/Contents/MacOS/love";
 
 pub(crate) fn run_dev(
     cwd: impl AsRef<Path>,
@@ -124,14 +123,7 @@ fn replace_signal(temporary: &Path, signal: &Path) -> io::Result<()> {
 }
 
 fn launch(love: Option<&Path>, out_dir: &Path) -> Result<Child, CliError> {
-    let explicit = love
-        .map(Path::to_path_buf)
-        .or_else(|| std::env::var_os("TUA_LOVE").map(PathBuf::from));
-    let candidates = match explicit {
-        Some(command) => vec![command],
-        None => default_love_commands(),
-    };
-    for command in &candidates {
+    for command in &love_commands(love) {
         match Command::new(command).arg(out_dir).spawn() {
             Ok(child) => {
                 println!("dev: started {} {}", command.display(), out_dir.display());
@@ -146,17 +138,7 @@ fn launch(love: Option<&Path>, out_dir: &Path) -> Result<Child, CliError> {
             }
         }
     }
-    Err(CliError::usage(
-        "cannot find LOVE; put `love` on PATH, set TUA_LOVE, or pass --love PATH",
-    ))
-}
-
-fn default_love_commands() -> Vec<PathBuf> {
-    #[allow(unused_mut)]
-    let mut commands = vec![PathBuf::from("love")];
-    #[cfg(target_os = "macos")]
-    commands.push(PathBuf::from(MACOS_LOVE));
-    commands
+    Err(CliError::usage(LOVE_NOT_FOUND))
 }
 
 /// End `tua dev` with the game's exit status when the window closes. The

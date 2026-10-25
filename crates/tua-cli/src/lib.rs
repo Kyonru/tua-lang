@@ -10,6 +10,7 @@ mod diagnostics;
 mod error;
 mod formatter;
 mod linter;
+mod love;
 mod package;
 mod source;
 mod source_map;
