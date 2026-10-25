@@ -2,6 +2,7 @@
 const path = require("node:path");
 const vscode = require("vscode");
 const { InspectorSessions } = require("./sessions");
+const { matchingInstances } = require("../editor/declaration-target");
 const { RuntimeOrigins } = require("./origins");
 const { loadSourceMapForGeneratedPath } = require("../editor/source-maps");
 const GROUPS = [["ecs", "Entities and components", "symbol-struct"], ["states", "State machines", "type-hierarchy"], ["signals", "Signal activity", "radio-tower"], ["pools", "Object pools", "database"], ["stores", "Stores", "symbol-variable"]];
@@ -13,6 +14,9 @@ class InspectorTree {
   }
   entry() {
     return this.sessions.entries.get(this.selected) || [...this.sessions.entries.values()].find(entry => entry.session.active) || [...this.sessions.entries.values()].at(-1);
+  }
+  getParent(node) {
+    return this.getChildren().find(group => group.children?.some(child => child.id === node.id));
   }
   getTreeItem(node) {
     const item = new vscode.TreeItem(node.label, node.children?.length ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None);
@@ -141,6 +145,31 @@ function registerRuntimeInspector(context, activity) {
         const character = Math.min(node.origin.character || 0, document.lineAt(line).text.length);
         await vscode.window.showTextDocument(document, { preview: true, selection: new vscode.Range(line, character, line, character) });
       } catch { await vscode.window.showInformationMessage("The creation source is no longer available. Start a new run to refresh its location."); }
+    }),
+    vscode.commands.registerCommand("tua.inspector.forDeclaration", async target => {
+      if (!target?.path || !target.kind) return;
+      if (!enabled()) {
+        const action = await vscode.window.showInformationMessage("Runtime inspection is disabled. Enable it, then start a new Tua run to inspect this declaration.", "Enable Runtime Inspection");
+        if (action) await setEnabled(true);
+        await vscode.commands.executeCommand("tua.inspector.focus");
+        return;
+      }
+      const matches = matchingInstances(sessions.entries, target);
+      if (!matches.length) {
+        await vscode.window.showInformationMessage(`No connected instance of ${target.name} matches this source location. Start or restart an inspected run with source maps enabled.`);
+        return;
+      }
+      const selected = matches.length === 1 ? matches[0] : (await vscode.window.showQuickPick(matches.map(match => ({
+        label: `${match.entry.session.title} · ${target.name} #${match.object.id}`, description: match.object.origin.file, match,
+      })), { placeHolder: "Choose a runtime instance" }))?.match;
+      if (!selected) return;
+      // Recheck after the picker: the player may have stopped in the meantime.
+      if (!matchingInstances(sessions.entries, target).some(match => match.entry === selected.entry && match.object.id === selected.object.id)) return;
+      tree.selected = selected.entry.session.id;
+      refresh();
+      await vscode.commands.executeCommand("tua.inspector.focus");
+      const node = tree.getChildren().flatMap(group => group.children || []).find(item => item.id === `inspector:${tree.selected}:object:${selected.object.id}`);
+      if (node) await view.reveal(node, { select: true, focus: true, expand: true });
     }),
     vscode.commands.registerCommand("tua.inspector.open", () => vscode.commands.executeCommand("tua.inspector.focus")),
     vscode.commands.registerCommand("tua.inspector.select", async () => {

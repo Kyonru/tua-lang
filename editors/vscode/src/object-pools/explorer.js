@@ -12,10 +12,12 @@ const {
 
 let explorerPanel;
 let explorerFocusUri;
+let explorerFocusTarget;
+let renderSequence = 0;
 
 function registerObjectPoolExplorerFeature({ getClient }) {
-  const command = vscode.commands.registerCommand(COMMANDS.showObjectPoolExplorer, () =>
-    showObjectPoolExplorer({ getClient, focusUri: activeFileUri() }),
+  const command = vscode.commands.registerCommand(COMMANDS.showObjectPoolExplorer, (target) =>
+    showObjectPoolExplorer({ getClient, focusUri: target?.uri || activeFileUri(), target }),
   );
 
   return vscode.Disposable.from(command, {
@@ -23,11 +25,13 @@ function registerObjectPoolExplorerFeature({ getClient }) {
       explorerPanel?.dispose?.();
       explorerPanel = undefined;
       explorerFocusUri = undefined;
+      explorerFocusTarget = undefined;
+      renderSequence += 1;
     },
   });
 }
 
-async function showObjectPoolExplorer({ getClient, focusUri }) {
+async function showObjectPoolExplorer({ getClient, focusUri, target }) {
   const client = getClient();
 
   if (!client) {
@@ -36,6 +40,7 @@ async function showObjectPoolExplorer({ getClient, focusUri }) {
   }
 
   explorerFocusUri = focusUri;
+  explorerFocusTarget = target;
 
   if (explorerPanel) {
     explorerPanel.reveal?.(vscode.ViewColumn.Beside, false);
@@ -52,6 +57,8 @@ async function showObjectPoolExplorer({ getClient, focusUri }) {
     explorerPanel.onDidDispose?.(() => {
       explorerPanel = undefined;
       explorerFocusUri = undefined;
+      explorerFocusTarget = undefined;
+      renderSequence += 1;
     });
     explorerPanel.webview.onDidReceiveMessage?.((message) =>
       handleExplorerMessage(message, { getClient }),
@@ -75,14 +82,19 @@ async function handleExplorerMessage(message, { getClient }) {
 }
 
 async function renderObjectPoolExplorer(panel, client, focusUri) {
+  const sequence = ++renderSequence;
+  const target = explorerFocusTarget;
   panel.webview.html = objectPoolExplorerLoadingHtml(panel.webview);
 
   try {
     const response = await client.sendRequest("tua/objectPoolGraph", null);
+    if (sequence !== renderSequence) return;
     const viewModel = objectPoolExplorerViewModel(response, focusUri);
+    viewModel.focusId = viewModel.pools.find(pool => pool.uri === focusUri && pool.name === target?.name && pool.line === target?.line)?.id;
 
     panel.webview.html = objectPoolExplorerHtml(panel.webview, viewModel);
   } catch (error) {
+    if (sequence !== renderSequence) return;
     panel.webview.html = objectPoolExplorerErrorHtml(panel.webview, error);
   }
 }

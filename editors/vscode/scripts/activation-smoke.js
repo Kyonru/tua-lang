@@ -1193,6 +1193,10 @@ async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
       "Object Pool Explorer should render pools, lifecycle operations, insights, and navigation",
     );
     assertWebviewScriptsParse(objectPoolPanel.html, "Object Pool Explorer");
+    const poolModel = JSON.parse(objectPoolPanel.html.match(/const model = (.*);/)[1]);
+    await state.commands.get("tua.showObjectPoolExplorer")({ uri: poolModel.pools[0].uri, name: "bullets", line: poolModel.pools[0].line });
+    assert(objectPoolPanel.html.includes('"focusId":"pool:bullets"'), "declaration action should select the exact pool even when lifecycle insights exist");
+
     assert(
       state.clients[0].requests.some((request) => request.method === "tua/objectPoolGraph"),
       "Object Pool Explorer should request compiler-backed lifecycle graph data",
@@ -2246,6 +2250,9 @@ function createMockState(workspace, options = {}) {
         return item;
       },
       registerInlineCompletionItemProvider(selector, provider) {
+        return { selector, provider, dispose() {} };
+      },
+      registerCodeActionsProvider(selector, provider) {
         return { selector, provider, dispose() {} };
       },
       registerHoverProvider(selector, provider) {

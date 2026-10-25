@@ -83,6 +83,8 @@ test("named runtime objects expose creation-site actions and retain separate run
   const entry = { session: { id: "host", active: true }, snapshot: { objects: [1, 2].map(id => ({ id, kind: "stores", label: `stores ${id}`, data: { state: {}, updates: 0 }, origin })) } };
   const tree = new InspectorTree({ entries: new Map([["host", entry]]) });
   const stores = tree.getChildren().find(node => node.label === "Stores").children;
+  assert.equal(tree.getParent(stores[0]).label, "Stores");
+  assert.equal(tree.getParent(tree.getParent(stores[0])), undefined);
   assert.equal(stores[0].label, "player"); assert.notEqual(stores[0].id, stores[1].id);
   assert.match(stores[0].description, /#1/);
   const item = tree.getTreeItem(stores[0]);

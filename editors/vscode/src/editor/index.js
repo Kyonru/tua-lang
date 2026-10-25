@@ -1,5 +1,6 @@
 "use strict";
 
+const { registerDeclarationActions } = require("./declaration-actions");
 const { registerGeneratedLuaCommand } = require("./generated-lua");
 const { registerHoverActions } = require("./hover-actions");
 const { registerInlayHintPresentation } = require("./inlay-hints");
@@ -9,6 +10,7 @@ const { registerTypeExplanation } = require("./type-explanation");
 
 function registerEditorDevex(options) {
   const generatedLua = registerGeneratedLuaCommand(options);
+  const declarationActions = registerDeclarationActions(options);
   const hoverActions = registerHoverActions(options);
   const inlayHints = registerInlayHintPresentation(options);
   const inlineCompletion = registerInlineCompletion(options);
@@ -23,6 +25,7 @@ function registerEditorDevex(options) {
     },
     dispose() {
       generatedLua.dispose();
+      declarationActions.dispose();
       hoverActions.dispose();
       inlayHints.dispose();
       inlineCompletion.dispose();

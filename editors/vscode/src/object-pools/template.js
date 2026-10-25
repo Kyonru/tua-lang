@@ -82,6 +82,7 @@ function objectPoolExplorerHtml(webview, viewModel) {
     }
 
     function initialMode() {
+      if (model.focusId) return "pools";
       if (model.insights.length) return "insights";
       if (model.pools.length) return "pools";
       return "operations";
@@ -89,7 +90,7 @@ function objectPoolExplorerHtml(webview, viewModel) {
 
     function initialSelection(targetMode) {
       const items = collections[targetMode] || [];
-      return items.find((item) => item.uri === model.focusUri)?.id || items[0]?.id || null;
+      return items.find((item) => item.id === model.focusId)?.id || items.find((item) => item.uri === model.focusUri)?.id || items[0]?.id || null;
     }
 
     function visibleItems() {

@@ -8,6 +8,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Added
 
+- Contextual declaration tools for local state machines, input players, stores,
+  and object pools: existing previews, API references, and direct selection of
+  source-matched runtime instances, including a multi-player/instance picker.
+
 - Runtime Inspector objects show recognizable binding names and creation-site
   navigation, using source maps for Tua and generated Lua as a fallback.
 - `tua shader-tools` and the optional editor setup check installed validators without loading the game; a machine-scoped glslang picker selects the fallback while LÖVE remains preferred.

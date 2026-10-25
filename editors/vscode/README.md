@@ -291,6 +291,27 @@ inspection. This mode is optional and does not change your global hint settings.
 
 ## What You Get
 
+### Contextual declaration tools
+
+Place the cursor inside a direct local `stateMachine(...)`, `objectPool(...)`,
+`store(...)`, or `input(...)` declaration and open the lightbulb menu (`Cmd+.` on
+macOS, `Ctrl+.` elsewhere). You can also right-click and choose **Tua: Tools for
+Declaration…**, or run that command from the Command Palette.
+
+- State machines open their existing static preview.
+- Object pools open the explorer with that declaration selected.
+- State machines, pools, and stores can select and expand their matching live
+  Runtime Inspector object. A picker distinguishes multiple players or instances.
+- All four helpers offer their built-in API reference. Input currently has no
+  live inspector or dedicated binding preview.
+
+The language server confirms that the constructor is Tua's built-in helper;
+shadowed functions and helper aliases do not receive these actions. Runtime
+matching requires a connected inspected player and a source-mapped creation site
+with the same file, binding name, and line. If inspection is disabled, the action
+offers to enable it; start a new run afterward. Restart after moving declarations
+to refresh source locations. Static previews retain their existing preview setting.
+
 ### Core Tua Editing
 
 - TextMate and semantic highlighting for Tua, Lua interop, LOVE-aware helpers,
