@@ -686,7 +686,11 @@ impl<'a> Formatter<'a> {
             self.multiline_function_header_depths.pop();
         }
         self.brace_depth = update_group_depth(self.brace_depth, code, b'{', b'}');
-        self.pending_continuation = self.paren_depth == 0 && line_ends_with_continuation(code);
+        // A comma outside every group continues an expression list, such as
+        // the values of `return a,` or the names of `local a,`.
+        self.pending_continuation = self.paren_depth == 0
+            && (line_ends_with_continuation(code)
+                || (self.brace_depth == 0 && code.trim_end().ends_with(',')));
 
         if closes_suppressed_block {
             let suppressed = self

@@ -968,3 +968,52 @@ fn range_and_on_type_formatting_avoid_invalid_sources() {
     assert!(!range_error.is_empty());
     assert!(!on_type_error.is_empty());
 }
+
+#[test]
+fn indents_multiline_expression_lists() {
+    let source = r#"local function unproject(x: number, y: number, depth: number)
+local values = {
+x,
+y,
+}
+local first,
+second = x, y
+return x + depth,
+y + depth,
+first + second
+end
+"#;
+    let expected = r#"local function unproject(x: number, y: number, depth: number)
+  local values = {
+    x,
+    y,
+  }
+  local first,
+    second = x, y
+  return x + depth,
+    y + depth,
+    first + second
+end
+"#;
+
+    let output = format(source);
+
+    assert_eq!(output, expected);
+    assert_eq!(format(&output), output);
+    let parsed = parse_tua_source("src/main.tua", output).expect("formatted source should parse");
+    let environment = crate::types::build_type_environment(&parsed)
+        .expect("formatted source should build a type environment");
+    let diagnostics = crate::linter::lint_parsed_source(
+        &parsed,
+        &crate::DiagnosticsConfig::default(),
+        &crate::config::JitConfig::default(),
+        &environment,
+    );
+    assert!(
+        diagnostics
+            .iter()
+            .all(|diagnostic| diagnostic.code
+                != Some(crate::DiagnosticCode::LINT_MULTI_LINE_STATEMENT)),
+        "formatter output must satisfy its continuation-layout lint: {diagnostics:#?}"
+    );
+}
