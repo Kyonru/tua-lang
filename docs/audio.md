@@ -396,7 +396,7 @@ export type AudioAnalysis = {
   energy: number[],
 }
 
-local catalog: {[string]: AudioAnalysis } = require("generated.audio.catalog_data")
+local catalog: { [string]: AudioAnalysis } = require("generated.audio.catalog_data")
 return catalog
 ```
 

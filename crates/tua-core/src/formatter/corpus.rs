@@ -305,7 +305,7 @@ print(v())
 print(t)
 "#,
         )
-        .formats_to(r#"local t = {1, 2, x = 3}
+        .formats_to(r#"local t = { 1, 2, x = 3 }
 print(t)
 "#),
         Case::new(
@@ -492,6 +492,11 @@ print(m)
             "string_table_call_syntax",
             r#"local function f(t) return t end
 print(f{1, 2})
+"#,
+        )
+        .formats_to(
+            r#"local function f(t) return t end
+print(f{ 1, 2 })
 "#,
         ),
         Case::new(

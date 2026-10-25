@@ -12,6 +12,10 @@ language or editor behavior, and migration notes call out those changes.
   so `- n` and `# items` become `-n` and `#items`. `- -n` keeps its space.
 - The formatter separates a trailing comment from the code it follows, so
   `print(1)-- note` becomes `print(1) -- note`.
+- The formatter pads one-line tables, so `{1, 2}` becomes `{ 1, 2 }` and
+  `{ }` becomes `{}`. Generated audio catalogs use the same style. Run
+  `tua fmt` once to adopt it; `tua fmt --check` reports files that still use
+  the old spacing.
 
 ### Fixed
 

@@ -72,7 +72,7 @@ type TextOrNumber = string | number
 -- Feature: table constructors as arrays, maps, and object-like records.
 local colors = { "red", "green", "blue" }
 
-local mixed = {1, "2", true}
+local mixed = { 1, "2", true }
 
 -- local mixedIndex: number = mixed[1]
 

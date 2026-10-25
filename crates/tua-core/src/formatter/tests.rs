@@ -47,7 +47,7 @@ end"#;
 
     assert_eq!(
         format(source),
-        r#"type Player = {hp:number, name:string}
+        r#"type Player = { hp:number, name:string }
 type Players = Player[]
 enum Direction
   "North"
@@ -74,7 +74,7 @@ local player=makePlayer("Ada")"#;
     assert_eq!(
         format(source),
         r#"local function makePlayer(name:string):Player
-  return {name = name, hp = 100}
+  return { name = name, hp = 100 }
 end
 local inline = function() return 1 end
 local player = makePlayer("Ada")
@@ -122,7 +122,7 @@ local joined = left .. right
 local scientific = 1e-3 + 2e+4
 local callback: (number) -> string = tostring
 local function collect(...)
-  local values = {...}
+  local values = { ... }
   return values
 end
 "#
@@ -1597,6 +1597,37 @@ local y = (x)--note
 local x = 1 --[[ block ]]
 local y = (x) --note
 -- own line
+"#;
+
+    let output = format(source);
+
+    assert_eq!(output, expected);
+    assert_eq!(format(&output), output);
+}
+
+#[test]
+fn pads_one_line_tables_and_keeps_empty_tables_tight() {
+    let source = r#"local list = {1, 2,3}
+local empty = { }
+local nested = {{x=1},{ y = 2 }}
+local keyed = {["a b"]=1}
+local args = {...}
+local built = f{1}
+local open = {
+  1,
+}
+type Point = {x: number, y: number}
+"#;
+    let expected = r#"local list = { 1, 2, 3 }
+local empty = {}
+local nested = { { x = 1 }, { y = 2 } }
+local keyed = { ["a b"] = 1 }
+local args = { ... }
+local built = f{ 1 }
+local open = {
+  1,
+}
+type Point = { x: number, y: number }
 "#;
 
     let output = format(source);

@@ -4,7 +4,7 @@ import type { Position, Rotation, Velocity } from "./types"
 -- the exact component shapes requested by the system.
 local PositionComponent = ecs.component("Position", { x = "number", y = "number" })
 local VelocityComponent = ecs.component("Velocity", { x = "number", y = "number" })
-local RotationComponent = ecs.component("Rotation", { r = "number"})
+local RotationComponent = ecs.component("Rotation", { r = "number" })
 local world = ecs.world()
 local player = world:create()
 
@@ -14,7 +14,7 @@ world:add(player, RotationComponent, { r = 0 })
 
 local movement = ecs.system(
   world,
-  { PositionComponent, VelocityComponent, RotationComponent},
+  { PositionComponent, VelocityComponent, RotationComponent },
   function(
     _,
     position: Position,

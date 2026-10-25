@@ -945,6 +945,29 @@ fn normalize_spacing(line: &str, quote_style: QuoteStyle) -> String {
                             index += 1;
                         }
                     }
+                    // A one-line table pads its contents, as in `{ 1, 2 }`,
+                    // while an empty table stays `{}`.
+                    b'{' => {
+                        output.push('{');
+                        index += 1;
+                        while bytes
+                            .get(index)
+                            .is_some_and(|byte| byte.is_ascii_whitespace())
+                        {
+                            index += 1;
+                        }
+                        if bytes.get(index).is_some_and(|byte| *byte != b'}') {
+                            output.push(' ');
+                        }
+                    }
+                    b'}' => {
+                        trim_trailing_spaces(&mut output);
+                        if !output.is_empty() && !output.ends_with('{') {
+                            output.push(' ');
+                        }
+                        output.push('}');
+                        index += 1;
+                    }
                     b')' | b']' => {
                         trim_trailing_spaces(&mut output);
                         output.push(bytes[index] as char);
