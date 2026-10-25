@@ -6,6 +6,12 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+### Added
+
+- Property accesses expose optional `propertyChain1` through `propertyChain4`
+  semantic modifiers, allowing themes or user settings to color successive
+  properties while preserving their existing semantic classifications.
+
 ### Changed
 
 - The formatter attaches unary minus and length operators to their operand,

@@ -196,3 +196,29 @@ fn semantic_tokens_unknown_document_returns_empty_data() {
 
     assert_eq!(response["result"], json!({ "data": [] }));
 }
+
+#[test]
+fn property_chain_modifiers_are_encoded_in_full_and_range_results() {
+    let uri = "file:///tmp/property-chain-colors.tua";
+    let source = "local x = target.width.a.a.c.b\n";
+    let output = run_messages(vec![
+        did_open(uri, source),
+        semantic_tokens_request(2, uri),
+        semantic_tokens_range_request(
+            3,
+            uri,
+            json!({"line": 0, "character": 0}),
+            json!({"line": 1, "character": 0}),
+        ),
+    ]);
+    for id in [2, 3] {
+        let response = response_with_id(&output, id);
+        let data = response["result"]["data"].as_array().unwrap();
+        let bits = data
+            .chunks(5)
+            .filter(|t| t[3] == 4)
+            .map(|t| t[4].as_u64().unwrap() & 480)
+            .collect::<Vec<_>>();
+        assert_eq!(bits, vec![32, 64, 128, 256, 32]);
+    }
+}

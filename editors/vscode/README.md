@@ -269,3 +269,32 @@ source file contents.
 
 `Tua: Report Issue` opens the project issue URL with the same diagnostic bundle
 pre-filled for review before submission.
+
+## Property-chain colors
+
+Property accesses carry optional semantic modifiers `propertyChain1` through
+`propertyChain4`, cycling from the first member of each chain. For example,
+`target.width.a.a.c.b` assigns positions 1, 2, 3, 4, 1 to its properties.
+The root retains its ordinary semantic color. Calls and indexes preserve the
+receiver's position; chains within their arguments start independently. Methods
+keep their ordinary method color but count as a step in the receiver chain.
+
+Themes can style `property.propertyChain1:tua` through
+`property.propertyChain4:tua`. Themes without these rules retain normal property
+highlighting. To opt in through user settings with any theme:
+
+```json
+{
+  "editor.semanticTokenColorCustomizations": {
+    "rules": {
+      "property.propertyChain1:tua": "#8EC7FF",
+      "property.propertyChain2:tua": "#88D5CF",
+      "property.propertyChain3:tua": "#F0BFA5",
+      "property.propertyChain4:tua": "#C5ACF5"
+    }
+  }
+}
+```
+
+Semantic highlighting must be enabled. Property declarations do not receive
+chain modifiers; existing readonly, modification, and deprecation markers remain.

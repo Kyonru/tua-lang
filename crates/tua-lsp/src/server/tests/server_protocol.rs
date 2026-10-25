@@ -179,7 +179,11 @@ fn initialize_returns_server_capabilities() {
             "readonly",
             "deprecated",
             "modification",
-            "defaultLibrary"
+            "defaultLibrary",
+            "propertyChain1",
+            "propertyChain2",
+            "propertyChain3",
+            "propertyChain4"
         ])
     );
     assert_eq!(

@@ -1161,6 +1161,24 @@
         "label": "tua Icons",
         "path": "./icons/tua-icon-theme.json"
       }
+    ],
+    "semanticTokenModifiers": [
+      {
+        "id": "propertyChain1",
+        "description": "Property access position 1 in a repeating four-color chain."
+      },
+      {
+        "id": "propertyChain2",
+        "description": "Property access position 2 in a repeating four-color chain."
+      },
+      {
+        "id": "propertyChain3",
+        "description": "Property access position 3 in a repeating four-color chain."
+      },
+      {
+        "id": "propertyChain4",
+        "description": "Property access position 4 in a repeating four-color chain."
+      }
     ]
   },
   "devDependencies": {

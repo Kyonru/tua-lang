@@ -19,12 +19,16 @@ pub(super) const SEMANTIC_TOKEN_TYPES: [&str; 13] = [
     "decorator",
 ];
 
-pub(super) const SEMANTIC_TOKEN_MODIFIERS: [&str; 5] = [
+pub(super) const SEMANTIC_TOKEN_MODIFIERS: [&str; 9] = [
     "declaration",
     "readonly",
     "deprecated",
     "modification",
     "defaultLibrary",
+    "propertyChain1",
+    "propertyChain2",
+    "propertyChain3",
+    "propertyChain4",
 ];
 
 pub(super) fn server_description() -> String {

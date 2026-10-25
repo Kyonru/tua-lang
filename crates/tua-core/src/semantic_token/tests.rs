@@ -785,3 +785,96 @@ fn token_text_from_source<'a>(source: &'a str, token: &SemanticToken) -> &'a str
 
     &line[start..end]
 }
+
+#[test]
+fn property_chain_colors_cycle_and_preserve_semantic_modifiers() {
+    let source = "local target = {}\nlocal value = target.width.a.a.c.b.s.b.t\ntarget.width.a = 1\nlocal other = target.width\n";
+    let tokens = semantic_tokens_tua_source("chain.tua", source).unwrap();
+    use SemanticTokenModifier::*;
+    let chain = |line| {
+        tokens
+            .iter()
+            .filter(|t| t.span.start.line == line && t.kind == SemanticTokenKind::Property)
+            .collect::<Vec<_>>()
+    };
+    let cycle = [
+        PropertyChain1,
+        PropertyChain2,
+        PropertyChain3,
+        PropertyChain4,
+    ];
+    assert_eq!(chain(2).len(), 8);
+    for (i, token) in chain(2).iter().enumerate() {
+        assert!(token.modifiers.contains(&cycle[i % 4]));
+    }
+    assert!(chain(3)[1].modifiers.contains(&Modification));
+    assert!(chain(3)[1].modifiers.contains(&PropertyChain2));
+    assert!(chain(4)[0].modifiers.contains(&PropertyChain1));
+    assert!(tokens
+        .iter()
+        .filter(|t| t.kind != SemanticTokenKind::Property)
+        .all(|t| !t.modifiers.iter().any(|m| cycle.contains(m))));
+}
+
+#[test]
+fn property_chain_colors_handle_multiline_calls_indexes_and_incomplete_source() {
+    use SemanticTokenModifier::*;
+    for (source, expected) in [
+        (
+            "local x = target.width\n -- comment\n .height",
+            vec![PropertyChain1, PropertyChain2],
+        ),
+        (
+            "local x = target.width[other.key].height",
+            vec![PropertyChain1, PropertyChain1, PropertyChain2],
+        ),
+        (
+            "local x = target:make(other.key).width.height",
+            vec![PropertyChain1, PropertyChain2, PropertyChain3],
+        ),
+        (
+            "local x = (target.width).height",
+            vec![PropertyChain1, PropertyChain2],
+        ),
+        (
+            "local x = target.width.height\nlocal unfinished =",
+            vec![PropertyChain1, PropertyChain2],
+        ),
+    ] {
+        let tokens = semantic_tokens_tua_source("chain.tua", source).unwrap();
+        let actual = tokens
+            .iter()
+            .flat_map(|t| t.modifiers.iter().copied())
+            .filter(|m| {
+                matches!(
+                    m,
+                    PropertyChain1 | PropertyChain2 | PropertyChain3 | PropertyChain4
+                )
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(actual, expected, "{source}");
+    }
+}
+
+#[test]
+fn property_chain_colors_reset_after_parenthesized_calculations() {
+    use SemanticTokenModifier::*;
+    for source in [
+        "local value = (left.a + right.b.c).result",
+        "local value = (left.a or right.b.c).result",
+    ] {
+        let tokens = semantic_tokens_tua_source("chain.tua", source).unwrap();
+        let result = tokens
+            .iter()
+            .find(|t| {
+                let start = t.span.start.column - 1;
+                source.get(start..start + 6) == Some("result")
+            })
+            .unwrap();
+        assert!(
+            result.modifiers.contains(&PropertyChain1),
+            "{source}: {:?}",
+            result.modifiers
+        );
+    }
+}

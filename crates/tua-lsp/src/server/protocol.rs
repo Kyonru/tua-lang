@@ -1412,6 +1412,10 @@ fn semantic_token_modifier_bit(modifier: SemanticTokenModifier) -> usize {
         SemanticTokenModifier::Deprecated => 1 << 2,
         SemanticTokenModifier::Modification => 1 << 3,
         SemanticTokenModifier::DefaultLibrary => 1 << 4,
+        SemanticTokenModifier::PropertyChain1 => 1 << 5,
+        SemanticTokenModifier::PropertyChain2 => 1 << 6,
+        SemanticTokenModifier::PropertyChain3 => 1 << 7,
+        SemanticTokenModifier::PropertyChain4 => 1 << 8,
     }
 }
 

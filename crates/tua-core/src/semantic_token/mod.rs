@@ -1,3 +1,5 @@
+mod property_chain;
+
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
@@ -54,6 +56,10 @@ pub enum SemanticTokenModifier {
     Deprecated,
     Modification,
     DefaultLibrary,
+    PropertyChain1,
+    PropertyChain2,
+    PropertyChain3,
+    PropertyChain4,
 }
 
 pub fn semantic_tokens_tua_source(
@@ -124,6 +130,7 @@ fn semantic_tokens_parsed_source_with_optional_environment(
     tokens.extend(signal_event_semantic_tokens(&source_tokens));
     tokens.extend(enum_member_semantic_tokens(parsed, &source_tokens));
 
+    property_chain::apply_chain_modifiers(&source_tokens, &mut tokens);
     tokens.sort_by_key(|token| position_key(token.span.start));
     tokens.dedup_by_key(|token| {
         (
@@ -279,6 +286,7 @@ fn lossy_semantic_tokens(source: &str) -> Vec<SemanticToken> {
     semantic_tokens.extend(signal_event_semantic_tokens(&tokens));
     semantic_tokens.extend(lossy_enum_member_semantic_tokens(&tokens));
 
+    property_chain::apply_chain_modifiers(&tokens, &mut semantic_tokens);
     semantic_tokens.sort_by_key(|token| position_key(token.span.start));
     semantic_tokens.dedup_by_key(|token| {
         (
