@@ -4933,3 +4933,29 @@ fn check_shader_glslang_fallback_and_missing_tools() {
     assert!(output.status.success(), "{output:?}");
     assert!(String::from_utf8_lossy(&output.stdout).contains("shader compilation skipped"));
 }
+
+#[cfg(unix)]
+#[test]
+fn shader_tools_probes_without_loading_project() {
+    use std::os::unix::fs::PermissionsExt;
+    let temp = TempDir::new("shader-tools");
+    // Invalid project config must never be read by the tool probe.
+    fs::write(temp.path.join("tua.toml"), "invalid configuration !!!").unwrap();
+    let fake = temp.path.join("glslang");
+    fs::write(&fake, "#!/bin/sh\nexit 0\n").unwrap();
+    fs::set_permissions(&fake, fs::Permissions::from_mode(0o700)).unwrap();
+    for (command, works) in [(&fake, true), (&temp.path.join("missing"), false)] {
+        let output = tua()
+            .arg("shader-tools")
+            .current_dir(&temp.path)
+            .env("TUA_LOVE", "/no/such/love")
+            .env("TUA_GLSLANG", command)
+            .output()
+            .unwrap();
+        assert!(output.status.success(), "{output:?}");
+        let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+        assert_eq!(report["love"]["canValidate"], false);
+        assert_eq!(report["glslang"]["canValidate"], works);
+        assert_eq!(report["preferred"], "love");
+    }
+}

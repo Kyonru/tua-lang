@@ -17,6 +17,7 @@ pub fn run_command(
     cwd: impl AsRef<Path>,
 ) -> Result<String, CliError> {
     match command {
+        CommandName::ShaderTools => Ok(crate::shaders::probe_tools().to_string()),
         CommandName::Init => tua_core::init_project(cwd)
             .map(format_init_result)
             .map_err(CliError::from_config_error),

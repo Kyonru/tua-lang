@@ -2420,6 +2420,7 @@ function createMockState(workspace, options = {}) {
       },
       getConfiguration() {
         return {
+          inspect(key) { return { globalValue: configuration.get(key) }; },
           get(key, defaultValue) {
             return configuration.has(key) ? configuration.get(key) : defaultValue;
           },
@@ -3406,6 +3407,8 @@ function assertRegisteredCommands(state) {
     "tua.setup.useMaterialIcons",
     "tua.setup.restoreIcons",
     "tua.setup.applyShaders",
+    "tua.setup.checkShaderTools",
+    "tua.setup.selectGlslang",
     "tua.setup.restoreShaders",
     "tua.setup.installShaderHighlighting",
     "tua.setup.skipShaders",

@@ -31,6 +31,46 @@ impl ProjectShaderValidator {
     }
 }
 
+/// Probe only a built-in source, never the workspace or its pipelines.
+pub(crate) fn probe_tools() -> serde_json::Value {
+    use tua_core::shader_validation::ShaderTarget;
+    use tua_core::{AssetCategory, ProjectAsset};
+    let mut validator = ProjectShaderValidator::new(None);
+    let request = ShaderValidationRequest {
+        mode: ShaderValidationMode::Love,
+        asset: ProjectAsset {
+            path: "tua-probe.glsl".into(),
+            relative_path: "tua-probe.glsl".into(),
+            category: AssetCategory::Shader,
+            extension: "glsl".into(),
+            dimensions: None,
+            references: Vec::new(),
+        },
+        target: ShaderTarget::Desktop,
+        source: "vec4 effect(vec4 c, Image t, vec2 uv, vec2 p) { return Texel(t, uv) * c; }".into(),
+    };
+    let love = validator.love.validate(std::slice::from_ref(&request));
+    let version = validator
+        .love
+        .session
+        .as_ref()
+        .map(|session| session.version.clone());
+    validator.love.stop();
+    let glslang = validator.glslang.validate(&[request]);
+    let report = |result: Result<Vec<ShaderValidationOutcome>, String>| match result {
+        Ok(outcomes) if outcomes == [ShaderValidationOutcome::Valid] => {
+            serde_json::json!({"canValidate": true})
+        }
+        Ok(outcomes) => {
+            serde_json::json!({"canValidate": false, "message": format!("built-in shader rejected: {outcomes:?}")})
+        }
+        Err(message) => serde_json::json!({"canValidate": false, "message": message}),
+    };
+    let mut love = report(love);
+    love["version"] = serde_json::json!(version);
+    serde_json::json!({ "love": love, "glslang": report(glslang), "preferred": "love" })
+}
+
 impl ShaderValidator for ProjectShaderValidator {
     fn cache_key(&self) -> String {
         self.love

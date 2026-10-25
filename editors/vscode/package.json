@@ -26,7 +26,8 @@
         "tua.server.path",
         "tua.love.command",
         "tua.love.windowsRuntime",
-        "tua.love.macosApp"
+        "tua.love.macosApp",
+        "tua.shaders.glslangPath"
       ]
     }
   },
@@ -689,6 +690,12 @@
           "type": "boolean",
           "default": false,
           "description": "Enable read-only local runtime inspection for new Tua development runs. Uses a temporary editor-owned shim; build and package output stay unchanged. Restart a running game after enabling."
+        },
+        "tua.shaders.glslangPath": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "description": "Optional glslangValidator executable. LÖVE remains preferred; this selects the fallback. Empty uses TUA_GLSLANG or PATH. Changing it restarts the language server."
         }
       }
     },
@@ -1244,6 +1251,16 @@
       {
         "command": "tua.setup.skipShaders",
         "title": "Skip Shader Setup",
+        "category": "Tua"
+      },
+      {
+        "command": "tua.setup.checkShaderTools",
+        "title": "Check Shader Validators",
+        "category": "Tua"
+      },
+      {
+        "command": "tua.setup.selectGlslang",
+        "title": "Select glslangValidator",
         "category": "Tua"
       }
     ],
@@ -1905,7 +1922,7 @@
           {
             "id": "shaders",
             "title": "Shader support (optional)",
-            "description": "Associate this workspace’s shader files with LÖVE Shader. This avoids duplicate checks from GLSL Lint. Highlighting is optional; validation uses LÖVE first, then glslang.\n[Use LÖVE Shader Associations](command:tua.setup.applyShaders)\n[Install Shader Highlighting](command:tua.setup.installShaderHighlighting)\n[Restore Shader Associations](command:tua.setup.restoreShaders)\n[Skip](command:tua.setup.skipShaders)",
+            "description": "Associate this workspace’s shader files with LÖVE Shader. This avoids duplicate checks from GLSL Lint. Highlighting is optional; validation uses LÖVE first, then glslang.\n[Use LÖVE Shader Associations](command:tua.setup.applyShaders)\n[Install Shader Highlighting](command:tua.setup.installShaderHighlighting)\n[Restore Shader Associations](command:tua.setup.restoreShaders)\n[Skip](command:tua.setup.skipShaders)\n[Check Shader Validators](command:tua.setup.checkShaderTools)\n[Select glslangValidator](command:tua.setup.selectGlslang)",
             "media": {
               "markdown": "assets/setup/shaders.md"
             },

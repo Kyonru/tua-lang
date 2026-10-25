@@ -702,3 +702,10 @@ LÖVE sources without their engine headers. The optional Shader languages
 extension provides full GLSL highlighting. Restore removes only associations
 owned by setup and preserves subsequent manual edits. Nothing is installed or
 reconfigured automatically. Validation prefers LÖVE, then glslang.
+
+The setup step’s **Check Shader Validators** button reports LÖVE’s version and
+tests a built-in shader with each installed backend. It runs only on request in
+a trusted workspace. **Select glslangValidator** saves a machine-scoped
+`tua.shaders.glslangPath`; Restore Shader Associations also restores this
+selection when it has not been changed manually. Changing this path or
+`tua.love.command` restarts the server. LÖVE stays preferred.

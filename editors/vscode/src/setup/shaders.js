@@ -5,7 +5,7 @@ const PATTERNS = ["*.glsl", "*.vert", "*.frag", "*.vs", "*.fs"];
 
 // Back up individual association keys, not the whole object: unrelated edits
 // made after Apply must survive Restore and partial failures must be retryable.
-function createShaderSetup({ workspace, state, target }) {
+function createShaderSetup({ workspace, state, target, globalTarget }) {
   const config = () => workspace.getConfiguration("files", null);
   const read = () => ({ ...config().inspect("associations")?.workspaceValue });
   async function apply() {
@@ -22,6 +22,12 @@ function createShaderSetup({ workspace, state, target }) {
   async function restore() {
     const saved = { ...state.get(BACKUP_KEY, {}) };
     for (const pattern of Object.keys(saved)) {
+      if (pattern === "$glslangPath") {
+        const settings = workspace.getConfiguration("tua", null);
+        if (settings.inspect("shaders.glslangPath")?.globalValue === saved[pattern].applied) {
+          await settings.update("shaders.glslangPath", saved[pattern].value, globalTarget);
+        }
+      }
       const current = read();
       if (PATTERNS.includes(pattern) && current[pattern] === "love-glsl") {
         if (saved[pattern].present) current[pattern] = saved[pattern].value;
@@ -32,7 +38,17 @@ function createShaderSetup({ workspace, state, target }) {
       await state.update(BACKUP_KEY, Object.keys(saved).length ? { ...saved } : undefined);
     }
   }
-  return { apply, restore };
+  async function selectPath(path) {
+    const settings = workspace.getConfiguration("tua", null);
+    const value = settings.inspect("shaders.glslangPath")?.globalValue;
+    if (value === path) return;
+    const saved = { ...state.get(BACKUP_KEY, {}) };
+    const previous = saved.$glslangPath;
+    saved.$glslangPath = { value: previous && value === previous.applied ? previous.value : value, applied: path };
+    await state.update(BACKUP_KEY, saved);
+    await settings.update("shaders.glslangPath", path, globalTarget);
+  }
+  return { apply, restore, selectPath };
 }
 
 module.exports = { BACKUP_KEY, PATTERNS, createShaderSetup };

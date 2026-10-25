@@ -5,10 +5,11 @@ const { COMMANDS } = require("../constants");
 const { formatError } = require("../shared/errors");
 const { createPresetManager, MATERIAL_ICONS_EXTENSION } = require("./presets");
 
+const { shaderEnvironment, probeShaderTools } = require("./shader-tools");
 const { createShaderSetup } = require("./shaders");
 
-function registerSetup(context) {
-  const shaders = createShaderSetup({ workspace: vscode.workspace, state: context.workspaceState, target: vscode.ConfigurationTarget.Workspace });
+function registerSetup(context, { getServerCommand } = {}) {
+  const shaders = createShaderSetup({ workspace: vscode.workspace, state: context.workspaceState, target: vscode.ConfigurationTarget.Workspace, globalTarget: vscode.ConfigurationTarget.Global });
   const presets = createPresetManager({
     workspace: vscode.workspace,
     state: context.globalState,
@@ -75,6 +76,21 @@ function registerSetup(context) {
     vscode.commands.registerCommand(COMMANDS.openSetup, () =>
       vscode.commands.executeCommand("workbench.action.openWalkthrough", `${context.extension.id}#tua.setup`, false),
     ),
+    register(COMMANDS.setupCheckShaderTools, async () => {
+      if (!vscode.workspace.isTrusted) throw new Error("Trust this workspace before running shader validators");
+      const command = getServerCommand?.();
+      if (!command) throw new Error("Select a Tua server first");
+      const report = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: "Checking shader validators (LÖVE may open a small window)" }, () => probeShaderTools(command, shaderEnvironment(vscode.workspace)));
+      const love = report.love;
+      const glslang = report.glslang;
+      const message = `LÖVE${love.version ? ` ${love.version}` : ""}: ${love.canValidate ? "validation works (preferred)" : love.message}. glslang: ${glslang.canValidate ? "validation works (fallback)" : glslang.message}.`;
+      void vscode.window.showInformationMessage(message);
+    }),
+    register(COMMANDS.setupSelectGlslang, async () => {
+      if (!vscode.workspace.isTrusted) throw new Error("Trust this workspace before configuring shader validators");
+      const selected = await vscode.window.showOpenDialog({ canSelectMany: false, canSelectFiles: true, canSelectFolders: false, title: "Select glslangValidator executable" });
+      if (selected?.[0]) await shaders.selectPath(selected[0].fsPath);
+    }),
     register(COMMANDS.setupApplyShaders, async () => {
       await shaders.apply();
       await vscode.commands.executeCommand("setContext", "tua.setup.shadersApplied", true);

@@ -20,6 +20,7 @@ Commands:
   traceback Remap generated Lua traceback lines to Tua source
   watch     Rebuild when source files change
   dev       Rebuild on change and hot reload the running LOVE game
+  shader-tools Test shader validators with built-in source and report JSON
   lsp       Start the tua language server over stdio
   api       Start the read-only Tua JSON-RPC API over stdio
   mcp       Start the read-only Tua MCP server over stdio
@@ -81,6 +82,7 @@ pub enum CommandName {
     Lsp,
     Api,
     Mcp,
+    ShaderTools,
 }
 
 impl CommandName {
@@ -98,6 +100,7 @@ impl CommandName {
             "lsp" => Self::Lsp,
             "api" => Self::Api,
             "mcp" => Self::Mcp,
+            "shader-tools" => Self::ShaderTools,
             _ => return None,
         })
     }
@@ -105,6 +108,7 @@ impl CommandName {
 
 pub fn command_help(command: CommandName) -> &'static str {
     match command {
+        CommandName::ShaderTools => "tua shader-tools - test installed shader validators\n\nUsage:\n  tua shader-tools\n\nReports JSON using a built-in shader in an isolated directory; does not load the project.\n",
         CommandName::Init => "tua init - create a Tua project\n\nUsage:\n  tua init\n\nCreates tua.toml and src/main.tua without overwriting existing files, and adds generated folders to .gitignore.\n",
         CommandName::Check => "tua check - parse and type-check the project\n\nUsage:\n  tua check [--deny-warnings] [--love PATH]\n",
         CommandName::Fmt => "tua fmt - format project source files\n\nUsage:\n  tua fmt [--check]\n",

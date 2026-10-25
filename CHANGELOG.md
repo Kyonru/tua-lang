@@ -10,6 +10,8 @@ language or editor behavior, and migration notes call out those changes.
 
 - Runtime Inspector objects show recognizable binding names and creation-site
   navigation, using source maps for Tua and generated Lua as a fallback.
+- `tua shader-tools` and the optional editor setup check installed validators without loading the game; a machine-scoped glslang picker selects the fallback while LÖVE remains preferred.
+
 - Optional LÖVE Shader setup associates workspace shader files with a dedicated language, offers GLSL highlighting installation, and restores associations while preserving later manual edits.
 
 - The development-only Runtime Inspector now includes stores: current state,

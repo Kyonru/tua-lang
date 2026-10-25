@@ -1,6 +1,6 @@
 //! Isolated, bounded LOVE subprocess used by check and the LSP worker.
 mod glslang;
-pub(crate) use glslang::{ProjectShaderValidator, NO_GLSLANG, NO_VALIDATOR};
+pub(crate) use glslang::{probe_tools, ProjectShaderValidator, NO_GLSLANG, NO_VALIDATOR};
 
 use std::fs;
 use std::io::{self, BufRead, BufReader, Read, Write};
@@ -60,6 +60,7 @@ impl Drop for ValidatorDirectory {
 }
 
 struct Session {
+    version: String,
     child: Child,
     requests: SyncSender<Vec<u8>>,
     responses: Receiver<Result<String, String>>,
@@ -160,7 +161,8 @@ impl LoveShaderValidator {
                 }
             }
         });
-        let session = Session {
+        let mut session = Session {
+            version: String::new(),
             child,
             requests: request_tx,
             responses: response_rx,
@@ -176,6 +178,7 @@ impl LoveShaderValidator {
                 .fatal
                 .unwrap_or_else(|| "LOVE shader validator did not report READY".to_owned()));
         }
+        session.version = output.love_version.unwrap_or_default();
         Ok(session)
     }
 }

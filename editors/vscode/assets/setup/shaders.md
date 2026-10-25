@@ -14,3 +14,7 @@ Validation prefers LÖVE. When LÖVE is unavailable, install `glslangValidator`:
 The fallback targets LÖVE 11.5 headers. LÖVE validation can briefly open a
 small graphics window. Validation runs in a background worker, not while
 handling completion requests.
+
+Use **Check Shader Validators** to test the tools without loading the game.
+**Select glslangValidator** saves a machine setting and restarts the server.
+Restore also restores this path if you have not edited it afterward.

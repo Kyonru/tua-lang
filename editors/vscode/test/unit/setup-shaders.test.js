@@ -36,3 +36,20 @@ test("shader setup requires a workspace and does not touch settings at construct
   assert.equal(f.saved.size, 0);
   await assert.rejects(manager.apply(), /Open a workspace/);
 });
+test("selected validator path restores the original and preserves later manual changes", async () => {
+  let value = "/old/tool";
+  const saved = new Map();
+  const state = { get: (key, fallback) => saved.get(key) ?? fallback, update: async (key, data) => saved.set(key, data) };
+  const workspace = { getConfiguration: (section) => section === "tua" ? {
+    inspect: () => ({ globalValue: value }), update: async (_key, next, target) => { assert.equal(target, 1); value = next; },
+  } : { inspect: () => ({}) } };
+  const manager = createShaderSetup({ workspace, state, globalTarget: 1 });
+  await manager.selectPath("/new/tool");
+  await manager.selectPath("/newer/tool");
+  await manager.restore();
+  assert.equal(value, "/old/tool");
+  await manager.selectPath("/new/tool");
+  value = "/manual/tool";
+  await manager.restore();
+  assert.equal(value, "/manual/tool");
+});

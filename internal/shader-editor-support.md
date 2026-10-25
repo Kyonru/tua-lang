@@ -424,8 +424,10 @@ Executable paths come only from the sources listed under [Trust](#trust).
 
 ## Phase 4: VS Code setup step
 
-Language, highlighting installation, opt-in workspace associations, and reversible
-setup are implemented. Validator discovery and path selection are next.
+Implemented (Unreleased): language, optional highlighting installation, workspace
+associations, validator probe, and machine-scoped fallback selection. Setup is
+reversible and preserves subsequent manual changes. The probe uses built-in
+source in isolation and never loads the game; no probe runs on activation.
 
 Add a step to the `tua.setup` walkthrough, after the icon step:
 

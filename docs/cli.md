@@ -296,3 +296,12 @@ validation batch is limited to 512 requests, 16 MiB of shader source, and ten
 seconds per backend after startup (LÖVE startup also has a ten-second timeout).
 LÖVE validation reflects the installed engine; glslang follows the bundled 11.5
 wrapper. Neither proves support on every device.
+
+### Check shader validator installation
+
+Run `tua shader-tools` to test LÖVE and glslang with a built-in shader and
+print a JSON report (`love.canValidate`, `love.version`, and
+`glslang.canValidate`). This uses isolated temporary files, never loads the
+project, and can briefly open LÖVE’s graphics window. Each backend is bounded
+by a timeout; unavailable tools are reported in JSON rather than as command
+failure. `TUA_LOVE` and `TUA_GLSLANG` select trusted executables.

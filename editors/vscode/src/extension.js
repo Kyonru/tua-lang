@@ -16,6 +16,7 @@ const { registerServerHealthFeature } = require("./health");
 const { registerLoveDevex } = require("./love");
 const { registerModuleDevex } = require("./modules");
 const { registerObjectPoolDevex } = require("./object-pools");
+const { shaderEnvironment } = require("./setup/shader-tools");
 const { registerSetup } = require("./setup");
 const { registerRuntimeInspector } = require("./inspector/view");
 const { registerProjectChecks } = require("./workspace/checks");
@@ -49,7 +50,7 @@ async function activate(context) {
   context.subscriptions.push(outputChannel);
   context.subscriptions.push(registerBuiltinDocumentProvider(outputChannel));
   context.subscriptions.push(registerLifecycleCommands());
-  context.subscriptions.push(registerSetup(context));
+  context.subscriptions.push(registerSetup(context, { getServerCommand: () => configuredServerPath(context) }));
   context.subscriptions.push(registerWorkspaceSidebar({ getClient: () => client }));
   context.subscriptions.push(registerProjectChecks({ getClient: () => client, getServerCommand: () => currentServerInfo?.command || configuredServerPath(extensionContext) }));
   editorDevex = registerEditorDevex({
@@ -468,6 +469,9 @@ async function selectServerVersion() {
 }
 
 function handleConfigurationChange(event) {
+  if (event.affectsConfiguration("tua.shaders.glslangPath") || event.affectsConfiguration("tua.love.command")) {
+    void restartLanguageServer();
+  }
   const serverPathChanged = event.affectsConfiguration("tua.server.path");
   const traceChanged =
     event.affectsConfiguration("tua.trace.server") ||
@@ -1096,6 +1100,7 @@ function serverExecutable(command, cwd) {
     command,
     args: ["lsp"],
     options: {
+      env: shaderEnvironment(vscode.workspace),
       cwd,
     },
   };
