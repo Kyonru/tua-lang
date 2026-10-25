@@ -216,70 +216,36 @@ without launching the game.
 
 ## Live runtime inspector
 
-Open **Tua → Runtime Inspector**, click **Enable Runtime Inspection**, then launch
-Run, Hot reload, or Debug. Use **Select Runtime Player** to choose a player in a
-multi-instance run. Inspection is off by default and requires a trusted workspace.
-Enabling it applies to new runs; restart an already-running game to attach.
-After disabling inspection, use **Enable Runtime Inspection** (plug icon) in the
-view toolbar to turn it back on, even while the last snapshot remains visible.
-The setting is `tua.runtimeInspector.enabled` (default `false`). For a custom
-debug launch configuration, use `tuaProject: true` to enable Tua launch preparation.
+Inspect game state while a local Tua game runs. Inspection is opt-in and adds no
+code to release builds.
 
-The view shows live objects from Tua's built-in runtimes:
+### Start inspecting
 
-- **Entities and components:** entity IDs and component values in each ECS world.
-- **State machines:** current state and pending asynchronous transition.
-- **Signal activity:** emission counts, the latest 20 event names, and listener
-  counts. Signal payloads are not retained.
-- **Object pools:** active, available, and capacity counts.
-- **Stores:** current state, successful `set`/`update` call counts, seconds since
-  the last successful call, and subscriber/field-watcher counts. State fields
-  added, changed, or removed since the previous snapshot have explicit markers.
-  Direct mutations through `get()` appear in state snapshots but do not increment
-  the API update count; calls that raise errors are not counted. First snapshots
-  and connections after a restart start a new comparison baseline. Watcher counts
-  sample at most 128 watched keys and report when that limit is reached.
+1. Open **Tua → Runtime Inspector** in a trusted workspace.
+2. Click **Enable Runtime Inspection**, then start a new Run, Hot reload, or Debug
+   session. Restart an existing game to attach.
+3. For multiple players, use **Select Runtime Player**.
 
-Objects use recognizable source binding names (for example, `player` or
-`game_state`) when their creation site is unambiguous. Runtime IDs distinguish
-instances created by the same factory. Use the inline **Go to Runtime Object
-Creation Site** action or expand **Go to Creation Site** to navigate to source.
-Source maps resolve generated Lua locations back to Tua; without a map, navigation
-opens generated Lua. Anonymous or ambiguous bindings retain their runtime label.
-These links identify creation sites, not every later assignment or reference.
+### Read the view
 
-Snapshots arrive twice per second. **Pause Inspector Updates** / **Resume Inspector Updates** pauses
-snapshot updates without pausing the game; **Refresh Runtime Snapshot** requests a
-snapshot even while updates are paused. A stopped or disconnected player retains
-its last snapshot with an explicit status and age. A debugger pause also stops
-new snapshots until the game resumes.
+| Category | What you can inspect |
+| --- | --- |
+| Stores | State fields and changes since the previous snapshot |
+| State machines | Current state and pending transition |
+| Entities and components | Sampled entities and their component values |
+| Signals | Listener counts and recent event names |
+| Object pools | Active, available, and total capacity |
 
-The inspector is an extension-owned development shim, loaded by a private
-**temporary launcher outside the project**. It wraps runtime constructors only
-inside that game process. It does not modify source files, compiler runtimes,
-normal build output, or packaged games. Run and hot reload mirror current build
-output; multiplayer debugging retains its isolated build snapshot. Temporary launchers are
-removed when their player exits. Disabling inspection disconnects immediately
-and keeps the launcher alive until the game exits so asset loading continues.
+Expand an object to see its values. **Details** holds counters, runtime IDs, and
+its creation-site link; empty categories are hidden. Use the inline source action
+to jump to Tua when source maps are available.
 
-Each player connects to its own authenticated listener on `127.0.0.1` using
-LÖVE's bundled LuaSocket. There is no remote listener, upload, telemetry, or
-runtime expression evaluation. Networking is non-blocking and bounded; a slow
-editor skips snapshots instead of growing a queue. Large worlds and values are
-sampled (128 live objects, 100 entities per world, 32 component stores per world,
-3,000 serialized values per snapshot), and abbreviated values are marked.
+**Pause/Resume** controls inspector updates, not the game. **Refresh** requests one
+snapshot even while paused. After disabling inspection, the toolbar's **Enable**
+(plug) action remains available; start a new run after re-enabling it.
 
-This currently inspects Tua's built-in ECS, state-machine, signal, pool, and store
-implementations. Other ECS backends and arbitrary user tables are not discovered.
-It supports the standard LÖVE loop and custom loops that return a frame function.
-Platforms that restrict creating symbolic links need that permission enabled;
-if a launcher cannot be created, the game runs normally and a warning explains
-why inspection is unavailable. Save identity and player arguments are preserved.
-
-Validation: `npm run test:inspector` exercises two native LÖVE players and checks
-that packaging after inspection contains no shim. Run `TUA_INSPECTOR_TEST=1`
-with the existing `test:multiplayer` harness to check hot reload, source-mapped
-breakpoints, and independent debug sessions with inspection enabled.
+See the [Runtime Inspector guide](../../docs/debugging.md#live-runtime-inspector)
+for source navigation, troubleshooting, limits, and development-only behavior.
 
 ## Contextual hint density
 
