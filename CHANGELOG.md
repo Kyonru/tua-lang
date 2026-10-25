@@ -6,6 +6,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Output guards reject parent traversal and Windows reparse points, including
+  junctions. The security model now states the concurrent-filesystem boundary.
+
 - Dictionary reads now infer `Value | nil` in checking and editor analysis.
   Migration: guard the result or supply a default before using it as `Value`.
 

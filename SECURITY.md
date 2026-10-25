@@ -55,6 +55,10 @@ The following boundaries are intentional:
 
 - CLI build output must remain inside the project root. Output paths that
   escape it, or writes through symlink components, are rejected.
+  Windows junctions and other reparse points are rejected too. These checks
+  protect against repository-controlled paths present when the command runs.
+  They do not provide a race-proof filesystem sandbox against another local
+  process replacing directories concurrently; use OS isolation for that threat.
 - LSP and newline-delimited API/MCP transports enforce message limits, and the
   language server limits queued and in-flight work. These limits reduce denial
   of service risk; they are not a substitute for operating-system isolation.
