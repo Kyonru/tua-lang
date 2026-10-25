@@ -60,7 +60,8 @@ language or editor behavior, and migration notes call out those changes.
   continuation indentation, so formatted code no longer triggers the
   multiline-statement layout warning. Continuation lines that start with an
   operator, `and`, `or`, `=`, a method or field access, or a type-union `|`
-  also keep their indentation.
+  also keep their indentation, and `for` loops whose header spans several
+  lines keep their body indented.
 
 - Malformed `tua.toml` input that triggers an internal dependency panic now
   produces a normal configuration parse error instead of terminating Tua.

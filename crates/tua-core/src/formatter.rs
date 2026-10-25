@@ -813,7 +813,9 @@ fn split_control_header(code: &str) -> Option<SplitControlHeader> {
         && !code_contains_word(code, "then")
     {
         Some(SplitControlHeader::Then)
-    } else if starts_with_word(code, "while") && !code_contains_word(code, "do") {
+    } else if (starts_with_word(code, "while") || starts_with_word(code, "for"))
+        && !code_contains_word(code, "do")
+    {
         Some(SplitControlHeader::Do)
     } else if code == "until" {
         Some(SplitControlHeader::UntilCondition)

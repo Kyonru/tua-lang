@@ -1191,3 +1191,43 @@ end
     assert_eq!(format(&output), output);
     assert_no_multiline_layout_lint(&output);
 }
+
+#[test]
+fn indents_bodies_of_split_for_headers() {
+    let source = r#"local function visit(items: any, last: number)
+for index = 1,
+last do
+print(index)
+end
+for key, value in pairs(items),
+nil do
+print(key, value)
+end
+for index = 1, last
+do
+print(index)
+end
+end
+"#;
+    let expected = r#"local function visit(items: any, last: number)
+  for index = 1,
+    last do
+    print(index)
+  end
+  for key, value in pairs(items),
+    nil do
+    print(key, value)
+  end
+  for index = 1, last
+  do
+    print(index)
+  end
+end
+"#;
+
+    let output = format(source);
+
+    assert_eq!(output, expected);
+    assert_eq!(format(&output), output);
+    assert_no_multiline_layout_lint(&output);
+}
