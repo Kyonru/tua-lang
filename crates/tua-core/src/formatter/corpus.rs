@@ -372,6 +372,12 @@ print(2)
 local m = - n
 print(m)
 "#,
+        )
+        .formats_to(
+            r#"local n = 1
+local m = -n
+print(m)
+"#,
         ),
         Case::new(
             "unary_minus_minus",
@@ -407,6 +413,11 @@ print(c)
             "unary_not_len",
             r#"local s = "abc"
 print(not true, #s, - #s)
+"#,
+        )
+        .formats_to(
+            r#"local s = "abc"
+print(not true, #s, -#s)
 "#,
         ),
         Case::new(

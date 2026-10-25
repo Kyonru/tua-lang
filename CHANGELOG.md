@@ -6,6 +6,11 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+### Changed
+
+- The formatter attaches unary minus and length operators to their operand,
+  so `- n` and `# items` become `-n` and `#items`. `- -n` keeps its space.
+
 ### Fixed
 
 - Queued editor refreshes yield to newly arrived input between dispatches,

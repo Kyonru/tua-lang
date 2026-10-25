@@ -947,6 +947,24 @@ fn normalize_spacing(line: &str, quote_style: QuoteStyle) -> String {
                         output.push(bytes[index] as char);
                         index += 1;
                     }
+                    byte @ (b'-' | b'#') if !output.is_empty() => {
+                        // A unary operator hugs its operand, except that
+                        // `- -x` keeps its space so it never becomes `--x`.
+                        // A line that starts with `-` may continue a binary
+                        // expression from the previous line, so it is kept.
+                        output.push(byte as char);
+                        index += 1;
+                        let mut operand = index;
+                        while bytes
+                            .get(operand)
+                            .is_some_and(|byte| byte.is_ascii_whitespace())
+                        {
+                            operand += 1;
+                        }
+                        if bytes.get(operand) != Some(&b'-') {
+                            index = operand;
+                        }
+                    }
                     byte if byte.is_ascii_whitespace() => {
                         if !output.ends_with(' ') {
                             output.push(' ');

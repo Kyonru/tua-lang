@@ -1562,3 +1562,26 @@ fn drops_a_leading_byte_order_mark() {
         "local x = 1\nprint(x)\n"
     );
 }
+
+#[test]
+fn compacts_unary_minus_and_length_operators() {
+    let source = r#"local n = - 1
+local m = - n * 2
+local negated = - - n
+local size = # items + count(- n)
+local small = 1e-5 - - 2
+return - n, # items
+"#;
+    let expected = r#"local n = -1
+local m = -n * 2
+local negated = - -n
+local size = #items + count(-n)
+local small = 1e-5 - -2
+return -n, #items
+"#;
+
+    let output = format(source);
+
+    assert_eq!(output, expected);
+    assert_eq!(format(&output), output);
+}
