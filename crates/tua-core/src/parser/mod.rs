@@ -69,7 +69,7 @@ pub fn parse_raw_lua_source(
     source: impl Into<String>,
 ) -> Result<RawParsedSource, Vec<Diagnostic>> {
     let path = path.as_ref().to_path_buf();
-    let source = source.into();
+    let source = without_byte_order_mark(source.into());
     limits::validate(&path, &source)?;
     let parser_source = source.clone();
     let parser_provenance = source_line_provenance(&source);
@@ -92,7 +92,7 @@ pub fn parse_raw_tua_source(
     source: impl Into<String>,
 ) -> Result<RawParsedSource, Vec<Diagnostic>> {
     let path = path.as_ref().to_path_buf();
-    let source = source.into();
+    let source = without_byte_order_mark(source.into());
     limits::validate(&path, &source)?;
 
     // Large generated modules are commonly plain Lua with a `.tua` extension.
@@ -139,6 +139,15 @@ pub fn parse_raw_tua_source(
         Ok(raw)
     } else {
         Err(diagnostics)
+    }
+}
+
+/// Editors on Windows may save UTF-8 with a byte-order mark. LuaJIT skips it,
+/// so Tua accepts it too; positions then match what editors display.
+fn without_byte_order_mark(source: String) -> String {
+    match source.strip_prefix('\u{feff}') {
+        Some(rest) => rest.to_owned(),
+        None => source,
     }
 }
 

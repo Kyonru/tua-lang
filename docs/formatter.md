@@ -77,11 +77,12 @@ on one line, such as `function(a, b) return a end`, intact rather than splitting
 its header from its `end`. Syntax-aware reflow for those forms belongs in a
 future document-layout engine rather than more line-level heuristics.
 
-Formatting requires parseable source. Whole-document formatting normalizes
-the configured line-ending convention, while range and on-type formatting
-limit their edits to the requested source area. Project `[format]` settings
-are canonical and take precedence over an editor client's generic tab-size
-and insert-spaces preferences.
+Formatting requires parseable source. A leading UTF-8 byte-order mark is
+accepted, as LuaJIT accepts it, and removed from formatted output.
+Whole-document formatting normalizes the configured line-ending convention,
+while range and on-type formatting limit their edits to the requested source
+area. Project `[format]` settings are canonical and take precedence over an
+editor client's generic tab-size and insert-spaces preferences.
 
 Tua does not currently provide formatter-disable directives, configurable
 trailing commas, or path/stdin formatting modes. Type-annotation punctuation

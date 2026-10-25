@@ -39,6 +39,28 @@ fn rejects_excessive_nesting_and_operator_chains_before_parsing() {
 }
 
 #[test]
+fn accepts_a_leading_utf8_byte_order_mark() {
+    let tua = parse_tua_source(
+        "main.tua",
+        "\u{feff}local score: number = 1\nprint(score)\n",
+    )
+    .expect("Tua source with a byte-order mark should parse");
+    assert_eq!(tua.source, "local score: number = 1\nprint(score)\n");
+
+    let lua = parse_lua_source("module.lua", "\u{feff}return { value = 1 }\n")
+        .expect("Lua source with a byte-order mark should parse");
+    assert_eq!(lua.source, "return { value = 1 }\n");
+
+    let diagnostics = parse_tua_source("main.tua", "\u{feff}local x = = 1\n")
+        .expect_err("invalid source should still fail");
+    assert_eq!(
+        (diagnostics[0].line, diagnostics[0].column),
+        (1, 9),
+        "columns should count from the first visible character: {diagnostics:?}"
+    );
+}
+
+#[test]
 fn raw_lua_parse_contains_lua_compatible_syntax_only() {
     let raw = parse_raw_lua_source("src/plain.lua", "local value = 1\n")
         .expect("plain Lua should raw parse");

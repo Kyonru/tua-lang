@@ -1554,3 +1554,11 @@ consume(
     );
     assert_no_multiline_layout_lint(&output);
 }
+
+#[test]
+fn drops_a_leading_byte_order_mark() {
+    assert_eq!(
+        format("\u{feff}local x=1\nprint(x)\n"),
+        "local x = 1\nprint(x)\n"
+    );
+}

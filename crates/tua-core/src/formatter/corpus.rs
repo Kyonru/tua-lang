@@ -1348,5 +1348,7 @@ c:bump(1)
 print(Bag.new())
 "#,
         ),
+        Case::new("mixed_byte_order_mark", "\u{feff}local a = 1\nprint(a)\n")
+            .formats_to("local a = 1\nprint(a)\n"),
     ]
 }

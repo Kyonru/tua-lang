@@ -36,6 +36,8 @@ language or editor behavior, and migration notes call out those changes.
 - Wrapping also wraps nested calls and tables that are still too long, so one
   `tua fmt` run produces output that `tua fmt --check` accepts. Previously a
   nested call was wrapped only on the next run.
+- Source files that start with a UTF-8 byte-order mark now parse instead of
+  failing with `unexpected character`. `tua fmt` removes the mark.
 
 ## [0.4.1] - 2026-10-25
 
