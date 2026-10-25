@@ -100,6 +100,22 @@ files[".tuahotreload"] = shader_signal(10)
 tick()
 assert(water.source() == "version three", "fixed shader is retried")
 
+-- A shader error must not resume callbacks paused by an earlier Lua error.
+files["game/enemy.lua"] = "local M = {\nreturn M\n"
+files[".tuahotreload"] = shader_signal(20)
+tick()
+local paused = updates
+files["water.glsl"] = "broken"
+files[".tuahotreload"] = shader_signal(21)
+tick()
+tick()
+assert(updates == paused, "a later shader error keeps a blocking reload error paused")
+files["water.glsl"] = "version four"
+files["game/enemy.lua"] = "local M = { hp = 3 }\nfunction M.speed() return 4 end\nreturn M\n"
+files[".tuahotreload"] = shader_signal(22)
+tick()
+assert(enemy.speed() == 4 and updates > paused, "fixing both errors resumes the game")
+
 -- Invalid shaders loaded by main must not trigger a restart either.
 files["water.glsl"] = "broken"
 files[".tuahotreload"] = shader_signal(11, "main.lua")

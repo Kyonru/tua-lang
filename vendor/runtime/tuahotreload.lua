@@ -55,8 +55,10 @@ local function read(path)
 end
 
 local function report(message, keep_running)
+  -- A shader error keeps the game running, but must not resume callbacks
+  -- that an earlier reload or runtime error paused.
+  failure_blocks = not keep_running or (failure ~= nil and failure_blocks)
   failure = message
-  failure_blocks = not keep_running
   print("[tua dev] " .. message)
 end
 
