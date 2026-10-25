@@ -4,6 +4,7 @@ const test = require("node:test");
 const Module = require("node:module");
 const commands = new Map();
 const views = new Map();
+const executed = [];
 let picks = 0;
 const noop = { dispose() {} };
 const vscode = {
@@ -11,7 +12,7 @@ const vscode = {
   EventEmitter: class { constructor() { this.event = () => noop; } fire() {} dispose() {} },
   ThemeColor: class {}, ThemeIcon: class {}, TreeItem: class { constructor(label) { this.label = label; } },
   StatusBarAlignment: { Left: 1 },
-  commands: { registerCommand: (id, callback) => { commands.set(id, callback); return noop; }, executeCommand: async () => {} },
+  commands: { registerCommand: (id, callback) => { commands.set(id, callback); return noop; }, executeCommand: async (...args) => { executed.push(args); if (args[0] === "tua.activity.stop") return commands.get(args[0])?.(args[1]); } },
   languages: { getDiagnostics: () => [] },
   window: {
     createTreeView: (id, options) => { views.set(id, options.treeDataProvider); return { dispose() {} }; },
@@ -60,5 +61,23 @@ test("Stop uses live sessions, ignores editor URIs, and does not stop unrelated 
   assert.equal(firstStops, 1, "resolve the original callback by session ID");
   commands.get("tua.activity.stop")({ id: "expired-session" });
   assert.equal(secondStops, 1, "a stale explicit session must not stop a different run");
+  feature.dispose();
+});
+
+
+test("toolbar Stop targets a multiplayer group while player Stop stays independent", () => {
+  const feature = registerRunActivity();
+  let groupStops = 0;
+  let playerStops = 0;
+  const group = feature.store.begin({ title: "Players", cwd: "/game", kind: "run" });
+  group.stop = () => groupStops++;
+  const player = feature.store.begin({ title: "Client", cwd: "/game", kind: "run", groupId: group.id });
+  player.stop = () => playerStops++;
+  commands.get("tua.activity.stop")(editorUri);
+  assert.equal(groupStops, 1);
+  assert.equal(playerStops, 0);
+  commands.get("tua.activity.stop")({ id: player.id });
+  assert.equal(groupStops, 1);
+  assert.equal(playerStops, 1);
   feature.dispose();
 });

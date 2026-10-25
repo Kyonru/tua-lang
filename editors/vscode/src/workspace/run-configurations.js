@@ -42,7 +42,7 @@ function registerRunConfigurations(context) {
     const configuration = requested ? await choose(requested) : selected();
     if (!configuration) return vscode.window.showWarningMessage(error || "Choose a Tua run configuration first.");
     await vscode.commands.executeCommand("tua.console.open");
-    return vscode.commands.executeCommand(MODES[configuration.mode], { console: true, ...(configuration.mode === "package" ? { target: configuration.packageTarget } : {}) });
+    return vscode.commands.executeCommand(MODES[configuration.mode], { console: true, title: configuration.name, configurationName: configuration.name, ...(configuration.instances ? { instances: configuration.instances } : {}), ...(configuration.mode === "package" ? { target: configuration.packageTarget } : {}) });
   };
   refresh();
   return vscode.Disposable.from(changed, view,

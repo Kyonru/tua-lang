@@ -4,6 +4,7 @@ const childProcess = require("child_process");
 const fs = require("fs");
 const path = require("path");
 const vscode = require("vscode");
+const { normalizeInstances } = require("../workspace/run-options");
 const { COMMANDS } = require("../constants");
 const {
   projectLayoutForUri,
@@ -18,13 +19,15 @@ const TASK_NAME = "Run LOVE Project";
 const RUNNING_CONTEXT = "tua.loveProjectRunning";
 
 function registerLoveProjectRunner({ appendOutputLine, getClient, getServerCommand, activity }) {
-  let activeExecution;
+  const activeExecutions = new Set();
+  let nextRun = 0;
+  let lastRun = {};
   const disposables = [
     vscode.commands.registerCommand(COMMANDS.runLoveProject, presentation =>
-      runLoveProject({ getClient, getServerCommand, showConsole: presentation?.console === true }),
+      runLoveProject({ getClient, getServerCommand, showConsole: presentation?.console === true, instances: presentation?.instances, title: presentation?.title, configurationName: presentation?.configurationName }),
     ),
     vscode.commands.registerCommand(COMMANDS.restartLoveProject, () =>
-      runLoveProject({ getClient, getServerCommand, restart: true }),
+      runLoveProject({ getClient, getServerCommand, ...lastRun, restart: true }),
     ),
     vscode.commands.registerCommand(COMMANDS.stopLoveProject, () => stopLoveProject()),
   ];
@@ -34,9 +37,8 @@ function registerLoveProjectRunner({ appendOutputLine, getClient, getServerComma
   if (vscode.tasks?.onDidEndTask) {
     disposables.push(
       vscode.tasks.onDidEndTask((event) => {
-        if (event.execution === activeExecution) {
-          activeExecution = undefined;
-          void setRunningContext(false);
+        if (activeExecutions.delete(event.execution)) {
+          void setRunningContext(activeExecutions.size > 0);
         }
       }),
     );
@@ -45,9 +47,8 @@ function registerLoveProjectRunner({ appendOutputLine, getClient, getServerComma
   if (vscode.tasks?.onDidEndTaskProcess) {
     disposables.push(
       vscode.tasks.onDidEndTaskProcess((event) => {
-        if (event.execution === activeExecution) {
-          activeExecution = undefined;
-          void setRunningContext(false);
+        if (activeExecutions.delete(event.execution)) {
+          void setRunningContext(activeExecutions.size > 0);
         }
       }),
     );
@@ -70,11 +71,20 @@ function registerLoveProjectRunner({ appendOutputLine, getClient, getServerComma
       return undefined;
     }
 
-    if (options.restart && activeExecution?.terminate) {
-      activeExecution.terminate();
+    let instances;
+    try { instances = options.instances === undefined ? undefined : normalizeInstances(options.instances); }
+    catch (error) { vscode.window.showErrorMessage(error.message); return undefined; }
+    if (options.restart) {
+      for (const execution of activeExecutions) execution.terminate();
+      activeExecutions.clear();
     }
+    lastRun = { configurationName: options.configurationName, instances, title: options.title, showConsole: options.showConsole };
 
     const task = createLoveProjectTask({
+      configurationName: options.configurationName,
+      runId: ++nextRun,
+      instances,
+      title: options.title,
       showConsole: options.showConsole,
       activity,
       appendOutputLine,
@@ -83,36 +93,42 @@ function registerLoveProjectRunner({ appendOutputLine, getClient, getServerComma
       tuaCommand: options.getServerCommand?.() || "tua",
     });
 
-    activeExecution = await vscode.tasks.executeTask(task);
+    const execution = await vscode.tasks.executeTask(task);
+    activeExecutions.add(execution);
     await setRunningContext(true);
 
     return {
       outputDirectory: layout.outputDirectory,
-      taskName: TASK_NAME,
+      taskName: task.name,
       workspaceRoot: layout.configDirectory,
     };
   }
 
   async function stopLoveProject() {
-    if (!activeExecution?.terminate) {
+    if (activeExecutions.size === 0) {
       await setRunningContext(false);
       vscode.window.showInformationMessage("No Tua LOVE project is currently running.");
       return false;
     }
 
-    activeExecution.terminate();
-    activeExecution = undefined;
+    for (const execution of activeExecutions) execution.terminate();
+    activeExecutions.clear();
     await setRunningContext(false);
     return true;
   }
 
-  return vscode.Disposable.from(...disposables);
+  return vscode.Disposable.from(...disposables, { dispose() {
+    for (const execution of activeExecutions) execution.terminate();
+    activeExecutions.clear();
+  } });
 }
 
-function createLoveProjectTask({ appendOutputLine, layout, loveCommand, tuaCommand, activity, showConsole = false }) {
+function createLoveProjectTask({ appendOutputLine, layout, loveCommand, tuaCommand, activity, showConsole = false, instances, title = TASK_NAME, runId, configurationName }) {
   const terminalOptions = {
     activity,
-    title: TASK_NAME,
+    title,
+    configurationName,
+    instances,
     appendOutputLine,
     cwd: layout.configDirectory,
     loveCommand,
@@ -127,9 +143,10 @@ function createLoveProjectTask({ appendOutputLine, layout, loveCommand, tuaComma
       type: TASK_TYPE,
       command: "runLoveProject",
       projectRoot: layout.configDirectory,
+      ...(runId === undefined ? {} : { runId }),
     },
     vscode.TaskScope.Workspace,
-    TASK_NAME,
+    title,
     "Tua",
     execution,
     [],
@@ -203,7 +220,7 @@ function resolveLoveCommand(command, options = {}) {
 }
 
 class LoveProjectTerminal {
-  constructor({ appendOutputLine, cwd, loveCommand, outputDirectory, tuaCommand, activity, kind = "run", title }) {
+  constructor({ appendOutputLine, cwd, loveCommand, outputDirectory, tuaCommand, activity, kind = "run", title, instances, args = [], groupId, configurationName }) {
     this.closeEmitter = new vscode.EventEmitter();
     this.writeEmitter = new vscode.EventEmitter();
     this.onDidClose = this.closeEmitter.event;
@@ -214,11 +231,16 @@ class LoveProjectTerminal {
     this.outputDirectory = outputDirectory;
     this.tuaCommand = tuaCommand;
     this.activeProcess = undefined;
+    this.instances = instances;
+    this.args = args;
+    this.children = [];
+    this.title = title;
+    this.kind = kind;
     this.finished = false;
     this.lineBuffers = { stdout: "", stderr: "" };
     this.sourceMaps = [];
     this.activity = activity;
-    this.session = activity?.begin({ cwd, kind, title });
+    this.session = activity?.begin({ cwd, kind, title, configurationName, ...(groupId ? { groupId } : {}) });
     if (this.session) this.session.stop = () => this.close();
   }
 
@@ -229,6 +251,7 @@ class LoveProjectTerminal {
   close() {
     this.stopped = true;
     this.killActiveProcess();
+    for (const child of this.children) child.close();
     this.finish(1);
   }
 
@@ -246,13 +269,38 @@ class LoveProjectTerminal {
       return;
     }
 
+    if (this.instances) {
+      await this.runInstances();
+      return;
+    }
+    await this.runGame();
+  }
+
+  async runInstances() {
+    // Build once, then give every player a process and an independently filterable console session.
+    this.activity?.update(this.session, "running");
+    this.children = this.instances.map(instance => new LoveProjectTerminal({
+      appendOutputLine: line => this.appendOutputLine?.(`[${instance.name}] ${line}`),
+      cwd: this.cwd, loveCommand: this.loveCommand, outputDirectory: this.outputDirectory,
+      tuaCommand: this.tuaCommand, activity: this.activity,
+      kind: this.kind, title: `${this.title}: ${instance.name}`, args: instance.args, groupId: this.session?.id,
+    }));
+    for (const [index, child] of this.children.entries()) {
+      child.onDidWrite(text => this.writeEmitter.fire(`[${this.instances[index].name}] ${text}`));
+    }
+    const codes = await Promise.all(this.children.map(child => child.runGame()));
+    if (!this.finished) this.finish(codes.find(code => code !== 0) || 0);
+  }
+
+  async runGame() {
     this.sourceMaps = this.loadSourceMaps();
     this.writeLine(`[tua] Starting LOVE from ${this.outputDirectory}`);
-    const loveCode = await this.runProcess(this.loveCommand, [this.outputDirectory], { onStart: () => this.activity?.update(this.session, "running") });
+    const loveCode = await this.runProcess(this.loveCommand, [this.outputDirectory, ...this.args], { onStart: () => this.activity?.update(this.session, "running") });
 
     if (!this.finished) {
       this.finish(loveCode);
     }
+    return loveCode;
   }
 
   runProcess(command, args, { onStart } = {}) {

@@ -55,7 +55,11 @@ function registerRunActivity() {
       const session = typeof selected?.id === "string"
         ? store.sessions.find(item => item.id === selected.id && item.active)
         : store.sessions.find(item => item.active && item.stop);
-      session?.stop?.();
+      // Toolbar Stop targets the whole multiplayer run; an explicit player row stops only that player.
+      const target = typeof selected?.id !== "string" && session?.groupId
+        ? store.sessions.find(item => item.id === session.groupId && item.active) || session
+        : session;
+      return target?.stop?.();
     }),
   );
   return { store, dispose: () => disposable.dispose() };

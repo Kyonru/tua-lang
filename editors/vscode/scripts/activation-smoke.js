@@ -512,6 +512,23 @@ async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
     assert.strictEqual(state.taskTerminations.length, 1, "restart after stop has no stale task to terminate");
     assert.strictEqual(state.executedTasks.length, 2, "restart LOVE should start a fresh task");
 
+    const players = [{ name: "Host", args: ["--host"] }, { name: "Client", args: ["--join", "localhost"] }];
+    await state.commands.get("tua.runLoveProject")({ instances: players, title: "Local players", console: true });
+    const groupTask = state.executedTasks.at(-1).task;
+    const groupTerminal = await groupTask.execution.callback();
+    assert.deepStrictEqual(groupTerminal.instances, players);
+    assert.strictEqual(groupTask.name, "Local players");
+    assert.notStrictEqual(groupTask.definition.runId, state.executedTasks.at(-2).task.definition.runId);
+    const terminationsBeforeRestart = state.taskTerminations.length;
+    await state.commands.get("tua.restartLoveProject")();
+    assert.strictEqual(state.taskTerminations.length, terminationsBeforeRestart + 2, "restart must terminate every tracked normal run");
+    const restartedGroup = await state.executedTasks.at(-1).task.execution.callback();
+    assert.deepStrictEqual(restartedGroup.instances, players, "restart preserves per-player arguments");
+    await state.commands.get("tua.stopLoveProject")();
+    const tasksBeforeInvalid = state.executedTasks.length;
+    await state.commands.get("tua.runLoveProject")({ instances: [] });
+    assert.strictEqual(state.executedTasks.length, tasksBeforeInvalid, "invalid instance groups cannot start tasks");
+
     const loveRunner = require(path.join(extensionRoot, "src", "love", "run-project.js"));
     const fakeLove = path.join(workspace, "bin", platformLoveExecutableName());
     assert.strictEqual(
