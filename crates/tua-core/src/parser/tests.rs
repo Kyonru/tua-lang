@@ -4,6 +4,41 @@ use proptest::prelude::*;
 use std::path::PathBuf;
 
 #[test]
+fn rejects_excessive_nesting_and_operator_chains_before_parsing() {
+    for source in [
+        format!("local x = {}1{}", "(".repeat(1000), ")".repeat(1000)),
+        format!("{}print(1){}", "do ".repeat(1000), " end".repeat(1000)),
+        format!("local x = {}true", "not ".repeat(1000)),
+        format!("local x = 1{}", " +\n 1".repeat(1000)),
+        format!("local x = a{}", ".field".repeat(1000)),
+    ] {
+        for result in [
+            parse_raw_tua_source("limit.tua", &source),
+            parse_raw_lua_source("limit.lua", &source),
+        ] {
+            let errors = result.unwrap_err();
+            assert!(errors[0].message.contains("complexity limit"));
+        }
+    }
+    let source = format!(
+        "-- {}\nlocal x = [=[{}]=]\n",
+        "(".repeat(1000),
+        "function ".repeat(1000)
+    );
+    assert!(parse_raw_tua_source("literal.tua", source).is_ok());
+    // Match the CLI/LSP analysis stack when exercising the accepted boundary.
+    std::thread::Builder::new()
+        .stack_size(8 * 1024 * 1024)
+        .spawn(|| {
+            let source = format!("local x = {}1{}", "(".repeat(64), ")".repeat(64));
+            assert!(parse_raw_tua_source("bounded.tua", source).is_ok());
+        })
+        .unwrap()
+        .join()
+        .unwrap();
+}
+
+#[test]
 fn raw_lua_parse_contains_lua_compatible_syntax_only() {
     let raw = parse_raw_lua_source("src/plain.lua", "local value = 1\n")
         .expect("plain Lua should raw parse");

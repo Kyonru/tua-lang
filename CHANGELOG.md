@@ -6,6 +6,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Recursive source complexity is bounded before parsing, preventing deeply
+  nested source and long operator chains from aborting the compiler.
+
 - `tua init` rejects symlinked destinations before creating or appending files.
 
 ### Added

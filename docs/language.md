@@ -876,6 +876,11 @@ Complex left-hand sides such as calls and computed indexes are rejected.
 
 ## Boundaries
 
+To keep malformed input from exhausting the compiler stack, analysis rejects
+more than 64 nested constructs or 128 operators in one expression segment with
+`TL0001`. Split deeply nested functions or long expressions into smaller pieces.
+Comments and string contents do not count toward these limits.
+
 Tua does not statically prove every Lua pattern. These remain gradual or
 conservative:
 

@@ -1,5 +1,6 @@
 mod dialect;
 mod doc;
+mod limits;
 mod model;
 mod normalize;
 
@@ -69,6 +70,7 @@ pub fn parse_raw_lua_source(
 ) -> Result<RawParsedSource, Vec<Diagnostic>> {
     let path = path.as_ref().to_path_buf();
     let source = source.into();
+    limits::validate(&path, &source)?;
     let parser_source = source.clone();
     let parser_provenance = source_line_provenance(&source);
 
@@ -91,6 +93,7 @@ pub fn parse_raw_tua_source(
 ) -> Result<RawParsedSource, Vec<Diagnostic>> {
     let path = path.as_ref().to_path_buf();
     let source = source.into();
+    limits::validate(&path, &source)?;
 
     // Large generated modules are commonly plain Lua with a `.tua` extension.
     // Select their linear Lua 5.1 grammar with a syntax-aware lexical pass,
