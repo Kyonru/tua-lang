@@ -21,6 +21,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Parser errors for reserved keywords used as variable, function, or parameter
+  names now identify the keyword and name category instead of only saying a
+  name was expected. Editor diagnostics underline the complete keyword.
+
 - The formatter keeps a space before grouped expressions after `and` and `or`,
   including nested conditions such as `inside and (not closest or ready)`.
 

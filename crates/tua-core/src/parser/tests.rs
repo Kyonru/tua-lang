@@ -1970,3 +1970,59 @@ fn bare_lua_doc_alias_without_members_still_reports_its_missing_type() {
     assert!(parsed.annotations.is_empty());
     assert_eq!(parsed.diagnostics.len(), 1, "{:?}", parsed.diagnostics);
 }
+
+#[test]
+fn reserved_keywords_in_names_have_specific_parse_errors() {
+    for (source, keyword, kind, column) in [
+        ("local and = 1", "and", "variable", 7),
+        ("local nil: number = 1", "nil", "variable", 7),
+        ("local function end() return 1 end", "end", "function", 16),
+        ("function while() end", "while", "function", 10),
+        ("function object:or() end", "or", "function", 17),
+        ("local function f(or) end", "or", "parameter", 18),
+        ("local f = function(a, false) end", "false", "parameter", 23),
+    ] {
+        let errors = parse_tua_source("names.tua", source).unwrap_err();
+        let diagnostic = errors
+            .iter()
+            .find(|error| {
+                error.message
+                    == format!("reserved keyword `{keyword}` cannot be used as a {kind} name")
+            })
+            .unwrap_or_else(|| panic!("{source}: {errors:?}"));
+        assert_eq!(diagnostic.code, Some(DiagnosticCode::SYNTAX_PARSE));
+        assert_eq!(
+            (diagnostic.line, diagnostic.column, diagnostic.end_column),
+            (1, column, column + keyword.len())
+        );
+    }
+    let errors = parse_lua_source("names.lua", "local and = 1").unwrap_err();
+    assert_eq!(
+        errors[0].message,
+        "reserved keyword `and` cannot be used as a variable name"
+    );
+}
+
+#[test]
+fn name_diagnostics_preserve_builtin_shadowing_and_other_syntax_errors() {
+    for source in [
+        "local type = 1; print(type)",
+        "local function print(type) return type end",
+        "local candy, floor, ended = 1, 2, 3",
+        "local value = { [\"end\"] = 1 }; print(value[\"end\"])",
+    ] {
+        parse_tua_source("names.tua", source).unwrap();
+        parse_lua_source("names.lua", source).unwrap();
+    }
+    for source in [
+        "local = 1",
+        "local function () end",
+        "local function f(,) end",
+        "if true then",
+    ] {
+        let errors = parse_tua_source("names.tua", source).unwrap_err();
+        assert!(errors
+            .iter()
+            .all(|error| !error.message.contains("reserved keyword")));
+    }
+}

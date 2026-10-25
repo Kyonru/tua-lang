@@ -937,3 +937,27 @@ fn did_close_removes_document_and_clears_diagnostics() {
     );
     assert!(response_with_id(&output, 2)["result"].is_null());
 }
+
+#[test]
+fn reserved_function_names_publish_specific_keyword_diagnostics() {
+    let uri = "file:///tmp/reserved-function-name.tua";
+    let mut server = TestServer::new();
+    server.send(did_open(uri, "local function end() return 1 end\n"));
+    let diagnostics = last_published_diagnostics(server.output(), uri);
+    let diagnostic = diagnostics
+        .iter()
+        .find(|diagnostic| {
+            diagnostic["message"] == "reserved keyword `end` cannot be used as a function name"
+        })
+        .expect("reserved keyword diagnostic should be published");
+    assert_eq!(diagnostic["code"], "TL0001");
+    assert_eq!(diagnostic["severity"], 1);
+    assert_eq!(
+        diagnostic["range"]["start"],
+        json!({ "line": 0, "character": 15 })
+    );
+    assert_eq!(
+        diagnostic["range"]["end"],
+        json!({ "line": 0, "character": 18 })
+    );
+}

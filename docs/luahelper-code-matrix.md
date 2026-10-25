@@ -50,7 +50,7 @@ valid unless it is listed below.
 
 | Code | Meaning | Control |
 | --- | --- | --- |
-| `TL0001` | Source cannot be parsed as valid Lua/Tua syntax. | Always enabled. |
+| `TL0001` | Source cannot be parsed as valid Lua/Tua syntax, including reserved keywords where an identifier is expected. | Always enabled. |
 | `TL0002` | Compound-assignment syntax or its target is invalid. | Always enabled. |
 | `TL0003` | A supported LuaDoc annotation is malformed. | `diagnostics.doc_annotations` |
 | `TL0004` | The parser recognized a Luau grammar form that is not part of Tua. | Always enabled; blocks analysis and emission. |

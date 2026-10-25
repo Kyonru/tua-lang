@@ -27,6 +27,17 @@ that final invariant.
     syntax or behavior. For a focused explanation of inference, narrowing,
     shared aliases, and declaration modules, see [Typing In Tua](typing.md).
 
+## Names And Keywords
+
+Reserved keywords such as `and`, `or`, and `end` cannot be used as variable,
+function, or parameter names. In these name positions, `TL0001` identifies the
+keyword, for example: ``reserved keyword `and` cannot be used as a variable name``.
+Use a different identifier, such as `condition`, `either`, or `finish`.
+
+Built-in names such as `type` and `print` are ordinary identifiers and can be
+shadowed by locals or parameters. Keyword text is also valid as a quoted table
+key: `record["end"]`.
+
 ## Find A Feature
 
 ### Types And Data

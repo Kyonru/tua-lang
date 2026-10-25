@@ -1851,16 +1851,52 @@ fn token_text(token: &full_moon::tokenizer::TokenReference) -> String {
 }
 
 fn parser_error_to_diagnostic(path: &Path, error: full_moon::Error) -> Diagnostic {
-    let (start, _) = error.range();
+    let (start, end) = error.range();
     let position = SourcePosition::from_full_moon(start);
-
-    Diagnostic::error(
+    let reserved_name = reserved_name_error(&error);
+    let underline_keyword = reserved_name.is_some();
+    let mut diagnostic = Diagnostic::error(
         path,
         position.line,
         position.column,
-        error.error_message().into_owned(),
+        reserved_name.unwrap_or_else(|| error.error_message().into_owned()),
     )
-    .with_code(DiagnosticCode::SYNTAX_PARSE)
+    .with_code(DiagnosticCode::SYNTAX_PARSE);
+    if underline_keyword {
+        let end = SourcePosition::from_full_moon(end);
+        diagnostic = diagnostic.with_range(position.line, position.column, end.line, end.column);
+    }
+    diagnostic
+}
+
+// Refine identifier errors from the parser rather than maintaining another
+// keyword list or rejecting valid shadowing of built-in names.
+fn reserved_name_error(error: &full_moon::Error) -> Option<String> {
+    let full_moon::Error::AstError(error) = error else {
+        return None;
+    };
+    let full_moon::tokenizer::TokenType::Symbol { symbol } = error.token().token_type() else {
+        return None;
+    };
+    let keyword = symbol.to_string();
+    if !keyword
+        .chars()
+        .all(|character| character.is_ascii_alphabetic())
+    {
+        return None;
+    }
+    let kind = match error.error_message() {
+        "expected either a variable name or `function`" => "variable",
+        "expected function name"
+        | "expected a function name"
+        | "expected name after `.`"
+        | "expected name after `:`" => "function",
+        "expected a parameter name or `)`" => "parameter",
+        _ => return None,
+    };
+    Some(format!(
+        "reserved keyword `{keyword}` cannot be used as a {kind} name"
+    ))
 }
 
 fn diagnostic_for_node(path: &Path, node: &impl Node, message: impl Into<String>) -> Diagnostic {
