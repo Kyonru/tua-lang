@@ -24,6 +24,61 @@ Code without changing the normal Lua and LOVE workflow.
   inspect language-server health, and keep `tua.toml` fully documented in the
   editor.
 
+## Feature tour
+
+Captured from the extension running in VSCodium with the optional **Indigo Carbon
+HC** theme. The demo uses [Starfall](../../examples/starfall), a sample store, and
+the repository's astronaut sprite sheet. These are actual editor views.
+
+**Project workspace.** Named run configurations, project navigation, asset
+references, and compiler-backed Tua editing in one place.
+
+![Tua workspace with Development, Debug, Hot reload and Package configurations, expanded project files, and the asset inspector](docs/screenshots/workspace.png)
+
+<details>
+<summary><strong>State-machine preview</strong> — states, transitions, and source navigation</summary>
+
+Inspect the scene's `title`, `playing`, and `over` states and the transitions
+between them. Select a state or transition for details; double-click to open its
+source. This is the static source preview, separate from live runtime inspection.
+
+![State-machine graph showing play and crash transitions between title, playing and over, with topology details](docs/screenshots/state-machine.png)
+
+</details>
+
+<details>
+<summary><strong>Sprite animation preview</strong> — playback, frame selection, speed, and zoom</summary>
+
+Preview a `spriteSheet` declaration without starting the game. Switch animations,
+step through frames, and inspect the selected frame on the source sheet.
+
+![Astronaut sprite preview with idle and walk animations, playback controls, frame chips, and the source sprite sheet](docs/screenshots/sprite-animation.png)
+
+</details>
+
+<details>
+<summary><strong>Module graph</strong> — dependencies, exports, cycles, and inclusion paths</summary>
+
+Follow dependencies from the entry module, select a module for details, and
+filter unresolved imports or cycles.
+
+![Starfall module dependency graph with main.tua selected and its dependency overview visible](docs/screenshots/module-graph.png)
+
+</details>
+
+<details>
+<summary><strong>Live runtime inspector</strong> — state machines, object pools, and stores</summary>
+
+Inspect values from a running local LÖVE process. The example shows the active
+scene, pool capacity, and a demo player's store. Inspection is opt-in and stays
+out of release builds.
+
+![Live runtime inspector showing the scene state, pool counts, and expanded player store values beside Tua source](docs/screenshots/runtime-inspector.png)
+
+</details>
+
+[Regenerate these screenshots](docs/screenshots/README.md).
+
 ## Quick Start
 
 1. Install the extension from the
