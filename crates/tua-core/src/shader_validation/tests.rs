@@ -18,6 +18,10 @@ fn encodes_length_framed_requests() {
         encode_request(7, ShaderTarget::Gles, "vec4 é;"),
         b"SHADER 7 gles 8\nvec4 \xc3\xa9;".to_vec()
     );
+    assert_eq!(
+        encode_request(1, ShaderTarget::Desktop, "a;\r\nb;\r\n"),
+        b"SHADER 1 desktop 6\na;\nb;\n".to_vec()
+    );
     assert_eq!(ShaderTarget::parse("desktop"), Some(ShaderTarget::Desktop));
     assert_eq!(ShaderTarget::parse("metal"), None);
 }

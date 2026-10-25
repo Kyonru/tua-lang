@@ -69,7 +69,12 @@ impl<'de> serde::Deserialize<'de> for ShaderTarget {
 }
 
 /// One framed request: `SHADER <id> <target> <byte-count>\n<source>`.
+///
+/// CRLF becomes LF before framing: LÖVE reads stdin in text mode on Windows,
+/// which drops each CR and would desynchronize the byte count. Line numbers
+/// are unchanged.
 pub fn encode_request(id: usize, target: ShaderTarget, source: &str) -> Vec<u8> {
+    let source = source.replace("\r\n", "\n");
     let mut request = format!("SHADER {id} {} {}\n", target.as_str(), source.len()).into_bytes();
     request.extend_from_slice(source.as_bytes());
     request
