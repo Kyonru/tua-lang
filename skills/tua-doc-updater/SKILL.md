@@ -64,6 +64,23 @@ separate docs request when the implementation changed.
   defects and distinguish fixed issues from remaining gaps.
 - Remove stale language such as "not implemented" after behavior lands.
 
+## Release Summaries
+
+- When preparing a release, write or refresh `### Release summary` at the
+  start of the relevant changelog entry before creating the release tag.
+  Keep detailed changes below the next level-three heading.
+- Follow `docs/releases.md`: aim for 150–300 words, with a short overview,
+  `#### Highlights` containing three to six user-facing bullets, and
+  `#### Upgrade notes` when needed. Include material compatibility and security
+  changes; summarize only changes supported by the detailed entry.
+- Maintain the summary under `Unreleased` until release preparation moves the
+  entry to its version. Do not require a summary for every individual fix.
+- Generate GitHub notes with `scripts/package_release.py notes`; do not keep
+  a second hand-maintained summary. The generator adds the tagged changelog
+  link and download/checksum guidance.
+- If the release is already tagged, report whether the tag contains the new
+  summary. Do not silently move a tag or edit a published release.
+
 ## Verification
 
 - Run `make docs-build` after docs or nav changes.

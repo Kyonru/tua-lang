@@ -48,6 +48,22 @@ cleanup, docs, packaging, or conflict resolution.
   with `unzip -t`, and report its SHA-256. `extension-check` also validates
   `.vscode/launch.json` through `launch-config-check.js`.
 
+## Release Notes Checks
+
+- Before tagging a release, use `tua-doc-updater` to prepare its changelog
+  summary according to `docs/releases.md`.
+- Run `python3 scripts/package_release.py notes --changelog CHANGELOG.md
+  --version <version> --output <temporary-notes-file>` after the final notes
+  edit. Inspect the result: overview, highlights, applicable upgrade notes,
+  correct tagged changelog link, and download/checksum guidance. Confirm that
+  detailed changelog sections were excluded; legacy full-note fallback is not
+  sufficient for a new release.
+- Run `make release-tool-test docs-build diff-check` when changing the summary
+  or its generation workflow. These focused checks do not replace the full
+  release gate for code changes.
+- Report if an existing release tag predates these changes; do not claim the
+  tagged workflow will publish the updated summary until it includes them.
+
 ## Environment Failures
 
 Distinguish a product failure from a sandbox or host limitation. For example,
