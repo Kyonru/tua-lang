@@ -4631,3 +4631,42 @@ effect:sendColor("tint", { 1, 0.5, 0.25, 1 })
     )
     .expect("LOVE table parameters should accept arrays");
 }
+
+#[test]
+fn merges_array_rows_with_different_fields_into_one_record() {
+    check_tua_source(
+        "src/main.tua",
+        r#"
+local perks = {
+  { id = "laser", enabled = false, cooldown = 0.1 },
+  { id = "ricochet", enabled = true, cooldown = 0, level = 1, bounce = { range = 8 } },
+  { id = "multishot", enabled = false, cooldown = 0, bounce = { range = 4, angle = 0.5 } },
+}
+
+for _, perk in ipairs(perks) do
+  if perk.level then
+    perk.level += 1
+  end
+  local range: number = perk.bounce and perk.bounce.range or 0
+  local angle = perk.bounce and perk.bounce.angle
+  print(perk.id, perk.enabled, range, angle)
+end
+"#,
+    )
+    .expect("fields present in only some rows should be optional, not a union error");
+
+    let diagnostics = check_tua_source(
+        "src/main.tua",
+        r#"
+local rows = { { id = "a" }, { id = "b", level = 1 } }
+local id: number = rows[1].id
+"#,
+    )
+    .expect_err("merged rows keep their field types");
+    assert!(
+        diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.message.contains("expected number, found string")),
+        "{diagnostics:#?}"
+    );
+}

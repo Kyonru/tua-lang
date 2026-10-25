@@ -118,6 +118,24 @@ a key may be absent. Store the result in a local and guard it, or provide a
 default with `or`, before using it as `Value`. Values yielded by `pairs` retain
 the declared value type. This is stricter than earlier releases.
 
+An unannotated array of records infers one row type. A field that only some
+rows define becomes optional, so every row can read it:
+
+```tua
+local perks = {
+  { id = "laser", cooldown = 0.1 },
+  { id = "ricochet", cooldown = 0, level = 1 }, -- level?: number
+}
+for _, perk in ipairs(perks) do
+  if perk.level then
+    perk.level += 1
+  end
+end
+```
+
+Rows that are not all plain records, such as records mixed with numbers or
+class instances, keep a union of their types.
+
 Ordinary `values[index]` reads use the declared element type, matching the
 dense-array contract. When the index may be outside the populated range, use
 Lua's `rawget(values, index)`: Tua infers `T | nil`, and direct indexed

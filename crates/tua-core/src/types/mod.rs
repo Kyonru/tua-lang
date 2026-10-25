@@ -3,7 +3,7 @@ mod environment;
 mod format;
 mod model;
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::hash::{DefaultHasher, Hash, Hasher};
 
 pub use assignability::{
@@ -46,6 +46,63 @@ pub(crate) fn deduplicate_inferred_types(types: Vec<Type>) -> Vec<Type> {
     }
 
     unique
+}
+
+/// Rows of an array literal that are all plain records, such as
+/// `{ { id = "a" }, { id = "b", level = 1 } }`, merge into one record type. A
+/// field missing from some rows becomes optional, so reading it yields
+/// `T | nil` instead of failing on a union of row shapes. Other items keep
+/// their distinct types.
+pub(crate) fn merge_record_rows(items: Vec<Type>) -> Vec<Type> {
+    let rows = deduplicate_inferred_types(items);
+    if rows.len() < 2 || !rows.iter().all(is_plain_record) {
+        return rows;
+    }
+
+    let mut fields = BTreeMap::<String, (Vec<Type>, usize, bool)>::new();
+    for row in &rows {
+        let Type::Table(shape) = row else {
+            unreachable!("every row was checked to be a record");
+        };
+        for (name, field) in shape.fields() {
+            let (types, present, optional) = fields.entry(name.to_owned()).or_default();
+            types.push(field.ty.clone());
+            *present += 1;
+            *optional |= field.optional;
+        }
+    }
+
+    let merged = fields
+        .into_iter()
+        .map(|(name, (types, present, optional))| {
+            let mut types = merge_record_rows(types);
+            let ty = if types.len() == 1 {
+                types.remove(0)
+            } else {
+                Type::union(types)
+            };
+            let field = if optional || present < rows.len() {
+                TableField::optional(ty)
+            } else {
+                TableField::required(ty)
+            };
+            (name, field)
+        });
+
+    vec![Type::table(merged)]
+}
+
+fn is_plain_record(ty: &Type) -> bool {
+    let Type::Table(shape) = ty else {
+        return false;
+    };
+
+    shape.fields().next().is_some()
+        && !shape.has_index_signature()
+        && shape.metatable_facts().is_none()
+        && !shape.has_self_index()
+        && shape.constructor_methods().next().is_none()
+        && shape.nominal_identity().is_none()
 }
 
 use crate::parser::{FunctionTypeParameter as ParsedFunctionTypeParameter, TuaType};

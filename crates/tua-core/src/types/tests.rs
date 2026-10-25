@@ -388,6 +388,30 @@ fn widening_literals_collapses_members_that_become_equal() {
 }
 
 #[test]
+fn record_rows_merge_with_optional_fields_but_other_items_stay_distinct() {
+    let merged = merge_record_rows(vec![
+        Type::table([("id", TableField::required(Type::string()))]),
+        Type::table([
+            ("id", TableField::required(Type::string())),
+            ("level", TableField::required(Type::number())),
+        ]),
+    ]);
+    assert_eq!(
+        merged,
+        vec![Type::table([
+            ("id", TableField::required(Type::string())),
+            ("level", TableField::optional(Type::number())),
+        ])]
+    );
+
+    let mixed = vec![
+        Type::table([("id", TableField::required(Type::string()))]),
+        Type::number(),
+    ];
+    assert_eq!(merge_record_rows(mixed.clone()), mixed);
+}
+
+#[test]
 fn table_fields_must_be_assignable() {
     let source = Type::table([("hp", TableField::required(Type::string()))]);
     let target = Type::table([("hp", TableField::required(Type::number()))]);

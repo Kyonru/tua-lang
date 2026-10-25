@@ -2051,7 +2051,8 @@ fn pair_types_from_iterator_function(function: &FunctionType) -> Option<(Type, T
 
 fn table_or_array_type(fields: Vec<(String, TableField)>, array_items: Vec<Type>) -> Type {
     let table = (!fields.is_empty()).then(|| Type::table(fields));
-    let array = (!array_items.is_empty()).then(|| Type::array(union_types(array_items)));
+    let array = (!array_items.is_empty())
+        .then(|| Type::array(union_types(crate::types::merge_record_rows(array_items))));
 
     match (table, array) {
         (Some(table), Some(array)) => Type::union([table, array]),
