@@ -10,10 +10,10 @@ workflow pages under `docs/`. Completed work belongs in
 
 ## Now
 
-### Harden The Current 0.3 Release Line
+### Ship And Qualify The 0.4 Release Line
 
-- Ship the filesystem-isolation and malformed-configuration fixes in the next
-  patch release, then publish coordinated security guidance.
+- Ship the filesystem-isolation, malformed-input, and analysis fixes in 0.4.0
+  with migration notes and coordinated security guidance.
 - Keep CLI, server, extension, changelog, and migration notes synchronized.
 - Collect independent real-project evidence for deterministic inline
   completion before enabling it by default; keep exact project retrieval

@@ -6,6 +6,22 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-25
+
+### Compatibility and hardening
+
+This minor release tightens checking and filesystem isolation. When upgrading
+from 0.3.0:
+
+- Guard dictionary lookups or provide defaults before using their values.
+- Correct primitive arithmetic and comparison type errors reported as `TL1003`.
+- Replace symlinked generated-output destinations with directories inside the
+  project. Custom files in build output are preserved on disk but are excluded
+  from packages unless they belong to the current build inventory.
+- Split sources that exceed the documented nesting, expression, or input-size
+  limits. Rename may refuse an occupied name even in a disjoint scope; choose
+  a fresh name.
+
 - Analysis snapshots share immutable per-file records to reduce editor memory
   and copy cost. Performance gates collect 20 samples and enforce separate warm,
   contended and sampled-memory limits, including larger project fixtures.
@@ -87,6 +103,9 @@ language or editor behavior, and migration notes call out those changes.
 
 - The extension publishing toolchain no longer resolves the high-severity
   vulnerable Azure authorization-flow dependency reported by `npm audit`.
+
+- The publishing toolchain also pins a patched UUID dependency while retaining
+  the Azure authentication version that avoids that authorization-flow issue.
 
 ### Fixed
 
@@ -1213,7 +1232,8 @@ language or editor behavior, and migration notes call out those changes.
 - Project source and `tua.toml` files require no migration for this coordinated
   release.
 
-[Unreleased]: https://github.com/Kyonru/tua-lang/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/Kyonru/tua-lang/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/Kyonru/tua-lang/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/Kyonru/tua-lang/compare/v0.2.9...v0.3.0
 [0.2.9]: https://github.com/Kyonru/tua-lang/compare/v0.2.8...v0.2.9
 [0.2.8]: https://github.com/Kyonru/tua-lang/compare/v0.2.7...v0.2.8
