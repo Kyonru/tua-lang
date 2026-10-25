@@ -62,6 +62,7 @@ mod semantic;
 mod semantic_domains;
 pub mod semantic_index;
 pub mod semantic_token;
+pub mod shader_validation;
 mod signal;
 pub mod signature_help;
 mod source_text;
