@@ -325,7 +325,9 @@ impl Default for ShadersConfig {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ShaderValidationMode {
-    /// Validate when a LÖVE executable is found.
+    Love,
+    Glslang,
+    /// Prefer LOVE, falling back to glslang when LOVE cannot validate.
     Auto,
     Off,
 }
@@ -334,6 +336,8 @@ impl ShaderValidationMode {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Auto => "auto",
+            Self::Love => "love",
+            Self::Glslang => "glslang",
             Self::Off => "off",
         }
     }
@@ -346,9 +350,11 @@ impl<'de> Deserialize<'de> for ShaderValidationMode {
     {
         match String::deserialize(deserializer)?.as_str() {
             "auto" => Ok(Self::Auto),
+            "love" => Ok(Self::Love),
+            "glslang" => Ok(Self::Glslang),
             "off" => Ok(Self::Off),
             other => Err(D::Error::custom(format!(
-                "unknown shader validation mode `{other}`; expected `auto` or `off`"
+                "unknown shader validation mode `{other}`; expected `auto`, `love`, `glslang`, or `off`"
             ))),
         }
     }

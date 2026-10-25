@@ -4873,3 +4873,63 @@ fn dev_without_launch_publishes_ready_output_and_reloads() {
     assert!(stdout.contains("dev: sent reload 2"));
     assert_eq!(fs::read_to_string(signal).unwrap(), "2\n");
 }
+
+#[cfg(unix)]
+#[test]
+fn check_shader_glslang_fallback_and_missing_tools() {
+    use std::os::unix::fs::PermissionsExt;
+    let temp = TempDir::new("shader-glslang");
+    fs::create_dir_all(temp.path.join("src")).unwrap();
+    fs::write(temp.path.join("tua.toml"), DEFAULT_CONFIG_TEXT).unwrap();
+    fs::write(
+        temp.path.join("src/main.tua"),
+        "local effect = shader \"effect.glsl\"\nprint(effect)\n",
+    )
+    .unwrap();
+    fs::write(
+        temp.path.join("src/effect.glsl"),
+        "vec4 effect(vec4 c, Image t, vec2 u, vec2 p) { return missing; }\n",
+    )
+    .unwrap();
+    let fake = temp.path.join("fake-glslang");
+    fs::write(
+        &fake,
+        "#!/bin/sh\necho 'ERROR: 1:1: undeclared identifier'; exit 2\n",
+    )
+    .unwrap();
+    fs::set_permissions(&fake, fs::Permissions::from_mode(0o700)).unwrap();
+    for mode in ["auto", "glslang"] {
+        fs::write(
+            temp.path.join("tua.toml"),
+            DEFAULT_CONFIG_TEXT.replace("validate = \"auto\"", &format!("validate = \"{mode}\"")),
+        )
+        .unwrap();
+        let output = tua()
+            .arg("check")
+            .current_dir(&temp.path)
+            .env("TUA_LOVE", "/no/such/love")
+            .env("TUA_GLSLANG", &fake)
+            .output()
+            .unwrap();
+        assert!(!output.status.success());
+        let text = format!(
+            "{}{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(
+            text.contains("TL2016") && text.contains("effect.glsl:1:1"),
+            "{text}"
+        );
+    }
+    fs::write(temp.path.join("tua.toml"), DEFAULT_CONFIG_TEXT).unwrap();
+    let output = tua()
+        .args(["check", "--deny-warnings"])
+        .current_dir(&temp.path)
+        .env("TUA_LOVE", "/no/such/love")
+        .env("TUA_GLSLANG", "/no/such/glslang")
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{output:?}");
+    assert!(String::from_utf8_lossy(&output.stdout).contains("shader compilation skipped"));
+}

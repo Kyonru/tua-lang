@@ -12,6 +12,9 @@ language or editor behavior, and migration notes call out those changes.
   successful update counts and age, subscriber/watcher counts, and markers for
   fields added, changed, or removed between snapshots. Production store runtimes
   and packaged output remain unchanged.
+- Shader validation falls back from LÖVE to headless `glslangValidator`, using
+  generated LÖVE 11.5 headers. Select `auto`, `love`, `glslang`, or `off` in
+  `[shaders]`; executable paths remain outside project configuration.
 
 - An opt-in live Runtime Inspector selects individual development players and
   displays ECS components, active states, signal activity, and pool counts.

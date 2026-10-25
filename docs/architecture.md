@@ -47,7 +47,10 @@ Shader compilation follows the same boundary: `tua-core` owns the request
 protocol and diagnostics, the CLI supplies a bounded LÖVE process adapter, and
 the LSP owns idle scheduling and stale-result rejection. The executable injects
 the adapter through `run_stdio_with_shader_validator`; core analysis never
-starts a process. Editor shader overlays reuse the shared asset inventory.
+starts a process. Headless fallback headers are generated from the vendored
+LÖVE 11.5 wrapper by `scripts/generate-shader-headers.py`; core wraps stages and
+maps user diagnostics, while CLI owns bounded glslang processes. Header failures
+remain tool failures instead of being attributed to user source. Editor shader overlays reuse the shared asset inventory.
 Uniform metadata lives in the asset index as immutable shared models, reused
 by the checker and editor queries. Disk refreshes compare shader content and
 reuse unchanged models; synchronized overlays replace only the current

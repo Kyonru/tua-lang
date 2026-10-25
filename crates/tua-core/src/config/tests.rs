@@ -870,6 +870,19 @@ fn parses_shader_validation_settings() {
         ShadersConfig::default()
     );
 
+    for (name, expected) in [
+        ("love", ShaderValidationMode::Love),
+        ("glslang", ShaderValidationMode::Glslang),
+    ] {
+        assert_eq!(
+            parse_config(&format!("[shaders]\nvalidate = \"{name}\"\n"))
+                .unwrap()
+                .shaders
+                .validate,
+            expected
+        );
+    }
+
     for invalid in [
         "[shaders]\nvalidate = \"always\"\n",
         "[shaders]\ntargets = [\"metal\"]\n",

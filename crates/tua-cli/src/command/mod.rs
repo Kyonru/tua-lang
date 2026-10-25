@@ -91,7 +91,7 @@ pub fn run_watch_command(cwd: impl AsRef<Path>) -> Result<(), CliError> {
 }
 
 pub fn run_lsp_command() -> Result<(), CliError> {
-    tua_lsp::run_stdio_with_shader_validator(Box::new(crate::shaders::LoveShaderValidator::new(
+    tua_lsp::run_stdio_with_shader_validator(Box::new(crate::shaders::ProjectShaderValidator::new(
         None,
     )))
     .map_err(|source| CliError::usage(format!("failed to run tua lsp: {source}")))

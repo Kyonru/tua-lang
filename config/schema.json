@@ -169,9 +169,11 @@
       "default": "auto",
       "enum": [
         "auto",
+        "love",
+        "glslang",
         "off"
       ],
-      "description": "Compile shader assets with LOVE's validateShader during tua check. Auto validates when a LOVE executable is found."
+      "description": "Compile referenced shaders during check and trusted editor validation. Auto prefers LOVE, falling back to glslangValidator when LOVE cannot validate."
     },
     {
       "path": "shaders.targets",

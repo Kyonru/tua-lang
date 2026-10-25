@@ -113,9 +113,16 @@ pub(crate) fn run_project_diagnostics(
             },
         )
         .map_err(CliError::usage)?;
-        match crate::shaders::LoveShaderValidator::new(love).validate(&requests) {
+        match crate::shaders::ProjectShaderValidator::new(love).validate(&requests) {
             Ok(outcomes) => diagnostics.extend(validation_diagnostics(&requests, &outcomes)),
-            Err(error) if error == crate::love::LOVE_NOT_FOUND => {
+            Err(error)
+                if [
+                    crate::love::LOVE_NOT_FOUND,
+                    crate::shaders::NO_GLSLANG,
+                    crate::shaders::NO_VALIDATOR,
+                ]
+                .contains(&error.as_str()) =>
+            {
                 note = format!("note: shader compilation skipped: {error}\n");
             }
             Err(error) => {

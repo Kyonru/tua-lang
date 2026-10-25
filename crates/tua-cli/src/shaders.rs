@@ -1,4 +1,7 @@
 //! Isolated, bounded LOVE subprocess used by check and the LSP worker.
+mod glslang;
+pub(crate) use glslang::{ProjectShaderValidator, NO_GLSLANG, NO_VALIDATOR};
+
 use std::fs;
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
@@ -227,8 +230,9 @@ mod tests {
     use tua_core::shader_validation::ShaderTarget;
     use tua_core::{AssetCategory, ProjectAsset};
 
-    fn request(source: &str) -> ShaderValidationRequest {
+    pub(super) fn request(source: &str) -> ShaderValidationRequest {
         ShaderValidationRequest {
+            mode: tua_core::config::ShaderValidationMode::Auto,
             asset: ProjectAsset {
                 path: "test.glsl".into(),
                 relative_path: "test.glsl".into(),

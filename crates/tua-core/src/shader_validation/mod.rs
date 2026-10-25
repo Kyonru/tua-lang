@@ -6,6 +6,9 @@
 //! protocol with it. This module holds the pure parts: encoding requests,
 //! reading answers, and turning them into diagnostics. Callers own the process.
 
+mod glslang;
+pub use glslang::{parse_glslang_output, shader_compile_units, ShaderCompileUnit};
+
 use std::collections::BTreeMap;
 use std::path::Path;
 
@@ -329,6 +332,7 @@ mod tests;
 /// One immutable input to the external validator. The source may be an editor overlay.
 #[derive(Clone, Debug)]
 pub struct ShaderValidationRequest {
+    pub mode: crate::config::ShaderValidationMode,
     pub asset: crate::asset::ProjectAsset,
     pub target: ShaderTarget,
     pub source: String,
@@ -336,6 +340,11 @@ pub struct ShaderValidationRequest {
 
 /// Process orchestration is supplied by the executable; core analysis never spawns LOVE.
 pub trait ShaderValidator: Send {
+    /// Trusted tool identity; changes invalidate cached outcomes after upgrades.
+    fn cache_key(&self) -> String {
+        String::new()
+    }
+
     /// Release external resources when no referenced shaders need validation.
     fn stop(&mut self) {}
 
@@ -375,6 +384,7 @@ pub fn shader_validation_requests(
         }
         for target in &targets {
             requests.push(ShaderValidationRequest {
+                mode: config.validate,
                 asset: asset.clone(),
                 target: *target,
                 source: source.clone(),

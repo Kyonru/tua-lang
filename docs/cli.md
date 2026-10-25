@@ -275,16 +275,24 @@ Use `tua check --love /path/to/love`, `TUA_LOVE`, or put LÖVE on `PATH`. On mac
 Tua also tries `/Applications/love.app/Contents/MacOS/love`. On Windows use
 `lovec.exe` for console I/O; automatic discovery prefers it. Windows validation
 has not yet been tested on a real LÖVE installation. A graphical session and
-working graphics driver are required. Missing LÖVE produces a skip note; startup,
-protocol, and timeout failures fail the check rather than claim validation passed.
+working graphics driver are required for LÖVE. In `auto` mode, failure to start
+or communicate with LÖVE falls back to headless `glslangValidator`. Actual shader
+errors from LÖVE are retained. Find glslang on `PATH` or set `TUA_GLSLANG` to a
+trusted executable. If neither tool exists, Tua prints one skip note (unaffected
+by `--deny-warnings`); other validator failures fail the check.
+
+The fallback uses generated headers from vendored LÖVE 11.5, with gamma correction
+disabled. Desktop uses GLSL 3.30; GLES uses ES 1.00 for `glsl1` and ES 3.00 for
+`glsl3`. It validates language compatibility, not a device's GPU support.
 
 ```toml
 [shaders]
-validate = "auto" # "off" skips compilation checks
+validate = "auto" # also "love", "glslang", or "off"
 targets = ["desktop", "gles"] # default: ["desktop"]
 ```
 
 Executable paths are deliberately not accepted in project configuration. Each
 validation batch is limited to 512 requests, 16 MiB of shader source, and ten
-seconds after startup (which also has a ten-second timeout). Validation reflects
-the installed LÖVE version and driver; it does not prove support on every device.
+seconds per backend after startup (LÖVE startup also has a ten-second timeout).
+LÖVE validation reflects the installed engine; glslang follows the bundled 11.5
+wrapper. Neither proves support on every device.

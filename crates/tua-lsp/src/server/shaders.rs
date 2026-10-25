@@ -52,6 +52,7 @@ impl ShaderWorker {
         let stopped = cancelled.clone();
         let thread = std::thread::spawn(move || {
             let mut previous_inputs = Vec::new();
+            let mut previous_validator = String::new();
             let mut previous_outcomes = Vec::new();
             while let Ok(job) = receiver.recv() {
                 let result = (|| {
@@ -65,21 +66,25 @@ impl ShaderWorker {
                             (
                                 request.asset.path.clone(),
                                 request.target,
+                                request.mode,
                                 request.source.clone(),
                             )
                         })
                         .collect();
-                    let outcomes = if inputs == previous_inputs {
-                        previous_outcomes.clone()
-                    } else {
-                        let outcomes = validator.validate(&requests)?;
-                        if outcomes.len() != requests.len() {
-                            return Err("incomplete shader validator results".to_owned());
-                        }
-                        previous_inputs = inputs;
-                        previous_outcomes = outcomes.clone();
-                        outcomes
-                    };
+                    let validator_key = validator.cache_key();
+                    let outcomes =
+                        if inputs == previous_inputs && validator_key == previous_validator {
+                            previous_outcomes.clone()
+                        } else {
+                            let outcomes = validator.validate(&requests)?;
+                            if outcomes.len() != requests.len() {
+                                return Err("incomplete shader validator results".to_owned());
+                            }
+                            previous_inputs = inputs;
+                            previous_validator = validator_key;
+                            previous_outcomes = outcomes.clone();
+                            outcomes
+                        };
                     let mut diagnostics = BTreeMap::<String, Vec<Value>>::new();
                     for diagnostic in job
                         .snapshot

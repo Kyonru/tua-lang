@@ -43,8 +43,8 @@ Fake-process timeout/protocol tests, editor synchronization tests, and a blocked
 validator/interactive-hover regression cover the boundaries. Real LÖVE 11.5 on
 macOS was tested; Windows `lovec.exe` remains unverified. Phase 1 editor features
 and Phase 2 value-shape diagnostics are also implemented below. The
-glslangValidator fallback and setup tooling remain planned. Phase 5 shader
-hot reload is implemented.
+glslangValidator fallback and Phase 5 shader hot reload are implemented;
+Phase 4 setup tooling remains planned.
 
 ## Current state
 
@@ -349,6 +349,16 @@ This depends on the `table` parameter fix (`b054c6b`) so that arrays reach the
 check as `number[]` rather than an empty table.
 
 ## Phase 3: GLSL compilation (`TL2016`)
+
+Implemented (Unreleased). Both CLI and trusted LSP validation prefer LÖVE in
+`auto` mode (the user-selected policy) and fall back only on infrastructure
+failure, never on a reported shader error. Explicit `love`/`glslang` modes are
+supported. `TUA_GLSLANG` or PATH selects the fallback executable. Generated
+11.5 headers, bounded processes, source-string line mapping, and validator-mode
+cache invalidation have regressions. The real 11-shader corpus passes expected
+valid/invalid outcomes on both targets; Linux CI installs glslang and checks
+header drift plus this corpus. Gamma correction is disabled in the fallback.
+Real Windows LÖVE/glslang process behavior remains unverified.
 
 ### Validators
 

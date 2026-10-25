@@ -74,7 +74,12 @@ jobs:
           node-version: 22
       - name: Install Lua and LOVE runtime test dependencies
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y luajit love xvfb xauth
+        run: sudo apt-get update && sudo apt-get install -y luajit love xvfb xauth glslang-tools
+      - name: Verify headless shader validation
+        if: runner.os == 'Linux'
+        run: |
+          LUA=luajit python3 scripts/generate-shader-headers.py --check
+          cargo test -p tua-cli real_glslang --lib -- --ignored
       - name: Install LOVE debugger adapter
         if: runner.os == 'Linux'
         shell: bash
