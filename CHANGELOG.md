@@ -58,6 +58,8 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- The run configuration picker and Stop action now handle implicit editor-toolbar
+  arguments correctly. Session actions resolve their live callbacks by ID.
 - Sprite previews preserve playback settings and keyboard focus, replay completed
   animations, and stop animation work while paused or hidden. Invalid frames and
   unreadable images show actionable errors. Playback controls stay accessible in

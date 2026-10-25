@@ -39,7 +39,7 @@ function registerRunActivity() {
   update();
   const disposable = vscode.Disposable.from(store, changed, view, status, store.subscribe(update),
     vscode.commands.registerCommand("tua.activity.show", async selected => {
-      const session = selected || store.sessions[0];
+      const session = typeof selected?.id === "string" ? store.sessions.find(item => item.id === selected.id) : store.sessions[0];
       if (!session) return vscode.commands.executeCommand("tua.sessions.focus");
       const items = [{ label: "Open Console", command: "tua.console.open" }, { label: "Open Problems", description: session.label, command: "workbench.actions.view.problems" }];
       for (const [uri, diagnostics] of vscode.languages.getDiagnostics()) {
@@ -52,7 +52,9 @@ function registerRunActivity() {
       if (picked?.command) return vscode.commands.executeCommand(picked.command);
     }),
     vscode.commands.registerCommand("tua.activity.stop", selected => {
-      const session = selected || store.sessions.find(item => item.active && item.stop);
+      const session = typeof selected?.id === "string"
+        ? store.sessions.find(item => item.id === selected.id && item.active)
+        : store.sessions.find(item => item.active && item.stop);
       session?.stop?.();
     }),
   );

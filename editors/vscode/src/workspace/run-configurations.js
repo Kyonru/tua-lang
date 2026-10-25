@@ -19,7 +19,7 @@ function registerRunConfigurations(context) {
       item.description = configuration.mode === "hotReload" ? "hot reload" : configuration.mode;
       item.iconPath = new vscode.ThemeIcon(configuration === selected() ? "check" : "circle-outline");
       item.contextValue = "tuaRunConfiguration";
-      item.command = { command: "tua.run.select", title: "Select configuration", arguments: [configuration] };
+      item.command = { command: "tua.run.selectConfiguration", title: "Select configuration", arguments: [configuration] };
       return item;
     },
   } });
@@ -46,7 +46,8 @@ function registerRunConfigurations(context) {
   };
   refresh();
   return vscode.Disposable.from(changed, view,
-    vscode.commands.registerCommand("tua.run.select", choose),
+    vscode.commands.registerCommand("tua.run.select", () => choose()),
+    vscode.commands.registerCommand("tua.run.selectConfiguration", requested => choose(requested)),
     vscode.commands.registerCommand("tua.run.selected", () => run()),
     vscode.commands.registerCommand("tua.run.configuration", run),
     vscode.commands.registerCommand("tua.run.configure", () => vscode.commands.executeCommand("workbench.action.openSettings", "tua.run.configurations")),
