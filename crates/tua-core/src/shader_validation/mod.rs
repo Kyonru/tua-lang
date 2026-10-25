@@ -325,3 +325,77 @@ pub fn shader_validation_diagnostics(
 
 #[cfg(test)]
 mod tests;
+
+/// One immutable input to the external validator. The source may be an editor overlay.
+#[derive(Clone, Debug)]
+pub struct ShaderValidationRequest {
+    pub asset: crate::asset::ProjectAsset,
+    pub target: ShaderTarget,
+    pub source: String,
+}
+
+/// Process orchestration is supplied by the executable; core analysis never spawns LOVE.
+pub trait ShaderValidator: Send {
+    fn validate(
+        &mut self,
+        requests: &[ShaderValidationRequest],
+    ) -> Result<Vec<ShaderValidationOutcome>, String>;
+}
+
+/// Collect only statically referenced shader assets, with bounded input and deduplicated targets.
+pub fn shader_validation_requests(
+    inventory: &crate::asset::AssetInventory,
+    config: &crate::config::ShadersConfig,
+    mut read: impl FnMut(&Path) -> Result<String, String>,
+) -> Result<Vec<ShaderValidationRequest>, String> {
+    if config.validate == crate::config::ShaderValidationMode::Off {
+        return Ok(Vec::new());
+    }
+    let targets: std::collections::BTreeSet<_> = config.targets.iter().copied().collect();
+    let mut requests = Vec::new();
+    let mut bytes = 0usize;
+    for asset in &inventory.assets {
+        if !asset
+            .references
+            .iter()
+            .any(|reference| reference.loader_kind == crate::asset::AssetLoaderKind::Shader)
+        {
+            continue;
+        }
+        if targets.is_empty() {
+            break;
+        }
+        let source = read(&asset.path)?;
+        bytes = bytes.saturating_add(source.len().saturating_mul(targets.len()));
+        if bytes > 16 * 1024 * 1024 || requests.len() + targets.len() > 512 {
+            return Err("shader validation input exceeds 16 MiB or 512 requests".to_owned());
+        }
+        for target in &targets {
+            requests.push(ShaderValidationRequest {
+                asset: asset.clone(),
+                target: *target,
+                source: source.clone(),
+            });
+        }
+    }
+    Ok(requests)
+}
+
+pub fn validation_diagnostics(
+    requests: &[ShaderValidationRequest],
+    outcomes: &[ShaderValidationOutcome],
+) -> Vec<Diagnostic> {
+    requests
+        .iter()
+        .zip(outcomes)
+        .flat_map(|(request, outcome)| {
+            shader_validation_diagnostics(
+                &request.asset.path,
+                &request.asset.relative_path,
+                &request.asset.references,
+                request.target,
+                outcome,
+            )
+        })
+        .collect()
+}

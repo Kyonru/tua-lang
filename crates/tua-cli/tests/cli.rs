@@ -4772,3 +4772,49 @@ fn lua_version_works(candidate: &OsString) -> bool {
         .output()
         .is_ok_and(|output| output.status.success())
 }
+
+#[cfg(unix)]
+#[test]
+fn check_validates_referenced_shaders_via_love_and_respects_off() {
+    use std::os::unix::fs::PermissionsExt;
+    let temp = TempDir::new("shader-validation");
+    fs::create_dir_all(temp.path.join("src")).unwrap();
+    fs::write(temp.path.join("tua.toml"), DEFAULT_CONFIG_TEXT).unwrap();
+    fs::write(
+        temp.path.join("src/main.tua"),
+        "local effect = shader \"effect.glsl\"\nprint(effect)\n",
+    )
+    .unwrap();
+    fs::write(temp.path.join("src/effect.glsl"), "broken").unwrap();
+    let fake = temp.path.join("fake-love");
+    fs::write(&fake, "#!/bin/sh\nprintf 'READY 11.5.0\\n'\nwhile read -r command id target size; do\n dd bs=1 count=\"$size\" >/dev/null 2>&1\n printf 'RESULT %s invalid ERROR: 0:3: syntax error\\n' \"$id\"\ndone\n").unwrap();
+    fs::set_permissions(&fake, fs::Permissions::from_mode(0o700)).unwrap();
+    let output = tua()
+        .arg("check")
+        .current_dir(&temp.path)
+        .env("TUA_LOVE", &fake)
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    let diagnostics = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(diagnostics.contains("TL2016"), "{diagnostics}");
+    assert!(diagnostics.contains("effect.glsl:3:1"), "{diagnostics}");
+    assert!(diagnostics.contains("main.tua:1:"), "{diagnostics}");
+    fs::write(
+        temp.path.join("tua.toml"),
+        DEFAULT_CONFIG_TEXT.replace("validate = \"auto\"", "validate = \"off\""),
+    )
+    .unwrap();
+    let output = tua()
+        .arg("check")
+        .current_dir(&temp.path)
+        .env("TUA_LOVE", "/no/such/love")
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{output:?}");
+    assert!(!String::from_utf8_lossy(&output.stdout).contains("skipped"));
+}

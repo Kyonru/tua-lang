@@ -22,5 +22,6 @@ pub(crate) fn run_lint(
         "linted",
         "project lint failed",
         false,
+        None,
     )
 }

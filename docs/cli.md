@@ -256,3 +256,28 @@ cargo run -p tua-cli -- mcp --stdio --workspace /path/to/project
 
 Starts the stdio-only MCP adapter with twelve read-only Tua tools. It pins MCP
 protocol `2025-11-25` and applies no edits.
+
+### Shader compilation checks
+
+`tua check` uses LÖVE's `love.graphics.validateShader` for statically referenced
+shader assets. `TL2016` identifies the shader line and its loader calls. This runs
+Tua's bundled validator in a fresh temporary directory, without loading your game.
+Build, watch, dev, and lint do not run this compilation check.
+
+Use `tua check --love /path/to/love`, `TUA_LOVE`, or put LÖVE on `PATH`. On macOS
+Tua also tries `/Applications/love.app/Contents/MacOS/love`. On Windows use
+`lovec.exe` for console I/O; automatic discovery prefers it. Windows validation
+has not yet been tested on a real LÖVE installation. A graphical session and
+working graphics driver are required. Missing LÖVE produces a skip note; startup,
+protocol, and timeout failures fail the check rather than claim validation passed.
+
+```toml
+[shaders]
+validate = "auto" # "off" skips compilation checks
+targets = ["desktop", "gles"] # default: ["desktop"]
+```
+
+Executable paths are deliberately not accepted in project configuration. Each
+validation batch is limited to 512 requests, 16 MiB of shader source, and ten
+seconds after startup (which also has a ten-second timeout). Validation reflects
+the installed LÖVE version and driver; it does not prove support on every device.

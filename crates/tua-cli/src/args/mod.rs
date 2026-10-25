@@ -34,7 +34,7 @@ Options:
   --maps <path>     With traceback, source-map directory or .lua.map.json file
   --target <kind>   With package, love (default), windows, or macos
   --love <path>     With package, the LOVE for Windows directory or love.app to fuse with;
-                    with dev, the LOVE executable to run
+                    with dev or check, the LOVE executable to run
   --name <name>     With package, the game name (default: project directory name)
   --identifier <id> With package --target macos, the app bundle identifier
   -h, --help        Print command help
@@ -55,6 +55,7 @@ pub enum CliAction {
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct CommandOptions {
     pub dev_love: Option<PathBuf>,
+    pub check_love: Option<PathBuf>,
     pub emit_on_error: bool,
     pub package: PackageOptions,
     pub fmt_check: bool,
@@ -104,7 +105,7 @@ impl CommandName {
 pub fn command_help(command: CommandName) -> &'static str {
     match command {
         CommandName::Init => "tua init - create a Tua project\n\nUsage:\n  tua init\n\nCreates tua.toml and src/main.tua without overwriting existing files, and adds generated folders to .gitignore.\n",
-        CommandName::Check => "tua check - parse and type-check the project\n\nUsage:\n  tua check [--deny-warnings]\n",
+        CommandName::Check => "tua check - parse and type-check the project\n\nUsage:\n  tua check [--deny-warnings] [--love PATH]\n",
         CommandName::Fmt => "tua fmt - format project source files\n\nUsage:\n  tua fmt [--check]\n",
         CommandName::Lint => "tua lint - run lint rules\n\nUsage:\n  tua lint [--strict]\n",
         CommandName::Build => "tua build - check and emit Lua output\n\nUsage:\n  tua build [--emit-on-error]\n",
@@ -155,12 +156,16 @@ where
 
         match arg.as_str() {
             "--emit-on-error" if command == CommandName::Build => options.emit_on_error = true,
-            "--love" if command == CommandName::Dev => {
+            "--love" if matches!(command, CommandName::Dev | CommandName::Check) => {
                 index += 1;
                 let Some(path) = args.get(index) else {
                     return Err(CliError::usage("`--love` expects a path"));
                 };
-                options.dev_love = Some(PathBuf::from(path));
+                if command == CommandName::Check {
+                    options.check_love = Some(PathBuf::from(path));
+                } else {
+                    options.dev_love = Some(PathBuf::from(path));
+                }
             }
             flag @ ("--target" | "--love" | "--name" | "--identifier")
                 if command == CommandName::Package =>

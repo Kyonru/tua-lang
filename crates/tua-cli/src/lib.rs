@@ -12,6 +12,7 @@ mod formatter;
 mod linter;
 mod love;
 mod package;
+mod shaders;
 mod source;
 mod source_map;
 mod traceback;

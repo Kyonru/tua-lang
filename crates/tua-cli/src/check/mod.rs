@@ -17,6 +17,7 @@ pub(crate) fn run_check(
     cwd: impl AsRef<Path>,
     loaded: LoadedConfig,
     deny_warnings: bool,
+    love: Option<&Path>,
 ) -> Result<String, CliError> {
     run_project_diagnostics(
         cwd,
@@ -25,6 +26,7 @@ pub(crate) fn run_check(
         "checked",
         "project check failed",
         deny_warnings,
+        love,
     )
 }
 
@@ -35,6 +37,7 @@ pub(crate) fn run_project_diagnostics(
     success_verb: &str,
     error_message: &str,
     deny_warnings: bool,
+    love: Option<&Path>,
 ) -> Result<String, CliError> {
     let cwd = cwd.as_ref();
     let pipeline_outcome = if mode == ProjectDiagnosticMode::Check {
@@ -83,6 +86,9 @@ pub(crate) fn run_project_diagnostics(
         host.set_file_with_kind(&source_file.path, source, kind);
     }
 
+    if mode == ProjectDiagnosticMode::Check {
+        host.refresh_asset_index_from_disk();
+    }
     let snapshot = host.snapshot();
 
     for source_file in source_files {
@@ -91,6 +97,33 @@ pub(crate) fn run_project_diagnostics(
         }
 
         diagnostics.extend(snapshot.pipeline_diagnostics(&source_file.path));
+    }
+
+    let mut note = String::new();
+    if mode == ProjectDiagnosticMode::Check {
+        use tua_core::shader_validation::{
+            shader_validation_requests, validation_diagnostics, ShaderValidator,
+        };
+        let requests = shader_validation_requests(
+            &snapshot.asset_inventory(),
+            &workspace.config().shaders,
+            |path| {
+                tua_core::input_limits::read_source(path)
+                    .map_err(|error| format!("{}: {error}", path.display()))
+            },
+        )
+        .map_err(CliError::usage)?;
+        match crate::shaders::LoveShaderValidator::new(love).validate(&requests) {
+            Ok(outcomes) => diagnostics.extend(validation_diagnostics(&requests, &outcomes)),
+            Err(error) if error == crate::love::LOVE_NOT_FOUND => {
+                note = format!("note: shader compilation skipped: {error}\n");
+            }
+            Err(error) => {
+                return Err(CliError::usage(format!(
+                    "shader validation failed: {error}"
+                )))
+            }
+        }
     }
 
     // Snapshot diagnostics have already passed through this policy. Applying
@@ -134,11 +167,11 @@ pub(crate) fn run_project_diagnostics(
             sorted_diagnostics(diagnostics),
         ))
     } else if diagnostics.is_empty() {
-        Ok(format!("{success_verb} {checked} file(s)"))
+        Ok(format!("{note}{success_verb} {checked} file(s)"))
     } else {
         let diagnostics = sorted_diagnostics(diagnostics);
         Ok(format!(
-            "{}\n{success_verb} {checked} file(s)",
+            "{note}{}\n{success_verb} {checked} file(s)",
             format_diagnostics_for_cli(&diagnostics)
         ))
     }
