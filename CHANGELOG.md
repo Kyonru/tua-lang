@@ -6,6 +6,13 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+### Fixed
+
+- The shader validator that the language server keeps running between
+  validations no longer shows as a hung LÖVE app on macOS after the server
+  starts or restarts. It now waits for requests on a thread and keeps
+  processing window events.
+
 ## [0.5.0] - 2026-10-25
 
 ### Release summary

@@ -324,5 +324,15 @@ done
             .unwrap();
         assert!(matches!(outcomes[0], ShaderValidationOutcome::Valid));
         assert!(matches!(outcomes[1], ShaderValidationOutcome::Invalid(_)));
+        // Editors keep the session idle between batches; it must keep serving.
+        let pid = validator.session.as_ref().unwrap().child.id();
+        std::thread::sleep(Duration::from_millis(500));
+        let outcomes = validator
+            .validate(&[request(
+                "vec4 effect(vec4 c, Image t, vec2 uv, vec2 px) { return c; }",
+            )])
+            .unwrap();
+        assert!(matches!(outcomes[0], ShaderValidationOutcome::Valid));
+        assert_eq!(pid, validator.session.as_ref().unwrap().child.id());
     }
 }

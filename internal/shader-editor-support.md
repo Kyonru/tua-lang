@@ -576,6 +576,10 @@ regression test:
   error had paused.
 - `tua check` aborted with a usage error, hiding all other diagnostics, when a
   referenced shader was not UTF-8 or exceeded the size limit.
+- The idle validator blocked LÖVE's main thread on stdin inside `love.load`,
+  so macOS reported it as not responding after every language-server start or
+  restart. A LÖVE thread now reads stdin and the main loop keeps pumping
+  window events while it waits.
 
 Known limitations, left as follow-ups:
 
