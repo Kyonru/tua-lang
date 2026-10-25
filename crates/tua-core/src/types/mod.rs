@@ -77,7 +77,17 @@ pub(crate) fn has_leading_lua_doc_type(parsed: &ParsedSource, line: usize) -> bo
 pub(crate) fn widen_inferred_type(ty: &Type) -> Type {
     match ty {
         Type::StringLiteral(_) => Type::string(),
-        Type::Union(types) => Type::union(types.iter().map(widen_inferred_type)),
+        // Widening can make members equal, as with `"a" | "b"` or records that
+        // differ only in literal values; keep one of each.
+        Type::Union(types) => {
+            let mut widened =
+                deduplicate_inferred_types(types.iter().map(widen_inferred_type).collect());
+            if widened.len() == 1 {
+                widened.remove(0)
+            } else {
+                Type::union(widened)
+            }
+        }
         // Parameter types are never inferred from values: a literal there
         // is an annotated contract such as `---@param mode "fill" | "line"`,
         // and widening it would accept arguments the contract rejects.

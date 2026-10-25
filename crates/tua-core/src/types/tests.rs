@@ -370,6 +370,24 @@ fn any_table_value_is_assignable_to_a_plain_table() {
 }
 
 #[test]
+fn widening_literals_collapses_members_that_become_equal() {
+    let row = |id: &str| Type::table([("id", TableField::required(Type::string_literal(id)))]);
+
+    assert_eq!(
+        widen_inferred_type(&Type::union([row("a"), row("b")])),
+        Type::table([("id", TableField::required(Type::string()))])
+    );
+    assert_eq!(
+        widen_inferred_type(&Type::union([
+            Type::string_literal("a"),
+            Type::string_literal("b"),
+            Type::nil(),
+        ])),
+        Type::union([Type::string(), Type::nil()])
+    );
+}
+
+#[test]
 fn table_fields_must_be_assignable() {
     let source = Type::table([("hp", TableField::required(Type::string()))]);
     let target = Type::table([("hp", TableField::required(Type::number()))]);
