@@ -6,6 +6,39 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+### Release summary
+
+Tua 0.5.0 expands the LÖVE development workflow with shader intelligence,
+multiplayer run sessions, and an optional live Runtime Inspector. It also fixes
+editor request failures, false nil-type errors, and formatter inconsistencies.
+
+#### Highlights
+
+- Shader assets and literal inline shaders gain uniform completion, hover,
+  definitions, value checks, and compiler diagnostics. Validation prefers LÖVE
+  with glslang as fallback; hot reload keeps the last working shader on errors.
+- The opt-in Runtime Inspector shows ECS, state machines, signals, pools, and
+  stores, with source navigation, configurable collection, and reconnect recovery.
+- Named run configurations launch multiple local players, share builds and
+  hot-reload watching, and provide per-player consoles and debug sessions.
+- A unified project sidebar and optional setup walkthrough bring assets,
+  previews, run tools, shader setup, and the Indigo Carbon theme together.
+- Language-server requests stay cancellable and prioritize interactive work;
+  correlated return values and compound guards narrow more accurately.
+
+#### Upgrade notes
+
+Run `tua fmt` once: table padding, unary operators, comments, and continuation
+indentation now follow consistent formatting. The toolbar defaults to compact
+mode; set `tua.editor.toolbarMode = "full"` to restore individual buttons.
+
+Shader compilation is enabled for `tua check` and trusted editor workspaces
+when a validator is available. Use `[shaders] validate = "off"` to disable
+external compilation; the unsent-uniform lint remains opt-in. New `TL4076`
+callback-order warnings can be disabled with
+`[diagnostics] love_callback_order = false`. Runtime inspection and appearance
+setup remain optional. Generated code still targets LuaJIT/LÖVE 11.x.
+
 ### Added
 
 - Runtime Inspector collection categories and configurable 100–10,000 ms update
