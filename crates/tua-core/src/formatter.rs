@@ -571,7 +571,12 @@ impl<'a> Formatter<'a> {
             output.push('\n');
             self.has_content = true;
             self.pending_blank_line = false;
-            self.update_multiline_state(line);
+            if let Some(code_start) = self.update_multiline_state(line) {
+                // Keep the literal-containing line byte-for-byte, but let the
+                // normal formatter consume its code suffix for indentation state.
+                // Otherwise `]])` leaves the opening call on the parenthesis stack.
+                self.format_line(&line[code_start..], &mut String::new());
+            }
             return;
         }
 
@@ -593,7 +598,9 @@ impl<'a> Formatter<'a> {
         self.update_multiline_state(line);
     }
 
-    fn update_multiline_state(&mut self, line: &str) {
+    fn update_multiline_state(&mut self, line: &str) -> Option<usize> {
+        let started_in_literal = !matches!(self.multiline_state, MultilineState::Code);
+        let mut code_start = None;
         let bytes = line.as_bytes();
         let mut index = 0;
 
@@ -644,6 +651,9 @@ impl<'a> Formatter<'a> {
                     if bytes[index..].starts_with(close) {
                         index += close.len();
                         self.multiline_state = MultilineState::Code;
+                        if started_in_literal && code_start.is_none() {
+                            code_start = Some(index);
+                        }
                     } else {
                         index += 1;
                     }
@@ -658,6 +668,9 @@ impl<'a> Formatter<'a> {
                         } else if bytes[index] == *quote {
                             index += 1;
                             self.multiline_state = MultilineState::Code;
+                            if started_in_literal && code_start.is_none() {
+                                code_start = Some(index);
+                            }
                             break;
                         }
                         index += 1;
@@ -665,6 +678,7 @@ impl<'a> Formatter<'a> {
                 }
             }
         }
+        code_start
     }
 
     fn format_line(&mut self, line: &str, output: &mut String) {

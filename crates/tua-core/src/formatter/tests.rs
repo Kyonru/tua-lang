@@ -1671,3 +1671,18 @@ local value = outer(inner(
     assert_eq!(format(&output), output);
     assert_no_multiline_layout_lint(&output);
 }
+
+#[test]
+fn closes_call_and_table_indentation_after_multiline_literal_suffixes() {
+    for source in [
+        "local shader = love.graphics.newShader([[\nvec4 effect() { return vec4(1); }\n]])\nprint(shader)\n",
+        "local data = {\n  text = [[\nkeep this unindented\n]]}\nprint(data)\n",
+        "if ready then\n  print([=[\nif then function ( {\n]=])\n  print(1)\nend\nprint(2)\n",
+        "print(\"first\\\nsecond\")\nprint(2)\n",
+        "if ready then\n  --[[\ncomment\n]] end\nprint(2)\n",
+    ] {
+        let output = format(source);
+        assert_eq!(output, source);
+        assert_eq!(format(&output), output);
+    }
+}

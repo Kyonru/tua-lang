@@ -628,6 +628,10 @@ print(f())
         )
         .keep_indentation(),
         Case::new(
+            "shader_long_string_followed_by_code",
+            "local s = love.graphics.newShader([[\nvec4 effect() { return vec4(1); }\n]])\nprint(s)\n",
+        ).keep_indentation(),
+        Case::new(
             "long_string_in_call",
             r#"print([[
 line one

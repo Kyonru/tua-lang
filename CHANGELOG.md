@@ -115,6 +115,7 @@ language or editor behavior, and migration notes call out those changes.
 - Module Graph, ECS Explorer, and Object Pool Explorer keep content reachable
   when toolbars grow or editor panes are short. Sprite preview controls scroll
   inside their sticky panel instead of extending below the viewport.
+- Formatting a multiline shader/string or block comment now consumes code after its closing delimiter, so subsequent statements keep their correct indentation.
 
 - Runtime Inspector keeps an Enable action in its toolbar when disabled, including
   when retained snapshots hide the welcome screen.
