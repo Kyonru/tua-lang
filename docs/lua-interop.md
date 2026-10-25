@@ -617,6 +617,7 @@ modules that return the same export shape as the runtime library.
 | Symptom | What to check |
 | --- | --- |
 | A required Lua module is `any` | Return a statically visible table and annotate its public functions or values. |
+| `TL1013` reports an untyped module | Fix the syntax error at the reported location in the plain `.lua` file; its exports return once it parses. |
 | A module field does not complete | Confirm the field is present in the returned export table rather than added dynamically later. |
 | A module path is unresolved | Check `source`, file location, spelling, and the configured require-path separator. Use `require` for external packages. |
 | A parent relative import is rejected | Replace `import("../shared")` with a project module name such as `import("shared")`. |

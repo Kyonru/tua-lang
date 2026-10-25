@@ -6044,3 +6044,63 @@ fn png_header(width: u32, height: u32) -> Vec<u8> {
 
     bytes
 }
+
+#[test]
+fn snapshot_diagnostics_warn_when_a_required_lua_module_does_not_parse() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+local broken = require("<|module|>broken")
+local luajit = require("luajit")
+print(broken, luajit.sumOdd({ 1, 2, 3 }))
+-- file: src/broken.lua
+local M = {}
+function M.value()
+  return 1 +
+end
+return M
+-- file: src/luajit.lua
+local M = {}
+function M.sumOdd(items)
+  local total = 0
+  for _, value in ipairs(items) do
+    if value % 2 == 0 then goto continue end
+    total = total + value
+    ::continue::
+  end
+  return total
+end
+return M
+"#,
+    );
+    let mut host = AnalysisHost::new();
+
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        let kind = if file
+            .path
+            .extension()
+            .and_then(|extension| extension.to_str())
+            == Some("lua")
+        {
+            AnalysisSourceKind::Lua
+        } else {
+            AnalysisSourceKind::Tua
+        };
+        host.set_file_with_kind(&file.path, file.source.clone(), kind);
+    }
+
+    let diagnostics = host.snapshot().diagnostics("src/main.tua");
+    let unparsed = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::TYPE_UNPARSED_MODULE))
+        .collect::<Vec<_>>();
+
+    assert_eq!(unparsed.len(), 1, "{diagnostics:#?}");
+    assert_eq!(unparsed[0].severity, DiagnosticSeverity::Warning);
+    assert_eq!(unparsed[0].line, fixture.position("module").line);
+    assert_eq!(unparsed[0].column, fixture.position("module").column);
+    assert_eq!(
+        unparsed[0].message,
+        "module `broken` is untyped because src/broken.lua:3:12 does not parse: expected expression after binary operator"
+    );
+}

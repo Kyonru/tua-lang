@@ -107,6 +107,7 @@ impl AnalysisSnapshot {
                 .filter(|diagnostic| self.project_diagnostic_enabled(diagnostic))
                 .cloned(),
         );
+        diagnostics.extend(self.unparsed_lua_module_diagnostics(path.as_ref()));
 
         let diagnostics =
             self.project_aware_diagnostics(path.as_ref(), deduplicate_diagnostics(diagnostics));
@@ -121,6 +122,51 @@ impl AnalysisSnapshot {
 
     pub(super) fn file(&self, path: &Path) -> Option<&AnalysisFile> {
         self.files.get(&normalize_path(path))
+    }
+
+    /// Plain Lua files are not checked themselves, so a required one that
+    /// fails to parse would otherwise leave its importer silently untyped.
+    fn unparsed_lua_module_diagnostics(&self, path: &Path) -> Vec<Diagnostic> {
+        let Some(module) = self.module_graph.module(path) else {
+            return Vec::new();
+        };
+
+        module
+            .require_edges
+            .iter()
+            .filter_map(|edge| {
+                let target = match &edge.resolution {
+                    RequireResolution::Resolved { path } => path,
+                    RequireResolution::Duplicate { selected, .. } => selected,
+                    RequireResolution::Missing { .. } | RequireResolution::Invalid { .. } => {
+                        return None;
+                    }
+                };
+                let file = self.file(target)?;
+                if file.kind != AnalysisSourceKind::Lua {
+                    return None;
+                }
+                let error = file.parsed.as_ref().err()?.first()?;
+
+                Some(
+                    Diagnostic::new(
+                        edge.source.clone(),
+                        edge.span.start.line,
+                        edge.span.start.column,
+                        crate::DiagnosticSeverity::Warning,
+                        format!(
+                            "module `{}` is untyped because {}:{}:{} does not parse: {}",
+                            edge.module,
+                            target.to_string_lossy().replace('\\', "/"),
+                            error.line,
+                            error.column,
+                            error.message
+                        ),
+                    )
+                    .with_code(crate::DiagnosticCode::TYPE_UNPARSED_MODULE),
+                )
+            })
+            .collect()
     }
 
     pub(super) fn effective_asset_roots(&self) -> &[PathBuf] {
