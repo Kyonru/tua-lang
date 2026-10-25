@@ -247,6 +247,11 @@ snapshot even while paused. After disabling inspection, the toolbar's **Enable**
 See the [Runtime Inspector guide](../../docs/debugging.md#live-runtime-inspector)
 for source navigation, troubleshooting, limits, and development-only behavior.
 
+For performance measurements and reproduction steps, see the
+[inspector benchmark](../../benchmarks/runtime-inspector/README.md). Pausing updates
+or disabling an existing session leaves wrappers installed; restart with
+inspection disabled for a run without the shim.
+
 ## Contextual hint density
 
 Choose **Contextual** in **Tua: Select Inlay Hint Mode** to hide routine hints.
