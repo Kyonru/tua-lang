@@ -204,6 +204,53 @@ effect:send("<|reassigned|>")
 }
 
 #[test]
+fn shader_locals_assigned_in_another_function_share_editor_features_and_checks() {
+    let temp = TempProject::new("shader-load-draw");
+    let fixture = Fixture::parse(
+        r#"-- file: main.tua
+local effect: any
+function love.load()
+  effect = love.graphics.newShader("effect.glsl")
+end
+function love.draw()
+  effect:send("<|draw|>")
+  effect:send("tnit", {})
+end
+"#,
+    );
+    let host = shader_host(&temp, &fixture);
+    let snapshot = host.snapshot();
+    assert_eq!(
+        snapshot
+            .completion("main.tua", fixture.position("draw"))
+            .len(),
+        5
+    );
+    let diagnostics = snapshot.diagnostics("main.tua");
+    assert!(
+        diagnostics
+            .iter()
+            .any(|d| d.line == 7 && d.code == Some(DiagnosticCode::ASSET_SHADER_UNIFORM)),
+        "{diagnostics:#?}"
+    );
+
+    // Competing or unknown assignments leave the receiver unresolved.
+    for other in ["{}", "love.graphics.newShader(\"effect.glsl\")"] {
+        let fixture = Fixture::parse(&format!(
+            "-- file: main.tua\nlocal effect: any\nfunction love.load()\n  effect = love.graphics.newShader(\"effect.glsl\")\nend\nfunction reset()\n  effect = {other}\nend\nfunction love.draw()\n  effect:send(\"<|draw|>\")\nend\n"
+        ));
+        let host = shader_host(&temp, &fixture);
+        assert!(
+            host.snapshot()
+                .completion("main.tua", fixture.position("draw"))
+                .iter()
+                .all(|item| item.label != "tint"),
+            "{other}"
+        );
+    }
+}
+
+#[test]
 fn shader_uniform_completion_works_while_a_call_is_unfinished() {
     let temp = TempProject::new("shader-incomplete");
     let fixture = Fixture::parse(

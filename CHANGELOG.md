@@ -63,7 +63,9 @@ language or editor behavior, and migration notes call out those changes.
   launching LOVE, allowing editor-managed players to share a single watcher.
 - Shader uniform completion, hover, and go-to-definition share cached GLSL
   metadata in Tua and Lua, including array types, unread uniforms, both-stage
-  declarations, partial names, and synchronized unsaved shader edits.
+  declarations, partial names, and synchronized unsaved shader edits. A local
+  declared without a value resolves to its only loader assignment, as when
+  `love.load` assigns the shader that `love.draw` sends to.
 
 - A dedicated Tua sidebar unifies project files, module exports, signal call sites,
   ECS declarations, assets, run configurations, recent sessions, and setup checks.

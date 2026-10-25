@@ -3199,15 +3199,12 @@ fn token_text(token: &full_moon::tokenizer::TokenReference) -> String {
     token.token().to_string().trim().to_owned()
 }
 
-/// Resolve a local shader loader through the shared lexical assignment resolver.
-pub(crate) fn shader_loader_for_local<'a>(
-    parsed: &'a ParsedSource,
-    scope: &crate::ScopeMap,
+fn binding_at<'a>(
+    scope: &'a crate::ScopeMap,
     name: &str,
     position: SourcePosition,
-) -> Option<&'a FunctionCall> {
-    let local = local_assignment_value_in_block(parsed.ast.nodes(), name, position, true)?;
-    if let Some(binding) = scope
+) -> Option<&'a crate::ScopeDeclaration> {
+    scope
         .declarations()
         .iter()
         .filter(|binding| {
@@ -3216,14 +3213,49 @@ pub(crate) fn shader_loader_for_local<'a>(
                 && position_key(binding.name_span.start) <= position_key(position)
         })
         .max_by_key(|binding| position_key(binding.name_span.start))
-    {
-        if matches!(
+}
+
+fn is_nil_literal(expression: &Expression) -> bool {
+    matches!(expression, Expression::Symbol(token) if token_text(token) == "nil")
+}
+
+/// Resolve a local shader loader through the shared lexical assignment resolver.
+///
+/// A local declared without a value (`local water` assigned in `love.load`)
+/// resolves to its only loader assignment anywhere in the file; several or
+/// non-loader assignments leave it unresolved.
+pub(crate) fn shader_loader_for_local<'a>(
+    parsed: &'a ParsedSource,
+    scope: &crate::ScopeMap,
+    name: &str,
+    position: SourcePosition,
+) -> Option<std::borrow::Cow<'a, FunctionCall>> {
+    let binding = binding_at(scope, name, position);
+    if binding.is_some_and(|binding| {
+        matches!(
             binding.kind,
             crate::ScopeDeclarationKind::Parameter | crate::ScopeDeclarationKind::Function
-        ) || position_key(local.span.start) < position_key(binding.name_span.start)
-        {
-            return None;
+        )
+    }) {
+        return None;
+    }
+    let local = local_assignment_value_in_block(parsed.ast.nodes(), name, position, true);
+    let declared_without_value = match (&local, binding) {
+        (None, _) => true,
+        (Some(local), Some(binding)) => {
+            local.span == binding.name_span && local.expression.is_none_or(is_nil_literal)
         }
+        (Some(_), None) => false,
+    };
+    if declared_without_value {
+        return sole_shader_loader_assignment(parsed, scope, name, binding.map(|b| b.name_span))
+            .map(std::borrow::Cow::Owned);
+    }
+    let local = local?;
+    if binding.is_some_and(|binding| {
+        position_key(local.span.start) < position_key(binding.name_span.start)
+    }) {
+        return None;
     }
     if local.return_index != 0 {
         return None;
@@ -3231,7 +3263,59 @@ pub(crate) fn shader_loader_for_local<'a>(
     let Expression::FunctionCall(call) = local.expression? else {
         return None;
     };
-    Some(call)
+    Some(std::borrow::Cow::Borrowed(call))
+}
+
+fn sole_shader_loader_assignment(
+    parsed: &ParsedSource,
+    scope: &crate::ScopeMap,
+    name: &str,
+    binding: Option<SourceSpan>,
+) -> Option<FunctionCall> {
+    struct Assignments<'s> {
+        scope: &'s crate::ScopeMap,
+        name: &'s str,
+        binding: Option<SourceSpan>,
+        calls: Vec<FunctionCall>,
+        other: bool,
+    }
+    impl Visitor for Assignments<'_> {
+        fn visit_assignment(&mut self, assignment: &ast::Assignment) {
+            let expressions = assignment.expressions().iter().collect::<Vec<_>>();
+            for (index, variable) in assignment.variables().iter().enumerate() {
+                if directly_assigned_name(variable).as_deref() != Some(self.name) {
+                    continue;
+                }
+                let Some(span) = node_span(variable) else {
+                    self.other = true;
+                    continue;
+                };
+                if binding_at(self.scope, self.name, span.start).map(|binding| binding.name_span)
+                    != self.binding
+                {
+                    continue;
+                }
+                match assignment_expression_for_local(&expressions, index) {
+                    Some((Expression::FunctionCall(call), 0)) => self.calls.push(call.clone()),
+                    None => {}
+                    Some((expression, 0)) if is_nil_literal(expression) => {}
+                    Some(_) => self.other = true,
+                }
+            }
+        }
+    }
+    let mut assignments = Assignments {
+        scope,
+        name,
+        binding,
+        calls: Vec::new(),
+        other: false,
+    };
+    assignments.visit_ast(&parsed.ast);
+    if assignments.other || assignments.calls.len() != 1 {
+        return None;
+    }
+    assignments.calls.pop()
 }
 
 #[cfg(test)]

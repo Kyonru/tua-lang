@@ -2187,7 +2187,7 @@ impl<'a> Checker<'a> {
             &call.receiver,
             call.span.start,
         )
-        .and_then(node_span)
+        .and_then(|loader| node_span(loader.as_ref()))
             != Some(uniforms.loader_span)
         {
             return;

@@ -21,11 +21,11 @@ impl AnalysisSnapshot {
         if let Some(inline) = self.file(&parsed.path).and_then(|file| {
             file.inline_shaders()
                 .iter()
-                .find(|shader| Some(shader.call_span) == node_span(loader))
+                .find(|shader| Some(shader.call_span) == node_span(loader.as_ref()))
         }) {
             return Some((parsed.path.clone(), inline.source.uniforms.clone()?));
         }
-        let call = asset::asset_loader_call(loader)?;
+        let call = asset::asset_loader_call(&loader)?;
         if call.kind != AssetLoaderKind::Shader {
             return None;
         }
