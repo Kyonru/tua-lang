@@ -210,6 +210,7 @@ fn typed_watch_method(environment: &TypeEnvironment, state_type: Type) -> TypedF
         has_varargs: false,
         vararg_type: None,
         return_type: Some(unsubscribe.clone()),
+        guarded_return_types: None,
         return_types: vec![unsubscribe],
         documentation: Some(
             "Watch one top-level state field and return an idempotent unsubscribe function."
@@ -265,6 +266,7 @@ fn typed_function(
         has_varargs: false,
         vararg_type: None,
         return_type: Some(return_type.clone()),
+        guarded_return_types: None,
         return_types: vec![return_type],
         documentation: Some(documentation.to_owned()),
         overloads: Vec::new(),

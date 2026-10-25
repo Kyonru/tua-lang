@@ -186,6 +186,10 @@ pub struct FunctionType {
     pub vararg_type: Option<Box<Type>>,
     pub return_type: Box<Type>,
     pub return_types: Vec<Type>,
+    /// The return types once the first value is known not to be `nil`, for a
+    /// function that returns either `nil` alone or a non-nil first value
+    /// with others, as in `if hit then return x, y end return nil`.
+    pub guarded_return_types: Option<Vec<Type>>,
 }
 
 impl FunctionType {
@@ -236,7 +240,13 @@ impl FunctionType {
             vararg_type: vararg_type.map(Box::new),
             return_type: Box::new(return_types[0].clone()),
             return_types,
+            guarded_return_types: None,
         }
+    }
+
+    pub fn with_guarded_return_types(mut self, guarded: Option<Vec<Type>>) -> Self {
+        self.guarded_return_types = guarded;
+        self
     }
 
     pub fn return_types_or_any(&self) -> &[Type] {

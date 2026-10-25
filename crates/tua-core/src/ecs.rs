@@ -472,6 +472,7 @@ fn typed_function(
         has_varargs: false,
         vararg_type: None,
         return_type: Some(return_type.clone()),
+        guarded_return_types: None,
         return_types: vec![return_type],
         documentation: Some(documentation.to_owned()),
         overloads: Vec::new(),

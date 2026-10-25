@@ -363,13 +363,22 @@ impl ProjectTypeDatabase {
                     .iter()
                     .map(|ty| self.resolve_type_inner(module_graph, source_path, ty, resolving))
                     .collect::<Vec<_>>();
+                let guarded = function.guarded_return_types.as_ref().map(|types| {
+                    types
+                        .iter()
+                        .map(|ty| self.resolve_type_inner(module_graph, source_path, ty, resolving))
+                        .collect()
+                });
 
-                Type::Function(FunctionType::new_signature(
-                    parameters,
-                    function.required_parameter_count,
-                    vararg_type,
-                    return_types,
-                ))
+                Type::Function(
+                    FunctionType::new_signature(
+                        parameters,
+                        function.required_parameter_count,
+                        vararg_type,
+                        return_types,
+                    )
+                    .with_guarded_return_types(guarded),
+                )
             }
             Type::Table(table) => {
                 let mut resolved_table =
@@ -737,6 +746,7 @@ fn typed_function_from_export(name: &str, field: &ModuleExportField) -> TypedFun
             has_varargs: function.vararg_type.is_some(),
             vararg_type: function.vararg_type.as_deref().cloned(),
             return_type: Some((*function.return_type).clone()),
+            guarded_return_types: None,
             return_types: function.return_types_or_any().to_vec(),
             documentation: field.documentation.clone(),
             overloads: Vec::new(),
@@ -749,6 +759,7 @@ fn typed_function_from_export(name: &str, field: &ModuleExportField) -> TypedFun
             has_varargs: true,
             vararg_type: Some(Type::Any),
             return_type: Some(field.ty.clone()),
+            guarded_return_types: None,
             return_types: vec![field.ty.clone()],
             documentation: field.documentation.clone(),
             overloads: Vec::new(),

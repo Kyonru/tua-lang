@@ -22,7 +22,9 @@ use crate::module_index::{
     required_module_exports_for_receiver,
 };
 use crate::narrowing::{
-    directly_assigned_name, narrowed_locals_after_false_condition, narrowed_locals_for_condition,
+    directly_assigned_name, extend_with_return_guards, forget_return_guards,
+    narrowed_locals_after_false_condition, narrowed_locals_for_condition, return_guards_for_names,
+    ReturnGuard,
 };
 use crate::parser::{parse_tua_source, ParsedLanguage, ParsedSource, SourcePosition, SourceSpan};
 use crate::profile::{self, DiagnosticsTraceCategory};
@@ -190,6 +192,8 @@ struct Checker<'a> {
     context: TypeContext,
     scoped_locals: Vec<BTreeMap<String, Type>>,
     scoped_local_contracts: Vec<BTreeMap<String, Type>>,
+    /// Locals declared with later values of a call, per block scope.
+    scoped_return_guards: Vec<Vec<ReturnGuard>>,
     stable_inferred_locals: bool,
     unresolved_project_aliases: BTreeSet<String>,
     asset_roots: Vec<PathBuf>,
@@ -273,6 +277,7 @@ impl<'a> Checker<'a> {
             context: environment.to_type_context(),
             scoped_locals: Vec::new(),
             scoped_local_contracts: Vec::new(),
+            scoped_return_guards: Vec::new(),
             stable_inferred_locals: parsed.raw.language == ParsedLanguage::Tua,
             unresolved_project_aliases: unresolved_project_aliases(parsed, environment),
             asset_roots: if asset_index.is_some() {
@@ -354,6 +359,7 @@ impl<'a> Checker<'a> {
     ) {
         self.scoped_locals.push(locals);
         self.scoped_local_contracts.push(contracts);
+        self.scoped_return_guards.push(Vec::new());
 
         for stmt in block.stmts() {
             self.check_stmt(stmt, current_return);
@@ -366,6 +372,7 @@ impl<'a> Checker<'a> {
 
         self.scoped_locals.pop();
         self.scoped_local_contracts.pop();
+        self.scoped_return_guards.pop();
     }
 
     fn record_guard_clause_narrowing(&mut self, statement: &ast::Stmt) {
@@ -389,10 +396,11 @@ impl<'a> Checker<'a> {
             .aliases()
             .map(|(name, ty)| (name.to_owned(), ty.clone()))
             .collect::<BTreeMap<_, _>>();
-        let narrowed =
+        let mut narrowed =
             narrowed_locals_after_false_condition(statement.condition(), &aliases, |name| {
                 self.infer_named_value(name)
             });
+        self.extend_with_return_guards(&mut narrowed);
         if let Some(scope) = self.scoped_locals.last_mut() {
             scope.extend(narrowed);
         }
@@ -622,6 +630,7 @@ impl<'a> Checker<'a> {
         }
 
         self.record_local_assignment_types(local);
+        self.record_local_return_guards(local);
     }
 
     fn record_local_assignment_types(&mut self, local: &ast::LocalAssignment) {
@@ -841,6 +850,7 @@ impl<'a> Checker<'a> {
         let Some(name) = directly_assigned_name(variable) else {
             return;
         };
+        self.forget_return_guards(&name);
 
         let flow_type = match (&ty, &target) {
             (Some(source), Some(target))
@@ -3005,9 +3015,11 @@ impl<'a> Checker<'a> {
                     .aliases()
                     .map(|(name, ty)| (name.to_owned(), ty.clone()))
                     .collect::<BTreeMap<_, _>>();
-                narrowed_locals_after_false_condition(lhs, &aliases, |name| {
+                let mut narrowed = narrowed_locals_after_false_condition(lhs, &aliases, |name| {
                     self.infer_named_value(name)
-                })
+                });
+                self.extend_with_return_guards(&mut narrowed);
+                narrowed
             }
             _ => return check_rhs(self),
         };
@@ -3026,7 +3038,61 @@ impl<'a> Checker<'a> {
             .map(|(name, ty)| (name.to_owned(), ty.clone()))
             .collect::<BTreeMap<_, _>>();
 
-        narrowed_locals_for_condition(condition, &aliases, |name| self.infer_named_value(name))
+        let mut narrowed =
+            narrowed_locals_for_condition(condition, &aliases, |name| self.infer_named_value(name));
+        self.extend_with_return_guards(&mut narrowed);
+        narrowed
+    }
+
+    fn extend_with_return_guards(&self, narrowed: &mut BTreeMap<String, Type>) {
+        extend_with_return_guards(narrowed, self.scoped_return_guards.iter().flatten());
+    }
+
+    fn forget_return_guards(&mut self, name: &str) {
+        for guards in &mut self.scoped_return_guards {
+            forget_return_guards(guards, name);
+        }
+    }
+
+    /// Records `local first, ... = call()` when the call's first value guards
+    /// the others, so checking `first` also narrows them.
+    fn record_local_return_guards(&mut self, local: &ast::LocalAssignment) {
+        let names = local.names().iter().map(token_text).collect::<Vec<_>>();
+        for name in &names {
+            self.forget_return_guards(name);
+        }
+
+        let mut expressions = local.expressions().iter();
+        let (Some(Expression::FunctionCall(function_call)), None) =
+            (expressions.next(), expressions.next())
+        else {
+            return;
+        };
+        if names.len() < 2 {
+            return;
+        }
+        let Some(guarded) = self.call_guarded_return_types(function_call) else {
+            return;
+        };
+        if let Some(scope) = self.scoped_return_guards.last_mut() {
+            scope.extend(return_guards_for_names(&names, &guarded));
+        }
+    }
+
+    fn call_guarded_return_types(&self, function_call: &FunctionCall) -> Option<Vec<Type>> {
+        let calls = function_call
+            .suffixes()
+            .filter(|suffix| matches!(suffix, Suffix::Call(_)))
+            .count();
+        if calls != 1 || !matches!(function_call.suffixes().last(), Some(Suffix::Call(_))) {
+            return None;
+        }
+
+        match self.infer_call_target(function_call)? {
+            Callable::Function(function) => function.guarded_return_types,
+            Callable::TypedFunction(function) => function.guarded_return_types,
+            Callable::Any | Callable::ExternalFunction(_) => None,
+        }
     }
 
     fn check_runtime_type_check(&mut self, function_call: &FunctionCall) {

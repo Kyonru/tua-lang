@@ -15,7 +15,9 @@ use crate::classes::nominal_class_identity;
 use crate::deprecation::Deprecation;
 use crate::module_index::required_module_export_type_for_fields;
 use crate::narrowing::{
-    directly_assigned_name, narrowed_locals_after_false_condition, narrowed_locals_for_condition,
+    directly_assigned_name, extend_with_return_guards, forget_return_guards,
+    narrowed_locals_after_false_condition, narrowed_locals_for_condition, return_guards_for_names,
+    ReturnGuard,
 };
 use crate::parser::{
     FunctionAnnotation as ParsedFunctionAnnotation, FunctionTypeParameter, LuaDocAnnotation,
@@ -403,12 +405,21 @@ impl AliasResolutionContext {
                     .iter()
                     .map(|ty| self.resolve(environment, ty))
                     .collect::<Vec<_>>();
-                Type::Function(FunctionType::new_signature(
-                    parameters,
-                    function.required_parameter_count,
-                    vararg_type,
-                    return_types,
-                ))
+                let guarded = function.guarded_return_types.as_ref().map(|types| {
+                    types
+                        .iter()
+                        .map(|ty| self.resolve(environment, ty))
+                        .collect()
+                });
+                Type::Function(
+                    FunctionType::new_signature(
+                        parameters,
+                        function.required_parameter_count,
+                        vararg_type,
+                        return_types,
+                    )
+                    .with_guarded_return_types(guarded),
+                )
             }
             Type::Table(table) => {
                 let mut resolved =
@@ -447,6 +458,8 @@ pub struct TypedFunction {
     pub vararg_type: Option<Type>,
     pub return_type: Option<Type>,
     pub return_types: Vec<Type>,
+    /// See [`FunctionType::guarded_return_types`].
+    pub guarded_return_types: Option<Vec<Type>>,
     pub documentation: Option<String>,
     pub overloads: Vec<TypedFunctionOverload>,
 }
@@ -471,14 +484,17 @@ impl TypedFunction {
 
     pub fn as_type(&self) -> Option<Type> {
         self.has_fully_annotated_parameters().then(|| {
-            Type::Function(FunctionType::new_signature(
-                self.parameters.iter().map(|parameter| {
-                    FunctionParameter::named(&parameter.name, parameter.ty.clone())
-                }),
-                self.required_parameter_count,
-                self.vararg_type.clone(),
-                self.return_types_or_any(),
-            ))
+            Type::Function(
+                FunctionType::new_signature(
+                    self.parameters.iter().map(|parameter| {
+                        FunctionParameter::named(&parameter.name, parameter.ty.clone())
+                    }),
+                    self.required_parameter_count,
+                    self.vararg_type.clone(),
+                    self.return_types_or_any(),
+                )
+                .with_guarded_return_types(self.guarded_return_types.clone()),
+            )
         })
     }
 }
@@ -642,9 +658,10 @@ pub(crate) fn build_type_environment_with_domain_registry(
             continue;
         };
 
-        if let Some(return_types) = inferred_returns.get(name) {
-            function.return_types = return_types.clone();
+        if let Some(returns) = inferred_returns.get(name) {
+            function.return_types = returns.types.clone();
             function.return_type = function.return_types.first().cloned();
+            function.guarded_return_types = returns.guarded.clone();
         }
     }
 
@@ -1005,6 +1022,7 @@ fn resolve_function_annotation(
         has_varargs: function.has_varargs,
         vararg_type: None,
         return_type,
+        guarded_return_types: None,
         return_types,
         documentation: None,
         overloads: Vec::new(),
@@ -1499,6 +1517,7 @@ fn lua_doc_function_for_code_line(
         has_varargs: vararg_type.is_some(),
         vararg_type: None,
         return_type,
+        guarded_return_types: None,
         return_types,
         documentation: lua_doc_documentation(&group.annotations),
         overloads: lua_doc_overloads(
@@ -1778,6 +1797,7 @@ pub(crate) fn typed_function_from_lua_doc_body(
         has_varargs,
         vararg_type,
         return_type,
+        guarded_return_types: None,
         return_types,
         documentation,
         overloads: lua_doc_overloads(parsed, docs, alias_names, diagnostics, &context),
@@ -2318,7 +2338,7 @@ fn infer_function_return_types(
     aliases: &BTreeMap<String, Type>,
     locals: &BTreeMap<String, Type>,
     functions: &[TypedFunction],
-) -> BTreeMap<String, Vec<Type>> {
+) -> BTreeMap<String, InferredReturns> {
     let mut returns = BTreeMap::new();
     let parameters = function_parameters_by_name(functions);
     let runtime_imports = runtime_import_bindings(parsed);
@@ -2380,9 +2400,10 @@ pub(crate) fn inferred_function_type_from_body(
     let runtime_imports = runtime_import_bindings(parsed);
     let context =
         InferenceQueryContext::new(parsed, &aliases, &function_types, "", &runtime_imports);
-    if let Some(return_types) = infer_block_return_types(body.block(), context, &locals) {
-        *function.return_type = return_types.first().cloned().unwrap_or(Type::Any);
-        function.return_types = return_types;
+    if let Some(returns) = infer_block_return_types(body.block(), context, &locals) {
+        *function.return_type = returns.types.first().cloned().unwrap_or(Type::Any);
+        function.return_types = returns.types;
+        function.guarded_return_types = returns.guarded;
     }
 
     Type::Function(function)
@@ -2411,7 +2432,7 @@ fn runtime_import_bindings(parsed: &ParsedSource) -> BTreeMap<String, String> {
 
 fn function_types_by_name(
     functions: &[TypedFunction],
-    inferred_returns: &BTreeMap<String, Vec<Type>>,
+    inferred_returns: &BTreeMap<String, InferredReturns>,
 ) -> BTreeMap<String, Type> {
     functions
         .iter()
@@ -2422,22 +2443,37 @@ fn function_types_by_name(
                 return None;
             }
 
-            let return_types = (!function.return_types.is_empty())
-                .then(|| function.return_types.clone())
-                .or_else(|| inferred_returns.get(name).cloned())
-                .or_else(|| function.return_type.clone().map(|ty| vec![ty]))
-                .unwrap_or_else(|| vec![Type::Any]);
+            let inferred = inferred_returns.get(name);
+            let (return_types, guarded) = if !function.return_types.is_empty() {
+                (
+                    function.return_types.clone(),
+                    function.guarded_return_types.clone(),
+                )
+            } else if let Some(inferred) = inferred {
+                (inferred.types.clone(), inferred.guarded.clone())
+            } else {
+                (
+                    function
+                        .return_type
+                        .clone()
+                        .map_or_else(|| vec![Type::Any], |ty| vec![ty]),
+                    None,
+                )
+            };
 
             Some((
                 name.clone(),
-                Type::Function(FunctionType::new_signature(
-                    function.parameters.iter().map(|parameter| {
-                        FunctionParameter::named(&parameter.name, parameter.ty.clone())
-                    }),
-                    function.required_parameter_count,
-                    function.vararg_type.clone(),
-                    return_types,
-                )),
+                Type::Function(
+                    FunctionType::new_signature(
+                        function.parameters.iter().map(|parameter| {
+                            FunctionParameter::named(&parameter.name, parameter.ty.clone())
+                        }),
+                        function.required_parameter_count,
+                        function.vararg_type.clone(),
+                        return_types,
+                    )
+                    .with_guarded_return_types(guarded),
+                ),
             ))
         })
         .collect()
@@ -2447,7 +2483,7 @@ fn collect_function_return_types(
     block: &ast::Block,
     query: FunctionReturnQuery<'_>,
     locals: &BTreeMap<String, Type>,
-    returns: &mut BTreeMap<String, Vec<Type>>,
+    returns: &mut BTreeMap<String, InferredReturns>,
 ) {
     let mut scoped_locals = locals.clone();
     let root_inference = InferenceQueryContext::new(
@@ -2570,14 +2606,20 @@ fn locals_with_function_parameters(
     scoped
 }
 
+#[derive(Clone, Debug, PartialEq)]
+struct InferredReturns {
+    types: Vec<Type>,
+    guarded: Option<Vec<Type>>,
+}
+
 fn infer_block_return_types(
     block: &ast::Block,
     context: InferenceQueryContext<'_>,
     locals: &BTreeMap<String, Type>,
-) -> Option<Vec<Type>> {
+) -> Option<InferredReturns> {
     let mut returns = Vec::new();
 
-    collect_return_types_in_block(block, context, locals, &mut returns);
+    collect_return_types_in_block(block, context, locals, &[], &mut returns);
 
     if returns.is_empty() {
         return None;
@@ -2587,24 +2629,96 @@ fn infer_block_return_types(
         returns.push(vec![Type::nil()]);
     }
 
-    type_from_return_type_lists(returns)
+    let guarded = guarded_return_types(&returns, context.aliases);
+    Some(InferredReturns {
+        types: type_from_return_type_lists(returns)?,
+        guarded,
+    })
+}
+
+/// When every return either yields `nil` first or a first value that is never
+/// `nil` or `false`, a caller that checks the first value learns which
+/// returns produced the others. This collects the types those returns give.
+fn guarded_return_types(
+    return_lists: &[Vec<Type>],
+    aliases: &BTreeMap<String, Type>,
+) -> Option<Vec<Type>> {
+    let mut guarded = Vec::new();
+    let mut has_nil_first = false;
+
+    for list in return_lists {
+        match list.first() {
+            None => has_nil_first = true,
+            Some(first) if *first == Type::nil() => has_nil_first = true,
+            Some(first) if type_is_always_truthy(first, aliases, 0) => {
+                guarded.push(list.clone());
+            }
+            Some(_) => return None,
+        }
+    }
+
+    let width = guarded.iter().map(Vec::len).max()?;
+    if !has_nil_first || width < 2 {
+        return None;
+    }
+    type_from_return_type_lists(guarded)
+}
+
+fn type_is_always_truthy(ty: &Type, aliases: &BTreeMap<String, Type>, depth: usize) -> bool {
+    const MAX_ALIAS_DEPTH: usize = 16;
+    match ty {
+        Type::Any => false,
+        // Aliases outside the map name LOVE and runtime objects.
+        Type::Alias(name) => match aliases.get(name) {
+            Some(resolved) if depth < MAX_ALIAS_DEPTH => {
+                type_is_always_truthy(resolved, aliases, depth + 1)
+            }
+            Some(_) => false,
+            None => true,
+        },
+        Type::Primitive(primitive) => !matches!(
+            primitive,
+            crate::PrimitiveType::Nil | crate::PrimitiveType::Boolean
+        ),
+        Type::Union(types) => types
+            .iter()
+            .all(|ty| type_is_always_truthy(ty, aliases, depth)),
+        Type::StringLiteral(_)
+        | Type::Function(_)
+        | Type::Table(_)
+        | Type::Array(_)
+        | Type::Tuple(_)
+        | Type::Dictionary { .. } => true,
+    }
 }
 
 fn collect_return_types_in_block(
     block: &ast::Block,
     context: InferenceQueryContext<'_>,
     locals: &BTreeMap<String, Type>,
+    guards: &[ReturnGuard],
     returns: &mut Vec<Vec<Type>>,
 ) {
     let mut scoped_locals = locals.clone();
+    let mut guards = guards.to_vec();
 
     for stmt in block.stmts() {
         match stmt {
             ast::Stmt::Assignment(assignment) => {
                 infer_assignment_types(assignment, context, &mut scoped_locals);
+                for variable in assignment.variables() {
+                    if let Some(name) = directly_assigned_name(variable) {
+                        forget_return_guards(&mut guards, &name);
+                    }
+                }
             }
             ast::Stmt::LocalAssignment(local) => {
+                let local_guards = local_return_guards(local, context.expression(&scoped_locals));
                 infer_local_assignment_types(local, context, &mut scoped_locals);
+                for name in local.names() {
+                    forget_return_guards(&mut guards, &token_text(name));
+                }
+                guards.extend(local_guards);
             }
             ast::Stmt::FunctionDeclaration(function) => {
                 infer_function_declaration_type(
@@ -2616,19 +2730,34 @@ fn collect_return_types_in_block(
             ast::Stmt::FunctionCall(function_call) => {
                 record_setmetatable_call(function_call, context, &mut scoped_locals);
             }
-            ast::Stmt::Do(block) => {
-                collect_return_types_in_block(block.block(), context, &scoped_locals, returns)
-            }
-            ast::Stmt::GenericFor(for_stmt) => {
-                collect_return_types_in_block(for_stmt.block(), context, &scoped_locals, returns)
-            }
+            ast::Stmt::Do(block) => collect_return_types_in_block(
+                block.block(),
+                context,
+                &scoped_locals,
+                &guards,
+                returns,
+            ),
+            ast::Stmt::GenericFor(for_stmt) => collect_return_types_in_block(
+                for_stmt.block(),
+                context,
+                &scoped_locals,
+                &guards,
+                returns,
+            ),
             ast::Stmt::If(if_stmt) => {
                 let branch_locals = locals_with_condition_narrowing(
                     if_stmt.condition(),
                     context.aliases,
                     &scoped_locals,
+                    &guards,
                 );
-                collect_return_types_in_block(if_stmt.block(), context, &branch_locals, returns);
+                collect_return_types_in_block(
+                    if_stmt.block(),
+                    context,
+                    &branch_locals,
+                    &guards,
+                    returns,
+                );
 
                 if let Some(else_ifs) = if_stmt.else_if() {
                     for else_if in else_ifs {
@@ -2636,40 +2765,61 @@ fn collect_return_types_in_block(
                             else_if.condition(),
                             context.aliases,
                             &scoped_locals,
+                            &guards,
                         );
                         collect_return_types_in_block(
                             else_if.block(),
                             context,
                             &branch_locals,
+                            &guards,
                             returns,
                         );
                     }
                 }
 
                 if let Some(else_block) = if_stmt.else_block() {
-                    collect_return_types_in_block(else_block, context, &scoped_locals, returns);
+                    collect_return_types_in_block(
+                        else_block,
+                        context,
+                        &scoped_locals,
+                        &guards,
+                        returns,
+                    );
                 }
                 if if_stmt.else_if().is_none()
                     && if_stmt.else_block().is_none()
                     && !block_may_fall_through(if_stmt.block())
                 {
-                    let narrowed = narrowed_locals_after_false_condition(
+                    let mut narrowed = narrowed_locals_after_false_condition(
                         if_stmt.condition(),
                         context.aliases,
                         |name| scoped_locals.get(name).cloned(),
                     );
+                    extend_with_return_guards(&mut narrowed, &guards);
                     scoped_locals.extend(narrowed);
                 }
             }
-            ast::Stmt::NumericFor(for_stmt) => {
-                collect_return_types_in_block(for_stmt.block(), context, &scoped_locals, returns)
-            }
-            ast::Stmt::Repeat(repeat) => {
-                collect_return_types_in_block(repeat.block(), context, &scoped_locals, returns)
-            }
-            ast::Stmt::While(while_stmt) => {
-                collect_return_types_in_block(while_stmt.block(), context, &scoped_locals, returns)
-            }
+            ast::Stmt::NumericFor(for_stmt) => collect_return_types_in_block(
+                for_stmt.block(),
+                context,
+                &scoped_locals,
+                &guards,
+                returns,
+            ),
+            ast::Stmt::Repeat(repeat) => collect_return_types_in_block(
+                repeat.block(),
+                context,
+                &scoped_locals,
+                &guards,
+                returns,
+            ),
+            ast::Stmt::While(while_stmt) => collect_return_types_in_block(
+                while_stmt.block(),
+                context,
+                &scoped_locals,
+                &guards,
+                returns,
+            ),
             ast::Stmt::LocalFunction(_) => {}
             _ => {}
         }
@@ -2972,14 +3122,70 @@ fn locals_with_condition_narrowing(
     condition: &Expression,
     aliases: &BTreeMap<String, Type>,
     locals: &BTreeMap<String, Type>,
+    guards: &[ReturnGuard],
 ) -> BTreeMap<String, Type> {
     let mut scoped = locals.clone();
+    let mut narrowed =
+        narrowed_locals_for_condition(condition, aliases, |name| locals.get(name).cloned());
 
-    scoped.extend(narrowed_locals_for_condition(condition, aliases, |name| {
-        locals.get(name).cloned()
-    }));
-
+    extend_with_return_guards(&mut narrowed, guards);
+    scoped.extend(narrowed);
     scoped
+}
+
+/// The sibling guards of `local first, ... = call()` for a call with guarded
+/// return types.
+fn local_return_guards(
+    local: &ast::LocalAssignment,
+    query: ExpressionInferenceQuery<'_, '_>,
+) -> Vec<ReturnGuard> {
+    let names = local.names().iter().map(token_text).collect::<Vec<_>>();
+    let mut expressions = local.expressions().iter();
+    let (Some(Expression::FunctionCall(function_call)), None) =
+        (expressions.next(), expressions.next())
+    else {
+        return Vec::new();
+    };
+    if names.len() < 2 {
+        return Vec::new();
+    }
+
+    call_guarded_return_types(query, function_call)
+        .map(|guarded| return_guards_for_names(&names, &guarded))
+        .unwrap_or_default()
+}
+
+fn call_guarded_return_types(
+    query: ExpressionInferenceQuery<'_, '_>,
+    function_call: &FunctionCall,
+) -> Option<Vec<Type>> {
+    let calls = function_call
+        .suffixes()
+        .filter(|suffix| matches!(suffix, ast::Suffix::Call(_)))
+        .count();
+    if calls != 1 || !matches!(function_call.suffixes().last(), Some(ast::Suffix::Call(_))) {
+        return None;
+    }
+    let parts = field_chain_before_first_call(function_call)?;
+    let callee = match parts.as_slice() {
+        [name] => query
+            .context
+            .function_types
+            .get(name)
+            .or_else(|| query.locals.get(name))
+            .cloned(),
+        _ => infer_field_chain_type(
+            query.context.parsed,
+            query.context.aliases,
+            query.locals,
+            &parts,
+        ),
+    }?;
+
+    match resolve_aliases_from_map(query.context.aliases, &callee, 0) {
+        Type::Function(function) => function.guarded_return_types,
+        _ => None,
+    }
 }
 
 fn infer_expression_return_type(

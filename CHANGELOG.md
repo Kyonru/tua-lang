@@ -47,6 +47,11 @@ language or editor behavior, and migration notes call out those changes.
 - An unannotated array of records infers one row type in which fields that
   only some rows define are optional. Reading such a field no longer reports
   `TL1011` for a union of row shapes.
+- Checking the first value of a call such as `local x, y = project(z)` now
+  narrows the other values returned with it, so `if x then print(y + 1) end`
+  no longer reports `y` as possibly `nil`. This applies to checking, return
+  inference, hovers, and the binary-operator lint, including for functions
+  exported by modules.
 - The formatter keeps a space before grouped expressions after `and` and `or`,
   including nested conditions such as `inside and (not closest or ready)`.
 

@@ -640,6 +640,7 @@ fn typed_function_from_type(
         has_varargs: function.vararg_type.is_some(),
         vararg_type: function.vararg_type.as_deref().cloned(),
         return_type: function.return_types_or_any().first().cloned(),
+        guarded_return_types: None,
         return_types: function.return_types_or_any().to_vec(),
         documentation: Some(documentation),
         overloads: Vec::new(),

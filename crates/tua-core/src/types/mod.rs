@@ -148,15 +148,23 @@ pub(crate) fn widen_inferred_type(ty: &Type) -> Type {
         // Parameter types are never inferred from values: a literal there
         // is an annotated contract such as `---@param mode "fill" | "line"`,
         // and widening it would accept arguments the contract rejects.
-        Type::Function(function) => Type::Function(FunctionType::new_signature(
-            function.parameters.iter().cloned(),
-            function.required_parameter_count,
-            function.vararg_type.as_deref().cloned(),
-            function
-                .return_types_or_any()
-                .iter()
-                .map(widen_inferred_type),
-        )),
+        Type::Function(function) => Type::Function(
+            FunctionType::new_signature(
+                function.parameters.iter().cloned(),
+                function.required_parameter_count,
+                function.vararg_type.as_deref().cloned(),
+                function
+                    .return_types_or_any()
+                    .iter()
+                    .map(widen_inferred_type),
+            )
+            .with_guarded_return_types(
+                function
+                    .guarded_return_types
+                    .as_ref()
+                    .map(|types| types.iter().map(widen_inferred_type).collect()),
+            ),
+        ),
         Type::Table(table) => {
             let mut widened = TableShape::from_fields(table.fields().map(|(name, field)| {
                 let ty = if name.starts_with("__") {

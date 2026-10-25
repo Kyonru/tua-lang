@@ -488,6 +488,7 @@ fn typed_member_for_spec(member: &str, spec: &InputSpec, exact: bool) -> Option<
                 has_varargs: false,
                 vararg_type: None,
                 return_type: Some(Type::number()),
+                guarded_return_types: None,
                 return_types: vec![Type::number()],
                 documentation: Some(if member == "getRaw" {
                     "Return configured input values before applying the deadzone.".to_owned()
@@ -515,6 +516,7 @@ fn typed_member_for_spec(member: &str, spec: &InputSpec, exact: bool) -> Option<
             has_varargs: false,
             vararg_type: None,
             return_type: Some(Type::boolean()),
+            guarded_return_types: None,
             return_types: vec![Type::boolean()],
             documentation: Some(member_documentation(member).to_owned()),
             overloads: vec![method_overload(
@@ -729,6 +731,7 @@ fn typed_function(
         has_varargs: false,
         vararg_type: None,
         return_type: returns.first().cloned(),
+        guarded_return_types: None,
         return_types: returns,
         documentation: Some(documentation.to_owned()),
         overloads: Vec::new(),

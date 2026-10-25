@@ -1303,13 +1303,22 @@ fn resolve_export_aliases_inner(
                 .iter()
                 .map(|ty| resolve_export_aliases_inner(environment, ty, false, visiting))
                 .collect::<Vec<_>>();
+            let guarded = function.guarded_return_types.as_ref().map(|types| {
+                types
+                    .iter()
+                    .map(|ty| resolve_export_aliases_inner(environment, ty, false, visiting))
+                    .collect()
+            });
 
-            Type::Function(FunctionType::new_signature(
-                parameters,
-                function.required_parameter_count,
-                vararg_type,
-                return_types,
-            ))
+            Type::Function(
+                FunctionType::new_signature(
+                    parameters,
+                    function.required_parameter_count,
+                    vararg_type,
+                    return_types,
+                )
+                .with_guarded_return_types(guarded),
+            )
         }
         Type::Table(table) => {
             let mut resolved =
@@ -1598,12 +1607,15 @@ fn typed_function_type(function: &TypedFunction) -> Type {
             .collect()
     };
 
-    Type::Function(FunctionType::new_signature(
-        parameters,
-        function.required_parameter_count,
-        function.vararg_type.clone(),
-        function.return_types_or_any(),
-    ))
+    Type::Function(
+        FunctionType::new_signature(
+            parameters,
+            function.required_parameter_count,
+            function.vararg_type.clone(),
+            function.return_types_or_any(),
+        )
+        .with_guarded_return_types(function.guarded_return_types.clone()),
+    )
 }
 
 fn parameter_documentation(function: &TypedFunction) -> Vec<Option<String>> {

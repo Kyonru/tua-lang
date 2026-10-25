@@ -1905,7 +1905,7 @@ return { project = project }
             .unwrap()
             .unwrap();
         assert_eq!(
-            hover.contents, "function projected(): nil | { x: number, y: nil | number }",
+            hover.contents, "function projected(): nil | { x: number, y: number }",
             "{extension}"
         );
         crate::check_tua_source(&path, source).unwrap();

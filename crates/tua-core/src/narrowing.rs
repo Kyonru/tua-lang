@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 
 use full_moon::ast::{self, Call, Expression, FunctionArgs, FunctionCall, Prefix, Suffix, Var};
 use full_moon::node::Node;
+use full_moon::visitors::Visitor;
 
 use crate::ast_utils::plain_field_chain_from_var_expression;
 use crate::control_flow::block_fallthrough_position;
@@ -22,6 +23,131 @@ pub(crate) enum TypeNarrowingKind {
     Primitive(PrimitiveType),
     Table,
     RuntimeType(String),
+}
+
+/// A local that received a later value of a call whose first value guards the
+/// rest, such as `y` in `local x, y = project(point)`. Once `x` is known not
+/// to be `nil`, `y` has the type the non-nil returns give it.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct ReturnGuard {
+    pub guard: String,
+    pub sibling: String,
+    pub guarded: Type,
+}
+
+/// The guards created by `local first, ... = call()` when the call has
+/// guarded return types.
+pub(crate) fn return_guards_for_names(names: &[String], guarded: &[Type]) -> Vec<ReturnGuard> {
+    let Some(guard) = names.first() else {
+        return Vec::new();
+    };
+
+    names
+        .iter()
+        .zip(guarded)
+        .skip(1)
+        .filter(|(sibling, _)| *sibling != guard)
+        .map(|(sibling, guarded)| ReturnGuard {
+            guard: guard.clone(),
+            sibling: sibling.clone(),
+            guarded: guarded.clone(),
+        })
+        .collect()
+}
+
+/// Narrows the siblings of every guard that `narrowed` proves is not `nil`.
+pub(crate) fn extend_with_return_guards<'a>(
+    narrowed: &mut BTreeMap<String, Type>,
+    guards: impl IntoIterator<Item = &'a ReturnGuard>,
+) {
+    let mut siblings = Vec::new();
+
+    for guard in guards {
+        let Some(guard_type) = narrowed.get(&guard.guard) else {
+            continue;
+        };
+        if type_may_be_nil(guard_type) || narrowed.contains_key(&guard.sibling) {
+            continue;
+        }
+        siblings.push((guard.sibling.clone(), guard.guarded.clone()));
+    }
+
+    narrowed.extend(siblings);
+}
+
+pub(crate) fn type_may_be_nil(ty: &Type) -> bool {
+    match ty {
+        Type::Any => true,
+        Type::Primitive(PrimitiveType::Nil) => true,
+        Type::Union(types) => types.iter().any(type_may_be_nil),
+        _ => false,
+    }
+}
+
+/// Whether any statement in the file assigns or redeclares `name` after
+/// `after` and before `before`. Unrelated scopes count too, which keeps the
+/// answer conservative.
+pub(crate) fn name_assigned_between(
+    parsed: &ParsedSource,
+    name: &str,
+    after: SourcePosition,
+    before: SourcePosition,
+) -> bool {
+    struct AssignmentFinder<'a> {
+        name: &'a str,
+        after: SourcePosition,
+        before: SourcePosition,
+        found: bool,
+    }
+
+    impl AssignmentFinder<'_> {
+        fn record(&mut self, node: &impl Node, assigns: bool) {
+            if assigns
+                && node_start(node).is_some_and(|start| {
+                    starts_before(self.after, start) && starts_before(start, self.before)
+                })
+            {
+                self.found = true;
+            }
+        }
+    }
+
+    impl Visitor for AssignmentFinder<'_> {
+        fn visit_assignment(&mut self, node: &ast::Assignment) {
+            let assigns = node
+                .variables()
+                .iter()
+                .any(|var| assigned_name(var).as_deref() == Some(self.name));
+            self.record(node, assigns);
+        }
+
+        fn visit_compound_assignment(&mut self, node: &ast::CompoundAssignment) {
+            let assigns = assigned_name(node.lhs()).as_deref() == Some(self.name);
+            self.record(node, assigns);
+        }
+
+        fn visit_local_assignment(&mut self, node: &ast::LocalAssignment) {
+            let assigns = node
+                .names()
+                .iter()
+                .any(|local_name| token_text(local_name) == self.name);
+            self.record(node, assigns);
+        }
+    }
+
+    let mut finder = AssignmentFinder {
+        name,
+        after,
+        before,
+        found: false,
+    };
+    finder.visit_ast(&parsed.ast);
+    finder.found
+}
+
+/// Drops the guards that an assignment or declaration of `name` invalidates.
+pub(crate) fn forget_return_guards(guards: &mut Vec<ReturnGuard>, name: &str) {
+    guards.retain(|guard| guard.guard != name && guard.sibling != name);
 }
 
 pub(crate) fn narrowed_locals_for_condition(

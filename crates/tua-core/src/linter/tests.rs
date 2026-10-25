@@ -4966,3 +4966,36 @@ impl Drop for TempProject {
         let _ = std::fs::remove_dir_all(&self.path);
     }
 }
+
+#[test]
+fn binary_operator_lint_narrows_values_returned_with_a_checked_first_value() {
+    let diagnostics = check_tua_source_with_diagnostics_config(
+        "src/main.tua",
+        r#"
+local function project(z: number)
+  if z <= 0 then
+    return nil
+  end
+  return z * 2, z * 3
+end
+
+local x, y = project(1)
+if x then
+  print(y * 2)
+end
+print(y * 2)
+"#,
+        &DiagnosticsConfig {
+            binary_operator_type_mismatches: true,
+            ..diagnostics_without_standard_rules()
+        },
+    )
+    .expect_err("the unchecked use should still be reported");
+
+    let lines = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_BINARY_OPERATOR_TYPE))
+        .map(|diagnostic| diagnostic.line)
+        .collect::<Vec<_>>();
+    assert_eq!(lines, vec![13], "{diagnostics:#?}");
+}

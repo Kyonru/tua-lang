@@ -319,6 +319,27 @@ if target then
 end
 ```
 
+Checking the first value of a call also narrows the values returned with it,
+when the function returns either `nil` alone or a first value that is never
+`nil` or `false`:
+
+```tua
+local function project(z: number)
+  if z <= 0 then
+    return nil
+  end
+  return 320 / z, 240 / z
+end
+
+local x, y = project(depth)
+if x then
+  print(x + y) -- y: number
+end
+```
+
+The narrowing ends when either local is reassigned, and it does not apply when
+the first value may be `false` or is `any`.
+
 Use `value is Type` when Tua can emit an equivalent runtime identity check:
 
 ```tua

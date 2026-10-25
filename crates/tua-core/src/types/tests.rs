@@ -1592,5 +1592,5 @@ end
         .return_type
         .as_ref()
         .unwrap();
-    assert_eq!(returns.to_string(), "nil | { x: number, y: nil | number }");
+    assert_eq!(returns.to_string(), "nil | { x: number, y: number }");
 }

@@ -19,7 +19,9 @@ use crate::module_index::{
     required_module_export_for_fields, required_module_export_type_for_fields,
     required_module_exports_for_receiver, ModuleExportField, ModuleExports,
 };
-use crate::narrowing::{directly_assigned_name, narrowed_type_at_position};
+use crate::narrowing::{
+    directly_assigned_name, name_assigned_between, narrowed_type_at_position, type_may_be_nil,
+};
 use crate::semantic_domains::BuiltinDomainRegistry;
 use crate::types::{
     deduplicate_inferred_types, type_from_tua_type, FunctionType, MetatableFacts, PrimitiveType,
@@ -746,11 +748,57 @@ impl<'a> SemanticModel<'a> {
             {
                 return Some(narrowed);
             }
+            if let Some(guarded) = self.guarded_sibling_type(name, position, depth) {
+                return Some(guarded);
+            }
 
             return Some(base);
         }
 
         None
+    }
+
+    /// The type of `y` in `local x, y = call()` where `x` is known not to be
+    /// `nil` at `position` and the call's first value guards the others.
+    fn guarded_sibling_type(
+        &self,
+        name: &str,
+        position: SourcePosition,
+        depth: usize,
+    ) -> Option<Type> {
+        let local = self.local_assignment_value(name, position)?;
+        let guard = token_text(local.guard?);
+        let guard = guard.as_str();
+        let Some(Expression::FunctionCall(function_call)) = local.expression else {
+            return None;
+        };
+        let calls = function_call
+            .suffixes()
+            .filter(|suffix| matches!(suffix, Suffix::Call(_)))
+            .count();
+        if calls != 1 || !matches!(function_call.suffixes().last(), Some(Suffix::Call(_))) {
+            return None;
+        }
+        if name_assigned_between(self.parsed, name, local.span.start, position)
+            || name_assigned_between(self.parsed, guard, local.span.start, position)
+        {
+            return None;
+        }
+
+        let aliases = self.alias_map();
+        let guard_type =
+            narrowed_type_at_position(self.parsed, &aliases, guard, position, |lookup_name| {
+                self.type_of_name_without_narrowing(lookup_name, position, depth + 1)
+            })?;
+        if type_may_be_nil(&guard_type) {
+            return None;
+        }
+
+        let parts = field_chain_before_first_call(function_call)?;
+        self.function_type_for_call_parts(&parts, local.evaluation_position)?
+            .guarded_return_types?
+            .get(local.return_index)
+            .cloned()
     }
 
     fn type_of_name_without_narrowing(
@@ -1856,6 +1904,9 @@ struct LocalAssignmentValue<'a> {
     evaluation_position: SourcePosition,
     expression: Option<&'a Expression>,
     return_index: usize,
+    /// The first name of `local first, ... = call()` when this value is a
+    /// later one; checking `first` may narrow it.
+    guard: Option<&'a full_moon::tokenizer::TokenReference>,
 }
 
 pub(crate) fn resolve_field_chain_type(
@@ -2179,6 +2230,7 @@ fn collect_local_assignment_values<'a>(
                         evaluation_position,
                         expression,
                         return_index,
+                        guard: None,
                     });
                 }
             }
@@ -2200,11 +2252,15 @@ fn collect_local_assignment_values<'a>(
                             .map(|(expression, return_index)| (Some(expression), return_index))
                             .unwrap_or((None, 0));
 
+                    let guard = (index > 0 && expressions.len() == 1)
+                        .then(|| local.names().iter().next())
+                        .flatten();
                     candidates.push(LocalAssignmentValue {
                         span,
                         evaluation_position,
                         expression,
                         return_index,
+                        guard,
                     });
                 }
             }
@@ -2655,6 +2711,7 @@ fn typed_function_from_asset_loader(kind: AssetLoaderKind) -> TypedFunction {
         has_varargs: false,
         vararg_type: None,
         return_type: Some(return_type.clone()),
+        guarded_return_types: None,
         return_types: vec![return_type],
         documentation: Some(kind.documentation().to_owned()),
         overloads: Vec::new(),
@@ -2683,6 +2740,7 @@ fn typed_function_from_vector_constructor() -> TypedFunction {
         has_varargs: false,
         vararg_type: None,
         return_type: Some(return_type.clone()),
+        guarded_return_types: None,
         return_types: vec![return_type],
         documentation: Some(vector::documentation().to_owned()),
         overloads: Vec::new(),
@@ -2715,6 +2773,7 @@ fn typed_function_from_function_type(
         has_varargs,
         vararg_type,
         return_type: return_types.first().cloned(),
+        guarded_return_types: None,
         return_types,
         documentation: None,
         overloads: Vec::new(),
@@ -2759,6 +2818,7 @@ fn typed_function_from_module_export(
         has_varargs,
         vararg_type,
         return_type: return_types.first().cloned(),
+        guarded_return_types: None,
         return_types,
         documentation: export.documentation,
         overloads: Vec::new(),
@@ -2781,6 +2841,7 @@ fn typed_function_from_lua_item(item: LuaItem) -> Option<TypedFunction> {
         has_varargs: false,
         vararg_type: None,
         return_type: return_types.first().cloned(),
+        guarded_return_types: None,
         return_types,
         documentation: Some(item.documentation.to_owned()),
         overloads: Vec::new(),

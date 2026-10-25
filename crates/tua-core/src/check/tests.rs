@@ -4670,3 +4670,110 @@ local id: number = rows[1].id
         "{diagnostics:#?}"
     );
 }
+
+#[test]
+fn checking_the_first_return_narrows_the_values_returned_with_it() {
+    check_tua_source(
+        "src/main.tua",
+        r#"
+local function project(z: number)
+  if z <= 0 then
+    return nil
+  end
+  return z * 2, z * 3, "label"
+end
+
+local x, y, label = project(1)
+if x then
+  print(x + y, label .. "!")
+end
+
+local function projected(z: number)
+  local px, py = project(z)
+  if not px then
+    return nil
+  end
+  local scaled = py * 2
+  return { x = px, y = py, scaled = scaled }
+end
+
+local target = projected(2)
+if target then
+  print(target.y + 1)
+end
+
+local function parse(text: string)
+  if text == "" then
+    return nil, "empty"
+  end
+  return #text, text
+end
+
+local length, rest = parse("abc")
+if length ~= nil then
+  print(rest .. "")
+end
+"#,
+    )
+    .expect("a non-nil first value should narrow the other returns");
+
+    let diagnostics = check_tua_source(
+        "src/main.tua",
+        r#"
+local function project(z: number)
+  if z <= 0 then
+    return nil
+  end
+  return z * 2, z * 3
+end
+
+local x, y = project(1)
+print(y + 1)
+
+local a, b = project(1)
+a = 5
+if a then
+  print(b + 1)
+end
+
+local c, d = project(1)
+d = nil
+if c then
+  print(d + 1)
+end
+"#,
+    )
+    .expect_err("unchecked or reassigned values stay possibly nil");
+    let lines = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::TYPE_MISMATCH))
+        .map(|diagnostic| diagnostic.line)
+        .collect::<Vec<_>>();
+    assert_eq!(lines, vec![10, 15, 21], "{diagnostics:#?}");
+}
+
+#[test]
+fn a_first_return_that_may_be_false_does_not_guard_the_others() {
+    let diagnostics = check_tua_source(
+        "src/main.tua",
+        r#"
+local function find(z: number)
+  if z <= 0 then
+    return nil
+  end
+  return z > 1, z
+end
+
+local found, value = find(1)
+if found then
+  print(value + 1)
+end
+"#,
+    )
+    .expect_err("a boolean first value cannot tell the returns apart");
+    assert!(
+        diagnostics.iter().any(|diagnostic| diagnostic.line == 11
+            && diagnostic.code == Some(DiagnosticCode::TYPE_MISMATCH)),
+        "{diagnostics:#?}"
+    );
+}
