@@ -24,6 +24,8 @@ CPU while idle.
   are unchanged.
 - Real-LÖVE regression coverage now validates again after an idle gap on the
   same validator process.
+- Audio asset pipelines regenerate cached output after the 0.5.0 catalog
+  formatting change instead of failing with `TL2011`.
 
 #### Upgrade notes
 
@@ -36,6 +38,9 @@ Reinstall the VS Code extension to pick up the bundled 0.5.1 server.
   validations no longer shows as a hung LÖVE app on macOS after the server
   starts or restarts. It now waits for requests on a thread and keeps
   processing window events.
+- Audio analysis caches created before 0.5.0 are no longer reused. Their stale
+  `catalog.tua` could be restored over the current file or rejected with
+  `TL2011` (generated output would overwrite an unowned source file).
 
 ## [0.5.0] - 2026-10-25
 

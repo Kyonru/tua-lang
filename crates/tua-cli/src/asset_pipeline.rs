@@ -22,7 +22,10 @@ use crate::source::io_diagnostic;
 use tua_core::path_security::reject_symlink_path;
 
 const MANIFEST_VERSION: u32 = 1;
-const AUDIO_ANALYZER_VERSION: &str = "3";
+/// Part of the audio pipeline cache key. Bump it whenever the analysis or any
+/// generated file (`catalog.tua`, `catalog_data.lua`, `audio-index.json`) changes,
+/// or cached output from an older Tua is restored instead of regenerated.
+const AUDIO_ANALYZER_VERSION: &str = "4";
 const MAX_IMPORTER_TIMEOUT_MS: u64 = 3_600_000;
 const MAX_MANIFEST_BYTES: u64 = 16 * 1024 * 1024;
 const MAX_STDERR_BYTES: u64 = 1024 * 1024;
@@ -228,6 +231,7 @@ fn execute_audio_analysis(
         .chain(std::iter::once(std::borrow::Cow::Borrowed("catalog_data")))
         .collect::<Vec<_>>()
         .join(".");
+    // Changing this text requires bumping AUDIO_ANALYZER_VERSION.
     let facade = format!(
         r#"export type AudioTempoCandidate = {{
   bpm: number,
