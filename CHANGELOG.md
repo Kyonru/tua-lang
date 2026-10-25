@@ -55,9 +55,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
-- Multiline `return` values and other expression lists split after a comma now
-  keep their continuation indentation, so formatted code no longer triggers
-  the multiline-statement layout warning.
+- Multiline `return` values, other expression lists split after a comma, and
+  expressions split after `..`, a comparison, or `not` now keep their
+  continuation indentation, so formatted code no longer triggers the
+  multiline-statement layout warning.
 
 - Malformed `tua.toml` input that triggers an internal dependency panic now
   produces a normal configuration parse error instead of terminating Tua.

@@ -1017,3 +1017,95 @@ end
         "formatter output must satisfy its continuation-layout lint: {diagnostics:#?}"
     );
 }
+
+#[test]
+fn indents_continuations_after_trailing_operators() {
+    let source = r#"local function compare(a: string, b: string)
+local joined = a ..
+b
+local same = a ==
+b
+local different = a ~=
+b
+local before = a <
+b
+local after = a >
+b
+local atMost = a <=
+b
+local atLeast = a >=
+b
+local negated = not
+same
+local commented = a .. -- tail
+b
+repeat
+joined = joined .. "!"
+until #joined ==
+4
+return joined ..
+b, same, different, before, after, atMost, atLeast, negated, commented
+end
+
+local function count(...)
+return ...
+end
+"#;
+    let expected = r#"local function compare(a: string, b: string)
+  local joined = a ..
+    b
+  local same = a ==
+    b
+  local different = a ~=
+    b
+  local before = a <
+    b
+  local after = a >
+    b
+  local atMost = a <=
+    b
+  local atLeast = a >=
+    b
+  local negated = not
+    same
+  local commented = a .. -- tail
+    b
+  repeat
+    joined = joined .. "!"
+  until #joined ==
+    4
+  return joined ..
+    b, same, different, before, after, atMost, atLeast, negated, commented
+end
+
+local function count(...)
+  return ...
+end
+"#;
+
+    let output = format(source);
+
+    assert_eq!(output, expected);
+    assert_eq!(format(&output), output);
+    assert_no_multiline_layout_lint(&output);
+}
+
+fn assert_no_multiline_layout_lint(output: &str) {
+    let parsed =
+        parse_tua_source("src/main.tua", output.to_owned()).expect("formatted source should parse");
+    let environment = crate::types::build_type_environment(&parsed)
+        .expect("formatted source should build a type environment");
+    let diagnostics = crate::linter::lint_parsed_source(
+        &parsed,
+        &crate::DiagnosticsConfig::default(),
+        &crate::config::JitConfig::default(),
+        &environment,
+    );
+    assert!(
+        diagnostics
+            .iter()
+            .all(|diagnostic| diagnostic.code
+                != Some(crate::DiagnosticCode::LINT_MULTI_LINE_STATEMENT)),
+        "formatter output must satisfy its continuation-layout lint: {diagnostics:#?}"
+    );
+}

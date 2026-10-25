@@ -1473,22 +1473,22 @@ fn update_group_depth(current: usize, code: &str, open: u8, close: u8) -> usize 
 fn line_ends_with_continuation(code: &str) -> bool {
     let code = code.trim_end();
 
-    if code.is_empty()
-        || code.ends_with("==")
-        || code.ends_with("<=")
-        || code.ends_with(">=")
-        || code.ends_with("~=")
-    {
+    if code.is_empty() {
         return false;
     }
 
-    code.as_bytes()
-        .last()
-        .is_some_and(|byte| matches!(byte, b'=' | b'+' | b'-' | b'*' | b'/' | b'%' | b'^'))
+    // `...` is a complete vararg expression; `..` still needs its right operand.
+    (code.ends_with("..") && !code.ends_with("..."))
+        || code.as_bytes().last().is_some_and(|byte| {
+            matches!(
+                byte,
+                b'=' | b'<' | b'>' | b'+' | b'-' | b'*' | b'/' | b'%' | b'^'
+            )
+        })
         || code
             .split_whitespace()
             .next_back()
-            .is_some_and(|word| matches!(word, "and" | "or"))
+            .is_some_and(|word| matches!(word, "and" | "or" | "not"))
 }
 
 fn line_starts_with_continuation(code: &str) -> bool {
