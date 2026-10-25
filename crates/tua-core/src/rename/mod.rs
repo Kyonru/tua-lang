@@ -82,6 +82,13 @@ pub fn rename_parsed_source(
     let Some(target) = prepare_rename_parsed_source(parsed, position)? else {
         return Ok(None);
     };
+    if rename_name_conflicts(
+        &parsed.source,
+        &new_name,
+        target.kind == RenameKind::TableField,
+    ) {
+        return Ok(None);
+    }
     let reference_kind = reference_kind_for_rename(target.kind);
     let edits = references_parsed_source(parsed, position, true)?
         .into_iter()
@@ -94,6 +101,27 @@ pub fn rename_parsed_source(
         .collect::<Vec<_>>();
 
     Ok((!edits.is_empty()).then_some(RenameEdit { edits }))
+}
+
+/// Conservatively refuse an occupied name in an affected file. This includes
+/// free/global uses: introducing a local can capture those uses even when no
+/// declaration with that name exists. Disjoint-scope reuse can be relaxed later
+/// only with a proof that every binding is preserved after applying the edits.
+pub(crate) fn rename_name_conflicts(source: &str, name: &str, fields: bool) -> bool {
+    use full_moon::ast::LuaVersion;
+    use full_moon::tokenizer::{Lexer, LexerResult, TokenType};
+    let tokens = match Lexer::new(source, LuaVersion::luau().with_luajit()).collect() {
+        LexerResult::Ok(tokens) | LexerResult::Recovered(tokens, _) => tokens,
+        LexerResult::Fatal(_) => return true,
+    };
+    tokens.iter().any(|token| match token.token_type() {
+        TokenType::Identifier { identifier } => identifier.as_str() == name,
+        // Escaped field keys are ambiguous to the semantic index; fail closed.
+        TokenType::StringLiteral { literal, .. } if fields => {
+            literal.as_str() == name || literal.contains('\\')
+        }
+        _ => false,
+    })
 }
 
 pub fn rename_target_for_definition(

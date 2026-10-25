@@ -1561,6 +1561,16 @@ impl AnalysisSnapshot {
         edits.sort_by_key(text_edit_key);
         edits.dedup_by_key(|edit| text_edit_key(edit));
 
+        for edit in &edits {
+            let source = self.source(&edit.path)?;
+            if crate::rename::rename_name_conflicts(
+                source,
+                new_name,
+                rename_target.kind == crate::RenameKind::TableField,
+            ) {
+                return None;
+            }
+        }
         (!edits.is_empty()).then_some(RenameEdit { edits })
     }
 

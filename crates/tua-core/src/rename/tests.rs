@@ -120,6 +120,30 @@ local after = value
 }
 
 #[test]
+fn rename_rejects_capture_of_locals_and_globals() {
+    for source in [
+        "local x = 1\nlocal y = 2\nprint(x, y)\n",
+        "local x = 1\nprint(x, y)\n",
+        "local x = 1\ndo local y = 2; print(x, y) end\n",
+    ] {
+        let position = SourcePosition { line: 1, column: 7 };
+        assert!(rename_tua_source("capture.tua", source, position, "y")
+            .unwrap()
+            .is_none());
+        let mut host = crate::AnalysisHost::new();
+        host.set_file("capture.tua", source);
+        assert!(host
+            .snapshot()
+            .rename("capture.tua", position, "y")
+            .is_none());
+        assert!(host
+            .snapshot()
+            .rename("capture.tua", position, "fresh_name")
+            .is_some());
+    }
+}
+
+#[test]
 fn renames_class_names_fields_and_methods_in_original_source() {
     let source = r#"
 open class Entity {

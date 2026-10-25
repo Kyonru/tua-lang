@@ -38,6 +38,11 @@ terminal command.
 | Complete Lua, Tua, LOVE, modules, or assets | Contextual completion, snippets, and completion resolve |
 | Move through a project | Definition, type definition, implementation, references, symbols, call hierarchy, and module explorer |
 | Change code safely | Rename, quick fixes, source actions, and file-rename import updates |
+
+Symbol rename conservatively refuses a replacement name already used in any
+affected file, including free/global references that a new local could capture.
+Choose a fresh name when scopes are ambiguous. This can also refuse otherwise
+safe reuse in disjoint scopes.
 | Inspect a LOVE project | Asset, Signal, Module, ECS, Object Pool, and Sprite tools |
 | Inspect generated output | **Tua: Open Generated Lua Beside Tua** and source-map navigation |
 | Diagnose server problems | Tua output, language status, server health, traces, and debug information |

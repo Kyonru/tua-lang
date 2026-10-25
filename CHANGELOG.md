@@ -6,6 +6,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Symbol rename rejects occupied replacement names to prevent local/global
+  capture and field collisions in affected files.
+
 - Known invalid primitive operators now report `TL1003`, including operations
   inside conditions and on unions that need narrowing.
 
