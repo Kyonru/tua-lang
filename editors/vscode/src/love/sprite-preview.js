@@ -161,9 +161,15 @@ function createPreviewPanel(state, onReload) {
 
   state.attach(panel);
   panel.onDidDispose?.(() => state.clearPanel(panel));
-  panel.webview.onDidReceiveMessage?.((message) => {
+  panel.webview.onDidReceiveMessage?.(async (message) => {
     if (message?.command === "reload") {
-      return onReload();
+      try {
+        return await onReload();
+      } finally {
+        if (state.panel() === panel) {
+          await panel.webview.postMessage?.({ command: "reloadComplete" });
+        }
+      }
     }
 
     return undefined;

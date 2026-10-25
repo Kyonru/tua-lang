@@ -364,6 +364,19 @@ With `workbench.editor.editorActionsLocation: "titleBar"`, these controls appear
 to the right of the Command Center. The extension groups the tools independently
 of any color theme, leaving space for VSCodium's sidebar and panel toggles.
 
+## Sprite animation preview
+
+Sprite previews retain the selected animation, paused frame, speed, and zoom when
+reloaded for the same source file. Switching animations keeps the current pause
+choice; Play restarts a completed non-looping animation. Playback stops requesting
+animation frames while paused or hidden, and honors reduced motion on first open.
+The preview supports up to 2,048 frames per animation and reports invalid ranges,
+out-of-image frames, and image decode failures. The error view includes Reload.
+
+Wide sprite panels place the image and controls side by side. Narrow panels stack
+them without a sticky image covering the controls. Frame buttons remain stable
+while playing so keyboard focus is retained.
+
 ## State-machine preview
 
 State-machine previews retain the selected machine, state or transition, and graph

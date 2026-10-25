@@ -1,18 +1,40 @@
 "use strict";
 
-function spritePreviewRuntime(sprites) {
-  const serializedSprites = JSON.stringify(sprites).replace(/</g, "\\u003c");
+const { jsonForHtml } = require("../../shared/webview");
+const { advancePlayback, expandAnimationFrames } = require("./playback");
+
+function spritePreviewRuntime(sprites, source) {
+  const serializedSprites = jsonForHtml(sprites);
 
   return `    const sprites = ${serializedSprites};
     const root = document.getElementById("sprites");
     const summary = document.getElementById("summary");
     const reloadButton = document.getElementById("reload-preview");
     const vscode = typeof acquireVsCodeApi === "function" ? acquireVsCodeApi() : undefined;
+    const source = ${jsonForHtml(source)};
+    const saved = vscode?.getState?.();
+    const savedSprites = saved?.source === source ? saved.sprites || {} : {};
+    const captures = new Map();
+    const frameCache = new WeakMap();
+    ${expandAnimationFrames.toString()}
+    ${advancePlayback.toString()}
+    function saveState() {
+      for (const [key, capture] of captures) savedSprites[key] = capture();
+      vscode?.setState?.({ source, sprites: savedSprites });
+    }
+    window.addEventListener("beforeunload", saveState);
+    window.addEventListener("message", ({ data }) => {
+      if (data?.command === "reloadComplete") {
+        reloadButton.disabled = false;
+        reloadButton.textContent = "Reload";
+      }
+    });
     const animationCount = sprites.reduce((total, sprite) => total + sprite.animations.length, 0);
 
     summary.appendChild(pill(sprites.length + " sprite" + (sprites.length === 1 ? "" : "s")));
     summary.appendChild(pill(animationCount + " animation" + (animationCount === 1 ? "" : "s")));
     reloadButton.addEventListener("click", () => {
+      saveState();
       reloadButton.disabled = true;
       reloadButton.textContent = "Reloading";
 
@@ -82,6 +104,12 @@ function spritePreviewRuntime(sprites) {
         return section;
       }
 
+      sprite = { ...sprite, animations: sprite.animations.filter(candidate => {
+        try { animationFrames(candidate); return true; }
+        catch (error) { appendUnavailableMessage(section, candidate.name + ": " + error.message); return false; }
+      }) };
+      if (!sprite.animations.length) return section;
+
       const workbench = document.createElement("div");
       workbench.className = "workbench";
       workbench.innerHTML = \`
@@ -89,6 +117,7 @@ function spritePreviewRuntime(sprites) {
           <div class="stage-frame">
             <canvas class="sprite-canvas"></canvas>
           </div>
+          <div class="stage-status" role="status">Loading image…</div>
           <div class="stage-readout">
             <div class="readout"><span>Frame</span><span class="frame-value">-</span></div>
             <div class="readout"><span>Source rect</span><span class="rect-value">-</span></div>
@@ -135,6 +164,8 @@ function spritePreviewRuntime(sprites) {
 
       const stageFrame = workbench.querySelector(".stage-frame");
       const canvas = workbench.querySelector(".sprite-canvas");
+      canvas.setAttribute("role", "img");
+      canvas.setAttribute("aria-label", sprite.name + " animation preview");
       const sheetCanvas = workbench.querySelector(".sheet-canvas");
       const tabs = workbench.querySelector(".animation-tabs");
       const previousButton = workbench.querySelector(".previous");
@@ -157,13 +188,24 @@ function spritePreviewRuntime(sprites) {
       const sheetContext = sheetCanvas.getContext("2d");
       const image = new Image();
       const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-      let animation = sprite.animations[0];
-      let frameOffset = 0;
+      const stateKey = JSON.stringify([sprite.name, sprite.imagePath]);
+      const previous = savedSprites[stateKey];
+      let animation = sprite.animations.find(candidate => candidate.name === previous?.animation) || sprite.animations[0];
+      let frameOffset = Math.max(0, Math.min(animationFrames(animation).length - 1, Math.trunc(previous?.frameOffset) || 0));
       let elapsed = 0;
       let lastTime = 0;
-      let playing = !reducedMotion;
-      let speedScale = 1;
-      let zoomScale = 1;
+      let playing = typeof previous?.playing === "boolean" ? previous.playing : !reducedMotion;
+      let speedScale = Math.max(0.25, Math.min(2, Number(previous?.speedScale) || 1));
+      let zoomScale = Math.max(1, Math.min(4, Number(previous?.zoomScale) || 1));
+      let imageReady = false;
+      let animationRequest;
+      let timelineAnimation;
+      let activeChip;
+      const status = workbench.querySelector(".stage-status");
+      speedInput.value = String(speedScale);
+      speedValue.textContent = speedScale + "x";
+      zoomInput.value = String(zoomScale);
+      captures.set(stateKey, () => ({ animation: animation.name, frameOffset, playing, speedScale, zoomScale }));
 
       for (const candidate of sprite.animations) {
         const tab = document.createElement("button");
@@ -173,7 +215,6 @@ function spritePreviewRuntime(sprites) {
           animation = candidate;
           frameOffset = 0;
           elapsed = 0;
-          playing = !reducedMotion;
           lastTime = 0;
           updateAll();
         });
@@ -189,77 +230,105 @@ function spritePreviewRuntime(sprites) {
       });
 
       playButton.addEventListener("click", () => {
+        if (!playing && !animation.loop && frameOffset === animationFrames(animation).length - 1) {
+          frameOffset = 0;
+          elapsed = 0;
+        }
         playing = !playing;
-        updatePlayButton();
+        lastTime = 0;
+        updateAll();
       });
 
       speedInput.addEventListener("input", () => {
         speedScale = Number(speedInput.value) || 1;
         speedValue.textContent = speedScale + "x";
+        saveState();
       });
 
       zoomInput.addEventListener("input", () => {
         zoomScale = Number(zoomInput.value) || 1;
         updateZoom();
+        saveState();
       });
 
       window.addEventListener("resize", updateZoom);
+      document.addEventListener("visibilitychange", () => {
+        if (document.hidden) saveState();
+        lastTime = 0;
+        scheduleTick();
+      });
 
       image.addEventListener("load", () => {
+        imageReady = true;
+        for (const control of workbench.querySelectorAll("button, input")) control.disabled = false;
+        status.textContent = "";
         updateCanvasDimensions();
         context.imageSmoothingEnabled = false;
         sheetContext.imageSmoothingEnabled = false;
         sheetValue.textContent = image.naturalWidth + "x" + image.naturalHeight;
         sheetMeta.textContent = image.naturalWidth + "x" + image.naturalHeight + " px";
         updateAll();
-        requestAnimationFrame(tick);
       });
 
       image.addEventListener("error", () => {
-        sheetMeta.className = "error";
-        sheetMeta.textContent = "Could not load " + sprite.imagePath;
+        playing = false;
+        status.classList.add("error");
+        status.textContent = "Could not decode " + sprite.imagePath + ". Check the image and reload the preview.";
+        sheetMeta.textContent = "Image unavailable";
+        updatePlayButton();
       });
 
+      for (const control of workbench.querySelectorAll("button, input")) control.disabled = true;
+      updatePlayButton();
       image.src = sprite.imageUri;
 
+      function scheduleTick() {
+        if (animationRequest !== undefined) cancelAnimationFrame(animationRequest);
+        animationRequest = undefined;
+        if (playing && imageReady && !document.hidden) animationRequest = requestAnimationFrame(tick);
+      }
+
       function tick(time) {
-        if (!lastTime) {
-          lastTime = time;
-        }
-        const delta = Math.max(0, time - lastTime) / 1000 * speedScale;
+        animationRequest = undefined;
+        const delta = lastTime ? Math.max(0, time - lastTime) / 1000 * speedScale : 0;
         lastTime = time;
-
-        if (playing) {
-          elapsed += delta;
-          const frames = animationFrames(animation);
-          let changed = false;
-          let duration = frameDuration(frameOffset);
-          while (elapsed >= duration && playing) {
-            elapsed -= duration;
-            if (animation.loop || frameOffset < frames.length - 1) {
-              frameOffset = (frameOffset + 1) % frames.length;
-            } else {
-              elapsed = 0;
-              playing = false;
-            }
-            changed = true;
-            duration = frameDuration(frameOffset);
-          }
-          if (changed) {
-            updateAll();
-          }
-        }
-
-        requestAnimationFrame(tick);
+        const before = frameOffset;
+        const wasPlaying = playing;
+        const next = advancePlayback(
+          { offset: frameOffset, elapsed, playing },
+          animationFrames(animation).map((_, index) => frameDuration(index)), animation.loop, delta,
+        );
+        frameOffset = next.offset;
+        elapsed = next.elapsed;
+        playing = next.playing;
+        if (before !== frameOffset) updateFrame();
+        updatePlayButton();
+        if (wasPlaying !== playing) saveState();
+        scheduleTick();
       }
 
       function updateAll() {
-        updateCanvasDimensions();
         updateTabs();
+        updateTimeline();
+        updateFrame();
         updatePlayButton();
+        scheduleTick();
+        saveState();
+      }
+
+      function updateFrame() {
+        if (!imageReady) return;
+        updateCanvasDimensions();
         updateZoom();
         updateMetrics();
-        updateTimeline();
+        const selectedChip = timeline.children[frameOffset];
+        if (activeChip !== selectedChip) {
+          activeChip?.classList.remove("active");
+          activeChip?.setAttribute("aria-pressed", "false");
+          selectedChip?.classList.add("active");
+          selectedChip?.setAttribute("aria-pressed", "true");
+          activeChip = selectedChip;
+        }
         drawFrame();
         drawSheet();
       }
@@ -267,11 +336,13 @@ function spritePreviewRuntime(sprites) {
       function updateTabs() {
         for (const tab of tabs.querySelectorAll("button")) {
           tab.classList.toggle("active", tab.textContent === animation.name);
+          tab.setAttribute("aria-pressed", String(tab.textContent === animation.name));
         }
       }
 
       function updatePlayButton() {
         playButton.textContent = playing ? "Pause" : "Play";
+        playButton.setAttribute("aria-pressed", String(playing));
       }
 
       function updateZoom() {
@@ -291,10 +362,7 @@ function spritePreviewRuntime(sprites) {
         const availableWidth = Math.max(1, stageFrame.clientWidth - 24);
         const availableHeight = Math.max(1, stageFrame.clientHeight - 24);
 
-        return Math.max(
-          1,
-          Math.min(availableWidth / frame.width, availableHeight / frame.height),
-        );
+        return Math.min(availableWidth / frame.width, availableHeight / frame.height);
       }
 
       function updateMetrics() {
@@ -328,6 +396,14 @@ function spritePreviewRuntime(sprites) {
         const metadata = currentMetadata();
 
         context.clearRect(0, 0, canvas.width, canvas.height);
+        if (rect.x < 0 || rect.y < 0 || rect.x + frame.width > image.naturalWidth || rect.y + frame.height > image.naturalHeight) {
+          playing = false;
+          status.classList.add("error");
+          status.textContent = "This frame extends outside the image. Check its range and frame dimensions.";
+          return;
+        }
+        status.classList.remove("error");
+        status.textContent = "";
         context.drawImage(
           image,
           rect.x,
@@ -342,32 +418,42 @@ function spritePreviewRuntime(sprites) {
       }
 
       function drawSheet() {
-        const scale = Math.max(1, Math.min(8, Math.floor(320 / Math.max(image.naturalWidth, image.naturalHeight))));
+        const fit = 320 / Math.max(image.naturalWidth, image.naturalHeight);
+        const scale = fit < 1 ? fit : Math.min(8, Math.floor(fit));
         const rect = sourceRect(currentFrame());
         const frame = animationFrame();
 
-        sheetCanvas.width = image.naturalWidth * scale;
-        sheetCanvas.height = image.naturalHeight * scale;
+        const width = Math.max(1, Math.floor(image.naturalWidth * scale));
+        const height = Math.max(1, Math.floor(image.naturalHeight * scale));
+        if (sheetCanvas.width !== width || sheetCanvas.height !== height) {
+          sheetCanvas.width = width;
+          sheetCanvas.height = height;
+          sheetContext.imageSmoothingEnabled = false;
+        }
         sheetCanvas.style.width = sheetCanvas.width + "px";
         sheetCanvas.style.height = sheetCanvas.height + "px";
         sheetContext.clearRect(0, 0, sheetCanvas.width, sheetCanvas.height);
         sheetContext.drawImage(image, 0, 0, sheetCanvas.width, sheetCanvas.height);
-        sheetContext.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue("--accent").trim() || "#ffffff";
+        sheetContext.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue("--accent").trim() || getComputedStyle(document.body).color;
         sheetContext.lineWidth = Math.max(2, scale);
         sheetContext.strokeRect(
           rect.x * scale + sheetContext.lineWidth / 2,
           rect.y * scale + sheetContext.lineWidth / 2,
-          frame.width * scale - sheetContext.lineWidth,
-          frame.height * scale - sheetContext.lineWidth,
+          Math.max(1, frame.width * scale - sheetContext.lineWidth),
+          Math.max(1, frame.height * scale - sheetContext.lineWidth),
         );
       }
 
       function updateTimeline() {
+        if (timelineAnimation === animation) return;
+        timelineAnimation = animation;
+        activeChip = undefined;
         const frames = animationFrames(animation);
         timeline.replaceChildren(...frames.map((frame, index) => {
           const entry = document.createElement("button");
           entry.type = "button";
-          entry.className = index === frameOffset ? "frame-chip active" : "frame-chip";
+          entry.className = "frame-chip";
+          entry.setAttribute("aria-pressed", "false");
           entry.textContent = frame.column + "," + frame.row;
           entry.addEventListener("click", () => {
             frameOffset = index;
@@ -442,20 +528,10 @@ function spritePreviewRuntime(sprites) {
     }
 
     function animationFrames(animation) {
-      const frames = [];
-
-      const ranges = animation.frames.length > 0
-        ? animation.frames
-        : [{ from: animation.from, to: animation.to, row: animation.row }];
-      for (const range of ranges) {
-        const step = range.to >= range.from ? 1 : -1;
-        for (let column = range.from; step > 0 ? column <= range.to : column >= range.to; column += step) {
-          frames.push({ column, row: range.row });
-        }
-      }
-
-      return frames;
+      if (!frameCache.has(animation)) frameCache.set(animation, expandAnimationFrames(animation));
+      return frameCache.get(animation);
     }
+
 `;
 }
 

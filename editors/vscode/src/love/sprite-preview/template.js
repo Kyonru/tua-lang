@@ -112,12 +112,14 @@ function spritePreviewHtml(webview, viewModel) {
 
     .sprites {
       display: grid;
+      align-content: start;
       gap: 14px;
       padding: 16px;
     }
 
     .sprite {
       display: grid;
+      align-content: start;
       gap: 12px;
       border: 1px solid var(--panel-border);
       border-radius: var(--radius);
@@ -167,8 +169,7 @@ function spritePreviewHtml(webview, viewModel) {
     }
 
     .stage {
-      position: sticky;
-      top: 64px;
+      position: relative;
       z-index: 1;
       display: grid;
       grid-template-rows: minmax(220px, 42vh) auto;
@@ -208,6 +209,12 @@ function spritePreviewHtml(webview, viewModel) {
       box-shadow: 0 0 0 1px rgba(127, 127, 127, .22);
       background: transparent;
     }
+
+    body.vscode-high-contrast button, body.vscode-high-contrast-light button { border-color: var(--vscode-contrastBorder); }
+    body.vscode-high-contrast button[aria-pressed="true"], body.vscode-high-contrast-light button[aria-pressed="true"] { outline: 2px solid var(--focus); }
+    .stage-status:empty { display: none; }
+    .stage-status { color: var(--muted); overflow-wrap: anywhere; }
+    button:disabled, input:disabled { opacity: .5; cursor: default; }
 
     .stage-readout {
       display: grid;
@@ -448,6 +455,11 @@ function spritePreviewHtml(webview, viewModel) {
       overflow-wrap: anywhere;
     }
 
+    @media (min-width: 960px) {
+      .workbench { grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); }
+      .stage { position: sticky; top: 70px; border-bottom: 0; border-right: 1px solid var(--panel-border); }
+    }
+
     @media (max-width: 780px) {
       header,
       .sprite-head,
@@ -459,10 +471,6 @@ function spritePreviewHtml(webview, viewModel) {
         justify-content: start;
       }
 
-      .stage {
-        position: sticky;
-        top: 70px;
-      }
 
       .metrics {
         grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -495,7 +503,7 @@ function spritePreviewHtml(webview, viewModel) {
     <main class="sprites" id="sprites"></main>
   </div>
   <script nonce="${nonce}">
-${spritePreviewRuntime(viewModel.sprites)}
+${spritePreviewRuntime(viewModel.sprites, viewModel.source)}
   </script>
 </body>
 </html>`;
@@ -516,22 +524,27 @@ function spritePreviewErrorHtml(webview, source, message) {
     source,
     "Sprite preview unavailable",
     message,
+    true,
   );
 }
 
-function spritePreviewStateHtml(webview, source, title, message) {
+function spritePreviewStateHtml(webview, source, title, message, retry = false) {
+  const nonce = webviewNonce();
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';">
   <title>Tua Sprite Preview</title>
   <style>
     body { margin: 0; padding: 24px; color: var(--vscode-foreground); background: var(--vscode-editor-background); font: 13px/1.5 var(--vscode-font-family); }
     main { max-width: 640px; }
     h1 { margin: 0 0 6px; font-size: 16px; }
     p { margin: 0; color: var(--vscode-descriptionForeground); }
+    button { margin-top: 16px; padding: 6px 12px; color: var(--vscode-button-foreground); background: var(--vscode-button-background); border: 1px solid var(--vscode-contrastBorder, transparent); cursor: pointer; font: inherit; }
+    button:hover { background: var(--vscode-button-hoverBackground); }
+    button:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: 2px; }
     code { display: block; margin-top: 16px; overflow-wrap: anywhere; color: var(--vscode-textPreformat-foreground); }
   </style>
 </head>
@@ -540,7 +553,9 @@ function spritePreviewStateHtml(webview, source, title, message) {
     <h1>${escapeHtml(title)}</h1>
     <p>${escapeHtml(message)}</p>
     <code>${escapeHtml(source)}</code>
+    ${retry ? '<button id="retry" type="button">Reload preview</button>' : ""}
   </main>
+  ${retry ? `<script nonce="${nonce}">const vscode = acquireVsCodeApi(); document.getElementById("retry").addEventListener("click", () => vscode.postMessage({ command: "reload" }));</script>` : ""}
 </body>
 </html>`;
 }

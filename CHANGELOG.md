@@ -46,6 +46,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Sprite previews preserve playback settings and keyboard focus, replay completed
+  animations, and stop animation work while paused or hidden. Invalid frames and
+  unreadable images show actionable errors. Playback controls stay accessible in
+  narrow panels, and error views offer a reload action.
 - State-machine previews preserve graph selection and scroll position across
   refreshes. Selecting states and events retains keyboard focus, and double-click
   navigation to their source now works reliably.
