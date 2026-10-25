@@ -6,6 +6,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Known invalid primitive operators now report `TL1003`, including operations
+  inside conditions and on unions that need narrowing.
+
 - Recursive source complexity is bounded before parsing, preventing deeply
   nested source and long operator chains from aborting the compiler.
 

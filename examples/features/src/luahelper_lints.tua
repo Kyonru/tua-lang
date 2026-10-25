@@ -1,8 +1,8 @@
 -- Feature: LuaHelper parity lints.
 -- These examples are valid Lua/Tua and compile normally. When the matching
 -- [diagnostics] toggles are enabled, they demonstrate warnings for assignment
--- arity, local declaration arity, no-use assignments, binary operator type
--- mismatches, and local functions that are referenced but never directly called.
+-- arity, local declaration arity, no-use assignments, and local functions that
+-- are referenced but never directly called.
 
 -- Feature: assignment_arity.
 -- With assignment_arity enabled, this warns because two explicit values are
@@ -21,10 +21,10 @@ local localArityA, localArityB = 1
 local reassignedOnly = 1
 reassignedOnly = 2
 
--- Feature: binary_operator_type_mismatches.
--- With binary_operator_type_mismatches enabled, this warns because + requires
--- numeric operands unless a static metatable operator is known.
-local badBinaryOperand = 1 + "hp"
+-- Feature: primitive operator checking.
+-- `local badBinaryOperand = 1 + "hp"` is a TL1003 error even when lints are off.
+-- Use concatenation when constructing a label from a number and text.
+local healthLabel = 1 .. "hp"
 
 -- Feature: uncalled_local_functions.
 -- With uncalled_local_functions enabled, this warns because the local function
@@ -39,6 +39,6 @@ return {
   assignmentTarget = assignmentTarget,
   localArityA = localArityA,
   localArityB = localArityB,
-  badBinaryOperand = badBinaryOperand,
+  healthLabel = healthLabel,
   callbackValue = callbackValue,
 }

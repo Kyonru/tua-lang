@@ -150,6 +150,32 @@ end
 }
 
 #[test]
+fn rejects_invalid_primitive_operators_in_values_and_conditions() {
+    for source in [
+        "local enabled: boolean = true; local n: number = enabled + 1",
+        "local function f(x: string | number) return x + 1 end",
+        "if true < 1 then print(1) end",
+        "local x = true .. 'hello'",
+        "local x = -true",
+        "if #false then print(1) end",
+    ] {
+        let errors = check_tua_source("operators.tua", source).unwrap_err();
+        assert!(
+            errors
+                .iter()
+                .any(|d| d.code == Some(DiagnosticCode::TYPE_MISMATCH)
+                    && d.message.contains("operator")),
+            "{source}: {errors:?}"
+        );
+    }
+    check_tua_source(
+        "gradual.tua",
+        "local x: any = nil; local y = x + 1; local z = -x",
+    )
+    .unwrap();
+}
+
+#[test]
 fn accepts_number_and_string_ordering_expressions() {
     check_tua_source(
         "src/comparison.tua",

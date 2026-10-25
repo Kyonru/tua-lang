@@ -1098,7 +1098,9 @@ print(complex(true, false), divided, left, right, mixed)
 
     server.send(initialize_with_root(1, temp.uri()));
     server.send(did_open(&uri, source));
-    assert_eq!(last_published_diagnostics(server.output(), &uri).len(), 0);
+    let initial = last_published_diagnostics(server.output(), &uri);
+    assert_eq!(initial.len(), 1);
+    assert_eq!(initial[0]["code"], "TL1003");
 
     server.send(did_change_configuration(json!({
         "diagnostics": {

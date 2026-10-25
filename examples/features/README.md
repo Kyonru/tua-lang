@@ -67,9 +67,9 @@ make build-features
   default exact-code suppression on the same line, next line, or an entire
   file from its first nonblank line.
 - `src/luahelper_lints.tua` demonstrates opt-in LuaHelper parity diagnostics
-  for assignment/local declaration arity, unused assignments, binary operator
-  type mismatches, and local functions that are referenced but never directly
-  called.
+  for assignment/local declaration arity, unused assignments, and local
+  functions that are referenced but never directly called. Its commented
+  primitive-operator example explains the unconditional TL1003 error.
 - `src/luajit.tua` demonstrates stable inferred locals alongside opt-in
   LuaJIT guidance for table-shape drift, hot-loop dynamic writes, and the
   `any` escape hatch. The feature is disabled by default, so the example

@@ -424,6 +424,11 @@ runtime local and therefore do not appear as runtime values.
 
 ## Current Boundaries
 
+Known primitive operands are checked for arithmetic, ordering, concatenation,
+negation, and length operations (`TL1003`). Narrow unions before applying an
+operator that is not valid for every member; use `tonumber` for string-to-number
+conversion. Unknown values and `any` retain gradual behavior.
+
 Tua intentionally remains gradual and does not try to prove arbitrary Lua
 behavior. Expect conservative results around dynamically computed table keys,
 runtime-generated modules, `_G`, complex metatable mutation, and unknown

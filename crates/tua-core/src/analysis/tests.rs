@@ -2,6 +2,21 @@ use super::*;
 use crate::{DiagnosticCode, DiagnosticSeverity, Fixture, SemanticTokenModifier};
 use std::env;
 use std::fs;
+
+#[test]
+fn snapshot_reports_invalid_primitive_operator() {
+    let mut host = AnalysisHost::new();
+    host.set_file(
+        "operators.tua",
+        "local enabled: boolean = true\nlocal n: number = enabled + 1\n",
+    );
+    assert!(host
+        .snapshot()
+        .diagnostics("operators.tua")
+        .iter()
+        .any(|d| d.code == Some(crate::DiagnosticCode::TYPE_MISMATCH)
+            && d.message.contains("operator")));
+}
 use std::path::Path;
 use std::process;
 use std::sync::Arc;

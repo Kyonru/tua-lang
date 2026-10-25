@@ -464,6 +464,8 @@ impl<'a> Checker<'a> {
             Expression::BinaryOperator { lhs, binop, rhs } => {
                 if is_equality_operator(binop) {
                     self.check_equality_comparison(lhs, binop, rhs);
+                } else {
+                    self.infer_expression(expression);
                 }
 
                 self.check_condition_expression(lhs);
@@ -472,6 +474,9 @@ impl<'a> Checker<'a> {
             Expression::Parentheses { expression, .. }
             | Expression::TypeAssertion { expression, .. } => {
                 self.check_condition_expression(expression);
+            }
+            Expression::UnaryOperator { .. } => {
+                self.infer_expression(expression);
             }
             Expression::FunctionCall(function_call)
                 if runtime_type::is_check_call(function_call) =>
@@ -1265,11 +1270,19 @@ impl<'a> Checker<'a> {
                 let right = self.infer_expression(rhs)?;
 
                 self.check_binary_metamethod_operand(lhs, binop, rhs, &left, &right);
+                self.check_primitive_binary_operands(expression, binop, &left, &right);
 
                 self.infer_binary_operator_type(binop, &left, &right)
             }
             Expression::UnaryOperator { unop, expression } => {
                 let operand = self.infer_expression(expression)?;
+
+                if self.known_primitive_type(&operand)
+                    && ((matches!(unop, ast::UnOp::Minus(_)) && !self.is_number_type(&operand))
+                        || (matches!(unop, ast::UnOp::Hash(_)) && !self.is_string_type(&operand)))
+                {
+                    self.invalid_operator(expression, &unop.to_string(), &operand.to_string());
+                }
 
                 self.infer_unary_operator_type(unop, &operand)
             }
@@ -2916,6 +2929,60 @@ impl<'a> Checker<'a> {
         }
 
         Ok(())
+    }
+
+    fn known_primitive_type(&self, ty: &Type) -> bool {
+        match resolve_aliases(ty, self.environment, 0) {
+            Type::Primitive(_) | Type::StringLiteral(_) => true,
+            Type::Union(types) => types.iter().all(|ty| self.known_primitive_type(ty)),
+            _ => false,
+        }
+    }
+
+    fn invalid_operator(&mut self, expression: &Expression, operator: &str, operands: &str) {
+        let position = node_position(expression);
+        self.diagnostics.push(
+            Diagnostic::error(
+                &self.parsed.path,
+                position.line,
+                position.column,
+                format!(
+                    "operator `{}` cannot be applied to {operands}",
+                    operator.trim()
+                ),
+            )
+            .with_code(DiagnosticCode::TYPE_MISMATCH),
+        );
+    }
+
+    fn check_primitive_binary_operands(
+        &mut self,
+        expression: &Expression,
+        binop: &ast::BinOp,
+        left: &Type,
+        right: &Type,
+    ) {
+        // Unknown values and object/metatable operators retain gradual behavior.
+        if !self.known_primitive_type(left) || !self.known_primitive_type(right) {
+            return;
+        }
+        let valid = if is_numeric_operator(binop) {
+            self.is_number_type(left) && self.is_number_type(right)
+        } else if is_ordering_operator(binop) {
+            (self.is_number_type(left) && self.is_number_type(right))
+                || (self.is_string_type(left) && self.is_string_type(right))
+        } else if matches!(binop, ast::BinOp::TwoDots(_)) {
+            self.is_concat_operand_type(left) && self.is_concat_operand_type(right)
+        } else {
+            true
+        };
+        if !valid {
+            self.invalid_operator(
+                expression,
+                &binop.to_string(),
+                &format!("{left} and {right}"),
+            );
+        }
     }
 
     fn infer_binary_operator_type(
