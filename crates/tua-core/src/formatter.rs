@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::{borrow::Cow, path::Path};
 
 use crate::{parse_tua_source, Diagnostic, ParsedSource, SourcePosition, SourceSpan, TextEdit};
 
@@ -617,6 +617,7 @@ impl<'a> Formatter<'a> {
         }
 
         let code = code_before_comment(trimmed);
+        let code = code.as_ref();
         let split_header = self.split_control_header;
         let closes_split_header = split_header.is_some_and(|header| header.closes_with(code));
         let opens_split_header = split_control_header(code);
@@ -1650,16 +1651,38 @@ fn function_parameter_list_is_open(code: &str) -> bool {
     function_start.is_some_and(|start| update_group_depth(0, &code[start..], b'(', b')') > 0)
 }
 
-fn code_before_comment(line: &str) -> &str {
+/// Returns the code of a line without its comments. A block comment that
+/// closes on the same line is replaced by a space, so code after it still
+/// decides whether the line continues the statement.
+fn code_before_comment(line: &str) -> Cow<'_, str> {
     let bytes = line.as_bytes();
     let mut state = MaskState::Code;
+    let mut code = String::new();
+    let mut copied = 0;
     let mut index = 0;
 
     while index < bytes.len() {
         match &mut state {
             MaskState::Code => {
                 if bytes[index] == b'-' && bytes.get(index + 1) == Some(&b'-') {
-                    return &line[..index];
+                    let comment_end =
+                        long_bracket_open(&bytes[index + 2..]).and_then(|(close, consumed)| {
+                            let body = index + 2 + consumed;
+                            find_subslice(&bytes[body..], &close)
+                                .map(|offset| body + offset + close.len())
+                        });
+                    let Some(comment_end) = comment_end else {
+                        if copied == 0 {
+                            return Cow::Borrowed(&line[..index]);
+                        }
+                        code.push_str(&line[copied..index]);
+                        return Cow::Owned(code);
+                    };
+                    code.push_str(&line[copied..index]);
+                    code.push(' ');
+                    copied = comment_end;
+                    index = comment_end;
+                    continue;
                 }
                 if bytes[index] == b'\'' || bytes[index] == b'"' {
                     state = MaskState::ShortString {
@@ -1697,7 +1720,18 @@ fn code_before_comment(line: &str) -> &str {
         }
     }
 
-    line
+    if copied == 0 {
+        Cow::Borrowed(line)
+    } else {
+        code.push_str(&line[copied..]);
+        Cow::Owned(code)
+    }
+}
+
+fn find_subslice(haystack: &[u8], needle: &[u8]) -> Option<usize> {
+    haystack
+        .windows(needle.len())
+        .position(|window| window == needle)
 }
 
 fn assignment_operator_at(bytes: &[u8], index: usize) -> Option<&'static str> {

@@ -18,6 +18,9 @@ language or editor behavior, and migration notes call out those changes.
   `TL4037`. Nested callbacks and local functions follow the same rule.
 - The formatter keeps the space before a bracketed table key, so
   `{ ["end"] = 1, [2] = 3 }` no longer becomes `{["end"] = 1,[2] = 3 }`.
+- A block comment that opens and closes mid-line, as in
+  `local x = --[[ default ]] 1`, no longer gives the following lines a
+  continuation indent.
 
 ## [0.4.1] - 2026-10-25
 

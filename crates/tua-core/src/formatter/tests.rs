@@ -1330,3 +1330,31 @@ local value = names["end"] .. lookup[1]
     assert_eq!(output, expected);
     assert_eq!(format(&output), output);
 }
+
+#[test]
+fn reads_code_after_inline_block_comments() {
+    let source = r#"local function make()
+local x = --[[ default ]] 1
+local y = 2 --[[ trailing ]]
+local z = --[==[ ]] still a comment ]==] 3
+return x + y + z
+end
+local w = --[[ opens
+]] 4
+"#;
+    let expected = r#"local function make()
+  local x = --[[ default ]] 1
+  local y = 2 --[[ trailing ]]
+  local z = --[==[ ]] still a comment ]==] 3
+  return x + y + z
+end
+local w = --[[ opens
+]] 4
+"#;
+
+    let output = format(source);
+
+    assert_eq!(output, expected);
+    assert_eq!(format(&output), output);
+    assert_no_multiline_layout_lint(&output);
+}
