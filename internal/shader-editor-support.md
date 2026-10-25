@@ -12,8 +12,9 @@ The work spans four layers:
   that sends values matches it.
 - **Editor features**: completion, hover, and go-to-definition across the
   Tua/GLSL boundary.
-- **GLSL compilation**: real compiler errors for LÖVE's dialect, produced by an
-  external validator rather than a GLSL front end inside Tua.
+- **GLSL compilation**: real compiler errors for LÖVE's dialect, produced by
+  the user's own LÖVE (which contains glslang) or `glslangValidator`, rather
+  than a GLSL front end inside Tua.
 - **Workflow**: a setup step that installs shader tooling, and hot reload for
   shader files in `tua dev`.
 
@@ -21,8 +22,9 @@ The work spans four layers:
 
 - A GLSL language server. Tua checks what it can verify about LÖVE shaders and
   leaves general GLSL editing to other extensions.
-- Bundling a GLSL compiler. Validation uses `glslangValidator` when the user
-  has one; everything else works without it.
+- Bundling a GLSL compiler. Validation uses the LÖVE executable the project
+  already runs on, or `glslangValidator` where LÖVE cannot open a window.
+  Everything else works without either.
 - Uniform blocks and macro-generated declarations. LÖVE 11 cannot `send` to
   uniform blocks, and parsing macro output would require a preprocessor.
   Shaders that use either stay unchecked, as they are today.
@@ -67,18 +69,27 @@ a `main()` that calls the user's `effect` or `position`. A single file can hold
 both stages under `#ifdef VERTEX` and `#ifdef PIXEL`.
 
 Generic GLSL linters therefore report false errors on almost every LÖVE
-shader. Any compile check must reproduce LÖVE's wrapping. Phase 0 must pin the
-exact header for LÖVE 11.5 from `src/modules/graphics/Shader.cpp`, and record
-how `#pragma language glsl3` and GLSL ES targets change it.
+shader. Any compile check must reproduce LÖVE's wrapping. In LÖVE 11.5 the
+wrapping lives in `src/modules/graphics/wrap_GraphicsShader.lua` (not
+`Shader.cpp`), vendored unmodified at `vendor/love/11.5/`. See
+[Phase 0](#phase-0-findings) for how it selects stages, versions, and line
+numbering.
 
 ### Trust
 
-Running a validator is running an executable on workspace content. The
-executable path may come only from user-level settings (`tua.shaders.validatorPath`)
-or `PATH`, never from `tua.toml`. A cloned repository must not be able to
-choose what Tua executes. `tua.toml` may only enable or disable validation and
-choose targets. The VS Code extension does not run the validator in untrusted
-workspaces.
+Running a validator is running an executable on workspace content. A cloned
+repository must not be able to choose what Tua executes:
+
+- `tua.toml` never names an executable. It may only enable or disable
+  validation and choose targets.
+- The LÖVE executable comes from the same sources as `tua dev`: `--love`,
+  `TUA_LOVE`, `tua.love.command`, `love` on `PATH`, then
+  `/Applications/love.app` on macOS. `glslangValidator` comes from
+  `TUA_GLSLANG`, a new `tua.shaders.glslangPath` setting, or `PATH`.
+- `tua.love.command` is already in the extension's `restrictedConfigurations`,
+  so VS Code ignores a workspace value until the workspace is trusted.
+  `tua.shaders.glslangPath` joins that list.
+- No validation runs in untrusted workspaces.
 
 ### Performance
 
@@ -119,30 +130,120 @@ Requirements:
 - Unit tests cover multi-stage files, arrays, precision qualifiers,
   `#pragma language glsl3`, comments next to declarations, and CRLF.
 
-## Phase 0: Fixtures and facts
+## Phase 0: Findings
 
-Produce evidence before building:
+Done. Recorded on macOS (Apple Silicon) with LÖVE 11.5 and glslang 16.6.0.
+Linux and Windows results are still needed; rerun the probes there before
+Phase 3 depends on them.
 
-- A fixture corpus under `crates/tua-core/tests/fixtures/shaders/` (or the
-  asset test helpers): a pixel-only shader, a vertex+pixel shader, a
-  `glsl3` shader, one using LÖVE built-ins, one with arrays, one with an
-  unread uniform, one with a compile error, and the zombie project's
-  `water.glsl` (with permission) as a realistic case.
-- The exact LÖVE 11.5 header and footer text per stage and target, vendored
-  with the zlib license notice.
-- `glslangValidator` facts on macOS, Linux, and Windows: stdin support
-  (`--stdin -S frag`), the error output format, whether `#line 1` after the
-  header makes reported lines match the user file, the exit codes, and how
-  long one compile takes.
-- Whether GLSL Lint (`dtoplak.vscode-glsllint`) can be turned off per
-  workspace or per file extension. This decides how the setup step avoids
-  duplicate, false diagnostics.
-- A small LÖVE script that confirms each runtime failure this plan claims to
-  prevent: unknown uniform, unread uniform, wrong value shape, wrong array
-  length, missing entry point. `84e18f4` already confirmed the unread case.
+### Artifacts
 
-Exit criteria: fixtures committed, header vendored, validator behavior
-recorded in this document.
+- Fixture corpus: `crates/tua-core/src/asset/fixtures/shaders/`. It holds 11
+  shaders: pixel-only, vertex and pixel in one file, `glsl3`, LÖVE built-ins,
+  arrays and matrices, an unread uniform, a compile error, a GLES-only error,
+  a missing entry point, a multi-canvas `void effect()`, and a water shader
+  that sends suffixed uniforms from loops. It was written for Tua rather than
+  copied from a user project. Each file states its expected LÖVE result in a
+  leading comment. `parses_the_shader_fixture_corpus` checks the uniform
+  parser against all of them.
+- LÖVE's wrapper: `vendor/love/11.5/wrap_GraphicsShader.lua`, unmodified, with
+  its zlib header.
+- Probes, rerunnable on any platform:
+  - `love scripts/love-shader-facts [fixtures-dir]` validates every fixture with
+    `love.graphics.validateShader` on desktop and GLES, then runs the
+    `Shader:send` cases below.
+  - `scripts/love-shader-facts/glslang.sh [fixtures-dir] [lua]` wraps each
+    fixture with the vendored LÖVE code and runs `glslangValidator`.
+
+### LÖVE as the validator
+
+`love.graphics.validateShader(gles, code)` runs LÖVE's bundled glslang on the
+CPU, using LÖVE's exact header for the installed version. This is the most
+faithful validator available, and every LÖVE user already has it.
+
+- It requires a window. With `t.window = false` it raises `love.graphics
+  cannot function without a window!`, and SDL's `offscreen` video driver is
+  not available in the macOS build. A 1×1 borderless window at `(-4000, -4000)`
+  works. Whether a dock or taskbar entry flashes must be checked on each
+  platform.
+- Starting LÖVE takes about 0.6 s. Each validation takes 0.3–3.6 ms. Validate
+  every shader in one process per `tua check`, and keep one process alive for
+  the language server.
+- Reported lines are user lines (`ERROR: 0:4:` for line 4) on both targets.
+  Only the first error per stage is reported; glslang then prints
+  `compilation terminated`.
+- A shader without an entry point raises `missing 'position' or 'effect'
+  function?` instead of returning a result.
+- It cannot run in headless CI without a display. CI uses `glslangValidator`,
+  or LÖVE under a virtual display such as `xvfb-run`.
+
+### `glslangValidator`
+
+- `--stdin -S frag|vert` works. The exit code is 0 for success and 2 for
+  compile errors. Errors print as `ERROR: 0:LINE: message`. About 20 ms per
+  stage, including wrapping.
+- It agrees with LÖVE on all 11 fixtures once the code is wrapped with the
+  vendored wrapper.
+- Line numbers: for GLSL 1 code, LÖVE's desktop wrapper uses `#version 330
+  core` with `LOVE_GLSL1_ON_GLSL3` and inserts `#line 0`. glslang 16 then
+  reports user line 4 as line 3. With `#line 1`, the reported lines match on
+  both targets. Tua's wrapper must emit `#line 1`, and the fixtures pin the
+  mapping.
+- Install: Homebrew `glslang` (16.6.0, bottled), `glslang-tools` on Debian and
+  Ubuntu, or the Vulkan SDK.
+
+### How LÖVE wraps a shader (11.5)
+
+- Stages are detected by pattern. A file is vertex code if it contains
+  `vec4 position(` and pixel code if it contains `vec4 effect(`, or
+  `void effect(` for the custom multi-canvas form. One file can be both; it is
+  compiled once per stage with `VERTEX` or `PIXEL` defined.
+- The language is `glsl1` unless the code starts with `#pragma language glsl3`.
+  On systems that support GLSL 3, `glsl1` code compiles as `#version 330 core`
+  with `LOVE_GLSL1_ON_GLSL3`. GLES uses `#version 100` or `#version 300 es`.
+- The header order is: version, stage define, optional defines, `SYNTAX`,
+  stage `HEADER`, `UNIFORMS`, `FUNCTIONS`, stage `FUNCTIONS`, stage `MAIN`,
+  the `#line` directive, then user code.
+
+### What `Shader:send` rejects at runtime
+
+| Case | LÖVE 11.5 |
+| --- | --- |
+| Unknown or unread uniform | error: `Shader uniform 'x' does not exist` |
+| number ← number | ok |
+| number ← table | error: `number expected, got table` |
+| number ← two numbers | ok, the extra value is ignored |
+| vec4 ← 4 numbers | ok |
+| vec4 ← 3 numbers | error: `bad argument #7 (number expected, got nil)` |
+| vec4 ← 5 numbers | ok, the extra value is ignored |
+| vec4 ← number | error: `table expected, got number` |
+| `sendColor` vec3 ← 3 or 4 components | ok |
+| `sendColor` on a number uniform | error: `sendColor can only be used on vec3 or vec4 uniforms` |
+| array[2] ← 2 or 3 values | ok, extra values are ignored |
+| Image ← Canvas | ok |
+| Image ← number | error: `Texture expected, got number` |
+| mat2 ← rows or flat table | ok |
+| mat2 ← `Transform` | error: `table expected, got userdata` |
+| mat4 ← `Transform` | ok |
+| bool ← boolean | ok |
+| bool ← number | error: `boolean expected, got number` |
+| No entry point | `newShader` error: `missing 'position' or 'effect' function?` |
+
+### GLSL Lint
+
+`dtoplak.vscode-glsllint` 1.9.2 (source: `hsimpson/vscode-glsllint`) has no
+setting that turns it off. It activates on `*` and lints documents whose
+language ID is `glsl`:
+
+- A `.glsl` file has no stage mapping, so every open and save shows an error
+  message asking for `glsllint.fallBackStage` or
+  `glsllint.additionalStageAssociations`.
+- `.frag` and `.vert` files are linted without LÖVE's header, so LÖVE code
+  gets false errors.
+
+It skips documents with any other language ID. Giving LÖVE shaders a Tua
+language ID keeps GLSL Lint away from them, and gives the language server a
+document to synchronize for live diagnostics. See Phase 4.
 
 ## Phase 1: Editor features from the uniform model
 
@@ -190,38 +291,54 @@ enforces at runtime:
 | --- | --- |
 | `float`, `number`, `int` | number |
 | `bool` | boolean |
-| `vec2`/`vec3`/`vec4` (and `ivec`, `bvec`) | table of 2/3/4 numbers (booleans for `bvec`) |
-| `mat2`/`mat3`/`mat4` | table of rows, or a flat table, or a `Transform` (confirm in Phase 0) |
-| `Image`, `sampler2D`, `ArrayImage`, `CubeImage`, `VolumeImage` | the matching LÖVE texture type, or a `Canvas` |
-| arrays `T[n]` | up to `n` values of the element shape |
+| `vec2`/`vec3`/`vec4` (and `ivec`, `bvec`) | table of at least 2/3/4 numbers (booleans for `bvec`) |
+| `mat2`/`mat3` | table of rows or a flat table |
+| `mat4` | table of rows, a flat table, or a `Transform` |
+| `Image`, `sampler2D`, `ArrayImage`, `CubeImage`, `VolumeImage` | a LÖVE texture: the matching image type or a `Canvas` |
 
-Rules:
+Rules, from the Phase 0 table:
 
-- Only report what the types prove. A table literal with three numbers sent to
-  a `vec4` is an error. An array of unknown length is not.
-- `sendColor` requires `vec3`/`vec4` targets and colors in the 0–1 range when
-  literal.
-- Error severity, since LÖVE raises in every reported case. Each case gets a
-  LÖVE fixture from Phase 0.
+- Report only what LÖVE rejects. A vector table with fewer components than
+  the type is an error; extra components are ignored by LÖVE and are not
+  reported. A non-table sent to a vector, a table sent to a scalar, a number
+  sent to a texture, a non-boolean sent to a `bool`, and a `Transform` sent to
+  anything but `mat4` are errors.
+- Array uniforms accept extra values silently, so array length is not checked.
+- `sendColor` on a uniform that is not `vec3`/`vec4` is an error. Three or four
+  components are both accepted.
+- Only report what the types prove. A table whose length is unknown is not
+  checked for component count.
+- Error severity, since LÖVE raises in every reported case. Each rule is
+  backed by a row in the Phase 0 table and rerun with the probe.
 
 This depends on the `table` parameter fix (`b054c6b`) so that arrays reach the
 check as `number[]` rather than an empty table.
 
-## Phase 3: GLSL compilation through `glslangValidator` (`TL2016`)
+## Phase 3: GLSL compilation (`TL2016`)
+
+### Validators
+
+1. **LÖVE** (preferred): the project's LÖVE executable, found as in
+   [Trust](#trust). It runs a small bundled Lua program, like
+   `scripts/love-shader-facts`, that reads shader sources and targets on stdin
+   and writes one result per stage. It uses LÖVE's own header, so it follows
+   the installed LÖVE version exactly.
+2. **`glslangValidator`** (fallback): used when LÖVE cannot open a window, as in
+   headless CI, or when the user selects it. Tua wraps the code itself.
 
 ### Ownership
 
 `tua-core` stays free of process spawning. It provides pure functions:
 
-- `shader_compile_units(source, target) -> Vec<CompileUnit>` wraps the file for
-  each stage present (`VERTEX`, `PIXEL`) with LÖVE's header and footer and a
-  `#line 1` directive before the user code.
-- `parse_glslang_output(output, unit) -> Vec<ShaderDiagnostic>` maps messages
-  back to the original file, and drops or rewrites errors located in the
-  header.
+- `shader_compile_units(source, target) -> Vec<CompileUnit>` detects stages
+  with LÖVE's patterns and wraps each one with the vendored header text,
+  ending in `#line 1`. Only the `glslangValidator` path needs this.
+- `parse_shader_errors(output) -> Vec<ShaderDiagnostic>` reads
+  `ERROR: 0:LINE: message` from either validator. It reports errors in the
+  header lines as an internal problem rather than as a user error.
 
-`tua-cli` and `tua-lsp` run the validator, cache results, and publish
-diagnostics.
+`tua-cli` and `tua-lsp` run the validator, cache results by content hash,
+validator, version, and target, and publish diagnostics.
 
 ### Targets
 
@@ -235,12 +352,12 @@ diagnostics.
 
 ```toml
 [shaders]
-validate = "auto"        # "auto" (when a validator is found), "off"
+validate = "auto"        # "auto", "love", "glslang", or "off"
 targets = ["desktop"]    # add "gles" for mobile/web builds
 ```
 
-The validator path comes from the `TUA_GLSLANG` environment variable,
-`tua.shaders.validatorPath` in user settings, or `PATH`, in that order.
+`auto` uses LÖVE when it can open a window and `glslangValidator` otherwise.
+Executable paths come only from the sources listed under [Trust](#trust).
 
 ### Diagnostics
 
@@ -254,11 +371,12 @@ The validator path comes from the `TUA_GLSLANG` environment variable,
 
 - Validate on open and on save of shader files, and after the file watcher
   reports a change.
-- Live validation of unsaved shader edits needs the client to sync `.glsl`
-  documents. Add a document selector for `glsl` (and the shader file
-  extensions) used only for synchronization, not for Tua features.
-- Runs off the main scheduler queue, cancels stale runs on edit, has a timeout,
-  and is skipped in untrusted workspaces.
+- Live validation of unsaved shader edits needs the client to sync shader
+  documents. Synchronize the `love-glsl` language from Phase 4 (and `glsl`
+  when the user keeps that association), used only for shader features.
+- Keeps one LÖVE validator process per workspace, restarted if it exits. Runs
+  off the main scheduler queue, cancels stale runs on edit, has a timeout, and
+  is skipped in untrusted workspaces.
 
 ## Phase 4: VS Code setup step
 
@@ -266,22 +384,29 @@ Add a step to the `tua.setup` walkthrough, after the icon step:
 
 **Shader support (optional)**
 
+- **A LÖVE shader language.** The extension contributes a `love-glsl` language
+  whose grammar includes `source.glsl` when a GLSL grammar is installed and
+  highlights LÖVE's `extern`, `number`, `Image`, `Texel`, `effect`, and
+  `position`. The step maps the project's shader files to it with a
+  workspace-level `files.associations` entry, so GLSL Lint, which only lints
+  `glsl` documents, no longer reports false errors on them. The mapping is
+  reversible like the other presets.
 - **Install highlighting.** Installs `slevesque.shader` ("Shader languages
-  support for VS Code", which gives GLSL highlighting) through
+  support for VS Code", which provides the GLSL grammar) through
   `workbench.extensions.installExtension`, as the Material Icons step does.
-- **Find a validator.** Detects `glslangValidator` and shows its version. When
-  missing, shows the platform command: `brew install glslang` on macOS,
-  `apt install glslang-tools` on Debian/Ubuntu, or the Vulkan SDK or
-  `winget` on Windows. Offers a file picker that writes
-  `tua.shaders.validatorPath` at user level.
-- **Avoid duplicate checks.** If GLSL Lint is installed, explains that it does
-  not understand LÖVE's dialect. If Phase 0 finds a supported way to disable it
-  for the workspace, offers that as a reversible preset. Tua does not install
-  GLSL Lint.
-- **Reversible.** Like the other presets, every setting written is backed up
-  under `tua.setup.previous.v1.shaders` and has a Restore action.
+- **Find a validator.** Reports whether Tua found LÖVE, the version, and
+  whether it can validate. When only headless validation is possible, or the
+  user wants it, shows the `glslangValidator` install command:
+  `brew install glslang` on macOS, `apt install glslang-tools` on Debian and
+  Ubuntu, or the Vulkan SDK on Windows. Offers a file picker for
+  `tua.shaders.glslangPath`.
+- **Duplicate checks.** If GLSL Lint is installed, explains why LÖVE shaders
+  moved to `love-glsl`. Tua does not install GLSL Lint.
+- **Reversible.** Every setting written is backed up under
+  `tua.setup.previous.v1.shaders` and has a Restore action.
 
-Completion event: the validator was found, or the user chose to skip.
+Completion event: the shader association is applied, or the user chose to
+skip.
 
 Tests: extend `scripts/manifest-check.js` and the activation smoke test.
 
@@ -336,7 +461,7 @@ Each new code goes into `DiagnosticCode::is_known`,
 
 ## Recommended order
 
-1. Phase 0, since every later phase depends on its fixtures and facts.
+1. Phase 0 (done on macOS; repeat the probes on Linux and Windows).
 2. Phase 1 together with the `ShaderUniformSet` v2 model: small, visible, and
    needs no external tools.
 3. Phase 5: the largest day-to-day improvement for shader iteration.
@@ -354,12 +479,16 @@ CHANGELOG entries, and documentation.
   the catalog moves?
 - Should `TL2016` block `tua build` like other errors, or stay advisory? A
   validator can disagree with a specific GPU driver.
-- Is the zombie project's `water.glsl` acceptable as a test fixture, or should
-  we write an equivalent?
+- Does the off-screen 1×1 LÖVE window flash a dock or taskbar entry on macOS,
+  Windows, or Linux? If it does, the language server should use
+  `glslangValidator` when available and LÖVE only on save or on request.
 
 ## References
 
 - GLSL Lint, `dtoplak.vscode-glsllint`: <https://marketplace.visualstudio.com/items?itemName=dtoplak.vscode-glsllint>
 - Shader languages support, `slevesque.shader`: <https://marketplace.visualstudio.com/items?itemName=slevesque.shader>
 - glslang reference front end: <https://github.com/KhronosGroup/glslang>
+- GLSL Lint source: <https://github.com/hsimpson/vscode-glsllint>
+- LÖVE 11.5 shader wrapper: <https://github.com/love2d/love/blob/11.5/src/modules/graphics/wrap_GraphicsShader.lua>
+- LÖVE `love.graphics.validateShader`: <https://love2d.org/wiki/love.graphics.validateShader>
 - LÖVE `Shader:send`: <https://love2d.org/wiki/Shader:send>
