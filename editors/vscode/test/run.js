@@ -2,6 +2,7 @@
 
 const fs = require("fs");
 const os = require("os");
+const net = require("net");
 const path = require("path");
 const { runTests } = require("@vscode/test-electron");
 const { localVSCodeExecutable } = require("./vscode-executable");
@@ -17,6 +18,14 @@ async function main() {
   const logPath = path.join(tempRoot, "lsp-events.jsonl");
 
   const fixtures = createWorkspaceFixtures(workspaceOne, workspaceTwo);
+  let debugPort;
+  if (process.env.TUA_TEST_SUITE === "workspace-ui") {
+    const server = net.createServer();
+    await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
+    debugPort = server.address().port;
+    await new Promise(resolve => server.close(resolve));
+    fixtures.mockLove = createServerLauncher(tempRoot, path.join(__dirname, "fixtures", "mock-love.js"), "love-vscode-test");
+  }
   fs.writeFileSync(
     workspacePath,
     `${JSON.stringify(
@@ -40,12 +49,14 @@ async function main() {
       extensionTestsPath,
       extensionTestsEnv: {
         TUA_SERVER_PATH: serverPath,
+        ...(debugPort ? { TUA_TEST_CDP_PORT: String(debugPort) } : {}),
         TUA_EXTENSION_TEST_API: "1",
         TUA_TEST_FIXTURES: JSON.stringify(fixtures),
         TUA_TEST_LSP_LOG: logPath,
       },
       launchArgs: [
         workspacePath,
+        ...(debugPort ? [`--remote-debugging-port=${debugPort}`, "--skip-welcome", "--skip-release-notes"] : []),
         "--disable-extensions",
         "--disable-workspace-trust",
         `--user-data-dir=${path.join(tempRoot, "user-data")}`,
@@ -178,9 +189,9 @@ function spriteSource(imagePath, animations) {
   ].join("\n");
 }
 
-function createServerLauncher(tempRoot, serverFixturePath) {
+function createServerLauncher(tempRoot, serverFixturePath, name = "tua-vscode-test") {
   if (process.platform === "win32") {
-    const launcherPath = path.join(tempRoot, "tua-vscode-test.cmd");
+    const launcherPath = path.join(tempRoot, `${name}.cmd`);
     fs.writeFileSync(
       launcherPath,
       `@echo off\r\n"${process.execPath}" "${serverFixturePath}" %*\r\n`,
@@ -188,7 +199,7 @@ function createServerLauncher(tempRoot, serverFixturePath) {
     return launcherPath;
   }
 
-  const launcherPath = path.join(tempRoot, "tua-vscode-test");
+  const launcherPath = path.join(tempRoot, name);
   fs.writeFileSync(
     launcherPath,
     `#!/bin/sh\nexec "${process.execPath}" "${serverFixturePath}" "$@"\n`,

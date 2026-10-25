@@ -449,3 +449,12 @@ Run `npm run check` for unit, syntax, manifest, and activation checks. Run
 VS Code profile. To use VSCodium, set `VSCODE_EXECUTABLE_PATH` to its executable.
 These tests use a loopback debugging port, a valid PNG fixture, and a controlled
 animation clock so desktop occlusion does not affect playback assertions.
+
+## Workspace integration verification
+
+Run `TUA_TEST_SUITE=workspace-ui npm run test:vscode` to exercise the native Tua
+sidebar, named run selection, setup checks, contextual hints, session status, and
+console source links in an isolated profile with a mock compiler and game runtime.
+Set `VSCODE_EXECUTABLE_PATH` to use VSCodium and `TUA_WORKSPACE_SCREENSHOTS` to a
+local directory to capture dark, light, and high-contrast views. This suite opens
+a loopback debugging port only in its temporary test instance.

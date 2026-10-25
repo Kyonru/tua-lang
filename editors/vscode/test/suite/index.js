@@ -9,6 +9,7 @@ const { runModuleGraphTests } = require("./module-graph");
 const { runSpritePreviewTests } = require("./sprite-preview");
 const { fixtures, waitForEvent } = require("./support");
 const { runSetupTests } = require("./setup");
+const { runWorkspaceUiTests } = require("./workspace-ui");
 const { runWorkspaceTests } = require("./workspace");
 
 async function run() {
@@ -21,6 +22,7 @@ async function run() {
     "ecs-explorer",
     "module-graph",
     "workspace",
+    "workspace-ui",
     "sprite-preview",
   ]);
 
@@ -59,6 +61,7 @@ async function run() {
     "the real language client should remain running after initialization",
   );
 
+  if (selectedSuite === "workspace-ui") await runWorkspaceUiTests();
   if (selectedSuite === "all" || selectedSuite === "setup") {
     await runSetupTests();
   }

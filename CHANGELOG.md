@@ -8,6 +8,18 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Added
 
+- A dedicated Tua sidebar unifies project files, module exports, signal call sites,
+  ECS declarations, assets, run configurations, recent sessions, and setup checks.
+- Named run configurations remember the selected development, debug, hot-reload,
+  or packaging action. The compact toolbar runs that configuration and opens the
+  integrated game console.
+- Run-session status distinguishes builds, reload requests, completed reloads,
+  and failed rebuilds that leave the last good code running. The console filters
+  by severity, module, and session, collapses repeats, and links errors to source.
+- Project setup checks offer actions for compiler, LOVE, debugger, and source-map
+  problems. A build-only command prepares output without starting the game.
+- Optional contextual inlay hints reveal detail for selections, explicit type
+  inspection, and Lua debugging while keeping ordinary code quiet.
 - The VS Code extension bundles the optional Indigo Carbon theme and a native
   **Set Up Tua** walkthrough for theme, layout, file icons, and hint density.
   Theme, layout, and icon presets can restore previous user settings while
