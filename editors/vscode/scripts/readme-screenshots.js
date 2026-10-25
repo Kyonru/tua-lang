@@ -92,38 +92,55 @@ exports.run = async () => {
   }
 };
 async function main() {
+  const { inspect, hash } = require("./readme-screenshot-artifacts");
+  const executable = require("../test/vscode-executable").localVSCodeExecutable();
+  if (!executable || !fs.existsSync(executable)) throw new Error("Set VSCODE_EXECUTABLE_PATH to a local VS Code or VSCodium executable; capture requires a graphical session.");
+  const compiler = path.join(extension, "bin", process.platform === "win32" ? "tua.exe" : "tua");
+  const compilerVersion = require("node:child_process").execFileSync(compiler, ["--version"], { encoding: "utf8", timeout: 10000 }).trim();
+  const output = path.resolve(process.env.TUA_CAPTURE_OUTPUT || path.join(extension, "docs/screenshots"));
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), "tua-readme-"));
-  const project = path.join(temp, "Starfall");
-  fs.mkdirSync(project);
-  fs.cpSync(path.resolve(extension, "../../examples/starfall/src"), path.join(project, "src"), { recursive: true });
-  fs.copyFileSync(path.resolve(extension, "../../examples/starfall/tua.toml"), path.join(project, "tua.toml"));
-  fs.mkdirSync(path.join(project, "src/assets"));
-  fs.copyFileSync(path.resolve(extension, "../../examples/features/src/assets/player.png"), path.join(project, "src/assets/player.png"));
-  fs.writeFileSync(path.join(project, "src/sprites.tua"), `-- Demo sprite sheet: preview playback without starting the game.\nlocal Player = spriteSheet({\n  image = "assets/player.png",\n  frame = { width = 128, height = 128 },\n  animations = {\n    idle = { from = 0, to = 2, row = 0, fps = 8 },\n    walk = { from = 3, to = 6, row = 0, fps = 12 },\n  },\n})\nreturn Player\n`);
-  fs.writeFileSync(path.join(project, "src/inspector_demo.tua"), 'local playerState = store({ health = 100, energy = 75, level = 3, weapon = "Pulse blaster" })\nreturn playerState\n');
-  const mainFile = path.join(project, "src/main.tua");
-  fs.writeFileSync(mainFile, 'require("inspector_demo")\n' + fs.readFileSync(mainFile, "utf8"));
-  // Only the disposable game's configuration is adjusted, including save identity.
-  fs.appendFileSync(path.join(project, "src/conf.tua"), '\nlocal configure = love.conf\nfunction love.conf(t: any)\n  configure(t)\n  t.identity = "tua-readme-capture"\n  t.window.visible = false\nend\n');
-  const user = path.join(temp, "user"); fs.mkdirSync(path.join(user, "User"), { recursive: true });
-  fs.writeFileSync(path.join(user, "User/settings.json"), JSON.stringify({
-    "workbench.colorTheme": "Indigo Carbon HC", "workbench.iconTheme": "tua-icons",
-    "workbench.startupEditor": "none", "window.commandCenter": true,
-    "editor.fontSize": 15, "editor.minimap.enabled": false, "editor.stickyScroll.enabled": false,
-    "workbench.editor.editorActionsLocation": "titleBar", "workbench.layoutControl.enabled": true,
-    "telemetry.telemetryLevel": "off", "tua.preview.enabled": true,
-    "tua.runtimeInspector.enabled": true, "tua.server.path": path.join(extension, "bin/tua"),
-  }, null, 2));
-  const net = require("node:net"), server = net.createServer();
-  await new Promise(resolve => server.listen(0, "127.0.0.1", resolve)); const port = server.address().port;
-  await new Promise(resolve => server.close(resolve));
+  const captures = path.join(temp, "captures");
   try {
+    const project = path.join(temp, "Starfall");
+    fs.mkdirSync(project);
+    fs.cpSync(path.resolve(extension, "../../examples/starfall/src"), path.join(project, "src"), { recursive: true });
+    fs.copyFileSync(path.resolve(extension, "../../examples/starfall/tua.toml"), path.join(project, "tua.toml"));
+    fs.mkdirSync(path.join(project, "src/assets"));
+    fs.copyFileSync(path.resolve(extension, "../../examples/features/src/assets/player.png"), path.join(project, "src/assets/player.png"));
+    fs.writeFileSync(path.join(project, "src/sprites.tua"), `-- Demo sprite sheet: preview playback without starting the game.\nlocal Player = spriteSheet({\n  image = "assets/player.png",\n  frame = { width = 128, height = 128 },\n  animations = {\n    idle = { from = 0, to = 2, row = 0, fps = 8 },\n    walk = { from = 3, to = 6, row = 0, fps = 12 },\n  },\n})\nreturn Player\n`);
+    fs.writeFileSync(path.join(project, "src/inspector_demo.tua"), 'local playerState = store({ health = 100, energy = 75, level = 3, weapon = "Pulse blaster" })\nreturn playerState\n');
+    const mainFile = path.join(project, "src/main.tua");
+    fs.writeFileSync(mainFile, 'require("inspector_demo")\n' + fs.readFileSync(mainFile, "utf8"));
+    // Only the disposable game's configuration is adjusted, including save identity.
+    fs.appendFileSync(path.join(project, "src/conf.tua"), '\nlocal configure = love.conf\nfunction love.conf(t: any)\n  configure(t)\n  t.identity = "tua-readme-capture"\n  t.window.visible = false\nend\n');
+    const user = path.join(temp, "user"); fs.mkdirSync(path.join(user, "User"), { recursive: true });
+    fs.writeFileSync(path.join(user, "User/settings.json"), JSON.stringify({
+      "workbench.colorTheme": "Indigo Carbon HC", "workbench.iconTheme": "tua-icons",
+      "workbench.startupEditor": "none", "window.commandCenter": true,
+      "editor.fontSize": 15, "editor.minimap.enabled": false, "editor.stickyScroll.enabled": false,
+      "workbench.editor.editorActionsLocation": "titleBar", "workbench.layoutControl.enabled": true,
+      "telemetry.telemetryLevel": "off", "tua.preview.enabled": true,
+      "tua.runtimeInspector.enabled": true, "tua.server.path": compiler,
+    }, null, 2));
+    const net = require("node:net"), server = net.createServer();
+    await new Promise(resolve => server.listen(0, "127.0.0.1", resolve)); const port = server.address().port;
+    await new Promise(resolve => server.close(resolve));
     await require("@vscode/test-electron").runTests({
       extensionDevelopmentPath: extension, extensionTestsPath: __filename,
-      vscodeExecutablePath: require("../test/vscode-executable").localVSCodeExecutable(),
-      extensionTestsEnv: { TUA_CAPTURE_PORT: String(port), TUA_CAPTURE_OUTPUT: process.env.TUA_CAPTURE_OUTPUT || path.join(extension, "docs/screenshots") },
+      vscodeExecutablePath: executable,
+      extensionTestsEnv: { TUA_CAPTURE_PORT: String(port), TUA_CAPTURE_OUTPUT: captures },
       launchArgs: [project, "--disable-extensions", "--disable-workspace-trust", "--skip-welcome", "--skip-release-notes", `--user-data-dir=${user}`, `--extensions-dir=${temp}/extensions`, `--remote-debugging-port=${port}`],
     });
+    const images = inspect(captures, fs.readFileSync(path.join(extension, "README.md"), "utf8"));
+    const manifest = { schemaVersion: 1, completed: true, capturedAt: new Date().toISOString(),
+      extensionVersion: require("../package.json").version, compilerVersion,
+      bundleSha256: hash(fs.readFileSync(path.join(extension, "dist/extension.js"))), images };
+    // A failed capture never replaces the checked-in gallery. Write the completion
+    // manifest last, so an interrupted copy is detected by the verification command.
+    fs.mkdirSync(output, { recursive: true });
+    for (const image of images) fs.copyFileSync(path.join(captures, image.file), path.join(output, image.file));
+    fs.writeFileSync(path.join(output, "capture.json"), JSON.stringify(manifest, null, 2) + "\n");
+    console.log("Gallery ready for visual review: " + output);
   } finally { fs.rmSync(temp, { recursive: true, force: true }); }
 }
 if (require.main === module) main().catch(error => { console.error(error); process.exitCode = 1; });

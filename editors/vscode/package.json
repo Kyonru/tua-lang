@@ -56,7 +56,9 @@
     "vscode:prepublish": "npm run build",
     "test:webviews": "npm run build && node test/webview/run.js",
     "test:multiplayer": "node scripts/multiplayer-runtime-e2e.js",
-    "test:inspector": "node scripts/runtime-inspector-e2e.js"
+    "test:inspector": "node scripts/runtime-inspector-e2e.js",
+    "screenshots:readme": "npm run build && node scripts/readme-screenshots.js && npm run screenshots:readme:check",
+    "screenshots:readme:check": "node scripts/readme-screenshot-artifacts.js"
   },
   "contributes": {
     "breakpoints": [

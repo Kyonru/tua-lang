@@ -494,6 +494,13 @@ extension-real-server-test: extension-deps extension-server ## Run VS Code integ
 json-check: ## Validate every tracked JSON file.
 	node scripts/check-json.js
 
+.PHONY: extension-screenshots extension-screenshots-check
+extension-screenshots: ## Capture README feature screenshots in a local graphical editor (requires staged server).
+	$(NPM) --prefix $(VSCODE_DIR) run screenshots:readme
+
+extension-screenshots-check: ## Verify README screenshot links, PNG dimensions, and capture hashes without launching an editor.
+	$(NPM) --prefix $(VSCODE_DIR) run screenshots:readme:check
+
 .PHONY: extension-package
 extension-package: extension-deps extension-server json-check extension-check ## Build a VSIX with the bundled tua server.
 	cd $(VSCODE_DIR) && $(VSCE) package --out tua-$(PROJECT_VERSION).vsix

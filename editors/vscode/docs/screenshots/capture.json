@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "completed": true,
+  "capturedAt": "2026-10-25T21:51:04.423Z",
+  "extensionVersion": "0.4.1",
+  "compilerVersion": "tua 0.4.1",
+  "bundleSha256": "4225366444328f44acee798b04b52028d8bb72a9a64f53a5c512fda49182d8cd",
+  "images": [
+    {
+      "file": "workspace.png",
+      "width": 1440,
+      "height": 960,
+      "bytes": 218065,
+      "sha256": "e3b3ffad52c2f363e6be4e5ba827fe5a6abd2ea65bf49ff7f46ab11a806b534d"
+    },
+    {
+      "file": "state-machine.png",
+      "width": 1440,
+      "height": 960,
+      "bytes": 62893,
+      "sha256": "f8bf498f837ed21382f3335da9297ce1510eb45e58f06c8344a9e0660278ea56"
+    },
+    {
+      "file": "sprite-animation.png",
+      "width": 1440,
+      "height": 960,
+      "bytes": 120039,
+      "sha256": "277e7232b2ec505c3d6b8fb57ff89806f1406b788a557739a0927ac51f7b674d"
+    },
+    {
+      "file": "module-graph.png",
+      "width": 1440,
+      "height": 960,
+      "bytes": 113715,
+      "sha256": "69dd47fdf7412eb7803b3b96809e63972465f26e2b3378e3a02c85cf3a8c1c0f"
+    },
+    {
+      "file": "runtime-inspector.png",
+      "width": 1440,
+      "height": 960,
+      "bytes": 204126,
+      "sha256": "430ec7de9e79346d8d19b8135ae97f6cb00bfc6095fc0e1e0ed46cc2183aa334"
+    }
+  ]
+}
