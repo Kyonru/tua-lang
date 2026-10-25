@@ -363,3 +363,10 @@ Palette. Set `tua.editor.toolbarMode` to `full` to restore individual buttons.
 With `workbench.editor.editorActionsLocation: "titleBar"`, these controls appear
 to the right of the Command Center. The extension groups the tools independently
 of any color theme, leaving space for VSCodium's sidebar and panel toggles.
+
+## State-machine preview
+
+State-machine previews retain the selected machine, state or transition, and graph
+scroll position across refreshes. Selecting a node or event keeps its button and
+keyboard focus intact; double-click opens its source. These are static source
+previews; they do not execute the game or display its current runtime state.

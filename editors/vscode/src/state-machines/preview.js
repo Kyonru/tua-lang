@@ -24,18 +24,20 @@ function registerStateMachinePreviewFeature({
   let renderSequence = 0;
   let refreshTimer;
 
-  const render = async ({ reveal = false, position } = {}) => {
+  const render = async ({ reveal = false, position, loading = false } = {}) => {
     const client = getClient();
     if (!panel || !document || !client) {
       return undefined;
     }
 
     const sequence = ++renderSequence;
-    panel.webview.html = stateMachinePreviewLoadingHtml(panel.webview, document.uri.toString());
+    if (loading) {
+      panel.webview.html = stateMachinePreviewLoadingHtml(panel.webview, document.uri.toString());
+    }
 
     try {
       const inspection = await inspectStateMachines({ client, document, position });
-      if (sequence !== renderSequence) {
+      if (sequence !== renderSequence || client !== getClient()) {
         return undefined;
       }
 
@@ -55,7 +57,7 @@ function registerStateMachinePreviewFeature({
       }
       return viewModel.summary;
     } catch (error) {
-      if (sequence !== renderSequence) {
+      if (sequence !== renderSequence || client !== getClient()) {
         return undefined;
       }
 
@@ -117,7 +119,7 @@ function registerStateMachinePreviewFeature({
       target?.uri === document.uri.toString() && target.position
         ? target.position
         : editor?.selection?.active;
-    return render({ position });
+    return render({ position, loading: true });
   };
 
   const command = vscode.commands.registerCommand(COMMANDS.previewStateMachine, show);

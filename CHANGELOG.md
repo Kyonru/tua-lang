@@ -46,6 +46,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- State-machine previews preserve graph selection and scroll position across
+  refreshes. Selecting states and events retains keyboard focus, and double-click
+  navigation to their source now works reliably.
 - LOVE functions that take a `table`, such as `Shader:send` with a vector or
   `Shader:sendColor`, accept arrays and dictionaries instead of reporting
   `expected {  }, found number[]`.

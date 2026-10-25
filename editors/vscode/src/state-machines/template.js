@@ -2,6 +2,8 @@
 
 const { escapeHtml, jsonForHtml, webviewDocument } = require("../shared/webview");
 
+const { restoreGraphState } = require("./selection");
+
 const GRAPH_LAYOUT = {
   columnWidth: 320,
   nodeHeight: 68,
@@ -410,8 +412,11 @@ function stateMachinePreviewHtml(webview, viewModel) {
     const connections = document.getElementById("connections");
     const edgeLabels = document.getElementById("edge-labels");
     const inspector = document.getElementById("inspector");
-    let machineIndex = 0;
-    let selection = { kind: "machine" };
+    ${restoreGraphState.toString()}
+    const restored = restoreGraphState(preview, vscode.getState());
+    let machineIndex = restored.machineIndex;
+    let selection = restored.selection;
+    let routeElements = [];
     let positionedNodes = new Map();
     let renderedEdges = [];
     let renderedLayout;
@@ -434,14 +439,54 @@ function stateMachinePreviewHtml(webview, viewModel) {
     picker.addEventListener("change", () => {
       machineIndex = Number(picker.value) || 0;
       selection = { kind: "machine" };
+      graphScroll.scrollLeft = 0;
+      graphScroll.scrollTop = 0;
       render();
+      saveState();
     });
     document.getElementById("reload").addEventListener("click", () => {
       vscode.postMessage({ command: "reload" });
     });
     window.addEventListener("resize", debounce(() => requestAnimationFrame(drawConnections), 80));
 
+    graphScroll.addEventListener("scroll", debounce(saveState, 100));
+    window.addEventListener("beforeunload", saveState);
     render();
+    requestAnimationFrame(() => {
+      graphScroll.scrollLeft = restored.left;
+      graphScroll.scrollTop = restored.top;
+    });
+
+    function saveState() {
+      const machine = currentMachine();
+      const transition = selection.kind === "transition"
+        ? machine.transitions.find(item => item.id === selection.id) : undefined;
+      vscode.setState({
+        source: preview.source, machine: machine.name,
+        selection: transition ? { ...selection, event: transition.event, to: transition.to } : selection,
+        left: graphScroll.scrollLeft, top: graphScroll.scrollTop,
+      });
+    }
+
+    function select(next) {
+      const fromInspector = inspector.contains(document.activeElement);
+      selection = next;
+      for (const [name, entry] of positionedNodes) {
+        const selected = selection.kind === "state" && selection.name === name;
+        entry.element.classList.toggle("selected", selected);
+        entry.element.setAttribute("aria-pressed", String(selected));
+      }
+      for (const { edge, path, label } of routeElements) {
+        const selected = selection.kind === "transition" &&
+          selection.id === edge.transition.id && selection.source === edge.source;
+        path.classList.toggle("selected", selected);
+        label.classList.toggle("selected", selected);
+        label.setAttribute("aria-pressed", String(selected));
+      }
+      renderInspector(currentMachine());
+      if (fromInspector) inspector.querySelector(".source-button, .source-link")?.focus();
+      saveState();
+    }
 
     function currentMachine() {
       return preview.machines[machineIndex];
@@ -483,6 +528,7 @@ function stateMachinePreviewHtml(webview, viewModel) {
           button.style.setProperty("--state-hue", statePastelHue(state.colorIndex) + "deg");
         }
         button.dataset.state = state.name;
+        button.setAttribute("aria-pressed", String(selected));
         button.title = state.wildcard ? "Wildcard transition source" : "State " + state.name;
 
         const name = document.createElement("span");
@@ -497,8 +543,7 @@ function stateMachinePreviewHtml(webview, viewModel) {
         button.append(meta);
 
         button.addEventListener("click", () => {
-          selection = { kind: "state", name: state.name };
-          render();
+          select({ kind: "state", name: state.name });
         });
         if (!state.wildcard) {
           button.addEventListener("dblclick", () => openLocation(state.range));
@@ -523,6 +568,7 @@ function stateMachinePreviewHtml(webview, viewModel) {
     }
 
     function drawConnections() {
+      routeElements = [];
       clearConnectionPaths();
       edgeLabels.replaceChildren();
       const graphRect = graph.getBoundingClientRect();
@@ -570,21 +616,18 @@ function stateMachinePreviewHtml(webview, viewModel) {
           (route.kind === "loop" ? " loop" : "") +
           (selected ? " selected" : "");
         label.textContent = edge.transition.event;
+        label.setAttribute("aria-pressed", String(selected));
         label.style.left = geometry.labelX + "px";
         label.style.top = geometry.labelY + "px";
         label.title = edge.source + " → " + edge.target;
         label.addEventListener("click", () => {
-          selection = {
-            kind: "transition",
-            id: edge.transition.id,
-            source: edge.source,
-          };
-          render();
+          select({ kind: "transition", id: edge.transition.id, source: edge.source });
         });
         label.addEventListener("dblclick", () => openLocation(edge.transition.selectionRange));
         label.addEventListener("mouseenter", () => path.classList.add("hovered"));
         label.addEventListener("mouseleave", () => path.classList.remove("hovered"));
         edgeLabels.append(label);
+        routeElements.push({ edge, path, label });
       }
     }
 
@@ -644,8 +687,7 @@ function stateMachinePreviewHtml(webview, viewModel) {
         button.append(text(state.name, "item-name"));
         if (state.initial) button.append(text("initial", "tag"));
         button.addEventListener("click", () => {
-          selection = { kind: "state", name: state.name };
-          render();
+          select({ kind: "state", name: state.name });
         });
         list.append(button);
       }
@@ -700,12 +742,7 @@ function stateMachinePreviewHtml(webview, viewModel) {
         button.append(text(edge.transition.event, "item-name"));
         button.append(text(edge.source + " → " + edge.target, "item-meta"));
         button.addEventListener("click", () => {
-          selection = {
-            kind: "transition",
-            id: edge.transition.id,
-            source: edge.source,
-          };
-          render();
+          select({ kind: "transition", id: edge.transition.id, source: edge.source });
         });
         list.append(button);
       }
@@ -1143,6 +1180,17 @@ const STYLES = `
       background: color-mix(in srgb, var(--state-pastel) 26%, var(--surface));
       border-color: color-mix(in srgb, var(--state-pastel-border) 48%, var(--border));
     }
+  }
+
+  body.vscode-high-contrast .state-node,
+  body.vscode-high-contrast-light .state-node {
+    color: var(--text);
+    background: var(--canvas);
+    border-color: var(--vscode-contrastBorder, var(--text));
+  }
+  body.vscode-high-contrast button[aria-pressed="true"],
+  body.vscode-high-contrast-light button[aria-pressed="true"] {
+    outline: 2px solid var(--vscode-focusBorder);
   }
 
   @media (prefers-reduced-motion: reduce) {
