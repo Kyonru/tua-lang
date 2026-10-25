@@ -30,7 +30,9 @@ newlines, spacing, and blank-line normalization. Configure it independently:
 Spacing follows one style: binary operators and `=` are surrounded by spaces,
 unary `-` and `#` attach to their operand, one-line tables are padded as
 `{ 1, 2 }` while an empty table stays `{}`, and a trailing comment is
-separated from code by one space.
+separated from code by one space. A table field starting with unary minus uses
+normal field indentation; a subtraction continued from the previous line uses
+continuation indentation.
 
 String and comment contents are never reformatted. This includes nonblank
 lines inside long-bracket strings, block comments, and escaped multiline short

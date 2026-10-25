@@ -21,6 +21,11 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Wrapping table fields that start with unary minus now produces stable
+  indentation in one formatting pass. A subsequent `tua fmt --check` no longer
+  asks to indent those fields again; binary subtraction continuations keep
+  their continuation indentation.
+
 - Compound guards now narrow the right operand of `and` and `or`, so
   `target ~= nil and target.x > 0` type-checks. The narrowing stays within the
   expression, and guards that access a known nil value still report an error.

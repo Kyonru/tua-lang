@@ -1,4 +1,6 @@
-use std::{borrow::Cow, path::Path};
+use std::{borrow::Cow, collections::BTreeSet, path::Path};
+
+use full_moon::{ast, node::Node, visitors::Visitor};
 
 use crate::{parse_tua_source, Diagnostic, ParsedSource, SourcePosition, SourceSpan, TextEdit};
 
@@ -125,7 +127,51 @@ pub fn format_tua_source_on_type(
 }
 
 pub fn format_parsed_source(parsed: &ParsedSource, options: &FormatOptions) -> String {
-    Formatter::new(options).format(&parsed.source)
+    Formatter::new(options, table_value_start_lines(parsed)).format(&parsed.source)
+}
+
+// A bare table value can start with unary minus. Its first line is not a
+// continuation, unlike a subtraction on a later line of the same field.
+fn table_value_start_lines(parsed: &ParsedSource) -> BTreeSet<usize> {
+    struct Values<'a> {
+        parsed: &'a ParsedSource,
+        source_lines: Vec<&'a str>,
+        lines: BTreeSet<usize>,
+    }
+    impl Visitor for Values<'_> {
+        fn visit_table_constructor(&mut self, table: &ast::TableConstructor) {
+            for field in table.fields() {
+                let ast::Field::NoKey(value) = field else {
+                    continue;
+                };
+                let Some(position) = value.start_position() else {
+                    continue;
+                };
+                let Some(origin) = self.parsed.raw.parser_position_origin(SourcePosition {
+                    line: position.line(),
+                    column: position.character(),
+                }) else {
+                    continue;
+                };
+                let source = origin.source_position;
+                let starts_line = self
+                    .source_lines
+                    .get(source.line.saturating_sub(1))
+                    .and_then(|line| line.get(..source.column.saturating_sub(1)))
+                    .is_some_and(|prefix| prefix.trim().is_empty());
+                if !origin.class_generated && starts_line {
+                    self.lines.insert(source.line);
+                }
+            }
+        }
+    }
+    let mut values = Values {
+        parsed,
+        source_lines: parsed.source.lines().collect(),
+        lines: BTreeSet::new(),
+    };
+    values.visit_ast(&parsed.ast);
+    values.lines
 }
 
 fn local_format_edits(
@@ -410,6 +456,8 @@ struct Formatter<'a> {
     brace_depth: usize,
     open_parens: Vec<OpenParen>,
     line_number: usize,
+    source_line: usize,
+    table_value_start_lines: BTreeSet<usize>,
     pending_continuation: bool,
     suppressed_paren_blocks: Vec<SuppressedParenBlock>,
     multiline_function_header_depths: Vec<usize>,
@@ -453,7 +501,7 @@ struct SuppressedParenBlock {
 }
 
 impl<'a> Formatter<'a> {
-    fn new(options: &'a FormatOptions) -> Self {
+    fn new(options: &'a FormatOptions, table_value_start_lines: BTreeSet<usize>) -> Self {
         Self {
             options,
             indent_level: 0,
@@ -461,6 +509,8 @@ impl<'a> Formatter<'a> {
             brace_depth: 0,
             open_parens: Vec::new(),
             line_number: 0,
+            source_line: 0,
+            table_value_start_lines,
             pending_continuation: false,
             suppressed_paren_blocks: Vec::new(),
             multiline_function_header_depths: Vec::new(),
@@ -474,7 +524,8 @@ impl<'a> Formatter<'a> {
     fn format(&mut self, source: &str) -> String {
         let mut output = String::new();
 
-        for raw_line in source.split_inclusive('\n') {
+        for (index, raw_line) in source.split_inclusive('\n').enumerate() {
+            self.source_line = index + 1;
             let line = raw_line.trim_end_matches(['\n', '\r']);
             self.format_source_line(line, &mut output);
         }
@@ -645,7 +696,8 @@ impl<'a> Formatter<'a> {
         let normalized = normalize_spacing(trimmed, self.options.quote_style);
         let closes_paren = code.trim_start().starts_with(')');
         let closes_brace = code.trim_start().starts_with('}');
-        let starts_with_continuation = line_starts_with_continuation(code);
+        let starts_with_continuation = line_starts_with_continuation(code)
+            && !self.table_value_start_lines.contains(&self.source_line);
         // Parentheses around an open table are already folded into its block
         // indent through `suppressed_paren_blocks`; a call inside a table
         // still indents its own arguments.
