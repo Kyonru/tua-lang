@@ -8,10 +8,10 @@
     <text x="238" y="45" fill="#A1A8BA">player.tua</text>
   </g>
   <g font-family="monospace" font-size="22" fill="#E1E4ED">
-    <text x="32" y="122"><tspan fill="#C5ACF5">local </tspan><tspan>target = player</tspan></text>
-    <text x="32" y="178"><tspan>target</tspan><tspan fill="#8EC7FF">.width</tspan><tspan fill="#88D5CF">.a</tspan><tspan fill="#F0BFA5">.a</tspan><tspan fill="#C5ACF5">.c</tspan><tspan fill="#8EC7FF">.b</tspan></text>
-    <text x="32" y="234"><tspan fill="#C5ACF5">function </tspan><tspan fill="#8EC7FF">move</tspan><tspan>(</tspan><tspan fill="#F0BFA5">dt</tspan><tspan>: </tspan><tspan fill="#88D5CF">number</tspan><tspan>)</tspan></text>
-    <text x="32" y="274">  target.x += speed * dt</text>
+    <text x="32" y="122"><tspan fill="#C5ACF5">local </tspan><tspan>damage =</tspan></text>
+    <text x="32" y="178"><tspan>  game</tspan><tspan fill="#8EC7FF">.player</tspan><tspan fill="#88D5CF">.weapon</tspan><tspan fill="#F0BFA5">.stats</tspan><tspan fill="#C5ACF5">.damage</tspan><tspan fill="#8EC7FF">.base</tspan></text>
+    <text x="32" y="234"><tspan fill="#C5ACF5">function </tspan><tspan fill="#8EC7FF">hit</tspan><tspan>(</tspan><tspan fill="#F0BFA5">enemy</tspan><tspan>: </tspan><tspan fill="#88D5CF">Enemy</tspan><tspan>)</tspan></text>
+    <text x="32" y="274"><tspan>  enemy</tspan><tspan fill="#8EC7FF">.health</tspan><tspan> -= damage</tspan></text>
     <text x="32" y="314" fill="#C5ACF5">end</text>
   </g>
   <text x="32" y="370" font-family="sans-serif" font-size="17" fill="#A1A8BA">Quiet surfaces. A visible active tab. Stable property colors.</text>

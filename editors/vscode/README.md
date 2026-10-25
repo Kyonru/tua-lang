@@ -321,7 +321,8 @@ pre-filled for review before submission.
 
 Property accesses carry optional semantic modifiers `propertyChain1` through
 `propertyChain4`, cycling from the first member of each chain. For example,
-`target.width.a.a.c.b` assigns positions 1, 2, 3, 4, 1 to its properties.
+`game.player.weapon.stats.damage.base` reads a weapon’s base damage. Its properties
+cycle through blue, teal, peach, lavender, then blue again in Indigo Carbon.
 The root retains its ordinary semantic color. Calls and indexes preserve the
 receiver's position; chains within their arguments start independently. Methods
 keep their ordinary method color but count as a step in the receiver chain.
