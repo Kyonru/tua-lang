@@ -4,6 +4,8 @@ const childProcess = require("child_process");
 const fs = require("fs");
 const path = require("path");
 const vscode = require("vscode");
+const { normalizeInstances } = require("../workspace/run-options");
+const { registerDebugInstanceGroups } = require("./debug-instances");
 const { COMMANDS } = require("../constants");
 const { projectLayoutForWorkspaceRoot } = require("../editor/project-layout");
 const { sourceMapPathForGeneratedPath } = require("../editor/source-maps");
@@ -25,6 +27,8 @@ const DEBUG_BOOTSTRAP =
 
 function registerLoveProjectDebugger({ appendOutputLine, getClient, getServerCommand, activity }) {
   const preparedOutputs = new Set();
+  const instanceGroups = registerDebugInstanceGroups({ activity, appendOutputLine, build: runBuildCommand,
+    prepare: prepareLoveDebugOutput, configuration: createLoveDebugConfiguration, scriptFiles: debuggerScriptFiles });
   const startDisposable = vscode.debug.onDidStartDebugSession?.((session) => {
     for (const prepared of preparedOutputs) {
       if (debugSessionTargetsOutput(session, prepared.outputDirectory) && prepared.activitySession) {
@@ -105,7 +109,7 @@ function registerLoveProjectDebugger({ appendOutputLine, getClient, getServerCom
       },
     },
   );
-  const commandDisposable = vscode.commands.registerCommand(COMMANDS.debugLoveProject, async () => {
+  const commandDisposable = vscode.commands.registerCommand(COMMANDS.debugLoveProject, async (options) => {
     if (!vscode.workspace.isTrusted) {
       vscode.window.showWarningMessage("Trust this workspace before debugging a LOVE project.");
       return undefined;
@@ -121,7 +125,18 @@ function registerLoveProjectDebugger({ appendOutputLine, getClient, getServerCom
       return undefined;
     }
 
+    if (options?.instances !== undefined) {
+      let instances;
+      try { instances = normalizeInstances(options.instances); }
+      catch (error) { vscode.window.showErrorMessage(error.message); return undefined; }
+      return instanceGroups.start({ layout, instances, title: options.title,
+        configurationName: options.configurationName,
+        tuaCommand: getServerCommand?.() || "tua", loveCommand: configuredLoveCommand() });
+    }
+
     const preparedResult = await buildAndPrepareLoveDebugProject({
+      configurationName: options?.configurationName,
+      title: options?.title,
       appendOutputLine,
       activity,
       getServerCommand,
@@ -170,6 +185,7 @@ function registerLoveProjectDebugger({ appendOutputLine, getClient, getServerCom
 
   return vscode.Disposable.from(
     commandDisposable,
+    instanceGroups,
     configurationProviderDisposable,
     terminationDisposable,
     startDisposable,
@@ -210,8 +226,10 @@ async function buildAndPrepareLoveDebugProject({
   getServerCommand,
   layout,
   preparedOutputs,
+  configurationName,
+  title = "Debug LOVE Project",
 }) {
-  const activitySession = activity?.begin({ kind: "debug", title: "Debug LOVE Project", cwd: layout.configDirectory });
+  const activitySession = activity?.begin({ kind: "debug", title, cwd: layout.configDirectory, configurationName });
   const appendOutputLine = line => { writeOutput?.(line); activity?.output(activitySession, line, { module: "build" }); };
   const tuaCommand = getServerCommand?.() || "tua";
   appendOutputLine?.(`[tua] Building debug project in ${layout.configDirectory}`);
@@ -469,7 +487,8 @@ function hasDebuggerSourceMap(directory) {
   return false;
 }
 
-function runBuildCommand({ appendOutputLine, cwd, tuaCommand }) {
+function runBuildCommand({ appendOutputLine, cwd, tuaCommand, signal }) {
+  if (signal?.aborted) return Promise.resolve(1);
   appendOutputLine?.(`$ ${quoteCommandArg(tuaCommand)} build`);
 
   return new Promise((resolve) => {
@@ -481,11 +500,13 @@ function runBuildCommand({ appendOutputLine, cwd, tuaCommand }) {
         return;
       }
       settled = true;
+      signal?.removeEventListener("abort", abort);
       flushBufferedLines(stdout, appendOutputLine);
       flushBufferedLines(stderr, appendOutputLine);
       resolve(code);
     };
     let child;
+    const abort = () => child?.kill();
 
     try {
       child = childProcess.spawn(tuaCommand, ["build"], {
@@ -500,6 +521,8 @@ function runBuildCommand({ appendOutputLine, cwd, tuaCommand }) {
       return;
     }
 
+    signal?.addEventListener("abort", abort, { once: true });
+    if (signal?.aborted) abort();
     child.stdout.on("data", (chunk) => {
       const result = consumeLines(stdout, chunk, appendOutputLine);
       stdout = result;

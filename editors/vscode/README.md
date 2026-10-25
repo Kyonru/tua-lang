@@ -134,6 +134,52 @@ can specify `packageTarget` (`love`, `windows`, or `macos`). Existing launch
 configurations and direct commands still work. Each action uses the project of
 the active file; in a multi-root workspace, open a file from the desired project.
 
+### Multiple local players
+
+Run, Hot reload, and Debug configurations can launch up to 16 named instances from one build:
+
+```json
+"tua.run.configurations": [
+  {
+    "name": "Local multiplayer",
+    "mode": "run",
+    "instances": [
+      { "name": "Host", "args": ["--host", "22122"] },
+      { "name": "Client", "args": ["--join", "localhost:22122"] }
+    ]
+  }
+]
+```
+
+Select **Local multiplayer** and press Run. Each player gets its own process and
+console session. Run and Hot reload pass arguments literally without shell
+expansion; Debug uses your installed debugger's argument handling. Your game
+must interpret them (for example in `love.load(args)`) and implement the
+host/client networking. Omit `args` to launch identical copies.
+
+The toolbar Stop button stops the latest active group. Stop beside an individual player
+in **Run Sessions** stops only that player. Closing or crashing one player leaves
+its peers running. **Tua: Stop LOVE Project** stops all tracked normal runs;
+**Tua: Restart LOVE Project** stops those runs and launches the last normal Run
+configuration again, preserving player names and arguments. A failed build starts
+no players. Instances share the build output and LÖVE save identity; games that
+write player-specific saves should choose distinct identities themselves.
+
+Use `"mode": "hotReload"` with the same `instances` to share one build watcher.
+Every player reloads after a successful rebuild; build errors leave the previous
+code running. Closing one player leaves the watcher and other players active.
+Stopping the group or closing its last player also stops the watcher.
+This mode requires the bundled CLI's `tua dev --no-launch` support; update a custom
+`tua.server.path` executable along with the extension.
+
+Use `"mode": "debug"` to launch separate Lua debugger sessions. Set breakpoints in
+`.tua` files, then select the player in VS Code's debug session picker to step or
+continue it independently. The group uses an isolated copy of one build, with
+source maps pointing to your original sources. Its files are cleaned up after the
+last player exits. A partial launch failure stops the players already launched.
+Debugging requires the supported Local Lua Debugger extension, as for a single
+player. `instances` is not supported for packaging.
+
 ## Build and run status
 
 The **Run Sessions** view and status bar show builds, running games, reload
