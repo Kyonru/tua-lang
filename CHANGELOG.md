@@ -6,6 +6,30 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-10-25
+
+### Release summary
+
+Tua 0.4.1 fixes intermittent audio voice stealing when multiple sounds start
+in the same update. Equal-priority voices now follow play order, so the oldest
+handle is consistently released even when voice records are reused.
+
+#### Highlights
+
+- Equal-priority voice stealing is deterministic within a single update.
+- Reused pooled voices receive a fresh place in the play order.
+- Regression coverage forces reversed candidate order and repeated reuse.
+
+#### Upgrade notes
+
+No source or configuration changes are needed when upgrading from 0.4.0.
+For upgrades from 0.3.0, follow the 0.4.0 migration notes in the full changelog.
+
+### Fixed
+
+- Audio voice stealing deterministically selects the oldest equal-priority
+  voice, including voices started in the same update and reused pooled voices.
+
 ## [0.4.0] - 2026-10-25
 
 ### Release summary
@@ -135,9 +159,6 @@ from 0.3.0:
   the Azure authentication version that avoids that authorization-flow issue.
 
 ### Fixed
-
-- Audio voice stealing deterministically selects the oldest equal-priority
-  voice, including voices started in the same update and reused pooled voices.
 
 - Plain Lua modules that use LuaJIT `goto`, labels, or number suffixes now
   parse for typed `require`, instead of silently losing every inferred export.
@@ -1262,7 +1283,8 @@ from 0.3.0:
 - Project source and `tua.toml` files require no migration for this coordinated
   release.
 
-[Unreleased]: https://github.com/Kyonru/tua-lang/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/Kyonru/tua-lang/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/Kyonru/tua-lang/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/Kyonru/tua-lang/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/Kyonru/tua-lang/compare/v0.2.9...v0.3.0
 [0.2.9]: https://github.com/Kyonru/tua-lang/compare/v0.2.8...v0.2.9
