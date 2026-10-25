@@ -33,7 +33,9 @@ class ActivityStore {
     if (!session?.active || session.kind !== "dev") return;
     const phase = devPhase(line);
     const reloaded = line.match(/^\[tua dev\] reloaded (.+)$/);
-    if (reloaded && !session.modules.includes(reloaded[1])) session.modules.push(reloaded[1]);
+    if (reloaded) for (const name of reloaded[1].split(", ")) {
+      if (!session.modules.includes(name) && session.modules.length < 200) session.modules.push(name);
+    }
     if (phase) this.update(session, phase);
   }
   output(session, line, options = {}) {
@@ -60,7 +62,8 @@ function devPhase(line) {
   if (line.startsWith("[tua dev] reloaded ")) return "reloaded";
   if (line === "dev: keeping the running game on its last good build") return "previous";
   if (line === "dev: fix the errors above to start the game") return "failed";
-  if (/^\[tua dev\].*(?:failed|error)/i.test(line)) return "reloadFailed";
+  if (/^\[tua dev\] .+ changed; restarting$/.test(line)) return "reloading";
+  if (line.startsWith("[tua dev] ") && line !== "[tua dev] hot reload is watching for rebuilds") return "reloadFailed";
   return undefined;
 }
 

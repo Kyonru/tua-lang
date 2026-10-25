@@ -16,6 +16,11 @@ test("hot reload distinguishes a request, success, and the last good build", () 
   assert.equal(session.phase, "reloaded");
   assert.deepEqual(session.modules, ["player"]);
   assert.equal(devPhase("game says reloaded"), undefined);
+  assert.equal(devPhase("[tua dev] hot reload is watching for rebuilds"), undefined);
+  assert.equal(devPhase("[tua dev] enemy.lua:8: unexpected symbol near end"), "reloadFailed");
+  assert.equal(devPhase("[tua dev] main.lua changed; restarting"), "reloading");
+  store.line(session, "[tua dev] reloaded player, combat");
+  assert.deepEqual(session.modules, ["player", "combat"]);
 });
 
 test("sessions isolate late events, preserve active runs, and bound history", () => {
