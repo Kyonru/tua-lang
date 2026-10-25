@@ -91,30 +91,86 @@ fn wait_for_speculative_results(
 }
 
 #[test]
-fn scheduler_rejects_requests_beyond_the_in_flight_job_limit() {
+fn scheduler_bounds_total_requests_including_deferred_work() {
     let mut server = LspServer::default();
     let (event_tx, _event_rx) = std::sync::mpsc::sync_channel(EVENT_QUEUE_CAPACITY);
     let mut scheduler = RequestScheduler::new(event_tx, SharedReceivedInputState::default());
-
-    for id in 0..crate::server::scheduler::MAX_IN_FLIGHT_JOBS {
+    for id in 0..scheduler::MAX_PENDING_REQUESTS {
         let output = scheduler.dispatch(
             &mut server,
-            json!({"jsonrpc":"2.0", "id":id, "method":"tua/unknown", "params":{}}),
+            document_symbol_request(id as u64, &format!("file:///tmp/burst-{id}.tua")),
             None,
         );
-        assert!(output.iter().all(|message| message.get("error").is_none()));
+        assert!(output.is_empty(), "{output:?}");
+        assert!(scheduler.in_flight_count() <= scheduler::MAX_IN_FLIGHT_JOBS);
     }
-
+    let rejected = scheduler::MAX_PENDING_REQUESTS as u64;
     let output = scheduler.dispatch(
         &mut server,
-        json!({"jsonrpc":"2.0", "id":crate::server::scheduler::MAX_IN_FLIGHT_JOBS, "method":"tua/unknown", "params":{}}),
+        document_symbol_request(rejected, "file:///tmp/overflow.tua"),
         None,
     );
-    assert_eq!(
-        response_with_id(&output, crate::server::scheduler::MAX_IN_FLIGHT_JOBS as u64,)["error"]
-            ["code"],
-        -32000
+    assert_eq!(response_with_id(&output, rejected)["error"]["code"], -32000);
+    // IDs remain reserved while deferred, and cancelling frees their capacity.
+    let output = scheduler.dispatch(
+        &mut server,
+        document_symbol_request(100, "file:///tmp/duplicate.tua"),
+        None,
     );
+    assert_eq!(response_with_id(&output, 100)["error"]["code"], -32600);
+    assert_eq!(scheduler.cancel(&json!(100))[0]["error"]["code"], -32800);
+    assert!(scheduler
+        .dispatch(
+            &mut server,
+            document_symbol_request(rejected, "file:///tmp/overflow.tua"),
+            None
+        )
+        .is_empty());
+}
+
+#[test]
+fn scheduler_drains_editor_bursts_and_cancels_stale_deferred_requests() {
+    let mut server = LspServer::default();
+    let (event_tx, event_rx) = std::sync::mpsc::sync_channel(EVENT_QUEUE_CAPACITY);
+    let mut scheduler = RequestScheduler::new(event_tx, SharedReceivedInputState::default());
+    let changed_uri = "file:///tmp/burst-40.tua";
+    let _ = server.handle_message(did_open(changed_uri, "local before = 1\n"));
+    for id in 0..60 {
+        assert!(scheduler
+            .dispatch(
+                &mut server,
+                document_symbol_request(id, &format!("file:///tmp/burst-{id}.tua")),
+                Some(1)
+            )
+            .is_empty());
+    }
+    let mut output = scheduler.cancel(&json!(30));
+    assert_eq!(output[0]["error"]["code"], -32800);
+    let _ = server.handle_message(did_change(changed_uri, "local after = 2\n", 2));
+    output.extend(scheduler.cancel_stale_document_requests(
+        changed_uri,
+        server.document_generations.get(changed_uri).copied(),
+        Some(2),
+    ));
+    assert_eq!(response_with_id(&output, 40)["error"]["code"], -32801);
+    while scheduler.has_in_flight() {
+        if let ServerEvent::RequestFinished(result) = event_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("queued editor requests should complete")
+        {
+            output.extend(scheduler.finish(&mut server, *result));
+        }
+        assert!(scheduler.in_flight_count() <= scheduler::MAX_IN_FLIGHT_JOBS);
+    }
+    for id in 0..60 {
+        assert_eq!(
+            output.iter().filter(|message| message["id"] == id).count(),
+            1
+        );
+        if id != 30 && id != 40 {
+            assert!(response_with_id(&output, id).get("error").is_none());
+        }
+    }
 }
 
 #[test]
@@ -207,9 +263,9 @@ fn non_interactive_bursts_reserve_capacity_for_interactive_requests() {
         inlay_hint_request(rejected_id, uri, rejected_id as usize, 0, 100, 0),
         None,
     );
-    assert_eq!(
-        response_with_id(&output, rejected_id)["error"]["code"],
-        -32000
+    assert!(
+        output.is_empty(),
+        "background request should wait for a worker"
     );
 
     let output = scheduler.dispatch(

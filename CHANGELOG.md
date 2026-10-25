@@ -8,6 +8,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Editor request bursts now wait in a bounded language-server queue instead
+  of failing when worker slots fill. Queued requests remain cancellable,
+  document edits discard stale work, and interactive requests retain priority.
 - Multiline calls inside functions with multiline parameter lists now retain
   their continuation indentation, preventing formatter output from triggering
   `TL4037`. Nested callbacks and local functions follow the same rule.

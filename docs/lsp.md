@@ -23,6 +23,11 @@ tua lsp
 speaks JSON-RPC/LSP on stdout, so clients must not treat it as an interactive
 terminal command.
 
+Editor request bursts wait in a bounded queue when worker slots are occupied.
+Interactive requests retain priority over background refreshes; cancelled or
+outdated queued requests are discarded before analysis starts. Capacity errors
+can still occur at the overall limit of 256 outstanding client requests.
+
 !!! info "Everything runs locally"
     The server and extension send no source code or completion-learning data
     off your machine. Completion is computed locally, and the

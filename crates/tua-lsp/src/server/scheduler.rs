@@ -42,7 +42,15 @@ pub(super) enum ServerEvent {
     SpeculativeReady,
 }
 
+struct DeferredRequest {
+    message: Value,
+    document_version: Option<i64>,
+    generation: Option<u64>,
+    non_interactive: bool,
+}
+
 pub(super) struct RequestScheduler {
+    deferred: VecDeque<DeferredRequest>,
     foreground_tx: Sender<WorkerJob>,
     background_tx: Sender<WorkerJob>,
     speculative_lane: SpeculativeLane,
@@ -158,6 +166,7 @@ impl RequestScheduler {
         let speculative_lane = spawn_speculative_lane(event_tx);
 
         Self {
+            deferred: VecDeque::new(),
             foreground_tx,
             background_tx,
             speculative_lane,
@@ -209,6 +218,38 @@ impl RequestScheduler {
         let newest_wins_key = speculative
             .then(|| uri.as_ref().map(|uri| format!("inline:{uri}")))
             .flatten();
+        // Delay snapshot cloning until a worker slot is available. Ordinary
+        // editor startup bursts should wait, not fail at the worker-job limit.
+        if self
+            .deferred
+            .iter()
+            .any(|request| request.message.get("id") == Some(&id))
+        {
+            return vec![error_response(
+                id,
+                -32600,
+                "request id is already in flight".to_owned(),
+            )];
+        }
+        let coalesces = coalesce_key
+            .as_ref()
+            .and_then(|key| self.coalesced_jobs.get(key))
+            .and_then(|job_id| self.jobs.get(job_id))
+            .is_some_and(|job| !job.cancelled.load(Ordering::Acquire));
+        if !speculative
+            && !coalesces
+            && !self.request_jobs.contains_key(&request_key)
+            && !self.has_worker_capacity(non_interactive)
+            && self.request_jobs.len() + self.deferred.len() < MAX_PENDING_REQUESTS
+        {
+            self.deferred.push_back(DeferredRequest {
+                message,
+                document_version,
+                generation,
+                non_interactive,
+            });
+            return Vec::new();
+        }
         let (mut outbound, trace) = server.begin_request_trace(&message, &method);
 
         if self.request_jobs.contains_key(&request_key) {
@@ -238,7 +279,7 @@ impl RequestScheduler {
         if let Some(key) = newest_wins_key.as_deref() {
             outbound.extend(self.cancel_superseded_request(key));
         }
-        if self.request_jobs.len() >= MAX_PENDING_REQUESTS {
+        if self.request_jobs.len() + self.deferred.len() >= MAX_PENDING_REQUESTS {
             outbound.push(error_response(
                 id,
                 -32000,
@@ -267,9 +308,7 @@ impl RequestScheduler {
             }
         }
 
-        if self.jobs.len() >= MAX_IN_FLIGHT_JOBS
-            || non_interactive && self.non_interactive_job_count() >= MAX_NON_INTERACTIVE_JOBS
-        {
+        if !self.has_worker_capacity(non_interactive) {
             outbound.push(error_response(
                 id,
                 -32000,
@@ -536,6 +575,18 @@ impl RequestScheduler {
     }
 
     pub(super) fn cancel(&mut self, id: &Value) -> Vec<Value> {
+        if let Some(index) = self
+            .deferred
+            .iter()
+            .position(|request| request.message.get("id") == Some(id))
+        {
+            self.deferred.remove(index);
+            return vec![error_response(
+                id.clone(),
+                REQUEST_CANCELLED,
+                "request cancelled".to_owned(),
+            )];
+        }
         let key = request_id_key(id);
         let Some(job_id) = self.request_jobs.remove(&key) else {
             return Vec::new();
@@ -574,6 +625,16 @@ impl RequestScheduler {
             .filter_map(|(job_id, job)| (job.uri.as_deref() == Some(uri)).then_some(*job_id))
             .collect::<Vec<_>>();
         let mut outbound = Vec::new();
+        self.deferred.retain(|request| {
+            let stale = document_uri(&request.message) == Some(uri)
+                && (request.generation != generation
+                    || matches!((request.document_version, document_version), (Some(old), Some(new)) if old != new));
+            if stale {
+                outbound.push(error_response(request.message["id"].clone(), CONTENT_MODIFIED,
+                    "document changed while request was queued".to_owned()));
+            }
+            !stale
+        });
 
         for job_id in document_job_ids {
             let Some(job) = self.jobs.get_mut(&job_id) else {
@@ -627,6 +688,39 @@ impl RequestScheduler {
     }
 
     pub(super) fn finish(&mut self, server: &mut LspServer, result: WorkerResult) -> Vec<Value> {
+        let mut outbound = self.finish_job(server, result);
+        while let Some(index) = self
+            .deferred
+            .iter()
+            .enumerate()
+            .filter(|(_, request)| self.has_worker_capacity(request.non_interactive))
+            .min_by_key(|(index, request)| (request.non_interactive, *index))
+            .map(|(index, _)| index)
+        {
+            let request = self.deferred.remove(index).expect("queued request exists");
+            let stale = document_uri(&request.message).is_some_and(|uri| {
+                server.document_generations.get(uri).copied() != request.generation
+                    || self.received_document_version_is_stale(uri, request.document_version)
+            });
+            if stale {
+                outbound.push(error_response(
+                    request.message["id"].clone(),
+                    CONTENT_MODIFIED,
+                    "document changed while request was queued".to_owned(),
+                ));
+            } else {
+                outbound.extend(self.dispatch(server, request.message, request.document_version));
+            }
+        }
+        outbound
+    }
+
+    fn has_worker_capacity(&self, non_interactive: bool) -> bool {
+        self.jobs.len() < MAX_IN_FLIGHT_JOBS
+            && (!non_interactive || self.non_interactive_job_count() < MAX_NON_INTERACTIVE_JOBS)
+    }
+
+    fn finish_job(&mut self, server: &mut LspServer, result: WorkerResult) -> Vec<Value> {
         let speculative_active = self.has_speculative_in_flight();
         let Some(job) = self.remove_job(result.job_id) else {
             return Vec::new();
@@ -714,7 +808,7 @@ impl RequestScheduler {
     }
 
     pub(super) fn has_in_flight(&self) -> bool {
-        !self.jobs.is_empty()
+        !self.jobs.is_empty() || !self.deferred.is_empty()
     }
 
     pub(super) fn in_flight_count(&self) -> usize {
