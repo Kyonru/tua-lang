@@ -1465,3 +1465,45 @@ local after = 1
     );
     assert_no_multiline_layout_lint(&output);
 }
+
+#[test]
+fn indents_multiline_calls_inside_tables() {
+    let source = r#"local rows = {
+lookup(
+1,
+2
+),
+handler = function(value)
+return lookup(
+value,
+3
+)
+end,
+}
+consume(function() end, {
+alpha = 1,
+})
+"#;
+    let expected = r#"local rows = {
+  lookup(
+    1,
+    2
+  ),
+  handler = function(value)
+    return lookup(
+      value,
+      3
+    )
+  end,
+}
+consume(function() end, {
+  alpha = 1,
+})
+"#;
+
+    let output = format(source);
+
+    assert_eq!(output, expected);
+    assert_eq!(format(&output), output);
+    assert_no_multiline_layout_lint(&output);
+}

@@ -30,6 +30,9 @@ language or editor behavior, and migration notes call out those changes.
 - Wrapping no longer splits a block that opens and closes on one line, such as
   `function(a, b) return a end` or `if ready then start(a, b) end`. Splitting
   it produced `)return a end` and mis-indented every following line.
+- A multiline call inside a table constructor, including one inside a method
+  defined in the table, indents its arguments instead of aligning them with the
+  call.
 
 ## [0.4.1] - 2026-10-25
 

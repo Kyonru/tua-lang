@@ -638,8 +638,10 @@ impl<'a> Formatter<'a> {
         let closes_paren = code.trim_start().starts_with(')');
         let closes_brace = code.trim_start().starts_with('}');
         let starts_with_continuation = line_starts_with_continuation(code);
-        let suppress_paren_for_brace = self.brace_depth > 0 || closes_brace;
-        let paren_indent = if suppress_paren_for_brace {
+        // Parentheses around an open table are already folded into its block
+        // indent through `suppressed_paren_blocks`; a call inside a table
+        // still indents its own arguments.
+        let paren_indent = if closes_brace {
             0
         } else {
             self.paren_depth
