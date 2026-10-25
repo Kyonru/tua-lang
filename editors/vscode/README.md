@@ -298,3 +298,20 @@ highlighting. To opt in through user settings with any theme:
 
 Semantic highlighting must be enabled. Property declarations do not receive
 chain modifiers; existing readonly, modification, and deprecation markers remain.
+
+## Editor toolbar density
+
+The default `tua.editor.toolbarMode: "compact"` provides four primary controls:
+Run/Stop, hot reload, Debug, and **Tua Tools**. The tools menu groups:
+
+- Code: inlay hint mode, generated Lua, and jumping between source and output.
+- Structure: workspace symbols, signal graph, and state-machine preview.
+- Run: restart the LOVE project.
+
+The menu follows the active editor: Lua files expose the source/output jump;
+Tua files expose the full set. All commands remain available in the Command
+Palette. Set `tua.editor.toolbarMode` to `full` to restore individual buttons.
+
+With `workbench.editor.editorActionsLocation: "titleBar"`, these controls appear
+to the right of the Command Center. The extension groups the tools independently
+of any color theme, leaving space for VSCodium's sidebar and panel toggles.

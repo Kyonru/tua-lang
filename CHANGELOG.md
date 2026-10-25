@@ -14,6 +14,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Changed
 
+- The editor toolbar defaults to compact mode, keeping Run/Stop, hot reload,
+  and Debug visible while grouping secondary actions under Tua Tools. Set
+  `tua.editor.toolbarMode` to `full` to restore the individual buttons.
+
 - The formatter attaches unary minus and length operators to their operand,
   so `- n` and `# items` become `-n` and `#items`. `- -n` keeps its space.
 - The formatter separates a trailing comment from the code it follows, so

@@ -585,6 +585,19 @@
           "type": "boolean",
           "default": false,
           "description": "Enable experimental sprite-animation and state-machine previews in editor integrations."
+        },
+        "tua.editor.toolbarMode": {
+          "type": "string",
+          "enum": [
+            "full",
+            "compact"
+          ],
+          "enumDescriptions": [
+            "Show all Tua editor tools as toolbar buttons.",
+            "Show Run/Stop, Debug, hot reload, and a grouped Tua Tools menu."
+          ],
+          "default": "compact",
+          "description": "Controls the Tua editor toolbar. Compact mode groups code and structure tools to leave room for layout toggles in the title bar."
         }
       }
     },
@@ -877,17 +890,17 @@
       "editor/title": [
         {
           "command": "tua.inlayHints.selectMode",
-          "when": "editorLangId == tua",
+          "when": "(editorLangId == tua) && config.tua.editor.toolbarMode != compact",
           "group": "navigation@40"
         },
         {
           "command": "tua.openGeneratedLua",
-          "when": "editorLangId == tua",
+          "when": "(editorLangId == tua) && config.tua.editor.toolbarMode != compact",
           "group": "navigation@45"
         },
         {
           "command": "tua.jumpBetweenSourceAndGenerated",
-          "when": "editorLangId == tua || resourceExtname == .lua",
+          "when": "(editorLangId == tua || resourceExtname == .lua) && config.tua.editor.toolbarMode != compact",
           "group": "navigation@46"
         },
         {
@@ -912,23 +925,28 @@
         },
         {
           "command": "tua.restartLoveProject",
-          "when": "editorLangId == tua",
+          "when": "(editorLangId == tua) && config.tua.editor.toolbarMode != compact",
           "group": "navigation@50"
         },
         {
           "command": "tua.showWorkspaceSymbolsByModule",
-          "when": "editorLangId == tua",
+          "when": "(editorLangId == tua) && config.tua.editor.toolbarMode != compact",
           "group": "navigation@47"
         },
         {
           "command": "tua.showSignalGraph",
-          "when": "editorLangId == tua",
+          "when": "(editorLangId == tua) && config.tua.editor.toolbarMode != compact",
           "group": "navigation@50"
         },
         {
           "command": "tua.previewStateMachine",
-          "when": "editorLangId == tua",
+          "when": "(editorLangId == tua) && config.tua.editor.toolbarMode != compact",
           "group": "navigation@51"
+        },
+        {
+          "submenu": "tua.editorTools",
+          "when": "(editorLangId == tua || resourceExtname == .lua) && config.tua.editor.toolbarMode == compact",
+          "group": "navigation@52"
         }
       ],
       "commandPalette": [
@@ -1076,6 +1094,43 @@
           "when": "view == tua.assets && (viewItem == tuaAsset.used || viewItem == tuaAsset.unused)",
           "group": "navigation@30"
         }
+      ],
+      "tua.editorTools": [
+        {
+          "command": "tua.inlayHints.selectMode",
+          "when": "editorLangId == tua",
+          "group": "1_code@1"
+        },
+        {
+          "command": "tua.openGeneratedLua",
+          "when": "editorLangId == tua",
+          "group": "1_code@2"
+        },
+        {
+          "command": "tua.jumpBetweenSourceAndGenerated",
+          "when": "editorLangId == tua || resourceExtname == .lua",
+          "group": "1_code@3"
+        },
+        {
+          "command": "tua.restartLoveProject",
+          "when": "editorLangId == tua",
+          "group": "3_run@1"
+        },
+        {
+          "command": "tua.showWorkspaceSymbolsByModule",
+          "when": "editorLangId == tua",
+          "group": "2_structure@1"
+        },
+        {
+          "command": "tua.showSignalGraph",
+          "when": "editorLangId == tua",
+          "group": "2_structure@2"
+        },
+        {
+          "command": "tua.previewStateMachine",
+          "when": "editorLangId == tua",
+          "group": "2_structure@3"
+        }
       ]
     },
     "languages": [
@@ -1178,6 +1233,13 @@
       {
         "id": "propertyChain4",
         "description": "Property access position 4 in a repeating four-color chain."
+      }
+    ],
+    "submenus": [
+      {
+        "id": "tua.editorTools",
+        "label": "Tua Tools",
+        "icon": "$(tools)"
       }
     ]
   },
