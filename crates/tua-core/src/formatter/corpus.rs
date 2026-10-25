@@ -1368,5 +1368,9 @@ print(Bag.new())
             .formats_to("local a = 1\nprint(a)\n"),
         Case::new("comment_touching_code", "local a = 1-- one\nprint(a)--[[ two ]]\n")
             .formats_to("local a = 1 -- one\nprint(a) --[[ two ]]\n"),
+        Case::new(
+            "wrap_hugged_nested_call",
+            "local function f(...) return ... end\nprint(f(\n  1,\n  2\n))\n",
+        ),
     ]
 }

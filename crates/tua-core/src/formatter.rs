@@ -408,7 +408,8 @@ struct Formatter<'a> {
     indent_level: usize,
     paren_depth: usize,
     brace_depth: usize,
-    paren_continuation_indents: Vec<usize>,
+    open_parens: Vec<OpenParen>,
+    line_number: usize,
     pending_continuation: bool,
     suppressed_paren_blocks: Vec<SuppressedParenBlock>,
     multiline_function_header_depths: Vec<usize>,
@@ -440,6 +441,12 @@ enum SplitControlHeader {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct OpenParen {
+    line: usize,
+    continuation_indent: usize,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct SuppressedParenBlock {
     depth: usize,
     promoted_indent: usize,
@@ -452,7 +459,8 @@ impl<'a> Formatter<'a> {
             indent_level: 0,
             paren_depth: 0,
             brace_depth: 0,
-            paren_continuation_indents: Vec::new(),
+            open_parens: Vec::new(),
+            line_number: 0,
             pending_continuation: false,
             suppressed_paren_blocks: Vec::new(),
             multiline_function_header_depths: Vec::new(),
@@ -644,11 +652,17 @@ impl<'a> Formatter<'a> {
         let paren_indent = if closes_brace {
             0
         } else {
-            self.paren_depth
+            self.paren_levels(self.paren_depth)
                 .saturating_sub(usize::from(closes_paren))
-                .saturating_sub(suppressed_paren_depth)
+                .saturating_sub(self.paren_levels(suppressed_paren_depth))
         };
-        let paren_extra = self.paren_continuation_indents.iter().sum::<usize>();
+        let paren_extra = self
+            .open_parens
+            .iter()
+            .enumerate()
+            .filter(|(index, paren)| self.paren_starts_level(*index, paren))
+            .map(|(_, paren)| paren.continuation_indent)
+            .sum::<usize>();
         let continuation_indent = usize::from(
             (self.pending_continuation || starts_with_continuation)
                 && paren_indent == 0
@@ -685,6 +699,7 @@ impl<'a> Formatter<'a> {
         output.push('\n');
 
         self.update_paren_state(code, continuation_indent);
+        self.line_number += 1;
         if closes_function_header {
             self.multiline_function_header_depths.pop();
             // The parameter list no longer contributes a parenthesis level
@@ -736,6 +751,21 @@ impl<'a> Formatter<'a> {
         };
     }
 
+    /// Parentheses opened on the same line, as in `print(lookup(`, share one
+    /// indentation level, and a line that starts with `)` closes that level.
+    fn paren_levels(&self, depth: usize) -> usize {
+        self.open_parens
+            .iter()
+            .take(depth)
+            .enumerate()
+            .filter(|(index, paren)| self.paren_starts_level(*index, paren))
+            .count()
+    }
+
+    fn paren_starts_level(&self, index: usize, paren: &OpenParen) -> bool {
+        index == 0 || self.open_parens[index - 1].line != paren.line
+    }
+
     fn update_paren_state(&mut self, code: &str, continuation_indent: usize) {
         let bytes = code.as_bytes();
         let mut state = MaskState::Code;
@@ -761,11 +791,14 @@ impl<'a> Formatter<'a> {
                     match bytes[index] {
                         b'(' => {
                             self.paren_depth += 1;
-                            self.paren_continuation_indents.push(continuation_indent);
+                            self.open_parens.push(OpenParen {
+                                line: self.line_number,
+                                continuation_indent,
+                            });
                         }
                         b')' => {
                             self.paren_depth = self.paren_depth.saturating_sub(1);
-                            self.paren_continuation_indents.pop();
+                            self.open_parens.pop();
                         }
                         _ => {}
                     }

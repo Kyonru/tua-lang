@@ -16,6 +16,8 @@ language or editor behavior, and migration notes call out those changes.
   `{ }` becomes `{}`. Generated audio catalogs use the same style. Run
   `tua fmt` once to adopt it; `tua fmt --check` reports files that still use
   the old spacing.
+- Arguments of calls opened on the same line, as in `print(lookup(`, are
+  indented one level instead of one level per parenthesis.
 
 ### Fixed
 

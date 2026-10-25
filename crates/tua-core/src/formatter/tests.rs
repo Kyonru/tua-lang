@@ -1635,3 +1635,39 @@ type Point = { x: number, y: number }
     assert_eq!(output, expected);
     assert_eq!(format(&output), output);
 }
+
+#[test]
+fn indents_parentheses_opened_on_one_line_once() {
+    let source = r#"print(lookup(
+target,
+1
+))
+consume(first, wrap(
+second
+), third)
+local value = outer(inner(
+deep(
+1
+)
+))
+"#;
+    let expected = r#"print(lookup(
+  target,
+  1
+))
+consume(first, wrap(
+  second
+), third)
+local value = outer(inner(
+  deep(
+    1
+  )
+))
+"#;
+
+    let output = format(source);
+
+    assert_eq!(output, expected);
+    assert_eq!(format(&output), output);
+    assert_no_multiline_layout_lint(&output);
+}

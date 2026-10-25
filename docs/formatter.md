@@ -36,6 +36,10 @@ String and comment contents are never reformatted. This includes nonblank
 lines inside long-bracket strings, block comments, and escaped multiline short
 strings, even when their text resembles Tua code.
 
+Parentheses opened on the same line, as in `print(lookup(`, add one
+indentation level, and the line that closes them returns to the opening line's
+indentation.
+
 Multiline function parameters are indented once while the closing parenthesis
 stays aligned with the declaration. Multiline calls in the body indent their
 arguments one level beyond the call, including inside callbacks and functions
