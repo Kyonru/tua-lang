@@ -1,13 +1,26 @@
 -- Extension-owned development shim. Never copied into compiler output.
 local M = {}
 local objects = setmetatable({}, { __mode = "k" })
-local serial, sequence, lastWrite = 0, 0, -math.huge
+local serial, sequence = 0, 0
 local LIMIT = 3000
 
 local function quote(value)
   return '"' .. value:gsub('[%z\1-\31\\"]', function(c)
     return string.format("\\u%04x", string.byte(c))
   end) .. '"'
+end
+
+-- Repeated field names dominate encoding work. Keep a bounded cache; never
+-- cache arbitrary values or retain references to game tables.
+local quotedKeys, quotedKeyCount = {}, 0
+local function quoteKey(value)
+  local key = tostring(value):sub(1, 240)
+  local quoted = quotedKeys[key]
+  if quoted then return quoted end
+  if quotedKeyCount >= 512 then quotedKeys, quotedKeyCount = {}, 0 end
+  quoted = quote(key)
+  quotedKeys[key], quotedKeyCount = quoted, quotedKeyCount + 1
+  return quoted
 end
 
 -- Never invoke game metamethods or stringify userdata; cycles and large values
@@ -39,7 +52,7 @@ local function encode(value, budget, seen, depth)
     end
     if type(key) == "string" or type(key) == "number" then
       count = count + 1
-      parts[#parts + 1] = quote(tostring(key):sub(1, 240)) .. ":" .. encode(child, budget, seen, depth + 1)
+      parts[#parts + 1] = quoteKey(key) .. ":" .. encode(child, budget, seen, depth + 1)
     end
   end
   seen[value] = nil
@@ -72,8 +85,10 @@ function M.signal(object, name)
   if not entry then return end
   entry.emitted = entry.emitted + 1
   -- A bounded recent history, without retaining payloads or game objects.
-  table.insert(entry.events, 1, { name = name, sequence = entry.emitted })
-  if #entry.events > 20 then table.remove(entry.events) end
+  entry.eventHead = (entry.eventHead or 0) % 20 + 1
+  local event = entry.events[entry.eventHead] or {}
+  event.name, event.sequence = name, entry.emitted
+  entry.events[entry.eventHead] = event
 end
 
 
@@ -89,16 +104,25 @@ function M.snapshot()
       data.updates = entry.updates or 0
       data.secondsSinceUpdate = entry.lastUpdate and math.max(0, clock() - entry.lastUpdate) or "Never"
     end
-    if entry.kind == "signals" then data.emitted = entry.emitted; data.recent = entry.events end
+    if entry.kind == "signals" then
+      data.emitted, data.recent = entry.emitted, {}
+      for i = 1, #entry.events do
+        data.recent[i] = entry.events[((entry.eventHead - i) % 20) + 1]
+      end
+    end
     -- Reserve the protocol envelope before encoding game data. Truncation must
     -- never remove required identity fields or replace data with a string.
-    local metadataBudget = { left = 16 }
-    local metadata = encode({ id = entry.id, kind = entry.kind, label = entry.label,
-      source = entry.source, line = entry.line, constructor = entry.constructor }, metadataBudget, {}, 0)
-    budget.left = budget.left - (16 - metadataBudget.left)
-    if metadataBudget.truncated then budget.truncated = true end
+    if not entry.metadata then
+      local metadataBudget = { left = 16 }
+      entry.metadata = encode({ id = entry.id, kind = entry.kind, label = entry.label,
+        source = entry.source, line = entry.line, constructor = entry.constructor }, metadataBudget, {}, 0):sub(1, -2)
+      entry.metadataCost = 16 - metadataBudget.left
+      entry.metadataTruncated = metadataBudget.truncated
+    end
+    budget.left = budget.left - entry.metadataCost
+    if entry.metadataTruncated then budget.truncated = true end
     local payload = encode(data, budget, {}, 1)
-    entries[#entries + 1] = metadata:sub(1, -2) .. ',"data":' .. payload .. '}'
+    entries[#entries + 1] = entry.metadata .. ',"data":' .. payload .. '}'
   end
   sequence = sequence + 1
   local bytes = 0

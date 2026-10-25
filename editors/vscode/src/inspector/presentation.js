@@ -1,5 +1,7 @@
 "use strict";
 
+const compareKeys = new Intl.Collator(undefined, { numeric: true }).compare;
+
 function shortValue(value) {
   if (typeof value === "number" && Number.isFinite(value)) return String(Number.isInteger(value) ? value : Number(value.toPrecision(6)));
   const text = typeof value === "string" ? JSON.stringify(value) : String(value);
@@ -24,7 +26,7 @@ function duration(seconds) {
 
 function valueNodes(value, prefix, depth = 0) {
   if (!value || typeof value !== "object" || depth >= 8) return [];
-  return Object.keys(value).slice(0, 128).sort((a, b) => a.localeCompare(b, undefined, { numeric: true })).map(key => {
+  return Object.keys(value).slice(0, 128).sort(compareKeys).map(key => {
     const child = value[key];
     const nested = child !== null && typeof child === "object";
     return { id: `${prefix}/${encodeURIComponent(key)}`, label: key,
@@ -47,7 +49,7 @@ function storeNodes(data, prefix, previous) {
 function changedValueNodes(current, previous, prefix, depth = 0) {
   if (depth >= 8) return [];
   const keys = [...new Set([...Object.keys(current || {}), ...Object.keys(previous || {})])].slice(0, 128);
-  return keys.sort((a, b) => a.localeCompare(b, undefined, { numeric: true })).map(key => {
+  return keys.sort(compareKeys).map(key => {
     const present = Object.hasOwn(current || {}, key), wasPresent = Object.hasOwn(previous || {}, key);
     const value = present ? current[key] : previous[key], old = previous?.[key];
     const nested = value !== null && typeof value === "object";
@@ -71,8 +73,11 @@ function presentObject(object, prefix, previous) {
   if (data.unavailable) return { summary: "Unavailable", children: valueNodes(data, prefix), details };
   switch (object.kind) {
     case "stores": {
-      const state = storeNodes(data, prefix, previous).find(node => node.label === "state");
-      children = state?.children || (Object.hasOwn(data, "state") ? [row(prefix, "state", "Value", data.state)] : []);
+      children = data.state && typeof data.state === "object"
+        ? (previous?.state && typeof previous.state === "object"
+          ? changedValueNodes(data.state, previous.state, prefix + "/state")
+          : valueNodes(data.state, prefix + "/state"))
+        : (Object.hasOwn(data, "state") ? [row(prefix, "state", "Value", data.state)] : []);
       const changed = children.filter(node => node.change).length;
       const fieldCount = data.state && typeof data.state === "object" ? Object.keys(data.state).length : children.length;
       summary = `${fieldCount} ${fieldCount === 1 ? "field" : "fields"}${changed ? ` · ${changed} changed` : ""}`;

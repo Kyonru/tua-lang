@@ -207,3 +207,24 @@ test("empty categories skip launchers and intervals are clamped", async t => {
   assert.equal(await inspector.launch(activity.begin({ title: "No categories" }), "/unused"), undefined);
   assert.equal(inspector.entries.size, 0);
 });
+
+test("signal history reuses bounded slots while preserving newest-first snapshot order", t => {
+  const { spawnSync } = require("node:child_process");
+  const lua = ["lua", "luajit"].find(command => spawnSync(command, ["-v"]).status === 0);
+  if (!lua) return t.skip("Lua interpreter unavailable");
+  const script = `local inspect = assert(loadfile(arg[1]))()
+local bus = {}
+inspect.register('signals', bus, function() return { listeners = {} } end)
+for i = 1, 1000 do inspect.signal(bus, 'event' .. i) end
+io.write(inspect.snapshot(), '\\n')
+inspect.signal(bus, 'last')
+io.write(inspect.snapshot(), '\\n')`;
+  const result = spawnSync(lua, ["-", path.resolve(__dirname, "../../assets/inspector/snapshot.lua")], { input: script, encoding: "utf8" });
+  assert.equal(result.status, 0, result.stderr);
+  const [first, second] = result.stdout.trim().split("\n").map(JSON.parse).map(value => value.objects[0]);
+  assert.equal(Object.keys(first.data.recent).length, 20);
+  assert.equal(first.data.recent["1"].sequence, 1000);
+  assert.equal(first.data.recent["20"].sequence, 981);
+  assert.equal(second.data.recent["1"].name, "last");
+  assert.equal(second.id, first.id);
+});
