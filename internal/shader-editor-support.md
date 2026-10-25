@@ -1,5 +1,9 @@
 # Shader editor support plan
 
+Implementation status (Unreleased): Phases 1–6 are implemented within the
+limits documented below. Phase 0 has macOS evidence; native Linux/Windows
+qualification remains open. Feature work is isolated and merged phase by phase.
+
 ## Goal
 
 Make LÖVE shaders as checkable and editable as Tua source. Mistakes that LÖVE
@@ -313,10 +317,11 @@ rejected, while numeric strings, matrix layout selectors, and raw Data are
 accepted. Unknown values, lengths, heterogeneous dynamic name patterns, raw
 Data sizes, and texture dimensions remain unchecked. Extra ignored values are
 not diagnosed. No external validator is needed for these checks.
-The initial expanded scalar/vector/matrix probe passed on macOS; subsequent
-launches for the additional `bvec3`/`ivec2` cases timed out before producing any
-probe output. Those cases have core regressions but still need a completed
-native probe run.
+The scalar/vector/matrix probe passed on macOS. The follow-up `bvec3`/`ivec2`
+probe also passed all nine cases with LÖVE 11.5 and graphics access: booleans
+for bvec3, numbers/numeric strings for ivec2, rejection of wrong or missing
+components, and acceptance of ignored extra components. Sandboxed launches
+could not create the graphics session; Linux/Windows probes remain open.
 
 Check the values passed to `send` against the uniform's GLSL type, which LÖVE
 enforces at runtime:
@@ -496,7 +501,7 @@ plain-Lua runtime test for reload-on-asset with a stub `love.graphics`.
   by no traced project code retains its initial value. Explicit initializers,
   unread uniforms, escaped shaders and dynamic loaders are excluded. Results
   are cached per snapshot and computed only by diagnostics when enabled.
-- **Inline shaders**: apply the uniform model, Phases 1–3, and `TL2017` to
+- **Inline shaders (implemented for one literal long string)**: apply the uniform model, Phases 1–3, and `TL2017` to
   `love.graphics.newShader([[ … ]])` with literal source. Diagnostics map into
   the long string's lines.
 
@@ -528,16 +533,22 @@ Each new code goes into `DiagnosticCode::is_known`,
 Each phase lands as separate commits, one per feature, with regression tests,
 CHANGELOG entries, and documentation.
 
-## Open questions
+## Decisions and remaining qualification
 
-- LÖVE 12 changes shader syntax and adds features such as uniform buffers. Do
-  we target LÖVE 11.5 only, matching the current API catalog, and add 12 when
-  the catalog moves?
-- Should `TL2016` block `tua build` like other errors, or stay advisory? A
-  validator can disagree with a specific GPU driver.
-- Does the off-screen 1×1 LÖVE window flash a dock or taskbar entry on macOS,
-  Windows, or Linux? If it does, the language server should use
-  `glslangValidator` when available and LÖVE only on save or on request.
+- Target LÖVE 11.5, matching the current API catalog and vendored headers.
+  LÖVE 12 and uniform-buffer support need a separate compatibility effort.
+- External `TL2016` compilation runs in `tua check` and the trusted editor
+  worker. Build does not start a compiler process. Cheap uniform and entry-point
+  checks still apply during builds.
+- The user selected LÖVE-first validation everywhere, with glslang as fallback.
+  The small LÖVE graphics window may flash; setup probes are explicit, and live
+  validation stays off the interactive request queue.
+- Inline support covers one literal long string. Generated/quoted source and
+  separate vertex/pixel arguments remain outside this implementation.
+- The explicit setup probe passed with installed LÖVE 11.5.0 and glslang on
+  macOS when run with graphics access. A sandboxed launch exited before READY.
+- Repeat native probes on Linux and Windows, including console pipes and
+  graphics-window behavior. macOS and fake-process tests do not qualify them.
 
 ## References
 

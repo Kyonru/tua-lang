@@ -39,19 +39,6 @@ impl Checker<'_> {
         call: &asset::ShaderSendCall,
         uniforms: &ShaderUniforms,
     ) {
-        // Parameters and shadowed or reassigned locals must not inherit an
-        // unrelated shader contract from the traversal's name map.
-        let Some(loader) = crate::semantic::shader_asset_for_local(
-            self.parsed,
-            &self.scope,
-            &call.receiver,
-            call.span.start,
-        ) else {
-            return;
-        };
-        if loader.path != uniforms.asset_path {
-            return;
-        }
         let candidates: Vec<_> = uniforms
             .model
             .uniforms

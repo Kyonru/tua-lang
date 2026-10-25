@@ -17,7 +17,18 @@ impl AnalysisSnapshot {
                 &fallback_scope
             }
         };
-        let call = crate::semantic::shader_asset_for_local(parsed, scope, receiver, position)?;
+        let loader = crate::semantic::shader_loader_for_local(parsed, scope, receiver, position)?;
+        if let Some(inline) = self.file(&parsed.path).and_then(|file| {
+            file.inline_shaders()
+                .iter()
+                .find(|shader| Some(shader.call_span) == node_span(loader))
+        }) {
+            return Some((parsed.path.clone(), inline.source.uniforms.clone()?));
+        }
+        let call = asset::asset_loader_call(loader)?;
+        if call.kind != AssetLoaderKind::Shader {
+            return None;
+        }
         let metadata = asset::validate_asset_with_index(
             call.kind,
             &call.path,
@@ -247,4 +258,48 @@ fn completion_literal(name: &str, typed: &str, call: Option<&asset::ShaderSendCa
         return typed.to_owned();
     }
     name.to_owned()
+}
+
+impl AnalysisSnapshot {
+    /// Literal shader sources use the cached parsed document, including unsaved edits.
+    pub fn inline_shader_validation_requests(
+        &self,
+        config_for_path: impl Fn(&Path) -> crate::config::ShadersConfig,
+    ) -> Result<Vec<crate::shader_validation::ShaderValidationRequest>, String> {
+        use crate::shader_validation::{check_request_limits, ShaderValidationRequest};
+        let mut requests = Vec::new();
+        for (path, file) in &self.files {
+            if self.is_generated_path(path) {
+                continue;
+            }
+            let config = config_for_path(path);
+            if config.validate == crate::config::ShaderValidationMode::Off {
+                continue;
+            }
+            let targets: BTreeSet<_> = config.targets.iter().copied().collect();
+            for shader in file.inline_shaders() {
+                if shader.source.missing_entry_point() {
+                    continue;
+                }
+                for target in &targets {
+                    requests.push(ShaderValidationRequest {
+                        source_origin: Some(shader.origin),
+                        mode: config.validate,
+                        target: *target,
+                        source: shader.source.source.to_string(),
+                        asset: ProjectAsset {
+                            path: path.clone(),
+                            relative_path: "<inline shader>".into(),
+                            category: crate::AssetCategory::Shader,
+                            extension: "glsl".into(),
+                            dimensions: None,
+                            references: Vec::new(),
+                        },
+                    });
+                    check_request_limits(&requests)?;
+                }
+            }
+        }
+        Ok(requests)
+    }
 }

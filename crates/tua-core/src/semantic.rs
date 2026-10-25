@@ -3200,12 +3200,12 @@ fn token_text(token: &full_moon::tokenizer::TokenReference) -> String {
 }
 
 /// Resolve a local shader loader through the shared lexical assignment resolver.
-pub(crate) fn shader_asset_for_local(
-    parsed: &ParsedSource,
+pub(crate) fn shader_loader_for_local<'a>(
+    parsed: &'a ParsedSource,
     scope: &crate::ScopeMap,
     name: &str,
     position: SourcePosition,
-) -> Option<crate::asset::AssetLoaderCall> {
+) -> Option<&'a FunctionCall> {
     let local = local_assignment_value_in_block(parsed.ast.nodes(), name, position, true)?;
     if let Some(binding) = scope
         .declarations()
@@ -3231,8 +3231,7 @@ pub(crate) fn shader_asset_for_local(
     let Expression::FunctionCall(call) = local.expression? else {
         return None;
     };
-    let asset = crate::asset::asset_loader_call(call)?;
-    (asset.kind == crate::AssetLoaderKind::Shader).then_some(asset)
+    Some(call)
 }
 
 #[cfg(test)]

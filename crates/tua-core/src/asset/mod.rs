@@ -1,4 +1,6 @@
+mod inline_shaders;
 mod shader_uniforms;
+pub(crate) use inline_shaders::{inline_shader_call, inline_shaders, map_position, InlineShader};
 #[cfg(test)]
 use shader_uniforms::shader_uniforms;
 pub(crate) use shader_uniforms::{ShaderSource, ShaderUniform, ShaderUniformSet};
@@ -876,6 +878,9 @@ pub(crate) struct AssetLoaderCall {
 }
 
 pub(crate) fn asset_loader_call(function_call: &FunctionCall) -> Option<AssetLoaderCall> {
+    if inline_shaders::inline_shader_token(function_call).is_some() {
+        return None;
+    }
     let (callee_parts, call) = field_chain_before_first_call(function_call)?;
     let spec = asset_loader_spec_for_callee_parts(&callee_parts)?;
     let (path, path_span) = call_string_argument(call, 0)?;

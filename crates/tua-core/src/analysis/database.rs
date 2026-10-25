@@ -593,6 +593,13 @@ fn build_analysis_file(
         })
     };
 
+    // Build GLSL metadata during analysis, never on the interactive request path.
+    let inline_shaders = parsed
+        .as_ref()
+        .ok()
+        .or_else(|| degraded_semantics.as_ref().map(|facts| &facts.parsed))
+        .map(asset::inline_shaders)
+        .unwrap_or_default();
     AnalysisFile(Arc::new(AnalysisFileData {
         source,
         kind,
@@ -603,6 +610,7 @@ fn build_analysis_file(
         exports,
         require_edges,
         assets,
+        inline_shaders,
         usage_index,
         ecs_index,
         object_pool_index,

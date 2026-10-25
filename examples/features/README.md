@@ -138,3 +138,7 @@ make build-features
 The `assets/wave.glsl` sample is a compilable LÖVE pixel shader. With LÖVE
 installed, `tua check` validates it; see `[shaders]` in the configuration reference
 for desktop/GLES targets and disabling external compilation.
+
+The asset example includes a literal inline LÖVE shader. Its `tint` uniform
+supports completion, hover, definition, and value checking; `tua check` also
+compiles it when a shader validator is available.

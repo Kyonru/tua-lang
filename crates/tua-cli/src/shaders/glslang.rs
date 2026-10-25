@@ -37,6 +37,7 @@ pub(crate) fn probe_tools() -> serde_json::Value {
     use tua_core::{AssetCategory, ProjectAsset};
     let mut validator = ProjectShaderValidator::new(None);
     let request = ShaderValidationRequest {
+        source_origin: None,
         mode: ShaderValidationMode::Love,
         asset: ProjectAsset {
             path: "tua-probe.glsl".into(),

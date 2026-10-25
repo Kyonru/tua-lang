@@ -217,6 +217,7 @@ struct Checker<'a> {
 
 #[derive(Clone, Debug)]
 struct ShaderUniforms {
+    loader_span: SourceSpan,
     asset_path: String,
     model: std::sync::Arc<asset::ShaderUniformSet>,
 }
@@ -2023,6 +2024,20 @@ impl<'a> Checker<'a> {
     }
 
     fn check_asset_loader_call(&mut self, function_call: &FunctionCall) {
+        if let Some(inline) = asset::inline_shader_call(function_call) {
+            if inline.source.missing_entry_point() {
+                self.push_asset_diagnostic(
+                    Diagnostic::error(
+                        &self.parsed.path,
+                        inline.origin.line,
+                        inline.origin.column,
+                        "inline shader has no `effect` or `position` entry point",
+                    )
+                    .with_code(DiagnosticCode::ASSET_SHADER_ENTRY_POINT),
+                );
+            }
+            return;
+        }
         let Some(asset_call) = asset::asset_loader_call(function_call) else {
             return;
         };
@@ -2120,6 +2135,13 @@ impl<'a> Checker<'a> {
             let Expression::FunctionCall(function_call) = expression else {
                 return None;
             };
+            if let Some(inline) = asset::inline_shader_call(function_call) {
+                return Some(ShaderUniforms {
+                    loader_span: inline.call_span,
+                    asset_path: "<inline shader>".into(),
+                    model: inline.source.uniforms?,
+                });
+            }
             let call = asset::asset_loader_call(function_call)?;
             if call.kind != asset::AssetLoaderKind::Shader {
                 return None;
@@ -2134,6 +2156,7 @@ impl<'a> Checker<'a> {
             let path = asset::resolved_asset_path(&metadata, &self.asset_roots, self.asset_index)?;
             let source = self.shader_source(&path)?;
             Some(ShaderUniforms {
+                loader_span: node_span(function_call)?,
                 asset_path: call.path,
                 model: source.uniforms.clone()?,
             })
@@ -2157,6 +2180,18 @@ impl<'a> Checker<'a> {
             return;
         };
 
+        // One shared lexical guard for name and value checks, including inline sources.
+        if crate::semantic::shader_loader_for_local(
+            self.parsed,
+            &self.scope,
+            &call.receiver,
+            call.span.start,
+        )
+        .and_then(node_span)
+            != Some(uniforms.loader_span)
+        {
+            return;
+        }
         self.check_shader_values(function_call, &call, &uniforms);
         match &call.uniform {
             asset::ShaderUniformReference::Exact(name) => {

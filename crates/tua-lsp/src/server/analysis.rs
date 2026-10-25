@@ -1195,16 +1195,18 @@ impl AnalysisSnapshot {
                     })
                 },
             )?);
-            if requests.len() > 512
-                || requests
-                    .iter()
-                    .map(|request| request.source.len())
-                    .sum::<usize>()
-                    > 16 * 1024 * 1024
-            {
-                return Err("shader validation input exceeds 16 MiB or 512 requests".to_owned());
-            }
+            tua_core::shader_validation::check_request_limits(&requests)?;
         }
+        requests.extend(self.core.inline_shader_validation_requests(|path| {
+            self.project_model
+                .as_ref()
+                .and_then(|model| model.workspace_for_path(path))
+                .map(|workspace| workspace.config())
+                .unwrap_or_else(|| self.core.config())
+                .shaders
+                .clone()
+        })?);
+        tua_core::shader_validation::check_request_limits(&requests)?;
         Ok(requests)
     }
 

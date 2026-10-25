@@ -235,6 +235,7 @@ mod tests {
 
     pub(super) fn request(source: &str) -> ShaderValidationRequest {
         ShaderValidationRequest {
+            source_origin: None,
             mode: tua_core::config::ShaderValidationMode::Auto,
             asset: ProjectAsset {
                 path: "test.glsl".into(),

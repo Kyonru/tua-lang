@@ -246,6 +246,7 @@ struct AnalysisFileData {
     exports: Option<ModuleExports>,
     require_edges: Vec<ModuleLink>,
     assets: Vec<AssetMetadata>,
+    inline_shaders: Vec<asset::InlineShader>,
     usage_index: Arc<FileUsageIndex>,
     ecs_index: Arc<crate::ecs::EcsFileIndex>,
     object_pool_index: Arc<crate::object_pool::ObjectPoolFileIndex>,
@@ -262,6 +263,9 @@ struct AnalysisFileSemantics {
 }
 
 impl AnalysisFile {
+    fn inline_shaders(&self) -> &[asset::InlineShader] {
+        &self.inline_shaders
+    }
     fn semantics(&self) -> Option<&AnalysisFileSemantics> {
         debug_assert_eq!(self.parsed.is_ok(), self.semantics.is_some());
         self.semantics.as_ref()

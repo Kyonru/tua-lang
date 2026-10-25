@@ -104,7 +104,7 @@ pub(crate) fn run_project_diagnostics(
         use tua_core::shader_validation::{
             shader_validation_requests, validation_diagnostics, ShaderValidator,
         };
-        let requests = shader_validation_requests(
+        let mut requests = shader_validation_requests(
             &snapshot.asset_inventory(),
             &workspace.config().shaders,
             |path| {
@@ -113,6 +113,12 @@ pub(crate) fn run_project_diagnostics(
             },
         )
         .map_err(CliError::usage)?;
+        requests.extend(
+            snapshot
+                .inline_shader_validation_requests(|_| workspace.config().shaders.clone())
+                .map_err(CliError::usage)?,
+        );
+        tua_core::shader_validation::check_request_limits(&requests).map_err(CliError::usage)?;
         match crate::shaders::ProjectShaderValidator::new(love).validate(&requests) {
             Ok(outcomes) => diagnostics.extend(validation_diagnostics(&requests, &outcomes)),
             Err(error)

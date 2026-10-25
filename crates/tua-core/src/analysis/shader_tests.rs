@@ -386,3 +386,165 @@ fn unsent_shader_uniform_lint_ignores_initializers_and_unread_uniforms() {
         .iter()
         .any(|d| d.code == Some(crate::DiagnosticCode::ASSET_SHADER_UNSENT_UNIFORM)));
 }
+
+#[test]
+fn inline_shader_queries_and_checks_share_literal_source_locations() {
+    let mut host = AnalysisHost::new();
+    let fixture = Fixture::parse(
+        r#"-- file: main.tua
+local effect = love.graphics.newShader([=[
+extern number intensity;
+vec4 effect(vec4 c, Image t, vec2 uv, vec2 p) { return c * intensity; }
+]=])
+effect:send("inten<|uniform|>sity", {})
+effect:send("<|complete|>", 1)
+"#,
+    );
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+    let snapshot = host.snapshot();
+    assert_eq!(
+        completion_labels(&snapshot.completion("main.tua", fixture.position("complete"))),
+        ["intensity"]
+    );
+    let hover = snapshot
+        .hover("main.tua", fixture.position("uniform"))
+        .unwrap();
+    assert!(hover.contents.contains("extern number intensity"));
+    let definitions = snapshot.definitions("main.tua", fixture.position("uniform"));
+    assert_eq!(definitions.len(), 1);
+    assert_eq!(definitions[0].path, PathBuf::from("main.tua"));
+    assert_eq!(
+        definitions[0].span.start,
+        SourcePosition {
+            line: 2,
+            column: 15
+        }
+    );
+    let diagnostics = snapshot.diagnostics("main.tua");
+    assert!(
+        diagnostics
+            .iter()
+            .any(|d| d.code == Some(crate::DiagnosticCode::ASSET_SHADER_VALUE)),
+        "{diagnostics:?}"
+    );
+    assert!(
+        !diagnostics
+            .iter()
+            .any(|d| d.code == Some(crate::DiagnosticCode::ASSET_MISSING)),
+        "{diagnostics:?}"
+    );
+    let requests = snapshot
+        .inline_shader_validation_requests(|_| crate::ShadersConfig::default())
+        .unwrap();
+    assert_eq!(requests.len(), 1);
+    assert_eq!(
+        requests[0].source_origin,
+        Some(SourcePosition { line: 2, column: 1 })
+    );
+    let errors = crate::shader_validation::validation_diagnostics(
+        &requests,
+        &[crate::shader_validation::ShaderValidationOutcome::Invalid(
+            vec![crate::shader_validation::ShaderError {
+                stage: None,
+                line: Some(2),
+                message: "bad GLSL".into(),
+            }],
+        )],
+    );
+    assert_eq!(errors[0].file, PathBuf::from("main.tua"));
+    assert_eq!(errors[0].line, 3);
+}
+
+#[test]
+fn inline_shaders_respect_crlf_initial_newlines_offsets_and_unsaved_changes() {
+    let mut host = AnalysisHost::new();
+    host.set_file("main.tua", "local s = love.graphics.newShader([[\r\nextern number n;\r\nvec4 effect() { return vec4(n); }\r\n]])\r\ns:send(\"n\", 1)\r\n");
+    let snapshot = host.snapshot();
+    let definitions = snapshot.definitions("main.tua", SourcePosition { line: 5, column: 9 });
+    assert_eq!(
+        definitions[0].span.start,
+        SourcePosition {
+            line: 2,
+            column: 15
+        }
+    );
+    host.set_file("main.tua", "local s = love.graphics.newShader([[extern number x; vec4 effect() { return vec4(x); }]])\ns:send(\"x\", 1)\n");
+    let snapshot = host.snapshot();
+    let definitions = snapshot.definitions("main.tua", SourcePosition { line: 2, column: 9 });
+    assert_eq!(
+        definitions[0].span.start,
+        SourcePosition {
+            line: 1,
+            column: 51
+        }
+    );
+    let requests = snapshot
+        .inline_shader_validation_requests(|_| crate::ShadersConfig::default())
+        .unwrap();
+    assert!(requests[0].source.contains("number x"));
+    assert_eq!(
+        requests[0].source_origin,
+        Some(SourcePosition {
+            line: 1,
+            column: 37
+        })
+    );
+}
+
+#[test]
+fn inline_shader_missing_entry_point_and_shadowing_are_conservative() {
+    let mut host = AnalysisHost::new();
+    host.set_file("main.tua", "local s = love.graphics.newShader([[extern number n;]])\nlocal function f(s: any) s:send(\"unknown\", {}) end\n");
+    let snapshot = host.snapshot();
+    let diagnostics = snapshot.diagnostics("main.tua");
+    assert!(
+        diagnostics
+            .iter()
+            .any(|d| d.code == Some(crate::DiagnosticCode::ASSET_SHADER_ENTRY_POINT)),
+        "{diagnostics:?}"
+    );
+    assert!(
+        !diagnostics
+            .iter()
+            .any(|d| d.code == Some(crate::DiagnosticCode::ASSET_SHADER_UNIFORM)),
+        "{diagnostics:?}"
+    );
+    assert!(snapshot
+        .inline_shader_validation_requests(|_| crate::ShadersConfig::default())
+        .unwrap()
+        .is_empty());
+}
+
+#[test]
+fn inline_shader_completion_survives_an_unfinished_send_and_lua_uses_same_model() {
+    for path in ["main.tua", "main.lua"] {
+        let mut host = AnalysisHost::new();
+        let source = "local s = love.graphics.newShader([[extern number strength; vec4 effect() { return vec4(strength); }]])\ns:send(\"str";
+        host.set_file(path, source);
+        let items = host.snapshot().completion(
+            path,
+            SourcePosition {
+                line: 2,
+                column: 12,
+            },
+        );
+        assert_eq!(completion_labels(&items), ["strength"], "{path}");
+    }
+}
+
+#[test]
+fn inline_shader_multi_source_calls_are_not_mistaken_for_asset_paths() {
+    let mut host = AnalysisHost::new();
+    host.set_file("main.tua", "local s = love.graphics.newShader([[// pixel\nvec4 effect() {}]], [[// vertex\nvec4 position() {}]])\nprint(s)\n");
+    let snapshot = host.snapshot();
+    assert!(!snapshot
+        .diagnostics("main.tua")
+        .iter()
+        .any(|d| d.code == Some(crate::DiagnosticCode::ASSET_MISSING)));
+    assert!(snapshot
+        .inline_shader_validation_requests(|_| crate::ShadersConfig::default())
+        .unwrap()
+        .is_empty());
+}

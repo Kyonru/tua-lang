@@ -4963,3 +4963,33 @@ fn shader_tools_probes_without_loading_project() {
         assert_eq!(report["preferred"], "love");
     }
 }
+
+#[cfg(unix)]
+#[test]
+fn check_maps_inline_shader_errors_into_the_source_string() {
+    use std::os::unix::fs::PermissionsExt;
+    let temp = TempDir::new("inline-shader");
+    fs::create_dir_all(temp.path.join("src")).unwrap();
+    fs::write(temp.path.join("tua.toml"), DEFAULT_CONFIG_TEXT).unwrap();
+    fs::write(temp.path.join("src/main.tua"), "local effect = love.graphics.newShader([[\nvec4 effect() {\nbroken\n}\n]])\nprint(effect)\n").unwrap();
+    let fake = temp.path.join("glslang");
+    fs::write(&fake, "#!/bin/sh\necho 'ERROR: 1:2: bad GLSL'; exit 2\n").unwrap();
+    fs::set_permissions(&fake, fs::Permissions::from_mode(0o700)).unwrap();
+    let output = tua()
+        .arg("check")
+        .current_dir(&temp.path)
+        .env("TUA_LOVE", "/missing/love")
+        .env("TUA_GLSLANG", &fake)
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        text.contains("main.tua:3:1") && text.contains("TL2016"),
+        "{text}"
+    );
+}

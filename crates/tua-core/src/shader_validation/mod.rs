@@ -332,6 +332,7 @@ mod tests;
 /// One immutable input to the external validator. The source may be an editor overlay.
 #[derive(Clone, Debug)]
 pub struct ShaderValidationRequest {
+    pub source_origin: Option<crate::SourcePosition>,
     pub mode: crate::config::ShaderValidationMode,
     pub asset: crate::asset::ProjectAsset,
     pub target: ShaderTarget,
@@ -390,6 +391,7 @@ pub fn shader_validation_requests(
         }
         for target in &targets {
             requests.push(ShaderValidationRequest {
+                source_origin: None,
                 mode: config.validate,
                 asset: asset.clone(),
                 target: *target,
@@ -415,6 +417,41 @@ pub fn validation_diagnostics(
                 request.target,
                 outcome,
             )
+            .into_iter()
+            .map(|mut diagnostic| {
+                if let Some(origin) = request.source_origin {
+                    let start = crate::asset::map_position(
+                        origin,
+                        crate::SourcePosition {
+                            line: diagnostic.line,
+                            column: diagnostic.column,
+                        },
+                    );
+                    let end = crate::asset::map_position(
+                        origin,
+                        crate::SourcePosition {
+                            line: diagnostic.end_line,
+                            column: diagnostic.end_column,
+                        },
+                    );
+                    diagnostic.line = start.line;
+                    diagnostic.column = start.column;
+                    diagnostic.end_line = end.line;
+                    diagnostic.end_column = end.column;
+                }
+                diagnostic
+            })
         })
         .collect()
+}
+
+/// Bound combined asset and inline batches before starting external tools.
+pub fn check_request_limits(requests: &[ShaderValidationRequest]) -> Result<(), String> {
+    if requests.len() > 512
+        || requests.iter().map(|r| r.source.len()).sum::<usize>() > 16 * 1024 * 1024
+    {
+        Err("shader validation input exceeds 16 MiB or 512 requests".into())
+    } else {
+        Ok(())
+    }
 }

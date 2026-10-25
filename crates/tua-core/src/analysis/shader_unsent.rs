@@ -121,6 +121,9 @@ impl AnalysisSnapshot {
                         return BTreeMap::new();
                     }
                     if parts == ["shader"] || parts == ["love", "graphics", "newShader"] {
+                        if asset::inline_shader_call(call).is_some() {
+                            continue;
+                        }
                         if call.suffixes().any(|suffix| matches!(suffix, Suffix::Call(Call::AnonymousCall(FunctionArgs::Parentheses { arguments, .. })) if arguments.iter().count() != 1)) {
                     continue;
                 }

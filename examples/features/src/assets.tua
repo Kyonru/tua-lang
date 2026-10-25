@@ -21,6 +21,14 @@ local waveShader = shader "assets/wave.glsl"
 -- Complete or hover "time", or go to its declaration in wave.glsl.
 waveShader:send("time", 0)
 -- Passing a table here would report TL2015: `time` is a scalar number uniform.
+-- Inline long-string shaders share uniform completion, navigation, and checks.
+local tintShader = love.graphics.newShader([[
+extern vec4 tint;
+vec4 effect(vec4 color, Image tex, vec2 uv, vec2 pixel) {
+  return Texel(tex, uv) * color * tint;
+}
+]])
+tintShader:sendColor("tint", { 1, 1, 1, 1 })
 local playerData = imageData "assets/player.png"
 local targetCanvas = canvas(320, 180)
 local playerFrame = quad(0, 0, 16, 16, 64, 64)
@@ -51,6 +59,7 @@ return {
   loadThemeMusic = loadThemeMusic,
   mainFont = mainFont,
   waveShader = waveShader,
+  tintShader = tintShader,
   playerData = playerData,
   targetCanvas = targetCanvas,
   playerFrame = playerFrame,

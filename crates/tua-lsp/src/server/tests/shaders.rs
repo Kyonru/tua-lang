@@ -334,3 +334,51 @@ fn shader_value_diagnostics_follow_unsaved_uniform_types() {
         .iter()
         .any(|d| d["code"] == "TL2015"));
 }
+
+#[test]
+fn inline_shader_worker_maps_errors_and_clears_them_after_unsaved_edits() {
+    let temp = TempProject::new("inline-shader-worker");
+    let source = "local effect = love.graphics.newShader([[\nvec4 effect() {\nbroken\n}\n]])\nprint(effect)\n";
+    temp.write("tua.toml", "source = \".\"\n");
+    temp.write("main.tua", source);
+    let uri = temp.uri_for("main.tua");
+    let mut initialize = initialize_with_root(1, temp.uri());
+    initialize["params"]["initializationOptions"] = json!({"workspaceTrusted": true});
+    let calls = Arc::new(AtomicUsize::new(0));
+    let output = run_shader_chunks(
+        vec![
+            (Duration::ZERO, vec![initialize, did_open(&uri, source)]),
+            (
+                Duration::from_millis(1200),
+                vec![did_change(
+                    &uri,
+                    &source.replace("broken", "return vec4(1.0);"),
+                    2,
+                )],
+            ),
+            (
+                Duration::from_millis(1200),
+                vec![json!({"jsonrpc":"2.0","method":"exit"})],
+            ),
+        ],
+        calls.clone(),
+    );
+    let publications: Vec<_> = output
+        .iter()
+        .filter(|m| m["method"] == "textDocument/publishDiagnostics" && m["params"]["uri"] == uri)
+        .collect();
+    assert!(
+        publications.iter().any(|m| m["params"]["diagnostics"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|d| d["code"] == "TL2016" && d["range"]["start"]["line"] == 2)),
+        "{output:?}"
+    );
+    assert!(!publications.last().unwrap()["params"]["diagnostics"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|d| d["code"] == "TL2016"));
+    assert_eq!(calls.load(Ordering::Relaxed), 2);
+}

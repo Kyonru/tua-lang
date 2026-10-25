@@ -826,6 +826,31 @@ sections). See [shader uniform editing](lsp.md#shader-uniform-editing).
 Names held in variables are not checked, and neither are shaders whose
 uniforms come from uniform blocks or preprocessor macros.
 
+Shader files with neither an `effect` nor a `position` entry point report
+`TL2017` at their loader, including when external shader validation is disabled.
+Macro-generated declarations and unsupported shader constructs are left to the
+external validator. This check does not require LÖVE to be installed.
+
+Enable `[shaders] warn_unsent = true` for the optional `TL2018` warning when a
+read uniform has no traced send anywhere in the project. Uniform initializers
+and unread uniforms are excluded. Returning, storing, aliasing, reassigning,
+or passing a shader to unknown code suppresses this warning for that asset;
+dynamic shader loading suppresses the project-wide lint. Static sends in other
+files and matching dynamic-name patterns count as possible sends. This is a
+conservative hint about the initial value, not proof of a rendering bug.
+
+Literal long strings passed as the single argument to
+`love.graphics.newShader([[ ... ]])` share uniform name/value checks,
+completion, hover, and definition with shader assets. Definitions and compiler
+errors point into the original Tua/Lua string. Metadata is built during file
+analysis, so editor requests do not parse GLSL or read files. The optional
+external validator runs in its existing background worker.
+
+Concatenated/generated shader source, quoted source strings, and separate
+vertex/pixel arguments are outside this inline support. Long strings containing
+ordinary asset paths keep file-based behavior. The unsent-uniform lint currently
+covers file assets only.
+
 ### LOVE Methods And Callbacks
 
 Prefer `:` for LOVE object methods. These methods usually need `self`, and Lua
@@ -976,16 +1001,3 @@ deliberately does not provide:
 - full compatibility with other Lua language servers or typed Lua dialects.
 
 Pre-1.0 releases follow the migration policy in [Releases](releases.md).
-
-Shader files with neither an `effect` nor a `position` entry point report
-`TL2017` at their loader, including when external shader validation is disabled.
-Macro-generated declarations and unsupported shader constructs are left to the
-external validator. This check does not require LÖVE to be installed.
-
-Enable `[shaders] warn_unsent = true` for the optional `TL2018` warning when a
-read uniform has no traced send anywhere in the project. Uniform initializers
-and unread uniforms are excluded. Returning, storing, aliasing, reassigning,
-or passing a shader to unknown code suppresses this warning for that asset;
-dynamic shader loading suppresses the project-wide lint. Static sends in other
-files and matching dynamic-name patterns count as possible sends. This is a
-conservative hint about the initial value, not proof of a rendering bug.
