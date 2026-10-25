@@ -1125,22 +1125,26 @@
         {
           "id": "tua.run",
           "name": "Run Configuration",
-          "when": "tua.hasProject"
+          "when": "tua.hasProject",
+          "initialSize": 18
         },
         {
           "id": "tua.workspace",
           "name": "Project",
-          "when": "tua.hasProject"
+          "when": "tua.hasProject",
+          "initialSize": 54
         },
         {
           "id": "tua.assets",
           "name": "Tua Assets",
-          "when": "tua.hasProject"
+          "when": "tua.hasProject",
+          "initialSize": 28
         },
         {
           "id": "tua.sessions",
           "name": "Run Sessions",
-          "when": "tua.hasProject"
+          "when": "tua.hasProject",
+          "visibility": "collapsed"
         },
         {
           "id": "tua.checks",
