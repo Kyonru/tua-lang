@@ -16,13 +16,13 @@ const STEP_ICONS = {
   unresolved: "question",
 };
 
-function registerTypeExplanation({ getClient, isTuaDocument }) {
+function registerTypeExplanation({ getClient, isTuaDocument, onInspect }) {
   return vscode.commands.registerCommand(COMMANDS.explainType, () =>
-    explainTypeAtCursor({ getClient, isTuaDocument }),
+    explainTypeAtCursor({ getClient, isTuaDocument, onInspect }),
   );
 }
 
-async function explainTypeAtCursor({ getClient, isTuaDocument }) {
+async function explainTypeAtCursor({ getClient, isTuaDocument, onInspect }) {
   const editor = vscode.window.activeTextEditor;
   const document = editor?.document;
   if (!document || !isTuaDocument(document)) {
@@ -37,6 +37,7 @@ async function explainTypeAtCursor({ getClient, isTuaDocument }) {
   }
 
   const position = editor.selection?.active || new vscode.Position(0, 0);
+  onInspect?.(document, position);
   const params = {
     textDocument: { uri: document.uri.toString() },
     position: { line: position.line, character: position.character },

@@ -778,7 +778,7 @@ async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
     );
     assert.deepStrictEqual(
       state.quickPickCalls.at(-1).items.map((item) => item.label),
-      ["Full", "Compact", "Types Only", "Parameters Only", "Off"],
+      ["Contextual", "Full", "Compact", "Types Only", "Parameters Only", "Off"],
       "the inlay hint command should expose all presentation modes in one quick pick",
     );
 

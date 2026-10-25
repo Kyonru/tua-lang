@@ -12,3 +12,5 @@
 
 You can change this later from the **Tua Tools** menu while editing a Tua file.
 Choosing a non-compact mode restores the hint length saved before Compact.
+
+**Contextual** keeps ordinary code quiet and reveals full hints for selected code, inspected symbols, and Lua debugging.

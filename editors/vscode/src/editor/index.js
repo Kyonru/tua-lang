@@ -13,7 +13,7 @@ function registerEditorDevex(options) {
   const inlayHints = registerInlayHintPresentation(options);
   const inlineCompletion = registerInlineCompletion(options);
   const symbols = registerSymbolCommands(options);
-  const typeExplanation = registerTypeExplanation(options);
+  const typeExplanation = registerTypeExplanation({ ...options, onInspect: inlayHints.inspect });
 
   return {
     middleware: inlayHints.middleware,

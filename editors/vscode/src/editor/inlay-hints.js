@@ -1,6 +1,7 @@
 "use strict";
 
 const vscode = require("vscode");
+const { contextualHints } = require("./contextual-hints");
 const { COMMANDS } = require("../constants");
 const { formatError } = require("../shared/errors");
 
@@ -11,6 +12,7 @@ const PREVIOUS_MAXIMUM_LENGTH_STATE = "tua.inlayHints.previousMaximumLength";
 const REFRESH_COMMAND = "editor.action.inlayHints.refresh";
 
 const MODES = [
+  { id: "contextual", label: "Contextual", description: "Show hints for selected code, inspected symbols, and Lua debugging" },
   {
     id: "full",
     label: "Full",
@@ -38,25 +40,51 @@ const MODES = [
   },
 ];
 
-function registerInlayHintPresentation({ context, configurationTarget, isTuaDocument }) {
-  const options = { context, configurationTarget, isTuaDocument };
+function registerInlayHintPresentation({ context, configurationTarget, isTuaDocument, getClient }) {
+  let inspected;
+  let timer;
+  const options = { context, configurationTarget, isTuaDocument, getClient, getInspected: () => inspected };
+  const schedule = () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      timer = undefined;
+      if (modeFromState(stateForTarget(context, configurationTarget())) === "contextual") void refreshInlayHints(getClient);
+    }, 100);
+  };
+  const inspect = (document, position) => {
+    if (!document || !isTuaDocument(document)) return;
+    inspected = { uri: document.uri.toString(), line: position.line };
+    schedule();
+  };
+  const listeners = [
+    vscode.window.onDidChangeTextEditorSelection?.(() => { inspected = undefined; schedule(); }),
+    vscode.window.onDidChangeActiveTextEditor?.(() => { inspected = undefined; schedule(); }),
+    vscode.debug.onDidChangeActiveDebugSession?.(schedule),
+    vscode.commands.registerCommand("tua.inlayHints.inspect", () => {
+      const editor = vscode.window.activeTextEditor;
+      if (editor) inspect(editor.document, editor.selection.active);
+    }),
+  ].filter(Boolean);
   const command = vscode.commands.registerCommand(COMMANDS.selectInlayHintMode, (requestedMode, fromSetup = false) =>
     selectInlayHintMode({ ...options, fromSetup: fromSetup === true }, requestedMode),
   );
 
   return {
+    inspect,
     middleware: {
       provideInlayHints: (document, range, token, next) =>
         provideInlayHints(options, document, range, token, next),
     },
     dispose() {
+      clearTimeout(timer);
+      for (const listener of listeners) listener.dispose();
       command.dispose();
     },
   };
 }
 
 async function selectInlayHintMode(
-  { context, configurationTarget, isTuaDocument, fromSetup = false },
+  { context, configurationTarget, isTuaDocument, getClient, fromSetup = false },
   requestedMode,
 ) {
   const document = vscode.window.activeTextEditor?.document;
@@ -94,7 +122,7 @@ async function selectInlayHintMode(
 
     await state.update(MODE_STATE, mode.id);
     await vscode.commands.executeCommand("setContext", "tua.inlayHints.mode", mode.id);
-    await refreshInlayHints();
+    await refreshInlayHints(getClient);
     vscode.window.setStatusBarMessage(`Tua inlay hints: ${mode.label}`, 1800);
 
     return mode.id;
@@ -115,6 +143,17 @@ async function provideInlayHints(options, document, range, token, next) {
     return hints;
   }
 
+  if (mode === "contextual") {
+    const editor = vscode.window.activeTextEditor;
+    const inspection = options.getInspected?.();
+    const session = vscode.debug.activeDebugSession;
+    const sameWorkspace = !session?.workspaceFolder || session.workspaceFolder.uri.toString() === vscode.workspace.getWorkspaceFolder(document.uri)?.uri.toString();
+    return contextualHints(hints, {
+      debugging: session?.type === "lua-local" && sameWorkspace,
+      selections: editor?.document.uri.toString() === document.uri.toString() ? editor.selections || [editor.selection] : [],
+      inspectedLine: inspection?.uri === document.uri.toString() ? inspection.line : undefined,
+    });
+  }
   if (mode === "types") {
     return hints.filter((hint) => hint.kind === vscode.InlayHintKind.Type);
   }
@@ -198,8 +237,14 @@ async function restoreMaximumLength(configuration, state, target) {
   await state.update(PREVIOUS_MAXIMUM_LENGTH_STATE, undefined);
 }
 
-async function refreshInlayHints() {
+async function refreshInlayHints(getClient) {
   try {
+    // Use the language client's existing refresh emitters, without changing user settings.
+    const providers = getClient?.()?.getFeature?.("textDocument/inlayHint")?.getProviders?.();
+    if (providers) {
+      for (const provider of providers) provider.onDidChangeInlayHints.fire();
+      return;
+    }
     await vscode.commands.executeCommand(REFRESH_COMMAND);
   } catch {
     // Older hosts refresh on the next viewport or document change.

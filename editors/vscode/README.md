@@ -84,7 +84,7 @@ All four steps are optional; opening setup does not change settings.
   editor's configured extension registry. It is not a dependency. Restore changes
   the selected file icons; it leaves that extension installed. Product icons are
   unchanged.
-- **Hints:** choose Full, Compact, Types Only, Parameters Only, or Off for the
+- **Hints:** choose Contextual, Full, Compact, Types Only, Parameters Only, or Off for the
   current workspace (or user profile when no folder is open), even with no Tua
   file open.
 
@@ -160,6 +160,14 @@ for review and saving. Executable probes run only after you request checks in a
 trusted workspace, with a three-second timeout. **Tua: Build Project** builds
 without launching the game.
 
+## Contextual hint density
+
+Choose **Contextual** in **Tua: Select Inlay Hint Mode** to hide routine hints.
+Select code, run **Inspect Hints at Cursor**, or use **Explain Type** to reveal
+complete hints on those lines. While a Lua debug session is active, visible Tua
+code in that workspace shows full hints. Moving the selection clears explicit
+inspection. This mode is optional and does not change your global hint settings.
+
 ## What You Get
 
 ### Core Tua Editing
@@ -178,7 +186,7 @@ without launching the game.
 - Hover, completion, signature help, definition, references, rename, document
   symbols, workspace symbols, document highlight, call hierarchy, code lenses,
   and range/full/delta semantic tokens.
-- Inlay hint modes: Full, Compact, Types Only, Parameters Only, and Off.
+- Inlay hint modes: Contextual, Full, Compact, Types Only, Parameters Only, and Off.
 - `Tua: Explain Type / Why Is This Any?` for tracing annotations, inference,
   widening, narrowing, module resolution, and dynamic fallback points.
 - Source actions for organizing imports, sorting imports, removing unused

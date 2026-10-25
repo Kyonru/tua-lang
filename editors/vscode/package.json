@@ -1112,6 +1112,12 @@
         "title": "Build Project",
         "category": "Tua",
         "icon": "$(tools)"
+      },
+      {
+        "command": "tua.inlayHints.inspect",
+        "title": "Inspect Hints at Cursor",
+        "category": "Tua",
+        "icon": "$(symbol-type-parameter)"
       }
     ],
     "views": {
@@ -1368,6 +1374,10 @@
         {
           "command": "tua.checks.build",
           "when": "false"
+        },
+        {
+          "command": "tua.inlayHints.inspect",
+          "when": "editorLangId == tua"
         }
       ],
       "editor/context": [
@@ -1385,6 +1395,11 @@
           "command": "tua.copyQualifiedName",
           "when": "editorLangId == tua",
           "group": "navigation@60"
+        },
+        {
+          "command": "tua.inlayHints.inspect",
+          "when": "editorLangId == tua",
+          "group": "navigation@41"
         }
       ],
       "view/title": [
@@ -1698,7 +1713,7 @@
           {
             "id": "hints",
             "title": "Set your hint density",
-            "description": "Choose Full, Compact, Types Only, Parameters Only, or Off for Tua inlay hints. This choice applies to the current workspace, or your user profile when no folder is open.\n[Choose Hint Density](command:tua.inlayHints.selectMode?%5Bnull%2Ctrue%5D)\n[Open Tua Settings](command:tua.openSettings)",
+            "description": "Choose Contextual, Full, Compact, Types Only, Parameters Only, or Off for Tua inlay hints. This choice applies to the current workspace, or your user profile when no folder is open.\n[Choose Hint Density](command:tua.inlayHints.selectMode?%5Bnull%2Ctrue%5D)\n[Open Tua Settings](command:tua.openSettings)",
             "media": {
               "markdown": "assets/setup/hints.md"
             },
