@@ -784,11 +784,13 @@ wave:send("tim", 0) -- TL2013: did you mean `time`?
 wave:send("light" .. tostring(index), color) -- needs a uniform starting with `light`
 ```
 
+LOVE also rejects a declared uniform that the shader never reads, because the
+GLSL compiler removes it. Tua reports warning `TL2014` when such a uniform is
+sent; read it in the shader, or guard optional uniforms with
+`Shader:hasUniform`.
+
 Names built at runtime are not checked, and neither are shaders whose uniforms
-come from uniform blocks or preprocessor macros. LOVE also rejects a declared
-uniform that the GLSL compiler removed because the shader never reads it; that
-case still appears only at runtime, so `Shader:hasUniform` remains the guard for
-optional uniforms.
+come from uniform blocks or preprocessor macros.
 
 ### LOVE Methods And Callbacks
 

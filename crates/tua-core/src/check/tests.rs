@@ -4568,7 +4568,9 @@ extern number time;
 uniform highp vec4 ripple1, ripple2;
 /* uniform vec4 alsoCommented; */
 uniform Image textures[2];
-vec4 effect(vec4 color, Image tex, vec2 uv, vec2 screen) { return color; }
+vec4 effect(vec4 color, Image tex, vec2 uv, vec2 screen) {
+  return color * time * ripple1 * ripple2 * Texel(textures[0], uv);
+}
 "#,
     );
     temp.write(
@@ -4776,4 +4778,42 @@ end
             && diagnostic.code == Some(DiagnosticCode::TYPE_MISMATCH)),
         "{diagnostics:#?}"
     );
+}
+
+#[test]
+fn warns_when_sending_a_uniform_the_shader_never_reads() {
+    let temp = TempProject::new("shader-unread-uniforms");
+    let source = r#"
+local glow = shader "assets/glow.glsl"
+glow:send("time", 1)
+glow:send("strength", 2)
+"#;
+
+    temp.write("src/main.tua", source);
+    temp.write(
+        "game/assets/glow.glsl",
+        r#"extern number time;
+extern number strength;
+vec4 effect(vec4 color, Image tex, vec2 uv, vec2 screen) { return color * time; }
+"#,
+    );
+
+    let diagnostics = check_tua_source_with_asset_roots_and_diagnostics_config(
+        temp.path.join("src/main.tua"),
+        source,
+        &[temp.path.join("game")],
+        &diagnostics_without_standard_rules(),
+    )
+    .expect_err("an unread uniform should be reported");
+
+    assert_eq!(diagnostics.len(), 1, "{diagnostics:#?}");
+    assert_eq!(diagnostics[0].line, 4);
+    assert_eq!(diagnostics[0].severity, DiagnosticSeverity::Warning);
+    assert_eq!(
+        diagnostics[0].code,
+        Some(DiagnosticCode::ASSET_SHADER_UNREAD_UNIFORM)
+    );
+    assert!(diagnostics[0]
+        .message
+        .contains("declares uniform `strength` but never reads it"));
 }

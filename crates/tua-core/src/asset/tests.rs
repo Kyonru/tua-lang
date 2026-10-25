@@ -282,7 +282,7 @@ fn png_header(width: u32, height: u32) -> Vec<u8> {
 
 #[test]
 fn lists_shader_uniform_declarations() {
-    let names = shader_uniform_names(
+    let uniforms = shader_uniforms(
         r#"#pragma language glsl3
 // uniform float commented;
 /* uniform vec4 blockComment; */
@@ -296,15 +296,38 @@ vec4 effect(vec4 color, Image tex, vec2 uv, vec2 screen) { return color * scale;
     .expect("plain declarations should be listed");
 
     assert_eq!(
-        names.into_iter().collect::<Vec<_>>(),
+        uniforms.names.into_iter().collect::<Vec<_>>(),
         ["first", "layers", "second", "time"]
     );
+    assert_eq!(shader_uniforms("uniform Lights { vec4 color; };"), None);
     assert_eq!(
-        shader_uniform_names("uniform Lights { vec4 color; };"),
+        shader_uniforms("#define PARAM(name) uniform float name;\nPARAM(time)"),
         None
     );
+}
+
+#[test]
+fn finds_shader_uniforms_that_no_code_reads() {
+    let uniforms = shader_uniforms(
+        r#"extern number time;
+extern number unused; // unused stays unread even when a comment names it
+uniform vec4 tint;
+#ifdef VERTEX
+uniform float sway;
+vec4 position(mat4 transform, vec4 vertex) { return transform * vertex; }
+#endif
+#ifdef PIXEL
+uniform float sway;
+vec4 effect(vec4 color, Image tex, vec2 uv, vec2 screen) {
+  return color * tint * sin(time);
+}
+#endif
+"#,
+    )
+    .expect("plain declarations should be listed");
+
     assert_eq!(
-        shader_uniform_names("#define PARAM(name) uniform float name;\nPARAM(time)"),
-        None
+        uniforms.unread.into_iter().collect::<Vec<_>>(),
+        ["sway", "unused"]
     );
 }

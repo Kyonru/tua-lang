@@ -214,6 +214,7 @@ struct Checker<'a> {
 struct ShaderUniforms {
     asset_path: String,
     names: BTreeSet<String>,
+    unread: BTreeSet<String>,
 }
 
 impl<'a> Checker<'a> {
@@ -2079,9 +2080,12 @@ impl<'a> Checker<'a> {
             let path = asset::resolved_asset_path(&metadata, &self.asset_roots, self.asset_index)?;
             let source = read_shader_source(&path)?;
 
+            let uniforms = asset::shader_uniforms(&source)?;
+
             Some(ShaderUniforms {
                 asset_path: call.path,
-                names: asset::shader_uniform_names(&source)?,
+                names: uniforms.names,
+                unread: uniforms.unread,
             })
         });
 
@@ -2115,6 +2119,17 @@ impl<'a> Checker<'a> {
             ),
         };
         if declared {
+            if let asset::ShaderUniformReference::Exact(name) = &call.uniform {
+                if uniforms.unread.contains(name) {
+                    let diagnostic = unread_shader_uniform_diagnostic(
+                        &self.parsed.path,
+                        call.span,
+                        &uniforms.asset_path,
+                        name,
+                    );
+                    self.push_asset_diagnostic(diagnostic);
+                }
+            }
             return;
         }
 
@@ -4396,6 +4411,30 @@ fn missing_asset_diagnostic(
 
     Diagnostic::error(path, position.line, position.column, message)
         .with_code(DiagnosticCode::ASSET_MISSING)
+}
+
+fn unread_shader_uniform_diagnostic(
+    path: &Path,
+    span: SourceSpan,
+    asset_path: &str,
+    name: &str,
+) -> Diagnostic {
+    Diagnostic::new(
+        path,
+        span.start.line,
+        span.start.column,
+        DiagnosticSeverity::Warning,
+        format!(
+            "shader `{asset_path}` declares uniform `{name}` but never reads it; GLSL compilers remove unread uniforms, so LOVE raises an error when it is sent. Read it in the shader or guard the call with `Shader:hasUniform`"
+        ),
+    )
+    .with_range(
+        span.start.line,
+        span.start.column,
+        span.end.line,
+        span.end.column,
+    )
+    .with_code(DiagnosticCode::ASSET_SHADER_UNREAD_UNIFORM)
 }
 
 /// The declared uniform nearest to a misspelled name, if any is close.

@@ -1221,12 +1221,22 @@ fn fold_asset_path(path: &str) -> String {
     path.replace('\\', "/").to_lowercase()
 }
 
-/// Names declared with `uniform` or LOVE's `extern` in shader source. Returns
-/// `None` when the declarations cannot be listed reliably: a uniform block or a
-/// preprocessor macro that spells a declaration.
-pub(crate) fn shader_uniform_names(source: &str) -> Option<BTreeSet<String>> {
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub(crate) struct ShaderUniformSet {
+    /// Names declared with `uniform` or LOVE's `extern`.
+    pub(crate) names: BTreeSet<String>,
+    /// Declared names that no code reads. GLSL compilers remove these, and
+    /// LOVE then reports them as missing when they are sent.
+    pub(crate) unread: BTreeSet<String>,
+}
+
+/// The uniforms declared in shader source. Returns `None` when the
+/// declarations cannot be listed reliably: a uniform block or a preprocessor
+/// macro that spells a declaration.
+pub(crate) fn shader_uniforms(source: &str) -> Option<ShaderUniformSet> {
     let code = strip_glsl_comments(source);
     let mut names = BTreeSet::new();
+    let mut declarations = BTreeMap::<String, usize>::new();
 
     for line in code.lines() {
         let line = line.trim_start();
@@ -1258,11 +1268,26 @@ pub(crate) fn shader_uniform_names(source: &str) -> Option<BTreeSet<String>> {
             let name = name.split(['[', '=']).next().unwrap_or_default().trim();
             if !name.is_empty() && name.chars().all(|c| c == '_' || c.is_ascii_alphanumeric()) {
                 names.insert(name.to_owned());
+                *declarations.entry(name.to_owned()).or_default() += 1;
             }
         }
     }
 
-    Some(names)
+    // A name that appears only in its own declarations is never read.
+    let mut uses = BTreeMap::<&str, usize>::new();
+    for word in code.split(|character: char| character != '_' && !character.is_ascii_alphanumeric())
+    {
+        if names.contains(word) {
+            *uses.entry(word).or_default() += 1;
+        }
+    }
+    let unread = names
+        .iter()
+        .filter(|name| uses.get(name.as_str()) <= declarations.get(name.as_str()))
+        .cloned()
+        .collect();
+
+    Some(ShaderUniformSet { names, unread })
 }
 
 fn strip_glsl_comments(source: &str) -> String {

@@ -19,6 +19,9 @@ language or editor behavior, and migration notes call out those changes.
   check the uniform name against the shader's `uniform` and `extern`
   declarations. A misspelled name reports `TL2013` with a suggestion instead of
   failing when LOVE runs the call.
+- Sending a uniform that the shader declares but never reads reports warning
+  `TL2014`. GLSL compilers remove such uniforms, and LOVE then raises
+  "does not exist" at runtime.
 
 ### Changed
 
