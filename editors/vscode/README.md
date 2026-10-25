@@ -114,6 +114,15 @@ Select **Indigo Carbon HC**, apply **Tua Layout** if desired, then uninstall
 package's global layout defaults are intentionally not carried into Tua's
 configuration defaults. Language and workflow tools work with any theme.
 
+## Tua workspace
+
+Open the **Tua** Activity Bar icon for project files, module exports, signal
+call sites, ECS declarations, and the Asset Explorer. Graph groups have an inline
+action to open their detailed explorer. Right-click a Tua file for sprite/state
+previews or generated Lua. Source items navigate to their declaration. Project
+data loads on expansion and refreshes after saves; the Refresh action retries
+failed requests. Existing commands remain available in the Command Palette.
+
 ## What You Get
 
 ### Core Tua Editing

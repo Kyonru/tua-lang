@@ -275,14 +275,14 @@ async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
     );
 
     await waitUntil(
-      () => state.treeViews[0]?.treeDataProvider.getChildren().length === 2,
+      () => state.treeViews.find(view => view.id === "tua.assets")?.treeDataProvider.getChildren().length === 2,
     );
     assert(
       state.clients[0].requests.some((request) => request.method === "tua/assetInventory"),
       "activation should load compiler-backed asset inventory after the server starts",
     );
-    assert.strictEqual(state.treeViews.length, 1, "activation should create one Asset Explorer");
-    assert.strictEqual(state.treeViews[0].id, "tua.assets");
+    assert(state.treeViews.some(view => view.id === "tua.workspace"), "activation should create the Tua workspace");
+    assert.strictEqual(state.treeViews.find(view => view.id === "tua.assets").id, "tua.assets");
 
     fs.mkdirSync(path.join(workspace, "src", "love"), { recursive: true });
     fs.writeFileSync(
@@ -340,18 +340,18 @@ async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
       "init project should log the spawned init command to the Tua output channel",
     );
 
-    const assetCategories = state.treeViews[0].treeDataProvider.getChildren();
+    const assetCategories = state.treeViews.find(view => view.id === "tua.assets").treeDataProvider.getChildren();
     const imageCategory = assetCategories.find((node) => node.category === "image");
     const audioCategory = assetCategories.find((node) => node.category === "audio");
-    const usedGroup = state.treeViews[0].treeDataProvider
+    const usedGroup = state.treeViews.find(view => view.id === "tua.assets").treeDataProvider
       .getChildren(imageCategory)
       .find((node) => node.usage === "used");
-    const unusedGroup = state.treeViews[0].treeDataProvider
+    const unusedGroup = state.treeViews.find(view => view.id === "tua.assets").treeDataProvider
       .getChildren(audioCategory)
       .find((node) => node.usage === "unused");
-    const usedAsset = state.treeViews[0].treeDataProvider.getChildren(usedGroup)[0];
-    const unusedAsset = state.treeViews[0].treeDataProvider.getChildren(unusedGroup)[0];
-    const assetReference = state.treeViews[0].treeDataProvider.getChildren(usedAsset)[0];
+    const usedAsset = state.treeViews.find(view => view.id === "tua.assets").treeDataProvider.getChildren(usedGroup)[0];
+    const unusedAsset = state.treeViews.find(view => view.id === "tua.assets").treeDataProvider.getChildren(unusedGroup)[0];
+    const assetReference = state.treeViews.find(view => view.id === "tua.assets").treeDataProvider.getChildren(usedAsset)[0];
 
     assert.strictEqual(usedAsset.asset.path, "assets/player.png");
     assert.strictEqual(unusedAsset.asset.path, "assets/jump.wav");

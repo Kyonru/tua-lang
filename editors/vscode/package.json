@@ -912,10 +912,51 @@
         "command": "tua.setup.restoreIcons",
         "title": "Restore Previous File Icons",
         "category": "Tua"
+      },
+      {
+        "command": "tua.workspace.open",
+        "title": "Open Tua Workspace",
+        "category": "Tua",
+        "icon": "$(layout-sidebar-left)"
+      },
+      {
+        "command": "tua.workspace.refresh",
+        "title": "Refresh Project",
+        "category": "Tua",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "tua.workspace.graph",
+        "title": "Open Graph",
+        "category": "Tua",
+        "icon": "$(type-hierarchy)"
+      },
+      {
+        "command": "tua.workspace.sprites",
+        "title": "Preview File Sprites",
+        "category": "Tua",
+        "icon": "$(play-circle)"
+      },
+      {
+        "command": "tua.workspace.states",
+        "title": "Preview File State Machine",
+        "category": "Tua",
+        "icon": "$(type-hierarchy)"
+      },
+      {
+        "command": "tua.workspace.generated",
+        "title": "Open File Generated Lua",
+        "category": "Tua",
+        "icon": "$(go-to-file)"
       }
     ],
     "views": {
-      "explorer": [
+      "tua": [
+        {
+          "id": "tua.workspace",
+          "name": "Project",
+          "when": "tua.hasProject"
+        },
         {
           "id": "tua.assets",
           "name": "Tua Assets",
@@ -1089,6 +1130,22 @@
         {
           "command": "tua.assets.reveal",
           "when": "false"
+        },
+        {
+          "command": "tua.workspace.graph",
+          "when": "false"
+        },
+        {
+          "command": "tua.workspace.sprites",
+          "when": "false"
+        },
+        {
+          "command": "tua.workspace.states",
+          "when": "false"
+        },
+        {
+          "command": "tua.workspace.generated",
+          "when": "false"
         }
       ],
       "editor/context": [
@@ -1113,6 +1170,11 @@
           "command": "tua.assets.refresh",
           "when": "view == tua.assets",
           "group": "navigation"
+        },
+        {
+          "command": "tua.workspace.refresh",
+          "when": "view == tua.workspace",
+          "group": "navigation"
         }
       ],
       "view/item/context": [
@@ -1130,6 +1192,26 @@
           "command": "tua.assets.reveal",
           "when": "view == tua.assets && (viewItem == tuaAsset.used || viewItem == tuaAsset.unused)",
           "group": "navigation@30"
+        },
+        {
+          "command": "tua.workspace.graph",
+          "when": "view == tua.workspace && viewItem == tuaWorkspace.graph",
+          "group": "inline"
+        },
+        {
+          "command": "tua.workspace.sprites",
+          "when": "view == tua.workspace && viewItem == tuaWorkspace.source",
+          "group": "tua@0"
+        },
+        {
+          "command": "tua.workspace.states",
+          "when": "view == tua.workspace && viewItem == tuaWorkspace.source",
+          "group": "tua@1"
+        },
+        {
+          "command": "tua.workspace.generated",
+          "when": "view == tua.workspace && viewItem == tuaWorkspace.source",
+          "group": "tua@2"
         }
       ],
       "tua.editorTools": [
@@ -1344,7 +1426,16 @@
           }
         ]
       }
-    ]
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "tua",
+          "title": "Tua",
+          "icon": "assets/logo.svg"
+        }
+      ]
+    }
   },
   "devDependencies": {
     "@vscode/debugadapter-testsupport": "1.68.0",

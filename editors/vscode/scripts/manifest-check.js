@@ -103,7 +103,7 @@ if (!manifest.activationEvents?.includes("onDebugResolve:lua-local")) {
   process.exit(1);
 }
 
-const assetView = (manifest.contributes?.views?.explorer || []).find(
+const assetView = (manifest.contributes?.views?.tua || []).find(
   (view) => view.id === "tua.assets",
 );
 if (!assetView) {
@@ -221,7 +221,7 @@ for (const command of [
   }
 }
 
-const assetsView = (manifest.contributes?.views?.explorer || []).find(
+const assetsView = (manifest.contributes?.views?.tua || []).find(
   (view) => view.id === "tua.assets",
 );
 if (assetsView?.when !== "tua.hasProject") {
