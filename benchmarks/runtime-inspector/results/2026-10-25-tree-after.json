@@ -1,0 +1,34 @@
+{
+  "objects": 16,
+  "fieldsPerObject": 128,
+  "expandedValueRows": 2048,
+  "updateInterval": 500,
+  "secondsPerPhase": 15,
+  "phases": {
+    "paused": {
+      "inputSamples": 142,
+      "inputP50Ms": 2.52033400000073,
+      "inputP95Ms": 10.563500000000204,
+      "inputP99Ms": 39.719999999999345,
+      "inputMaxMs": 50.61554099999921,
+      "eventLoopLagP99Ms": 1.7726249999998345,
+      "eventLoopLagMaxMs": 2.738416000000143
+    },
+    "live": {
+      "inputSamples": 137,
+      "inputP50Ms": 4.6079160000008414,
+      "inputP95Ms": 17.34625000000233,
+      "inputP99Ms": 20.354999999999563,
+      "inputMaxMs": 89.14016600000105,
+      "eventLoopLagP99Ms": 2.3467920000002778,
+      "eventLoopLagMaxMs": 4.90599999999904
+    }
+  },
+  "treeBuild": {
+    "count": 65,
+    "p50Ms": 0.6460420000000227,
+    "p99Ms": 2.5313330000008136,
+    "maxMs": 2.5313330000008136
+  },
+  "rendererErrors": []
+}

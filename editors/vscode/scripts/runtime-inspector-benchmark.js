@@ -10,6 +10,7 @@ const { InspectorSessions } = require("../src/inspector/sessions");
 const { RuntimeOrigins } = require("../src/inspector/origins");
 const { presentObject } = require("../src/inspector/presentation");
 const allowedModes = ["no-shim", "disabled-after-launch", "paused", "active"];
+const assetsDirectory = process.env.TUA_INSPECTOR_ASSETS || path.resolve(__dirname, "../assets/inspector");
 const modes = (process.env.TUA_BENCH_MODES || allowedModes.join(",")).split(",");
 if (modes.some(mode => !allowedModes.includes(mode))) throw new Error("Unknown benchmark mode");
 const seconds = Number(process.env.TUA_BENCH_SECONDS || 8);
@@ -35,7 +36,7 @@ async function run(profile, mode, repetition) {
     throw new Error(`Host is busy (load ${hostLoadBefore[0].toFixed(1)}, limit ${maxLoad}, ${os.cpus().length} logical CPUs). Rerun after other workloads finish, or set TUA_BENCH_ALLOW_BUSY=1 to collect explicitly noisy measurements.`);
   }
   const activity = new ActivityStore(), origins = new RuntimeOrigins();
-  const inspector = new InspectorSessions({ activity, enabled: () => mode !== "no-shim", assetsDirectory: path.resolve(__dirname, "../assets/inspector"), describeObject: (entry, object) => origins.describe(entry, object), reportError: message => { throw new Error(message); } });
+  const inspector = new InspectorSessions({ activity, enabled: () => mode !== "no-shim", assetsDirectory, describeObject: (entry, object) => origins.describe(entry, object), reportError: message => { throw new Error(message); } });
   const session = activity.begin({ title: mode, kind: "run", cwd: root });
   const launch = await inspector.launch(session, output);
   if (mode === "no-shim" && launch !== undefined) throw new Error("Disabled inspection unexpectedly created a launcher");
@@ -103,7 +104,7 @@ async function run(profile, mode, repetition) {
 (async () => {
   const report = { createdAt: new Date().toISOString(), host: { platform: process.platform, release: os.release(), arch: process.arch, cpu: os.cpus()[0]?.model, logicalCpus: os.cpus().length, loadAtStart: os.loadavg() }, maxLoad, seconds, warmup, repetitions, methodology: "60 Hz deterministic runtime fixture; measured work excludes sleep, includes the real post-frame shim tick; no rendering. Node CPU includes listener, parsing, source lookup, presentation, launcher reconciliation and benchmark sampling; excludes VS Code UI. RSS sampled once per second. Fresh process per run; mode order rotates per repetition.", runs: [] };
   report.completed = false;
-  report.sources = Object.fromEntries(["../assets/inspector/shim.lua", "../assets/inspector/snapshot.lua", "../assets/inspector/transport.lua", "fixtures/inspector-benchmark.lua"].map(file => [file, createHash("sha256").update(fs.readFileSync(path.resolve(__dirname, file))).digest("hex")]));
+  report.sources = Object.fromEntries(["../assets/inspector/shim.lua", "../assets/inspector/snapshot.lua", "../assets/inspector/transport.lua", "fixtures/inspector-benchmark.lua"].map(file => [file, createHash("sha256").update(fs.readFileSync(file.startsWith("../assets/inspector/") ? path.join(assetsDirectory, path.basename(file)) : path.resolve(__dirname, file))).digest("hex")]));
   const save = () => fs.writeFileSync(outputPath, JSON.stringify(report, null, 2) + "\n");
   save();
   try {

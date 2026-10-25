@@ -8,6 +8,14 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Added
 
+- Runtime Inspector collection categories and configurable 100–10,000 ms update
+  intervals, with a native configuration picker; disabled categories receive no
+  wrappers and empty collection skips the development shim.
+- Inspector reconnect recovery after interrupted sockets, bounded encoding caches
+  and signal-history reuse, and faster expanded store-tree construction.
+- Reproducible inspector soak/reconnect, rendered zombie-game, and native expanded
+  tree benchmarks, with measured results and explicit validation limits.
+
 - Runtime Inspector presents concise per-object summaries and direct store values,
   groups source links and counters under Details, and hides empty categories.
 

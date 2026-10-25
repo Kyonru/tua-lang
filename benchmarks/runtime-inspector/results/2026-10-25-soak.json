@@ -1,0 +1,1174 @@
+{
+  "started": "2026-10-25T21:19:44.451Z",
+  "duration": 600,
+  "snapshots": 1126,
+  "truncated": 786,
+  "reconnects": [
+    {
+      "seconds": 31.121,
+      "recoveryMs": 1120
+    },
+    {
+      "seconds": 61.135,
+      "recoveryMs": 1132
+    },
+    {
+      "seconds": 91.13,
+      "recoveryMs": 1127
+    },
+    {
+      "seconds": 121.127,
+      "recoveryMs": 1122
+    },
+    {
+      "seconds": 151.132,
+      "recoveryMs": 1127
+    },
+    {
+      "seconds": 181.133,
+      "recoveryMs": 1127
+    },
+    {
+      "seconds": 211.132,
+      "recoveryMs": 1125
+    },
+    {
+      "seconds": 241.132,
+      "recoveryMs": 1123
+    },
+    {
+      "seconds": 271.131,
+      "recoveryMs": 1121
+    },
+    {
+      "seconds": 301.137,
+      "recoveryMs": 1126
+    },
+    {
+      "seconds": 331.133,
+      "recoveryMs": 1121
+    },
+    {
+      "seconds": 361.136,
+      "recoveryMs": 1123
+    },
+    {
+      "seconds": 391.135,
+      "recoveryMs": 1121
+    },
+    {
+      "seconds": 421.134,
+      "recoveryMs": 1119
+    },
+    {
+      "seconds": 451.136,
+      "recoveryMs": 1120
+    },
+    {
+      "seconds": 481.139,
+      "recoveryMs": 1121
+    },
+    {
+      "seconds": 511.141,
+      "recoveryMs": 1122
+    },
+    {
+      "seconds": 541.142,
+      "recoveryMs": 1121
+    },
+    {
+      "seconds": 571.141,
+      "recoveryMs": 1120
+    }
+  ],
+  "samples": [
+    {
+      "mode": "no-shim",
+      "seconds": 10.008,
+      "heapKiB": 622.846,
+      "frames": 586,
+      "nodeHeapKiB": 4851,
+      "snapshots": 20,
+      "generation": 1
+    },
+    {
+      "mode": "active",
+      "seconds": 10.005,
+      "heapKiB": 787.359,
+      "frames": 581,
+      "nodeHeapKiB": 4846.2578125,
+      "snapshots": 20,
+      "generation": 1
+    },
+    {
+      "mode": "no-shim",
+      "seconds": 20.025,
+      "heapKiB": 621.846,
+      "frames": 1175,
+      "nodeHeapKiB": 4904.7734375,
+      "snapshots": 45,
+      "generation": 1
+    },
+    {
+      "mode": "active",
+      "seconds": 20.013,
+      "heapKiB": 800.344,
+      "frames": 1163,
+      "nodeHeapKiB": 4903.2109375,
+      "snapshots": 45,
+      "generation": 1
+    },
+    {
+      "mode": "no-shim",
+      "seconds": 30.029,
+      "heapKiB": 621.346,
+      "frames": 1763,
+      "nodeHeapKiB": 4941.640625,
+      "snapshots": 64,
+      "generation": 1
+    },
+    {
+      "mode": "active",
+      "seconds": 30.021,
+      "heapKiB": 787.367,
+      "frames": 1746,
+      "nodeHeapKiB": 4942.6015625,
+      "snapshots": 64,
+      "generation": 1
+    },
+    {
+      "mode": "active",
+      "seconds": 40.022,
+      "heapKiB": 787.266,
+      "frames": 2328,
+      "nodeHeapKiB": 5014.3828125,
+      "snapshots": 83,
+      "generation": 2
+    },
+    {
+      "mode": "no-shim",
+      "seconds": 40.042,
+      "heapKiB": 621.096,
+      "frames": 2351,
+      "nodeHeapKiB": 5014.6015625,
+      "snapshots": 83,
+      "generation": 2
+    },
+    {
+      "mode": "no-shim",
+      "seconds": 50.046,
+      "heapKiB": 620.971,
+      "frames": 2939,
+      "nodeHeapKiB": 5016.0625,
+      "snapshots": 102,
+      "generation": 2
+    },
+    {
+      "mode": "active",
+      "seconds": 50.033,
+      "heapKiB": 800.41,
+      "frames": 2911,
+      "nodeHeapKiB": 5016.1796875,
+      "snapshots": 102,
+      "generation": 2
+    },
+    {
+      "mode": "active",
+      "seconds": 60.037,
+      "heapKiB": 797.969,
+      "frames": 3492,
+      "nodeHeapKiB": 5083.5,
+      "snapshots": 122,
+      "generation": 2
+    },
+    {
+      "mode": "no-shim",
+      "seconds": 60.059,
+      "heapKiB": 620.908,
+      "frames": 3527,
+      "nodeHeapKiB": 5084.4375,
+      "snapshots": 122,
+      "generation": 2
+    },
+    {
+      "mode": "active",
+      "seconds": 70.049,
+      "heapKiB": 787.367,
+      "frames": 4074,
+      "nodeHeapKiB": 5062.03125,
+      "snapshots": 140,
+      "generation": 3
+    },
+    {
+      "mode": "no-shim",
+      "seconds": 70.072,
+      "heapKiB": 620.908,
+      "frames": 4115,
+      "nodeHeapKiB": 5061.7890625,
+      "snapshots": 140,
+      "generation": 3
+    },
+    {
+      "mode": "active",
+      "seconds": 80.05,
+      "heapKiB": 787.367,
+      "frames": 4655,
+      "nodeHeapKiB": 5102.234375,
+      "snapshots": 160,
+      "generation": 3
+    },
+    {
+      "mode": "no-shim",
+      "seconds": 80.086,
+      "heapKiB": 620.908,
+      "frames": 4703,
+      "nodeHeapKiB": 5102.3515625,
+      "snapshots": 160,
+      "generation": 3
+    },
+    {
+      "mode": "active",
+      "seconds": 90.063,
+      "heapKiB": 798.629,
+      "frames": 5239,
+      "nodeHeapKiB": 5093.953125,
+      "snapshots": 179,
+      "generation": 3
+    },
+    {
+      "mode": "no-shim",
+      "seconds": 90.102,
+      "heapKiB": 620.908,
+      "frames": 5292,
+      "nodeHeapKiB": 5094.0078125,
+      "snapshots": 179,
+      "generation": 3
+    },
+    {
+      "mode": "active",
+      "seconds": 100.063,
+      "heapKiB": 808.074,
+      "frames": 5822,
+      "nodeHeapKiB": 5104.3359375,
+      "snapshots": 197,
+      "generation": 4
+    },
+    {
+      "mode": "no-shim",
+      "seconds": 100.102,
+      "heapKiB": 620.908,
+      "frames": 5880,
+      "nodeHeapKiB": 5104.375,
+      "snapshots": 197,
+      "generation": 4
+    },
+    {
+      "mode": "active",
+      "seconds": 110.078,
+      "heapKiB": 810.836,
+      "frames": 6405,
+      "nodeHeapKiB": 5109.9609375,
+      "snapshots": 216,
+      "generation": 4
+    },
+    {
+      "mode": "no-shim",
+      "seconds": 110.111,
+      "heapKiB": 620.908,
+      "frames": 6468,
+      "nodeHeapKiB": 5110.421875,
+      "snapshots": 216,
+      "generation": 4
+    },
+    {
+      "mode": "active",
+      "seconds": 120.081,
+      "heapKiB": 787.422,
+      "frames": 6987,
+      "nodeHeapKiB": 5149.9296875,
+      "snapshots": 236,
+      "generation": 4
+    },
+    {
+      "mode": "no-shim",
+      "seconds": 120.127,
+      "heapKiB": 620.908,
+      "frames": 7057,
+      "nodeHeapKiB": 5150.421875,
+      "snapshots": 236,
+      "generation": 4
+    },
+    {
+      "mode": "active",
+      "seconds": 130.093,
+      "heapKiB": 798.328,
+      "frames": 7570,
+      "nodeHeapKiB": 5154.5078125,
+      "snapshots": 254,
+      "generation": 5
+    },
+    {
+      "mode": "no-shim",
+      "seconds": 130.131,
+      "heapKiB": 620.908,
+      "frames": 7645,
+      "nodeHeapKiB": 5154.28125,
+      "snapshots": 254,
+      "generation": 5
+    },
+    {
+      "mode": "active",
+      "seconds": 140.11,
+      "heapKiB": 800.957,
+      "frames": 8153,
+      "nodeHeapKiB": 5150.171875,
+      "snapshots": 273,
+      "generation": 5
+    },
+    {
+      "mode": "no-shim",
+      "seconds": 140.147,
+      "heapKiB": 620.908,
+      "frames": 8234,
+      "nodeHeapKiB": 5150.5859375,
+      "snapshots": 273,
+      "generation": 5
+    },
+    {
+      "mode": "active",
+      "seconds": 150.117,
+      "heapKiB": 787.359,
+      "frames": 8735,
+      "nodeHeapKiB": 5158.609375,
+      "snapshots": 293,
+      "generation": 5
+    },
+    {
+      "mode": "no-shim",
+      "seconds": 150.148,
+      "heapKiB": 620.908,
+      "frames": 8822,
+      "nodeHeapKiB": 5158.6484375,
+      "snapshots": 293,
+      "generation": 5
+    },
+    {
+      "mode": "active",
+      "seconds": 160.132,
+      "heapKiB": 800.344,
+      "frames": 9319,
+      "nodeHeapKiB": 5194.1953125,
+      "snapshots": 311,
+      "generation": 6
+    },
+    {
+      "mode": "no-shim",
+      "seconds": 160.157,
+      "heapKiB": 620.908,
+      "frames": 9410,
+      "nodeHeapKiB": 5193.9609375,
+      "snapshots": 311,
+      "generation": 6
+    },
+    {
+      "mode": "active",
+      "seconds": 170.135,
+      "heapKiB": 811.25,
+      "frames": 9903,
+      "nodeHeapKiB": 5172.375,
+      "snapshots": 330,
+      "generation": 6
+    },
+    {
+      "mode": "no-shim",
+      "seconds": 170.17,
+      "heapKiB": 620.908,
+      "frames": 10000,
+      "nodeHeapKiB": 5172.8046875,
+      "snapshots": 330,
+      "generation": 6
+    },
+    {
+      "mode": "active",
+      "seconds": 180.149,
+      "heapKiB": 787.266,
+      "frames": 10488,
+      "nodeHeapKiB": 5200.4375,
+      "snapshots": 350,
+      "generation": 6
+    },
+    {
+      "mode": "no-shim",
+      "seconds": 180.171,
+      "heapKiB": 620.908,
+      "frames": 10588,
+      "nodeHeapKiB": 5200.5859375,
+      "snapshots": 350,
+      "generation": 6
+    },
+    {
+      "mode": "active",
+      "seconds": 190.157,
+      "heapKiB": 800.445,
+      "frames": 11072,
+      "nodeHeapKiB": 5184.390625,
+      "snapshots": 368,
+      "generation": 7
+    },
+    {
+      "mode": "no-shim",
+      "seconds": 190.184,
+      "heapKiB": 620.908,
+      "frames": 11177,
+      "nodeHeapKiB": 5184.25,
+      "snapshots": 368,
+      "generation": 7
+    },
+    {
+      "mode": "active",
+      "seconds": 200.171,
+      "heapKiB": 827.777,
+      "frames": 11655,
+      "nodeHeapKiB": 5217.6640625,
+      "snapshots": 387,
+      "generation": 7
+    },
+    {
+      "mode": "no-shim",
+      "seconds": 200.198,
+      "heapKiB": 620.908,
+      "frames": 11766,
+      "nodeHeapKiB": 5218.125,
+      "snapshots": 387,
+      "generation": 7
+    },
+    {
+      "mode": "active",
+      "seconds": 210.177,
+      "heapKiB": 800.727,
+      "frames": 12238,
+      "nodeHeapKiB": 5205.6796875,
+      "snapshots": 407,
+      "generation": 7
+    },
+    {
+      "mode": "no-shim",
+      "seconds": 210.206,
+      "heapKiB": 620.908,
+      "frames": 12355,
+      "nodeHeapKiB": 5205.671875,
+      "snapshots": 407,
+      "generation": 7
+    },
+    {
+      "mode": "active",
+      "seconds": 220.183,
+      "heapKiB": 800.547,
+      "frames": 12822,
+      "nodeHeapKiB": 5247.84375,
+      "snapshots": 425,
+      "generation": 8
+    },
+    {
+      "mode": "no-shim",
+      "seconds": 220.221,
+      "heapKiB": 620.908,
+      "frames": 12944,
+      "nodeHeapKiB": 5247.703125,
+      "snapshots": 425,
+      "generation": 8
+    },
+    {
+      "mode": "active",
+      "seconds": 230.189,
+      "heapKiB": 827.914,
+      "frames": 13405,
+      "nodeHeapKiB": 5250.546875,
+      "snapshots": 444,
+      "generation": 8
+    },
+    {
+      "mode": "no-shim",
+      "seconds": 230.222,
+      "heapKiB": 620.908,
+      "frames": 13532,
+      "nodeHeapKiB": 5226.5234375,
+      "snapshots": 445,
+      "generation": 8
+    },
+    {
+      "mode": "active",
+      "seconds": 240.193,
+      "heapKiB": 811.219,
+      "frames": 13988,
+      "nodeHeapKiB": 5227.1875,
+      "snapshots": 464,
+      "generation": 8
+    },
+    {
+      "mode": "no-shim",
+      "seconds": 240.236,
+      "heapKiB": 620.908,
+      "frames": 14121,
+      "nodeHeapKiB": 5227.3359375,
+      "snapshots": 464,
+      "generation": 8
+    },
+    {
+      "mode": "active",
+      "seconds": 250.203,
+      "heapKiB": 788.027,
+      "frames": 14574,
+      "nodeHeapKiB": 5277.5078125,
+      "snapshots": 482,
+      "generation": 9
+    },
+    {
+      "mode": "no-shim",
+      "seconds": 250.244,
+      "heapKiB": 620.908,
+      "frames": 14710,
+      "nodeHeapKiB": 5277.7421875,
+      "snapshots": 482,
+      "generation": 9
+    },
+    {
+      "mode": "active",
+      "seconds": 260.22,
+      "heapKiB": 787.32,
+      "frames": 15159,
+      "nodeHeapKiB": 5282.90625,
+      "snapshots": 502,
+      "generation": 9
+    },
+    {
+      "mode": "no-shim",
+      "seconds": 260.255,
+      "heapKiB": 620.908,
+      "frames": 15299,
+      "nodeHeapKiB": 5282.9921875,
+      "snapshots": 502,
+      "generation": 9
+    },
+    {
+      "mode": "active",
+      "seconds": 270.234,
+      "heapKiB": 800.5,
+      "frames": 15743,
+      "nodeHeapKiB": 5287.796875,
+      "snapshots": 521,
+      "generation": 9
+    },
+    {
+      "mode": "no-shim",
+      "seconds": 270.259,
+      "heapKiB": 620.908,
+      "frames": 15887,
+      "nodeHeapKiB": 5288.1015625,
+      "snapshots": 521,
+      "generation": 9
+    },
+    {
+      "mode": "active",
+      "seconds": 280.248,
+      "heapKiB": 799.32,
+      "frames": 16328,
+      "nodeHeapKiB": 5305.828125,
+      "snapshots": 539,
+      "generation": 10
+    },
+    {
+      "mode": "no-shim",
+      "seconds": 280.275,
+      "heapKiB": 620.908,
+      "frames": 16476,
+      "nodeHeapKiB": 5305.890625,
+      "snapshots": 539,
+      "generation": 10
+    },
+    {
+      "mode": "active",
+      "seconds": 290.251,
+      "heapKiB": 787.398,
+      "frames": 16911,
+      "nodeHeapKiB": 5308.5703125,
+      "snapshots": 559,
+      "generation": 10
+    },
+    {
+      "mode": "no-shim",
+      "seconds": 290.29,
+      "heapKiB": 620.908,
+      "frames": 17066,
+      "nodeHeapKiB": 5308.5,
+      "snapshots": 559,
+      "generation": 10
+    },
+    {
+      "mode": "active",
+      "seconds": 300.259,
+      "heapKiB": 801.02,
+      "frames": 17496,
+      "nodeHeapKiB": 5307.6328125,
+      "snapshots": 578,
+      "generation": 10
+    },
+    {
+      "mode": "no-shim",
+      "seconds": 300.301,
+      "heapKiB": 620.908,
+      "frames": 17655,
+      "nodeHeapKiB": 5307.59375,
+      "snapshots": 578,
+      "generation": 10
+    },
+    {
+      "mode": "active",
+      "seconds": 310.262,
+      "heapKiB": 802.809,
+      "frames": 18082,
+      "nodeHeapKiB": 5310.765625,
+      "snapshots": 596,
+      "generation": 11
+    },
+    {
+      "mode": "no-shim",
+      "seconds": 310.306,
+      "heapKiB": 620.908,
+      "frames": 18244,
+      "nodeHeapKiB": 5310.7421875,
+      "snapshots": 596,
+      "generation": 11
+    },
+    {
+      "mode": "active",
+      "seconds": 320.266,
+      "heapKiB": 798.18,
+      "frames": 18666,
+      "nodeHeapKiB": 5342.6015625,
+      "snapshots": 616,
+      "generation": 11
+    },
+    {
+      "mode": "no-shim",
+      "seconds": 320.315,
+      "heapKiB": 620.908,
+      "frames": 18832,
+      "nodeHeapKiB": 5342.5625,
+      "snapshots": 616,
+      "generation": 11
+    },
+    {
+      "mode": "active",
+      "seconds": 330.275,
+      "heapKiB": 801.113,
+      "frames": 19250,
+      "nodeHeapKiB": 5320.15625,
+      "snapshots": 635,
+      "generation": 11
+    },
+    {
+      "mode": "no-shim",
+      "seconds": 330.327,
+      "heapKiB": 620.908,
+      "frames": 19420,
+      "nodeHeapKiB": 5320.453125,
+      "snapshots": 635,
+      "generation": 11
+    },
+    {
+      "mode": "active",
+      "seconds": 340.288,
+      "heapKiB": 800.477,
+      "frames": 19835,
+      "nodeHeapKiB": 5331.5234375,
+      "snapshots": 653,
+      "generation": 12
+    },
+    {
+      "mode": "no-shim",
+      "seconds": 340.341,
+      "heapKiB": 620.908,
+      "frames": 20009,
+      "nodeHeapKiB": 5328.78125,
+      "snapshots": 653,
+      "generation": 12
+    },
+    {
+      "mode": "active",
+      "seconds": 350.297,
+      "heapKiB": 787.578,
+      "frames": 20418,
+      "nodeHeapKiB": 5334.265625,
+      "snapshots": 673,
+      "generation": 12
+    },
+    {
+      "mode": "no-shim",
+      "seconds": 350.346,
+      "heapKiB": 620.908,
+      "frames": 20598,
+      "nodeHeapKiB": 5334.3515625,
+      "snapshots": 673,
+      "generation": 12
+    },
+    {
+      "mode": "active",
+      "seconds": 360.312,
+      "heapKiB": 811.156,
+      "frames": 21003,
+      "nodeHeapKiB": 5330.96875,
+      "snapshots": 692,
+      "generation": 12
+    },
+    {
+      "mode": "no-shim",
+      "seconds": 360.354,
+      "heapKiB": 620.908,
+      "frames": 21187,
+      "nodeHeapKiB": 5331.3125,
+      "snapshots": 692,
+      "generation": 12
+    },
+    {
+      "mode": "active",
+      "seconds": 370.315,
+      "heapKiB": 800.398,
+      "frames": 21589,
+      "nodeHeapKiB": 5349.703125,
+      "snapshots": 710,
+      "generation": 13
+    },
+    {
+      "mode": "no-shim",
+      "seconds": 370.361,
+      "heapKiB": 620.908,
+      "frames": 21776,
+      "nodeHeapKiB": 5349.6484375,
+      "snapshots": 710,
+      "generation": 13
+    },
+    {
+      "mode": "active",
+      "seconds": 380.325,
+      "heapKiB": 788.285,
+      "frames": 22174,
+      "nodeHeapKiB": 5362.1640625,
+      "snapshots": 730,
+      "generation": 13
+    },
+    {
+      "mode": "no-shim",
+      "seconds": 380.363,
+      "heapKiB": 620.908,
+      "frames": 22364,
+      "nodeHeapKiB": 5358.1484375,
+      "snapshots": 730,
+      "generation": 13
+    },
+    {
+      "mode": "active",
+      "seconds": 390.328,
+      "heapKiB": 779.371,
+      "frames": 22758,
+      "nodeHeapKiB": 5332.8046875,
+      "snapshots": 749,
+      "generation": 13
+    },
+    {
+      "mode": "no-shim",
+      "seconds": 390.364,
+      "heapKiB": 620.908,
+      "frames": 22952,
+      "nodeHeapKiB": 5333.1015625,
+      "snapshots": 749,
+      "generation": 13
+    },
+    {
+      "mode": "active",
+      "seconds": 400.328,
+      "heapKiB": 811.164,
+      "frames": 23342,
+      "nodeHeapKiB": 5365.5234375,
+      "snapshots": 767,
+      "generation": 14
+    },
+    {
+      "mode": "no-shim",
+      "seconds": 400.371,
+      "heapKiB": 620.908,
+      "frames": 23541,
+      "nodeHeapKiB": 5365.15625,
+      "snapshots": 767,
+      "generation": 14
+    },
+    {
+      "mode": "active",
+      "seconds": 410.341,
+      "heapKiB": 787.359,
+      "frames": 23929,
+      "nodeHeapKiB": 5367.6875,
+      "snapshots": 787,
+      "generation": 14
+    },
+    {
+      "mode": "no-shim",
+      "seconds": 410.385,
+      "heapKiB": 620.908,
+      "frames": 24131,
+      "nodeHeapKiB": 5367.546875,
+      "snapshots": 787,
+      "generation": 14
+    },
+    {
+      "mode": "active",
+      "seconds": 420.346,
+      "heapKiB": 800.664,
+      "frames": 24514,
+      "nodeHeapKiB": 5364.1328125,
+      "snapshots": 806,
+      "generation": 14
+    },
+    {
+      "mode": "no-shim",
+      "seconds": 420.392,
+      "heapKiB": 620.908,
+      "frames": 24720,
+      "nodeHeapKiB": 5364.8515625,
+      "snapshots": 806,
+      "generation": 14
+    },
+    {
+      "mode": "active",
+      "seconds": 430.349,
+      "heapKiB": 798.016,
+      "frames": 25099,
+      "nodeHeapKiB": 5374.1015625,
+      "snapshots": 824,
+      "generation": 15
+    },
+    {
+      "mode": "no-shim",
+      "seconds": 430.394,
+      "heapKiB": 620.908,
+      "frames": 25308,
+      "nodeHeapKiB": 5374.078125,
+      "snapshots": 824,
+      "generation": 15
+    },
+    {
+      "mode": "active",
+      "seconds": 440.356,
+      "heapKiB": 798.117,
+      "frames": 25684,
+      "nodeHeapKiB": 5378.0625,
+      "snapshots": 844,
+      "generation": 15
+    },
+    {
+      "mode": "no-shim",
+      "seconds": 440.398,
+      "heapKiB": 620.908,
+      "frames": 25895,
+      "nodeHeapKiB": 5378.359375,
+      "snapshots": 844,
+      "generation": 15
+    },
+    {
+      "mode": "active",
+      "seconds": 450.367,
+      "heapKiB": 787.617,
+      "frames": 26272,
+      "nodeHeapKiB": 5373.6640625,
+      "snapshots": 864,
+      "generation": 15
+    },
+    {
+      "mode": "no-shim",
+      "seconds": 450.404,
+      "heapKiB": 620.908,
+      "frames": 26485,
+      "nodeHeapKiB": 5373.75,
+      "snapshots": 864,
+      "generation": 15
+    },
+    {
+      "mode": "active",
+      "seconds": 460.377,
+      "heapKiB": 840.289,
+      "frames": 26860,
+      "nodeHeapKiB": 5358.2421875,
+      "snapshots": 881,
+      "generation": 16
+    },
+    {
+      "mode": "no-shim",
+      "seconds": 460.411,
+      "heapKiB": 620.908,
+      "frames": 27076,
+      "nodeHeapKiB": 5358.1328125,
+      "snapshots": 881,
+      "generation": 16
+    },
+    {
+      "mode": "active",
+      "seconds": 470.393,
+      "heapKiB": 800.672,
+      "frames": 27447,
+      "nodeHeapKiB": 5349.515625,
+      "snapshots": 901,
+      "generation": 16
+    },
+    {
+      "mode": "no-shim",
+      "seconds": 470.424,
+      "heapKiB": 620.908,
+      "frames": 27666,
+      "nodeHeapKiB": 5349.59375,
+      "snapshots": 901,
+      "generation": 16
+    },
+    {
+      "mode": "active",
+      "seconds": 480.408,
+      "heapKiB": 788.703,
+      "frames": 28034,
+      "nodeHeapKiB": 5361.953125,
+      "snapshots": 921,
+      "generation": 16
+    },
+    {
+      "mode": "no-shim",
+      "seconds": 480.441,
+      "heapKiB": 620.908,
+      "frames": 28256,
+      "nodeHeapKiB": 5362.0390625,
+      "snapshots": 921,
+      "generation": 16
+    },
+    {
+      "mode": "active",
+      "seconds": 490.415,
+      "heapKiB": 834.344,
+      "frames": 28620,
+      "nodeHeapKiB": 5393.484375,
+      "snapshots": 938,
+      "generation": 17
+    },
+    {
+      "mode": "no-shim",
+      "seconds": 490.449,
+      "heapKiB": 620.908,
+      "frames": 28845,
+      "nodeHeapKiB": 5389.1171875,
+      "snapshots": 939,
+      "generation": 17
+    },
+    {
+      "mode": "active",
+      "seconds": 500.421,
+      "heapKiB": 800.508,
+      "frames": 29208,
+      "nodeHeapKiB": 5387.015625,
+      "snapshots": 958,
+      "generation": 17
+    },
+    {
+      "mode": "no-shim",
+      "seconds": 500.452,
+      "heapKiB": 620.908,
+      "frames": 29435,
+      "nodeHeapKiB": 5387.140625,
+      "snapshots": 958,
+      "generation": 17
+    },
+    {
+      "mode": "active",
+      "seconds": 510.422,
+      "heapKiB": 788.012,
+      "frames": 29793,
+      "nodeHeapKiB": 5389.7109375,
+      "snapshots": 978,
+      "generation": 17
+    },
+    {
+      "mode": "no-shim",
+      "seconds": 510.463,
+      "heapKiB": 620.908,
+      "frames": 30024,
+      "nodeHeapKiB": 5390.0078125,
+      "snapshots": 978,
+      "generation": 17
+    },
+    {
+      "mode": "active",
+      "seconds": 520.426,
+      "heapKiB": 839.992,
+      "frames": 30378,
+      "nodeHeapKiB": 5414.3203125,
+      "snapshots": 995,
+      "generation": 18
+    },
+    {
+      "mode": "no-shim",
+      "seconds": 520.475,
+      "heapKiB": 620.908,
+      "frames": 30614,
+      "nodeHeapKiB": 5412.4765625,
+      "snapshots": 996,
+      "generation": 18
+    },
+    {
+      "mode": "active",
+      "seconds": 530.441,
+      "heapKiB": 811.297,
+      "frames": 30961,
+      "nodeHeapKiB": 5415.8828125,
+      "snapshots": 1015,
+      "generation": 18
+    },
+    {
+      "mode": "no-shim",
+      "seconds": 530.491,
+      "heapKiB": 620.908,
+      "frames": 31203,
+      "nodeHeapKiB": 5415.859375,
+      "snapshots": 1015,
+      "generation": 18
+    },
+    {
+      "mode": "active",
+      "seconds": 540.451,
+      "heapKiB": 787.461,
+      "frames": 31544,
+      "nodeHeapKiB": 5395.171875,
+      "snapshots": 1035,
+      "generation": 18
+    },
+    {
+      "mode": "no-shim",
+      "seconds": 540.5,
+      "heapKiB": 620.908,
+      "frames": 31792,
+      "nodeHeapKiB": 5395.3203125,
+      "snapshots": 1035,
+      "generation": 18
+    },
+    {
+      "mode": "active",
+      "seconds": 550.456,
+      "heapKiB": 800.648,
+      "frames": 32128,
+      "nodeHeapKiB": 5391.125,
+      "snapshots": 1053,
+      "generation": 19
+    },
+    {
+      "mode": "no-shim",
+      "seconds": 550.503,
+      "heapKiB": 620.908,
+      "frames": 32380,
+      "nodeHeapKiB": 5390.984375,
+      "snapshots": 1053,
+      "generation": 19
+    },
+    {
+      "mode": "active",
+      "seconds": 560.474,
+      "heapKiB": 811.203,
+      "frames": 32714,
+      "nodeHeapKiB": 5418.1328125,
+      "snapshots": 1072,
+      "generation": 19
+    },
+    {
+      "mode": "no-shim",
+      "seconds": 560.515,
+      "heapKiB": 620.908,
+      "frames": 32969,
+      "nodeHeapKiB": 5418.1875,
+      "snapshots": 1072,
+      "generation": 19
+    },
+    {
+      "mode": "active",
+      "seconds": 570.481,
+      "heapKiB": 787.469,
+      "frames": 33298,
+      "nodeHeapKiB": 5417.625,
+      "snapshots": 1092,
+      "generation": 19
+    },
+    {
+      "mode": "no-shim",
+      "seconds": 570.532,
+      "heapKiB": 620.908,
+      "frames": 33557,
+      "nodeHeapKiB": 5417.7421875,
+      "snapshots": 1092,
+      "generation": 19
+    },
+    {
+      "mode": "active",
+      "seconds": 580.493,
+      "heapKiB": 800.602,
+      "frames": 33882,
+      "nodeHeapKiB": 5395.375,
+      "snapshots": 1110,
+      "generation": 20
+    },
+    {
+      "mode": "no-shim",
+      "seconds": 580.546,
+      "heapKiB": 620.908,
+      "frames": 34146,
+      "nodeHeapKiB": 5395.265625,
+      "snapshots": 1110,
+      "generation": 20
+    },
+    {
+      "mode": "active",
+      "seconds": 590.505,
+      "heapKiB": 792.984,
+      "frames": 34468,
+      "nodeHeapKiB": 5382.8046875,
+      "snapshots": 1126,
+      "generation": 20
+    },
+    {
+      "mode": "no-shim",
+      "seconds": 590.558,
+      "heapKiB": 620.908,
+      "frames": 34735,
+      "nodeHeapKiB": 5382.984375,
+      "snapshots": 1126,
+      "generation": 20
+    },
+    {
+      "mode": "no-shim",
+      "seconds": 600,
+      "heapKiB": 620.908,
+      "frames": 35290,
+      "nodeHeapKiB": 5382.578125,
+      "snapshots": 1126,
+      "generation": 20
+    },
+    {
+      "mode": "active",
+      "seconds": 600.016,
+      "heapKiB": 855.281,
+      "frames": 35026,
+      "nodeHeapKiB": 5385.78125,
+      "snapshots": 1126,
+      "generation": 20
+    }
+  ],
+  "errors": [],
+  "completed": true,
+  "rate1000": 0.9996667777407531,
+  "rate200": 4.998333888703765,
+  "rate500": 1.9993335554815062,
+  "no-shimHeapGrowthKiB": -0.22966666666661695,
+  "activeHeapGrowthKiB": 24.608000000000175,
+  "nodeHeapRangeKiB": 476.546875
+}

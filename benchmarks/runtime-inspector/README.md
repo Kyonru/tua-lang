@@ -6,7 +6,8 @@ second. These are different states: disabling inspection before launch already
 means **no shim**; disabling it afterward leaves runtime wrappers in that process
 until it exits.
 
-[Measured comparison: Apple M3 Max, 2026-10-25](2026-10-25-m3-max.md).
+[Original overhead comparison](2026-10-25-m3-max.md) ·
+[Reconnect, memory, rendering, and expanded-tree validation](2026-10-25-validation.md).
 
 ## Run the benchmark
 
@@ -27,6 +28,7 @@ repetitions. Optional settings:
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
+| `TUA_INSPECTOR_ASSETS` | Extension assets | Override shim directory for paired implementation comparisons |
 | `TUA_BENCH_SECONDS` | `8` | Measurement duration per run |
 | `TUA_BENCH_WARMUP` | `3` | Warmup duration per run |
 | `TUA_BENCH_REPETITIONS` | `3` | Repetitions per workload and mode |
@@ -80,3 +82,38 @@ The fixture is paced near 60 Hz but performs no game rendering. This measures
 runtime overhead, **not your game's FPS, GPU cost, startup latency, or the cost of
 an expanded editor sidebar**. Run comparisons on a quiet machine and inspect the
 ranges between repetitions before interpreting small differences.
+
+## Extended validation
+
+Run from `editors/vscode`; each command creates isolated temporary projects.
+Native benchmarks require LÖVE. The UI benchmark requires a graphical session
+and a local VS Code/VSCodium executable (`VSCODE_EXECUTABLE_PATH`).
+
+```sh
+TUA_SOAK_OUTPUT=/tmp/inspector-soak.json node --expose-gc scripts/runtime-inspector-soak.js
+TUA_UI_OUTPUT=/tmp/inspector-ui.json node scripts/runtime-inspector-ui-benchmark.js
+TUA_GAME_OUTPUT=/tmp/inspector-game.json node scripts/runtime-inspector-game-benchmark.js /path/to/zombie
+```
+
+- **Soak:** ten minutes by default (`TUA_SOAK_SECONDS`), with a simultaneous
+  no-shim control, full-GC Lua/Node heap samples, ephemeral store churn, forced
+  TCP disconnects every 30 seconds, pause/refresh/resume, live frequency changes,
+  and explicit disable. Run with `--expose-gc` for comparable Node retained heaps.
+  Larger durations can test multi-hour sessions; the recorded run is ten minutes.
+- **Native tree:** 16 stores × 128 expanded values; paused and live phases,
+  keyboard-to-selection latency through CDP, extension-host timer lag, and tree
+  construction time. `TUA_UI_SECONDS` defaults to 15 per phase.
+  `TUA_PRESENTATION_MODULE` can point at an older presentation module for pairing.
+  Keep the test window focused; do not run visible games concurrently.
+- **Rendered game:** specifically uses the zombie project's `game.range`,
+  `player.gun`, and `core.state` APIs. Copies source/config, builds with the bundled
+  compiler, then runs deterministic aiming and five shots per second at 960×540.
+  Three fresh-process runs per no-shim/all-category/store-only condition, with
+  180 warmup and 600 measured frames. Visible, vsync off, paced at 60 Hz. This is
+  a controlled rendering scenario, not a full gameplay or uncapped FPS benchmark.
+
+For a paired snapshot comparison, copy current `assets/inspector` into a temporary
+folder and replace its `snapshot.lua` with the pre-optimization revision
+(`62eaae6:editors/vscode/assets/inspector/snapshot.lua`). Alternate that folder and
+current assets through `TUA_INSPECTOR_ASSETS`, using heavy/active, one repetition
+per invocation, three pairs. Source hashes are included in each output.
