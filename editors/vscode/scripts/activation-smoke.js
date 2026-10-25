@@ -243,8 +243,8 @@ async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
 
     assert.strictEqual(
       state.documentChangeListeners.length,
-      2,
-      "activation should observe edits for inline-model cancellation and live state-machine previews",
+      3,
+      "activation should observe edits for inline-model cancellation, live state-machine previews, and shader overlays",
     );
 
     assert.strictEqual(
@@ -270,6 +270,7 @@ async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
         },
         logVerbosity: "off",
         combinedInlineCompletionProvider: true,
+        workspaceTrusted: true,
       },
       "activation should pass trace defaults to initialization options",
     );
@@ -1430,6 +1431,7 @@ async function smokeDebugLspLogging(mockServer, workspace) {
         },
         logVerbosity: "debug",
         combinedInlineCompletionProvider: true,
+        workspaceTrusted: true,
       },
       "debug LSP env flag should enable server trace and debug logs",
     );
@@ -1444,8 +1446,8 @@ async function smokeDebugLspLogging(mockServer, workspace) {
 
     assert.strictEqual(
       state.documentChangeListeners.length,
-      2,
-      "debug logging should retain inline-model cancellation and state-machine preview listeners",
+      3,
+      "debug logging should retain inline-model, state-machine, and shader listeners",
     );
 
     await extension.deactivate();
@@ -1592,6 +1594,7 @@ async function smokeUntrustedWorkspaceGuard(extensionFixture, workspace) {
   await extension.activate(context);
 
   assert.strictEqual(state.clients.length, 1, "bundled server should remain available in Restricted Mode");
+  assert.strictEqual(state.clients[0].clientOptions.initializationOptions.workspaceTrusted, false, "Restricted Mode must disable external shader validation");
   assert.strictEqual(
     state.clients[0].serverOptions.run.command,
     bundledServer,

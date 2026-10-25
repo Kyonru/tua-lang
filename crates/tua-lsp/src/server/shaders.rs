@@ -233,6 +233,18 @@ impl LspServer {
                 continue;
             }
             changed = true;
+            // Pull clients own source-document diagnostics. Refresh their full
+            // report instead of replacing it with a shader-only publication.
+            let path = path_from_uri(&uri);
+            let shader_file = path
+                .extension()
+                .and_then(|extension| extension.to_str())
+                .is_some_and(|extension| {
+                    matches!(extension, "glsl" | "vert" | "frag" | "vs" | "fs")
+                });
+            if self.client_pull_diagnostics && !shader_file {
+                continue;
+            }
             // Preserve existing language diagnostics and replace only validator-owned entries.
             let mut diagnostics = self
                 .last_published_diagnostics
@@ -288,6 +300,33 @@ mod tests {
         assert!(server.shaders.diagnostics.is_empty());
         assert!(server.shader_due().is_some());
     }
+    #[test]
+    fn pull_clients_refresh_source_reports_without_shader_only_replacements() {
+        let mut server = LspServer {
+            client_pull_diagnostics: true,
+            client_diagnostic_refresh: true,
+            ..Default::default()
+        };
+        let messages = server.finish_shaders(ShaderResult {
+            generation: 0,
+            diagnostics: BTreeMap::from([
+                ("file:///main.tua".into(), vec![json!({"code":"TL2016"})]),
+                ("file:///effect.glsl".into(), vec![json!({"code":"TL2016"})]),
+            ]),
+            note: None,
+        });
+        assert!(messages
+            .iter()
+            .any(|message| message["method"] == "workspace/diagnostic/refresh"));
+        assert!(messages
+            .iter()
+            .any(|message| message["params"]["uri"] == "file:///effect.glsl"));
+        assert!(!messages
+            .iter()
+            .any(|message| message["params"]["uri"] == "file:///main.tua"));
+        assert_eq!(server.shader_diagnostics("file:///main.tua").count(), 1);
+    }
+
     #[test]
     fn validator_publications_preserve_language_diagnostics() {
         let mut server = LspServer::default();

@@ -174,8 +174,10 @@ fn collection_skips_disabled_and_unused_assets_and_deduplicates_targets() {
         assets: vec![asset],
         diagnostics: vec![],
     };
-    let mut config = crate::ShadersConfig::default();
-    config.targets = vec![ShaderTarget::Desktop, ShaderTarget::Desktop];
+    let mut config = crate::ShadersConfig {
+        targets: vec![ShaderTarget::Desktop, ShaderTarget::Desktop],
+        ..Default::default()
+    };
     let requests = shader_validation_requests(&inventory, &config, |_| Ok("valid".into())).unwrap();
     assert_eq!(requests.len(), 1);
     config.validate = crate::ShaderValidationMode::Off;

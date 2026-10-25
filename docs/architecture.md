@@ -43,6 +43,12 @@ The implementation follows four rules:
    configured catalogs establish. It does not execute project code or invent
    identities for dynamic values.
 
+Shader compilation follows the same boundary: `tua-core` owns the request
+protocol and diagnostics, the CLI supplies a bounded LÖVE process adapter, and
+the LSP owns idle scheduling and stale-result rejection. The executable injects
+the adapter through `run_stdio_with_shader_validator`; core analysis never
+starts a process. Editor shader overlays reuse the shared asset inventory.
+
 ## Repository Boundaries
 
 | Path | Owns | Does not own |
