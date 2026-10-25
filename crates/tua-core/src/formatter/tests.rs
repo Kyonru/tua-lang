@@ -1585,3 +1585,22 @@ return -n, #items
     assert_eq!(output, expected);
     assert_eq!(format(&output), output);
 }
+
+#[test]
+fn separates_trailing_comments_from_code() {
+    let source = r#"print(1)-- touching
+local x = 1--[[ block ]]
+local y = (x)--note
+-- own line
+"#;
+    let expected = r#"print(1) -- touching
+local x = 1 --[[ block ]]
+local y = (x) --note
+-- own line
+"#;
+
+    let output = format(source);
+
+    assert_eq!(output, expected);
+    assert_eq!(format(&output), output);
+}

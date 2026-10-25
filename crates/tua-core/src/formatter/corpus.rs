@@ -1361,5 +1361,7 @@ print(Bag.new())
         ),
         Case::new("mixed_byte_order_mark", "\u{feff}local a = 1\nprint(a)\n")
             .formats_to("local a = 1\nprint(a)\n"),
+        Case::new("comment_touching_code", "local a = 1-- one\nprint(a)--[[ two ]]\n")
+            .formats_to("local a = 1 -- one\nprint(a) --[[ two ]]\n"),
     ]
 }

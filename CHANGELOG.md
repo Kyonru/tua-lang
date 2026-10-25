@@ -10,6 +10,8 @@ language or editor behavior, and migration notes call out those changes.
 
 - The formatter attaches unary minus and length operators to their operand,
   so `- n` and `# items` become `-n` and `#items`. `- -n` keeps its space.
+- The formatter separates a trailing comment from the code it follows, so
+  `print(1)-- note` becomes `print(1) -- note`.
 
 ### Fixed
 

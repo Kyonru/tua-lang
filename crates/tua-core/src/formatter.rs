@@ -852,6 +852,9 @@ fn normalize_spacing(line: &str, quote_style: QuoteStyle) -> String {
         match &mut state {
             MaskState::Code => {
                 if bytes[index] == b'-' && bytes.get(index + 1) == Some(&b'-') {
+                    if !output.is_empty() && !output.ends_with(' ') {
+                        output.push(' ');
+                    }
                     output.push_str(line[index..].trim_end());
                     break;
                 }
