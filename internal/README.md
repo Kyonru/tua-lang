@@ -11,6 +11,7 @@ are not part of the public language and toolchain documentation.
 - [Release readiness](release-readiness.md)
 - [Local inline-completion plan](better-autocompletion.md)
 - [Lint review and enhancement plan](lint-enhancement.md)
+- [Shader editor support plan](shader-editor-support.md)
 
 User-facing behavior belongs under [`docs/`](../docs/). Promote an internal
 document there only when it describes a supported workflow or contract rather
