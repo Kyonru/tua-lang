@@ -201,6 +201,12 @@ fn collection_skips_disabled_and_unused_assets_and_deduplicates_targets() {
     let requests =
         shader_validation_requests(&inventory, &config, |_| Ok("vec4 effect() {}".into())).unwrap();
     assert_eq!(requests.len(), 1);
+    assert!(
+        shader_validation_requests(&inventory, &config, |_| Err("invalid utf-8".into()))
+            .unwrap()
+            .is_empty(),
+        "an unreadable shader is skipped instead of failing the batch"
+    );
     config.validate = crate::ShaderValidationMode::Off;
     assert!(
         shader_validation_requests(&inventory, &config, |_| panic!("disabled must not read"))

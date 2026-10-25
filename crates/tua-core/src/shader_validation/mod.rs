@@ -403,7 +403,11 @@ pub fn shader_validation_requests(
         if targets.is_empty() {
             break;
         }
-        let source = read(&asset.path)?;
+        // An unreadable shader (too large, not UTF-8, removed mid-check) is
+        // left unchecked like the uniform model does, not fatal for the batch.
+        let Ok(source) = read(&asset.path) else {
+            continue;
+        };
         if crate::asset::ShaderSource::from_source(source.clone(), None)
             .is_some_and(|source| source.missing_entry_point())
         {

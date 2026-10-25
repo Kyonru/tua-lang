@@ -4993,3 +4993,38 @@ fn check_maps_inline_shader_errors_into_the_source_string() {
         "{text}"
     );
 }
+
+#[test]
+fn check_skips_unreadable_shaders_instead_of_aborting() {
+    let temp = TempDir::new("latin1-shader");
+    fs::create_dir_all(temp.path.join("src")).unwrap();
+    fs::write(temp.path.join("tua.toml"), DEFAULT_CONFIG_TEXT).unwrap();
+    // A Latin-1 comment is not UTF-8; LOVE accepts it, so it must not hide other diagnostics.
+    fs::write(
+        temp.path.join("src/latin.glsl"),
+        b"// caf\xe9\nvec4 effect(vec4 c, Image t, vec2 u, vec2 p) { return c; }\n",
+    )
+    .unwrap();
+    fs::write(
+        temp.path.join("src/main.tua"),
+        "local s = love.graphics.newShader(\"latin.glsl\")\nlocal x: number = \"oops\"\nprint(s, x)\n",
+    )
+    .unwrap();
+    let output = tua()
+        .arg("check")
+        .current_dir(&temp.path)
+        .env("TUA_LOVE", "/missing/love")
+        .env("TUA_GLSLANG", "/missing/glslang")
+        .output()
+        .unwrap();
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        text.contains("main.tua:2:") && text.contains("TL1003"),
+        "{text}"
+    );
+    assert!(!text.contains("invalid utf-8"), "{text}");
+}
