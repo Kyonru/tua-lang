@@ -652,3 +652,22 @@ If generated Lua cannot be opened, inspect **Tua: Focus Output** for build
 diagnostics. If sprite preview is unavailable, enable `tua.preview.enabled`;
 ordinary sprite diagnostics and completion do not depend on the preview
 setting.
+
+### Shader compilation diagnostics
+
+In trusted workspaces, Tua validates statically referenced shaders with the
+installed LÖVE. A separate worker waits for 500 ms of idle time, reuses a single
+validator process, and caches unchanged inputs. Interactive completion and
+hover requests do not wait for compilation. Stale results are discarded.
+
+`TL2016` appears on shader lines and loader calls. Open shader buffers are
+validated before saving; saving, closing, changing references, or changing
+`[shaders]` configuration refreshes the results. Missing LÖVE or validator
+failures are reported in the language-server log. See [CLI shader checks](cli.md#shader-compilation-checks)
+for discovery, limits, targets, and platform requirements.
+
+Other LSP clients must send `initializationOptions.workspaceTrusted = true` to
+permit external validation, and synchronize shader text documents to validate
+unsaved buffers. The VS Code extension supplies trust and shader synchronization
+without claiming GLSL formatting or completion. Restricted Mode never starts
+the validator.

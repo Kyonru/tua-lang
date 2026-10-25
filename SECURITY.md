@@ -51,6 +51,13 @@ MCP adapter analyze source without executing Tua or Lua code. Project source,
 `tua.toml`, Lua files, assets, symlinks, LSP messages, and API/MCP messages must
 still be treated as untrusted data.
 
+Shader compilation checks execute only Tua's bundled validator program in a fresh
+private temporary directory, using the user's installed LÖVE. They pass shader
+source to `love.graphics.validateShader`; they never load the project's game.
+Executable paths cannot be supplied in `[shaders]`. The LSP requires an explicit
+workspace-trust signal before starting the validator. GPU drivers and the
+selected LÖVE executable remain trusted components.
+
 The following boundaries are intentional:
 
 - CLI build output must remain inside the project root. Output paths that

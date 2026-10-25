@@ -1,5 +1,8 @@
 "use strict";
 
+const { synchronizeShaderDocuments } = require("./shader-documents");
+let shaderDocuments;
+
 const childProcess = require("child_process");
 const fs = require("fs");
 const os = require("os");
@@ -282,6 +285,7 @@ async function startLanguageServer() {
     debug: serverExecutable(serverCommand, cwd),
   };
   const initializationOptions = {
+    workspaceTrusted: vscode.workspace.isTrusted,
     ...traceConfiguration(),
     // The extension owns one combined deterministic/Ollama provider. Asking
     // vscode-languageclient to register the standard provider too would issue
@@ -311,6 +315,7 @@ async function startLanguageServer() {
 
   try {
     await client.start();
+    shaderDocuments = synchronizeShaderDocuments(vscode, client, (message) => outputChannel.appendLine(message));
     currentServerInfo.state = "running";
     setServerStatus("running", serverDetail(serverCommand, cwd, preflight.version));
     void loveDevex?.refreshAssets?.();
@@ -851,6 +856,8 @@ async function reportIssue() {
 }
 
 async function stopLanguageServer(options = {}) {
+  shaderDocuments?.dispose();
+  shaderDocuments = undefined;
   const activeClient = client;
   client = undefined;
 

@@ -1062,7 +1062,9 @@ fn request_worker_survives_a_large_incomplete_lua_block() {
                     .expect("large incomplete request should finish")
                 {
                     ServerEvent::RequestFinished(result) => break result,
-                    ServerEvent::Input(_) | ServerEvent::SpeculativeReady => continue,
+                    ServerEvent::Input(_)
+                    | ServerEvent::SpeculativeReady
+                    | ServerEvent::ShadersFinished(_) => continue,
                 }
             };
 
@@ -1902,7 +1904,9 @@ fn received_document_version_rejects_a_result_before_did_change_is_processed() {
             .expect("worker result")
         {
             ServerEvent::RequestFinished(result) => break result,
-            ServerEvent::Input(_) | ServerEvent::SpeculativeReady => continue,
+            ServerEvent::Input(_)
+            | ServerEvent::SpeculativeReady
+            | ServerEvent::ShadersFinished(_) => continue,
         }
     };
     let output = scheduler.finish(&mut server, *result);

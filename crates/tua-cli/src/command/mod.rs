@@ -46,7 +46,7 @@ pub fn run_command(
                 cwd,
                 loaded,
                 options.deny_warnings,
-                options.check_love.as_deref(),
+                options.love_executable.as_deref(),
             )
         }
         CommandName::Fmt => {
@@ -69,7 +69,7 @@ pub fn run_command(
         CommandName::Dev => {
             let loaded =
                 tua_core::load_config_from_dir(&cwd).map_err(CliError::from_config_error)?;
-            run_dev(cwd, loaded, options.dev_love)?;
+            run_dev(cwd, loaded, options.love_executable)?;
 
             Ok("dev stopped".to_owned())
         }
@@ -91,8 +91,10 @@ pub fn run_watch_command(cwd: impl AsRef<Path>) -> Result<(), CliError> {
 }
 
 pub fn run_lsp_command() -> Result<(), CliError> {
-    tua_lsp::run_stdio()
-        .map_err(|source| CliError::usage(format!("failed to run tua lsp: {source}")))
+    tua_lsp::run_stdio_with_shader_validator(Box::new(crate::shaders::LoveShaderValidator::new(
+        None,
+    )))
+    .map_err(|source| CliError::usage(format!("failed to run tua lsp: {source}")))
 }
 
 fn format_init_result(result: tua_core::InitResult) -> String {

@@ -152,3 +152,43 @@ fn places_errors_on_the_shader_and_its_loaders() {
     )
     .is_empty());
 }
+
+#[test]
+fn collection_skips_disabled_and_unused_assets_and_deduplicates_targets() {
+    let asset = crate::ProjectAsset {
+        path: "wave.glsl".into(),
+        relative_path: "wave.glsl".into(),
+        category: crate::AssetCategory::Shader,
+        extension: "glsl".into(),
+        dimensions: None,
+        references: vec![crate::AssetReference {
+            path: "main.tua".into(),
+            span: SourceSpan {
+                start: SourcePosition { line: 1, column: 1 },
+                end: SourcePosition { line: 1, column: 8 },
+            },
+            loader_kind: AssetLoaderKind::Shader,
+        }],
+    };
+    let mut inventory = crate::AssetInventory {
+        assets: vec![asset],
+        diagnostics: vec![],
+    };
+    let mut config = crate::ShadersConfig::default();
+    config.targets = vec![ShaderTarget::Desktop, ShaderTarget::Desktop];
+    let requests = shader_validation_requests(&inventory, &config, |_| Ok("valid".into())).unwrap();
+    assert_eq!(requests.len(), 1);
+    config.validate = crate::ShaderValidationMode::Off;
+    assert!(
+        shader_validation_requests(&inventory, &config, |_| panic!("disabled must not read"))
+            .unwrap()
+            .is_empty()
+    );
+    config.validate = crate::ShaderValidationMode::Auto;
+    inventory.assets[0].references.clear();
+    assert!(
+        shader_validation_requests(&inventory, &config, |_| panic!("unused must not read"))
+            .unwrap()
+            .is_empty()
+    );
+}

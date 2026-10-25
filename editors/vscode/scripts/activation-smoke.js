@@ -2447,6 +2447,9 @@ function createMockState(workspace, options = {}) {
       onDidChangeWorkspaceFolders() {
         return { dispose() {} };
       },
+      textDocuments: [],
+      onDidOpenTextDocument() { return { dispose() {} }; },
+      onDidCloseTextDocument() { return { dispose() {} }; },
       onDidChangeTextDocument(listener) {
         documentChangeListeners.push(listener);
         return { dispose() {} };

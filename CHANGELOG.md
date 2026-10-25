@@ -20,6 +20,9 @@ language or editor behavior, and migration notes call out those changes.
   problems. A build-only command prepares output without starting the game.
 - Optional contextual inlay hints reveal detail for selections, explicit type
   inspection, and Lua debugging while keeping ordinary code quiet.
+- Trusted editor workspaces validate shader buffers on a separate idle worker,
+  reusing LÖVE and cached results without blocking interactive requests.
+
 - `tua check` validates referenced shader assets through an isolated LÖVE validator,
   reporting compilation failures as `TL2016` on shaders and loader calls. Configure
   `[shaders]` targets (`desktop`, `gles`) or disable validation with `validate = "off"`.

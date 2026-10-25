@@ -1144,6 +1144,64 @@ impl AnalysisSnapshot {
         self.core.file_rename_edits(old_path, new_path)
     }
 
+    pub(super) fn shader_requests(
+        &self,
+        overlays: &std::collections::BTreeMap<PathBuf, String>,
+    ) -> Result<Vec<tua_core::shader_validation::ShaderValidationRequest>, String> {
+        let inventory = self.core.asset_inventory();
+        let mut requests = Vec::new();
+        for asset in inventory.assets {
+            let config = self
+                .project_model
+                .as_ref()
+                .and_then(|model| model.workspace_for_path(&asset.path))
+                .map(|workspace| workspace.config())
+                .unwrap_or_else(|| self.core.config());
+            let inventory = AssetInventory {
+                assets: vec![asset],
+                diagnostics: Vec::new(),
+            };
+            requests.extend(tua_core::shader_validation::shader_validation_requests(
+                &inventory,
+                &config.shaders,
+                |path| {
+                    overlays.get(path).cloned().map(Ok).unwrap_or_else(|| {
+                        tua_core::input_limits::read_source(path)
+                            .map_err(|error| format!("{}: {error}", path.display()))
+                    })
+                },
+            )?);
+            if requests.len() > 512
+                || requests
+                    .iter()
+                    .map(|request| request.source.len())
+                    .sum::<usize>()
+                    > 16 * 1024 * 1024
+            {
+                return Err("shader validation input exceeds 16 MiB or 512 requests".to_owned());
+            }
+        }
+        Ok(requests)
+    }
+
+    pub(super) fn apply_shader_policy(&self, diagnostics: Vec<Diagnostic>) -> Vec<Diagnostic> {
+        diagnostics
+            .into_iter()
+            .flat_map(|diagnostic| {
+                let config = self
+                    .project_model
+                    .as_ref()
+                    .and_then(|model| model.workspace_for_path(&diagnostic.file))
+                    .map(|workspace| workspace.config())
+                    .unwrap_or_else(|| self.core.config());
+                self.settings
+                    .apply_project_config(config.clone())
+                    .diagnostics
+                    .apply_severity_policy(vec![diagnostic])
+            })
+            .collect()
+    }
+
     pub(super) fn asset_inventory(&self) -> AssetInventory {
         self.core.asset_inventory()
     }

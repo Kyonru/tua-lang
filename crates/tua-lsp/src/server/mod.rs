@@ -8,6 +8,7 @@ mod handlers;
 mod protocol;
 mod request_registry;
 mod scheduler;
+mod shaders;
 mod transport;
 mod uri;
 
@@ -61,9 +62,25 @@ pub fn run_stdio() -> io::Result<()> {
 }
 
 pub(crate) fn run(reader: impl Read + Send + 'static, writer: impl Write) -> io::Result<()> {
+    run_with_shader_validator(reader, writer, None)
+}
+
+pub fn run_stdio_with_shader_validator(
+    validator: Box<dyn tua_core::shader_validation::ShaderValidator>,
+) -> io::Result<()> {
+    run_with_shader_validator(io::stdin(), io::stdout().lock(), Some(validator))
+}
+
+fn run_with_shader_validator(
+    reader: impl Read + Send + 'static,
+    writer: impl Write,
+    validator: Option<Box<dyn tua_core::shader_validation::ShaderValidator>>,
+) -> io::Result<()> {
     let mut server = LspServer::default();
     let mut writer = writer;
     let (event_tx, event_rx) = mpsc::sync_channel(EVENT_QUEUE_CAPACITY);
+    let shader_worker =
+        validator.map(|validator| shaders::ShaderWorker::new(validator, event_tx.clone()));
     let received_input = SharedReceivedInputState::default();
     let mut scheduler = RequestScheduler::new(event_tx.clone(), Arc::clone(&received_input));
     let mut pending_messages = VecDeque::new();
@@ -98,6 +115,9 @@ pub(crate) fn run(reader: impl Read + Send + 'static, writer: impl Write) -> io:
     });
 
     loop {
+        if shader_worker.is_some() {
+            server.observe_shader_revision();
+        }
         drain_speculative_results(&mut server, &mut scheduler, &mut writer)?;
 
         if scheduler.speculative_has_priority(Instant::now())
@@ -174,6 +194,9 @@ pub(crate) fn run(reader: impl Read + Send + 'static, writer: impl Write) -> io:
             && !server.shutdown_requested
             && !server.should_exit
         {
+            if let Some(worker) = &shader_worker {
+                worker.dispatch_due(&mut server);
+            }
             let dispatched_warm = scheduler.dispatch_next_workspace_warm(&mut server);
             if !dispatched_warm {
                 scheduler.dispatch_due_pattern_corpus(&mut server, Instant::now());
@@ -216,6 +239,9 @@ pub(crate) fn run(reader: impl Read + Send + 'static, writer: impl Write) -> io:
                                 &mut writer,
                             )?,
                             Err(TryRecvError::Empty) => {
+                                if let Some(worker) = &shader_worker {
+                                    worker.dispatch_due(&mut server);
+                                }
                                 let now = Instant::now();
                                 scheduler.dispatch_due_slow_diagnostic(&mut server, now);
                                 scheduler.dispatch_due_pattern_corpus(&mut server, now);
@@ -283,6 +309,24 @@ pub(crate) fn run(reader: impl Read + Send + 'static, writer: impl Write) -> io:
                 };
                 tua_core::profile::span(format!("inline.coordinator.active {state} {method}"))
             });
+        if shader_worker.is_some() {
+            if method == "initialize" {
+                server.configure_shaders(&message);
+            }
+            if matches!(
+                method.as_str(),
+                "initialized"
+                    | "textDocument/didOpen"
+                    | "textDocument/didChange"
+                    | "textDocument/didSave"
+                    | "textDocument/didClose"
+                    | "workspace/didChangeWatchedFiles"
+                    | "workspace/didChangeConfiguration"
+                    | "workspace/didChangeWorkspaceFolders"
+            ) {
+                server.queue_shaders();
+            }
+        }
         let request = message.get("id").is_some();
         let received_document_version = take_received_request_version(&message, &received_input);
         let changed_uri = (method == "textDocument/didChange")
@@ -410,6 +454,11 @@ fn process_server_event(
                 write_message(writer, &message)?;
             }
         }
+        ServerEvent::ShadersFinished(result) => {
+            for message in server.finish_shaders(result) {
+                write_message(writer, &message)?;
+            }
+        }
         ServerEvent::SpeculativeReady => {}
     }
 
@@ -464,6 +513,7 @@ fn document_uri_from_message(message: &Value) -> Option<&str> {
 #[derive(Clone, Default)]
 struct LspServer {
     analysis: AnalysisHost,
+    shaders: shaders::ShaderState,
     workspace_folders: Vec<PathBuf>,
     settings: WorkspaceSettings,
     pending_slow_diagnostics: BTreeMap<String, PendingDiagnostics>,
@@ -773,6 +823,7 @@ impl LspServer {
         self.next_slow_diagnostics_due()
             .into_iter()
             .chain(self.next_pattern_corpus_due())
+            .chain(self.shader_due())
             .min()
     }
 

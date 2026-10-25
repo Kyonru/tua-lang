@@ -177,6 +177,10 @@ impl LoveShaderValidator {
     }
 }
 impl ShaderValidator for LoveShaderValidator {
+    fn stop(&mut self) {
+        self.session = None;
+    }
+
     fn validate(
         &mut self,
         requests: &[ShaderValidationRequest],

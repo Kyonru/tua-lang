@@ -31,6 +31,7 @@ mod recovery;
 mod scheduling;
 mod semantic_tokens;
 mod server_protocol;
+mod shaders;
 mod signature_help;
 mod type_explanation;
 mod workspace;

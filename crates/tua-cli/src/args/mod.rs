@@ -54,8 +54,7 @@ pub enum CliAction {
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct CommandOptions {
-    pub dev_love: Option<PathBuf>,
-    pub check_love: Option<PathBuf>,
+    pub love_executable: Option<PathBuf>,
     pub emit_on_error: bool,
     pub package: PackageOptions,
     pub fmt_check: bool,
@@ -161,11 +160,7 @@ where
                 let Some(path) = args.get(index) else {
                     return Err(CliError::usage("`--love` expects a path"));
                 };
-                if command == CommandName::Check {
-                    options.check_love = Some(PathBuf::from(path));
-                } else {
-                    options.dev_love = Some(PathBuf::from(path));
-                }
+                options.love_executable = Some(PathBuf::from(path));
             }
             flag @ ("--target" | "--love" | "--name" | "--identifier")
                 if command == CommandName::Package =>

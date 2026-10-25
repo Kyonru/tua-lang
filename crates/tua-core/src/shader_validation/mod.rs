@@ -336,6 +336,9 @@ pub struct ShaderValidationRequest {
 
 /// Process orchestration is supplied by the executable; core analysis never spawns LOVE.
 pub trait ShaderValidator: Send {
+    /// Release external resources when no referenced shaders need validation.
+    fn stop(&mut self) {}
+
     fn validate(
         &mut self,
         requests: &[ShaderValidationRequest],

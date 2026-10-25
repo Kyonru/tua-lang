@@ -1002,6 +1002,7 @@ impl LspServer {
             .diagnostics_for_uri(uri)
             .into_iter()
             .map(lsp_diagnostic_from_core)
+            .chain(self.shader_diagnostics(uri))
             .collect()
     }
 
@@ -1010,6 +1011,7 @@ impl LspServer {
             .fast_diagnostics_for_uri(uri)
             .into_iter()
             .map(lsp_diagnostic_from_core)
+            .chain(self.shader_diagnostics(uri))
             .collect()
     }
 
@@ -1207,7 +1209,10 @@ impl LspServer {
         generation
     }
 
-    fn publish_tracked_diagnostics(&mut self, uri: &str, diagnostics: Vec<Value>) -> Value {
+    fn publish_tracked_diagnostics(&mut self, uri: &str, mut diagnostics: Vec<Value>) -> Value {
+        diagnostics
+            .retain(|diagnostic| diagnostic.get("code").and_then(Value::as_str) != Some("TL2016"));
+        diagnostics.extend(self.shader_diagnostics(uri));
         self.last_published_diagnostics
             .insert(uri.to_owned(), diagnostics.clone());
 
@@ -1239,6 +1244,7 @@ impl LspServer {
             .diagnostics_for_uri(uri)
             .into_iter()
             .map(lsp_diagnostic_from_core)
+            .chain(self.shader_diagnostics(uri))
             .collect()
     }
 

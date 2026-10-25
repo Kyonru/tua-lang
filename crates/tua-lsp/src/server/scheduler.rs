@@ -40,6 +40,7 @@ pub(super) enum ServerEvent {
     Input(io::Result<Option<Value>>),
     RequestFinished(Box<WorkerResult>),
     SpeculativeReady,
+    ShadersFinished(super::shaders::ShaderResult),
 }
 
 struct DeferredRequest {

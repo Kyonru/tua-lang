@@ -29,6 +29,22 @@ The work spans four layers:
   uniform blocks, and parsing macro output would require a preprocessor.
   Shaders that use either stay unchecked, as they are today.
 
+## Implemented compilation slice (Unreleased)
+
+The LÖVE-only compilation path is implemented: `[shaders]`, isolated CLI
+validation, and a persistent idle LSP worker with content/target caching.
+Diagnostics use `TL2016` on shader files and loader calls. The editor forwards
+unsaved shader buffers without taking over GLSL language features. Validation
+requires a client workspace-trust signal, and no executable paths are read from
+project configuration. Discovery currently uses CLI `--love`, `TUA_LOVE`, PATH,
+and the macOS app; it does not yet use `tua.love.command` for the server.
+
+Fake-process timeout/protocol tests, editor synchronization tests, and a blocked
+validator/interactive-hover regression cover the boundaries. Real LÖVE 11.5 on
+macOS was tested; Windows `lovec.exe` remains unverified. The broader phases below
+remain a plan: in particular, there is no glslangValidator fallback or shader
+hot reload in this slice.
+
 ## Current state
 
 Shipped in `84e18f4` and `7d91af0` (asset module: `shader_uniforms`,

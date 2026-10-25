@@ -96,6 +96,7 @@ diagnostic instead of enabling a duplicate lint.
 | `TL2011` | An asset-pipeline configuration, importer execution, manifest, cache entry, diagnostic, or generated output is invalid. | Enabled for configured asset pipelines. |
 | `TL2012` | Built-in audio decoding or analysis failed, or its timing/channel metadata needs attention. | Enabled for `audio-analysis` pipelines. |
 | `TL2013` | `Shader:send` or `Shader:sendColor` names a uniform that the shader asset does not declare. | Always enabled for locals initialized from a shader asset. |
+| `TL2016` | LÖVE rejects a referenced shader during compilation. | `tua check` and trusted editor workspaces with shader validation enabled and LÖVE installed. |
 | `TL2014` | A sent uniform is declared but never read, so the GLSL compiler removes it and LOVE reports it missing. | Always enabled for locals initialized from a shader asset. |
 | `TL2009` | A statically indexed asset has no known source reference. | Asset Explorer analysis; hint. |
 | `TL2010` | Completed compiler output failed the final Lua 5.1 safety validation. | Always enabled; blocks emission. |
