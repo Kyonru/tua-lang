@@ -21,6 +21,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- When an outer table cannot be wrapped safely, the formatter keeps the line
+  intact instead of wrapping an inner call under the wrong indentation
+  context. Inline block comments no longer trigger repeated formatting changes.
+
 - Wrapping table fields that start with unary minus now produces stable
   indentation in one formatting pass. A subsequent `tua fmt --check` no longer
   asks to indent those fields again; binary subtraction continuations keep

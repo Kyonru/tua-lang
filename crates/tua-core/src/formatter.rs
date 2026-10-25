@@ -1190,14 +1190,14 @@ fn break_long_groups(line: &str, indent: &str, options: &FormatOptions) -> Strin
     let call = || break_long_call(line, indent, options).filter(keeps_blocks);
     // Split the outermost group first. Expanding a table passed as an
     // argument would leave the arguments after it on one long line.
-    let call_opens_first = matches!(
-        (top_level_byte(line, b'('), top_level_byte(line, b'{')),
-        (Some(paren), Some(brace)) if paren < brace
-    );
-    let wrapped = if call_opens_first {
-        call().or_else(table)
-    } else {
-        table().or_else(call)
+    // If the outer table cannot be scanned (for example, due to a comment),
+    // do not expand an inner call under the table's indentation context.
+    // A call with a single table argument can still wrap that table.
+    let wrapped = match (top_level_byte(line, b'('), top_level_byte(line, b'{')) {
+        (Some(paren), Some(brace)) if paren < brace => call().or_else(table),
+        (_, Some(_)) => table(),
+        (Some(_), None) => call(),
+        (None, None) => None,
     };
 
     wrapped.unwrap_or(inline)

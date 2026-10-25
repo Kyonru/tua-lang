@@ -232,6 +232,12 @@ fn layout_lints(output: &str) -> Vec<Diagnostic> {
 
 fn cases() -> Vec<Case> {
     vec![
+        Case::new("comment_blocks_outer_table_wrap", "return {f(a, b), f --[[ note ]] (a, b)}\n")
+            .formats_to("return { f(a, b), f --[[ note ]] (a, b)}\n")
+            .with(|options| options.line_width = 15),
+        Case::new("nested_comment_blocks_outer_table_wrap", "local x = {f(a, b), {a, --[[ note ]] b}} -- comment\n")
+            .formats_to("local x = { f(a, b), { a, --[[ note ]] b}} -- comment\n")
+            .with(|options| options.line_width = 25),
         Case::new("binary_minus_before_inline_table", "return a\n  - f({ b, c })\n"),
         Case::new("wrap_negative_table_value", "return {a, - n}\n")
             .formats_to("return {\n  a,\n  -n,\n}\n")

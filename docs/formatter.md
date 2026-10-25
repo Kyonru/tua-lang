@@ -80,7 +80,9 @@ canonical layout, run `tua fmt --check` as its own step.
 
 ## Current scope
 
-`line_width` is a preferred wrapping width, not a hard column limit. The
+`line_width` is a preferred wrapping width, not a hard column limit. When an
+outer table cannot be wrapped safely, the formatter leaves it intact rather
+than expanding an inner call on its own. The
 formatter currently expands comma-separated call arguments and table fields;
 it does not yet reflow long binary expressions, method chains, comments,
 strings, or single-argument calls. It also leaves a block that opens and closes
