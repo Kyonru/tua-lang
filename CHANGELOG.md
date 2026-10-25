@@ -17,6 +17,9 @@ language or editor behavior, and migration notes call out those changes.
   normal Run supports restarting the last group with its original arguments.
 - `tua dev --no-launch` prepares hot-reload output and watches for changes without
   launching LOVE, allowing editor-managed players to share a single watcher.
+- Shader uniform completion, hover, and go-to-definition share cached GLSL
+  metadata in Tua and Lua, including array types, unread uniforms, both-stage
+  declarations, partial names, and synchronized unsaved shader edits.
 
 - A dedicated Tua sidebar unifies project files, module exports, signal call sites,
   ECS declarations, assets, run configurations, recent sessions, and setup checks.

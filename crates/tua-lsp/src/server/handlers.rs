@@ -1506,10 +1506,16 @@ impl LspServer {
         let definition = {
             let _profile = tua_core::profile::span("lsp.definition.query");
 
-            snapshot.definition(&request.path, position)?
+            snapshot.definitions(&request.path, position)
         };
 
-        Some(lsp_location_from_core(definition))
+        match definition.len() {
+            0 => None,
+            1 => Some(lsp_location_from_core(definition.into_iter().next()?)),
+            _ => Some(Value::Array(
+                definition.into_iter().map(lsp_location_from_core).collect(),
+            )),
+        }
     }
 
     fn type_definition_response(&self, message: &Value) -> Option<Value> {

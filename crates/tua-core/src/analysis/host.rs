@@ -931,6 +931,15 @@ impl AnalysisHost {
             .semantics()
             .expect("parsed file must have semantic facts");
 
+        // Shader argument hovers need the snapshot's shared asset metadata.
+        if matches!(
+            crate::completion::context::completion_context(&file.source, position),
+            Some(crate::completion::context::CompletionContext::StringArgument { callee_parts, .. })
+                if callee_parts.last().is_some_and(|method| matches!(method.as_str(), "send" | "sendColor"))
+        ) {
+            return None;
+        }
+
         // Type imports are resolved by the project database. Returning a
         // current-file `any` here would prevent the caller from falling back
         // to the authoritative snapshot query.

@@ -248,6 +248,9 @@ impl AnalysisSnapshot {
         position: SourcePosition,
         file_scope_hash: u64,
     ) -> Vec<Completion> {
+        if let Some(completions) = self.shader_uniform_completions(parsed, source, position) {
+            return completions;
+        }
         let asset_completions = self.project_asset_path_completions(source, position);
 
         if !asset_completions.is_empty() {
@@ -320,6 +323,9 @@ impl AnalysisSnapshot {
         file_scope_hash: u64,
     ) -> Vec<Completion> {
         let _profile = profile::span("analysis.completion.render");
+        if let Some(completions) = self.shader_uniform_completions(parsed, source, position) {
+            return completions;
+        }
 
         let asset_completions = self.project_asset_path_completions(source, position);
 

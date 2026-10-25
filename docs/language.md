@@ -802,6 +802,10 @@ GLSL compiler removes it. Tua reports warning `TL2014` when such a uniform is
 sent; read it in the shader, or guard optional uniforms with
 `Shader:hasUniform`.
 
+The editor also completes uniform names, shows their declarations and expected
+Lua values on hover, and navigates to GLSL declarations (including both stage
+sections). See [shader uniform editing](lsp.md#shader-uniform-editing).
+
 Names held in variables are not checked, and neither are shaders whose
 uniforms come from uniform blocks or preprocessor macros.
 

@@ -6176,3 +6176,6 @@ fn snapshot_clones_share_immutable_files_and_keep_old_revisions() {
         &current.files[Path::new("shared.tua")].0
     ));
 }
+
+#[path = "shader_tests.rs"]
+mod shader_uniforms;

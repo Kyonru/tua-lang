@@ -66,6 +66,20 @@ pub(crate) fn completion_context(
         .or_else(|| identifier_context(line, cursor, position))
 }
 
+pub(crate) fn string_argument_is_method(source: &str, position: SourcePosition) -> bool {
+    let Some(cursor) = byte_offset_for_position(source, position) else {
+        return false;
+    };
+    let Some(open) = active_call_open(source, cursor) else {
+        return false;
+    };
+    let prefix = source[..open].trim_end();
+    prefix
+        .trim_end_matches(|c: char| c.is_ascii() && is_identifier_continue(c as u8))
+        .trim_end()
+        .ends_with(':')
+}
+
 pub(crate) fn completion_prefix(
     source: &str,
     position: SourcePosition,

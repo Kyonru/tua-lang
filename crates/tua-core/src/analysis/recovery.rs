@@ -151,7 +151,19 @@ pub(super) fn source_without_recoverable_incomplete_lines(source: &str) -> Strin
         let content = content.strip_suffix('\r').unwrap_or(content);
         let trimmed = code_before_line_comment(content).trim();
 
-        if line_is_recoverable_incomplete_edit(trimmed) {
+        // A partially typed string argument cannot parse yet. Retain the
+        // surrounding bindings and line numbers for completion queries.
+        let unfinished_argument = matches!(
+            crate::completion::context::completion_context(
+                content,
+                SourcePosition {
+                    line: 1,
+                    column: content.chars().count() + 1
+                },
+            ),
+            Some(crate::completion::context::CompletionContext::StringArgument { .. })
+        );
+        if line_is_recoverable_incomplete_edit(trimmed) || unfinished_argument {
             recovered.push('\n');
         } else {
             recovered.push_str(line);

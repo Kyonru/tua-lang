@@ -4,6 +4,9 @@ impl AnalysisSnapshot {
     pub fn hover(&self, path: impl AsRef<Path>, position: SourcePosition) -> Option<Hover> {
         let _profile = profile::span("analysis.query.hover");
         let path = path.as_ref();
+        if let Some(hover) = self.shader_uniform_hover(path, position) {
+            return Some(hover);
+        }
         let file = self.file(path)?;
 
         match &file.parsed {

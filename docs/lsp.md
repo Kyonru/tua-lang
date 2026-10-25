@@ -653,6 +653,22 @@ diagnostics. If sprite preview is unavailable, enable `tua.preview.enabled`;
 ordinary sprite diagnostics and completion do not depend on the preview
 setting.
 
+### Shader uniform editing
+
+For a local loaded with `shader "path.glsl"` or
+`love.graphics.newShader("path.glsl")`, the first string argument of `:send`
+and `:sendColor` offers uniform names with GLSL types and array lengths.
+Unread uniforms rank last; `sendColor` prioritizes `vec3` and `vec4`.
+Partial names and literal prefixes such as `"ripple" .. i` are supported.
+
+Hover a name to see its declaration, shader location, expected Lua value, and
+unread status. Pattern names list matching declarations. Go to Definition
+opens the GLSL declaration; names declared in both stages offer both locations.
+These features work in Tua and Lua without running LÖVE, and follow saved shader
+changes and synchronized unsaved shader buffers. Unknown receivers and
+macro-generated declarations stay unchecked. Value-shape diagnostics are not
+implemented yet.
+
 ### Shader compilation diagnostics
 
 In trusted workspaces, Tua validates statically referenced shaders with the

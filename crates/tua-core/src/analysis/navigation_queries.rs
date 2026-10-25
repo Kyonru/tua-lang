@@ -1,6 +1,16 @@
 use super::*;
 
 impl AnalysisSnapshot {
+    /// All declaration sites, including uniforms declared in both shader stages.
+    pub fn definitions(&self, path: impl AsRef<Path>, position: SourcePosition) -> Vec<Definition> {
+        let definitions = self.shader_uniform_definitions(path.as_ref(), position);
+        if definitions.is_empty() {
+            self.definition(path, position).into_iter().collect()
+        } else {
+            definitions
+        }
+    }
+
     pub fn definition(
         &self,
         path: impl AsRef<Path>,
@@ -8,6 +18,13 @@ impl AnalysisSnapshot {
     ) -> Option<Definition> {
         let _profile = profile::span("analysis.query.definition");
         let path = path.as_ref();
+        if let Some(definition) = self
+            .shader_uniform_definitions(path, position)
+            .into_iter()
+            .next()
+        {
+            return Some(definition);
+        }
 
         let file = self.file(path)?;
         let key = definition_request_key(path, &file.source, position);

@@ -41,9 +41,10 @@ and the macOS app; it does not yet use `tua.love.command` for the server.
 
 Fake-process timeout/protocol tests, editor synchronization tests, and a blocked
 validator/interactive-hover regression cover the boundaries. Real LÖVE 11.5 on
-macOS was tested; Windows `lovec.exe` remains unverified. The broader phases below
-remain a plan: in particular, there is no glslangValidator fallback or shader
-hot reload in this slice.
+macOS was tested; Windows `lovec.exe` remains unverified. Phase 1 editor features
+are also implemented below. Value-shape diagnostics,
+the glslangValidator fallback, setup tooling, and shader hot reload remain
+planned.
 
 ## Current state
 
@@ -70,8 +71,8 @@ Existing infrastructure this plan reuses:
   extension on demand (Material Icons) and records reversible settings
   (`src/setup/presets.js`).
 
-The shader parser (`shader_uniforms`) knows declared names and which are unread.
-It does not yet record types, array lengths, or declaration positions.
+The shader parser now records types, array lengths, original declaration
+positions, entrypoints, and read status in the shared cached uniform model.
 
 ## Constraints
 
@@ -262,6 +263,12 @@ language ID keeps GLSL Lint away from them, and gives the language server a
 document to synchronize for live diagnostics. See Phase 4.
 
 ## Phase 1: Editor features from the uniform model
+
+Implemented (Unreleased). Core and LSP tests cover completion ranking and
+unfinished calls, hover, both-stage definitions, lexical shadowing, disk
+invalidation, and unsaved overlays. The checker and editor share immutable
+asset-index models. Queries perform no shader file reads. Macro-generated
+uniforms and uniform blocks remain unsupported.
 
 All three features key off `shader_send_call`'s first argument position and
 the receiver's shader local.

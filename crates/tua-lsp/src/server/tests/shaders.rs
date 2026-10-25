@@ -231,3 +231,68 @@ fn hover_completes_while_shader_compilation_is_blocked() {
         "hover must release the validator before its timeout"
     );
 }
+
+#[test]
+fn uniform_editor_features_return_shader_locations_and_live_overlays() {
+    let temp = TempProject::new("uniform-editor");
+    let source =
+        "local effect = shader \"effect.glsl\"\neffect:send(\"tint\", {})\neffect:send(\"\", {})\n";
+    let shader = "/* comment */ extern vec4 tint;\r\n#ifdef VERTEX\r\nuniform vec4 tint;\r\n#endif\r\nvec4 effect(vec4 c, Image t, vec2 uv, vec2 px) { return tint; }\r\n";
+    temp.write("tua.toml", "source = \".\"\n");
+    temp.write("main.tua", source);
+    temp.write("effect.glsl", shader);
+    let uri = temp.uri_for("main.tua");
+    let shader_uri = temp.uri_for("effect.glsl");
+    let mut server = TestServer::new();
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&uri, source));
+    server.send(definition_request(2, &uri, source, "tint", 1));
+    let locations = response_with_id(server.output(), 2)["result"]
+        .as_array()
+        .unwrap();
+    assert_eq!(locations.len(), 2);
+    assert_eq!(locations[0]["uri"], shader_uri);
+    assert_eq!(
+        locations[0]["range"],
+        json!({"start":{"line":0,"character":26},"end":{"line":0,"character":30}})
+    );
+    assert_eq!(
+        locations[1]["range"]["start"],
+        json!({"line":2,"character":13})
+    );
+    server.send(hover_request(3, &uri, source, "tint"));
+    assert_hover_contains(server.output(), 3, "extern vec4 tint;");
+    server.send(completion_request(4, &uri, source, "effect:send(\""));
+    assert_completion_labels(server.output(), 4, ["tint"]);
+
+    server.send(did_open(&shader_uri, "extern number replacement;\n"));
+    server.send(completion_request(5, &uri, source, "effect:send(\""));
+    assert_completion_labels(server.output(), 5, ["replacement"]);
+    server.send(did_change(&shader_uri, "extern vec2 moved;\n", 2));
+    server.send(completion_request(6, &uri, source, "effect:send(\""));
+    assert_completion_labels(server.output(), 6, ["moved"]);
+    server.send(did_close(&shader_uri));
+    server.send(completion_request(7, &uri, source, "effect:send(\""));
+    assert_completion_labels(server.output(), 7, ["tint"]);
+}
+
+#[test]
+fn lua_shader_uniform_editor_features_share_tua_metadata() {
+    let temp = TempProject::new("lua-uniform-editor");
+    let source =
+        "local effect = love.graphics.newShader(\"effect.glsl\")\neffect:sendColor(\"tint\", {})\n";
+    temp.write("tua.toml", "source = \".\"\n");
+    temp.write("main.lua", source);
+    temp.write("effect.glsl", "extern vec4 tint;\n");
+    let uri = temp.uri_for("main.lua");
+    let mut server = TestServer::new();
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&uri, source));
+    server.send(hover_request(2, &uri, source, "tint"));
+    assert_hover_contains(server.output(), 2, "Unread uniform");
+    server.send(definition_request(3, &uri, source, "tint", 1));
+    assert_eq!(
+        response_with_id(server.output(), 3)["result"]["uri"],
+        temp.uri_for("effect.glsl")
+    );
+}

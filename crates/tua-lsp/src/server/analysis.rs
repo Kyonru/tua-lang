@@ -421,7 +421,13 @@ impl AnalysisHost {
                 .open_document_with_kind(path.clone(), source.clone(), core_source_kind(kind));
         } else {
             self.remove_completion_adaptive_source(&path);
-            self.core.remove_file(path);
+            self.core.remove_file(&path);
+            if is_shader_document(&path)
+                && !settings.is_ignored(&path, &self.effective_workspace_folders(roots))
+            {
+                self.core
+                    .set_shader_source_overlay(&path, Some(source.clone()));
+            }
         }
         project_inputs_changed
     }
@@ -447,13 +453,22 @@ impl AnalysisHost {
 
         if settings.is_ignored(&path, &effective_roots) {
             self.remove_completion_adaptive_source(&path);
-            self.core.remove_file(path);
+            self.core.remove_file(&path);
+            if is_shader_document(&path) {
+                self.core.set_shader_source_overlay(&path, None);
+            }
             return;
         }
 
         let Some(kind) = source_kind_for_path(&path, self.project_model.as_ref()) else {
             self.remove_completion_adaptive_source(&path);
-            self.core.remove_file(path);
+            self.core.remove_file(&path);
+            if is_shader_document(&path)
+                && !settings.is_ignored(&path, &self.effective_workspace_folders(roots))
+            {
+                self.core
+                    .set_shader_source_overlay(&path, Some(source.clone()));
+            }
             return;
         };
 
@@ -493,12 +508,21 @@ impl AnalysisHost {
             self.persist_completion_adaptive_source(&path, &source);
         } else {
             self.remove_completion_adaptive_source(&path);
-            self.core.remove_file(path);
+            self.core.remove_file(&path);
+            if is_shader_document(&path)
+                && !settings.is_ignored(&path, &self.effective_workspace_folders(roots))
+            {
+                self.core
+                    .set_shader_source_overlay(&path, Some(source.clone()));
+            }
         }
     }
 
     pub(super) fn close_document(&mut self, uri: &str) {
         if let Some(document) = self.documents.remove(uri) {
+            if is_shader_document(&document.path) {
+                self.core.set_shader_source_overlay(&document.path, None);
+            }
             if document.path.is_file() {
                 self.core.close_document(&document.path);
             } else {
@@ -1476,12 +1500,12 @@ impl AnalysisSnapshot {
         self.core.signature_help(path, position)
     }
 
-    pub(super) fn definition(
+    pub(super) fn definitions(
         &self,
         path: &Path,
         position: SourcePosition,
-    ) -> Option<tua_core::Definition> {
-        self.core.definition(path, position)
+    ) -> Vec<tua_core::Definition> {
+        self.core.definitions(path, position)
     }
 
     pub(super) fn type_definition(
@@ -2049,6 +2073,17 @@ fn unknown_type_span(source: &str, diagnostic: &Diagnostic, name: &str) -> Optio
 
 fn is_identifier_character(character: char) -> bool {
     character == '_' || character.is_ascii_alphanumeric()
+}
+
+fn is_shader_document(path: &Path) -> bool {
+    path.extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| {
+            matches!(
+                extension.to_ascii_lowercase().as_str(),
+                "glsl" | "vert" | "frag" | "vs" | "fs"
+            )
+        })
 }
 
 #[cfg(test)]
