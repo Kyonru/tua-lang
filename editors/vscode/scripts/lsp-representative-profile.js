@@ -2,6 +2,7 @@
 
 const fs = require("fs");
 const path = require("path");
+const { execFile } = require("child_process");
 const {
   LspClient,
   cacheHitRate,
@@ -44,6 +45,8 @@ const completionP95BudgetMs = numberEnv(
   "TUA_REPRESENTATIVE_COMPLETION_P95_BUDGET_MS",
   10000,
 );
+const warmCompletionP95BudgetMs = numberEnv("TUA_REPRESENTATIVE_WARM_COMPLETION_P95_BUDGET_MS", completionP95BudgetMs);
+const memoryBudgetMiB = numberEnv("TUA_REPRESENTATIVE_MEMORY_BUDGET_MIB", 2048);
 const inlineServerP95BudgetMs = numberEnv(
   "TUA_REPRESENTATIVE_INLINE_SERVER_P95_BUDGET_MS",
   10000,
@@ -130,6 +133,8 @@ const minimumReturnedAtMostOneParseRate = 0.5;
     },
     thresholds: {
       completionP95BudgetMs,
+      warmCompletionP95BudgetMs,
+      memoryBudgetMiB,
       inlineServerP95BudgetMs,
       inlineWorkerP95BudgetMs,
       inlineBackendP95BudgetMs,
@@ -159,6 +164,27 @@ const minimumReturnedAtMostOneParseRate = 0.5;
   process.exit(1);
 });
 
+function sampleMemory(pid) {
+  const result = { peakKiB: 0, samples: 0, stop: () => clearInterval(timer) };
+  let pending = false;
+  const sample = () => {
+    if (pending) return;
+    pending = true;
+    execFile("ps", ["-o", "rss=", "-p", String(pid)], { timeout: 1000 }, (error, stdout) => {
+      pending = false;
+      const value = Number(stdout.trim());
+      if (!error && Number.isFinite(value) && value > 0) {
+        result.samples += 1;
+        result.peakKiB = Math.max(result.peakKiB, value);
+      }
+    });
+  };
+  const timer = setInterval(sample, 100);
+  timer.unref();
+  sample();
+  return result;
+}
+
 async function profileFixture(root, fixture) {
   const coldValues = metricValues();
   const validationFailures = validationFailureCounts();
@@ -183,6 +209,7 @@ async function profileFixture(root, fixture) {
 
   const warmValues = metricValues();
   const session = await openSession(root);
+  const memory = sampleMemory(session.client.child.pid);
   let contention;
   let cacheStats;
   let health;
@@ -215,11 +242,13 @@ async function profileFixture(root, fixture) {
     health = baselineOnly ? null : await session.client.request("tua/health", null);
     inlineProfile = baselineOnly ? null : inlineProfileStats(session.client.stderr);
   } finally {
+    memory.stop();
     await closeSession(session.client);
   }
 
   return {
     name: fixture.name,
+    memory: { peakMiB: memory.peakKiB / 1024, samples: memory.samples },
     kind: fixture.kind,
     ...(fixture.graphShape ? { graphShape: fixture.graphShape } : {}),
     sourceFileCount: fixture.sourceFileCount,
@@ -818,10 +847,13 @@ function regressionChecks(report) {
     const contentionCompletionP95 = fixture.requestAge.completionAfterChange.p95Ms;
     const diagnosticsP95 = fixture.diagnostics.firstPublishAfterChange.p95Ms;
 
-    if (!diagnosticsOnly && warmCompletionP95 > report.thresholds.completionP95BudgetMs) {
+    if (fixture.memory.samples === 0 || fixture.memory.peakMiB > report.thresholds.memoryBudgetMiB) {
+      fail("general", `${fixture.name}: memory measurement missing or exceeds ${report.thresholds.memoryBudgetMiB} MiB (${fixture.memory.peakMiB.toFixed(1)} MiB)`);
+    }
+    if (!diagnosticsOnly && warmCompletionP95 > report.thresholds.warmCompletionP95BudgetMs) {
       fail("general", 
         `${fixture.name}: warm completion p95 ${warmCompletionP95.toFixed(2)}ms exceeds ` +
-          `${report.thresholds.completionP95BudgetMs}ms`,
+          `${report.thresholds.warmCompletionP95BudgetMs}ms`,
       );
     }
     if (contentionCompletionP95 > report.thresholds.completionP95BudgetMs) {

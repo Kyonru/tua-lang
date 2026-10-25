@@ -71,15 +71,15 @@ impl AnalysisSnapshot {
         let project_inference = self.project_local_inference(&last_good.parsed);
         let environment = self.project_type_environment_for_parsed(
             &last_good.parsed,
-            last_good.environment,
+            last_good.environment.clone(),
             &project_inference,
         );
         let semantic_index =
             SemanticIndex::build(&last_good.parsed, Some(&last_good.hir), &environment);
 
         Some(DegradedSemanticFacts {
-            parsed: last_good.parsed,
-            hir: last_good.hir,
+            parsed: last_good.parsed.clone(),
+            hir: last_good.hir.clone(),
             environment,
             semantic_index,
             project_inference,

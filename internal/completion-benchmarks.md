@@ -523,3 +523,13 @@ The performance workflow runs `make profile-all` on `main`, weekly, and on
 demand. It uploads JSON reports under `target/tua-speed/` for 90 days. Use those
 artifacts for trend investigation; use local same-machine baselines for strict
 before/after comparisons.
+
+## Trusted performance gates
+
+The representative CI smoke collects 20 warm and contention samples per
+fixture, with separate 250 ms warm and 1500 ms contended completion p95 budgets
+and a 1024 MiB sampled server RSS ceiling. Missing memory measurements fail the
+gate; profiling requires `ps` (Linux/macOS). The trusted-push, weekly and manual
+workflow includes 5,000-line and 1,000-file fixtures with 500/3000 ms latency and
+4096 MiB RSS ceilings. Reports retain measurements for regression comparison;
+these ceilings are qualification limits, not a claim of typical latency.

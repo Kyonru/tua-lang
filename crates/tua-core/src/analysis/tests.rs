@@ -6146,3 +6146,26 @@ fn input_budget_rejection_is_diagnostic_and_recovery_replaces_stale_data() {
     host.set_file("other.tua", "local other = 3\nprint(other)");
     assert!(host.snapshot().diagnostics("other.tua").is_empty());
 }
+#[test]
+fn snapshot_clones_share_immutable_files_and_keep_old_revisions() {
+    let mut host = AnalysisHost::new();
+    host.set_file("shared.tua", "return 1");
+    let old = host.snapshot();
+    let cloned = old.clone();
+    assert!(Arc::ptr_eq(&old.type_database, &cloned.type_database));
+    assert!(Arc::ptr_eq(&old.module_graph, &cloned.module_graph));
+    assert!(Arc::ptr_eq(&old.symbol_index, &cloned.symbol_index));
+    assert!(Arc::ptr_eq(&old.usage_index, &cloned.usage_index));
+    assert!(Arc::ptr_eq(
+        &old.files[Path::new("shared.tua")].0,
+        &cloned.files[Path::new("shared.tua")].0
+    ));
+    host.set_file("shared.tua", "return 2");
+    let current = host.snapshot();
+    assert_eq!(old.source("shared.tua"), Some("return 1"));
+    assert_eq!(current.source("shared.tua"), Some("return 2"));
+    assert!(!Arc::ptr_eq(
+        &old.files[Path::new("shared.tua")].0,
+        &current.files[Path::new("shared.tua")].0
+    ));
+}

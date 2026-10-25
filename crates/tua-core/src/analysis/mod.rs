@@ -195,10 +195,10 @@ pub struct AnalysisSnapshot {
     require_path_separator: ModulePathSeparator,
     module_path_index: Arc<ModulePathIndex>,
     builtin_catalogs: BuiltinCatalogs,
-    module_graph: ModuleGraph,
-    type_database: ProjectTypeDatabase,
-    symbol_index: SymbolIndex,
-    usage_index: ProjectUsageIndex,
+    module_graph: Arc<ModuleGraph>,
+    type_database: Arc<ProjectTypeDatabase>,
+    symbol_index: Arc<SymbolIndex>,
+    usage_index: Arc<ProjectUsageIndex>,
     last_good_files: BTreeMap<PathBuf, LastGoodAnalysisFile>,
     completion_adaptive_stats: CompletionAdaptiveStats,
     completion_sequence_ranking: CompletionSequenceRankingConfig,
@@ -222,7 +222,17 @@ pub struct AnalysisSemanticFile<'a> {
 }
 
 #[derive(Clone, Debug)]
-struct AnalysisFile {
+struct AnalysisFile(Arc<AnalysisFileData>);
+
+impl std::ops::Deref for AnalysisFile {
+    type Target = AnalysisFileData;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+#[derive(Debug)]
+struct AnalysisFileData {
     source: String,
     kind: AnalysisSourceKind,
     parsed: Result<ParsedSource, Vec<Diagnostic>>,
@@ -281,7 +291,17 @@ struct DegradedFileSemantics {
 }
 
 #[derive(Clone, Debug)]
-struct LastGoodAnalysisFile {
+struct LastGoodAnalysisFile(Arc<LastGoodAnalysisFileData>);
+
+impl std::ops::Deref for LastGoodAnalysisFile {
+    type Target = LastGoodAnalysisFileData;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+#[derive(Debug)]
+struct LastGoodAnalysisFileData {
     parsed: ParsedSource,
     hir: HirModule,
     environment: TypeEnvironment,
@@ -379,7 +399,7 @@ struct CompletionCacheStats {
 #[derive(Clone, Debug, Default)]
 struct AnalysisQueryCache {
     files: BTreeMap<PathBuf, CachedAnalysisFile>,
-    parsed_files: BTreeMap<ParsedCacheKey, Result<ParsedSource, Vec<Diagnostic>>>,
+    parsed_files: BTreeMap<ParsedCacheKey, Arc<Result<ParsedSource, Vec<Diagnostic>>>>,
     dependencies: BTreeMap<PathBuf, BTreeSet<PathBuf>>,
     importers: BTreeMap<PathBuf, BTreeSet<PathBuf>>,
     type_dependency_uses: BTreeMap<(PathBuf, PathBuf), Option<BTreeSet<String>>>,

@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use full_moon::ast::{
     self, Call, Expression, Field, FunctionCall, Index, LastStmt, Prefix, Suffix, Var,
@@ -32,11 +33,11 @@ use super::{
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TypeEnvironment {
     path: PathBuf,
-    aliases: BTreeMap<String, Type>,
+    aliases: Arc<BTreeMap<String, Type>>,
     alias_docs: BTreeMap<String, String>,
     class_names: BTreeSet<String>,
     class_parents: BTreeMap<String, String>,
-    locals: BTreeMap<String, Type>,
+    locals: Arc<BTreeMap<String, Type>>,
     local_docs: BTreeMap<String, String>,
     functions: Vec<TypedFunction>,
     deprecated_accesses: BTreeMap<Vec<String>, Deprecation>,
@@ -229,7 +230,9 @@ impl TypeEnvironment {
         locals: impl IntoIterator<Item = (String, Type)>,
     ) -> Self {
         for (name, ty) in locals {
-            self.locals.insert(name, ty);
+            if self.locals.get(&name) != Some(&ty) {
+                Arc::make_mut(&mut self.locals).insert(name, ty);
+            }
         }
 
         self
@@ -240,7 +243,9 @@ impl TypeEnvironment {
         aliases: impl IntoIterator<Item = (String, Type)>,
     ) -> Self {
         for (name, ty) in aliases {
-            self.aliases.entry(name).or_insert(ty);
+            if !self.aliases.contains_key(&name) {
+                Arc::make_mut(&mut self.aliases).insert(name, ty);
+            }
         }
 
         self
@@ -644,6 +649,28 @@ pub(crate) fn build_type_environment_with_domain_registry(
     register_class_constructor_types(parsed, &mut functions);
     register_class_method_types(parsed, &mut aliases, &functions);
 
+    let shared_aliases = domains.shared_builtin_aliases();
+    let aliases = if aliases == *shared_aliases {
+        shared_aliases
+    } else {
+        Arc::new(aliases)
+    };
+    let builtin_locals = crate::builtin_module::builtin_locals(parsed);
+    // During builtin inference this list is intentionally empty. Do not seed
+    // the catalog until all builtin modules have finished their own inference.
+    let can_share_locals =
+        locals.is_empty() && builtin_locals.len() == crate::builtin_module::MODULES.len();
+    let locals = builtin_locals
+        .into_iter()
+        .chain(locals)
+        .chain(domains.builtin_locals())
+        .collect::<BTreeMap<_, _>>();
+    let locals = if can_share_locals {
+        domains.shared_builtin_locals(locals)
+    } else {
+        Arc::new(locals)
+    };
+
     (
         TypeEnvironment {
             path: parsed.path.clone(),
@@ -660,11 +687,7 @@ pub(crate) fn build_type_environment_with_domain_registry(
                         .map(|parent| (class.name.clone(), parent.clone()))
                 })
                 .collect(),
-            locals: crate::builtin_module::builtin_locals(parsed)
-                .into_iter()
-                .chain(locals)
-                .chain(domains.builtin_locals())
-                .collect(),
+            locals,
             local_docs,
             functions,
             deprecated_accesses: BTreeMap::new(),
@@ -4170,4 +4193,21 @@ fn type_diagnostic(
         .unwrap_or(crate::SourcePosition { line: 1, column: 1 });
 
     Diagnostic::error(path, position.line, position.column, message).with_code(code)
+}
+#[cfg(test)]
+mod sharing_tests {
+    use super::*;
+
+    #[test]
+    fn builtin_catalogs_share_storage_without_leaking_project_aliases() {
+        let parsed = crate::parse_tua_source("shared.tua", "return 1").unwrap();
+        let first = TypeEnvironment::from_parsed(&parsed).unwrap();
+        let second = TypeEnvironment::from_parsed(&parsed).unwrap();
+        assert!(Arc::ptr_eq(&first.aliases, &second.aliases));
+        assert!(Arc::ptr_eq(&first.locals, &second.locals));
+        let changed = first.with_alias_types([("ProjectOnly".to_owned(), Type::number())]);
+        assert_eq!(changed.alias("ProjectOnly"), Some(&Type::number()));
+        assert!(second.alias("ProjectOnly").is_none());
+        assert!(!Arc::ptr_eq(&changed.aliases, &second.aliases));
+    }
 }

@@ -657,10 +657,10 @@ impl AnalysisHost {
             require_path_separator: self.require_path_separator,
             module_path_index,
             builtin_catalogs: self.builtin_catalogs.clone(),
-            module_graph,
-            type_database,
-            symbol_index,
-            usage_index,
+            module_graph: Arc::new(module_graph),
+            type_database: Arc::new(type_database),
+            symbol_index: Arc::new(symbol_index),
+            usage_index: Arc::new(usage_index),
             last_good_files: self.last_good_files.borrow().clone(),
             completion_adaptive_stats: self.completion_adaptive_stats.clone(),
             completion_sequence_ranking: self.completion_sequence_ranking.clone(),
@@ -1170,7 +1170,7 @@ impl AnalysisHost {
 
     pub fn document_links(&self, path: impl AsRef<Path>) -> Vec<ModuleLink> {
         self.current_analysis_file(path.as_ref())
-            .map(|file| file.require_edges)
+            .map(|file| file.require_edges.clone())
             .unwrap_or_default()
     }
 
@@ -1875,14 +1875,14 @@ impl AnalysisHost {
 
             last_good_files.insert(
                 path.clone(),
-                LastGoodAnalysisFile {
+                LastGoodAnalysisFile(Arc::new(LastGoodAnalysisFileData {
                     parsed: parsed.clone(),
                     hir: file.hir().cloned().expect("parsed file must have HIR"),
                     environment: file
                         .environment()
                         .cloned()
                         .expect("parsed file must have a type environment"),
-                },
+                })),
             );
         }
     }

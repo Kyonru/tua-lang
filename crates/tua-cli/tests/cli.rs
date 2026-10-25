@@ -1582,6 +1582,9 @@ timeout_ms = 20
     .expect("failed to write config");
     fs::write(temp.path().join("tools/import.sh"), "sleep 2\n").expect("failed to write importer");
 
+    // A freshly linked macOS executable can spend seconds in OS validation.
+    // Measure importer cancellation independently of that first launch cost.
+    assert!(tua().arg("--version").output().unwrap().status.success());
     let started = Instant::now();
     let output = tua()
         .arg("check")

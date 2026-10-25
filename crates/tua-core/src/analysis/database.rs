@@ -48,7 +48,7 @@ impl AnalysisQueryCache {
         let key = parsed_cache_key(path, source, kind);
 
         if let Some(parsed) = self.parsed_files.get(&key) {
-            return (parsed.clone(), true);
+            return (parsed.as_ref().clone(), true);
         }
 
         self.parsed_files
@@ -61,7 +61,7 @@ impl AnalysisQueryCache {
             parse_analysis_source(path, source.to_owned(), kind)
         };
 
-        self.parsed_files.insert(key, parsed.clone());
+        self.parsed_files.insert(key, Arc::new(parsed.clone()));
 
         (parsed, false)
     }
@@ -593,7 +593,7 @@ fn build_analysis_file(
         })
     };
 
-    AnalysisFile {
+    AnalysisFile(Arc::new(AnalysisFileData {
         source,
         kind,
         parsed,
@@ -607,7 +607,7 @@ fn build_analysis_file(
         ecs_index,
         object_pool_index,
         symbols,
-    }
+    }))
 }
 
 fn type_import_collision_diagnostics(parsed: &ParsedSource, scope: &ScopeMap) -> Vec<Diagnostic> {

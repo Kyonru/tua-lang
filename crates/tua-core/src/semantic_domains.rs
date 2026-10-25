@@ -1,4 +1,6 @@
 use full_moon::ast::{Expression, FunctionCall};
+use std::collections::BTreeMap;
+use std::sync::{Arc, OnceLock};
 
 use crate::types::{FunctionType, Type, TypeEnvironment, TypedFunction};
 use crate::{
@@ -72,6 +74,33 @@ impl BuiltinDomainRegistry {
         self.domains()
             .flat_map(BuiltinDomain::builtin_aliases)
             .collect()
+    }
+
+    pub(crate) fn shared_builtin_aliases(self) -> Arc<BTreeMap<String, Type>> {
+        static STANDARD: OnceLock<Arc<BTreeMap<String, Type>>> = OnceLock::new();
+        static WITHOUT_ECS: OnceLock<Arc<BTreeMap<String, Type>>> = OnceLock::new();
+        let cache = if self.ecs_enabled {
+            &STANDARD
+        } else {
+            &WITHOUT_ECS
+        };
+        cache
+            .get_or_init(|| Arc::new(self.builtin_aliases().into_iter().collect()))
+            .clone()
+    }
+
+    pub(crate) fn shared_builtin_locals(
+        self,
+        locals: BTreeMap<String, Type>,
+    ) -> Arc<BTreeMap<String, Type>> {
+        static STANDARD: OnceLock<Arc<BTreeMap<String, Type>>> = OnceLock::new();
+        static WITHOUT_ECS: OnceLock<Arc<BTreeMap<String, Type>>> = OnceLock::new();
+        let cache = if self.ecs_enabled {
+            &STANDARD
+        } else {
+            &WITHOUT_ECS
+        };
+        cache.get_or_init(|| Arc::new(locals)).clone()
     }
 
     pub(crate) fn defines_alias(self, name: &str, ty: &Type) -> bool {

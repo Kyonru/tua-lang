@@ -104,6 +104,13 @@ cached products and advances that revision.
 per-file facts with project-wide indexes and exposes stable query APIs to the
 CLI and LSP.
 
+Per-file analysis records are immutable and shared by reference between the
+host cache and snapshot copies. Snapshot clones also share their immutable
+project-wide indexes. Updating a file creates new records and indexes; in-flight
+requests retain the previous revision without copying its AST and semantic data.
+Identical builtin alias and local catalogs also share storage across files;
+project-specific additions use copy-on-write storage.
+
 Module-path completion follows the same boundary. Workspace indexing and file
 events provide normalized module paths and workspace-scoped require roots to
 `AnalysisHost`; each snapshot combines that inventory with live VFS overlays

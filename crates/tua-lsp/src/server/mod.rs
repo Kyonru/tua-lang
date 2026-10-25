@@ -34,7 +34,7 @@ use transport::{read_message, write_message};
 const SLOW_DIAGNOSTICS_DEBOUNCE: Duration = Duration::from_millis(200);
 const PATTERN_CORPUS_REBUILD_DEBOUNCE: Duration = Duration::from_millis(300);
 const PATTERN_CORPUS_BATCH_SIZE: usize = 16;
-const RECENT_REQUEST_LATENCY_LIMIT: usize = 128;
+const RECENT_REQUEST_LATENCY_LIMIT: usize = 4096;
 const EVENT_QUEUE_CAPACITY: usize = 16;
 
 #[derive(Default)]

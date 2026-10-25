@@ -49,17 +49,15 @@ jobs:
       - name: Run representative profiles
         run: make profile-representative
         env:
-          # project-1000 remains part of the local profile-all suite, but a
-          # single run peaks above the memory available on GitHub's standard
-          # hosted runner. The hosted trend still covers large files, a
-          # 100-file project, and 256-module graph shapes.
-          TUA_REPRESENTATIVE_FIXTURES: single-1000,single-5000,project-100,graph-chain-256,graph-diamond-256,graph-cycles-64
+          TUA_REPRESENTATIVE_FIXTURES: single-1000,single-5000,project-100,project-1000,graph-chain-256,graph-diamond-256,graph-cycles-64
           TUA_REPRESENTATIVE_COLD_REPEAT: 2
-          TUA_REPRESENTATIVE_WARM_REPEAT: 5
-          TUA_REPRESENTATIVE_CONTENTION_REPEAT: 3
+          TUA_REPRESENTATIVE_WARM_REPEAT: 20
+          TUA_REPRESENTATIVE_CONTENTION_REPEAT: 20
           TUA_REPRESENTATIVE_BACKGROUND_BURST: 32
           TUA_LSP_REQUEST_TIMEOUT_MS: 180000
-          TUA_REPRESENTATIVE_COMPLETION_P95_BUDGET_MS: 60000
+          TUA_REPRESENTATIVE_COMPLETION_P95_BUDGET_MS: 3000
+          TUA_REPRESENTATIVE_WARM_COMPLETION_P95_BUDGET_MS: 500
+          TUA_REPRESENTATIVE_MEMORY_BUDGET_MIB: 4096
           TUA_REPRESENTATIVE_PROFILE_OUT: target/tua-speed/representative-profile.json
       - name: Upload representative report
         if: always()

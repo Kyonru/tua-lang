@@ -6,6 +6,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Analysis snapshots share immutable per-file records to reduce editor memory
+  and copy cost. Performance gates collect 20 samples and enforce separate warm,
+  contended and sampled-memory limits, including larger project fixtures.
+
 - Source/configuration reads enforce 8 MiB/1 MiB limits. Shared analysis rejects
   projects exceeding 128 MiB of source inputs or 20,000 source files and reports
   a diagnostic instead of retaining stale results for rejected files.
