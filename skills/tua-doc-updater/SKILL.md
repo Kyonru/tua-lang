@@ -64,6 +64,14 @@ separate docs request when the implementation changed.
   defects and distinguish fixed issues from remaining gaps.
 - Remove stale language such as "not implemented" after behavior lands.
 
+## Editor Screenshots
+
+For editor UI changes and release preparation, follow
+`skills/tua-release-prep/SKILL.md`. Use `make extension-screenshots` to rebuild and
+capture the actual extension, then inspect every PNG and update README captions.
+Run `make extension-screenshots-check` to verify the completed image set and links.
+Do not substitute static mockups for screenshots of supported features.
+
 ## Release Summaries
 
 - When preparing a release, write or refresh `### Release summary` at the

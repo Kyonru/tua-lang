@@ -22,6 +22,17 @@ but it is not sufficient evidence that the release is safe to publish.
 - [ ] Visual Studio Marketplace and Open VSX show the same version and platform
       packages as the GitHub release.
 
+## Editor documentation evidence
+
+- [ ] For editor UI changes, `make extension-screenshots` completes against the
+      candidate and every captured image receives a visual review. Otherwise,
+      review the existing gallery and record why recapture was unnecessary.
+- [ ] `make extension-screenshots-check` passes; README captions match the panels.
+      `editors/vscode/docs/screenshots/capture.json` records the capture versions,
+      timestamp, bundle hash, and image hashes. Explain any candidate mismatch.
+- [ ] Missing native dependencies or graphical access are recorded as pending;
+      a headless artifact check is not a substitute for a new native capture.
+
 ## Minor-release qualification
 
 For a minor release, also record evidence for these checks in the release issue

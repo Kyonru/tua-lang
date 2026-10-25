@@ -48,6 +48,16 @@ cleanup, docs, packaging, or conflict resolution.
   with `unzip -t`, and report its SHA-256. `extension-check` also validates
   `.vscode/launch.json` through `launch-config-check.js`.
 
+## Editor Screenshot Checks
+
+- Use `make extension-screenshots` for release-facing editor UI changes; it needs
+  a local graphical editor, LÖVE, and a staged compiler. It builds the production
+  bundle before capture so bundling regressions are exercised.
+- Run `make extension-screenshots-check` for image links, dimensions, and hashes.
+  This check is headless; it does not validate current UI behavior or appearance.
+- Follow `skills/tua-release-prep/SKILL.md` for visual review and provenance.
+  Record unavailable native capture as pending rather than a passing check.
+
 ## Release Notes Checks
 
 - Before tagging a release, use `tua-doc-updater` to prepare its changelog

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Tua Release Preparation"
+  short_description: "Prepare release notes, editor screenshots, and checks"
+  default_prompt: "Use $tua-release-prep to prepare the Tua release candidate, refresh editor screenshots, and report verification evidence."

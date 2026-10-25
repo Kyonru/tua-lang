@@ -102,7 +102,12 @@ the native inlay-hint maximum-length setting used by Tua's compact-hint toggle.
    full tagged changelog and download/checksum guidance. Older entries without
    a summary retain full-note extraction. Commit the notes and leave the
    worktree clean.
-2. Run the required extension-host suite.
+2. Refresh the editor README screenshots when the release changes editor UI,
+   and review their captions and visual quality. Run `make extension-screenshots`
+   in a graphical session with a staged compiler and local VS Code/VSCodium;
+   `make extension-screenshots-check` verifies existing artifacts without a GUI.
+   See the repository's `skills/tua-release-prep/SKILL.md` for preparation and
+   provenance checks. Run the required extension-host suite.
 3. Run `make release-version VERSION=<version>`. The guarded script updates
    Rust, VS Code, lockfile, changelog, and release-documentation versions; runs
    `make ci-check`; creates a `release: v<version>` commit; and adds an
