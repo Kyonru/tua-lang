@@ -114,6 +114,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Runtime Inspector keeps object identity fields intact when snapshots reach the
+  serialization budget, preventing large inspected worlds from disconnecting.
+
 - Module Graph, ECS Explorer, and Object Pool Explorer keep content reachable
   when toolbars grow or editor panes are short. Sprite preview controls scroll
   inside their sticky panel instead of extending below the viewport.

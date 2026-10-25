@@ -6,7 +6,7 @@ const os = require("node:os");
 const path = require("node:path");
 const net = require("node:net");
 const { once } = require("node:events");
-const { listen, MAX_FRAME } = require("../../src/inspector/connection");
+const { listen, MAX_FRAME, validSnapshot } = require("../../src/inspector/connection");
 const { createLauncher } = require("../../src/inspector/launcher");
 const { InspectorSessions } = require("../../src/inspector/sessions");
 const { ActivityStore } = require("../../src/workspace/activity-store");
@@ -112,6 +112,7 @@ io.write(inspect.snapshot(), "\\n")`;
   assert.equal(small.objects[0].data.self, "<cycle>");
   assert(small.objects[0].data.text.length < 250);
   assert.equal(large.truncated, true);
+  assert.equal(validSnapshot(large), true, "truncation must preserve each object envelope so the connection stays valid");
   assert(Buffer.byteLength(JSON.stringify(large)) < MAX_FRAME);
 });
 

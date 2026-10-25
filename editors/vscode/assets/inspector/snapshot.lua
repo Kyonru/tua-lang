@@ -81,7 +81,7 @@ function M.snapshot()
   local budget = { left = LIMIT, truncated = false }
   local entries, count = {}, 0
   for object, entry in pairs(objects) do
-    if count >= 128 or budget.left <= 0 then budget.truncated = true; break end
+    if count >= 128 or budget.left < 8 then budget.truncated = true; break end
     count = count + 1
     local success, data = pcall(entry.reader, object)
     if not success then data = { unavailable = "Could not read runtime object" } end
@@ -90,8 +90,15 @@ function M.snapshot()
       data.secondsSinceUpdate = entry.lastUpdate and math.max(0, clock() - entry.lastUpdate) or "Never"
     end
     if entry.kind == "signals" then data.emitted = entry.emitted; data.recent = entry.events end
-    entries[#entries + 1] = encode({ id = entry.id, kind = entry.kind, label = entry.label,
-      source = entry.source, line = entry.line, constructor = entry.constructor, data = data }, budget, {}, 0)
+    -- Reserve the protocol envelope before encoding game data. Truncation must
+    -- never remove required identity fields or replace data with a string.
+    local metadataBudget = { left = 16 }
+    local metadata = encode({ id = entry.id, kind = entry.kind, label = entry.label,
+      source = entry.source, line = entry.line, constructor = entry.constructor }, metadataBudget, {}, 0)
+    budget.left = budget.left - (16 - metadataBudget.left)
+    if metadataBudget.truncated then budget.truncated = true end
+    local payload = encode(data, budget, {}, 1)
+    entries[#entries + 1] = metadata:sub(1, -2) .. ',"data":' .. payload .. '}'
   end
   sequence = sequence + 1
   local bytes = 0
