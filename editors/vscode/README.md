@@ -123,6 +123,14 @@ previews or generated Lua. Source items navigate to their declaration. Project
 data loads on expansion and refreshes after saves; the Refresh action retries
 failed requests. Existing commands remain available in the Command Palette.
 
+## Build and run status
+
+The **Run Sessions** view and status bar show builds, running games, reload
+requests, successful module reloads, and failed builds that leave the last good
+code running. Select a session to inspect project diagnostics and reloaded
+modules. Stop beside an active session cancels that run, including hot reload.
+Recent sessions stay in memory for this editor window; they are not uploaded.
+
 ## What You Get
 
 ### Core Tua Editing

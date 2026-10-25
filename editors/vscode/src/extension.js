@@ -14,6 +14,7 @@ const { registerLoveDevex } = require("./love");
 const { registerModuleDevex } = require("./modules");
 const { registerObjectPoolDevex } = require("./object-pools");
 const { registerSetup } = require("./setup");
+const { registerRunActivity } = require("./workspace/activity");
 const { registerWorkspaceSidebar } = require("./workspace/sidebar");
 const { registerSignalDevex } = require("./signals");
 const { registerStateMachineDevex } = require("./state-machines");
@@ -52,7 +53,10 @@ async function activate(context) {
     isTuaDocument,
   });
   context.subscriptions.push(editorDevex);
+  const runActivity = registerRunActivity();
+  context.subscriptions.push(runActivity);
   loveDevex = registerLoveDevex({
+    activity: runActivity.store,
     appendOutputLine: (line) => outputChannel?.appendLine(line),
     configurationTarget,
     getClient: () => client,

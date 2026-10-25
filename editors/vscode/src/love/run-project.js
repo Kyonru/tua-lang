@@ -16,7 +16,7 @@ const TASK_TYPE = "tua";
 const TASK_NAME = "Run LOVE Project";
 const RUNNING_CONTEXT = "tua.loveProjectRunning";
 
-function registerLoveProjectRunner({ appendOutputLine, getClient, getServerCommand }) {
+function registerLoveProjectRunner({ appendOutputLine, getClient, getServerCommand, activity }) {
   let activeExecution;
   const disposables = [
     vscode.commands.registerCommand(COMMANDS.runLoveProject, () =>
@@ -74,6 +74,7 @@ function registerLoveProjectRunner({ appendOutputLine, getClient, getServerComma
     }
 
     const task = createLoveProjectTask({
+      activity,
       appendOutputLine,
       layout,
       loveCommand: configuredLoveCommand(),
@@ -106,8 +107,10 @@ function registerLoveProjectRunner({ appendOutputLine, getClient, getServerComma
   return vscode.Disposable.from(...disposables);
 }
 
-function createLoveProjectTask({ appendOutputLine, layout, loveCommand, tuaCommand }) {
+function createLoveProjectTask({ appendOutputLine, layout, loveCommand, tuaCommand, activity }) {
   const terminalOptions = {
+    activity,
+    title: TASK_NAME,
     appendOutputLine,
     cwd: layout.configDirectory,
     loveCommand,
@@ -198,7 +201,7 @@ function resolveLoveCommand(command, options = {}) {
 }
 
 class LoveProjectTerminal {
-  constructor({ appendOutputLine, cwd, loveCommand, outputDirectory, tuaCommand }) {
+  constructor({ appendOutputLine, cwd, loveCommand, outputDirectory, tuaCommand, activity, kind = "run", title }) {
     this.closeEmitter = new vscode.EventEmitter();
     this.writeEmitter = new vscode.EventEmitter();
     this.onDidClose = this.closeEmitter.event;
@@ -212,6 +215,9 @@ class LoveProjectTerminal {
     this.finished = false;
     this.lineBuffer = "";
     this.sourceMaps = [];
+    this.activity = activity;
+    this.session = activity?.begin({ cwd, kind, title });
+    if (this.session) this.session.stop = () => this.close();
   }
 
   open() {
@@ -219,6 +225,7 @@ class LoveProjectTerminal {
   }
 
   close() {
+    this.stopped = true;
     this.killActiveProcess();
     this.finish(1);
   }
@@ -239,14 +246,14 @@ class LoveProjectTerminal {
 
     this.sourceMaps = this.loadSourceMaps();
     this.writeLine(`[tua] Starting LOVE from ${this.outputDirectory}`);
-    const loveCode = await this.runProcess(this.loveCommand, [this.outputDirectory]);
+    const loveCode = await this.runProcess(this.loveCommand, [this.outputDirectory], { onStart: () => this.activity?.update(this.session, "running") });
 
     if (!this.finished) {
       this.finish(loveCode);
     }
   }
 
-  runProcess(command, args) {
+  runProcess(command, args, { onStart } = {}) {
     this.writeLine(`$ ${formatCommand(command, args)}`);
 
     return new Promise((resolve) => {
@@ -272,6 +279,7 @@ class LoveProjectTerminal {
           env: process.env,
           stdio: ["ignore", "pipe", "pipe"],
           windowsHide: true,
+          detached: process.platform !== "win32",
         });
       } catch (error) {
         this.writeLine(`[tua] Failed to start ${command}: ${formatError(error)}`);
@@ -280,6 +288,7 @@ class LoveProjectTerminal {
       }
 
       this.activeProcess = child;
+      child.once("spawn", () => onStart?.());
       child.stdout.on("data", (chunk) => this.writeProcessOutput(chunk));
       child.stderr.on("data", (chunk) => this.writeProcessOutput(chunk));
       child.once("error", (error) => {
@@ -325,6 +334,7 @@ class LoveProjectTerminal {
   }
 
   writeProcessLine(line) {
+    this.activity?.line(this.session, line);
     this.writeTerminalLine(line);
 
     if (this.sourceMaps.length === 0) {
@@ -379,7 +389,13 @@ class LoveProjectTerminal {
       return;
     }
 
-    this.activeProcess.kill();
+    const child = this.activeProcess;
+    if (Number.isInteger(child.pid) && process.platform !== "win32") {
+      try { process.kill(-child.pid, "SIGTERM"); return; } catch { /* Already exited or not a process group. */ }
+    }
+    if (Number.isInteger(child.pid) && process.platform === "win32") {
+      childProcess.execFile("taskkill", ["/pid", String(child.pid), "/T", "/F"], () => child.kill());
+    } else child.kill();
   }
 
   finish(code) {
@@ -388,6 +404,7 @@ class LoveProjectTerminal {
     }
 
     this.finished = true;
+    this.activity?.finish(this.session, code, this.stopped);
     this.closeEmitter.fire(code);
     this.closeEmitter.dispose();
     this.writeEmitter.dispose();

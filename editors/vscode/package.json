@@ -948,6 +948,18 @@
         "title": "Open File Generated Lua",
         "category": "Tua",
         "icon": "$(go-to-file)"
+      },
+      {
+        "command": "tua.activity.show",
+        "title": "Inspect Run Status",
+        "category": "Tua",
+        "icon": "$(pulse)"
+      },
+      {
+        "command": "tua.activity.stop",
+        "title": "Stop Session",
+        "category": "Tua",
+        "icon": "$(debug-stop)"
       }
     ],
     "views": {
@@ -960,6 +972,11 @@
         {
           "id": "tua.assets",
           "name": "Tua Assets",
+          "when": "tua.hasProject"
+        },
+        {
+          "id": "tua.sessions",
+          "name": "Run Sessions",
           "when": "tua.hasProject"
         }
       ]
@@ -1212,6 +1229,11 @@
           "command": "tua.workspace.generated",
           "when": "view == tua.workspace && viewItem == tuaWorkspace.source",
           "group": "tua@2"
+        },
+        {
+          "command": "tua.activity.stop",
+          "when": "view == tua.sessions && viewItem == tuaSession.active",
+          "group": "inline"
         }
       ],
       "tua.editorTools": [

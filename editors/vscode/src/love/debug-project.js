@@ -22,11 +22,20 @@ const TUA_LAUNCH_PROPERTY = "tuaProject";
 const DEBUG_BOOTSTRAP =
   'if os.getenv("LOCAL_LUA_DEBUGGER_VSCODE") == "1" then require("lldebugger").start(); function love.errorhandler(message) error(message, 2) end end\n';
 
-function registerLoveProjectDebugger({ appendOutputLine, getClient, getServerCommand }) {
+function registerLoveProjectDebugger({ appendOutputLine, getClient, getServerCommand, activity }) {
   const preparedOutputs = new Set();
+  const startDisposable = vscode.debug.onDidStartDebugSession?.((session) => {
+    for (const prepared of preparedOutputs) {
+      if (debugSessionTargetsOutput(session, prepared.outputDirectory) && prepared.activitySession) {
+        prepared.activitySession.stop = () => vscode.debug.stopDebugging(session);
+        activity?.update(prepared.activitySession, "running");
+      }
+    }
+  }) || { dispose() {} };
   const terminationDisposable = vscode.debug.onDidTerminateDebugSession((session) => {
     for (const prepared of preparedOutputs) {
       if (debugSessionTargetsOutput(session, prepared.outputDirectory)) {
+        activity?.finish(prepared.activitySession, 0);
         restorePreparedOutput(preparedOutputs, prepared);
       }
     }
@@ -60,6 +69,7 @@ function registerLoveProjectDebugger({ appendOutputLine, getClient, getServerCom
 
         const prepared = await buildAndPrepareLoveDebugProject({
           appendOutputLine,
+          activity,
           getServerCommand,
           layout,
           preparedOutputs,
@@ -97,6 +107,7 @@ function registerLoveProjectDebugger({ appendOutputLine, getClient, getServerCom
 
     const preparedResult = await buildAndPrepareLoveDebugProject({
       appendOutputLine,
+      activity,
       getServerCommand,
       layout,
       preparedOutputs,
@@ -117,6 +128,7 @@ function registerLoveProjectDebugger({ appendOutputLine, getClient, getServerCom
     try {
       started = await vscode.debug.startDebugging(folder, configuration);
     } catch (error) {
+      activity?.finish(pendingOutput.activitySession, 1);
       restorePreparedOutput(preparedOutputs, pendingOutput);
       vscode.window.showErrorMessage(
         `Second Local Lua Debugger did not start the LOVE project: ${formatError(error)}`,
@@ -125,11 +137,13 @@ function registerLoveProjectDebugger({ appendOutputLine, getClient, getServerCom
     }
 
     if (!started) {
+      activity?.finish(pendingOutput.activitySession, 1);
       restorePreparedOutput(preparedOutputs, pendingOutput);
       vscode.window.showErrorMessage("Second Local Lua Debugger did not start the LOVE project.");
       return undefined;
     }
 
+    activity?.update(pendingOutput.activitySession, "running");
     appendOutputLine?.(`[tua] Debugging LOVE from ${layout.outputDirectory}`);
     return {
       bootstrapPath: prepared.bootstrapPath,
@@ -142,6 +156,7 @@ function registerLoveProjectDebugger({ appendOutputLine, getClient, getServerCom
     commandDisposable,
     configurationProviderDisposable,
     terminationDisposable,
+    startDisposable,
     {
       dispose() {
         for (const prepared of preparedOutputs) {
@@ -174,10 +189,12 @@ async function ensureDebuggerExtension() {
 
 async function buildAndPrepareLoveDebugProject({
   appendOutputLine,
+  activity,
   getServerCommand,
   layout,
   preparedOutputs,
 }) {
+  const activitySession = activity?.begin({ kind: "debug", title: "Debug LOVE Project", cwd: layout.configDirectory });
   const tuaCommand = getServerCommand?.() || "tua";
   appendOutputLine?.(`[tua] Building debug project in ${layout.configDirectory}`);
   const buildCode = await runBuildCommand({
@@ -186,6 +203,7 @@ async function buildAndPrepareLoveDebugProject({
     tuaCommand,
   });
   if (buildCode !== 0) {
+    activity?.finish(activitySession, buildCode);
     appendOutputLine?.(`[tua] Debug build failed with exit code ${buildCode}.`);
     vscode.window.showErrorMessage("Tua build failed. Open the Tua output for details.");
     await vscode.commands.executeCommand(COMMANDS.focusOutput);
@@ -196,12 +214,14 @@ async function buildAndPrepareLoveDebugProject({
   try {
     prepared = prepareLoveDebugOutput(layout.outputDirectory);
   } catch (error) {
+    activity?.finish(activitySession, 1);
     appendOutputLine?.(`[tua] Could not prepare LOVE debug output: ${formatError(error)}`);
     vscode.window.showErrorMessage(`Could not prepare LOVE debug output: ${formatError(error)}`);
     return undefined;
   }
 
   const pendingOutput = {
+    activitySession,
     outputDirectory: layout.outputDirectory,
     restore: prepared.restore,
   };

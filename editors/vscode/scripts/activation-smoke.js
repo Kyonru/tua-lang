@@ -2334,6 +2334,7 @@ function createMockState(workspace, options = {}) {
       showInputBox() {
         return Promise.resolve(options.inputBoxValue ?? "hero.png");
       },
+      createStatusBarItem() { return { show() {}, hide() {}, dispose() {} }; },
       setStatusBarMessage() {
         return { dispose() {} };
       },
@@ -2351,6 +2352,7 @@ function createMockState(workspace, options = {}) {
         return Promise.resolve(options.warningChoice);
       },
     },
+    StatusBarAlignment: { Left: 1, Right: 2 },
     workspace: {
       isTrusted: options.isTrusted ?? true,
       workspaceFolders: [

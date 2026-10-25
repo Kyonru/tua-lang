@@ -52,18 +52,19 @@ class TuaCommandTerminal extends LoveProjectTerminal {
   }
 
   writeProcessLine(line) {
-    if (this.sourceMaps.length === 0 && line.startsWith("dev: started")) {
+    if (line.startsWith("dev: started") || line.startsWith("dev: sent reload")) {
       this.sourceMaps = this.loadSourceMaps();
     }
     super.writeProcessLine(line);
   }
 }
 
-function registerGameCommands({ appendOutputLine, getClient, getServerCommand }) {
+function registerGameCommands({ appendOutputLine, getClient, getServerCommand, activity }) {
   return vscode.Disposable.from(
     vscode.commands.registerCommand(COMMANDS.runLoveProjectWithHotReload, () =>
       runTuaTask({
         appendOutputLine,
+        activity,
         getClient,
         getServerCommand,
         action: "running",
@@ -89,6 +90,7 @@ function registerGameCommands({ appendOutputLine, getClient, getServerCommand })
       }
       return runTuaTask({
         appendOutputLine,
+        activity,
         getClient,
         getServerCommand,
         action: "packaging",
@@ -99,7 +101,7 @@ function registerGameCommands({ appendOutputLine, getClient, getServerCommand })
   );
 }
 
-async function runTuaTask({ appendOutputLine, getClient, getServerCommand, action, taskName, args }) {
+async function runTuaTask({ appendOutputLine, getClient, getServerCommand, activity, action, taskName, args }) {
   if (!vscode.workspace.isTrusted) {
     vscode.window.showWarningMessage("Trust this workspace before running Tua game tasks.");
     return undefined;
@@ -115,6 +117,9 @@ async function runTuaTask({ appendOutputLine, getClient, getServerCommand, actio
   }
 
   const options = {
+    activity,
+    kind: action === "packaging" ? "package" : "dev",
+    title: taskName,
     appendOutputLine,
     cwd: layout.configDirectory,
     loveCommand: configuredLoveCommand(),
