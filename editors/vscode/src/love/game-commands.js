@@ -2,6 +2,8 @@
 
 const fs = require("fs");
 const vscode = require("vscode");
+const { normalizeInstances } = require("../workspace/run-options");
+const { HotReloadInstancesTerminal } = require("./hot-reload-instances");
 const { COMMANDS } = require("../constants");
 const {
   LoveProjectTerminal,
@@ -73,8 +75,10 @@ function registerGameCommands({ appendOutputLine, getClient, getServerCommand, a
         getServerCommand,
         showConsole: presentation?.console === true,
         action: "running",
-        taskName: HOT_RELOAD_TASK_NAME,
-        args: () => ["dev", "--love", configuredLoveCommand()],
+        taskName: presentation?.title || HOT_RELOAD_TASK_NAME,
+        instances: presentation?.instances,
+        configurationName: presentation?.configurationName,
+        args: () => presentation?.instances === undefined ? ["dev", "--love", configuredLoveCommand()] : ["dev", "--no-launch"],
       }),
     ),
     vscode.commands.registerCommand(COMMANDS.packageGame, async (options) => {
@@ -99,6 +103,7 @@ function registerGameCommands({ appendOutputLine, getClient, getServerCommand, a
         getClient,
         getServerCommand,
         showConsole: options?.console === true,
+        configurationName: options?.configurationName,
         action: "packaging",
         taskName: `${PACKAGE_TASK_NAME} (${choice.label})`,
         args: () => args,
@@ -107,7 +112,7 @@ function registerGameCommands({ appendOutputLine, getClient, getServerCommand, a
   );
 }
 
-async function runTuaTask({ appendOutputLine, getClient, getServerCommand, activity, action, taskName, args, showConsole = false }) {
+async function runTuaTask({ appendOutputLine, getClient, getServerCommand, activity, action, taskName, args, showConsole = false, instances, configurationName }) {
   if (!vscode.workspace.isTrusted) {
     vscode.window.showWarningMessage("Trust this workspace before running Tua game tasks.");
     return undefined;
@@ -122,9 +127,13 @@ async function runTuaTask({ appendOutputLine, getClient, getServerCommand, activ
     return undefined;
   }
 
+  try { instances = instances === undefined ? undefined : normalizeInstances(instances); }
+  catch (error) { vscode.window.showErrorMessage(error.message); return undefined; }
   const tuaArgs = args();
   const options = {
     activity,
+    instances,
+    configurationName,
     kind: tuaArgs[0],
     title: taskName,
     appendOutputLine,
@@ -139,7 +148,7 @@ async function runTuaTask({ appendOutputLine, getClient, getServerCommand, activ
     vscode.TaskScope.Workspace,
     taskName,
     "Tua",
-    new vscode.CustomExecution(async () => new TuaCommandTerminal(options)),
+    new vscode.CustomExecution(async () => instances ? new HotReloadInstancesTerminal(options) : new TuaCommandTerminal(options)),
     [],
   );
   task.detail = `tua ${options.tuaArgs.join(" ")} in ${layout.configDirectory}`;
