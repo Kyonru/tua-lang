@@ -128,6 +128,20 @@ jobs:
         run: |
           python3 scripts/package_release.py checksum \
             "dist/tua-${{ needs.validate.outputs.version }}-${{ matrix.vsce }}.vsix"
+      - name: Exercise packaged servers
+        shell: bash
+        run: |
+          suffix=tar.gz
+          if [[ "${{ runner.os }}" == "Windows" ]]; then suffix=zip; fi
+          python3 scripts/smoke_release.py \
+            --archive "dist/tua-${{ needs.validate.outputs.version }}-${{ matrix.target }}.${suffix}" \
+            --vsix "dist/tua-${{ needs.validate.outputs.version }}-${{ matrix.vsce }}.vsix" \
+            --version "${{ needs.validate.outputs.version }}" --target "${{ matrix.target }}"
+      - name: Install and exercise packaged VSIX
+        if: runner.os == 'Linux'
+        env:
+          TUA_TEST_VSIX: ${{ github.workspace }}/dist/tua-${{ needs.validate.outputs.version }}-${{ matrix.vsce }}.vsix
+        run: xvfb-run --auto-servernum node editors/vscode/test/real-server/run.js
       - name: Attest release artifacts
         uses: actions/attest-build-provenance@43d14bc2b83dec42d39ecae14e916627a18bb661 # v3
         with:

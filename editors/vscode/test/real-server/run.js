@@ -3,31 +3,50 @@
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
-const { runTests } = require("@vscode/test-electron");
+const { runTests, downloadAndUnzipVSCode, resolveCliArgsFromVSCodeExecutablePath } = require("@vscode/test-electron");
+const { spawnSync } = require("child_process");
 const { localVSCodeExecutable } = require("../vscode-executable");
 
 async function main() {
-  const extensionDevelopmentPath = path.resolve(__dirname, "..", "..");
+  let extensionDevelopmentPath = path.resolve(__dirname, "..", "..");
   const extensionTestsPath = path.resolve(__dirname, "suite", "index.js");
-  const serverPath = path.resolve(
+  let serverPath = path.resolve(
     process.env.TUA_REAL_SERVER_PATH ||
       path.join(extensionDevelopmentPath, "bin", process.platform === "win32" ? "tua.exe" : "tua"),
   );
 
-  assertRealServer(serverPath);
+  const vsix = process.env.TUA_TEST_VSIX;
+  if (!vsix) assertRealServer(serverPath);
 
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "tua-vsc-real-"));
   const workspacePath = path.join(tempRoot, "project");
   const fixtures = createProject(workspacePath);
 
   try {
+    let vscodeExecutablePath = localVSCodeExecutable();
+    if (vsix) {
+      vscodeExecutablePath ||= await downloadAndUnzipVSCode();
+      const [cli, ...cliArgs] = resolveCliArgsFromVSCodeExecutablePath(vscodeExecutablePath);
+      const installed = path.join(tempRoot, "extensions");
+      const result = spawnSync(cli, [...cliArgs, "--user-data-dir", path.join(tempRoot, "user-data"),
+        "--extensions-dir", installed, "--install-extension", path.resolve(vsix), "--force"],
+        { stdio: "inherit", timeout: 120000, shell: process.platform === "win32" });
+      if (result.error || result.status !== 0) throw result.error || new Error("VSIX installation failed");
+      const entry = fs.readdirSync(installed).find(name => name.toLowerCase().startsWith("solenodontelabs.tua-"));
+      if (!entry) throw new Error("installed Tua extension not found");
+      extensionDevelopmentPath = path.join(installed, entry);
+      serverPath = path.join(extensionDevelopmentPath, "bin", process.platform === "win32" ? "tua.exe" : "tua");
+      assertRealServer(serverPath);
+      // Exercise bundled discovery, without a development server override.
+      delete process.env.TUA_SERVER_PATH;
+    }
     await runTests({
       extensionDevelopmentPath,
       extensionTestsPath,
       extensionTestsEnv: {
         TUA_REAL_SERVER_FIXTURES: JSON.stringify(fixtures),
         TUA_REAL_SERVER_PATH: serverPath,
-        TUA_SERVER_PATH: serverPath,
+        ...(vsix ? {} : { TUA_SERVER_PATH: serverPath }),
       },
       launchArgs: [
         workspacePath,
@@ -37,7 +56,7 @@ async function main() {
         `--extensions-dir=${path.join(tempRoot, "extensions")}`,
       ],
       reuseMachineInstall: true,
-      vscodeExecutablePath: localVSCodeExecutable(),
+      vscodeExecutablePath,
     });
   } finally {
     if (process.env.TUA_TEST_KEEP_TEMP === "1") {

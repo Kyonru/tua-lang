@@ -94,3 +94,9 @@ Trusted CI and release verification run `make extension-real-server-test` in
 addition to the mock-server host suite. It stages the release server and tests
 actual Lua/Tua/LOVE completion, navigation, diagnostics and editor behavior in
 VS Code. Run it locally after changes that cross the extension/LSP boundary.
+
+Release packaging additionally runs `scripts/smoke_release.py` on both archive
+and VSIX server bytes. The Linux release job installs the built VSIX into an
+isolated extensions directory and runs the real-server suite using bundled
+server discovery. To reproduce, set `TUA_TEST_VSIX` to a local VSIX and run
+`node editors/vscode/test/real-server/run.js`.
