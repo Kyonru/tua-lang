@@ -35,6 +35,7 @@ game ends `tua dev`.
 | You change | The game |
 | --- | --- |
 | A module loaded with `require` | Swaps in the new code and keeps running. |
+| A shader loaded by a module | Compiles it first, then reloads its loading modules even when their Lua is unchanged. |
 | `main.tua` or `conf.tua` | Restarts, since their top-level code sets the game up. |
 | A file with errors | Keeps running the last good build; `tua dev` prints the diagnostics. |
 
@@ -53,6 +54,20 @@ survives the edit.
 A module that returns a function rather than a table is replaced; callers that
 already captured the old function keep it until they look it up again.
 
+## Shader Edits
+
+Saving a shader referenced by `shader "path.glsl"` or a literal
+`love.graphics.newShader("path.glsl")` reloads the loaded modules that use it.
+The runtime compiles the changed source inside the running LOVE process first.
+A compilation error appears in the console and overlay, while the last working
+shader and game keep running. Saving a fix retries the reload. Shaders loaded
+by `main.lua` or `conf.lua` trigger a restart only after successful validation.
+
+As with code reloads, module-level local state resets. Shader objects exported
+in module tables are replaced; callers that cached the old object directly
+keep that object, so look up the module's shader or call its drawing function.
+Dynamic filenames and assets outside the copied source tree are not tracked.
+
 ## Errors While Playing
 
 An error in `love.update` or `love.draw`, including one introduced by a
@@ -66,7 +81,8 @@ After each error-free build, `tua dev` writes `tuahotreload.lua` into the
 output, appends `require("tuahotreload").install()` to the end of
 `main.lua`, and rewrites `.tuahotreload`. The game checks that file a few
 times a second and compares each loaded module's source with what it last
-loaded. Because the hook is appended, source-map line numbers stay correct.
+loaded. The signal also carries the full shader dependency map, so a game
+that misses an intermediate generation still detects shader edits. Because the hook is appended, source-map line numbers stay correct.
 
 `tua build` and `tua package` regenerate `main.lua` without the hook, so a
 leftover `tuahotreload.lua` in the output is never loaded, and packages never

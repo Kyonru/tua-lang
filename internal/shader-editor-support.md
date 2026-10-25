@@ -43,7 +43,8 @@ Fake-process timeout/protocol tests, editor synchronization tests, and a blocked
 validator/interactive-hover regression cover the boundaries. Real LÖVE 11.5 on
 macOS was tested; Windows `lovec.exe` remains unverified. Phase 1 editor features
 and Phase 2 value-shape diagnostics are also implemented below. The
-glslangValidator fallback, setup tooling, and shader hot reload remain planned.
+glslangValidator fallback and setup tooling remain planned. Phase 5 shader
+hot reload is implemented.
 
 ## Current state
 
@@ -445,14 +446,20 @@ Tests: extend `scripts/manifest-check.js` and the activation smoke test.
 
 ## Phase 5: Shader hot reload in `tua dev`
 
-Today a changed `.glsl` is copied to the output, but the game keeps the old
-shader.
+Implemented (Unreleased). The watch build emits a complete shader-to-output-module
+map in each reload signal; the runtime compares shader content so skipped
+generations cannot lose changes. It preflights changed shaders before any reload
+or restart, releases temporary shader objects, preserves the running game after
+shader errors, and replaces exported shader objects. Core asset references drive
+the map. CLI signal integration and plain-Lua runtime regressions cover the flow.
+Dynamic paths and assets outside the copied source tree remain untracked.
 
 Design:
 
 1. `tua dev` knows which modules load each shader asset from the analysis
    asset references. When a build changes only shader files, it writes the
-   affected module names into the reload signal.
+   complete shader-to-module map into the reload signal. The runtime detects
+   changed shader content and selects the affected loaded modules.
 2. The runtime reloads those modules even though their Lua is unchanged.
    Module reload re-runs the file, so `local water = shader "…"` builds a new
    `Shader` from the new source. The new module functions capture it.

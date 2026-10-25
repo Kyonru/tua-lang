@@ -34,11 +34,17 @@ local generation = nil
 local since_poll = 0
 local notice, notice_left = nil, 0
 local failure = nil
+local failure_blocks = true
+local shader_sources = {}
 local callbacks = {}
 local installed = false
 
 local function module_path(name)
-  return (name:gsub("%.", "/")) .. ".lua"
+  local base = (name:gsub("%.", "/"))
+  if not love.filesystem.getInfo(base .. ".lua", "file") and love.filesystem.getInfo(base .. "/init.lua", "file") then
+    return base .. "/init.lua"
+  end
+  return base .. ".lua"
 end
 
 local function read(path)
@@ -48,8 +54,9 @@ local function read(path)
   return love.filesystem.read(path)
 end
 
-local function report(message)
+local function report(message, keep_running)
   failure = message
+  failure_blocks = not keep_running
   print("[tua dev] " .. message)
 end
 
@@ -70,6 +77,58 @@ local function track_loaded_modules()
   end
 end
 
+-- The signal is data, never Lua code. Paths are hex-encoded by the CLI.
+local function shader_dependencies(signal)
+  local result = {}
+  local function decode(value)
+    if #value % 2 ~= 0 or value:find("[^0-9a-f]") then return nil end
+    return (value:gsub("..", function(pair) return string.char(tonumber(pair, 16)) end))
+  end
+  for shader, module in (signal or ""):gmatch("shader\t([0-9a-f]+)\t([0-9a-f]+)\n") do
+    shader, module = decode(shader), decode(module)
+    if shader and module then
+      result[shader] = result[shader] or {}
+      result[shader][module] = true
+    end
+  end
+  return result
+end
+
+local function changed_shaders(signal)
+  local forced, sources = {}, {}
+  local loaded = {}
+  for name in pairs(tracked) do loaded[module_path(name)] = true end
+  for path in pairs(entry_sources) do loaded[path] = true end
+  for path, modules in pairs(shader_dependencies(signal)) do
+    local source = read(path)
+    sources[path] = source
+    if source ~= shader_sources[path] then
+      local needed = false
+      for module in pairs(modules) do
+        if loaded[module] then needed = true; forced[module] = true end
+      end
+      if needed then
+        local ok, shader = pcall(function()
+          assert(source, "shader file missing: " .. path)
+          return love.graphics.newShader(source)
+        end)
+        if not ok then
+          report(path .. ": " .. tostring(shader), true)
+          return nil
+        end
+        if shader.release then shader:release() end
+      end
+    end
+  end
+  return forced, sources
+end
+
+local function is_shader(value)
+  if type(value) ~= "userdata" and type(value) ~= "table" then return false end
+  local ok, result = pcall(function() return type(value.typeOf) == "function" and value:typeOf("Shader") end)
+  return ok and result
+end
+
 -- Copy `new` into `old`: functions and new keys are replaced or added, data
 -- already in `old` is kept, and nested tables are updated in place.
 local function swap(old, new, seen)
@@ -79,7 +138,9 @@ local function swap(old, new, seen)
   seen[old] = true
   for key, value in pairs(new) do
     local current = rawget(old, key)
-    if type(value) == "table" and type(current) == "table" then
+    if is_shader(value) and is_shader(current) then
+      rawset(old, key, value)
+    elseif type(value) == "table" and type(current) == "table" then
       swap(current, value, seen)
     elseif type(value) == "function" or current == nil then
       rawset(old, key, value)
@@ -149,9 +210,12 @@ local function poll()
     return
   end
   generation = current
+  track_loaded_modules()
+  local forced, sources = changed_shaders(current)
+  if not forced then return end
 
   for path, source in pairs(entry_sources) do
-    if read(path) ~= source then
+    if read(path) ~= source or forced[path] then
       print("[tua dev] " .. path .. " changed; restarting")
       love.event.quit("restart")
       return
@@ -162,9 +226,9 @@ local function poll()
   local all_ok = true
   for name, source in pairs(tracked) do
     local latest = read(module_path(name))
-    if latest and latest ~= source then
-      tracked[name] = latest
+    if latest and (latest ~= source or forced[module_path(name)]) then
       if reload(name, latest) then
+        tracked[name] = latest
         reloaded[#reloaded + 1] = name
       else
         all_ok = false
@@ -173,7 +237,8 @@ local function poll()
   end
   track_loaded_modules()
 
-  if all_ok and #reloaded > 0 then
+  if all_ok then shader_sources = sources end
+  if all_ok and (#reloaded > 0 or not failure_blocks) then
     failure = nil
     table.sort(reloaded)
     announce("reloaded " .. table.concat(reloaded, ", "))
@@ -182,7 +247,7 @@ end
 
 local function call(name, ...)
   local callback = callbacks[name]
-  if not callback or failure then
+  if not callback or (failure and failure_blocks) then
     return
   end
   local ok, message = xpcall(callback, debug.traceback, ...)
@@ -264,6 +329,7 @@ function M.install()
   entry_sources["main.lua"] = read("main.lua")
   entry_sources["conf.lua"] = read("conf.lua")
   generation = read(SIGNAL)
+  for path in pairs(shader_dependencies(generation)) do shader_sources[path] = read(path) end
   track_loaded_modules()
   if getmetatable(love) == nil then
     wrap_callbacks()

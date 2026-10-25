@@ -100,6 +100,7 @@ impl WatchBuildSession {
             }
         }
 
+        session.host.refresh_asset_index_from_disk();
         let snapshot = session.host.snapshot();
         let outcome =
             session.build_paths(&snapshot, tua_paths, asset_paths, diagnostics, true, false);
@@ -174,6 +175,9 @@ impl WatchBuildSession {
             }
         }
 
+        if !changed_assets.is_empty() {
+            self.host.refresh_asset_index_from_disk();
+        }
         let snapshot = self.host.snapshot();
         let mut affected_tua = changed_tua;
 
@@ -256,6 +260,7 @@ impl WatchBuildSession {
             return BuildOutcome {
                 emitted: 0,
                 diagnostics,
+                ..BuildOutcome::default()
             };
         }
 
@@ -380,6 +385,47 @@ impl WatchBuildSession {
         BuildOutcome {
             emitted,
             diagnostics,
+            shader_dependencies: self.shader_dependencies(snapshot),
         }
+    }
+    fn shader_dependencies(&self, snapshot: &tua_core::AnalysisSnapshot) -> Vec<ShaderDependency> {
+        let mut dependencies = BTreeSet::new();
+        for asset in snapshot.asset_inventory().assets {
+            if asset.category != tua_core::AssetCategory::Shader
+                || !asset.path.starts_with(self.workspace.primary_source_root())
+            {
+                continue;
+            }
+            let shader = output_path_for_asset(&self.workspace, &asset.path);
+            let Ok(shader) = shader.strip_prefix(&self.out_dir) else {
+                continue;
+            };
+            for reference in asset.references {
+                if reference.loader_kind != tua_core::AssetLoaderKind::Shader
+                    || !reference
+                        .path
+                        .starts_with(self.workspace.primary_source_root())
+                {
+                    continue;
+                }
+                let outputs =
+                    if SourceKind::for_path(&reference.path, &self.workspace.config().extension)
+                        == SourceKind::Tua
+                    {
+                        output_paths_for_tua_source(&self.workspace, &reference.path)
+                    } else {
+                        vec![output_path_for_asset(&self.workspace, &reference.path)]
+                    };
+                for output in outputs {
+                    if let Ok(module) = output.strip_prefix(&self.out_dir) {
+                        dependencies.insert(ShaderDependency {
+                            shader: shader.to_string_lossy().replace('\\', "/"),
+                            module: module.to_string_lossy().replace('\\', "/"),
+                        });
+                    }
+                }
+            }
+        }
+        dependencies.into_iter().collect()
     }
 }

@@ -59,6 +59,58 @@ files[".tuahotreload"] = "4\n"
 tick()
 assert(enemy.speed() == 3 and updates > before, "a fixed reload resumes the game")
 
+-- Shader edits reload unchanged Lua, preserve data, and replace exported shaders.
+local function hex(value) return (value:gsub(".", function(c) return string.format("%02x", c:byte()) end)) end
+local function shader_signal(number, module)
+  return number .. "\nshader\t" .. hex("water.glsl") .. "\t" .. hex(module or "game/water.lua") .. "\n"
+end
+local releases = 0
+love.graphics = {
+  newShader = function(source)
+    source = files[source] or source
+    assert(source ~= "broken", "GLSL syntax error")
+    return { source = source, typeOf = function(_, kind) return kind == "Shader" end,
+      release = function() releases = releases + 1 end }
+  end,
+}
+files["water.glsl"] = "version one"
+files["game/water.lua"] = 'local shader = love.graphics.newShader("water.glsl"); local M = { count = 1, shader = shader }; function M.source() return shader.source end; return M'
+package.loaded["game.water"] = assert(loadstring(files["game/water.lua"]))()
+local water = package.loaded["game.water"]
+water.count = 8
+files[".tuahotreload"] = shader_signal(5)
+tick()
+assert(water.source() == "version one")
+files["water.glsl"] = "version two"
+-- Two generations can be skipped; the complete map still identifies the edit.
+files[".tuahotreload"] = shader_signal(8)
+tick()
+assert(water.source() == "version two" and water.count == 8)
+assert(water.shader.source == "version two", "exported shaders must be replaced")
+assert(releases > 0, "preflight shaders are released")
+
+files["water.glsl"] = "broken"
+files[".tuahotreload"] = shader_signal(9)
+local before_shader_failure = updates
+tick()
+assert(water.source() == "version two", "failed shader keeps previous module")
+assert(updates > before_shader_failure, "shader errors do not pause the last good game")
+files["water.glsl"] = "version three"
+files[".tuahotreload"] = shader_signal(10)
+tick()
+assert(water.source() == "version three", "fixed shader is retried")
+
+-- Invalid shaders loaded by main must not trigger a restart either.
+files["water.glsl"] = "broken"
+files[".tuahotreload"] = shader_signal(11, "main.lua")
+tick()
+assert(not restarted, "preflight precedes restart")
+files["water.glsl"] = "valid entry shader"
+files[".tuahotreload"] = shader_signal(12, "main.lua")
+tick()
+assert(restarted, "entry shader changes restart after successful preflight")
+restarted = false
+
 -- A changed entry point restarts the game.
 files["main.lua"] = "-- main v2"
 files[".tuahotreload"] = "5\n"

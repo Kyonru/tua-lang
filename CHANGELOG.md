@@ -12,6 +12,8 @@ language or editor behavior, and migration notes call out those changes.
   displays ECS components, active states, signal activity, and pool counts.
   Its authenticated loopback connection supports pause and manual refresh;
   an extension-owned temporary shim leaves build and release output untouched.
+- `tua dev` reloads modules after their shader assets change, validates shaders
+  in the running game first, and keeps the last working shader on GLSL errors.
 
 - Shader sends report `TL2015` for proven scalar, vector, matrix, texture, and
   `sendColor` value mismatches, while preserving dynamic values and LOVE overloads.

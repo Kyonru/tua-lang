@@ -22,6 +22,13 @@ use tua_core::{
 pub(crate) struct BuildOutcome {
     pub(crate) emitted: usize,
     pub(crate) diagnostics: Vec<Diagnostic>,
+    pub(crate) shader_dependencies: Vec<ShaderDependency>,
+}
+
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub(crate) struct ShaderDependency {
+    pub(crate) shader: String,
+    pub(crate) module: String,
 }
 
 pub(crate) mod ownership;
@@ -134,6 +141,7 @@ fn build_project_files(
             return BuildOutcome {
                 emitted: 0,
                 diagnostics: vec![diagnostic],
+                ..BuildOutcome::default()
             };
         }
     };
@@ -265,6 +273,7 @@ fn build_project_files(
         return BuildOutcome {
             emitted: 0,
             diagnostics,
+            ..BuildOutcome::default()
         };
     }
 
@@ -405,6 +414,7 @@ fn build_project_files(
     BuildOutcome {
         emitted,
         diagnostics,
+        ..BuildOutcome::default()
     }
 }
 

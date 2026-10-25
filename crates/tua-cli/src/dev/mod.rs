@@ -49,8 +49,13 @@ pub(crate) fn run_dev(
         }
         prepare_output(&output_guard, &out_dir).map_err(|error| io_error(&out_dir, error))?;
         generation += 1;
-        write_signal(&output_guard, &out_dir, generation)
-            .map_err(|error| io_error(&out_dir, error))?;
+        write_signal(
+            &output_guard,
+            &out_dir,
+            generation,
+            &outcome.shader_dependencies,
+        )
+        .map_err(|error| io_error(&out_dir, error))?;
         if !launched {
             if no_launch {
                 // Emitted only after all output and the initial reload signal are ready.
@@ -98,12 +103,34 @@ fn prepare_output(guard: &OutputGuard, out_dir: &Path) -> io::Result<()> {
 /// Written last, so the game reloads only finished output. Unix can replace
 /// the signal atomically; Windows requires removing the previous tiny signal
 /// file before renaming its replacement.
-fn write_signal(guard: &OutputGuard, out_dir: &Path, generation: u64) -> io::Result<()> {
+fn write_signal(
+    guard: &OutputGuard,
+    out_dir: &Path,
+    generation: u64,
+    shaders: &[crate::build::ShaderDependency],
+) -> io::Result<()> {
     let temporary = out_dir.join(format!("{SIGNAL_FILE}.tmp"));
     let signal = out_dir.join(SIGNAL_FILE);
     check_output_path(guard, &temporary)?;
     check_output_path(guard, &signal)?;
-    fs::write(&temporary, format!("{generation}\n"))?;
+    let mut contents = format!("{generation}\n");
+    // Include the complete map so games that miss a generation still detect
+    // changed shader content. Hex keeps arbitrary filenames inert and unambiguous.
+    for dependency in shaders {
+        let hex = |value: &str| {
+            value
+                .as_bytes()
+                .iter()
+                .map(|byte| format!("{byte:02x}"))
+                .collect::<String>()
+        };
+        contents.push_str(&format!(
+            "shader\t{}\t{}\n",
+            hex(&dependency.shader),
+            hex(&dependency.module)
+        ));
+    }
+    fs::write(&temporary, contents)?;
     replace_signal(&temporary, &signal)
 }
 
@@ -204,12 +231,66 @@ mod tests {
     fn signals_replace_the_previous_generation() {
         let out = temp_dir("signal");
         let guard = OutputGuard::for_root(&out);
-        write_signal(&guard, &out, 1).unwrap();
-        write_signal(&guard, &out, 2).unwrap();
+        write_signal(&guard, &out, 1, &[]).unwrap();
+        write_signal(&guard, &out, 2, &[]).unwrap();
 
         assert_eq!(fs::read_to_string(out.join(SIGNAL_FILE)).unwrap(), "2\n");
         assert!(!out.join(format!("{SIGNAL_FILE}.tmp")).exists());
         fs::remove_dir_all(out).unwrap();
+    }
+
+    #[test]
+    fn shader_only_rebuild_signals_unchanged_loading_modules() {
+        let root = temp_dir("shader-dependencies");
+        fs::create_dir_all(root.join("src/game")).unwrap();
+        fs::write(root.join("tua.toml"), "source = \"src\"\n").unwrap();
+        fs::write(
+            root.join("src/main.tua"),
+            "local water = require(\"game.water\")\nreturn water\n",
+        )
+        .unwrap();
+        fs::write(
+            root.join("src/game/water.tua"),
+            "local water = shader \"water.glsl\"\nreturn { shader = water }\n",
+        )
+        .unwrap();
+        let shader = root.join("src/water.glsl");
+        fs::write(
+            &shader,
+            "vec4 effect(vec4 c, Image t, vec2 u, vec2 p) { return c; }",
+        )
+        .unwrap();
+        let loaded = tua_core::load_config_from_dir(&root).unwrap();
+        let (mut session, first) = crate::build::WatchBuildSession::start(&root, loaded).unwrap();
+        assert!(!has_errors(&first.diagnostics), "{:?}", first.diagnostics);
+        assert_eq!(
+            first.shader_dependencies,
+            vec![crate::build::ShaderDependency {
+                shader: "water.glsl".into(),
+                module: "game/water.lua".into(),
+            }]
+        );
+        let lua = fs::read(root.join("build/game/water.lua")).unwrap();
+        fs::write(
+            &shader,
+            "vec4 effect(vec4 c, Image t, vec2 u, vec2 p) { return c * 0.5; }",
+        )
+        .unwrap();
+        let next = session.rebuild(vec![shader], vec![]);
+        assert!(!has_errors(&next.diagnostics), "{:?}", next.diagnostics);
+        assert_eq!(next.shader_dependencies, first.shader_dependencies);
+        assert_eq!(fs::read(root.join("build/game/water.lua")).unwrap(), lua);
+        let guard = OutputGuard::for_root(&root);
+        write_signal(&guard, &root.join("build"), 2, &next.shader_dependencies).unwrap();
+        let signal = fs::read_to_string(root.join("build/.tuahotreload")).unwrap();
+        assert_eq!(
+            signal,
+            "2\nshader\t77617465722e676c736c\t67616d652f77617465722e6c7561\n"
+        );
+        // A subsequent non-shader rebuild retains the map for games that missed this signal.
+        let third = session.rebuild(vec![], vec![]);
+        assert_eq!(third.shader_dependencies, next.shader_dependencies);
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
