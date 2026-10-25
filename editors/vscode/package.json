@@ -2,7 +2,7 @@
   "name": "tua",
   "displayName": "Tua",
   "description": "Tua language support, LOVE development tools, and an optional editor theme and setup walkthrough.",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "publisher": "SolenodonteLabs",
   "license": "MIT",
   "repository": {

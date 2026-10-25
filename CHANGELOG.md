@@ -6,6 +6,8 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-25
+
 ### Release summary
 
 Tua 0.5.0 expands the LÖVE development workflow with shader intelligence,
@@ -1535,7 +1537,8 @@ from 0.3.0:
 - Project source and `tua.toml` files require no migration for this coordinated
   release.
 
-[Unreleased]: https://github.com/Kyonru/tua-lang/compare/v0.4.1...HEAD
+[Unreleased]: https://github.com/Kyonru/tua-lang/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/Kyonru/tua-lang/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/Kyonru/tua-lang/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/Kyonru/tua-lang/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/Kyonru/tua-lang/compare/v0.2.9...v0.3.0

@@ -57,7 +57,7 @@ sha256sum --check SHA256SUMS
 On macOS:
 
 ```bash
-shasum -a 256 tua-0.4.1-darwin-arm64.vsix
+shasum -a 256 tua-0.5.0-darwin-arm64.vsix
 ```
 
 Compare the printed value with the matching line in `SHA256SUMS`. On Windows,
@@ -67,7 +67,7 @@ With the GitHub CLI installed, verify that an artifact was produced by Tua's
 release workflow from this repository:
 
 ```bash
-gh attestation verify tua-0.4.1-aarch64-apple-darwin.tar.gz \
+gh attestation verify tua-0.5.0-aarch64-apple-darwin.tar.gz \
   --repo Kyonru/tua-lang
 ```
 
