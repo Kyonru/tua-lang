@@ -53,7 +53,8 @@
     "test:vscode": "npm run build && node test/run.js",
     "test:vscode-real": "npm run build && node test/real-server/run.js",
     "vscode:prepublish": "npm run build",
-    "test:webviews": "npm run build && node test/webview/run.js"
+    "test:webviews": "npm run build && node test/webview/run.js",
+    "test:multiplayer": "node scripts/multiplayer-runtime-e2e.js"
   },
   "contributes": {
     "breakpoints": [
