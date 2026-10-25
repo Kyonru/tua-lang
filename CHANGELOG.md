@@ -8,6 +8,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Added
 
+- The VS Code extension bundles the optional Indigo Carbon theme and a native
+  **Set Up Tua** walkthrough for theme, layout, file icons, and hint density.
+  Theme, layout, and icon presets can restore previous user settings while
+  preserving later manual edits. Setup does not change settings automatically.
 - Property accesses expose optional `propertyChain1` through `propertyChain4`
   semantic modifiers, allowing themes or user settings to color successive
   properties while preserving their existing semantic classifications.

@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="400" viewBox="0 0 720 400">
+  <style>
+    .base { fill: var(--vscode-editor-background); }
+    .surface { fill: var(--vscode-editorWidget-background); }
+    .line { fill: none; stroke: var(--vscode-descriptionForeground); stroke-width: 2; }
+    .muted { fill: var(--vscode-descriptionForeground); }
+    .text { fill: var(--vscode-foreground); }
+    .accent { fill: var(--vscode-textLink-foreground); }
+    text { font-family: sans-serif; font-size: 17px; }
+  </style>
+  <rect class="base" width="720" height="400"/>
+  <rect class="surface" x="16" y="40" width="688" height="56" rx="4"/>
+  <rect class="line" x="40" y="53" width="242" height="30" rx="4"/>
+  <text class="muted" x="65" y="74">Command Center</text>
+  <text class="text" x="306" y="74">Run</text>
+  <text class="text" x="355" y="74">Debug</text>
+  <text class="text" x="421" y="74">Reload</text>
+  <text class="text" x="491" y="74">Tools</text>
+  <g class="line">
+    <rect x="564" y="58" width="25" height="20" rx="2"/><path d="M572 58V78"/>
+    <rect x="604" y="58" width="25" height="20" rx="2"/><path d="M604 71H629"/>
+    <rect x="644" y="58" width="25" height="20" rx="2"/><path d="M661 58V78"/>
+  </g>
+  <rect class="surface" x="16" y="108" width="688" height="50" rx="4"/>
+  <text class="text" x="40" y="139">main.tua</text>
+  <text class="muted" x="184" y="139">player.tua</text>
+  <text class="muted" x="340" y="139">world.tua</text>
+  <text class="muted" x="495" y="139">combat.tua</text>
+  <text class="accent" x="32" y="220">More room for file names</text>
+  <text class="text" x="32" y="258">Editor actions and layout controls share the title bar.</text>
+  <text class="muted" x="32" y="296">Extra Tua commands stay in the Tools menu.</text>
+  <text class="muted" x="32" y="354">Restore your previous layout at any time.</text>
+</svg>

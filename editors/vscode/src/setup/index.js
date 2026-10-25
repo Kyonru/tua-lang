@@ -1,0 +1,84 @@
+"use strict";
+
+const vscode = require("vscode");
+const { COMMANDS } = require("../constants");
+const { formatError } = require("../shared/errors");
+const { createPresetManager, MATERIAL_ICONS_EXTENSION } = require("./presets");
+
+function registerSetup(context) {
+  const presets = createPresetManager({
+    workspace: vscode.workspace,
+    state: context.globalState,
+    target: vscode.ConfigurationTarget.Global,
+    resource: () => vscode.window.activeTextEditor?.document.uri,
+  });
+  let pending = Promise.resolve();
+  const operations = new Map();
+
+  const run = (id, action) => {
+    // Deduplicate double-clicks; queue different actions in click order.
+    // No settings are touched during activation.
+    if (operations.has(id)) return operations.get(id);
+    const operation = pending.then(action).catch((error) => {
+      void vscode.window.showErrorMessage(
+        `Tua setup: ${formatError(error)}. Any settings already changed can be undone with the matching Restore command.`,
+      );
+      return false;
+    }).finally(() => { operations.delete(id); });
+    pending = operation;
+    operations.set(id, operation);
+    return operation;
+  };
+
+  async function apply(id, label) {
+    const result = await presets.apply(id);
+    if (result.overridden.length) {
+      void vscode.window.showWarningMessage(
+        `${label} saved to user settings. Workspace or folder settings still override: ${result.overridden.join(", ")}. Your workspace settings were kept.`,
+      );
+    } else {
+      vscode.window.setStatusBarMessage(
+        result.changed ? `${label} applied. Restore is available in Tua setup.` : `${label} is already enabled.`,
+        5000,
+      );
+    }
+    return result;
+  }
+
+  async function restore(id, label) {
+    const result = await presets.restore(id);
+    vscode.window.setStatusBarMessage(
+      result.changed
+        ? `${label} restored.${result.preserved ? " Later manual changes were kept." : ""}`
+        : `No ${label.toLowerCase()} settings to restore.${result.preserved ? " Later manual changes were kept." : ""}`,
+      5000,
+    );
+    return result;
+  }
+
+  async function materialIcons() {
+    if (!vscode.extensions.getExtension(MATERIAL_ICONS_EXTENSION)) {
+      await vscode.commands.executeCommand("workbench.extensions.installExtension", MATERIAL_ICONS_EXTENSION);
+    }
+    const extension = vscode.extensions.getExtension(MATERIAL_ICONS_EXTENSION);
+    if (!extension?.packageJSON?.contributes?.iconThemes?.some((theme) => theme.id === "material-icon-theme")) {
+      throw new Error("Material Icon Theme is not available yet. Enable it in Extensions, reload if prompted, then try Use Material Icons again");
+    }
+    return apply("icons", "Material file icons");
+  }
+
+  const register = (id, action) => vscode.commands.registerCommand(id, () => run(id, action));
+  return vscode.Disposable.from(
+    vscode.commands.registerCommand(COMMANDS.openSetup, () =>
+      vscode.commands.executeCommand("workbench.action.openWalkthrough", `${context.extension.id}#tua.setup`, false),
+    ),
+    register(COMMANDS.setupApplyTheme, () => apply("theme", "Indigo Carbon")),
+    register(COMMANDS.setupRestoreTheme, () => restore("theme", "Theme")),
+    register(COMMANDS.setupApplyLayout, () => apply("layout", "Tua layout")),
+    register(COMMANDS.setupRestoreLayout, () => restore("layout", "Layout")),
+    register(COMMANDS.setupUseMaterialIcons, materialIcons),
+    register(COMMANDS.setupRestoreIcons, () => restore("icons", "File icons")),
+  );
+}
+
+module.exports = { registerSetup };

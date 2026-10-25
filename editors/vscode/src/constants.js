@@ -1,6 +1,14 @@
 "use strict";
 
 const COMMANDS = {
+  openSetup: "tua.openSetup",
+  setupApplyTheme: "tua.setup.applyTheme",
+  setupRestoreTheme: "tua.setup.restoreTheme",
+  setupApplyLayout: "tua.setup.applyLayout",
+  setupRestoreLayout: "tua.setup.restoreLayout",
+  setupUseMaterialIcons: "tua.setup.useMaterialIcons",
+  setupRestoreIcons: "tua.setup.restoreIcons",
+
   initProject: "tua.initProject",
   restartServer: "tua.restartServer",
   focusOutput: "tua.output.focus",

@@ -13,6 +13,7 @@ const { registerServerHealthFeature } = require("./health");
 const { registerLoveDevex } = require("./love");
 const { registerModuleDevex } = require("./modules");
 const { registerObjectPoolDevex } = require("./object-pools");
+const { registerSetup } = require("./setup");
 const { registerSignalDevex } = require("./signals");
 const { registerStateMachineDevex } = require("./state-machines");
 const { createDebugLogger, DEBUG_LSP_ENV } = require("./shared/debug-log");
@@ -39,6 +40,7 @@ async function activate(context) {
   context.subscriptions.push(outputChannel);
   context.subscriptions.push(registerBuiltinDocumentProvider(outputChannel));
   context.subscriptions.push(registerLifecycleCommands());
+  context.subscriptions.push(registerSetup(context));
   editorDevex = registerEditorDevex({
     appendOutputLine: (line) => outputChannel?.appendLine(line),
     context,

@@ -1,7 +1,7 @@
 {
   "name": "tua",
   "displayName": "Tua",
-  "description": "Language support for tua, a typed Lua superset for LuaJIT and LOVE projects.",
+  "description": "Tua language support, LOVE development tools, and an optional editor theme and setup walkthrough.",
   "version": "0.4.1",
   "publisher": "SolenodonteLabs",
   "license": "MIT",
@@ -32,7 +32,8 @@
   },
   "categories": [
     "Programming Languages",
-    "Snippets"
+    "Snippets",
+    "Themes"
   ],
   "activationEvents": [
     "onCommand:tua.initProject",
@@ -47,7 +48,7 @@
     "build:dev": "esbuild src/extension.js --bundle --platform=node --format=cjs --external:vscode --sourcemap --sources-content=true --outfile=dist/extension.js",
     "stage:server": "node scripts/stage-server.js",
     "clean:server": "node scripts/stage-server.js --clean",
-    "check": "node ../../scripts/sync-version.js --check && node ../../scripts/generate-config-schema.js --check && node scripts/check-js.js && node --test test/unit/*.test.js scripts/representative-diagnostics-compare.test.js scripts/inline-editor-replay.test.js && node scripts/syntax-grammar-check.js && node scripts/manifest-check.js && node scripts/launch-config-check.js && node scripts/ollama-completion-check.js && node scripts/activation-smoke.js",
+    "check": "node ../../scripts/sync-version.js --check && node ../../scripts/generate-config-schema.js --check && node scripts/check-js.js && node --test test/unit/*.test.js scripts/representative-diagnostics-compare.test.js scripts/inline-editor-replay.test.js && node scripts/syntax-grammar-check.js && node scripts/manifest-check.js && node scripts/theme-check.js && node scripts/launch-config-check.js && node scripts/ollama-completion-check.js && node scripts/activation-smoke.js",
     "test:love-debugger": "node scripts/love-debugger-e2e.js",
     "test:vscode": "npm run build && node test/run.js",
     "test:vscode-real": "npm run build && node test/real-server/run.js",
@@ -875,6 +876,41 @@
         "command": "tua.reportIssue",
         "title": "Report Issue",
         "category": "Tua"
+      },
+      {
+        "command": "tua.openSetup",
+        "title": "Set Up Tua",
+        "category": "Tua"
+      },
+      {
+        "command": "tua.setup.applyTheme",
+        "title": "Use Indigo Carbon Theme",
+        "category": "Tua"
+      },
+      {
+        "command": "tua.setup.restoreTheme",
+        "title": "Restore Previous Theme",
+        "category": "Tua"
+      },
+      {
+        "command": "tua.setup.applyLayout",
+        "title": "Apply Recommended Layout",
+        "category": "Tua"
+      },
+      {
+        "command": "tua.setup.restoreLayout",
+        "title": "Restore Previous Layout",
+        "category": "Tua"
+      },
+      {
+        "command": "tua.setup.useMaterialIcons",
+        "title": "Install / Use Material File Icons",
+        "category": "Tua"
+      },
+      {
+        "command": "tua.setup.restoreIcons",
+        "title": "Restore Previous File Icons",
+        "category": "Tua"
       }
     ],
     "views": {
@@ -1130,6 +1166,10 @@
           "command": "tua.previewStateMachine",
           "when": "editorLangId == tua",
           "group": "2_structure@3"
+        },
+        {
+          "command": "tua.openSetup",
+          "group": "4_setup@1"
         }
       ]
     },
@@ -1240,6 +1280,68 @@
         "id": "tua.editorTools",
         "label": "Tua Tools",
         "icon": "$(tools)"
+      }
+    ],
+    "themes": [
+      {
+        "label": "Indigo Carbon HC",
+        "uiTheme": "vs-dark",
+        "path": "./themes/indigo-carbon.json"
+      }
+    ],
+    "walkthroughs": [
+      {
+        "id": "tua.setup",
+        "title": "Set Up Tua",
+        "description": "Make room for your code. Choose an optional theme, toolbar layout, file icons, and hint density. Every step is optional; language tools work with your existing setup.",
+        "steps": [
+          {
+            "id": "theme",
+            "title": "Choose your editor theme",
+            "description": "Indigo Carbon uses quiet panels, a lighter active tab, and four repeating colors for Tua property chains. Your current theme stays selected until you choose another.\n[Use Indigo Carbon](command:tua.setup.applyTheme)\n[Browse Color Themes](command:workbench.action.selectTheme)\n[Restore Previous Theme](command:tua.setup.restoreTheme)",
+            "media": {
+              "image": "assets/setup/theme.svg",
+              "altText": "Indigo Carbon preview: a lighter active main.tua tab, quiet borders, and blue, teal, peach, and lavender property accesses."
+            },
+            "completionEvents": [
+              "onSettingChanged:workbench.colorTheme"
+            ]
+          },
+          {
+            "id": "layout",
+            "title": "Give file tabs more room",
+            "description": "Move editor actions beside the Command Center, keep sidebar and panel toggles visible, and group Tua tools into a compact menu. This updates user settings across projects; workspace overrides are preserved.\n[Apply Tua Layout](command:tua.setup.applyLayout)\n[Restore Previous Layout](command:tua.setup.restoreLayout)",
+            "media": {
+              "image": "assets/setup/layout.svg",
+              "altText": "Command Center with Run, Debug, Hot Reload, Tua Tools and layout controls above a full row of editor tabs."
+            },
+            "completionEvents": [
+              "onContext:config.window.commandCenter && config.workbench.editor.editorActionsLocation == titleBar && config.workbench.layoutControl.enabled && config.workbench.layoutControl.type == both && config.tua.editor.toolbarMode == compact"
+            ]
+          },
+          {
+            "id": "icons",
+            "title": "Choose file and folder icons",
+            "description": "Material Icon Theme is an optional, separate extension. The button installs it from your editor’s extension registry if needed, then selects its file icons. Product icons stay unchanged.\n[Install / Use Material Icons](command:tua.setup.useMaterialIcons)\n[Browse File Icon Themes](command:workbench.action.selectIconTheme)\n[Restore Previous File Icons](command:tua.setup.restoreIcons)",
+            "media": {
+              "markdown": "assets/setup/icons.md"
+            },
+            "completionEvents": [
+              "onSettingChanged:workbench.iconTheme"
+            ]
+          },
+          {
+            "id": "hints",
+            "title": "Set your hint density",
+            "description": "Choose Full, Compact, Types Only, Parameters Only, or Off for Tua inlay hints. This choice applies to the current workspace, or your user profile when no folder is open.\n[Choose Hint Density](command:tua.inlayHints.selectMode?%5Bnull%2Ctrue%5D)\n[Open Tua Settings](command:tua.openSettings)",
+            "media": {
+              "markdown": "assets/setup/hints.md"
+            },
+            "completionEvents": [
+              "onCommand:tua.inlayHints.selectMode"
+            ]
+          }
+        ]
       }
     ]
   },

@@ -40,8 +40,8 @@ const MODES = [
 
 function registerInlayHintPresentation({ context, configurationTarget, isTuaDocument }) {
   const options = { context, configurationTarget, isTuaDocument };
-  const command = vscode.commands.registerCommand(COMMANDS.selectInlayHintMode, (requestedMode) =>
-    selectInlayHintMode(options, requestedMode),
+  const command = vscode.commands.registerCommand(COMMANDS.selectInlayHintMode, (requestedMode, fromSetup = false) =>
+    selectInlayHintMode({ ...options, fromSetup: fromSetup === true }, requestedMode),
   );
 
   return {
@@ -56,11 +56,11 @@ function registerInlayHintPresentation({ context, configurationTarget, isTuaDocu
 }
 
 async function selectInlayHintMode(
-  { context, configurationTarget, isTuaDocument },
+  { context, configurationTarget, isTuaDocument, fromSetup = false },
   requestedMode,
 ) {
   const document = vscode.window.activeTextEditor?.document;
-  if (!document || !isTuaDocument(document)) {
+  if (!fromSetup && (!document || !isTuaDocument(document))) {
     vscode.window.showWarningMessage("Open a Tua document to select an inlay hint mode.");
     return undefined;
   }
@@ -78,7 +78,12 @@ async function selectInlayHintMode(
     return undefined;
   }
 
-  const configuration = editorConfiguration(document);
+  const configuration = fromSetup
+    ? vscode.workspace.getConfiguration("editor", {
+        uri: vscode.workspace.workspaceFolders?.[0]?.uri,
+        languageId: "tua",
+      })
+    : editorConfiguration(document);
 
   try {
     if (mode.id === "compact") {

@@ -67,6 +67,53 @@ From there you can:
 - jump between source and output with `Tua: Jump Between Tua and Generated Lua`;
 - run and restart the LOVE project without leaving VS Code.
 
+## Optional Editor Setup
+
+Run **Tua: Set Up Tua** from the Command Palette or the **Tua Tools** menu.
+The native Getting Started walkthrough also appears on a fresh installation.
+All four steps are optional; opening setup does not change settings.
+
+- **Theme:** choose the bundled Indigo Carbon theme, browse other themes, or
+  restore the previous theme. Its existing picker name, `Indigo Carbon HC`, is
+  retained for compatibility; it is registered as a dark theme, not a formal
+  high-contrast accessibility theme.
+- **Layout:** move editor actions to the title bar, show the Command Center and
+  sidebar/panel controls, and use the compact Tua Tools menu. Run
+  **Tua: Restore Previous Layout** to undo the preset.
+- **File icons:** optionally install/select Material Icon Theme from your
+  editor's configured extension registry. It is not a dependency. Restore changes
+  the selected file icons; it leaves that extension installed. Product icons are
+  unchanged.
+- **Hints:** choose Full, Compact, Types Only, Parameters Only, or Off for the
+  current workspace (or user profile when no folder is open), even with no Tua
+  file open.
+
+Theme, layout, and icon presets save the previous explicit user settings locally
+before writing changes. Repeated Apply clicks preserve the original backup.
+Restore removes settings that were previously unset and preserves settings you
+edited manually after applying. Workspace and folder overrides are never changed;
+setup reports when they prevent a preset from taking effect. Hint modes use the
+existing Tua hint controls and their workspace scope.
+
+The layout preset changes only `window.commandCenter`,
+`workbench.editor.editorActionsLocation`, `workbench.layoutControl.enabled`,
+`workbench.layoutControl.type`, and `tua.editor.toolbarMode`.
+Installing Tua or selecting its theme never applies the layout preset.
+
+The theme and setup add no telemetry, account requirements, or trial period.
+Setup uses no remote content. The optional icon install contacts your editor's
+extension registry only when you click its button. The existing separately
+opted-in Ollama integration is unaffected.
+
+### Migrating from the personal theme extension
+
+Indigo Carbon now lives in this extension under `themes/indigo-carbon.json`.
+Its palette, lighter active tabs, and Tua property-chain rules are unchanged.
+Select **Indigo Carbon HC**, apply **Tua Layout** if desired, then uninstall
+`personal-local.indigo-carbon-local` to avoid duplicate theme entries. The old
+package's global layout defaults are intentionally not carried into Tua's
+configuration defaults. Language and workflow tools work with any theme.
+
 ## What You Get
 
 ### Core Tua Editing

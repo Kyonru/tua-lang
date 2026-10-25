@@ -265,3 +265,21 @@ function assertExistingJson(relativePath, label) {
     process.exit(1);
   }
 }
+
+// Setup must be discoverable and self-contained in the packaged extension.
+const walkthrough = manifest.contributes.walkthroughs?.find((item) => item.id === "tua.setup");
+if (!walkthrough || walkthrough.steps.length !== 4) {
+  throw new Error("Tua setup should expose four optional steps.");
+}
+for (const step of walkthrough.steps) {
+  const media = step.media?.image || step.media?.markdown;
+  if (!media || !fs.existsSync(path.join(extensionRoot, media))) {
+    throw new Error(`Missing setup media for ${step.id}`);
+  }
+  for (const [, command] of step.description.matchAll(/\(command:([^?)]+)/g)) {
+    if (command.startsWith("tua.") && !commands.has(command)) {
+      throw new Error(`Unregistered setup button: ${command}`);
+    }
+  }
+}
+if (!commands.has("tua.openSetup")) throw new Error("Missing Set Up Tua command.");

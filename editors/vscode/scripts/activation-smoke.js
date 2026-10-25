@@ -3373,6 +3373,13 @@ function createMemento() {
 
 function assertRegisteredCommands(state) {
   for (const command of [
+    "tua.openSetup",
+    "tua.setup.applyTheme",
+    "tua.setup.restoreTheme",
+    "tua.setup.applyLayout",
+    "tua.setup.restoreLayout",
+    "tua.setup.useMaterialIcons",
+    "tua.setup.restoreIcons",
     "tua.initProject",
     "tua.restartServer",
     "tua.output.focus",

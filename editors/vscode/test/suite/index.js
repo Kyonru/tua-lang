@@ -8,12 +8,14 @@ const { runEcsExplorerTests } = require("./ecs-explorer");
 const { runModuleGraphTests } = require("./module-graph");
 const { runSpritePreviewTests } = require("./sprite-preview");
 const { fixtures, waitForEvent } = require("./support");
+const { runSetupTests } = require("./setup");
 const { runWorkspaceTests } = require("./workspace");
 
 async function run() {
   const selectedSuite = process.env.TUA_TEST_SUITE || "all";
   const supportedSuites = new Set([
     "all",
+    "setup",
     "completion",
     "editor-intelligence",
     "ecs-explorer",
@@ -57,6 +59,9 @@ async function run() {
     "the real language client should remain running after initialization",
   );
 
+  if (selectedSuite === "all" || selectedSuite === "setup") {
+    await runSetupTests();
+  }
   if (selectedSuite === "all" || selectedSuite === "completion") {
     await runCompletionTests();
   }
