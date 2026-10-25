@@ -9,6 +9,9 @@ impl AnalysisSnapshot {
         let mut references_by_asset = BTreeMap::<PathBuf, Vec<AssetReference>>::new();
 
         for (source_path, file) in &self.files {
+            if self.is_generated_path(source_path) {
+                continue;
+            }
             for metadata in &file.assets {
                 let Some(asset_path) =
                     asset::resolved_asset_path(metadata, self.effective_asset_roots(), Some(index))
@@ -34,6 +37,7 @@ impl AnalysisSnapshot {
 
         let mut assets = index
             .files()
+            .filter(|(path, ..)| !self.is_generated_path(path))
             .filter_map(|(path, relative_path, extension, dimensions)| {
                 Some(ProjectAsset {
                     path: path.to_path_buf(),

@@ -1980,7 +1980,13 @@ local portrait = love.graphics.newImage('assets/player.png')
     );
     let player_path = temp.write("assets/player.png", png_header(16, 16));
     let unused_path = temp.write("assets/unused.wav", b"placeholder");
+    temp.write("build/assets/player.png", png_header(16, 16));
     let mut host = AnalysisHost::new();
+    host.set_output_roots([temp.path().join("build")]);
+    host.set_file(
+        temp.path().join("build/main.lua"),
+        "local player = love.graphics.newImage(\"assets/player.png\")\n",
+    );
 
     host.set_source_roots([temp.path().join("src")]);
     host.set_asset_roots([temp.path().to_path_buf()]);
@@ -1990,6 +1996,7 @@ local portrait = love.graphics.newImage('assets/player.png')
     host.refresh_asset_index_from_disk();
 
     let inventory = host.snapshot().asset_inventory();
+    assert_eq!(inventory.assets.len(), 2);
     let player = inventory
         .assets
         .iter()

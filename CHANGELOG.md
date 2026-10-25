@@ -58,6 +58,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- The Tua Assets inspector excludes configured build output and its generated
+  references, avoiding duplicate assets and unused-asset hints for build copies.
+
 - The run configuration picker and Stop action now handle implicit editor-toolbar
   arguments correctly. Session actions resolve their live callbacks by ID.
 - Sprite previews preserve playback settings and keyboard focus, replay completed
