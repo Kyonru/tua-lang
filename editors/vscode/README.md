@@ -214,6 +214,54 @@ for review and saving. Executable probes run only after you request checks in a
 trusted workspace, with a three-second timeout. **Tua: Build Project** builds
 without launching the game.
 
+## Live runtime inspector
+
+Open **Tua → Runtime Inspector**, click **Enable Runtime Inspection**, then launch
+Run, Hot reload, or Debug. Use **Select Runtime Player** to choose a player in a
+multi-instance run. Inspection is off by default and requires a trusted workspace.
+Enabling it applies to new runs; restart an already-running game to attach.
+
+The view shows live objects from Tua's built-in runtimes:
+
+- **Entities and components:** entity IDs and component values in each ECS world.
+- **State machines:** current state and pending asynchronous transition.
+- **Signal activity:** emission counts, the latest 20 event names, and listener
+  counts. Signal payloads are not retained.
+- **Object pools:** active, available, and capacity counts.
+
+Snapshots arrive twice per second. **Pause or Resume Inspector Updates** pauses
+snapshot updates without pausing the game; **Refresh Runtime Snapshot** requests a
+snapshot even while updates are paused. A stopped or disconnected player retains
+its last snapshot with an explicit status and age. A debugger pause also stops
+new snapshots until the game resumes.
+
+The inspector is an extension-owned development shim, loaded by a private
+**temporary launcher outside the project**. It wraps runtime constructors only
+inside that game process. It does not modify source files, compiler runtimes,
+normal build output, or packaged games. Run and hot reload mirror current build
+output; debugging retains its isolated build snapshot. Temporary launchers are
+removed when their player exits. Disabling inspection disconnects immediately
+and keeps the launcher alive until the game exits so asset loading continues.
+
+Each player connects to its own authenticated listener on `127.0.0.1` using
+LÖVE's bundled LuaSocket. There is no remote listener, upload, telemetry, or
+runtime expression evaluation. Networking is non-blocking and bounded; a slow
+editor skips snapshots instead of growing a queue. Large worlds and values are
+sampled (128 live objects, 100 entities per world, 32 component stores per world,
+3,000 serialized values per snapshot), and abbreviated values are marked.
+
+This currently inspects Tua's built-in ECS, state-machine, signal, and pool
+implementations. Other ECS backends and arbitrary user tables are not discovered.
+It supports the standard LÖVE loop and custom loops that return a frame function.
+Platforms that restrict creating symbolic links need that permission enabled;
+if a launcher cannot be created, the game runs normally and a warning explains
+why inspection is unavailable. Save identity and player arguments are preserved.
+
+Validation: `npm run test:inspector` exercises two native LÖVE players and checks
+that packaging after inspection contains no shim. Run `TUA_INSPECTOR_TEST=1`
+with the existing `test:multiplayer` harness to check hot reload, source-mapped
+breakpoints, and independent debug sessions with inspection enabled.
+
 ## Contextual hint density
 
 Choose **Contextual** in **Tua: Select Inlay Hint Mode** to hide routine hints.

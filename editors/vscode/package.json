@@ -54,7 +54,8 @@
     "test:vscode-real": "npm run build && node test/real-server/run.js",
     "vscode:prepublish": "npm run build",
     "test:webviews": "npm run build && node test/webview/run.js",
-    "test:multiplayer": "node scripts/multiplayer-runtime-e2e.js"
+    "test:multiplayer": "node scripts/multiplayer-runtime-e2e.js",
+    "test:inspector": "node scripts/runtime-inspector-e2e.js"
   },
   "contributes": {
     "breakpoints": [
@@ -683,6 +684,11 @@
               }
             }
           }
+        },
+        "tua.runtimeInspector.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable read-only local runtime inspection for new Tua development runs. Uses a temporary editor-owned shim; build and package output stay unchanged. Restart a running game after enabling."
         }
       }
     },
@@ -1169,6 +1175,42 @@
           "light": "assets/toolbar/stop-light.svg",
           "dark": "assets/toolbar/stop-dark.svg"
         }
+      },
+      {
+        "command": "tua.inspector.enable",
+        "title": "Enable Runtime Inspection",
+        "category": "Tua",
+        "icon": "$(plug)"
+      },
+      {
+        "command": "tua.inspector.disable",
+        "title": "Disable Runtime Inspection",
+        "category": "Tua",
+        "icon": "$(debug-disconnect)"
+      },
+      {
+        "command": "tua.inspector.open",
+        "title": "Open Runtime Inspector",
+        "category": "Tua",
+        "icon": "$(inspect)"
+      },
+      {
+        "command": "tua.inspector.select",
+        "title": "Select Runtime Player",
+        "category": "Tua",
+        "icon": "$(list-selection)"
+      },
+      {
+        "command": "tua.inspector.pause",
+        "title": "Pause or Resume Inspector Updates",
+        "category": "Tua",
+        "icon": "$(debug-pause)"
+      },
+      {
+        "command": "tua.inspector.refresh",
+        "title": "Refresh Runtime Snapshot",
+        "category": "Tua",
+        "icon": "$(refresh)"
       }
     ],
     "views": {
@@ -1201,6 +1243,11 @@
           "id": "tua.checks",
           "name": "Project Checks",
           "when": "tua.hasProject",
+          "visibility": "collapsed"
+        },
+        {
+          "id": "tua.inspector",
+          "name": "Runtime Inspector",
           "visibility": "collapsed"
         }
       ],
@@ -1512,6 +1559,26 @@
           "command": "tua.run.stopSelected",
           "when": "view == tua.run && tua.selectedRunActive",
           "group": "navigation@0"
+        },
+        {
+          "command": "tua.inspector.select",
+          "when": "view == tua.inspector && config.tua.runtimeInspector.enabled",
+          "group": "navigation@0"
+        },
+        {
+          "command": "tua.inspector.refresh",
+          "when": "view == tua.inspector && config.tua.runtimeInspector.enabled",
+          "group": "navigation@1"
+        },
+        {
+          "command": "tua.inspector.pause",
+          "when": "view == tua.inspector && config.tua.runtimeInspector.enabled",
+          "group": "navigation@2"
+        },
+        {
+          "command": "tua.inspector.disable",
+          "when": "view == tua.inspector && config.tua.runtimeInspector.enabled",
+          "group": "navigation@3"
         }
       ],
       "view/item/context": [
@@ -1799,7 +1866,19 @@
           "icon": "assets/logo.svg"
         }
       ]
-    }
+    },
+    "viewsWelcome": [
+      {
+        "view": "tua.inspector",
+        "contents": "Inspect live entities, state machines, signal activity, and object pools.\n[Enable Runtime Inspection](command:tua.inspector.enable)\nApplies to new local development runs. No inspector code is added to packaged games.",
+        "when": "!config.tua.runtimeInspector.enabled"
+      },
+      {
+        "view": "tua.inspector",
+        "contents": "Inspection is enabled. Launch a Run, Hot reload, or Debug configuration, then select a player here.",
+        "when": "config.tua.runtimeInspector.enabled"
+      }
+    ]
   },
   "devDependencies": {
     "@vscode/debugadapter-testsupport": "1.68.0",

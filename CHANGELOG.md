@@ -8,6 +8,11 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Added
 
+- An opt-in live Runtime Inspector selects individual development players and
+  displays ECS components, active states, signal activity, and pool counts.
+  Its authenticated loopback connection supports pause and manual refresh;
+  an extension-owned temporary shim leaves build and release output untouched.
+
 - Shader sends report `TL2015` for proven scalar, vector, matrix, texture, and
   `sendColor` value mismatches, while preserving dynamic values and LOVE overloads.
 

@@ -1,0 +1,43 @@
+"use strict";
+const test = require("node:test");
+const assert = require("node:assert/strict");
+const Module = require("node:module");
+const original = Module._load;
+Module._load = function(id, ...args) {
+  if (id === "vscode") return {
+    EventEmitter: class { constructor() { this.event = () => {}; } dispose() {} },
+    TreeItem: class { constructor(label) { this.label = label; } },
+    TreeItemCollapsibleState: { Collapsed: 1, None: 0 }, ThemeIcon: class {},
+  };
+  return original.call(this, id, ...args);
+};
+const { InspectorTree, valueNodes } = require("../../src/inspector/view");
+Module._load = original;
+
+test("runtime view switches player data and preserves object identities across snapshots", () => {
+  const entry = (id, state) => ({ session: { id, title: id, active: true }, snapshot: {
+    objects: [{ id: 1, kind: "states", label: "Movement", data: { current: state } }], truncated: false,
+  } });
+  const entries = new Map([["host", entry("host", "idle")], ["client", entry("client", "walking")]]);
+  const tree = new InspectorTree({ entries });
+  const state = () => tree.getChildren().find(node => node.label === "State machines").children[0];
+  const originalId = state().id;
+  assert.equal(state().description, "idle");
+  entries.get("host").snapshot.objects[0].data.current = "running";
+  assert.equal(state().id, originalId);
+  tree.selected = "client";
+  assert.equal(state().description, "walking");
+  assert.notEqual(state().id, originalId);
+  entries.get("client").session.active = false;
+  assert.equal(state().description, "walking", "retain the selected player's final snapshot");
+  assert.equal(tree.getChildren().find(node => node.label === "Entities and components").children[0].label, "No live objects registered");
+});
+
+test("runtime values are displayed as data, with bounded depth and stable escaped keys", () => {
+  const data = { "a/b": { "<script>": "command:untrusted", value: false } };
+  const nodes = valueNodes(data, "root");
+  assert.equal(nodes[0].id, "root/a%2Fb");
+  assert.equal(nodes[0].children[0].label, "<script>");
+  assert.equal(nodes[0].children[0].command, undefined);
+  assert.deepEqual(valueNodes(data, "root", 8), []);
+});

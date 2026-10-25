@@ -17,6 +17,7 @@ const { registerLoveDevex } = require("./love");
 const { registerModuleDevex } = require("./modules");
 const { registerObjectPoolDevex } = require("./object-pools");
 const { registerSetup } = require("./setup");
+const { registerRuntimeInspector } = require("./inspector/view");
 const { registerProjectChecks } = require("./workspace/checks");
 const { registerGameConsole } = require("./workspace/console");
 const { registerRunConfigurations } = require("./workspace/run-configurations");
@@ -64,8 +65,11 @@ async function activate(context) {
   context.subscriptions.push(runActivity);
   context.subscriptions.push(registerRunConfigurations(context, runActivity.store));
   context.subscriptions.push(registerGameConsole(runActivity.store));
+  const runtimeInspector = registerRuntimeInspector(context, runActivity.store);
+  context.subscriptions.push(runtimeInspector);
   loveDevex = registerLoveDevex({
     activity: runActivity.store,
+    inspector: runtimeInspector.sessions,
     appendOutputLine: (line) => outputChannel?.appendLine(line),
     configurationTarget,
     getClient: () => client,
