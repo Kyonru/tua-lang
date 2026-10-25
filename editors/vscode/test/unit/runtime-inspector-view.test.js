@@ -91,3 +91,17 @@ test("named runtime objects expose creation-site actions and retain separate run
   assert.equal(link.command.command, "tua.inspector.goToSource");
   assert.deepEqual(link.command.arguments, [{ origin }]);
 });
+
+
+test("inspector can be re-enabled from its toolbar while a retained snapshot hides welcome content", () => {
+  const entry = { session: { id: "host", active: false }, status: "disabled", snapshot: { objects: [] } };
+  const tree = new InspectorTree({ entries: new Map([["host", entry]]) });
+  assert(tree.getChildren().length > 0, "retained snapshot keeps the welcome screen hidden");
+  const menus = require("../../package.json").contributes.menus["view/title"];
+  const enable = menus.find(item => item.command === "tua.inspector.enable");
+  const disable = menus.find(item => item.command === "tua.inspector.disable");
+  assert.equal(enable.when, "view == tua.inspector && !config.tua.runtimeInspector.enabled");
+  assert.equal(disable.when, "view == tua.inspector && config.tua.runtimeInspector.enabled");
+  assert.equal(enable.group, disable.group);
+  assert(enable.group.startsWith("navigation"), "enable is visible directly in the toolbar");
+});

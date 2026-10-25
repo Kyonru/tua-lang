@@ -99,6 +99,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Runtime Inspector keeps an Enable action in its toolbar when disabled, including
+  when retained snapshots hide the welcome screen.
+
 - Runtime Inspector updates now use separate Pause and Resume icons that follow
   the selected player, and disable when its connection is unavailable.
 

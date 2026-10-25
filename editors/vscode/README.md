@@ -220,6 +220,8 @@ Open **Tua → Runtime Inspector**, click **Enable Runtime Inspection**, then la
 Run, Hot reload, or Debug. Use **Select Runtime Player** to choose a player in a
 multi-instance run. Inspection is off by default and requires a trusted workspace.
 Enabling it applies to new runs; restart an already-running game to attach.
+After disabling inspection, use **Enable Runtime Inspection** (plug icon) in the
+view toolbar to turn it back on, even while the last snapshot remains visible.
 The setting is `tua.runtimeInspector.enabled` (default `false`). For a custom
 debug launch configuration, use `tuaProject: true` to enable Tua launch preparation.
 

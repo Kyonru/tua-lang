@@ -1599,6 +1599,11 @@
           "group": "navigation@3"
         },
         {
+          "command": "tua.inspector.enable",
+          "when": "view == tua.inspector && !config.tua.runtimeInspector.enabled",
+          "group": "navigation@3"
+        },
+        {
           "command": "tua.inspector.resume",
           "when": "view == tua.inspector && config.tua.runtimeInspector.enabled && tua.inspectorCanControl && tua.inspectorPaused",
           "group": "navigation@2"
