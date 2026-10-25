@@ -1054,8 +1054,9 @@ fn break_long_groups(line: &str, indent: &str, options: &FormatOptions) -> Strin
         return inline;
     }
 
-    let table = || break_long_table(line, indent, options);
-    let call = || break_long_call(line, indent, options);
+    let keeps_blocks = |wrapped: &String| wrap_keeps_one_line_blocks(line, wrapped);
+    let table = || break_long_table(line, indent, options).filter(keeps_blocks);
+    let call = || break_long_call(line, indent, options).filter(keeps_blocks);
     // Split the outermost group first. Expanding a table passed as an
     // argument would leave the arguments after it on one long line.
     let call_opens_first = matches!(
@@ -1354,23 +1355,41 @@ fn line_is_middle_block(code: &str) -> bool {
 }
 
 fn line_opens_block(code: &str) -> bool {
+    line_can_open_block(code)
+        && (line_opens_keyword_block(code) || line_opens_brace_block(code.trim()))
+}
+
+fn line_can_open_block(code: &str) -> bool {
     let code = code.trim();
 
-    if code.is_empty() || line_is_middle_block(code) {
-        return false;
-    }
+    !code.is_empty()
+        && !line_is_middle_block(code)
+        && !code_contains_word(code, "end")
+        && !code_contains_word(code, "until")
+}
 
-    let closes_same_line = code_contains_word(code, "end") || code_contains_word(code, "until");
+fn line_opens_keyword_block(code: &str) -> bool {
+    let code = code.trim();
 
-    !closes_same_line
-        && (code_contains_word(code, "function")
-            || starts_with_word(code, "if") && code_contains_word(code, "then")
-            || starts_with_word(code, "for") && code_contains_word(code, "do")
-            || starts_with_word(code, "while") && code_contains_word(code, "do")
-            || starts_with_word(code, "do")
-            || starts_with_word(code, "repeat")
-            || starts_with_word(code, "enum")
-            || line_opens_brace_block(code))
+    code_contains_word(code, "function")
+        || starts_with_word(code, "if") && code_contains_word(code, "then")
+        || starts_with_word(code, "for") && code_contains_word(code, "do")
+        || starts_with_word(code, "while") && code_contains_word(code, "do")
+        || starts_with_word(code, "do")
+        || starts_with_word(code, "repeat")
+        || starts_with_word(code, "enum")
+}
+
+/// A block that opens and closes on one line, such as
+/// `function(a, b) return a end`, must not be split: the wrapped header would
+/// open a block whose `end` sits on a line that does not close it.
+fn wrap_keeps_one_line_blocks(line: &str, wrapped: &str) -> bool {
+    let opens_keyword_block = |code: &str| {
+        let code = code_before_comment(code.trim());
+        line_can_open_block(&code) && line_opens_keyword_block(&code)
+    };
+
+    opens_keyword_block(line) || !wrapped.lines().any(opens_keyword_block)
 }
 
 fn line_opens_brace_block(code: &str) -> bool {

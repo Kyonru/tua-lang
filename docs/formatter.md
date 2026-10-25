@@ -72,8 +72,10 @@ canonical layout, run `tua fmt --check` as its own step.
 `line_width` is a preferred wrapping width, not a hard column limit. The
 formatter currently expands comma-separated call arguments and table fields;
 it does not yet reflow long binary expressions, method chains, comments,
-strings, or single-argument calls. Syntax-aware reflow for those forms belongs
-in a future document-layout engine rather than more line-level heuristics.
+strings, or single-argument calls. It also leaves a block that opens and closes
+on one line, such as `function(a, b) return a end`, intact rather than splitting
+its header from its `end`. Syntax-aware reflow for those forms belongs in a
+future document-layout engine rather than more line-level heuristics.
 
 Formatting requires parseable source. Whole-document formatting normalizes
 the configured line-ending convention, while range and on-type formatting

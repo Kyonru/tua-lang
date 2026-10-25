@@ -1432,3 +1432,36 @@ local rows = {
     );
     assert_no_multiline_layout_lint(&output);
 }
+
+#[test]
+fn does_not_wrap_inside_one_line_blocks() {
+    let source = r#"local handler = function(first_param, second_param) return first_param end
+local obj = { run = function(self, first, second) return first end }
+if ready then start(first_param, second_param, third_param) end
+run(function(first, second) return first end, first_param, second_param)
+local after = 1
+"#;
+    let expected = r#"local handler = function(first_param, second_param) return first_param end
+local obj = { run = function(self, first, second) return first end }
+if ready then start(first_param, second_param, third_param) end
+run(
+  function(first, second) return first end,
+  first_param,
+  second_param
+)
+local after = 1
+"#;
+    let options = FormatOptions {
+        line_width: 50,
+        ..FormatOptions::default()
+    };
+
+    let output = format_tua_source("src/main.tua", source, &options).expect("source should format");
+
+    assert_eq!(output, expected);
+    assert_eq!(
+        format_tua_source("src/main.tua", &output, &options).expect("output should reformat"),
+        output
+    );
+    assert_no_multiline_layout_lint(&output);
+}

@@ -27,6 +27,9 @@ language or editor behavior, and migration notes call out those changes.
 - Wrapping splits the outermost group of a long line first. A call such as
   `each({ 1, 2, 3 }, function(value) ... end)` now puts each argument on its
   own line instead of expanding the table and leaving the callback over width.
+- Wrapping no longer splits a block that opens and closes on one line, such as
+  `function(a, b) return a end` or `if ready then start(a, b) end`. Splitting
+  it produced `)return a end` and mis-indented every following line.
 
 ## [0.4.1] - 2026-10-25
 
