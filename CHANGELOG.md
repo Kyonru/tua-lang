@@ -6,6 +6,30 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+### Release summary
+
+Tua 0.5.1 fixes a hung LÖVE process on macOS after the language server starts
+or restarts. In trusted workspaces that reference shaders, the server keeps a
+small LÖVE shader validator running between validations. That validator
+waited for requests in a way that stopped it from processing window events,
+so macOS showed it as not responding and wrote hang reports. It now waits for
+requests on a background thread and keeps processing events, using almost no
+CPU while idle.
+
+#### Highlights
+
+- Restarting the Tua language server no longer leaves a "Not Responding" LÖVE
+  app on macOS.
+- The idle shader validator stays responsive between edits; validation results
+  are unchanged.
+- Real-LÖVE regression coverage now validates again after an idle gap on the
+  same validator process.
+
+#### Upgrade notes
+
+No source or configuration changes are needed when upgrading from 0.5.0.
+Reinstall the VS Code extension to pick up the bundled 0.5.1 server.
+
 ### Fixed
 
 - The shader validator that the language server keeps running between
