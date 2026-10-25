@@ -31,6 +31,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- LOVE functions that take a `table`, such as `Shader:send` with a vector or
+  `Shader:sendColor`, accept arrays and dictionaries instead of reporting
+  `expected {  }, found number[]`.
 - Parser errors for reserved keywords used as variable, function, or parameter
   names now identify the keyword and name category instead of only saying a
   name was expected. Editor diagnostics underline the complete keyword.

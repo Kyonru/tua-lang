@@ -354,6 +354,22 @@ fn table_shape_compatibility_is_structural() {
 }
 
 #[test]
+fn any_table_value_is_assignable_to_a_plain_table() {
+    let plain = Type::empty_table();
+
+    assert!(is_assignable(&Type::array(Type::number()), &plain));
+    assert!(is_assignable(
+        &Type::dictionary(Type::string(), Type::number()),
+        &plain
+    ));
+    assert!(!is_assignable(&Type::number(), &plain));
+    assert!(!is_assignable(
+        &Type::array(Type::number()),
+        &Type::table([("x", TableField::required(Type::number()))])
+    ));
+}
+
+#[test]
 fn table_fields_must_be_assignable() {
     let source = Type::table([("hp", TableField::required(Type::string()))]);
     let target = Type::table([("hp", TableField::required(Type::number()))]);

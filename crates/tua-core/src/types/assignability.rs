@@ -239,6 +239,13 @@ impl TypeContext {
                 resolving,
             ),
             (Type::Table(source), Type::Array(_)) if source.is_plain_empty() => Ok(()),
+            // A plain `{}` requires nothing of the table, which is how LOVE's
+            // `table` parameters (vectors, colors, matrices) are modeled.
+            (Type::Array(_) | Type::Dictionary { .. } | Type::Tuple(_), Type::Table(target))
+                if target.is_plain_empty() =>
+            {
+                Ok(())
+            }
             (Type::Array(source), Type::Array(target)) => self
                 .check_assignable_inner(source, target, depth + 1, resolving)
                 .map_err(|failure| failure.at(AssignabilityPathSegment::ArrayElement)),

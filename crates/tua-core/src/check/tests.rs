@@ -4541,3 +4541,18 @@ end
     )
     .is_err());
 }
+
+#[test]
+fn accepts_vector_and_color_tables_for_love_table_parameters() {
+    check_tua_source(
+        "src/main.tua",
+        r#"
+local effect = love.graphics.newShader("vec4 effect(vec4 c, Image t, vec2 uv, vec2 s) { return c; }")
+local ripple = { 0, 0, 1, 0 }
+effect:send("ripple", ripple)
+effect:send("ripples", { 1, 2, 3, 4 }, { 5, 6, 7, 8 })
+effect:sendColor("tint", { 1, 0.5, 0.25, 1 })
+"#,
+    )
+    .expect("LOVE table parameters should accept arrays");
+}
