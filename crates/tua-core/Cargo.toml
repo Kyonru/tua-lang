@@ -22,7 +22,7 @@ name = "inline_eval"
 required-features = ["test-fixture"]
 
 [dependencies]
-full_moon = { version = "2.2.0", features = ["luau"] }
+full_moon = { version = "2.2.0", features = ["luau", "luajit"] }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
 sha2 = { version = "0.10.9", optional = true }

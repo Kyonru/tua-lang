@@ -55,6 +55,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Plain Lua modules that use LuaJIT `goto`, labels, or number suffixes now
+  parse for typed `require`, instead of silently losing every inferred export.
+  Tua source still does not accept `goto`.
+
 - Multiline `return` values, other expression lists split after a comma, and
   expressions split after `..`, a comparison, or `not` now keep their
   continuation indentation, so formatted code no longer triggers the

@@ -45,6 +45,9 @@ checking or emission. Generated `.lua` files then pass a final Lua 5.1 parse
 before Tua returns an emission artifact; `TL2010` is the blocking safety
 diagnostic if compiler lowering or emission violates that invariant. Plain
 `.lua` files remain outside this transpilation step and are copied unchanged.
+Tua analyzes them with LuaJIT syntax, so a Lua module that uses `goto`,
+labels, or LuaJIT number suffixes keeps its inferred exports. `.tua` source
+does not accept `goto`.
 
 ## Use Tua Runtimes From Lua
 

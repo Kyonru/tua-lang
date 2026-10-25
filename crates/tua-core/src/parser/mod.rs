@@ -72,13 +72,15 @@ pub fn parse_raw_lua_source(
     let parser_source = source.clone();
     let parser_provenance = source_line_provenance(&source);
 
+    // Plain Lua files run on LuaJIT, so accept its `goto`, labels, and number
+    // suffixes. Tua source keeps the Lua 5.1 and Luau grammars below.
     parse_raw_source(
         path,
         source,
         parser_source,
         parser_provenance,
         Vec::new(),
-        LuaVersion::lua51(),
+        LuaVersion::lua51().with_luajit(),
         ParsedLanguage::Lua,
     )
 }

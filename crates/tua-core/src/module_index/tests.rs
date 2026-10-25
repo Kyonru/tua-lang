@@ -634,3 +634,31 @@ impl Drop for TempProject {
         let _ = fs::remove_dir_all(&self.path);
     }
 }
+
+#[test]
+fn infers_exports_from_lua_modules_that_use_luajit_goto() {
+    let source = r#"
+local M = {}
+
+function M.sumOdd(items)
+  local total = 0
+  for _, value in ipairs(items) do
+    if value % 2 == 0 then goto continue end
+    total = total + value
+    ::continue::
+  end
+  return total
+end
+
+return M
+"#;
+    let parsed = parse_lua_source("src/lib.lua", source).expect("LuaJIT goto should parse");
+
+    let exports = infer_module_exports(&parsed).expect("exports should be inferred");
+
+    assert!(exports.field("sumOdd").is_some(), "{exports:#?}");
+    assert!(
+        parse_tua_source("src/lib.tua", source).is_err(),
+        "Tua source keeps rejecting goto"
+    );
+}
