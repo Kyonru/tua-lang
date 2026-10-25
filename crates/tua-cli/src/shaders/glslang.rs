@@ -199,7 +199,6 @@ impl GlslangValidator {
             self.command.clone()
         };
         let mut outcomes = Vec::new();
-        let deadline = Instant::now() + self.timeout;
         for request in requests {
             let units = match shader_compile_units(&request.source, request.target) {
                 Ok(units) => units,
@@ -225,6 +224,9 @@ impl GlslangValidator {
                     .stdin(Stdio::null())
                     .stdout(Stdio::piped())
                     .stderr(Stdio::piped());
+                // Each process gets the full timeout: it bounds a hung tool, not
+                // the size of a project's shader batch.
+                let deadline = Instant::now() + self.timeout;
                 let mut child = process.spawn().map_err(|e| {
                     if e.kind() == io::ErrorKind::NotFound {
                         NO_GLSLANG.to_owned()
@@ -365,6 +367,20 @@ mod tests {
             .unwrap_err()
             .contains("timed out"));
         assert!(start.elapsed() < Duration::from_secs(2));
+    }
+    #[test]
+    fn headless_timeout_applies_per_process_not_per_batch() {
+        // The batch (8 x 0.3 s) outlasts one timeout; each process stays well within it.
+        let (_dir, command) = fake("sleep 0.3; exit 0");
+        let mut validator = GlslangValidator {
+            command,
+            timeout: Duration::from_secs(2),
+        };
+        let batch = vec![request(ShaderValidationMode::Glslang); 8];
+        let outcomes = validator.validate(&batch).unwrap();
+        assert!(outcomes
+            .iter()
+            .all(|outcome| *outcome == ShaderValidationOutcome::Valid));
     }
     #[test]
     #[ignore = "requires installed glslangValidator"]
