@@ -93,8 +93,15 @@ the native inlay-hint maximum-length setting used by Tua's compact-hint toggle.
 
 ## Release Process
 
-1. Add release notes under `[Unreleased]`, including compatibility and
-   migration notes when needed, commit them, and leave the worktree clean.
+1. Add detailed release notes under `[Unreleased]`. Before preparing a release,
+   lead them with `### Release summary`: a short overview, `#### Highlights`
+   with three to six user-facing bullets, and `#### Upgrade notes` when needed.
+   Aim for 150–300 words and include material compatibility or security changes.
+   The next level-three heading ends the summary. The GitHub release generator
+   publishes only this summary, promotes its subheadings, and adds a link to the
+   full tagged changelog and download/checksum guidance. Older entries without
+   a summary retain full-note extraction. Commit the notes and leave the
+   worktree clean.
 2. Run the required extension-host suite.
 3. Run `make release-version VERSION=<version>`. The guarded script updates
    Rust, VS Code, lockfile, changelog, and release-documentation versions; runs

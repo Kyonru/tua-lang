@@ -8,6 +8,33 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [0.4.0] - 2026-10-25
 
+### Release summary
+
+Tua 0.4.0 hardens project file handling, tightens type checking, and improves
+Lua interoperability and editor reliability.
+
+#### Highlights
+
+- **Safer project commands:** packaging, asset cleanup, hot reload, formatting,
+  and completion statistics reject symlinked write destinations. Generated
+  files publish through temporary files, and packages exclude stale outputs.
+- **Stronger checking:** dictionary reads include `nil`, invalid primitive
+  operations receive diagnostics, and source complexity and size limits reject
+  oversized inputs.
+- **Better Lua and editor support:** Lua files can import bundled Tua runtimes;
+  type completion and quick fixes can add project type imports.
+- **More reliable development:** analysis snapshots share immutable file data,
+  module caches track content changes, and the editor can stop running LOVE games.
+
+#### Upgrade notes
+
+- Guard dictionary lookups or supply defaults before using their values.
+- Fix primitive operator errors reported as `TL1003`.
+- Use real directories for generated output; files outside the current build
+  inventory are no longer included in packages.
+- Split inputs that exceed documented size or complexity limits. Rename can
+  refuse names occupied in another scope; choose a fresh name.
+
 ### Compatibility and hardening
 
 This minor release tightens checking and filesystem isolation. When upgrading

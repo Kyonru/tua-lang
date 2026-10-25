@@ -93,6 +93,32 @@ Future work.
         self.assertIn("Release behavior", notes)
         self.assertNotIn("Previous behavior", notes)
 
+    def test_release_summary_excludes_details_and_links_tagged_changelog(self) -> None:
+        notes = changelog_notes(
+            "## [1.2.3] - 2026-07-16\n\n### Release summary\n\nOverview.\n\n"
+            "#### Highlights\n\n- Main change.\n\n#### Upgrade notes\n\n- Migration.\n\n"
+            "### Fixed\n\n- Detailed fix.\n\n## [1.2.2] - 2026-07-01\nPrevious.\n",
+            "1.2.3",
+        )
+        self.assertIn("Overview.", notes)
+        self.assertIn("## Highlights", notes)
+        self.assertIn("## Upgrade notes", notes)
+        self.assertIn("blob/v1.2.3/CHANGELOG.md", notes)
+        self.assertIn("SHA256SUMS", notes)
+        self.assertNotIn("Detailed fix", notes)
+        self.assertNotIn("Previous.", notes)
+
+    def test_summary_heading_without_body_is_rejected(self) -> None:
+        with self.assertRaisesRegex(ValueError, "summary.*empty"):
+            changelog_notes("## [1.2.3] - 2026-07-16\n\n### Release summary\n", "1.2.3")
+
+    def test_empty_release_summary_is_rejected(self) -> None:
+        with self.assertRaisesRegex(ValueError, "summary.*empty"):
+            changelog_notes(
+                "## [1.2.3] - 2026-07-16\n\n### Release summary\n\n### Fixed\n- Detail.\n",
+                "1.2.3",
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

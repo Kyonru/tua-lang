@@ -105,6 +105,21 @@ def changelog_notes(changelog: str, version: str) -> str:
     body = changelog[match.end() : end].strip()
     if not body:
         raise ValueError(f"CHANGELOG.md release section for {version} is empty")
+    summary = re.search(
+        r"^### Release summary[ \t]*(?:\n|$)(.*?)(?=^### |\Z)",
+        body, re.MULTILINE | re.DOTALL,
+    )
+    if summary:
+        body = summary.group(1).strip()
+        if not body:
+            raise ValueError(f"CHANGELOG.md release summary for {version} is empty")
+        body = re.sub(r"^#### ", "## ", body, flags=re.MULTILINE)
+        body += (
+            f"\n\nSee the [full changelog](https://github.com/Kyonru/tua-lang/"
+            f"blob/v{version}/CHANGELOG.md) for every change in this release."
+            "\n\nDownload the CLI archive or platform-specific VS Code extension below. "
+            "Checksums are available in `SHA256SUMS`."
+        )
     return f"# Tua {version}\n\n{body}\n"
 
 
