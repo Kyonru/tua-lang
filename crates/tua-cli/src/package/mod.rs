@@ -75,7 +75,7 @@ pub(crate) fn run_package(
     fs::create_dir_all(&dist).map_err(|error| io_error(&dist, error))?;
     let love_path = dist.join(format!("{name}.love"));
     check_package_path(workspace.root(), &love_path)?;
-    fs::write(&love_path, &archive).map_err(|error| io_error(&love_path, error))?;
+    crate::atomic_fs::write(&love_path, &archive).map_err(|error| io_error(&love_path, error))?;
     lines.push(format!(
         "packaged {} ({})",
         display(cwd, &love_path),
@@ -222,10 +222,10 @@ fn fuse_windows(
     }
     let directory = dist.join("windows").join(name);
     check_package_path(project_root, &directory)?;
-    if directory.exists() {
-        fs::remove_dir_all(&directory).map_err(|error| io_error(&directory, error))?;
-    }
-    fs::create_dir_all(&directory).map_err(|error| io_error(&directory, error))?;
+    let destination = directory;
+    let stage = crate::atomic_fs::DirectoryStage::new(&destination)
+        .map_err(|error| io_error(&destination, error))?;
+    let directory = stage.path().to_path_buf();
 
     let mut executable = fs::read(&love_exe).map_err(|error| io_error(&love_exe, error))?;
     executable.extend_from_slice(archive);
@@ -243,7 +243,11 @@ fn fuse_windows(
             fs::copy(entry.path(), &target).map_err(|error| io_error(&target, error))?;
         }
     }
-    Ok(directory)
+    check_package_path(project_root, &destination)?;
+    stage
+        .publish(&destination)
+        .map_err(|error| io_error(&destination, error))?;
+    Ok(destination)
 }
 
 /// A macOS game: a copy of `love.app` that carries the archive in its
@@ -265,9 +269,10 @@ fn fuse_macos(
     }
     let app = dist.join("macos").join(format!("{name}.app"));
     check_package_path(project_root, &app)?;
-    if app.exists() {
-        fs::remove_dir_all(&app).map_err(|error| io_error(&app, error))?;
-    }
+    let destination = app;
+    let stage = crate::atomic_fs::DirectoryStage::new(&destination)
+        .map_err(|error| io_error(&destination, error))?;
+    let app = stage.path().to_path_buf();
     copy_tree(runtime, &app).map_err(|error| io_error(&app, error))?;
 
     let resources = app.join("Contents/Resources");
@@ -282,7 +287,11 @@ fn fuse_macos(
     let contents = fs::read_to_string(&plist).map_err(|error| io_error(&plist, error))?;
     fs::write(&plist, game_info_plist(&contents, name, identifier))
         .map_err(|error| io_error(&plist, error))?;
-    Ok(app)
+    check_package_path(project_root, &destination)?;
+    stage
+        .publish(&destination)
+        .map_err(|error| io_error(&destination, error))?;
+    Ok(destination)
 }
 
 /// Rename the bundle and drop LOVE's claim on `.love` files, as the LOVE
@@ -457,6 +466,25 @@ fn check_package_path(project_root: &Path, path: &Path) -> Result<(), CliError> 
 mod tests {
     use super::*;
 
+    #[test]
+    fn failed_bundle_preparation_preserves_previous_release() {
+        let project = temp_dir("failed-replacement");
+        let runtime = project.join("runtime");
+        fs::create_dir_all(runtime.join("invalid.dll")).unwrap();
+        fs::write(runtime.join("love.exe"), "runtime").unwrap();
+        let dist = project.join("dist");
+        let previous = dist.join("windows/game");
+        fs::create_dir_all(&previous).unwrap();
+        fs::write(previous.join("keep"), "previous release").unwrap();
+        assert!(fuse_windows(&runtime, b"archive", &project, &dist, "game").is_err());
+        assert_eq!(
+            fs::read_to_string(previous.join("keep")).unwrap(),
+            "previous release"
+        );
+        assert_eq!(fs::read_dir(dist.join("windows")).unwrap().count(), 1);
+        fs::remove_dir_all(project).unwrap();
+    }
+
     #[cfg(unix)]
     #[test]
     fn package_paths_reject_symlinked_files_and_directories() {
@@ -483,7 +511,6 @@ mod tests {
         fs::remove_dir_all(outside).unwrap();
     }
 
-    #[cfg(unix)]
     fn temp_dir(name: &str) -> PathBuf {
         let path = std::env::temp_dir().join(format!(
             "tua-package-{name}-{}-{}",

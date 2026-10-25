@@ -6,6 +6,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Formatting, build outputs and archives publish through sibling temporary
+  files. Platform bundles finish staging before replacing the previous release,
+  with rollback if publication fails.
+
 - Module export caches compare source contents, and hover documentation no
   longer falls back to reading another file outside the analysis snapshot.
 

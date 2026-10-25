@@ -101,7 +101,7 @@ pub(super) fn reconcile(
         OutputGuard::for_root(root)
             .check(&path)
             .map_err(|error| io::Error::other(error.message))?;
-        fs::write(
+        crate::atomic_fs::write(
             path,
             serde_json::to_vec(&current).map_err(io::Error::other)?,
         )

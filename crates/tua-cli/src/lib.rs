@@ -1,6 +1,7 @@
 mod api;
 mod args;
 mod asset_pipeline;
+mod atomic_fs;
 mod build;
 mod check;
 mod command;

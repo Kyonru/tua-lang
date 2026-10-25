@@ -55,7 +55,7 @@ pub(crate) fn write_source_map(
         fs::create_dir_all(parent).map_err(|source| io_diagnostic(parent, source))?;
     }
 
-    fs::write(&map_path, format!("{serialized}\n"))
+    crate::atomic_fs::write(&map_path, format!("{serialized}\n"))
         .map_err(|source| io_diagnostic(&map_path, source))?;
 
     let debugger_map = debugger_source_map_json(cwd, source_path, output_path, &mappings);
@@ -68,7 +68,7 @@ pub(crate) fn write_source_map(
             .with_code(tua_core::DiagnosticCode::EMIT_IO)
     })?;
 
-    fs::write(&debugger_map_path, format!("{serialized}\n"))
+    crate::atomic_fs::write(&debugger_map_path, format!("{serialized}\n"))
         .map_err(|source| io_diagnostic(&debugger_map_path, source))
 }
 

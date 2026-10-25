@@ -1,4 +1,3 @@
-use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
@@ -60,7 +59,7 @@ pub(crate) fn run_fmt(
                 ));
                 continue;
             }
-            if let Err(source) = fs::write(&source_file.path, formatted) {
+            if let Err(source) = crate::atomic_fs::write(&source_file.path, formatted) {
                 diagnostics.push(io_diagnostic(&source_file.path, source));
             }
         }

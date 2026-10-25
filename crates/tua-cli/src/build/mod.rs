@@ -459,7 +459,8 @@ fn write_output(guard: &OutputGuard, output_path: &Path, output: String) -> Resu
         fs::create_dir_all(parent).map_err(|source| io_diagnostic(parent, source))?;
     }
 
-    fs::write(output_path, output).map_err(|source| io_diagnostic(output_path, source))
+    crate::atomic_fs::write(output_path, output)
+        .map_err(|source| io_diagnostic(output_path, source))
 }
 
 fn collect_required_bundled_runtimes(output: &str, required: &mut BTreeSet<&'static str>) {
@@ -509,8 +510,7 @@ fn copy_output(
         fs::create_dir_all(parent).map_err(|source| io_diagnostic(parent, source))?;
     }
 
-    fs::copy(source_path, output_path)
-        .map(|_| ())
+    crate::atomic_fs::copy(source_path, output_path)
         .map_err(|source| io_diagnostic(output_path, source))
 }
 
