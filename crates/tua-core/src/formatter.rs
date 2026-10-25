@@ -925,7 +925,11 @@ fn normalize_spacing(line: &str, quote_style: QuoteStyle) -> String {
                         }
                     }
                     b'[' => {
-                        trim_trailing_spaces(&mut output);
+                        // Only an index hugs its target; a `[key]` table field
+                        // keeps the space after `{` or `,`.
+                        if previous_token_is_indexable(&output) {
+                            trim_trailing_spaces(&mut output);
+                        }
                         output.push(bytes[index] as char);
                         index += 1;
                         while bytes
@@ -1819,6 +1823,12 @@ fn should_trim_before_call_paren(output: &str) -> bool {
     }
     output.as_bytes().last().is_some_and(|byte| {
         byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b')' | b']' | b'}')
+    })
+}
+
+fn previous_token_is_indexable(output: &str) -> bool {
+    output.trim_end().as_bytes().last().is_some_and(|byte| {
+        is_identifier_continue(*byte) || matches!(byte, b')' | b']' | b'}' | b'\'' | b'"')
     })
 }
 

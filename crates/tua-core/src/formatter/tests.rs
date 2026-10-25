@@ -1311,3 +1311,22 @@ end
     assert_eq!(format(&output), output);
     assert_no_multiline_layout_lint(&output);
 }
+
+#[test]
+fn keeps_the_space_before_bracketed_table_keys() {
+    let source = r#"local names = { ["end"] = 1,[2] = "two" }
+local nested = { [1] = { ["a b"] = true } }
+consume({ [1] = 2 })
+local value = names ["end"] .. lookup [ 1 ]
+"#;
+    let expected = r#"local names = { ["end"] = 1, [2] = "two" }
+local nested = { [1] = { ["a b"] = true } }
+consume({ [1] = 2 })
+local value = names["end"] .. lookup[1]
+"#;
+
+    let output = format(source);
+
+    assert_eq!(output, expected);
+    assert_eq!(format(&output), output);
+}

@@ -16,6 +16,8 @@ language or editor behavior, and migration notes call out those changes.
 - Multiline calls inside functions with multiline parameter lists now retain
   their continuation indentation, preventing formatter output from triggering
   `TL4037`. Nested callbacks and local functions follow the same rule.
+- The formatter keeps the space before a bracketed table key, so
+  `{ ["end"] = 1, [2] = 3 }` no longer becomes `{["end"] = 1,[2] = 3 }`.
 
 ## [0.4.1] - 2026-10-25
 
