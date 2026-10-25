@@ -517,6 +517,86 @@ end
 }
 
 #[test]
+fn indents_calls_after_multiline_function_signatures() {
+    let cases = [
+        r#"local function fireProjectile(
+  screenX: number,
+  screenY: number,
+  weapon: any
+)
+  local velocityX: any = nil
+  local velocityY: any = nil
+  local lifetime = 10
+  if weapon.kind == "ballistic" then
+    velocityX, velocityY, lifetime = ballisticLaunch(
+      screenX,
+      screenY,
+      weapon
+    )
+    lifetime += 0.8
+  else
+    local length = math.sqrt(
+      screenX * screenX + screenY * screenY
+    )
+    if length > 0.01 then
+      lifetime = math.max(
+        2.5,
+        length + 0.25
+      )
+    end
+  end
+end
+"#,
+        r#"game:watch(
+  "score",
+  function(
+    score: number,
+    previous: number
+  )
+    local value = math.max(
+      score,
+      previous
+    )
+    local function nested(
+      x: number
+    )
+      return math.max(
+        x,
+        value
+      )
+    end
+  end
+)
+"#,
+    ];
+    for expected in cases {
+        let source = expected
+            .lines()
+            .map(str::trim)
+            .collect::<Vec<_>>()
+            .join("\n");
+        let output = format(&source);
+        assert_eq!(output, expected);
+        assert_eq!(format(&output), output);
+        let parsed =
+            parse_tua_source("src/main.tua", output).expect("formatted source should parse");
+        let environment = crate::types::build_type_environment(&parsed)
+            .expect("formatted source should build a type environment");
+        let diagnostics = crate::linter::lint_parsed_source(
+            &parsed,
+            &crate::DiagnosticsConfig::default(),
+            &crate::config::JitConfig::default(),
+            &environment,
+        );
+        assert!(
+            diagnostics.iter().all(|diagnostic| diagnostic.code
+                != Some(crate::DiagnosticCode::LINT_MULTI_LINE_STATEMENT)),
+            "formatted calls must satisfy TL4037: {diagnostics:#?}"
+        );
+    }
+}
+
+#[test]
 fn avoids_extra_paren_indent_inside_call_table_and_function_blocks() {
     let source = r#"function update()
 table.insert(list, {

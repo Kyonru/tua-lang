@@ -6,6 +6,12 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+### Fixed
+
+- Multiline calls inside functions with multiline parameter lists now retain
+  their continuation indentation, preventing formatter output from triggering
+  `TL4037`. Nested callbacks and local functions follow the same rule.
+
 ## [0.4.1] - 2026-10-25
 
 ### Release summary

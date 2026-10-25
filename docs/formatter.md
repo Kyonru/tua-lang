@@ -32,7 +32,9 @@ lines inside long-bracket strings, block comments, and escaped multiline short
 strings, even when their text resembles Tua code.
 
 Multiline function parameters are indented once while the closing parenthesis
-stays aligned with the declaration. Continued control-flow conditions are also
+stays aligned with the declaration. Multiline calls in the body indent their
+arguments one level beyond the call, including inside callbacks and functions
+with multiline parameter lists. Continued control-flow conditions are also
 indented once, whether they use enclosing parentheses or leading `and`/`or`
 operators; the body begins one level below the completed header.
 

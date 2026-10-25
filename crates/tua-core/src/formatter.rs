@@ -684,6 +684,11 @@ impl<'a> Formatter<'a> {
         self.update_paren_state(code, continuation_indent);
         if closes_function_header {
             self.multiline_function_header_depths.pop();
+            // The parameter list no longer contributes a parenthesis level
+            // inside the body. Keep only enclosing calls suppressed.
+            if let Some(block) = self.suppressed_paren_blocks.last_mut() {
+                block.depth = self.paren_depth;
+            }
         }
         self.brace_depth = update_group_depth(self.brace_depth, code, b'{', b'}');
         // A comma outside every group continues an expression list, such as
