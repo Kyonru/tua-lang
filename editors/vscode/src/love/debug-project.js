@@ -25,9 +25,9 @@ const TUA_LAUNCH_PROPERTY = "tuaProject";
 const DEBUG_BOOTSTRAP =
   'if os.getenv("LOCAL_LUA_DEBUGGER_VSCODE") == "1" then require("lldebugger").start(); function love.errorhandler(message) error(message, 2) end end\n';
 
-function registerLoveProjectDebugger({ appendOutputLine, getClient, getServerCommand, activity }) {
+function registerLoveProjectDebugger({ appendOutputLine, getClient, getServerCommand, activity, inspector }) {
   const preparedOutputs = new Set();
-  const instanceGroups = registerDebugInstanceGroups({ activity, appendOutputLine, build: runBuildCommand,
+  const instanceGroups = registerDebugInstanceGroups({ activity, inspector, appendOutputLine, build: runBuildCommand,
     prepare: prepareLoveDebugOutput, configuration: createLoveDebugConfiguration, scriptFiles: debuggerScriptFiles });
   const startDisposable = vscode.debug.onDidStartDebugSession?.((session) => {
     for (const prepared of preparedOutputs) {
@@ -98,11 +98,13 @@ function registerLoveProjectDebugger({ appendOutputLine, getClient, getServerCom
           return undefined;
         }
 
+        const launchDirectory = await inspector?.launch(prepared.pendingOutput.activitySession, layout.outputDirectory);
         return createLoveDebugConfiguration({
           layout,
           loveCommand: configuredLoveCommand(),
           overrides: {
             ...configuration,
+            ...(launchDirectory ? { tuaInspectorLaunch: launchDirectory } : {}),
             scriptFiles: debuggerScriptFiles(layout.outputDirectory),
           },
         });
@@ -151,9 +153,11 @@ function registerLoveProjectDebugger({ appendOutputLine, getClient, getServerCom
     const folder = vscode.workspace.getWorkspaceFolder(
       vscode.Uri.file(layout.configDirectory),
     );
+    const launchDirectory = await inspector?.launch(pendingOutput.activitySession, layout.outputDirectory);
     const configuration = createLoveDebugConfiguration({
       layout,
       loveCommand: configuredLoveCommand(),
+      overrides: launchDirectory ? { tuaInspectorLaunch: launchDirectory } : {},
     });
     let started;
     try {
@@ -291,6 +295,7 @@ function debugSessionTargetsOutput(session, outputDirectory) {
   }
 
   const expected = path.resolve(outputDirectory);
+  if (configuration.tuaInspectorOutput === expected) return true;
   return configuration.args.some(
     (argument) => typeof argument === "string" && path.resolve(argument) === expected,
   );
@@ -330,7 +335,8 @@ function createLoveDebugConfiguration({ layout, loveCommand, overrides = {} }) {
       ...defaults.program,
       ...(overrides.program || {}),
     },
-    args: [layout.outputDirectory, ...extraArgs],
+    args: [overrides.tuaInspectorLaunch || layout.outputDirectory, ...extraArgs],
+    ...(overrides.tuaInspectorLaunch ? { tuaInspectorOutput: path.resolve(layout.outputDirectory) } : {}),
     scriptRoots: [layout.outputDirectory, ...extraScriptRoots],
   };
 

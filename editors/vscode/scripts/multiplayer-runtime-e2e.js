@@ -8,6 +8,12 @@ const childProcess = require("node:child_process");
 const Module = require("node:module");
 const { DebugClient } = require("@vscode/debugadapter-testsupport");
 const { ActivityStore } = require("../src/workspace/activity-store");
+const { InspectorSessions } = require("../src/inspector/sessions");
+const inspectRuns = process.env.TUA_INSPECTOR_TEST === "1";
+function createInspector(activity) {
+  return inspectRuns ? new InspectorSessions({ activity, enabled: () => true,
+    assetsDirectory: path.resolve(__dirname, "../assets/inspector"), reportError: message => { throw new Error(message); } }) : undefined;
+}
 const tua = process.env.TUA_BIN || path.resolve(__dirname, "../../../target/debug/tua");
 const love = process.env.TUA_LOVE || (process.platform === "darwin" ? "/Applications/love.app/Contents/MacOS/love" : "love");
 const roots = [], starts = [], ends = [], trackers = [];
@@ -82,10 +88,12 @@ async function hotReload() {
   fs.writeFileSync(module, 'return { value = function() return 1 end }\n');
   const activity = new ActivityStore(), output = [];
   activity.events.on("output", event => output.push(event.line));
-  const terminal = new HotReloadInstancesTerminal({ activity, kind: "dev", title: "Reload players", cwd: root, outputDirectory: path.join(root, "build"), tuaCommand: tua, loveCommand: love, instances });
+  const inspector = createInspector(activity);
+  const terminal = new HotReloadInstancesTerminal({ activity, inspector, kind: "dev", title: "Reload players", cwd: root, outputDirectory: path.join(root, "build"), tuaCommand: tua, loveCommand: love, instances });
   const running = terminal.run();
   try {
     await until(() => output.includes("host:1") && output.includes("client:1"), "both players start");
+    if (inspector) await until(() => [...inspector.entries.values()].every(entry => entry.snapshot), "inspector connected to both hot-reload players");
     fs.writeFileSync(module, 'return { value = function() return 2 end }\n');
     await until(() => output.includes("host:2") && output.includes("client:2"), "both players reload");
     fs.writeFileSync(module, 'local invalid =\n');
@@ -102,18 +110,20 @@ async function hotReload() {
     await until(() => output.includes("entry-restarted") && output.filter(line => line === "client:4").length >= 2, "entrypoint restart retains player arguments");
     console.log("Native hot reload passed: shared reloads, build-error recovery, independent stop, entrypoint restart");
   } catch (error) { console.error(output.join("\n")); throw error; }
-  finally { terminal.close(); await running; activity.dispose(); }
+  finally { terminal.close(); await running; inspector?.dispose(); activity.dispose(); }
 }
 async function debug() {
   const root = fixture('local marker: number = 41\n\nfunction love.load(args)\n  marker = marker + 1\n  print(args[1] .. ":" .. marker)\nend\nfunction love.update() love.event.quit() end\n');
   const activity = new ActivityStore();
   let builds = 0;
-  const feature = registerDebugInstanceGroups({ activity, prepare: prepareLoveDebugOutput, configuration: createLoveDebugConfiguration, scriptFiles: debuggerScriptFiles,
+  const inspector = createInspector(activity);
+  const feature = registerDebugInstanceGroups({ activity, inspector, prepare: prepareLoveDebugOutput, configuration: createLoveDebugConfiguration, scriptFiles: debuggerScriptFiles,
     build: async () => { builds++; const result = childProcess.spawnSync(tua, ["build"], { cwd: root, encoding: "utf8" }); assert.equal(result.status, 0, result.stdout + result.stderr); return 0; } });
   try {
     const result = await feature.start({ layout: { configDirectory: root, workspaceRoot: root, outputDirectory: path.join(root, "build") }, instances, title: "Debug players", tuaCommand: tua, loveCommand: love });
     assert(result, "debug group must start");
     assert.equal(builds, 1);
+    if (inspector) assert.equal(inspector.entries.size, 2);
     const [host, client] = [...clients.values()];
     assert(!host.terminated && !client.terminated);
     const hostThreads = await host.client.threadsRequest();
@@ -134,7 +144,7 @@ async function debug() {
       // This adapter no longer answers disconnect after its game has exited.
       item.client.stopAdapter();
     }
-    await feature.dispose(); activity.dispose();
+    await feature.dispose(); inspector?.dispose(); activity.dispose();
   }
 }
 (async () => {

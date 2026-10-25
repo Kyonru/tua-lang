@@ -61,7 +61,7 @@ class TuaCommandTerminal extends LoveProjectTerminal {
   }
 }
 
-function registerGameCommands({ appendOutputLine, getClient, getServerCommand, activity }) {
+function registerGameCommands({ appendOutputLine, getClient, getServerCommand, activity, inspector }) {
   return vscode.Disposable.from(
     vscode.commands.registerCommand("tua.buildProject", () => runTuaTask({
       appendOutputLine, activity, getClient, getServerCommand,
@@ -71,6 +71,7 @@ function registerGameCommands({ appendOutputLine, getClient, getServerCommand, a
       runTuaTask({
         appendOutputLine,
         activity,
+        inspector,
         getClient,
         getServerCommand,
         showConsole: presentation?.console === true,
@@ -112,7 +113,7 @@ function registerGameCommands({ appendOutputLine, getClient, getServerCommand, a
   );
 }
 
-async function runTuaTask({ appendOutputLine, getClient, getServerCommand, activity, action, taskName, args, showConsole = false, instances, configurationName }) {
+async function runTuaTask({ appendOutputLine, getClient, getServerCommand, activity, action, taskName, args, showConsole = false, instances, configurationName, inspector }) {
   if (!vscode.workspace.isTrusted) {
     vscode.window.showWarningMessage("Trust this workspace before running Tua game tasks.");
     return undefined;
@@ -130,8 +131,15 @@ async function runTuaTask({ appendOutputLine, getClient, getServerCommand, activ
   try { instances = instances === undefined ? undefined : normalizeInstances(instances); }
   catch (error) { vscode.window.showErrorMessage(error.message); return undefined; }
   const tuaArgs = args();
+  // Inspector-enabled single-player dev runs use the same editor-owned watcher
+  // as multiplayer so the shim launches only the game, never the compiler.
+  if (tuaArgs[0] === "dev" && instances === undefined && inspector?.enabled()) {
+    instances = [{ name: "Game", args: [] }];
+    tuaArgs.splice(0, tuaArgs.length, "dev", "--no-launch");
+  }
   const options = {
     activity,
+    inspector,
     instances,
     configurationName,
     kind: tuaArgs[0],

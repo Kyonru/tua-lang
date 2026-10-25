@@ -4,7 +4,7 @@ const vscode = require("vscode");
 const { sourceLocation } = require("../workspace/console-buffer");
 const { createDebugSnapshot } = require("./debug-snapshot");
 
-function registerDebugInstanceGroups({ activity, appendOutputLine, build, prepare, configuration, scriptFiles }) {
+function registerDebugInstanceGroups({ activity, appendOutputLine, build, prepare, configuration, scriptFiles, inspector }) {
   const groups = new Set();
   const players = new Map();
   const find = session => players.get(session?.configuration?.tuaDebugInstance);
@@ -95,10 +95,13 @@ function registerDebugInstanceGroups({ activity, appendOutputLine, build, prepar
         if (player.activitySession) player.activitySession.stop = () => stopPlayer(player);
         group.players.push(player);
         players.set(player.id, player);
+        const launchDirectory = await inspector?.launch(player.activitySession, debugLayout.outputDirectory);
+        if (group.cancelled) { finishPlayer(player); break; }
         let started = false;
         try {
           started = await vscode.debug.startDebugging(folder, configuration({ layout: debugLayout, loveCommand, overrides: {
             name: `${title}: ${instance.name}`, args: instance.args, scriptFiles: files, tuaDebugInstance: player.id,
+            ...(launchDirectory ? { tuaInspectorLaunch: launchDirectory } : {}),
           } }));
         } finally {
           if (!started) { player.exitCode = 1; finishPlayer(player); }

@@ -18,7 +18,7 @@ const TASK_TYPE = "tua";
 const TASK_NAME = "Run LOVE Project";
 const RUNNING_CONTEXT = "tua.loveProjectRunning";
 
-function registerLoveProjectRunner({ appendOutputLine, getClient, getServerCommand, activity }) {
+function registerLoveProjectRunner({ appendOutputLine, getClient, getServerCommand, activity, inspector }) {
   const activeExecutions = new Set();
   let nextRun = 0;
   let lastRun = {};
@@ -87,6 +87,7 @@ function registerLoveProjectRunner({ appendOutputLine, getClient, getServerComma
       title: options.title,
       showConsole: options.showConsole,
       activity,
+      inspector,
       appendOutputLine,
       layout,
       loveCommand: configuredLoveCommand(),
@@ -123,9 +124,10 @@ function registerLoveProjectRunner({ appendOutputLine, getClient, getServerComma
   } });
 }
 
-function createLoveProjectTask({ appendOutputLine, layout, loveCommand, tuaCommand, activity, showConsole = false, instances, title = TASK_NAME, runId, configurationName }) {
+function createLoveProjectTask({ appendOutputLine, layout, loveCommand, tuaCommand, activity, showConsole = false, instances, title = TASK_NAME, runId, configurationName, inspector }) {
   const terminalOptions = {
     activity,
+    inspector,
     title,
     configurationName,
     instances,
@@ -220,7 +222,7 @@ function resolveLoveCommand(command, options = {}) {
 }
 
 class LoveProjectTerminal {
-  constructor({ appendOutputLine, cwd, loveCommand, outputDirectory, tuaCommand, activity, kind = "run", title, instances, args = [], groupId, configurationName }) {
+  constructor({ appendOutputLine, cwd, loveCommand, outputDirectory, tuaCommand, activity, kind = "run", title, instances, args = [], groupId, configurationName, inspector }) {
     this.closeEmitter = new vscode.EventEmitter();
     this.writeEmitter = new vscode.EventEmitter();
     this.onDidClose = this.closeEmitter.event;
@@ -240,6 +242,7 @@ class LoveProjectTerminal {
     this.lineBuffers = { stdout: "", stderr: "" };
     this.sourceMaps = [];
     this.activity = activity;
+    this.inspector = inspector;
     this.session = activity?.begin({ cwd, kind, title, configurationName, ...(groupId ? { groupId } : {}) });
     if (this.session) this.session.stop = () => this.close();
   }
@@ -282,7 +285,7 @@ class LoveProjectTerminal {
     this.children = this.instances.map(instance => new LoveProjectTerminal({
       appendOutputLine: line => this.appendOutputLine?.(`[${instance.name}] ${line}`),
       cwd: this.cwd, loveCommand: this.loveCommand, outputDirectory: this.outputDirectory,
-      tuaCommand: this.tuaCommand, activity: this.activity,
+      tuaCommand: this.tuaCommand, activity: this.activity, inspector: this.inspector,
       kind: this.kind, title: `${this.title}: ${instance.name}`, args: instance.args, groupId: this.session?.id,
     }));
     for (const [index, child] of this.children.entries()) {
@@ -295,7 +298,9 @@ class LoveProjectTerminal {
   async runGame() {
     this.sourceMaps = this.loadSourceMaps();
     this.writeLine(`[tua] Starting LOVE from ${this.outputDirectory}`);
-    const loveCode = await this.runProcess(this.loveCommand, [this.outputDirectory, ...this.args], { onStart: () => this.activity?.update(this.session, "running") });
+    const launchDirectory = await this.inspector?.launch(this.session, this.outputDirectory) || this.outputDirectory;
+    if (this.finished) return 1;
+    const loveCode = await this.runProcess(this.loveCommand, [launchDirectory, ...this.args], { onStart: () => this.activity?.update(this.session, "running") });
 
     if (!this.finished) {
       this.finish(loveCode);
