@@ -1100,10 +1100,15 @@ fn break_long_table(line: &str, indent: &str, options: &FormatOptions) -> Option
     }
     output.push_str("{\n");
 
+    // Items are wrapped in turn, so one pass reaches the layout that a second
+    // pass would otherwise produce for a nested group that is still too long.
     for item in items {
-        output.push_str(&item_indent);
-        output.push_str(item.trim());
-        output.push_str(",\n");
+        output.push_str(&break_long_groups(
+            &format!("{},", item.trim()),
+            &item_indent,
+            options,
+        ));
+        output.push('\n');
     }
 
     output.push_str(indent);
@@ -1138,11 +1143,12 @@ fn break_long_call(line: &str, indent: &str, options: &FormatOptions) -> Option<
 
     let last_index = args.len().saturating_sub(1);
     for (index, arg) in args.into_iter().enumerate() {
-        output.push_str(&item_indent);
-        output.push_str(arg.trim());
-        if index != last_index {
-            output.push(',');
-        }
+        let separator = if index == last_index { "" } else { "," };
+        output.push_str(&break_long_groups(
+            &format!("{}{separator}", arg.trim()),
+            &item_indent,
+            options,
+        ));
         output.push('\n');
     }
 

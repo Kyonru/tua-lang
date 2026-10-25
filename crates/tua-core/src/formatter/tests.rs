@@ -1507,3 +1507,50 @@ consume(function() end, {
     assert_eq!(format(&output), output);
     assert_no_multiline_layout_lint(&output);
 }
+
+#[test]
+fn wraps_nested_groups_in_one_pass() {
+    let source = r#"print(string.format("%s %s %s", first_value, second_value), third_value)
+local rows = { lookup(alpha_value, beta_value, gamma_value), other }
+consume(first_argument, { alpha = 1, beta = 2, gamma = 3, delta = 4 })
+"#;
+    let expected = r#"print(
+  string.format(
+    "%s %s %s",
+    first_value,
+    second_value
+  ),
+  third_value
+)
+local rows = {
+  lookup(
+    alpha_value,
+    beta_value,
+    gamma_value
+  ),
+  other,
+}
+consume(
+  first_argument,
+  {
+    alpha = 1,
+    beta = 2,
+    gamma = 3,
+    delta = 4,
+  }
+)
+"#;
+    let options = FormatOptions {
+        line_width: 40,
+        ..FormatOptions::default()
+    };
+
+    let output = format_tua_source("src/main.tua", source, &options).expect("source should format");
+
+    assert_eq!(output, expected);
+    assert_eq!(
+        format_tua_source("src/main.tua", &output, &options).expect("output should reformat"),
+        output
+    );
+    assert_no_multiline_layout_lint(&output);
+}

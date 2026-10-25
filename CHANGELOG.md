@@ -33,6 +33,9 @@ language or editor behavior, and migration notes call out those changes.
 - A multiline call inside a table constructor, including one inside a method
   defined in the table, indents its arguments instead of aligning them with the
   call.
+- Wrapping also wraps nested calls and tables that are still too long, so one
+  `tua fmt` run produces output that `tua fmt --check` accepts. Previously a
+  nested call was wrapped only on the next run.
 
 ## [0.4.1] - 2026-10-25
 
