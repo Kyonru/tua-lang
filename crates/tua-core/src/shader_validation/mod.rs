@@ -195,10 +195,9 @@ fn shader_errors(message: &str) -> Vec<ShaderError> {
         let Ok(line_number) = line_number.trim().parse::<usize>() else {
             continue;
         };
-        let text = clean_compiler_message(text);
-        if text.is_empty() || text == "compilation terminated" {
+        let Some(text) = compiler_error_text(text) else {
             continue;
-        }
+        };
         errors.push(ShaderError {
             stage,
             line: Some(line_number.max(1)),
@@ -214,6 +213,13 @@ fn shader_errors(message: &str) -> Vec<ShaderError> {
         });
     }
     errors
+}
+
+/// The cleaned message of one compiler error, or `None` for glslang's
+/// `compilation terminated` follow-up, which both validators print.
+fn compiler_error_text(text: &str) -> Option<String> {
+    let text = clean_compiler_message(text);
+    (!text.is_empty() && text != "compilation terminated").then_some(text)
 }
 
 /// Turns glslang's `'=' :  cannot convert from ' const float' to ...` into

@@ -100,10 +100,13 @@ pub fn parse_glslang_output(
                 message.trim()
             ));
         }
+        let Some(message) = super::compiler_error_text(message) else {
+            continue;
+        };
         errors.push(ShaderError {
             stage: Some(stage),
             line: Some(line.max(1)),
-            message: message.trim().to_owned(),
+            message,
         });
     }
     if errors.is_empty() {
@@ -144,6 +147,22 @@ mod tests {
         .unwrap();
         assert!(
             matches!(result, ShaderValidationOutcome::Invalid(errors) if errors[0].line == Some(7))
+        );
+        // glslang's follow-up line is not a second user error, and messages
+        // are cleaned like LOVE's own validator output.
+        let result = parse_glslang_output(
+            "ERROR: 1:3: '=' :  cannot convert from ' const int' to ' temp float'\nERROR: 1:3: '' : compilation terminated\nERROR: 2 compilation errors.  No code generated.",
+            ShaderStage::Pixel,
+            false,
+        )
+        .unwrap();
+        assert_eq!(
+            result,
+            ShaderValidationOutcome::Invalid(vec![ShaderError {
+                stage: Some(ShaderStage::Pixel),
+                line: Some(3),
+                message: "cannot convert from 'const int' to 'temp float'".into(),
+            }])
         );
         assert!(
             parse_glslang_output("ERROR: 0:17: header failed", ShaderStage::Vertex, false).is_err()
