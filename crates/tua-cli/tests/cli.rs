@@ -482,6 +482,71 @@ fn write_packaging_project(temp: &TempDir) {
 }
 
 #[test]
+fn rebuild_and_package_drop_deleted_outputs_but_preserve_unowned_files() {
+    let temp = TempDir::new("stale-build");
+    write_packaging_project(&temp);
+    fs::write(temp.path().join("src/removed.tua"), "return 1\n").unwrap();
+    assert!(tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .unwrap()
+        .status
+        .success());
+    fs::write(temp.path().join("build/manual.txt"), "keep me").unwrap();
+    fs::remove_file(temp.path().join("src/removed.tua")).unwrap();
+    fs::remove_file(temp.path().join("src/assets/level.txt")).unwrap();
+    let result = tua()
+        .args(["package", "--name", "clean"])
+        .current_dir(temp.path())
+        .output()
+        .unwrap();
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    assert!(!temp.path().join("build/removed.lua").exists());
+    assert!(!temp.path().join("build/removed.lua.map.json").exists());
+    assert!(!temp.path().join("build/assets/level.txt").exists());
+    assert_eq!(
+        fs::read_to_string(temp.path().join("build/manual.txt")).unwrap(),
+        "keep me"
+    );
+    let archive = fs::read(temp.path().join("dist/clean.love")).unwrap();
+    assert!(!archive
+        .windows(b"removed.lua".len())
+        .any(|w| w == b"removed.lua"));
+    assert!(!archive
+        .windows(b"manual.txt".len())
+        .any(|w| w == b"manual.txt"));
+}
+
+#[test]
+fn build_manifest_cannot_delete_outside_output_root() {
+    let temp = TempDir::new("hostile-build-manifest");
+    write_packaging_project(&temp);
+    fs::create_dir_all(temp.path().join("build")).unwrap();
+    fs::write(temp.path().join("victim"), "keep me").unwrap();
+    fs::write(
+        temp.path().join("build/.tua-build-manifest.json"),
+        "{\"../victim\":0}",
+    )
+    .unwrap();
+    assert!(!tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .unwrap()
+        .status
+        .success());
+    assert_eq!(
+        fs::read_to_string(temp.path().join("victim")).unwrap(),
+        "keep me"
+    );
+}
+
+#[test]
 fn package_writes_a_reproducible_love_archive_without_source_maps() {
     let temp = TempDir::new("package-love");
     write_packaging_project(&temp);

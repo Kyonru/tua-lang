@@ -140,6 +140,14 @@ fn love_archive(out_dir: &Path, extension: &str, dist: &Path) -> Result<Vec<u8>,
         .map_err(|error| io_error(out_dir, error))?;
     entries.sort();
 
+    // A successful separate-output build publishes its exact current inventory.
+    // Do not ship leftovers from older builds, including pre-manifest builds.
+    if out_dir.join(crate::build::ownership::MANIFEST).exists() {
+        let owned =
+            crate::build::ownership::load(out_dir).map_err(|error| io_error(out_dir, error))?;
+        entries.retain(|(name, path)| path.is_none() || owned.contains_key(name));
+    }
+
     let mut archive = zip::ZipWriter::new(Vec::new());
     for (name, path) in entries {
         match path {

@@ -19,6 +19,7 @@
 /site/
 /docs/_site/
 .tua/
+.tua-build-manifest.json
 __pycache__/
 
 # General

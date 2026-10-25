@@ -101,6 +101,13 @@ Build output mirrors the configured source tree. The configured `main` source
 file also emits to `<out>/main.lua` for LOVE entrypoint loading while keeping
 its normal mirrored output path.
 
+Separate-output builds record generated files in `.tua-build-manifest.json`.
+After a successful rebuild, obsolete recorded outputs are removed only if their
+contents are unchanged. Unrecorded and manually modified files are preserved on
+disk; packages include only the current build inventory. In-place builds and
+overlapping source/output trees do not perform this cleanup. Old outputs from
+before the first manifest are preserved on disk but excluded from packages.
+
 - `.tua` files are checked, lowered, erased, and emitted as `.lua`;
 - plain `.lua` files and other assets are copied unchanged;
 - bundled helper runtimes such as `brinevector.lua`, `anim8.lua`,

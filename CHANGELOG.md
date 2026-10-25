@@ -6,6 +6,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Successful separate-output builds reconcile owned files and packages exclude
+  obsolete outputs, so deleted modules and assets no longer ship accidentally.
+
 - Symbol rename rejects occupied replacement names to prevent local/global
   capture and field collisions in affected files.
 

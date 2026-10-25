@@ -24,6 +24,7 @@ pub(crate) struct BuildOutcome {
     pub(crate) diagnostics: Vec<Diagnostic>,
 }
 
+pub(crate) mod ownership;
 mod watch;
 
 pub(crate) use watch::WatchBuildSession;
@@ -268,6 +269,7 @@ fn build_project_files(
     }
 
     let mut emitted = 0usize;
+    let mut owned_outputs = BTreeSet::new();
     let mut required_bundled_runtimes = BTreeSet::new();
 
     for unit in units {
@@ -324,6 +326,7 @@ fn build_project_files(
                     match write_output(&output_guard, &output_path, output.clone()) {
                         Ok(()) => {
                             emitted += 1;
+                            owned_outputs.insert(output_path.clone());
 
                             if workspace.config().emit_maps {
                                 if let Err(diagnostic) = write_source_map(
@@ -334,6 +337,10 @@ fn build_project_files(
                                     &emission.provenance,
                                 ) {
                                     diagnostics.push(diagnostic);
+                                } else {
+                                    owned_outputs.insert(source_map_path_for(&output_path));
+                                    owned_outputs
+                                        .insert(debugger_source_map_path_for(&output_path));
                                 }
                             } else {
                                 remove_source_maps(&output_guard, &output_path, &mut diagnostics);
@@ -355,13 +362,22 @@ fn build_project_files(
                     continue;
                 }
                 match copy_output(&output_guard, &source_path, &output_path) {
-                    Ok(()) => emitted += 1,
+                    Ok(()) => {
+                        emitted += 1;
+                        owned_outputs.insert(output_path);
+                    }
                     Err(diagnostic) => diagnostics.push(diagnostic),
                 }
             }
         }
     }
 
+    let existing_runtimes = BUNDLED_RUNTIMES
+        .iter()
+        .filter(|runtime| required_bundled_runtimes.contains(runtime.module))
+        .map(|runtime| out_dir.join(runtime.file_name))
+        .filter(|path| path.exists() && !owned_outputs.contains(path))
+        .collect::<BTreeSet<_>>();
     write_required_bundled_runtimes(
         &output_guard,
         &out_dir,
@@ -369,6 +385,22 @@ fn build_project_files(
         &mut emitted,
         &mut diagnostics,
     );
+
+    for runtime in BUNDLED_RUNTIMES {
+        if required_bundled_runtimes.contains(runtime.module) {
+            owned_outputs.insert(out_dir.join(runtime.file_name));
+        }
+    }
+    // Never reconcile a tree containing sources, or an in-place build.
+    let overlaps_source = workspace
+        .source_roots()
+        .iter()
+        .any(|source| out_dir.starts_with(source) || source.starts_with(&out_dir));
+    if !overlaps_source && !has_errors(&diagnostics) {
+        if let Err(error) = ownership::reconcile(&out_dir, &owned_outputs, &existing_runtimes) {
+            diagnostics.push(error);
+        }
+    }
 
     BuildOutcome {
         emitted,
