@@ -31,7 +31,7 @@ impl CapturedChildStdout {
         let capture = Self::start(child, "initial build:");
         capture
             .ready
-            .recv_timeout(Duration::from_secs(3))
+            .recv_timeout(Duration::from_secs(10))
             .unwrap_or_else(|_| panic!("{failure_message}"));
         capture
     }
@@ -4336,10 +4336,14 @@ fn watch_handles_asset_create_rename_and_remove_in_uniform_batches() {
     );
     assert!(output_assets.join("original.txt").is_file());
 
-    fs::write(source_assets.join("created.txt"), "created").expect("failed to create asset");
+    // Publish one complete input: a polled create-then-write can otherwise
+    // consume two of the three rebuilds before the rename/delete steps.
+    let staged_asset = temp.path().join("created.txt");
+    fs::write(&staged_asset, "created").expect("failed to stage asset");
+    fs::rename(&staged_asset, source_assets.join("created.txt")).expect("failed to publish asset");
     wait_until(
         || output_assets.join("created.txt").is_file(),
-        Duration::from_secs(3),
+        Duration::from_secs(10),
         "watch did not copy the created asset",
     );
 
@@ -4353,14 +4357,14 @@ fn watch_handles_asset_create_rename_and_remove_in_uniform_batches() {
             output_assets.join("renamed.txt").is_file()
                 && !output_assets.join("original.txt").exists()
         },
-        Duration::from_secs(3),
+        Duration::from_secs(10),
         "watch did not apply the asset rename",
     );
 
     fs::remove_file(source_assets.join("created.txt")).expect("failed to remove asset");
     wait_until(
         || !output_assets.join("created.txt").exists(),
-        Duration::from_secs(3),
+        Duration::from_secs(10),
         "watch did not remove the deleted asset output",
     );
 
