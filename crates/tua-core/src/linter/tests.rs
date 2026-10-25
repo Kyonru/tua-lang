@@ -408,6 +408,77 @@ print(left, right, first, second, tableValue)
 }
 
 #[test]
+fn love_callback_order_reports_top_level_callbacks_out_of_run_order() {
+    let source = r#"function love.draw()
+end
+
+love.update = function(dt: number)
+  print(dt)
+end
+
+function love.load()
+end
+
+function love.keypressed(key: string)
+  print(key)
+end
+
+if love.window then
+  function love.load() end
+end
+"#;
+    let diagnostics = check_optional_rules_source(source, diagnostics_without_standard_rules());
+    let reported: Vec<_> = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_LOVE_CALLBACK_ORDER))
+        .map(|diagnostic| {
+            (
+                diagnostic.line,
+                diagnostic.column,
+                diagnostic.message.as_str(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        reported,
+        [
+            (
+                4,
+                1,
+                "`love.update` is defined after `love.draw`; define LÖVE callbacks in the order they run: `love.load`, `love.update`, `love.draw`"
+            ),
+            (
+                8,
+                10,
+                "`love.load` is defined after `love.draw`; define LÖVE callbacks in the order they run: `love.load`, `love.update`, `love.draw`"
+            ),
+        ],
+        "{diagnostics:#?}"
+    );
+
+    let ordered = check_optional_rules_source(
+        "function love.load() end\nfunction love.update(dt: number) print(dt) end\nfunction love.draw() end\n",
+        diagnostics_without_standard_rules(),
+    );
+    assert_eq!(
+        count_code(&ordered, DiagnosticCode::LINT_LOVE_CALLBACK_ORDER),
+        0
+    );
+
+    let disabled = check_optional_rules_source(
+        source,
+        DiagnosticsConfig {
+            love_callback_order: false,
+            ..diagnostics_without_standard_rules()
+        },
+    );
+    assert_eq!(
+        count_code(&disabled, DiagnosticCode::LINT_LOVE_CALLBACK_ORDER),
+        0
+    );
+}
+
+#[test]
 fn mixed_table_policy_is_opt_in_and_requires_both_field_kinds() {
     let diagnostics = check_optional_rules_source(
         r#"local mixed = { "player", hp = 10 }

@@ -189,6 +189,7 @@ enforced separately with `tua fmt --check`.
 | `TL4073` | A table literal mixes sequential entries with keyed fields. | `mixed_tables`; opt-in |
 | `TL4074` | A write targets a field absent from a statically known record shape. | `unknown_record_fields`; opt-in |
 | `TL4075` | A private type alias is not reachable from an annotation, class, or exported type. | `rules`; enabled by default |
+| `TL4076` | A top-level `love.load`, `love.update`, or `love.draw` is defined after a callback that LÖVE runs later. | `love_callback_order`; enabled by default |
 
 Configuration keys in this table live under `[diagnostics]` unless they start
 with `jit.`. VS Code can override matching diagnostic settings for the running

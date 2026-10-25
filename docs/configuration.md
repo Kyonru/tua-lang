@@ -143,6 +143,7 @@ the behavior and tradeoffs of each option.
 | `diagnostics.almost_swapped` | boolean | `false` | `tua.diagnostics.almostSwapped` |
 | `diagnostics.mixed_tables` | boolean | `false` | `tua.diagnostics.mixedTables` |
 | `diagnostics.unknown_record_fields` | boolean | `false` | `tua.diagnostics.unknownRecordFields` |
+| `diagnostics.love_callback_order` | boolean | `true` | `tua.diagnostics.loveCallbackOrder` |
 | `diagnostics.inline_ignores` | boolean | `true` | `tua.diagnostics.inlineIgnores` |
 | `diagnostics.inline_ignore_scopes` | string-array | `["tua-ignore-line","tua-ignore-next-line","tua-ignore-file"]` | `tua.diagnostics.inlineIgnoreScopes` |
 | `diagnostics.inline_ignore_max_per_file` | integer | `0` | `tua.diagnostics.inlineIgnoreMaxPerFile` |
@@ -573,6 +574,12 @@ permissive. It remains opt-in under `tua lint --strict`.
 : Reports `TL4073` when one table literal contains both sequential entries and
 keyed fields. Mixed tables are valid Lua, so this project-policy rule remains
 opt-in under `tua lint --strict`.
+
+`love_callback_order`
+: Reports `TL4076` when a top-level `love.load`, `love.update`, or `love.draw`
+is defined after a callback that LÖVE runs later. The expected order is
+`love.load`, `love.update`, `love.draw`. Enabled by default; set it to `false`
+to turn the warning off.
 
 `severity`
 : Overrides individual diagnostic codes with `allow`, `hint`, `info`,

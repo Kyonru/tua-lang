@@ -250,6 +250,7 @@ divide_by_zero = true
 almost_swapped = true
 mixed_tables = true
 unknown_record_fields = true
+love_callback_order = false
 inline_ignores = true
 inline_ignore_scopes = ["tua-ignore-line", "tua-ignore-next-line", "tua-ignore-file"]
 inline_ignore_max_per_file = 4
@@ -319,6 +320,7 @@ severity = { TL1003 = "warning", TL4035 = "allow" }
                 almost_swapped: true,
                 mixed_tables: true,
                 unknown_record_fields: true,
+                love_callback_order: false,
                 inline_ignores: true,
                 inline_ignore_scopes: vec![
                     "tua-ignore-line".to_owned(),
@@ -425,6 +427,7 @@ duplicate_keys = true
     assert!(!config.diagnostics.almost_swapped);
     assert!(!config.diagnostics.mixed_tables);
     assert!(!config.diagnostics.unknown_record_fields);
+    assert!(config.diagnostics.love_callback_order);
     assert!(config.diagnostics.inline_ignores);
     assert_eq!(
         config.diagnostics.inline_ignore_scopes,

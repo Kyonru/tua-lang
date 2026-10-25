@@ -89,6 +89,7 @@ divide_by_zero = false
 almost_swapped = false
 mixed_tables = false
 unknown_record_fields = false
+love_callback_order = true
 inline_ignores = true
 inline_ignore_scopes = [\"tua-ignore-line\", \"tua-ignore-next-line\", \"tua-ignore-file\"]
 inline_ignore_max_per_file = 0
@@ -392,6 +393,7 @@ pub struct DiagnosticsConfig {
     pub almost_swapped: bool,
     pub mixed_tables: bool,
     pub unknown_record_fields: bool,
+    pub love_callback_order: bool,
     pub inline_ignores: bool,
     pub inline_ignore_scopes: Vec<String>,
     pub inline_ignore_max_per_file: usize,
@@ -439,6 +441,7 @@ impl Default for DiagnosticsConfig {
             almost_swapped: false,
             mixed_tables: false,
             unknown_record_fields: false,
+            love_callback_order: true,
             inline_ignores: true,
             inline_ignore_scopes: vec![
                 "tua-ignore-line".to_owned(),
@@ -474,6 +477,7 @@ impl DiagnosticsConfig {
         self.local_declaration_arity = true;
         self.unused_assignments = true;
         self.binary_operator_type_mismatches = true;
+        self.love_callback_order = true;
     }
 
     pub fn apply_severity_policy(&self, diagnostics: Vec<Diagnostic>) -> Vec<Diagnostic> {

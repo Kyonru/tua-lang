@@ -29,6 +29,7 @@ use crate::{
 };
 
 mod class_rules;
+mod love_callbacks;
 mod optional_rules;
 mod rules;
 
@@ -44,6 +45,7 @@ pub(crate) fn lint_parsed_source(
         && !config.duplicate_keys
         && !config.missing_requires
         && !config.self_assignments
+        && !config.love_callback_order
         && !symbol_lints_enabled(config)
         && !correctness_lints_enabled(config)
         && !optional_lints_enabled(config)
@@ -145,6 +147,10 @@ pub(crate) fn lint_parsed_source(
                 .expect("standard rules should build a scope map"),
             environment,
         ));
+    }
+
+    if config.love_callback_order {
+        diagnostics.extend(love_callbacks::lint(parsed));
     }
 
     if jit_config.enabled {

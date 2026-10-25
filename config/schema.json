@@ -374,6 +374,13 @@
       "editor": "tua.diagnostics.unknownRecordFields"
     },
     {
+      "path": "diagnostics.love_callback_order",
+      "type": "boolean",
+      "default": true,
+      "description": "Report top-level love.load, love.update, and love.draw definitions that are not in the order LÖVE calls them.",
+      "editor": "tua.diagnostics.loveCallbackOrder"
+    },
+    {
       "path": "diagnostics.inline_ignores",
       "type": "boolean",
       "default": true,

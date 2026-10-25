@@ -16,6 +16,9 @@ language or editor behavior, and migration notes call out those changes.
 - Reproducible inspector soak/reconnect, rendered zombie-game, and native expanded
   tree benchmarks, with measured results and explicit validation limits.
 
+- `TL4076` warns when top-level `love.load`, `love.update`, and `love.draw` are
+  not defined in the order LÖVE runs them. It is enabled by default; disable it
+  with `[diagnostics] love_callback_order = false`.
 - Runtime Inspector presents concise per-object summaries and direct store values,
   groups source links and counters under Details, and hides empty categories.
 

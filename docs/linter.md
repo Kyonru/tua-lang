@@ -65,6 +65,7 @@ share an existing Tua code because they are the same analysis.
 | `RedundantInheritedField` | `TL4059` |
 | `ImportUnused` | `TL4054` (runtime and type-only imports) |
 | `TypeUnused` | `TL4075` |
+| `LoveCallbackOrder` | `TL4076` (its own `love_callback_order` switch) |
 | `BuiltinGlobalWrite` | `TL4038` |
 | `PlaceholderRead` | `TL4039` |
 | `UnreachableCode` | `TL4040` |
@@ -175,6 +176,14 @@ receiver has a known non-empty record shape without that field. Empty tables,
 dictionaries, dynamic `__index` tables, classes, and exact module exports keep
 their existing semantics. Enable `unknown_record_fields` when a project treats
 record-shaped tables as closed for mutation.
+
+`LoveCallbackOrder` reports a top-level `love.load`, `love.update`, or
+`love.draw` defined after a callback that LÖVE runs later. `love.run` calls
+`love.load` once, then `love.update` and `love.draw` every frame. Both
+`function love.draw()` and `love.draw = ...` count. Definitions inside
+functions or conditional blocks are ignored. Order has no runtime effect, so
+this is a readability warning. It is enabled by default; set
+`love_callback_order = false` to turn it off.
 
 `BuiltinGlobalWrite` reports direct assignments, compound assignments, and
 simple global function declarations that overwrite protected Lua 5.1/LuaJIT,

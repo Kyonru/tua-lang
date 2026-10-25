@@ -48,6 +48,7 @@ pub(super) struct DiagnosticOverrides {
     pub(super) almost_swapped: Option<bool>,
     pub(super) mixed_tables: Option<bool>,
     pub(super) unknown_record_fields: Option<bool>,
+    pub(super) love_callback_order: Option<bool>,
     pub(super) inline_ignores: Option<bool>,
     pub(super) inline_ignore_scopes: Option<Vec<String>>,
     pub(super) inline_ignore_max_per_file: Option<usize>,
@@ -319,6 +320,7 @@ impl DiagnosticOverrides {
                 "unknown_record_fields",
                 "unknownRecordFields",
             ),
+            love_callback_order: bool_setting(settings, "love_callback_order", "loveCallbackOrder"),
             inline_ignores: bool_setting(settings, "inline_ignores", "inlineIgnores"),
             inline_ignore_scopes: string_array_value(
                 settings
@@ -392,6 +394,10 @@ impl DiagnosticOverrides {
         apply_bool(
             self.unknown_record_fields,
             &mut diagnostics.unknown_record_fields,
+        );
+        apply_bool(
+            self.love_callback_order,
+            &mut diagnostics.love_callback_order,
         );
         apply_bool(self.inline_ignores, &mut diagnostics.inline_ignores);
 

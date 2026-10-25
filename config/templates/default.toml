@@ -62,6 +62,7 @@ divide_by_zero = false
 almost_swapped = false
 mixed_tables = false
 unknown_record_fields = false
+love_callback_order = true
 inline_ignores = true
 inline_ignore_scopes = ["tua-ignore-line", "tua-ignore-next-line", "tua-ignore-file"]
 inline_ignore_max_per_file = 0

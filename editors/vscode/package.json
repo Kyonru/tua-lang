@@ -399,6 +399,14 @@
           "default": null,
           "description": "Report writes to fields that are absent from a statically known record shape."
         },
+        "tua.diagnostics.loveCallbackOrder": {
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "default": null,
+          "description": "Report top-level love.load, love.update, and love.draw definitions that are not in the order LÖVE calls them."
+        },
         "tua.diagnostics.inlineIgnores": {
           "type": [
             "boolean",
