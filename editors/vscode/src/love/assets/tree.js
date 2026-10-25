@@ -49,7 +49,7 @@ class AssetTreeDataProvider {
     }
 
     if (element.kind === "category") {
-      return usageNodes(element.assets);
+      return usageNodes(element.assets, element.category);
     }
 
     if (element.kind === "usage") {
@@ -60,6 +60,7 @@ class AssetTreeDataProvider {
       return (element.asset.references || []).map((reference) => ({
         kind: "reference",
         reference,
+        assetUri: element.asset.uri,
       }));
     }
 
@@ -86,20 +87,26 @@ function categoryNodes(assets) {
     }
   }
 
-  return [...categories.values()];
+  return [...categories.values()]
+    .sort((left, right) => left.label.localeCompare(right.label))
+    .map((category) => ({
+      ...category,
+      assets: category.assets.slice().sort((left, right) =>
+        left.path.localeCompare(right.path, undefined, { numeric: true }) || left.uri.localeCompare(right.uri)),
+    }));
 }
 
-function usageNodes(assets) {
+function usageNodes(assets, category) {
   const used = assets.filter((asset) => assetUsageCount(asset) > 0);
   const unused = assets.filter((asset) => assetUsageCount(asset) === 0);
   const groups = [];
 
   if (used.length > 0) {
-    groups.push({ kind: "usage", usage: "used", label: "Used", assets: used });
+    groups.push({ kind: "usage", category, usage: "used", label: "Used", assets: used });
   }
 
   if (unused.length > 0) {
-    groups.push({ kind: "usage", usage: "unused", label: "Unused", assets: unused });
+    groups.push({ kind: "usage", category, usage: "unused", label: "No static references", assets: unused });
   }
 
   return groups;
@@ -111,6 +118,7 @@ function categoryTreeItem(node) {
     vscode.TreeItemCollapsibleState.Collapsed,
   );
 
+  item.id = `tua.asset.category:${node.category}`;
   item.contextValue = "tuaAssetCategory";
   item.iconPath = new vscode.ThemeIcon(CATEGORY_ICONS[node.category] || "files");
   return item;
@@ -122,6 +130,7 @@ function usageTreeItem(node) {
     vscode.TreeItemCollapsibleState.Collapsed,
   );
 
+  item.id = `tua.asset.usage:${node.category}:${node.usage}`;
   item.contextValue = `tuaAssetUsage.${node.usage}`;
   item.iconPath = new vscode.ThemeIcon(node.usage === "used" ? "references" : "circle-outline");
   return item;
@@ -140,6 +149,7 @@ function assetTreeItem(node) {
     title: "Open Asset",
     arguments: [node],
   };
+  item.id = `tua.asset:${asset.uri}`;
   item.contextValue = count > 0 ? "tuaAsset.used" : "tuaAsset.unused";
   item.description = assetDescription(asset, count);
   item.resourceUri = vscode.Uri.parse(asset.uri);
@@ -160,6 +170,7 @@ function referenceTreeItem(node) {
     title: "Open Asset Reference",
     arguments: [node],
   };
+  item.id = `tua.asset.reference:${node.assetUri}:${reference.uri}:${reference.range.start.line}:${reference.range.start.character}:${reference.loaderKind}`;
   item.contextValue = "tuaAssetReference";
   item.description = `line ${reference.range.start.line + 1}, ${reference.loaderKind}`;
   item.iconPath = new vscode.ThemeIcon("go-to-file");

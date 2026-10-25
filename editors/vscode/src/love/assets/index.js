@@ -58,6 +58,7 @@ class AssetExplorerController {
       showCollapseAll: true,
     });
     this.requestSerial = 0;
+    this.disposed = false;
     this.refreshTimer = undefined;
     this.visibilityDisposable = this.view.onDidChangeVisibility((event) => {
       if (event.visible) {
@@ -67,6 +68,8 @@ class AssetExplorerController {
   }
 
   dispose() {
+    this.disposed = true;
+    this.requestSerial += 1;
     if (this.refreshTimer) {
       clearTimeout(this.refreshTimer);
     }
@@ -78,6 +81,7 @@ class AssetExplorerController {
   }
 
   scheduleRefresh() {
+    if (this.disposed) return;
     if (this.refreshTimer) {
       clearTimeout(this.refreshTimer);
     }
@@ -89,6 +93,7 @@ class AssetExplorerController {
   }
 
   async refresh() {
+    if (this.disposed) return undefined;
     const client = this.getClient();
     if (!client) {
       return undefined;
@@ -99,17 +104,17 @@ class AssetExplorerController {
     try {
       const response = await client.sendRequest("tua/assetInventory", null);
 
-      if (serial !== this.requestSerial || client !== this.getClient()) {
+      if (this.disposed || serial !== this.requestSerial || client !== this.getClient()) {
         return undefined;
       }
 
       const inventory = response?.inventory || {};
       this.provider.update(inventory.assets);
       updateDiagnostics(this.diagnostics, inventory.diagnostics);
-      this.view.message = undefined;
+      this.view.message = this.provider.assets.length ? undefined : "No supported assets found in this project.";
       return inventory;
     } catch (error) {
-      if (serial === this.requestSerial && client === this.getClient()) {
+      if (!this.disposed && serial === this.requestSerial && client === this.getClient()) {
         this.view.message = `Asset inventory unavailable: ${formatError(error)}`;
       }
 
@@ -281,5 +286,6 @@ function assetPreviewUri(target) {
 }
 
 module.exports = {
+  AssetExplorerController,
   registerAssetExplorerFeature,
 };
