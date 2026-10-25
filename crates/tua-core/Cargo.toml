@@ -25,10 +25,10 @@ required-features = ["test-fixture"]
 full_moon = { version = "2.2.0", features = ["luau", "luajit"] }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
-sha2 = { version = "0.10.9", optional = true }
+sha2 = { version = "0.11.1", optional = true }
 toml = "0.9.12"
 toml_edit = "0.23.10"
 
 [dev-dependencies]
 proptest = "=1.12.0"
-sha2 = "0.10.9"
+sha2 = "0.11.1"
