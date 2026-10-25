@@ -331,3 +331,73 @@ vec4 effect(vec4 color, Image tex, vec2 uv, vec2 screen) {
         ["sway", "unused"]
     );
 }
+
+/// The shader fixtures and what the uniform parser finds in each. LOVE's own
+/// results for the same files are recorded in
+/// internal/shader-editor-support.md and reproduced by
+/// `love scripts/love-shader-facts`.
+#[test]
+fn parses_the_shader_fixture_corpus() {
+    macro_rules! fixture {
+        ($name:literal) => {
+            (
+                $name,
+                include_str!(concat!("fixtures/shaders/", $name, ".glsl")),
+            )
+        };
+    }
+    // (file name, source), declared uniforms, unread uniforms.
+    type Expected = (
+        (&'static str, &'static str),
+        &'static [&'static str],
+        &'static [&'static str],
+    );
+    let expected: [Expected; 11] = [
+        (
+            fixture!("arrays"),
+            &["colorMatrix", "lights", "weights"],
+            &[],
+        ),
+        (fixture!("compile_error"), &[], &[]),
+        (fixture!("gles_only_error"), &[], &[]),
+        (fixture!("glsl3"), &["frame"], &[]),
+        (fixture!("love_builtins"), &[], &[]),
+        (fixture!("missing_entry_point"), &["time"], &[]),
+        (fixture!("multi_canvas"), &[], &[]),
+        (fixture!("pixel_basic"), &["time", "tint"], &[]),
+        (
+            fixture!("unread_uniform"),
+            &["strength", "time"],
+            &["strength"],
+        ),
+        (fixture!("vertex_pixel"), &["sway"], &[]),
+        (
+            fixture!("water"),
+            &["horizonY", "ripple1", "ripple2", "ripple3", "time"],
+            &[],
+        ),
+    ];
+
+    for ((name, source), names, unread) in expected {
+        let uniforms =
+            shader_uniforms(source).unwrap_or_else(|| panic!("{name} should list its uniforms"));
+        assert_eq!(
+            uniforms
+                .names
+                .iter()
+                .map(String::as_str)
+                .collect::<Vec<_>>(),
+            names,
+            "{name} names"
+        );
+        assert_eq!(
+            uniforms
+                .unread
+                .iter()
+                .map(String::as_str)
+                .collect::<Vec<_>>(),
+            unread,
+            "{name} unread"
+        );
+    }
+}
