@@ -375,7 +375,10 @@ function documentHtml(webview, title, body, script) {
     :root { color-scheme: light dark; }
     * { box-sizing: border-box; }
     html, body { height: 100%; }
-    body { margin: 0; color: var(--vscode-foreground); background: var(--vscode-editor-background); font-family: var(--vscode-font-family); font-size: var(--vscode-font-size); letter-spacing: 0; overflow: hidden; }
+    /* Size content from the actual toolbar height, including wrapped labels. */
+    body { display: flex; flex-direction: column; }
+    body > .toolbar, body > .segments { flex: none; }
+    body { margin: 0; color: var(--vscode-foreground); background: var(--vscode-editor-background); font-family: var(--vscode-font-family); font-size: var(--vscode-font-size); letter-spacing: 0; overflow: auto; }
     button, input { color: inherit; font: inherit; letter-spacing: 0; }
     .toolbar { min-height: 58px; padding: 9px 14px; border-bottom: 1px solid var(--vscode-panel-border); display: flex; align-items: center; justify-content: space-between; gap: 16px; background: var(--vscode-sideBar-background); }
     .title-block { min-width: 190px; }
@@ -392,8 +395,8 @@ function documentHtml(webview, title, body, script) {
     .segments button:hover { color: var(--vscode-textLink-activeForeground); }
     .segments button.active { color: var(--vscode-textLink-foreground); border-bottom-color: var(--vscode-focusBorder); }
     .segments span { margin-left: 4px; color: var(--vscode-descriptionForeground); font-size: 10px; }
-    .layout { height: calc(100vh - 92px); display: grid; grid-template-columns: minmax(240px, 32%) minmax(380px, 1fr); }
-    .catalog { min-width: 0; border-right: 1px solid var(--vscode-panel-border); overflow: auto; background: var(--vscode-sideBar-background); }
+    .layout { flex: 1; min-height: 0; display: grid; grid-template-rows: minmax(0, 1fr); grid-template-columns: minmax(240px, 32%) minmax(380px, 1fr); }
+    .catalog { min-width: 0; min-height: 0; border-right: 1px solid var(--vscode-panel-border); overflow: auto; background: var(--vscode-sideBar-background); }
     .list { padding: 5px 0 24px; }
     .list-row { position: relative; width: 100%; min-height: 54px; padding: 8px 66px 8px 14px; border: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; text-align: left; background: transparent; cursor: pointer; }
     .list-row:hover { background: var(--vscode-list-hoverBackground); }
@@ -402,7 +405,7 @@ function documentHtml(webview, title, body, script) {
     .row-meta { width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .list-row.selected .row-meta { color: inherit; opacity: .78; }
     .count-badge { position: absolute; right: 14px; top: 18px; max-width: 48px; padding: 1px 6px; border: 1px solid currentColor; border-radius: 8px; text-align: center; font-size: 10px; opacity: .75; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .detail { min-width: 0; overflow: auto; }
+    .detail { min-width: 0; min-height: 0; overflow: auto; }
     .detail-header { min-height: 70px; padding: 13px 18px; border-bottom: 1px solid var(--vscode-panel-border); display: flex; align-items: center; justify-content: space-between; gap: 16px; background: var(--vscode-editorWidget-background); }
     .detail-heading { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
     .detail-title { margin: 0; font-size: 16px; font-weight: 600; overflow-wrap: anywhere; }
@@ -434,12 +437,12 @@ function documentHtml(webview, title, body, script) {
     .spinner { width: 18px; height: 18px; border: 2px solid var(--vscode-panel-border); border-top-color: var(--vscode-focusBorder); border-radius: 50%; animation: spin .8s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
     @media (max-width: 720px) {
-      body { overflow: auto; }
+      body { display: block; overflow: auto; }
       .toolbar { align-items: flex-start; flex-direction: column; }
       .tools { width: 100%; }
       .search { min-width: 0; flex: 1; }
       .search input { width: 100%; }
-      .layout { height: auto; min-height: calc(100vh - 126px); grid-template-columns: 1fr; }
+      .layout { height: auto; min-height: calc(100vh - 126px); grid-template-columns: 1fr; grid-template-rows: auto; }
       .catalog { max-height: 40vh; border-right: 0; border-bottom: 1px solid var(--vscode-panel-border); }
       .detail { min-height: 55vh; }
     }

@@ -560,6 +560,9 @@ function documentHtml(webview, title, body, script) {
     :root { color-scheme: light dark; }
     * { box-sizing: border-box; }
     html, body { height: 100%; }
+    /* Size content from the actual toolbar height, including wrapped labels. */
+    body { display: flex; flex-direction: column; }
+    body > .toolbar, body > .segments { flex: none; }
     body {
       margin: 0;
       color: var(--vscode-foreground);
@@ -567,7 +570,7 @@ function documentHtml(webview, title, body, script) {
       font-family: var(--vscode-font-family);
       font-size: var(--vscode-font-size);
       letter-spacing: 0;
-      overflow: hidden;
+      overflow: auto;
     }
     button, input { font: inherit; letter-spacing: 0; }
     button { color: inherit; }
@@ -621,9 +624,9 @@ function documentHtml(webview, title, body, script) {
       font-size: 18px;
     }
     .icon-button:hover { background: var(--vscode-toolbar-hoverBackground); }
-    .layout { height: calc(100vh - 58px); display: grid; grid-template-columns: minmax(420px, 1fr) minmax(320px, 38%); }
-    .graph-band { min-width: 0; display: flex; flex-direction: column; border-right: 1px solid var(--vscode-panel-border); }
-    .graph-heading { height: 32px; padding: 7px 13px; display: flex; justify-content: space-between; border-bottom: 1px solid var(--vscode-panel-border); font-size: 11px; font-weight: 600; text-transform: uppercase; }
+    .layout { flex: 1; min-height: 0; display: grid; grid-template-rows: minmax(0, 1fr); grid-template-columns: minmax(420px, 1fr) minmax(320px, 38%); }
+    .graph-band { min-width: 0; min-height: 0; display: flex; flex-direction: column; border-right: 1px solid var(--vscode-panel-border); }
+    .graph-heading { flex: none; min-height: 32px; padding: 7px 13px; display: flex; justify-content: space-between; border-bottom: 1px solid var(--vscode-panel-border); font-size: 11px; font-weight: 600; text-transform: uppercase; }
     .graph-scroll { min-height: 0; flex: 1; overflow: auto; background: var(--vscode-editor-background); }
     .graph { position: relative; min-height: 360px; isolation: isolate; }
     .connections { position: absolute; inset: 0; z-index: 0; pointer-events: none; overflow: visible; }
@@ -670,7 +673,7 @@ function documentHtml(webview, title, body, script) {
     .badge.root { color: var(--vscode-testing-iconPassed); }
     .badge.cycle, .metric.warning .metric-value { color: var(--vscode-editorWarning-foreground); }
     .badge.unresolved, .badge.missing, .badge.invalid { color: var(--vscode-editorError-foreground); }
-    .inspector { min-width: 0; overflow: auto; background: var(--vscode-sideBar-background); }
+    .inspector { min-width: 0; min-height: 0; overflow: auto; background: var(--vscode-sideBar-background); }
     .inspector-header { padding: 14px 16px 11px; border-bottom: 1px solid var(--vscode-panel-border); }
     .file-link { min-width: 0; padding: 0; border: 0; background: transparent; font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
     .file-link:hover, .inline-link:hover, .timeline-link:hover { color: var(--vscode-textLink-activeForeground); text-decoration: underline; }
@@ -738,12 +741,12 @@ function documentHtml(webview, title, body, script) {
       .metric:nth-child(-n+2) { border-bottom: 1px solid var(--vscode-panel-border); }
     }
     @media (max-width: 650px) {
-      body { overflow: auto; }
+      body { display: block; overflow: auto; }
       .toolbar { position: sticky; top: 0; z-index: 4; flex-direction: column; }
       .tools { width: 100%; justify-content: flex-start; }
       .segments { max-width: 100%; overflow-x: auto; }
-      .layout { height: auto; min-height: calc(100vh - 100px); grid-template-columns: 1fr; }
-      .graph-band { min-height: 420px; border-right: 0; border-bottom: 1px solid var(--vscode-panel-border); }
+      .layout { height: auto; min-height: calc(100vh - 100px); grid-template-columns: 1fr; grid-template-rows: auto; }
+      .graph-band { height: 420px; min-height: 0; border-right: 0; border-bottom: 1px solid var(--vscode-panel-border); }
       .inspector { min-height: 420px; }
     }
   ` });

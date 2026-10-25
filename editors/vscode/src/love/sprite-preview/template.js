@@ -175,7 +175,6 @@ function spritePreviewHtml(webview, viewModel) {
       grid-template-rows: minmax(220px, 42vh) auto;
       gap: 12px;
       align-self: start;
-      max-height: calc(100vh - 80px);
       padding: 14px;
       border-bottom: 1px solid var(--panel-border);
       background: var(--panel-raised);
@@ -457,7 +456,7 @@ function spritePreviewHtml(webview, viewModel) {
 
     @media (min-width: 960px) {
       .workbench { grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); }
-      .stage { position: sticky; top: 70px; border-bottom: 0; border-right: 1px solid var(--panel-border); }
+      .stage { position: sticky; top: 70px; max-height: max(0px, calc(100vh - 80px)); overflow: auto; border-bottom: 0; border-right: 1px solid var(--panel-border); }
     }
 
     @media (max-width: 780px) {

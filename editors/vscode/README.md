@@ -586,3 +586,9 @@ console source links in an isolated profile with a mock compiler and game runtim
 Set `VSCODE_EXECUTABLE_PATH` to use VSCodium and `TUA_WORKSPACE_SCREENSHOTS` to a
 local directory to capture dark, light, and high-contrast views. This suite opens
 a loopback debugging port only in its temporary test instance.
+
+
+Preview layout regression checks can run with an optional Playwright installation:
+`PLAYWRIGHT_MODULE=/path/to/playwright-core CHROMIUM_PATH=/path/to/chromium node scripts/webview-scroll-check.js`.
+This checks vertical scrolling and bottom-item reachability in wide, short, and
+narrow previews, including wrapped toolbars and sticky sprite controls.
