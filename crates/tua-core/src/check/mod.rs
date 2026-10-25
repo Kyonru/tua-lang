@@ -207,6 +207,7 @@ struct Checker<'a> {
     unknown_record_fields: bool,
     /// Locals holding a shader asset, with the uniforms its source declares.
     shader_locals: BTreeMap<String, ShaderUniforms>,
+    shader_sources: BTreeMap<PathBuf, Option<asset::ShaderSource>>,
     /// Numeric `for` variables whose literal bounds give every value.
     constant_loop_values: Vec<(String, Vec<i64>)>,
     diagnostics: Vec<Diagnostic>,
@@ -215,8 +216,7 @@ struct Checker<'a> {
 #[derive(Clone, Debug)]
 struct ShaderUniforms {
     asset_path: String,
-    names: BTreeSet<String>,
-    unread: BTreeSet<String>,
+    model: std::sync::Arc<asset::ShaderUniformSet>,
 }
 
 impl<'a> Checker<'a> {
@@ -297,6 +297,7 @@ impl<'a> Checker<'a> {
             runtime_imports,
             unknown_record_fields: diagnostics_config.unknown_record_fields,
             shader_locals: BTreeMap::new(),
+            shader_sources: BTreeMap::new(),
             constant_loop_values: Vec::new(),
             diagnostics: Vec::new(),
         }
@@ -2093,14 +2094,17 @@ impl<'a> Checker<'a> {
                 self.asset_index,
             );
             let path = asset::resolved_asset_path(&metadata, &self.asset_roots, self.asset_index)?;
-            let source = read_shader_source(&path)?;
-
-            let uniforms = asset::shader_uniforms(&source)?;
-
+            let source = if let Some(index) = self.asset_index {
+                index.shader(&path)?
+            } else {
+                self.shader_sources
+                    .entry(path.clone())
+                    .or_insert_with(|| asset::ShaderSource::read(&path, None))
+                    .as_ref()?
+            };
             Some(ShaderUniforms {
                 asset_path: call.path,
-                names: uniforms.names,
-                unread: uniforms.unread,
+                model: source.uniforms.clone()?,
             })
         });
 
@@ -2139,6 +2143,7 @@ impl<'a> Checker<'a> {
                         .map(|(_, values)| values.clone())
                 });
                 let matching = uniforms
+                    .model
                     .names
                     .iter()
                     .filter(|name| {
@@ -2180,7 +2185,7 @@ impl<'a> Checker<'a> {
     ) {
         let missing = names
             .iter()
-            .filter(|name| !uniforms.names.contains(name.as_str()))
+            .filter(|name| !uniforms.model.names.contains(name.as_str()))
             .collect::<Vec<_>>();
         if let Some(first) = missing.first() {
             let described = match missing.as_slice() {
@@ -2199,7 +2204,7 @@ impl<'a> Checker<'a> {
         }
 
         for name in names {
-            if uniforms.unread.contains(name) {
+            if uniforms.model.unread.contains(name) {
                 let diagnostic = unread_shader_uniform_diagnostic(
                     &self.parsed.path,
                     call.span,
@@ -2230,7 +2235,7 @@ impl<'a> Checker<'a> {
             }
             names.join(", ")
         };
-        let available = match closest_uniform(&uniforms.names, requested) {
+        let available = match closest_uniform(&uniforms.model.names, requested) {
             _ if !matching.is_empty() => {
                 format!(
                     "it declares {}",
@@ -2238,10 +2243,13 @@ impl<'a> Checker<'a> {
                 )
             }
             Some(suggestion) => format!("did you mean `{suggestion}`?"),
-            None if uniforms.names.is_empty() => "it declares no uniforms".to_owned(),
+            None if uniforms.model.names.is_empty() => "it declares no uniforms".to_owned(),
             None => format!(
                 "it declares {}",
-                listed(uniforms.names.iter().collect(), uniforms.names.len())
+                listed(
+                    uniforms.model.names.iter().collect(),
+                    uniforms.model.names.len()
+                )
             ),
         };
         self.push_asset_diagnostic(
@@ -4591,17 +4599,6 @@ fn integer_literal(expression: &Expression) -> Option<i64> {
         Expression::Parentheses { expression, .. } => integer_literal(expression),
         _ => None,
     }
-}
-
-/// Shader sources are small; a larger file is not read for uniform checks.
-const MAX_SHADER_SOURCE_BYTES: u64 = 1024 * 1024;
-
-fn read_shader_source(path: &Path) -> Option<String> {
-    let metadata = std::fs::metadata(path).ok()?;
-    if metadata.len() > MAX_SHADER_SOURCE_BYTES {
-        return None;
-    }
-    std::fs::read_to_string(path).ok()
 }
 
 fn wrong_asset_kind_diagnostic(

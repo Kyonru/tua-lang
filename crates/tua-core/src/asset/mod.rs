@@ -1,4 +1,9 @@
-use std::collections::{BTreeMap, BTreeSet};
+mod shader_uniforms;
+#[cfg(test)]
+use shader_uniforms::shader_uniforms;
+pub(crate) use shader_uniforms::{ShaderSource, ShaderUniform, ShaderUniformSet};
+
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -436,10 +441,16 @@ struct AssetIndexEntry {
     absolute_path: PathBuf,
     extension: Option<String>,
     dimensions: Option<(u32, u32)>,
+    shader: Option<ShaderSource>,
 }
 
 impl AssetIndex {
+    #[cfg(test)]
     pub(crate) fn from_roots(roots: &[PathBuf]) -> Self {
+        Self::from_roots_with_previous(roots, None)
+    }
+
+    pub(crate) fn from_roots_with_previous(roots: &[PathBuf], previous: Option<&Self>) -> Self {
         let roots = normalize_asset_roots(roots);
         let mut index = Self {
             roots: roots.clone(),
@@ -452,7 +463,57 @@ impl AssetIndex {
             collect_asset_index_entries(&root, &root, &mut index);
         }
 
+        let mut remaining = 16 * 1024 * 1024;
+        for entry in index.by_relative.values_mut() {
+            if entry
+                .extension
+                .as_deref()
+                .and_then(asset_category_for_extension)
+                != Some(AssetCategory::Shader)
+            {
+                continue;
+            }
+            let previous = previous
+                .and_then(|index| index.entry_for_path(&entry.relative_path))
+                .filter(|old| old.absolute_path == entry.absolute_path)
+                .and_then(|entry| entry.shader.as_ref());
+            if let Some(shader) = ShaderSource::read(&entry.absolute_path, previous) {
+                if shader.source.len() <= remaining {
+                    remaining -= shader.source.len();
+                    entry.shader = Some(shader);
+                }
+            }
+        }
         index
+    }
+
+    pub(crate) fn shader(&self, path: &Path) -> Option<&ShaderSource> {
+        self.by_absolute
+            .get(&normalize_path_components(path))
+            .and_then(|relative| self.by_relative.get(relative))?
+            .shader
+            .as_ref()
+    }
+
+    pub(crate) fn update_shader(&mut self, path: &Path, source: Option<String>) {
+        let Some(relative) = self.by_absolute.get(&normalize_path_components(path)) else {
+            return;
+        };
+        let Some(entry) = self.by_relative.get_mut(relative) else {
+            return;
+        };
+        if entry
+            .extension
+            .as_deref()
+            .and_then(asset_category_for_extension)
+            != Some(AssetCategory::Shader)
+        {
+            return;
+        }
+        entry.shader = match source {
+            Some(source) => ShaderSource::from_source(source, entry.shader.as_ref()),
+            None => ShaderSource::read(path, entry.shader.as_ref()),
+        };
     }
 
     pub(crate) fn roots(&self) -> &[PathBuf] {
@@ -1033,6 +1094,7 @@ fn collect_asset_index_entries(root: &Path, dir: &Path, index: &mut AssetIndex) 
                 absolute_path,
                 extension: Some(extension),
                 dimensions,
+                shader: None,
             },
         );
         let folded = fold_asset_path(&relative_path);
@@ -1219,95 +1281,6 @@ pub(crate) fn asset_category_for_extension(extension: &str) -> Option<AssetCateg
 
 fn fold_asset_path(path: &str) -> String {
     path.replace('\\', "/").to_lowercase()
-}
-
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub(crate) struct ShaderUniformSet {
-    /// Names declared with `uniform` or LOVE's `extern`.
-    pub(crate) names: BTreeSet<String>,
-    /// Declared names that no code reads. GLSL compilers remove these, and
-    /// LOVE then reports them as missing when they are sent.
-    pub(crate) unread: BTreeSet<String>,
-}
-
-/// The uniforms declared in shader source. Returns `None` when the
-/// declarations cannot be listed reliably: a uniform block or a preprocessor
-/// macro that spells a declaration.
-pub(crate) fn shader_uniforms(source: &str) -> Option<ShaderUniformSet> {
-    let code = strip_glsl_comments(source);
-    let mut names = BTreeSet::new();
-    let mut declarations = BTreeMap::<String, usize>::new();
-
-    for line in code.lines() {
-        let line = line.trim_start();
-        if line.starts_with('#') && (line.contains("uniform") || line.contains("extern")) {
-            return None;
-        }
-    }
-
-    for declaration in code.split(';') {
-        let mut words = declaration
-            .split(|character: char| character.is_whitespace())
-            .filter(|word| !word.is_empty())
-            .skip_while(|word| word.starts_with('#') || !matches!(*word, "uniform" | "extern"));
-        if words.next().is_none() {
-            continue;
-        }
-        let rest = words.collect::<Vec<_>>().join(" ");
-        if rest.contains('{') {
-            return None;
-        }
-        // Skip precision qualifiers and the type; the rest is the name list.
-        let rest = rest
-            .split_whitespace()
-            .skip_while(|word| matches!(*word, "lowp" | "mediump" | "highp" | "const"))
-            .skip(1)
-            .collect::<Vec<_>>()
-            .join(" ");
-        for name in rest.split(',') {
-            let name = name.split(['[', '=']).next().unwrap_or_default().trim();
-            if !name.is_empty() && name.chars().all(|c| c == '_' || c.is_ascii_alphanumeric()) {
-                names.insert(name.to_owned());
-                *declarations.entry(name.to_owned()).or_default() += 1;
-            }
-        }
-    }
-
-    // A name that appears only in its own declarations is never read.
-    let mut uses = BTreeMap::<&str, usize>::new();
-    for word in code.split(|character: char| character != '_' && !character.is_ascii_alphanumeric())
-    {
-        if names.contains(word) {
-            *uses.entry(word).or_default() += 1;
-        }
-    }
-    let unread = names
-        .iter()
-        .filter(|name| uses.get(name.as_str()) <= declarations.get(name.as_str()))
-        .cloned()
-        .collect();
-
-    Some(ShaderUniformSet { names, unread })
-}
-
-fn strip_glsl_comments(source: &str) -> String {
-    let mut output = String::with_capacity(source.len());
-    let mut rest = source;
-
-    while !rest.is_empty() {
-        if let Some(after) = rest.strip_prefix("//") {
-            rest = after.find('\n').map_or("", |end| &after[end..]);
-        } else if let Some(after) = rest.strip_prefix("/*") {
-            output.push(' ');
-            rest = after.find("*/").map_or("", |end| &after[end + 2..]);
-        } else {
-            let character = rest.chars().next().expect("rest is not empty");
-            output.push(character);
-            rest = &rest[character.len_utf8()..];
-        }
-    }
-
-    output
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

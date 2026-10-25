@@ -151,6 +151,7 @@ struct InlineStatisticalScopeEntry {
 
 #[derive(Clone, Debug, Default)]
 pub struct AnalysisHost {
+    shader_overlays: BTreeMap<PathBuf, String>,
     input_sizes: BTreeMap<PathBuf, usize>,
     input_errors: BTreeMap<PathBuf, Diagnostic>,
     config: ProjectConfig,

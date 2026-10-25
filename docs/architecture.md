@@ -48,6 +48,12 @@ protocol and diagnostics, the CLI supplies a bounded LÖVE process adapter, and
 the LSP owns idle scheduling and stale-result rejection. The executable injects
 the adapter through `run_stdio_with_shader_validator`; core analysis never
 starts a process. Editor shader overlays reuse the shared asset inventory.
+Uniform metadata lives in the asset index as immutable shared models, reused
+by the checker and editor queries. Disk refreshes compare shader content and
+reuse unchanged models; synchronized overlays replace only the current
+snapshot's model. Completion, hover, and definition do not read shader files.
+Models retain GLSL types, array bounds, original declaration spans, entrypoints,
+and read status. Shader-local resolution uses the shared lexical resolver.
 
 ## Repository Boundaries
 

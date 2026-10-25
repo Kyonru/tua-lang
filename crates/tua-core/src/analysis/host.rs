@@ -340,9 +340,29 @@ impl AnalysisHost {
         self.bump_revision();
     }
 
+    /// Update an editor shader overlay without parsing GLSL as Tua or reading disk on queries.
+    pub fn set_shader_source_overlay(&mut self, path: impl AsRef<Path>, source: Option<String>) {
+        let path = normalize_path(path.as_ref());
+        if let Some(source) = source.as_ref() {
+            self.shader_overlays.insert(path.clone(), source.clone());
+        } else {
+            self.shader_overlays.remove(&path);
+        }
+        if let Some(index) = &mut self.asset_index {
+            index.update_shader(&path, source);
+        }
+        self.cache.borrow_mut().invalidate_all();
+        self.clear_query_caches();
+        self.bump_revision();
+    }
+
     pub fn refresh_asset_index_from_disk(&mut self) {
         let roots = analysis_asset_roots(self.source_roots(), &self.asset_roots).to_vec();
-        let index = asset::AssetIndex::from_roots(&roots);
+        let mut index =
+            asset::AssetIndex::from_roots_with_previous(&roots, self.asset_index.as_ref());
+        for (path, source) in &self.shader_overlays {
+            index.update_shader(path, Some(source.clone()));
+        }
 
         if self.asset_index.as_ref() == Some(&index) {
             return;

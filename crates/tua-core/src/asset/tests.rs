@@ -401,3 +401,48 @@ fn parses_the_shader_fixture_corpus() {
         );
     }
 }
+
+#[test]
+fn shader_uniform_model_keeps_types_stage_locations_and_comment_offsets() {
+    let source = "#pragma language glsl3\r\n/* λ comment */ extern highp vec4 tint[4];\r\n#ifdef VERTEX\r\nuniform vec4 both;\r\nvec4 position(mat4 m, vec4 p) { return m * p + both; }\r\n#endif\r\n#ifdef PIXEL\r\nuniform vec4 both;\r\nvec4 effect(vec4 c, Image t, vec2 uv, vec2 px) { return both + tint[0]; }\r\n#endif\r\n";
+    let model = shader_uniforms(source).unwrap();
+    assert!(model.has_effect && model.has_position);
+    let tint = &model.uniforms["tint"];
+    assert_eq!(tint.glsl_type, "vec4");
+    assert_eq!(tint.array_len, Some(4));
+    assert!(tint.read);
+    let span = tint.declarations[0];
+    let line = source.lines().nth(span.start.line - 1).unwrap();
+    assert_eq!(
+        line.chars()
+            .skip(span.start.column - 1)
+            .take(span.end.column - span.start.column)
+            .collect::<String>(),
+        "tint"
+    );
+    assert_eq!(
+        model.uniforms["both"]
+            .declarations
+            .iter()
+            .map(|span| span.start.line)
+            .collect::<Vec<_>>(),
+        [4, 8]
+    );
+    let source = "extern/*comment\nmore*/number time;\nvoid effect() {}";
+    let model = shader_uniforms(source).unwrap();
+    assert_eq!(model.uniforms["time"].declarations[0].start.line, 2);
+    assert!(model.has_effect);
+}
+
+#[test]
+fn shader_source_cache_reuses_unchanged_models_and_invalidates_changed_source() {
+    let first = ShaderSource::from_source("extern number time;".into(), None).unwrap();
+    let same = ShaderSource::from_source("extern number time;".into(), Some(&first)).unwrap();
+    assert!(std::sync::Arc::ptr_eq(
+        first.uniforms.as_ref().unwrap(),
+        same.uniforms.as_ref().unwrap()
+    ));
+    let changed = ShaderSource::from_source("extern vec4 tint;".into(), Some(&first)).unwrap();
+    assert_ne!(first.fingerprint, changed.fingerprint);
+    assert!(changed.uniforms.unwrap().names.contains("tint"));
+}
