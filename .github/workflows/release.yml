@@ -120,8 +120,13 @@ jobs:
         shell: bash
         run: |
           cd editors/vscode
+          # vsce resolves README links against the repository root and ignores the
+          # editors/vscode subdirectory; pin them to this release's tag instead.
+          base="https://github.com/${{ github.repository }}"
           npx --no-install vsce package \
             --target "${{ matrix.vsce }}" \
+            --baseContentUrl "${base}/blob/v${{ needs.validate.outputs.version }}/editors/vscode" \
+            --baseImagesUrl "${base}/raw/v${{ needs.validate.outputs.version }}/editors/vscode" \
             --out "../../dist/tua-${{ needs.validate.outputs.version }}-${{ matrix.vsce }}.vsix"
       - name: Checksum VSIX
         shell: bash

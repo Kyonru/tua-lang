@@ -15,6 +15,9 @@ PROJECT_VERSION := $(shell node scripts/sync-version.js --print)
 TUA := $(CARGO) run -q -p tua-cli --
 VSCODE_DIR := editors/vscode
 VSIX := $(VSCODE_DIR)/tua-$(PROJECT_VERSION).vsix
+# vsce ignores the extension's subdirectory when rewriting README links, so
+# point them at this version's tag (as the release workflow does).
+VSCE_README_URLS := --baseContentUrl https://github.com/Kyonru/tua-lang/blob/v$(PROJECT_VERSION)/editors/vscode --baseImagesUrl https://github.com/Kyonru/tua-lang/raw/v$(PROJECT_VERSION)/editors/vscode
 EXAMPLE ?= examples/love-minimal
 ECS_BASE_REF ?= $(shell git describe --tags --abbrev=0 2>/dev/null)
 ECS_LOVE_FLAGS ?=
@@ -503,7 +506,7 @@ extension-screenshots-check: ## Verify README screenshot links, PNG dimensions, 
 
 .PHONY: extension-package
 extension-package: extension-deps extension-server json-check extension-check ## Build a VSIX with the bundled tua server.
-	cd $(VSCODE_DIR) && $(VSCE) package --out tua-$(PROJECT_VERSION).vsix
+	cd $(VSCODE_DIR) && $(VSCE) package --out tua-$(PROJECT_VERSION).vsix $(VSCE_README_URLS)
 	rm -rf $(VSCODE_DIR)/bin
 
 .PHONY: extension-install
