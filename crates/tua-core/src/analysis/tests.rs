@@ -6119,3 +6119,30 @@ return M
         "module `broken` is untyped because src/broken.lua:3:12 does not parse: expected expression after binary operator"
     );
 }
+#[test]
+fn input_budget_rejection_is_diagnostic_and_recovery_replaces_stale_data() {
+    let mut host = AnalysisHost::new();
+    host.set_file("main.tua", "local value = 1");
+    host.open_document(
+        "main.tua",
+        " ".repeat(crate::input_limits::MAX_SOURCE_BYTES + 1),
+    );
+    let rejected = host.snapshot();
+    assert!(rejected.source("main.tua").is_none());
+    assert!(rejected.diagnostics("main.tua")[0]
+        .message
+        .contains("8 MiB"));
+    host.open_document("main.tua", "local value = 2\nprint(value)");
+    assert!(host.snapshot().diagnostics("main.tua").is_empty());
+    host.input_sizes.insert(
+        PathBuf::from("budget-fixture"),
+        crate::input_limits::MAX_PROJECT_SOURCE_BYTES,
+    );
+    host.set_file("other.tua", "local other = 3\nprint(other)");
+    assert!(host.snapshot().diagnostics("other.tua")[0]
+        .message
+        .contains("aggregate"));
+    host.remove_file("budget-fixture");
+    host.set_file("other.tua", "local other = 3\nprint(other)");
+    assert!(host.snapshot().diagnostics("other.tua").is_empty());
+}

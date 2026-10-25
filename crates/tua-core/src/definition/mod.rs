@@ -1,5 +1,4 @@
 use std::collections::{BTreeMap, BTreeSet};
-use std::fs;
 use std::path::{Path, PathBuf};
 
 use full_moon::ast::{
@@ -561,7 +560,7 @@ fn has_parent_path_component(module: &str) -> bool {
 }
 
 fn parse_module_file(path: &Path) -> Option<ParsedSource> {
-    let source = fs::read_to_string(path).ok()?;
+    let source = crate::input_limits::read_source(path).ok()?;
 
     match path.extension().and_then(|extension| extension.to_str()) {
         Some("lua") => parse_lua_source(path, source).ok(),

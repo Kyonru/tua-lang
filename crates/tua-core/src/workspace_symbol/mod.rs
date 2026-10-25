@@ -51,7 +51,7 @@ pub fn workspace_symbols_from_files(
     let mut diagnostics = Vec::new();
 
     for path in source_files {
-        let source = match fs::read_to_string(&path) {
+        let source = match crate::input_limits::read_source(&path) {
             Ok(source) => source,
             Err(source) => {
                 diagnostics.push(io_diagnostic(&path, source));

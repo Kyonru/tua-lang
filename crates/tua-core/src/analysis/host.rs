@@ -57,6 +57,46 @@ fn declaration_meta_name(parsed: &ParsedSource) -> Option<&str> {
 }
 
 impl AnalysisHost {
+    /// Record a rejected disk input without retaining stale semantic results.
+    pub fn set_input_error(&mut self, path: impl AsRef<Path>, message: impl Into<String>) {
+        let path = normalize_path(path.as_ref());
+        self.remove_file(&path);
+        self.input_errors.insert(
+            path.clone(),
+            Diagnostic::error(&path, 1, 1, message).with_code(crate::DiagnosticCode::CONFIG_IO),
+        );
+    }
+
+    fn admit_source(&mut self, path: &Path, bytes: usize) -> bool {
+        use crate::input_limits::{MAX_PROJECT_FILES, MAX_PROJECT_SOURCE_BYTES, MAX_SOURCE_BYTES};
+        let path = normalize_path(path);
+        let previous = self.input_sizes.get(&path).copied().unwrap_or(0);
+        // Keep the larger disk/overlay footprint until removal: an open
+        // overlay may coexist with a different saved source in the VFS.
+        let retained = previous.max(bytes);
+        let total = self.input_sizes.values().sum::<usize>() - previous + retained;
+        let message = if bytes > MAX_SOURCE_BYTES {
+            Some("source exceeds 8 MiB input limit")
+        } else if total > MAX_PROJECT_SOURCE_BYTES {
+            Some("project exceeds 128 MiB aggregate source input limit")
+        } else if !self.input_sizes.contains_key(&path)
+            && self.input_sizes.len() >= MAX_PROJECT_FILES
+        {
+            Some("project exceeds 20000 source file limit")
+        } else {
+            None
+        };
+        if let Some(message) = message {
+            self.set_input_error(path, message);
+            return false;
+        }
+        self.input_sizes.insert(path.clone(), retained);
+        if self.input_errors.remove(&path).is_some() {
+            self.bump_revision();
+        }
+        true
+    }
+
     pub fn new() -> Self {
         Self::default()
     }
@@ -367,6 +407,9 @@ impl AnalysisHost {
     ) -> bool {
         let path = path.into();
         let source = source.into();
+        if !self.admit_source(&path, source.len()) {
+            return true;
+        }
         let vfs_kind = vfs_source_kind(kind);
         let had_module_path = self.has_module_path(&path);
 
@@ -393,6 +436,8 @@ impl AnalysisHost {
 
     pub fn remove_file(&mut self, path: impl AsRef<Path>) {
         let path = normalize_path(path.as_ref());
+        self.input_sizes.remove(&path);
+        self.input_errors.remove(&path);
         let had_module_path = self.has_module_path(&path);
         self.indexed_module_paths.remove(&path);
         self.cache.borrow_mut().invalidate_file(path.as_ref(), true);
@@ -429,6 +474,9 @@ impl AnalysisHost {
     ) {
         let path = path.into();
         let source = source.into();
+        if !self.admit_source(&path, source.len()) {
+            return;
+        }
         let vfs_kind = vfs_source_kind(kind);
         let had_module_path = self.has_module_path(&path);
 
@@ -599,6 +647,7 @@ impl AnalysisHost {
         self.refresh_last_good_files(&files);
 
         let snapshot = AnalysisSnapshot {
+            input_errors: self.input_errors.clone(),
             revision: self.revision,
             config: self.config.clone(),
             vfs,

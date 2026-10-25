@@ -87,6 +87,11 @@ struct OpenDocument {
 }
 
 impl AnalysisHost {
+    fn read_source_input(&mut self, path: &Path) -> std::io::Result<String> {
+        tua_core::input_limits::read_source(path).inspect_err(|error| {
+            self.core.set_input_error(path, error.to_string());
+        })
+    }
     pub(super) fn prepare_local_inline_completion(
         &self,
         path: &Path,
@@ -536,7 +541,7 @@ impl AnalysisHost {
             return;
         }
 
-        if let Ok(source) = fs::read_to_string(&path) {
+        if let Ok(source) = self.read_source_input(&path) {
             let effective_roots = self.effective_workspace_folders(roots);
 
             if self
@@ -635,7 +640,7 @@ impl AnalysisHost {
                         continue;
                     }
 
-                    if let Ok(source) = fs::read_to_string(&path) {
+                    if let Ok(source) = self.read_source_input(&path) {
                         let file_scope = file_scope_hash(workspace.root(), &path);
 
                         observed_file_scopes.insert(file_scope);
@@ -689,7 +694,7 @@ impl AnalysisHost {
                         continue;
                     }
 
-                    if let Ok(source) = fs::read_to_string(&path) {
+                    if let Ok(source) = self.read_source_input(&path) {
                         let _trace = tua_core::profile::diagnostics_span(
                             tua_core::profile::DiagnosticsTraceCategory::ReadVfsUpdate,
                         );

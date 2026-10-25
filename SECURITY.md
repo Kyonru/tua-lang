@@ -104,3 +104,13 @@ Routine dependency reports that do not demonstrate a vulnerability in Tua may
 use the bug template. Reports involving a reachable exploit, compromised
 package, malicious release asset, or credential exposure should use private
 reporting.
+
+## Text input budgets
+
+Source files are limited to 8 MiB and project configuration to 1 MiB, including
+in-memory parser inputs. Disk readers stop at the limit even if a file grows
+during the read. An analysis host admits at most 20,000 source files and 128 MiB
+of source text. It retains each path's largest admitted text size until removal
+to account conservatively for saved text and open overlays. Reopen the workspace
+after a large project reduction to reset that accounting. These are input
+budgets, not a bound on total process memory or filesystem discovery work.

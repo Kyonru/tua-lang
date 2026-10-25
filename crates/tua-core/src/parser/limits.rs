@@ -10,6 +10,15 @@ const MAX_NESTING: usize = 64;
 const MAX_OPERATORS: usize = 128;
 
 pub(super) fn validate(path: &Path, source: &str) -> Result<(), Vec<Diagnostic>> {
+    if source.len() > crate::input_limits::MAX_SOURCE_BYTES {
+        return Err(vec![Diagnostic::error(
+            path,
+            1,
+            1,
+            "source exceeds 8 MiB input limit",
+        )
+        .with_code(DiagnosticCode::SYNTAX_PARSE)]);
+    }
     let tokens = match Lexer::new(source, LuaVersion::luau().with_luajit()).collect() {
         LexerResult::Ok(tokens) | LexerResult::Recovered(tokens, _) => tokens,
         LexerResult::Fatal(_) => return Ok(()), // The parser reports lexical errors.

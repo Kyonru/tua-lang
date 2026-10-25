@@ -43,6 +43,13 @@ struct ConfigSetting {
 }
 
 pub fn parse_config(input: &str) -> Result<ProjectConfig, ConfigParseError> {
+    if input.len() > crate::input_limits::MAX_CONFIG_BYTES {
+        return Err(parse_error(
+            "",
+            None,
+            "configuration exceeds 1 MiB input limit",
+        ));
+    }
     catch_unwind(AssertUnwindSafe(|| parse_config_inner(input))).unwrap_or_else(|_| {
         Err(parse_error(
             input,

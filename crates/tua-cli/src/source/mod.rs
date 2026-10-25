@@ -40,7 +40,7 @@ pub(crate) fn discover_build_files(
 }
 
 pub(crate) fn read_source_file(path: &Path) -> Result<String, Diagnostic> {
-    fs::read_to_string(path).map_err(|source| io_diagnostic(path, source))
+    tua_core::input_limits::read_source(path).map_err(|source| io_diagnostic(path, source))
 }
 
 pub(crate) fn load_type_libraries(

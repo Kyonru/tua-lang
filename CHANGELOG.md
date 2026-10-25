@@ -6,6 +6,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Source/configuration reads enforce 8 MiB/1 MiB limits. Shared analysis rejects
+  projects exceeding 128 MiB of source inputs or 20,000 source files and reports
+  a diagnostic instead of retaining stale results for rejected files.
+
 - Formatting, build outputs and archives publish through sibling temporary
   files. Platform bundles finish staging before replacing the previous release,
   with rollback if publication fails.

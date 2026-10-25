@@ -50,6 +50,9 @@ impl AnalysisSnapshot {
     }
 
     pub fn fast_diagnostics(&self, path: impl AsRef<Path>) -> Vec<Diagnostic> {
+        if let Some(error) = self.input_errors.get(&normalize_path(path.as_ref())) {
+            return vec![error.clone()];
+        }
         let Some(file) = self.file(path.as_ref()) else {
             return Vec::new();
         };
@@ -65,6 +68,9 @@ impl AnalysisSnapshot {
     }
 
     pub fn pipeline_diagnostics(&self, path: impl AsRef<Path>) -> Vec<Diagnostic> {
+        if let Some(error) = self.input_errors.get(&normalize_path(path.as_ref())) {
+            return vec![error.clone()];
+        }
         let Some(file) = self.file(path.as_ref()) else {
             return Vec::new();
         };

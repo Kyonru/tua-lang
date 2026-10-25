@@ -568,7 +568,7 @@ impl ConfigError {
 pub fn load_config_from_dir(dir: impl AsRef<Path>) -> Result<LoadedConfig, ConfigError> {
     let path = dir.as_ref().join(CONFIG_FILE);
 
-    match fs::read_to_string(&path) {
+    match crate::input_limits::read_text(&path, crate::input_limits::MAX_CONFIG_BYTES) {
         Ok(contents) => {
             let config = parse_config(&contents).map_err(|source| ConfigError::Parse {
                 path: path.clone(),

@@ -1,6 +1,5 @@
 use std::cell::RefCell;
 use std::collections::BTreeMap;
-use std::fs;
 use std::path::{Path, PathBuf};
 
 use full_moon::ast::{
@@ -241,7 +240,7 @@ fn parse_module_source(
 
 fn required_module_exports_for_path(path: &Path) -> Option<ModuleExports> {
     let path = path.to_path_buf();
-    let source = fs::read_to_string(&path).ok()?;
+    let source = crate::input_limits::read_source(&path).ok()?;
 
     if let Some(cached) = REQUIRED_MODULE_EXPORT_CACHE.with(|cache| {
         cache

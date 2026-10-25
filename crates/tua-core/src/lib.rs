@@ -31,6 +31,7 @@ pub mod inlay_hint;
 pub mod inline_completion;
 mod inline_ignore;
 mod input;
+pub mod input_limits;
 pub mod inspector;
 mod linter;
 mod love_api;

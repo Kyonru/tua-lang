@@ -151,6 +151,8 @@ struct InlineStatisticalScopeEntry {
 
 #[derive(Clone, Debug, Default)]
 pub struct AnalysisHost {
+    input_sizes: BTreeMap<PathBuf, usize>,
+    input_errors: BTreeMap<PathBuf, Diagnostic>,
     config: ProjectConfig,
     vfs: VirtualFileSystem,
     require_path_separator: ModulePathSeparator,
@@ -183,6 +185,7 @@ pub struct AnalysisHost {
 
 #[derive(Clone, Debug)]
 pub struct AnalysisSnapshot {
+    input_errors: BTreeMap<PathBuf, Diagnostic>,
     revision: u64,
     config: ProjectConfig,
     vfs: VfsSnapshot,
