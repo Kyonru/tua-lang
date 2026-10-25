@@ -126,7 +126,8 @@ failed requests. Existing commands remain available in the Command Palette.
 ## Named run configurations
 
 Choose Development, Debug, Hot reload, or Package in **Run Configuration**.
-The choice is remembered per workspace and drives the compact toolbar Run button.
+The choice is remembered per workspace and drives the compact toolbar Run button,
+which opens the game console. Direct run commands retain their task terminal.
 Customize names and modes in `tua.run.configurations`; packaging configurations
 can specify `packageTarget` (`love`, `windows`, or `macos`). Existing launch
 configurations and direct commands still work. Each action uses the project of
@@ -138,7 +139,8 @@ The **Run Sessions** view and status bar show builds, running games, reload
 requests, successful module reloads, and failed builds that leave the last good
 code running. Select a session to inspect project diagnostics and reloaded
 modules. Stop beside an active session cancels that run, including hot reload.
-Recent sessions stay in memory for this editor window; they are not uploaded.
+The toolbar Stop action targets the latest stoppable session; each session also
+has its own Stop action. Recent sessions stay in memory for this editor window; they are not uploaded.
 
 ## Game console
 

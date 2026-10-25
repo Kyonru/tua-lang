@@ -52,8 +52,8 @@ function registerRunActivity() {
       if (picked?.command) return vscode.commands.executeCommand(picked.command);
     }),
     vscode.commands.registerCommand("tua.activity.stop", selected => {
-      const sessions = selected ? [selected] : store.sessions.filter(session => session.active);
-      for (const session of sessions) session.stop?.();
+      const session = selected || store.sessions.find(item => item.active && item.stop);
+      session?.stop?.();
     }),
   );
   return { store, dispose: () => disposable.dispose() };

@@ -20,8 +20,8 @@ const RUNNING_CONTEXT = "tua.loveProjectRunning";
 function registerLoveProjectRunner({ appendOutputLine, getClient, getServerCommand, activity }) {
   let activeExecution;
   const disposables = [
-    vscode.commands.registerCommand(COMMANDS.runLoveProject, () =>
-      runLoveProject({ getClient, getServerCommand }),
+    vscode.commands.registerCommand(COMMANDS.runLoveProject, presentation =>
+      runLoveProject({ getClient, getServerCommand, showConsole: presentation?.console === true }),
     ),
     vscode.commands.registerCommand(COMMANDS.restartLoveProject, () =>
       runLoveProject({ getClient, getServerCommand, restart: true }),
@@ -75,6 +75,7 @@ function registerLoveProjectRunner({ appendOutputLine, getClient, getServerComma
     }
 
     const task = createLoveProjectTask({
+      showConsole: options.showConsole,
       activity,
       appendOutputLine,
       layout,
@@ -108,7 +109,7 @@ function registerLoveProjectRunner({ appendOutputLine, getClient, getServerComma
   return vscode.Disposable.from(...disposables);
 }
 
-function createLoveProjectTask({ appendOutputLine, layout, loveCommand, tuaCommand, activity }) {
+function createLoveProjectTask({ appendOutputLine, layout, loveCommand, tuaCommand, activity, showConsole = false }) {
   const terminalOptions = {
     activity,
     title: TASK_NAME,
@@ -137,9 +138,9 @@ function createLoveProjectTask({ appendOutputLine, layout, loveCommand, tuaComma
   task.detail = `Build ${layout.configDirectory} and run LOVE from ${layout.outputDirectory}.`;
   task.presentationOptions = {
     clear: false,
-    focus: true,
+    focus: !showConsole,
     panel: vscode.TaskPanelKind?.Dedicated,
-    reveal: vscode.TaskRevealKind?.Always,
+    reveal: showConsole ? vscode.TaskRevealKind?.Never : vscode.TaskRevealKind?.Always,
   };
 
   if (vscode.TaskGroup?.Build) {

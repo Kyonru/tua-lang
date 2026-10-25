@@ -65,12 +65,13 @@ function registerGameCommands({ appendOutputLine, getClient, getServerCommand, a
       appendOutputLine, activity, getClient, getServerCommand,
       action: "building", taskName: "Build Project", args: () => ["build"],
     })),
-    vscode.commands.registerCommand(COMMANDS.runLoveProjectWithHotReload, () =>
+    vscode.commands.registerCommand(COMMANDS.runLoveProjectWithHotReload, presentation =>
       runTuaTask({
         appendOutputLine,
         activity,
         getClient,
         getServerCommand,
+        showConsole: presentation?.console === true,
         action: "running",
         taskName: HOT_RELOAD_TASK_NAME,
         args: () => ["dev", "--love", configuredLoveCommand()],
@@ -97,6 +98,7 @@ function registerGameCommands({ appendOutputLine, getClient, getServerCommand, a
         activity,
         getClient,
         getServerCommand,
+        showConsole: options?.console === true,
         action: "packaging",
         taskName: `${PACKAGE_TASK_NAME} (${choice.label})`,
         args: () => args,
@@ -105,7 +107,7 @@ function registerGameCommands({ appendOutputLine, getClient, getServerCommand, a
   );
 }
 
-async function runTuaTask({ appendOutputLine, getClient, getServerCommand, activity, action, taskName, args }) {
+async function runTuaTask({ appendOutputLine, getClient, getServerCommand, activity, action, taskName, args, showConsole = false }) {
   if (!vscode.workspace.isTrusted) {
     vscode.window.showWarningMessage("Trust this workspace before running Tua game tasks.");
     return undefined;
@@ -145,7 +147,7 @@ async function runTuaTask({ appendOutputLine, getClient, getServerCommand, activ
     clear: true,
     focus: false,
     panel: vscode.TaskPanelKind?.Dedicated,
-    reveal: vscode.TaskRevealKind?.Always,
+    reveal: showConsole ? vscode.TaskRevealKind?.Never : vscode.TaskRevealKind?.Always,
   };
 
   await vscode.tasks.executeTask(task);
