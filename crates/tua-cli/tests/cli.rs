@@ -4785,7 +4785,11 @@ fn check_validates_referenced_shaders_via_love_and_respects_off() {
         "local effect = shader \"effect.glsl\"\nprint(effect)\n",
     )
     .unwrap();
-    fs::write(temp.path.join("src/effect.glsl"), "broken").unwrap();
+    fs::write(
+        temp.path.join("src/effect.glsl"),
+        "vec4 effect() { broken }",
+    )
+    .unwrap();
     let fake = temp.path.join("fake-love");
     fs::write(&fake, "#!/bin/sh\nprintf 'READY 11.5.0\\n'\nwhile read -r command id target size; do\n dd bs=1 count=\"$size\" >/dev/null 2>&1\n printf 'RESULT %s invalid ERROR: 0:3: syntax error\\n' \"$id\"\ndone\n").unwrap();
     fs::set_permissions(&fake, fs::Permissions::from_mode(0o700)).unwrap();

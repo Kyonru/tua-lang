@@ -178,7 +178,8 @@ fn collection_skips_disabled_and_unused_assets_and_deduplicates_targets() {
         targets: vec![ShaderTarget::Desktop, ShaderTarget::Desktop],
         ..Default::default()
     };
-    let requests = shader_validation_requests(&inventory, &config, |_| Ok("valid".into())).unwrap();
+    let requests =
+        shader_validation_requests(&inventory, &config, |_| Ok("vec4 effect() {}".into())).unwrap();
     assert_eq!(requests.len(), 1);
     config.validate = crate::ShaderValidationMode::Off;
     assert!(

@@ -378,6 +378,12 @@ pub fn shader_validation_requests(
             break;
         }
         let source = read(&asset.path)?;
+        if crate::asset::ShaderSource::from_source(source.clone(), None)
+            .is_some_and(|source| source.missing_entry_point())
+        {
+            // The checker already reports TL2017 at each loader without a process.
+            continue;
+        }
         bytes = bytes.saturating_add(source.len().saturating_mul(targets.len()));
         if bytes > 16 * 1024 * 1024 || requests.len() + targets.len() > 512 {
             return Err("shader validation input exceeds 16 MiB or 512 requests".to_owned());

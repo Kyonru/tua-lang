@@ -67,6 +67,7 @@ impl DiagnosticCode {
     pub const ASSET_SHADER_UNREAD_UNIFORM: Self = Self(2014);
     pub const ASSET_SHADER_VALUE: Self = Self(2015);
     pub const ASSET_SHADER_COMPILE: Self = Self(2016);
+    pub const ASSET_SHADER_ENTRY_POINT: Self = Self(2017);
     pub const CONFIG_PARSE: Self = Self(3001);
     pub const CONFIG_IO: Self = Self(3002);
     pub const LINT_DUPLICATE_TABLE_KEY: Self = Self(4001);
@@ -207,6 +208,7 @@ impl DiagnosticCode {
                 | Self::ASSET_SHADER_UNREAD_UNIFORM
                 | Self::ASSET_SHADER_VALUE
                 | Self::ASSET_SHADER_COMPILE
+                | Self::ASSET_SHADER_ENTRY_POINT
                 | Self::CONFIG_PARSE
                 | Self::CONFIG_IO
                 | Self::LINT_DUPLICATE_TABLE_KEY

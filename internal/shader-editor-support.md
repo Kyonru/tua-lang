@@ -489,7 +489,7 @@ plain-Lua runtime test for reload-on-asset with a stub `love.graphics`.
 
 ## Phase 6: Further checks
 
-- **Missing entry point (`TL2017`)**: a shader with no `effect` (pixel) or
+- **Missing entry point (`TL2017`, implemented)**: a shader with no `effect` (pixel) or
   `position` (vertex) fails in `newShader`. Cheap to check from the uniform
   model; reported at the `shader "…"` call. Useful without a validator.
 - **Uniforms never sent (`TL2018`, opt-in)**: a uniform that is read but sent

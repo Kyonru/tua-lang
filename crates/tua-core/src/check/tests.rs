@@ -780,7 +780,10 @@ local data = imageData "assets/player.png"
     temp.write("assets/jump.wav", "");
     temp.write("assets/theme.ogg", "");
     temp.write("assets/ui.ttf", "");
-    temp.write("assets/wave.glsl", "");
+    temp.write(
+        "assets/wave.glsl",
+        "vec4 effect(vec4 c, Image t, vec2 uv, vec2 p) { return c; }",
+    );
 
     check_tua_source(temp.path.join("src/assets.tua"), source)
         .expect("existing supported assets should check");
@@ -4961,4 +4964,33 @@ end
         .map(|(i, _)| i + 1)
         .collect();
     assert_eq!(lines, expected, "{diagnostics:#?}");
+}
+
+#[test]
+fn missing_shader_entry_points_are_checked_without_external_tools() {
+    let temp = TempProject::new("shader-entry-point");
+    let source = "local effect = shader \"effect.glsl\"\nprint(effect)\n";
+    for (shader, expected) in [
+        ("extern number time;\n", true),
+        ("// vec4 effect() {}\n", true),
+        (
+            "vec4 effect(vec4 c, Image t, vec2 uv, vec2 p) { return c; }",
+            false,
+        ),
+        ("vec4 position(mat4 m, vec4 p) { return m * p; }", false),
+        ("#define ENTRY effect\nvec4 ENTRY() {}", false),
+        ("#include \"entry.glsl\"", false),
+        ("uniform Block { vec4 value; };", false),
+    ] {
+        temp.write("game/effect.glsl", shader);
+        let diagnostics = check_tua_source_with_asset_roots_and_diagnostics_config(
+            temp.path.join("src/main.tua"),
+            source,
+            &[temp.path.join("game")],
+            &diagnostics_without_standard_rules(),
+        )
+        .err()
+        .unwrap_or_default();
+        assert_eq!(diagnostics.iter().any(|diagnostic| diagnostic.code == Some(DiagnosticCode::ASSET_SHADER_ENTRY_POINT)), expected, "{shader}: {diagnostics:?}");
+    }
 }

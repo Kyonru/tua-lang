@@ -2038,6 +2038,30 @@ impl<'a> Checker<'a> {
             self.asset_index,
         );
 
+        if asset_call.kind == asset::AssetLoaderKind::Shader {
+            if let Some(path) =
+                asset::resolved_asset_path(&metadata, &self.asset_roots, self.asset_index)
+            {
+                if self
+                    .shader_source(&path)
+                    .is_some_and(|source| source.missing_entry_point())
+                {
+                    self.push_asset_diagnostic(
+                        Diagnostic::error(
+                            &self.parsed.path,
+                            asset_call.path_span.start.line,
+                            asset_call.path_span.start.column,
+                            format!(
+                                "shader `{}` has no `effect` or `position` entry point",
+                                asset_call.path
+                            ),
+                        )
+                        .with_code(DiagnosticCode::ASSET_SHADER_ENTRY_POINT),
+                    );
+                }
+            }
+        }
+
         match metadata.status {
             asset::AssetValidationStatus::WrongKind => {
                 self.push_asset_diagnostic(wrong_asset_kind_diagnostic(
@@ -2078,6 +2102,17 @@ impl<'a> Checker<'a> {
         }
     }
 
+    fn shader_source(&mut self, path: &Path) -> Option<&asset::ShaderSource> {
+        if let Some(index) = self.asset_index {
+            index.shader(path)
+        } else {
+            self.shader_sources
+                .entry(path.to_owned())
+                .or_insert_with(|| asset::ShaderSource::read(path, None))
+                .as_ref()
+        }
+    }
+
     /// Remembers the uniforms of a shader asset assigned to `name`, so that
     /// `name:send(...)` can be checked; any other value forgets them.
     fn record_shader_local(&mut self, name: String, expression: Option<&Expression>) {
@@ -2097,14 +2132,7 @@ impl<'a> Checker<'a> {
                 self.asset_index,
             );
             let path = asset::resolved_asset_path(&metadata, &self.asset_roots, self.asset_index)?;
-            let source = if let Some(index) = self.asset_index {
-                index.shader(&path)?
-            } else {
-                self.shader_sources
-                    .entry(path.clone())
-                    .or_insert_with(|| asset::ShaderSource::read(&path, None))
-                    .as_ref()?
-            };
+            let source = self.shader_source(&path)?;
             Some(ShaderUniforms {
                 asset_path: call.path,
                 model: source.uniforms.clone()?,

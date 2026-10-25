@@ -976,3 +976,8 @@ deliberately does not provide:
 - full compatibility with other Lua language servers or typed Lua dialects.
 
 Pre-1.0 releases follow the migration policy in [Releases](releases.md).
+
+Shader files with neither an `effect` nor a `position` entry point report
+`TL2017` at their loader, including when external shader validation is disabled.
+Macro-generated declarations and unsupported shader constructs are left to the
+external validator. This check does not require LÖVE to be installed.

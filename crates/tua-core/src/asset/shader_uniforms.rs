@@ -56,6 +56,15 @@ pub(crate) struct ShaderSource {
     pub uniforms: Option<Arc<ShaderUniformSet>>,
 }
 impl ShaderSource {
+    pub(crate) fn missing_entry_point(&self) -> bool {
+        self.uniforms.as_ref().is_some_and(|model| !model.has_effect && !model.has_position)
+            // Macro-generated entry points and includes are outside this scanner.
+            && !self.source.lines().any(|line| {
+                let line = line.trim_start();
+                line.starts_with("#define") || line.starts_with("#include")
+            })
+    }
+
     pub(crate) fn from_source(source: String, previous: Option<&Self>) -> Option<Self> {
         if source.len() > MAX_SHADER_BYTES {
             return None;

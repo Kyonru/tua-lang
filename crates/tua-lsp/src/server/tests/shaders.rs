@@ -52,7 +52,7 @@ fn shader_worker_uses_overlays_clears_errors_and_reuses_unchanged_results() {
     let source = "local effect = shader \"effect.glsl\"\nprint(effect)\n";
     temp.write("tua.toml", "source = \".\"\n");
     temp.write("main.tua", source);
-    temp.write("effect.glsl", "valid");
+    temp.write("effect.glsl", "vec4 effect() {}");
     let mut initialize = initialize_with_root(1, temp.uri());
     initialize["params"]["initializationOptions"] = json!({"workspaceTrusted": true});
     let calls = Arc::new(AtomicUsize::new(0));
@@ -64,7 +64,7 @@ fn shader_worker_uses_overlays_clears_errors_and_reuses_unchanged_results() {
                 vec![
                     initialize,
                     did_open(&temp.uri_for("main.tua"), source),
-                    did_open(&shader_uri, "broken"),
+                    did_open(&shader_uri, "vec4 effect() { broken }"),
                 ],
             ),
             (
@@ -77,7 +77,7 @@ fn shader_worker_uses_overlays_clears_errors_and_reuses_unchanged_results() {
             ),
             (
                 Duration::from_millis(900),
-                vec![did_change(&shader_uri, "fixed", 2)],
+                vec![did_change(&shader_uri, "vec4 effect() {}", 2)],
             ),
             (
                 Duration::from_millis(900),
@@ -122,7 +122,7 @@ fn untrusted_workspace_never_calls_shader_validator() {
         "main.tua",
         "local effect = shader \"effect.glsl\"\nprint(effect)\n",
     );
-    temp.write("effect.glsl", "broken");
+    temp.write("effect.glsl", "vec4 effect() { broken }");
     let calls = Arc::new(AtomicUsize::new(0));
     run_shader_chunks(
         vec![
@@ -195,7 +195,7 @@ fn hover_completes_while_shader_compilation_is_blocked() {
     let source = "local effect = shader \"effect.glsl\"\nprint(effect)\n";
     temp.write("tua.toml", "source = \".\"\n");
     temp.write("main.tua", source);
-    temp.write("effect.glsl", "valid");
+    temp.write("effect.glsl", "vec4 effect() {}");
     let mut initialize = initialize_with_root(1, temp.uri());
     initialize["params"]["initializationOptions"] = json!({"workspaceTrusted": true});
     let (start_tx, start_rx) = mpsc::sync_channel(1);
