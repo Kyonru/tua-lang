@@ -6,6 +6,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Dictionary reads now infer `Value | nil` in checking and editor analysis.
+  Migration: guard the result or supply a default before using it as `Value`.
+
 - Successful separate-output builds reconcile owned files and packages exclude
   obsolete outputs, so deleted modules and assets no longer ship accidentally.
 

@@ -424,6 +424,8 @@ local callbacks: ((dt: number) -> nil)[] = {}
 ```
 
 An ordinary indexed read assumes the dense-array contract and has type `T`.
+Dictionary reads instead return `Value | nil`, including dot access, since
+dictionary keys are not guaranteed to exist.
 Use `rawget(values, index)` when an index may be absent; its result is `T |
 nil`. Tua also permits direct checks such as `values[index] ~= nil`, since Lua
 can return `nil` for an out-of-range index even when the declared element type

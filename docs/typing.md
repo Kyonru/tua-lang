@@ -113,6 +113,11 @@ An empty table is a valid initializer when an array or dictionary annotation
 provides its element types. Array element types flow through supported indexed
 reads and writes, `table.insert`, `ipairs`, and common loop patterns.
 
+Dictionary reads (`scores[key]` and `scores.name`) return `Value | nil`, because
+a key may be absent. Store the result in a local and guard it, or provide a
+default with `or`, before using it as `Value`. Values yielded by `pairs` retain
+the declared value type. This is stricter than earlier releases.
+
 Ordinary `values[index]` reads use the declared element type, matching the
 dense-array contract. When the index may be outside the populated range, use
 Lua's `rawget(values, index)`: Tua infers `T | nil`, and direct indexed

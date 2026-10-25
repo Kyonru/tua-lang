@@ -45,8 +45,6 @@ local audio = audioSystem({
   analysis = analysis,
 })
 
-local detected = analysis["src/sample.wav"]
-local detected2 = analysis["src/sample2.wav"]
 local beat = -1
 local bar = -1
 local current = "sample2"
@@ -88,6 +86,17 @@ function love.update(dt: number)
 end
 
 function love.draw()
+  -- Catalog entries are dictionary reads: handle missing generated metadata.
+  local detected = analysis["src/sample.wav"]
+  local detected2 = analysis["src/sample2.wav"]
+  if not detected then
+    love.graphics.print("Audio analysis is unavailable; rebuild the asset pipeline.", 32, 32)
+    return
+  end
+  if not detected2 then
+    love.graphics.print("Audio analysis is unavailable; rebuild the asset pipeline.", 32, 32)
+    return
+  end
   local snapshot = audio:snapshot()
   love.graphics.print("Tua first-class audio", 32, 32)
   love.graphics.print(message, 32, 72)

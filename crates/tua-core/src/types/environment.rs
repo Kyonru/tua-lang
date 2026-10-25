@@ -3702,6 +3702,8 @@ fn resolve_table_field_type_from_map(
     field: &str,
 ) -> Option<Type> {
     match resolve_aliases_from_map(aliases, ty, 0) {
+        Type::Dictionary { key, value } => key_accepts_index(&key, &Type::string_literal(field))
+            .then(|| Type::union([*value, Type::nil()])),
         Type::Table(table) => table
             .semantic_field(field)
             .map(|field| resolve_aliases_from_map(aliases, &field.ty, 0)),
@@ -3732,7 +3734,7 @@ fn resolve_index_type_from_map(
         Type::Dictionary {
             key: dict_key,
             value,
-        } => key_accepts_index(&dict_key, key).then_some(*value),
+        } => key_accepts_index(&dict_key, key).then(|| Type::union([*value, Type::nil()])),
         Type::Table(table) => match key {
             Type::StringLiteral(value) => table
                 .semantic_field(value)

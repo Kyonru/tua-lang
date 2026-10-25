@@ -2,6 +2,19 @@ use super::*;
 use crate::{parse_lua_source, parse_tua_source, DiagnosticCode};
 
 #[test]
+fn inferred_dictionary_reads_include_nil_for_editor_queries() {
+    let parsed = parse_tua_source("dictionary.tua", "local scores: { [string]: number } = {}\nlocal bracket = scores['missing']\nlocal dotted = scores.missing\n").unwrap();
+    let environment = build_type_environment(&parsed).unwrap();
+    let semantic = crate::semantic::SemanticModel::new(&parsed, &environment);
+    for name in ["bracket", "dotted"] {
+        assert_eq!(
+            semantic.type_of_name(name, crate::SourcePosition { line: 4, column: 1 }),
+            Some(Type::union([Type::number(), Type::nil()]))
+        );
+    }
+}
+
+#[test]
 fn primitive_assignability_requires_matching_primitives() {
     assert!(is_assignable(&Type::number(), &Type::number()));
     assert!(is_assignable(&Type::string(), &Type::string()));

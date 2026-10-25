@@ -150,6 +150,19 @@ end
 }
 
 #[test]
+fn dictionary_reads_are_nilable_but_guarded_values_are_usable() {
+    for access in ["scores[\"missing\"]", "scores.missing"] {
+        let source =
+            format!("local scores: {{ [string]: number }} = {{}}\nlocal n: number = {access}\n");
+        assert!(check_tua_source("dictionary.tua", source)
+            .unwrap_err()
+            .iter()
+            .any(|d| d.code == Some(DiagnosticCode::TYPE_MISMATCH)));
+    }
+    check_tua_source("dictionary.tua", "local scores: { [string]: number } = {}\nscores['key'] = 1\nlocal n = scores['key']\nif n then local safe: number = n; print(safe + 1) end\nfor key, value in pairs(scores) do local safe: number = value end\n").unwrap();
+}
+
+#[test]
 fn rejects_invalid_primitive_operators_in_values_and_conditions() {
     for source in [
         "local enabled: boolean = true; local n: number = enabled + 1",
