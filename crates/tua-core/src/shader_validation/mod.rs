@@ -223,12 +223,26 @@ fn compiler_error_text(text: &str) -> Option<String> {
 }
 
 /// Turns glslang's `'=' :  cannot convert from ' const float' to ...` into
-/// `cannot convert from 'const float' to ...`.
+/// `cannot convert from 'const float' to ...`. Identifier tokens name the
+/// problem (`'tint' : undeclared identifier`), so they are kept.
 fn clean_compiler_message(text: &str) -> String {
     let text = text.trim();
     let text = match text.split_once(" : ") {
-        Some((token, rest)) if token.starts_with('\'') && token.ends_with('\'') => rest,
-        _ => text,
+        Some((token, rest))
+            if token.len() >= 2 && token.starts_with('\'') && token.ends_with('\'') =>
+        {
+            let name = token[1..token.len() - 1].trim();
+            if !name.is_empty()
+                && name
+                    .chars()
+                    .all(|character| character.is_ascii_alphanumeric() || character == '_')
+            {
+                format!("'{name}': {rest}")
+            } else {
+                rest.to_owned()
+            }
+        }
+        _ => text.to_owned(),
     };
     let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
 

@@ -53,6 +53,22 @@ fn reads_love_validation_results() {
 }
 
 #[test]
+fn compiler_messages_keep_identifier_tokens() {
+    assert_eq!(
+        clean_compiler_message("'tint' : undeclared identifier"),
+        "'tint': undeclared identifier"
+    );
+    assert_eq!(
+        clean_compiler_message("'texture2D' :  no matching overloaded function found"),
+        "'texture2D': no matching overloaded function found"
+    );
+    assert_eq!(
+        clean_compiler_message("'' : syntax error, unexpected IDENTIFIER"),
+        "syntax error, unexpected IDENTIFIER"
+    );
+}
+
+#[test]
 fn reports_validator_failures_and_unknown_messages() {
     let output = parse_validator_output(
         "RESULT 0 invalid Error validating vertex shader:\\nsomething unexpected\nFATAL boom\\nstack\n",
