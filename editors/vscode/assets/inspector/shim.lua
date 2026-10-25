@@ -35,11 +35,31 @@ end
 local function poolData(value)
   return { active = value:activeCount(), available = value:availableCount(), capacity = value:capacity() }
 end
+local function storeData(value)
+  local watchers, keys = 0, 0
+  for _, listeners in next, value._watchers do
+    if keys >= 128 then break end
+    keys = keys + 1
+    watchers = watchers + #listeners
+  end
+  return { state = value._state, subscribers = #value._listeners,
+    watchers = watchers, watcherKeysSampled = keys, watcherLimitReached = keys >= 128 }
+end
 local function constructor(original, kind, reader)
   if wrapped[original] then return original end
   local fn = function(...)
     local object = original(...)
     inspect.register(kind, object, reader)
+    if kind == "stores" then
+      for _, name in ipairs({ "set", "update" }) do
+        local method = object[name]
+        object[name] = function(self, ...)
+          local result = method(self, ...)
+          inspect.storeUpdated(self)
+          return result
+        end
+      end
+    end
     if kind == "signals" then
       local emit = object.emit
       object.emit = function(self, name, ...)
@@ -59,6 +79,9 @@ local function instrument(name, module)
     module.create = constructor(module.create, "states", stateData)
   elseif name == "tuasignal" and type(module) == "table" and type(module.new) == "function" then
     module.new = constructor(module.new, "signals", signalData)
+  elseif name == "tuastore" and type(module) == "function" then
+    module = constructor(module, "stores", storeData)
+    package.loaded[name] = module
   elseif name == "tuaobjectpool" and type(module) == "function" then
     module = constructor(module, "pools", poolData)
     package.loaded[name] = module

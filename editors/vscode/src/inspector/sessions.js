@@ -23,8 +23,8 @@ class InspectorSessions {
     this.entries.set(session.id, entry); this.changed();
     try {
       entry.connection = await listen({
-        onSnapshot: snapshot => { entry.snapshot = snapshot; entry.received = Date.now(); this.changed(); },
-        onStatus: status => { entry.status = status; this.changed(); },
+        onSnapshot: snapshot => { entry.previousSnapshot = entry.snapshot; entry.snapshot = snapshot; entry.received = Date.now(); this.changed(); },
+        onStatus: status => { if (status === "connected") { entry.previousSnapshot = undefined; entry.snapshot = undefined; } entry.status = status; this.changed(); },
       });
       if (this.disposed || !session.active || !this.enabled()) { this.close(entry); return undefined; }
       entry.launcher = createLauncher(outputDirectory, this.assetsDirectory, entry.connection);

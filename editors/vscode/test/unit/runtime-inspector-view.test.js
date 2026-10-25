@@ -41,3 +41,18 @@ test("runtime values are displayed as data, with bounded depth and stable escape
   assert.equal(nodes[0].children[0].command, undefined);
   assert.deepEqual(valueNodes(data, "root", 8), []);
 });
+
+test("store state marks nested changes, additions and removals without flagging unchanged values", () => {
+  const { storeNodes } = require("../../src/inspector/view");
+  const old = { state: { score: 1, player: { health: 10 }, removed: true, stable: false }, updates: 1 };
+  const now = { state: { score: 2, player: { health: 8, ammo: 3 }, stable: false }, updates: 2 };
+  const state = storeNodes(now, "store", old).find(node => node.label === "state");
+  const nodes = Object.fromEntries(state.children.map(node => [node.label, node]));
+  assert.equal(nodes.score.change, "changed");
+  assert.match(nodes.score.tooltip, /Previous: 1/);
+  assert.equal(nodes.removed.change, "removed");
+  assert.equal(nodes.stable.change, undefined);
+  assert.equal(nodes.player.change, "changed");
+  assert.equal(nodes.player.children.find(node => node.label === "ammo").change, "added");
+  assert.equal(storeNodes(now, "store").find(node => node.label === "state").children[0].change, undefined);
+});

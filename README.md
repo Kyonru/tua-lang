@@ -120,7 +120,8 @@ source-only statement snippets and conservative current-file recall; it stays
 local, reads no pattern database, and is off by default.
 
 The opt-in [live Runtime Inspector](docs/debugging.md#live-runtime-inspector)
-shows per-player ECS components, active states, signal activity, and pool counts.
+shows per-player ECS components, active states, signal activity, pool counts,
+and store state with update and subscription counts.
 Its editor-owned development shim leaves build and release output untouched.
 
 When deterministic ghost text is enabled, the extension tries it before

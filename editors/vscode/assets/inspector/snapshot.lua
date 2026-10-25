@@ -55,6 +55,17 @@ function M.register(kind, object, reader, label)
   return object
 end
 
+local function clock()
+  return love and love.timer and love.timer.getTime and love.timer.getTime() or os.clock()
+end
+
+function M.storeUpdated(object)
+  local entry = objects[object]
+  if not entry then return end
+  entry.updates = (entry.updates or 0) + 1
+  entry.lastUpdate = clock()
+end
+
 function M.signal(object, name)
   local entry = objects[object]
   if not entry then return end
@@ -73,6 +84,10 @@ function M.snapshot()
     count = count + 1
     local success, data = pcall(entry.reader, object)
     if not success then data = { unavailable = "Could not read runtime object" } end
+    if entry.kind == "stores" then
+      data.updates = entry.updates or 0
+      data.secondsSinceUpdate = entry.lastUpdate and math.max(0, clock() - entry.lastUpdate) or "Never"
+    end
     if entry.kind == "signals" then data.emitted = entry.emitted; data.recent = entry.events end
     entries[#entries + 1] = encode({ id = entry.id, kind = entry.kind, label = entry.label,
       source = entry.source, line = entry.line, data = data }, budget, {}, 0)

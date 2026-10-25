@@ -230,6 +230,13 @@ The view shows live objects from Tua's built-in runtimes:
 - **Signal activity:** emission counts, the latest 20 event names, and listener
   counts. Signal payloads are not retained.
 - **Object pools:** active, available, and capacity counts.
+- **Stores:** current state, successful `set`/`update` call counts, seconds since
+  the last successful call, and subscriber/field-watcher counts. State fields
+  added, changed, or removed since the previous snapshot have explicit markers.
+  Direct mutations through `get()` appear in state snapshots but do not increment
+  the API update count; calls that raise errors are not counted. First snapshots
+  and connections after a restart start a new comparison baseline. Watcher counts
+  sample at most 128 watched keys and report when that limit is reached.
 
 Snapshots arrive twice per second. **Pause or Resume Inspector Updates** pauses
 snapshot updates without pausing the game; **Refresh Runtime Snapshot** requests a
@@ -252,7 +259,7 @@ editor skips snapshots instead of growing a queue. Large worlds and values are
 sampled (128 live objects, 100 entities per world, 32 component stores per world,
 3,000 serialized values per snapshot), and abbreviated values are marked.
 
-This currently inspects Tua's built-in ECS, state-machine, signal, and pool
+This currently inspects Tua's built-in ECS, state-machine, signal, pool, and store
 implementations. Other ECS backends and arbitrary user tables are not discovered.
 It supports the standard LÖVE loop and custom loops that return a frame function.
 Platforms that restrict creating symbolic links need that permission enabled;

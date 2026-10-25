@@ -104,7 +104,7 @@ build.
 
 The **Runtime Inspector** in the Tua sidebar shows live ECS entities and
 components, active state machines, signal emission/listener counts, and object
-pool usage. It complements source breakpoints and the static project explorers.
+pool usage, and store state with update/subscription counts. It complements source breakpoints and the static project explorers.
 
 1. In a trusted workspace, open **Tua → Runtime Inspector** or run
    **Tua: Open Runtime Inspector**.
@@ -119,6 +119,10 @@ snapshot updates without stopping the game; **Refresh Runtime Snapshot** also
 works while updates are paused. Debugger pauses suspend snapshots until the game
 resumes. Disconnected or ended players retain their last snapshot, labeled with
 its status and age. Signal history retains the latest 20 event names, not payloads.
+Stores mark state fields added, changed, or removed since the previous snapshot.
+Their update counters track successful `set`/`update` calls, not direct mutations
+through `get()`; inspection adds no subscribers of its own. Subscriber counts are
+exact; field-watcher counts sample at most 128 watched keys and expose that limit.
 Large worlds and values are sampled and abbreviated to keep inspection bounded.
 
 The inspector is an **editor-owned development shim**, loaded from a private
@@ -129,7 +133,7 @@ packaged games contain no inspector code. It does not upload data or evaluate
 runtime expressions. Disabling inspection disconnects the player; the temporary
 launcher remains until that player exits so ongoing asset loads still work.
 
-Only Tua's built-in ECS, state-machine, signal, and object-pool implementations
+Only Tua's built-in ECS, state-machine, signal, object-pool, and store implementations
 are discovered. An empty category can mean that no such objects are currently
 alive, or that the game uses a different implementation. Inspection supports the
 standard LÖVE loop and custom loops that return a frame function.

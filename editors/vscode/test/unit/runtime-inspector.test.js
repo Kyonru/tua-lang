@@ -114,3 +114,54 @@ io.write(inspect.snapshot(), "\\n")`;
   assert.equal(large.truncated, true);
   assert(Buffer.byteLength(JSON.stringify(large)) < MAX_FRAME);
 });
+
+test("store shim preserves returns, errors, notifications and collection without adding subscriptions", t => {
+  const { spawnSync } = require("node:child_process");
+  const lua = ["lua", "luajit"].find(command => spawnSync(command, ["-v"]).status === 0);
+  if (!lua) return t.skip("Lua interpreter unavailable");
+  const script = `local assets, runtime = arg[1], arg[2]
+package.path = runtime .. "/?.lua;" .. package.path
+local originalLoadfile = loadfile
+loadfile = function(filename)
+  if filename == assets .. "/transport.lua" then return function() return function() return function() end end end end
+  return originalLoadfile(filename)
+end
+local now = 10
+love = { timer = { getTime = function() return now end } }
+local inspect = assert(loadfile(assets .. "/shim.lua"))(assets, 1, "token")
+local create = require("tuastore")
+assert(require("tuastore") == create, "requiring twice must not wrap twice")
+local store = create({ score = 0, nested = { health = 10 } })
+assert(#store._listeners == 0 and next(store._watchers) == nil)
+local notifications, watches = 0, 0
+local unsubscribe = store:subscribe(function() notifications = notifications + 1 end)
+local unwatch = store:watch("score", function() watches = watches + 1 end)
+local nextState = { score = 1, nested = { health = 10 } }
+assert(store:set(nextState) == nextState)
+assert(store:update(function(state) state.score = 2 end) == nextState)
+local ok, err = pcall(function() store:update(function() error("original error") end) end)
+assert(not ok and err:match("original error"))
+assert(notifications == 2 and watches == 2)
+assert(#store._listeners == 1 and #store._watchers.score == 1)
+do local dead = create({}); dead:update(function() end) end
+collectgarbage("collect")
+now = 12
+io.write(inspect.snapshot(), "\\n")
+unsubscribe(); unwatch()
+store:get().nested.health = 5
+io.write(inspect.snapshot(), "\\n")`;
+  const result = spawnSync(lua, ["-", path.resolve(__dirname, "../../assets/inspector"), path.resolve(__dirname, "../../../../vendor/runtime")], { input: script, encoding: "utf8" });
+  assert.equal(result.status, 0, result.stderr);
+  const [first, second] = result.stdout.trim().split("\n").map(line => JSON.parse(line));
+  assert.equal(first.objects.length, 1, "collected stores must disappear");
+  assert.equal(first.objects[0].kind, "stores");
+  assert.deepEqual(first.objects[0].data.state, { score: 2, nested: { health: 10 } });
+  assert.equal(first.objects[0].data.updates, 2);
+  assert.equal(first.objects[0].data.secondsSinceUpdate, 2);
+  assert.equal(first.objects[0].data.subscribers, 1);
+  assert.equal(first.objects[0].data.watchers, 1);
+  assert.equal(second.objects[0].data.subscribers, 0);
+  assert.equal(second.objects[0].data.watchers, 0);
+  assert.equal(second.objects[0].data.state.nested.health, 5);
+  assert.equal(second.objects[0].data.updates, 2, "direct mutations are not successful API calls");
+});

@@ -8,6 +8,11 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Added
 
+- The development-only Runtime Inspector now includes stores: current state,
+  successful update counts and age, subscriber/watcher counts, and markers for
+  fields added, changed, or removed between snapshots. Production store runtimes
+  and packaged output remain unchanged.
+
 - An opt-in live Runtime Inspector selects individual development players and
   displays ECS components, active states, signal activity, and pool counts.
   Its authenticated loopback connection supports pause and manual refresh;

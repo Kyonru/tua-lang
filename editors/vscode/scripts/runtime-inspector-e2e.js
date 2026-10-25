@@ -17,7 +17,7 @@ async function until(predicate) { for (let i = 0; i < 300; i++) { if (predicate(
 const kind = (entry, name) => entry.snapshot?.objects.find(object => object.kind === name)?.data;
 async function main() {
   fs.mkdirSync(output);
-  for (const name of ["tuaecs", "tuastatemachine", "tuasignal", "tuaobjectpool"]) fs.copyFileSync(path.resolve(__dirname, "../../../vendor/runtime", name + ".lua"), path.join(output, name + ".lua"));
+  for (const name of ["tuaecs", "tuastatemachine", "tuasignal", "tuaobjectpool", "tuastore"]) fs.copyFileSync(path.resolve(__dirname, "../../../vendor/runtime", name + ".lua"), path.join(output, name + ".lua"));
   fs.writeFileSync(path.join(output, "conf.lua"), `io.stdout:setvbuf("no")
 function love.conf(t)
   t.window.visible = false; t.window.width = 64; t.window.height = 64
@@ -34,12 +34,18 @@ machine:move()
 local bus = require("tuasignal").new()
 local pool = require("tuaobjectpool")({ create = function() return {} end, initial = 4 })
 local bullet = pool:acquire()
+local store = require("tuastore")({ score = 0 })
+store:subscribe(function() end)
+store:watch("score", function() end)
+store:set({ score = 1 })
+store:update(function(state) state.score = 2 end)
 local player = "unknown"
 function love.load(args) player = args[1] or "unknown" end
 function love.update(dt)
   data.player = player
   local changed = love.filesystem.read("change.txt")
   if changed then data.x = tonumber(changed) or 42 end
+  store:get().player = player
   bus:emit("frame")
   -- Keep runtime objects reachable, as a real game does.
   assert(world and machine.current == "walking" and pool:owns(bullet))
@@ -62,6 +68,11 @@ end
   await until(() => players.every(player => kind(player.entry, "signals")?.emitted > 0));
   for (const player of players) {
     assert.equal(kind(player.entry, "states").current, "walking");
+    assert.equal(kind(player.entry, "stores").state.score, 2);
+    assert.equal(kind(player.entry, "stores").state.player, player.session.title);
+    assert.equal(kind(player.entry, "stores").updates, 2);
+    assert.equal(kind(player.entry, "stores").subscribers, 1);
+    assert.equal(kind(player.entry, "stores").watchers, 1);
     assert.deepEqual(kind(player.entry, "pools"), { active: 1, available: 3, capacity: 4 });
     const component = Object.values(kind(player.entry, "ecs").entities["1"])[0];
     assert.equal(component.player, player.session.title); assert.equal(component.self, "<cycle>");
@@ -102,7 +113,7 @@ end
   assert.equal(contents.status, 0);
   assert(!contents.stdout.includes("Tua editor-only inspector"));
   assert(!contents.stdout.includes("127.0.0.1"));
-  console.log("Native runtime inspector passed: two players, ECS/state/signal/pool snapshots, pause/refresh/resume, live files, independent exit, cleanup, and inspector-free package.");
+  console.log("Native runtime inspector passed: two players, ECS/state/signal/pool/store snapshots, pause/refresh/resume, live files, independent exit, cleanup, and inspector-free package.");
 }
 main().catch(error => { console.error([...inspector.entries.values()].map(entry => ({ title: entry.session.title, status: entry.status, sequence: entry.snapshot?.sequence }))); console.error(error); process.exitCode = 1; }).finally(async () => {
   for (const child of children) if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");

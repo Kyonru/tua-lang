@@ -1870,7 +1870,7 @@
     "viewsWelcome": [
       {
         "view": "tua.inspector",
-        "contents": "Inspect live entities, state machines, signal activity, and object pools.\n[Enable Runtime Inspection](command:tua.inspector.enable)\nApplies to new local development runs. No inspector code is added to packaged games.",
+        "contents": "Inspect live entities, state machines, signal activity, object pools, and stores.\n[Enable Runtime Inspection](command:tua.inspector.enable)\nApplies to new local development runs. No inspector code is added to packaged games.",
         "when": "!config.tua.runtimeInspector.enabled"
       },
       {

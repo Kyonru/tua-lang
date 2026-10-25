@@ -2,7 +2,7 @@
 const path = require("node:path");
 const vscode = require("vscode");
 const { InspectorSessions } = require("./sessions");
-const GROUPS = [["ecs", "Entities and components", "symbol-struct"], ["states", "State machines", "type-hierarchy"], ["signals", "Signal activity", "radio-tower"], ["pools", "Object pools", "database"]];
+const GROUPS = [["ecs", "Entities and components", "symbol-struct"], ["states", "State machines", "type-hierarchy"], ["signals", "Signal activity", "radio-tower"], ["pools", "Object pools", "database"], ["stores", "Stores", "symbol-variable"]];
 
 class InspectorTree {
   constructor(sessions) {
@@ -30,8 +30,10 @@ class InspectorTree {
       const objects = entry.snapshot.objects.filter(object => object.kind === kind).sort((a, b) => a.id - b.id);
       return { id: prefix + ":" + kind, label, icon, description: String(objects.length),
         children: objects.length ? objects.map(object => ({ id: prefix + ":object:" + object.id, label: object.label,
-          description: kind === "states" ? String(object.data.current || "") : kind === "signals" ? `${object.data.emitted || 0} emitted` : undefined,
-          children: valueNodes(object.data, prefix + ":object:" + object.id),
+          description: kind === "states" ? String(object.data.current || "") : kind === "signals" ? `${object.data.emitted || 0} emitted` : kind === "stores" ? `${object.data.updates || 0} updates` : undefined,
+          children: object.kind === "stores"
+            ? storeNodes(object.data, prefix + ":object:" + object.id, entry.previousSnapshot?.objects.find(previous => previous.kind === "stores" && previous.id === object.id)?.data)
+            : valueNodes(object.data, prefix + ":object:" + object.id),
         })) : [{ id: prefix + ":" + kind + ":empty", label: "No live objects registered", icon: "info" }],
       };
     });
@@ -49,6 +51,35 @@ function valueNodes(value, prefix, depth = 0) {
     return { id: `${prefix}/${encodeURIComponent(key)}`, label: key,
       description: nested ? `${Object.keys(child).length} fields` : String(child),
       children: nested ? valueNodes(child, `${prefix}/${encodeURIComponent(key)}`, depth + 1) : undefined };
+  });
+}
+
+// Compare only serialized state, never runtime references or volatile age counters.
+function storeNodes(data, prefix, previous) {
+  const nodes = valueNodes(data, prefix);
+  const state = nodes.find(node => node.label === "state");
+  if (state && previous?.state && data.state && typeof data.state === "object") {
+    state.children = changedValueNodes(data.state, previous.state, `${prefix}/state`);
+  }
+  return nodes;
+}
+
+function changedValueNodes(current, previous, prefix, depth = 0) {
+  if (depth >= 8) return [];
+  const keys = [...new Set([...Object.keys(current || {}), ...Object.keys(previous || {})])].slice(0, 128);
+  return keys.sort((a, b) => a.localeCompare(b, undefined, { numeric: true })).map(key => {
+    const present = Object.hasOwn(current || {}, key), wasPresent = Object.hasOwn(previous || {}, key);
+    const value = present ? current[key] : previous[key], old = previous?.[key];
+    const nested = value !== null && typeof value === "object";
+    const children = nested ? changedValueNodes(present ? value : {}, wasPresent && old && typeof old === "object" ? old : {}, `${prefix}/${encodeURIComponent(key)}`, depth + 1) : undefined;
+    const change = !present ? "removed" : !wasPresent ? "added" : nested
+      ? (old === null || typeof old !== "object" || children.some(child => child.change) ? "changed" : undefined)
+      : !Object.is(value, old) ? "changed" : undefined;
+    const summary = nested ? `${Object.keys(value).length} fields` : String(value);
+    return { id: `${prefix}/${encodeURIComponent(key)}`, label: key, change, children,
+      description: `${summary}${change ? ` · ${change}` : ""}`,
+      icon: change ? (change === "added" ? "diff-added" : change === "removed" ? "diff-removed" : "diff-modified") : undefined,
+      tooltip: change === "changed" && !nested ? `Previous: ${old !== null && typeof old === "object" ? "[table]" : String(old)}\nCurrent: ${summary}` : undefined };
   });
 }
 
@@ -96,4 +127,4 @@ function registerRuntimeInspector(context, activity) {
   refresh();
   return { sessions, dispose: () => vscode.Disposable.from(...disposables).dispose() };
 }
-module.exports = { InspectorTree, valueNodes, registerRuntimeInspector };
+module.exports = { InspectorTree, valueNodes, storeNodes, registerRuntimeInspector };
