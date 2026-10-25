@@ -163,7 +163,8 @@ opted-in Ollama integration is unaffected.
 ### Migrating from the personal theme extension
 
 Indigo Carbon now lives in this extension under `themes/indigo-carbon.json`.
-Its palette, lighter active tabs, and Tua property-chain rules are unchanged.
+Its palette and Tua property-chain rules are preserved. Active tabs match the
+editor background; inactive tabs match the distinct tab bar background.
 Select **Indigo Carbon HC**, apply **Tua Layout** if desired, then uninstall
 `personal-local.indigo-carbon-local` to avoid duplicate theme entries. The old
 package's global layout defaults are intentionally not carried into Tua's

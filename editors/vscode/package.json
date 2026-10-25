@@ -1956,10 +1956,10 @@
           {
             "id": "theme",
             "title": "Choose your editor theme",
-            "description": "Indigo Carbon uses quiet panels, a lighter active tab, and four repeating colors for Tua property chains. Your current theme stays selected until you choose another.\n[Use Indigo Carbon](command:tua.setup.applyTheme)\n[Browse Color Themes](command:workbench.action.selectTheme)\n[Restore Previous Theme](command:tua.setup.restoreTheme)",
+            "description": "Indigo Carbon uses quiet panels, an active tab matching the editor, and four repeating colors for Tua property chains. Your current theme stays selected until you choose another.\n[Use Indigo Carbon](command:tua.setup.applyTheme)\n[Browse Color Themes](command:workbench.action.selectTheme)\n[Restore Previous Theme](command:tua.setup.restoreTheme)",
             "media": {
               "image": "assets/setup/theme.svg",
-              "altText": "Indigo Carbon preview: a lighter active main.tua tab, quiet borders, and blue, teal, peach, and lavender property accesses."
+              "altText": "Indigo Carbon preview: an active main.tua tab matching the editor, quiet borders, and blue, teal, peach, and lavender property accesses."
             },
             "completionEvents": [
               "onSettingChanged:workbench.colorTheme"

@@ -6,6 +6,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+### Changed
+
+- Indigo Carbon tabs now use a distinct tab bar color for inactive tabs, while the active tab matches the editor background.
+
 ## [0.5.1] - 2026-10-25
 
 ### Release summary
