@@ -1159,6 +1159,15 @@
         "title": "Inspect Hints at Cursor",
         "category": "Tua",
         "icon": "$(symbol-type-parameter)"
+      },
+      {
+        "command": "tua.run.stopSelected",
+        "title": "Stop Selected Run",
+        "category": "Tua",
+        "icon": {
+          "light": "assets/toolbar/stop-light.svg",
+          "dark": "assets/toolbar/stop-dark.svg"
+        }
       }
     ],
     "views": {
@@ -1266,7 +1275,7 @@
         },
         {
           "command": "tua.run.selected",
-          "when": "editorLangId == tua && config.tua.editor.toolbarMode == compact",
+          "when": "editorLangId == tua && config.tua.editor.toolbarMode == compact && !tua.selectedRunActive",
           "group": "navigation@48"
         },
         {
@@ -1275,9 +1284,9 @@
           "group": "navigation@49"
         },
         {
-          "command": "tua.activity.stop",
-          "when": "editorLangId == tua && config.tua.editor.toolbarMode == compact && tua.hasActiveSession",
-          "group": "navigation@50"
+          "command": "tua.run.stopSelected",
+          "when": "editorLangId == tua && config.tua.editor.toolbarMode == compact && tua.selectedRunActive",
+          "group": "navigation@48"
         }
       ],
       "commandPalette": [
@@ -1460,7 +1469,7 @@
         },
         {
           "command": "tua.run.selected",
-          "when": "view == tua.run",
+          "when": "view == tua.run && !tua.selectedRunActive",
           "group": "navigation@0"
         },
         {
@@ -1497,6 +1506,11 @@
           "command": "tua.checks.run",
           "when": "view == tua.checks",
           "group": "navigation"
+        },
+        {
+          "command": "tua.run.stopSelected",
+          "when": "view == tua.run && tua.selectedRunActive",
+          "group": "navigation@0"
         }
       ],
       "view/item/context": [

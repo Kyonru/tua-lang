@@ -49,7 +49,6 @@ async function activate(context) {
   context.subscriptions.push(registerBuiltinDocumentProvider(outputChannel));
   context.subscriptions.push(registerLifecycleCommands());
   context.subscriptions.push(registerSetup(context));
-  context.subscriptions.push(registerRunConfigurations(context));
   context.subscriptions.push(registerWorkspaceSidebar({ getClient: () => client }));
   context.subscriptions.push(registerProjectChecks({ getClient: () => client, getServerCommand: () => currentServerInfo?.command || configuredServerPath(extensionContext) }));
   editorDevex = registerEditorDevex({
@@ -63,6 +62,7 @@ async function activate(context) {
   context.subscriptions.push(editorDevex);
   const runActivity = registerRunActivity();
   context.subscriptions.push(runActivity);
+  context.subscriptions.push(registerRunConfigurations(context, runActivity.store));
   context.subscriptions.push(registerGameConsole(runActivity.store));
   loveDevex = registerLoveDevex({
     activity: runActivity.store,

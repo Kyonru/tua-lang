@@ -157,7 +157,7 @@ expansion; Debug uses your installed debugger's argument handling. Your game
 must interpret them (for example in `love.load(args)`) and implement the
 host/client networking. Omit `args` to launch identical copies.
 
-The toolbar Stop button stops the latest active group. Stop beside an individual player
+The primary Stop button stops the selected configuration’s group. Stop beside an individual player
 in **Run Sessions** stops only that player. Closing or crashing one player leaves
 its peers running. **Tua: Stop LOVE Project** stops all tracked normal runs;
 **Tua: Restart LOVE Project** stops those runs and launches the last normal Run
@@ -180,13 +180,18 @@ last player exits. A partial launch failure stops the players already launched.
 Debugging requires the supported Local Lua Debugger extension, as for a single
 player. `instances` is not supported for packaging.
 
+The primary Play button becomes Stop while the selected configuration is active,
+including during its build. For a group, Stop ends all of its players. Selecting
+another idle configuration shows Play for that configuration; individual player
+Stop actions remain available in **Run Sessions**.
+
 ## Build and run status
 
 The **Run Sessions** view and status bar show builds, running games, reload
 requests, successful module reloads, and failed builds that leave the last good
 code running. Select a session to inspect project diagnostics and reloaded
 modules. Stop beside an active session cancels that run, including hot reload.
-The toolbar Stop action targets the latest stoppable session; each session also
+The primary Stop action targets the selected configuration; each session also
 has its own Stop action. Recent sessions stay in memory for this editor window; they are not uploaded.
 
 ## Game console

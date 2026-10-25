@@ -5,11 +5,13 @@ const { DEFAULT_CONFIGURATIONS, normalizeConfigurations } = require("./run-optio
 const SELECTED = "tua.run.selectedConfiguration";
 const MODES = { run: COMMANDS.runLoveProject, debug: COMMANDS.debugLoveProject, hotReload: COMMANDS.runLoveProjectWithHotReload, package: COMMANDS.packageGame };
 
-function registerRunConfigurations(context) {
+function registerRunConfigurations(context, activity) {
   const changed = new vscode.EventEmitter();
   let configurations = [];
   let error;
   const selected = () => configurations.find(item => item.name === context.workspaceState.get(SELECTED)) || configurations[0];
+  const activeRun = configuration => activity?.sessions.find(session => session.active && !session.groupId && session.configurationName === configuration?.name);
+  const updateRunning = () => { void vscode.commands.executeCommand("setContext", "tua.selectedRunActive", Boolean(activeRun(selected()))); };
   const view = vscode.window.createTreeView("tua.run", { treeDataProvider: {
     onDidChangeTreeData: changed.event,
     getChildren: () => configurations,
@@ -29,6 +31,7 @@ function registerRunConfigurations(context) {
     view.description = selected()?.name;
     view.message = error;
     changed.fire();
+    updateRunning();
   };
   const choose = async requested => {
     const picked = requested ? configurations.find(item => item.name === requested.name) : await vscode.window.showQuickPick(
@@ -41,11 +44,18 @@ function registerRunConfigurations(context) {
   const run = async requested => {
     const configuration = requested ? await choose(requested) : selected();
     if (!configuration) return vscode.window.showWarningMessage(error || "Choose a Tua run configuration first.");
+    const running = activeRun(configuration);
+    if (running) return vscode.commands.executeCommand("tua.activity.stop", { id: running.id });
     await vscode.commands.executeCommand("tua.console.open");
     return vscode.commands.executeCommand(MODES[configuration.mode], { console: true, title: configuration.name, configurationName: configuration.name, ...(configuration.instances ? { instances: configuration.instances } : {}), ...(configuration.mode === "package" ? { target: configuration.packageTarget } : {}) });
   };
   refresh();
   return vscode.Disposable.from(changed, view,
+    activity?.subscribe(updateRunning) || { dispose() {} },
+    vscode.commands.registerCommand("tua.run.stopSelected", () => {
+      const running = activeRun(selected());
+      if (running) return vscode.commands.executeCommand("tua.activity.stop", { id: running.id });
+    }),
     vscode.commands.registerCommand("tua.run.select", () => choose()),
     vscode.commands.registerCommand("tua.run.selectConfiguration", requested => choose(requested)),
     vscode.commands.registerCommand("tua.run.selected", () => run()),

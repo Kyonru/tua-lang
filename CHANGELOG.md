@@ -12,7 +12,9 @@ language or editor behavior, and migration notes call out those changes.
   multiplayer instances with per-player arguments and separate console sessions.
   Hot reload shares one watcher; debug players have independent source-mapped
   sessions and a build snapshot retained until the last player exits.
-
+- The selected configuration's primary Play button becomes Stop while active.
+  Group Stop closes all players; session Stop controls remain independent, and
+  normal Run supports restarting the last group with its original arguments.
 - `tua dev --no-launch` prepares hot-reload output and watches for changes without
   launching LOVE, allowing editor-managed players to share a single watcher.
 

@@ -81,3 +81,45 @@ test("toolbar Stop targets a multiplayer group while player Stop stays independe
   assert.equal(playerStops, 1);
   feature.dispose();
 });
+
+
+test("Play changes to Stop for the selected run, including groups, and back after exit", async () => {
+  const feature = registerRunActivity();
+  const state = new Map();
+  const configurations = registerRunConfigurations({ workspaceState: { get: key => state.get(key), update: async (key, value) => state.set(key, value) } }, feature.store);
+  const active = () => executed.filter(args => args[0] === "setContext" && args[1] === "tua.selectedRunActive").at(-1)[2];
+  assert.equal(active(), false);
+  let stops = 0;
+  const group = feature.store.begin({ title: "Development", configurationName: "Development", cwd: "/game", kind: "run" });
+  group.stop = () => stops++;
+  assert.equal(active(), true);
+  const player = feature.store.begin({ title: "Player", configurationName: "Development", groupId: group.id, cwd: "/game", kind: "run" });
+  player.stop = () => assert.fail("primary Stop should target the group");
+  await commands.get("tua.run.stopSelected")(editorUri);
+  assert.equal(stops, 1);
+  await commands.get("tua.run.selected")();
+  assert.equal(stops, 2, "Run command also avoids launching duplicates");
+  await commands.get("tua.run.selectConfiguration")({ name: "Debug" });
+  assert.equal(active(), false, "an unrelated running configuration must not replace Play");
+  await commands.get("tua.run.stopSelected")();
+  assert.equal(stops, 2);
+  await commands.get("tua.run.selectConfiguration")({ name: "Development" });
+  assert.equal(active(), true);
+  feature.store.finish(player, 0);
+  feature.store.finish(group, 0);
+  assert.equal(active(), false);
+  configurations.dispose();
+  feature.dispose();
+});
+
+test("primary editor and sidebar Play/Stop buttons have complementary visibility", () => {
+  const manifest = require("../../package.json");
+  for (const location of ["editor/title", "view/title"]) {
+    const menu = manifest.contributes.menus[location];
+    const play = menu.find(item => item.command === "tua.run.selected");
+    const stop = menu.find(item => item.command === "tua.run.stopSelected");
+    assert(play.when.includes("!tua.selectedRunActive"));
+    assert(stop.when.includes("tua.selectedRunActive"));
+    assert.equal(play.group, stop.group);
+  }
+});
