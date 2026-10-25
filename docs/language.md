@@ -781,16 +781,29 @@ name that no `uniform` or `extern` declaration in the shader file matches:
 local wave = shader "assets/wave.glsl" -- declares `extern number time;`
 wave:send("time", love.timer.getTime())
 wave:send("tim", 0) -- TL2013: did you mean `time`?
-wave:send("light" .. tostring(index), color) -- needs a uniform starting with `light`
+wave:send("light" .. tostring(index), color) -- needs a uniform such as `light2`
 ```
+
+A name built around one value, as in `"light" .. index .. "Color"` or
+`string.format("light%dColor", index)`, is expanded when the value comes from a
+numeric `for` loop with literal bounds. Each generated name is checked, so a
+loop that runs one step past the declared uniforms is reported:
+
+```tua
+for i = 1, 4 do -- the shader declares light1Color through light3Color
+  wave:send("light" .. i .. "Color", { 1, 1, 1 }) -- TL2013: no `light4Color`
+end
+```
+
+Other runtime values only require some declared uniform that fits the pattern.
 
 LOVE also rejects a declared uniform that the shader never reads, because the
 GLSL compiler removes it. Tua reports warning `TL2014` when such a uniform is
 sent; read it in the shader, or guard optional uniforms with
 `Shader:hasUniform`.
 
-Names built at runtime are not checked, and neither are shaders whose uniforms
-come from uniform blocks or preprocessor macros.
+Names held in variables are not checked, and neither are shaders whose
+uniforms come from uniform blocks or preprocessor macros.
 
 ### LOVE Methods And Callbacks
 

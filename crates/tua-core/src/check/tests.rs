@@ -4607,7 +4607,7 @@ vec4 effect(vec4 color, Image tex, vec2 uv, vec2 screen) {
             (
                 7,
                 Some(DiagnosticCode::ASSET_SHADER_UNIFORM),
-                "shader `assets/water.glsl` has no uniform starting with `splash`, so LOVE raises an error when it is sent; it declares `ripple1`, `ripple2`, `textures`, `time`"
+                "shader `assets/water.glsl` has no uniforms `splash1`, `splash2`, so LOVE raises an error when it is sent; it declares `ripple1`, `ripple2`, `textures`, `time`"
             ),
             (
                 9,
@@ -4816,4 +4816,82 @@ vec4 effect(vec4 color, Image tex, vec2 uv, vec2 screen) { return color * time; 
     assert!(diagnostics[0]
         .message
         .contains("declares uniform `strength` but never reads it"));
+}
+
+#[test]
+fn checks_shader_uniform_names_built_from_loops_and_formats() {
+    let temp = TempProject::new("shader-uniform-patterns");
+    let source = r#"
+local lights = shader "assets/lights.glsl"
+for i = 1, 3 do
+  lights:send("light" .. tostring(i) .. "Color", { 1, 1, 1 })
+  lights:send(string.format("light%dRadius", i), 4)
+end
+for i = 1, 4 do
+  lights:send("light" .. i .. "Color", { 1, 1, 1 })
+end
+for i = 2, 3 do
+  lights:send("glow" .. tostring(i), 1)
+end
+local function setAll(count: number)
+  for i = 1, count do
+    lights:send("light" .. tostring(i) .. "Color", { 1, 1, 1 })
+    lights:send("shadow" .. tostring(i), 1)
+  end
+end
+setAll(2)
+"#;
+
+    temp.write("src/main.tua", source);
+    temp.write(
+        "game/assets/lights.glsl",
+        r#"uniform vec3 light1Color, light2Color, light3Color;
+uniform float light1Radius, light2Radius, light3Radius;
+uniform float glow2, glow3;
+vec4 effect(vec4 color, Image tex, vec2 uv, vec2 screen) {
+  float radius = light1Radius + light2Radius + light3Radius + glow2;
+  return color * vec4(light1Color + light2Color + light3Color, radius);
+}
+"#,
+    );
+
+    let diagnostics = check_tua_source_with_asset_roots_and_diagnostics_config(
+        temp.path.join("src/main.tua"),
+        source,
+        &[temp.path.join("game")],
+        &diagnostics_without_standard_rules(),
+    )
+    .expect_err("names outside the shader should be reported");
+    let reported = diagnostics
+        .iter()
+        .map(|diagnostic| {
+            (
+                diagnostic.line,
+                diagnostic.code,
+                diagnostic.message.as_str(),
+            )
+        })
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        reported,
+        vec![
+            (
+                8,
+                Some(DiagnosticCode::ASSET_SHADER_UNIFORM),
+                "shader `assets/lights.glsl` has no uniform `light4Color`, so LOVE raises an error when it is sent; it declares `light1Color`, `light2Color`, `light3Color`"
+            ),
+            (
+                11,
+                Some(DiagnosticCode::ASSET_SHADER_UNREAD_UNIFORM),
+                "shader `assets/lights.glsl` declares uniform `glow3` but never reads it; GLSL compilers remove unread uniforms, so LOVE raises an error when it is sent. Read it in the shader or guard the call with `Shader:hasUniform`"
+            ),
+            (
+                16,
+                Some(DiagnosticCode::ASSET_SHADER_UNIFORM),
+                "shader `assets/lights.glsl` has no uniform matching `shadow…`, so LOVE raises an error when it is sent; it declares `glow2`, `glow3`, `light1Color`, `light1Radius`, `light2Color`, `light2Radius`, ..."
+            ),
+        ],
+        "{diagnostics:#?}"
+    );
 }

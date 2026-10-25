@@ -207,6 +207,8 @@ struct Checker<'a> {
     unknown_record_fields: bool,
     /// Locals holding a shader asset, with the uniforms its source declares.
     shader_locals: BTreeMap<String, ShaderUniforms>,
+    /// Numeric `for` variables whose literal bounds give every value.
+    constant_loop_values: Vec<(String, Vec<i64>)>,
     diagnostics: Vec<Diagnostic>,
 }
 
@@ -295,6 +297,7 @@ impl<'a> Checker<'a> {
             runtime_imports,
             unknown_record_fields: diagnostics_config.unknown_record_fields,
             shader_locals: BTreeMap::new(),
+            constant_loop_values: Vec::new(),
             diagnostics: Vec::new(),
         }
     }
@@ -543,8 +546,20 @@ impl<'a> Checker<'a> {
             self.infer_expression(step);
         }
 
-        let locals = BTreeMap::from([(token_text(for_stmt.index_variable()), Type::number())]);
+        let name = token_text(for_stmt.index_variable());
+        let values = constant_loop_values(for_stmt).filter(|_| {
+            node_span(for_stmt).is_none_or(|span| {
+                !crate::narrowing::name_assigned_between(self.parsed, &name, span.start, span.end)
+            })
+        });
+        let locals = BTreeMap::from([(name.clone(), Type::number())]);
+        if let Some(values) = &values {
+            self.constant_loop_values.push((name, values.clone()));
+        }
         self.check_block_with_bindings(for_stmt.block(), current_return, locals.clone(), locals);
+        if values.is_some() {
+            self.constant_loop_values.pop();
+        }
     }
 
     fn check_equality_comparison(
@@ -2103,55 +2118,131 @@ impl<'a> Checker<'a> {
         let Some(call) = asset::shader_send_call(function_call) else {
             return;
         };
-        let Some(uniforms) = self.shader_locals.get(&call.receiver) else {
+        let Some(uniforms) = self.shader_locals.get(&call.receiver).cloned() else {
             return;
         };
-        let (declared, described) = match &call.uniform {
+
+        match &call.uniform {
             asset::ShaderUniformReference::Exact(name) => {
-                (uniforms.names.contains(name), format!("uniform `{name}`"))
+                self.check_sent_uniform_names(&call, &uniforms, std::slice::from_ref(name), &[]);
             }
-            asset::ShaderUniformReference::Prefix(prefix) => (
-                uniforms
+            asset::ShaderUniformReference::Pattern {
+                prefix,
+                suffix,
+                variable,
+            } => {
+                let values = variable.as_deref().and_then(|variable| {
+                    self.constant_loop_values
+                        .iter()
+                        .rev()
+                        .find(|(name, _)| name == variable)
+                        .map(|(_, values)| values.clone())
+                });
+                let matching = uniforms
                     .names
                     .iter()
-                    .any(|name| name.starts_with(prefix.as_str())),
-                format!("uniform starting with `{prefix}`"),
-            ),
-        };
-        if declared {
-            if let asset::ShaderUniformReference::Exact(name) = &call.uniform {
-                if uniforms.unread.contains(name) {
-                    let diagnostic = unread_shader_uniform_diagnostic(
-                        &self.parsed.path,
-                        call.span,
-                        &uniforms.asset_path,
-                        name,
+                    .filter(|name| {
+                        name.len() > prefix.len() + suffix.len()
+                            && name.starts_with(prefix.as_str())
+                            && name.ends_with(suffix.as_str())
+                    })
+                    .cloned()
+                    .collect::<Vec<_>>();
+                if let Some(values) = values {
+                    let names = values
+                        .iter()
+                        .map(|value| format!("{prefix}{value}{suffix}"))
+                        .collect::<Vec<_>>();
+                    self.check_sent_uniform_names(&call, &uniforms, &names, &matching);
+                } else if matching.is_empty() {
+                    let requested = format!("{prefix}{suffix}");
+                    self.report_missing_shader_uniform(
+                        &call,
+                        &uniforms,
+                        &format!("uniform matching {}", call.uniform.describe()),
+                        &requested,
+                        &[],
                     );
-                    self.push_asset_diagnostic(diagnostic);
                 }
             }
+        }
+    }
+
+    /// Reports the names a `send` call can produce that the shader lacks or
+    /// never reads. `matching` lists declared names that fit the call's
+    /// pattern, which explain a loop that runs past them.
+    fn check_sent_uniform_names(
+        &mut self,
+        call: &asset::ShaderSendCall,
+        uniforms: &ShaderUniforms,
+        names: &[String],
+        matching: &[String],
+    ) {
+        let missing = names
+            .iter()
+            .filter(|name| !uniforms.names.contains(name.as_str()))
+            .collect::<Vec<_>>();
+        if let Some(first) = missing.first() {
+            let described = match missing.as_slice() {
+                [name] => format!("uniform `{name}`"),
+                names => format!(
+                    "uniforms {}",
+                    names
+                        .iter()
+                        .map(|name| format!("`{name}`"))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ),
+            };
+            self.report_missing_shader_uniform(call, uniforms, &described, first, matching);
             return;
         }
 
-        let requested = match &call.uniform {
-            asset::ShaderUniformReference::Exact(name)
-            | asset::ShaderUniformReference::Prefix(name) => name,
+        for name in names {
+            if uniforms.unread.contains(name) {
+                let diagnostic = unread_shader_uniform_diagnostic(
+                    &self.parsed.path,
+                    call.span,
+                    &uniforms.asset_path,
+                    name,
+                );
+                self.push_asset_diagnostic(diagnostic);
+            }
+        }
+    }
+
+    fn report_missing_shader_uniform(
+        &mut self,
+        call: &asset::ShaderSendCall,
+        uniforms: &ShaderUniforms,
+        described: &str,
+        requested: &str,
+        matching: &[String],
+    ) {
+        let listed = |names: Vec<&String>, total: usize| {
+            let mut names = names
+                .into_iter()
+                .take(6)
+                .map(|name| format!("`{name}`"))
+                .collect::<Vec<_>>();
+            if total > names.len() {
+                names.push("...".to_owned());
+            }
+            names.join(", ")
         };
         let available = match closest_uniform(&uniforms.names, requested) {
+            _ if !matching.is_empty() => {
+                format!(
+                    "it declares {}",
+                    listed(matching.iter().collect(), matching.len())
+                )
+            }
             Some(suggestion) => format!("did you mean `{suggestion}`?"),
             None if uniforms.names.is_empty() => "it declares no uniforms".to_owned(),
-            None => {
-                let mut names = uniforms
-                    .names
-                    .iter()
-                    .take(6)
-                    .map(|name| format!("`{name}`"))
-                    .collect::<Vec<_>>();
-                if uniforms.names.len() > names.len() {
-                    names.push("...".to_owned());
-                }
-                format!("it declares {}", names.join(", "))
-            }
+            None => format!(
+                "it declares {}",
+                listed(uniforms.names.iter().collect(), uniforms.names.len())
+            ),
         };
         self.push_asset_diagnostic(
             Diagnostic::error(
@@ -4465,6 +4556,41 @@ fn edit_distance(left: &str, right: &str) -> usize {
     }
 
     previous[right.len()]
+}
+
+/// Every value of `for index = first, last[, step]` when the bounds are integer
+/// literals and the loop is short enough to expand.
+fn constant_loop_values(for_stmt: &ast::NumericFor) -> Option<Vec<i64>> {
+    const MAX_EXPANDED_VALUES: i64 = 256;
+    let start = integer_literal(for_stmt.start())?;
+    let end = integer_literal(for_stmt.end())?;
+    let step = match for_stmt.step() {
+        Some(step) => integer_literal(step)?,
+        None => 1,
+    };
+    if step == 0 || (end - start) / step >= MAX_EXPANDED_VALUES {
+        return None;
+    }
+
+    let mut values = Vec::new();
+    let mut value = start;
+    while (step > 0 && value <= end) || (step < 0 && value >= end) {
+        values.push(value);
+        value += step;
+    }
+    Some(values)
+}
+
+fn integer_literal(expression: &Expression) -> Option<i64> {
+    match expression {
+        Expression::Number(token) => token.token().to_string().trim().parse().ok(),
+        Expression::UnaryOperator {
+            unop: ast::UnOp::Minus(_),
+            expression,
+        } => integer_literal(expression).map(|value| -value),
+        Expression::Parentheses { expression, .. } => integer_literal(expression),
+        _ => None,
+    }
 }
 
 /// Shader sources are small; a larger file is not read for uniform checks.

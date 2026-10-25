@@ -1313,8 +1313,24 @@ fn strip_glsl_comments(source: &str) -> String {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum ShaderUniformReference {
     Exact(String),
-    /// `"light" .. index` names one of several uniforms sharing a prefix.
-    Prefix(String),
+    /// A name built around one runtime value, as in `"light" .. index`,
+    /// `"light" .. tostring(index) .. "Color"`, or
+    /// `string.format("light%d", index)`. `variable` names the value when it
+    /// is a plain local, so a constant loop range can expand it.
+    Pattern {
+        prefix: String,
+        suffix: String,
+        variable: Option<String>,
+    },
+}
+
+impl ShaderUniformReference {
+    pub(crate) fn describe(&self) -> String {
+        match self {
+            Self::Exact(name) => format!("`{name}`"),
+            Self::Pattern { prefix, suffix, .. } => format!("`{prefix}…{suffix}`"),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -1342,32 +1358,125 @@ pub(crate) fn shader_send_call(function_call: &FunctionCall) -> Option<ShaderSen
         FunctionArgs::Parentheses { arguments, .. } => arguments.iter().next()?,
         _ => return None,
     };
-    let (uniform, token) = match first {
-        Expression::String(token) => (
-            ShaderUniformReference::Exact(string_literal_value(token)?),
-            token,
-        ),
+    let uniform = match first {
+        Expression::String(token) => ShaderUniformReference::Exact(string_literal_value(token)?),
         Expression::BinaryOperator {
-            lhs,
             binop: full_moon::ast::BinOp::TwoDots(_),
             ..
-        } => {
-            let Expression::String(token) = lhs.as_ref() else {
-                return None;
-            };
-            (
-                ShaderUniformReference::Prefix(string_literal_value(token)?),
-                token,
-            )
-        }
+        } => concatenated_uniform_name(first)?,
+        Expression::FunctionCall(call) => formatted_uniform_name(call)?,
         _ => return None,
     };
 
     Some(ShaderSendCall {
         receiver: token_text(receiver),
         uniform,
-        span: node_span(token)?,
+        span: node_span(first)?,
     })
+}
+
+/// `"prefix" .. value .. "suffix"` with exactly one runtime operand.
+fn concatenated_uniform_name(expression: &Expression) -> Option<ShaderUniformReference> {
+    let mut operands = Vec::new();
+    flatten_concatenation(expression, &mut operands);
+
+    let mut prefix = String::new();
+    let mut suffix = String::new();
+    let mut variable = None;
+    let mut seen_value = false;
+    for operand in operands {
+        if let Expression::String(token) = operand {
+            let text = string_literal_value(token)?;
+            if seen_value {
+                suffix.push_str(&text);
+            } else {
+                prefix.push_str(&text);
+            }
+            continue;
+        }
+        if seen_value {
+            return None;
+        }
+        seen_value = true;
+        variable = uniform_name_variable(operand);
+    }
+
+    (seen_value && !(prefix.is_empty() && suffix.is_empty())).then_some(
+        ShaderUniformReference::Pattern {
+            prefix,
+            suffix,
+            variable,
+        },
+    )
+}
+
+fn flatten_concatenation<'a>(expression: &'a Expression, operands: &mut Vec<&'a Expression>) {
+    match expression {
+        Expression::BinaryOperator {
+            lhs,
+            binop: full_moon::ast::BinOp::TwoDots(_),
+            rhs,
+        } => {
+            flatten_concatenation(lhs, operands);
+            flatten_concatenation(rhs, operands);
+        }
+        Expression::Parentheses { expression, .. } => flatten_concatenation(expression, operands),
+        _ => operands.push(expression),
+    }
+}
+
+/// `string.format("prefix%dsuffix", value)` with a single conversion.
+fn formatted_uniform_name(call: &FunctionCall) -> Option<ShaderUniformReference> {
+    let (parts, Call::AnonymousCall(FunctionArgs::Parentheses { arguments, .. })) =
+        field_chain_before_first_call(call)?
+    else {
+        return None;
+    };
+    if parts != ["string", "format"] {
+        return None;
+    }
+    let mut arguments = arguments.iter();
+    let Some(Expression::String(format)) = arguments.next() else {
+        return None;
+    };
+    let value = arguments.next()?;
+    if arguments.next().is_some() {
+        return None;
+    }
+
+    let format = string_literal_value(format)?;
+    let mut pieces = format.split("%d").collect::<Vec<_>>();
+    if pieces.len() != 2 {
+        pieces = format.split("%i").collect();
+    }
+    if pieces.len() != 2 || pieces.iter().any(|piece| piece.contains('%')) {
+        return None;
+    }
+
+    Some(ShaderUniformReference::Pattern {
+        prefix: pieces[0].to_owned(),
+        suffix: pieces[1].to_owned(),
+        variable: uniform_name_variable(value),
+    })
+}
+
+/// The local behind `index` or `tostring(index)`.
+fn uniform_name_variable(expression: &Expression) -> Option<String> {
+    match expression {
+        Expression::Var(full_moon::ast::Var::Name(name)) => Some(token_text(name)),
+        Expression::FunctionCall(call) => {
+            let (parts, Call::AnonymousCall(FunctionArgs::Parentheses { arguments, .. })) =
+                field_chain_before_first_call(call)?
+            else {
+                return None;
+            };
+            if parts != ["tostring"] || arguments.len() != 1 {
+                return None;
+            }
+            uniform_name_variable(arguments.iter().next()?)
+        }
+        _ => None,
+    }
 }
 
 fn string_literal_value(token: &TokenReference) -> Option<String> {

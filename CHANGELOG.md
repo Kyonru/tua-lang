@@ -22,6 +22,10 @@ language or editor behavior, and migration notes call out those changes.
 - Sending a uniform that the shader declares but never reads reports warning
   `TL2014`. GLSL compilers remove such uniforms, and LOVE then raises
   "does not exist" at runtime.
+- Uniform names built in a numeric `for` loop with literal bounds, such as
+  `"light" .. i .. "Color"` or `string.format("light%dColor", i)`, are
+  checked for every value of the loop. Names with a suffix are matched on both
+  ends instead of by prefix only.
 
 ### Changed
 
