@@ -21,6 +21,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- The formatter keeps a space before grouped expressions after `and` and `or`,
+  including nested conditions such as `inside and (not closest or ready)`.
+
 - When an outer table cannot be wrapped safely, the formatter keeps the line
   intact instead of wrapping an inner call under the wrong indentation
   context. Inline block comments no longer trigger repeated formatting changes.

@@ -2036,9 +2036,15 @@ fn previous_token_is_indexable(output: &str) -> bool {
 
 fn should_space_before_group_paren(output: &str) -> bool {
     output
-        .split_whitespace()
-        .next_back()
-        .is_some_and(|word| matches!(word, "if" | "elseif" | "while" | "for" | "return" | "not"))
+        .trim_end()
+        .rsplit(|character: char| !character.is_ascii_alphanumeric() && character != '_')
+        .next()
+        .is_some_and(|word| {
+            matches!(
+                word,
+                "if" | "elseif" | "while" | "for" | "return" | "not" | "and" | "or"
+            )
+        })
 }
 
 fn long_bracket_open(bytes: &[u8]) -> Option<(Vec<u8>, usize)> {

@@ -232,6 +232,12 @@ fn layout_lints(output: &str) -> Vec<Diagnostic> {
 
 fn cases() -> Vec<Case> {
     vec![
+        Case::new("logical_group_parentheses", "if inside and(not closest or target.depth < closest.depth) then\n  closest = target\nend\n")
+            .formats_to("if inside and (not closest or target.depth < closest.depth) then\n  closest = target\nend\n"),
+        Case::new("nested_logical_group_parentheses", "local result = a and(not(b) or(c))\nreturn result\n")
+            .formats_to("local result = a and (not (b) or (c))\nreturn result\n"),
+        Case::new("keyword_suffix_call_parentheses", "return candy (a), floor (b), is_not (c)\n")
+            .formats_to("return candy(a), floor(b), is_not(c)\n"),
         Case::new("comment_blocks_outer_table_wrap", "return {f(a, b), f --[[ note ]] (a, b)}\n")
             .formats_to("return { f(a, b), f --[[ note ]] (a, b)}\n")
             .with(|options| options.line_width = 15),
