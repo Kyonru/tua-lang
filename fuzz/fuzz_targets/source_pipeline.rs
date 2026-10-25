@@ -24,11 +24,20 @@ fuzz_target!(|data: &[u8]| {
 
     if parsed.is_ok() {
         let _ = check_tua_source("fuzz/input.tua", normalized.original.clone());
-        let _ = format_tua_source(
+        if let Ok(formatted) = format_tua_source(
             "fuzz/input.tua",
             normalized.original.clone(),
             &FormatOptions::default(),
-        );
-        let _ = emit_tua_source("fuzz/input.tua", &normalized.original);
+        ) {
+            assert!(parse_raw_tua_source("fuzz/formatted.tua", formatted.clone()).is_ok());
+            assert_eq!(
+                format_tua_source("fuzz/formatted.tua", &formatted, &FormatOptions::default())
+                    .unwrap(),
+                formatted
+            );
+        }
+        if let Ok(emitted) = emit_tua_source("fuzz/input.tua", &normalized.original) {
+            assert!(parse_raw_lua_source("fuzz/emitted.lua", emitted).is_ok());
+        }
     }
 });

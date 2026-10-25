@@ -20,14 +20,16 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: [source_pipeline, project_config]
+        target: [source_pipeline, project_config, protocol_and_paths]
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - uses: dtolnay/rust-toolchain@2c76c034f9e32a5d6e2c104dc4df23a22476db04 # nightly
       - name: Install cargo-fuzz
         run: cargo install cargo-fuzz --locked --version 0.13.2
       - name: Fuzz trusted input boundary
-        run: cargo fuzz run "${{ matrix.target }}" -- -max_total_time=300 -max_len=65536
+        run: |
+          mkdir -p "fuzz/corpus/${{ matrix.target }}"
+          cargo fuzz run "${{ matrix.target }}" "fuzz/corpus/${{ matrix.target }}" "fuzz/seeds/${{ matrix.target }}" -- -max_total_time=300 -max_len=65536
       - name: Upload crash artifacts
         if: failure()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6

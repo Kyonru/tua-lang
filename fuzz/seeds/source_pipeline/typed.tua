@@ -1,0 +1,3 @@
+local count: number = 1
+count += 2
+print(count)

@@ -10,6 +10,14 @@ cargo-fuzz = true
 [dependencies]
 libfuzzer-sys = "0.4"
 tua-core = { path = "../crates/tua-core" }
+tua-lsp = { path = "../crates/tua-lsp", features = ["fuzzing"] }
+
+[[bin]]
+name = "protocol_and_paths"
+path = "fuzz_targets/protocol_and_paths.rs"
+test = false
+doc = false
+bench = false
 
 [[bin]]
 name = "source_pipeline"

@@ -15,6 +15,9 @@ serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.145"
 tua-core = { path = "../tua-core" }
 
+[features]
+fuzzing = []
+
 [dev-dependencies]
 tua-core = { path = "../tua-core", features = ["test-fixture"] }
 

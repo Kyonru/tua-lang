@@ -401,6 +401,16 @@ version = "0.0.0"
 dependencies = [
  "libfuzzer-sys",
  "tua-core",
+ "tua-lsp",
+]
+
+[[package]]
+name = "tua-lsp"
+version = "0.3.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "tua-core",
 ]
 
 [[package]]

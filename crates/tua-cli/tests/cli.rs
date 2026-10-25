@@ -4714,6 +4714,51 @@ fn working_lua_runtime() -> Option<OsString> {
     .find(lua_version_works)
 }
 
+#[test]
+fn compound_lowering_matches_bounded_integer_runtime_oracle() {
+    let Some(lua) = working_lua_runtime() else {
+        return;
+    };
+    let temp = TempDir::new("lowering-oracle");
+    fs::create_dir_all(temp.path().join("src")).unwrap();
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).unwrap();
+    let mut source = String::new();
+    let mut expected = String::new();
+    for a in -8..=8 {
+        for b in 1..=4 {
+            source.push_str(&format!(
+                "do local x: number = {a}; x += {b}; x *= 3; x -= 2; print(x) end\n"
+            ));
+            expected.push_str(&format!("{}\n", (a + b) * 3 - 2));
+        }
+    }
+    fs::write(temp.path().join("src/main.tua"), source).unwrap();
+    let build = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .unwrap();
+    assert!(
+        build.status.success(),
+        "{}",
+        String::from_utf8_lossy(&build.stderr)
+    );
+    let run = Command::new(lua)
+        .arg("build/main.lua")
+        .current_dir(temp.path())
+        .output()
+        .unwrap();
+    assert!(
+        run.status.success(),
+        "{}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+    assert_eq!(
+        String::from_utf8(run.stdout).unwrap().replace("\r\n", "\n"),
+        expected
+    );
+}
+
 fn lua_version_works(candidate: &OsString) -> bool {
     Command::new(candidate)
         .arg("-v")

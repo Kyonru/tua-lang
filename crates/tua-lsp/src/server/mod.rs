@@ -11,6 +11,11 @@ mod scheduler;
 mod transport;
 mod uri;
 
+#[cfg(feature = "fuzzing")]
+pub(crate) fn fuzz_transport(input: &[u8]) {
+    let _ = transport::read_message(&mut std::io::Cursor::new(input));
+}
+
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::io::{self, BufReader, Read, Write};
 use std::path::PathBuf;
