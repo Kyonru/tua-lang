@@ -175,7 +175,8 @@ configuration defaults. Language and workflow tools work with any theme.
 ### Game-Focused Project Tooling
 
 - Asset Explorer grouped by asset kind and static usage, with reference
-  navigation, rename, reveal, preview, and conservative unused-asset hints.
+  navigation, rename, reveal, and preview. Stable tree identities preserve expansion
+  as counts change; **No static references** can include dynamically loaded assets.
 - SignalBus event-name completion and a compiler-backed signal graph with
   typed payload display, conflict inspection, and source navigation.
 - Module dependency explorer for `require(...)` and `import(...)` relationships,
@@ -383,3 +384,11 @@ State-machine previews retain the selected machine, state or transition, and gra
 scroll position across refreshes. Selecting a node or event keeps its button and
 keyboard focus intact; double-click opens its source. These are static source
 previews; they do not execute the game or display its current runtime state.
+
+## Preview verification
+
+Run `npm run check` for unit, syntax, manifest, and activation checks. Run
+`npm run test:webviews` for rendered preview interaction tests in an isolated
+VS Code profile. To use VSCodium, set `VSCODE_EXECUTABLE_PATH` to its executable.
+These tests use a loopback debugging port, a valid PNG fixture, and a controlled
+animation clock so desktop occlusion does not affect playback assertions.
