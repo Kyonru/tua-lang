@@ -6,6 +6,7 @@ const path = require("path");
 const repoRoot = path.resolve(__dirname, "..");
 const cargoPath = path.join(repoRoot, "Cargo.toml");
 const cargoLockPath = path.join(repoRoot, "Cargo.lock");
+const fuzzCargoLockPath = path.join(repoRoot, "fuzz", "Cargo.lock");
 const packagePath = path.join(repoRoot, "editors", "vscode", "package.json");
 const packageLockPath = path.join(repoRoot, "editors", "vscode", "package-lock.json");
 const semanticVersionPattern = /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/;
@@ -60,14 +61,14 @@ function updatedWorkspaceVersion(contents, version) {
   return `${contents.slice(0, range.start)}${version}${contents.slice(range.end)}`;
 }
 
-function synchronizedCargoLock(contents, version) {
+function synchronizedCargoLock(contents, version, packages = workspacePackages) {
   semanticVersion(version);
   const found = new Set();
   const generated = contents
     .split(/(?=^\[\[package]]\s*$)/m)
     .map((block) => {
       const name = block.match(/^name = "([^"]+)"\s*$/m)?.[1];
-      if (!workspacePackages.has(name)) {
+      if (!packages.has(name)) {
         return block;
       }
       if (found.has(name)) {
@@ -81,7 +82,7 @@ function synchronizedCargoLock(contents, version) {
       return block.replace(/^version = "[^"]+"[ \t]*$/m, `version = "${version}"`);
     })
     .join("");
-  const missing = [...workspacePackages].filter((name) => !found.has(name));
+  const missing = [...packages].filter((name) => !found.has(name));
 
   if (missing.length > 0) {
     throw new Error(`Cargo.lock is missing workspace packages: ${missing.join(", ")}`);
@@ -141,11 +142,15 @@ function main(args = process.argv.slice(2)) {
 
   const checkOnly = mode === "check";
   const cargoLock = synchronizedCargoLock(fs.readFileSync(cargoLockPath, "utf8"), version);
+  const fuzzCargoLock = synchronizedCargoLock(
+    fs.readFileSync(fuzzCargoLockPath, "utf8"), version, new Set(["tua-core", "tua-lsp"]),
+  );
   const packageJson = synchronizedJson(fs.readFileSync(packagePath, "utf8"), version);
   const packageLock = synchronizedJson(fs.readFileSync(packageLockPath, "utf8"), version, true);
   const files = [
     ...(mode === "set" ? [[cargoPath, updatedWorkspaceVersion(cargo, version)]] : []),
     [cargoLockPath, cargoLock],
+    [fuzzCargoLockPath, fuzzCargoLock],
     [packagePath, packageJson],
     [packageLockPath, packageLock],
   ];

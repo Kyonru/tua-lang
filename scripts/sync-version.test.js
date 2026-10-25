@@ -82,3 +82,14 @@ test("invalid or missing workspace versions are rejected", () => {
   assert.throws(() => workspaceVersion('[workspace.package]\nversion = "next"\n'), /semantic version/);
   assert.throws(() => workspaceVersion('[package]\nversion = "1.0.0"\n'), /workspace.package/);
 });
+
+test("fuzz lock updates only its required workspace dependencies", () => {
+  const contents = '[[package]]\nname = "tua-core"\nversion = "0.3.0"\n\n[[package]]\nname = "tua-lsp"\nversion = "0.3.0"\n';
+  const packages = new Set(["tua-core", "tua-lsp"]);
+  const updated = synchronizedCargoLock(contents, "0.4.0", packages);
+  assert.strictEqual((updated.match(/version = "0\.4\.0"/g) || []).length, 2);
+  assert.throws(
+    () => synchronizedCargoLock('[[package]]\nname = "tua-core"\nversion = "0.3.0"\n', "0.4.0", packages),
+    /missing workspace packages: tua-lsp/,
+  );
+});

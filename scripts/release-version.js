@@ -11,6 +11,7 @@ const repoRoot = path.resolve(__dirname, "..");
 const releaseFiles = [
   "Cargo.toml",
   "Cargo.lock",
+  "fuzz/Cargo.lock",
   "CHANGELOG.md",
   "docs/releases.md",
   "editors/vscode/package.json",

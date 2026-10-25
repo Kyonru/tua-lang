@@ -73,6 +73,9 @@ test("release command commits synchronized metadata and creates an annotated tag
   try {
     fs.mkdirSync(path.join(root, "scripts"));
     fs.mkdirSync(path.join(root, "docs"));
+    fs.mkdirSync(path.join(root, "fuzz"));
+    fs.writeFileSync(path.join(root, "fuzz", "Cargo.lock"),
+      'version = 4\n\n[[package]]\nname = "tua-core"\nversion = "0.2.8"\n\n[[package]]\nname = "tua-lsp"\nversion = "0.2.8"\n');
     fs.mkdirSync(path.join(root, "editors", "vscode"), { recursive: true });
     for (const script of ["release-version.js", "sync-version.js", "package_release.py"]) {
       fs.copyFileSync(path.join(__dirname, script), path.join(root, "scripts", script));
