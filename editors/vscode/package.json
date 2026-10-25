@@ -758,13 +758,19 @@
         "command": "tua.runLoveProject",
         "title": "Run LOVE Project",
         "category": "Tua",
-        "icon": "$(play)"
+        "icon": {
+          "light": "assets/toolbar/run-light.svg",
+          "dark": "assets/toolbar/run-dark.svg"
+        }
       },
       {
         "command": "tua.stopLoveProject",
         "title": "Stop LOVE Project",
         "category": "Tua",
-        "icon": "$(debug-stop)"
+        "icon": {
+          "light": "assets/toolbar/stop-light.svg",
+          "dark": "assets/toolbar/stop-dark.svg"
+        }
       },
       {
         "command": "tua.debugLoveProject",
@@ -1015,7 +1021,10 @@
         "command": "tua.activity.stop",
         "title": "Stop Session",
         "category": "Tua",
-        "icon": "$(debug-stop)"
+        "icon": {
+          "light": "assets/toolbar/stop-light.svg",
+          "dark": "assets/toolbar/stop-dark.svg"
+        }
       },
       {
         "command": "tua.run.select",
@@ -1026,13 +1035,19 @@
       {
         "command": "tua.run.selected",
         "title": "Run Selected Configuration",
-        "icon": "$(play)",
+        "icon": {
+          "light": "assets/toolbar/run-light.svg",
+          "dark": "assets/toolbar/run-dark.svg"
+        },
         "category": "Tua"
       },
       {
         "command": "tua.run.configuration",
         "title": "Run This Configuration",
-        "icon": "$(play)",
+        "icon": {
+          "light": "assets/toolbar/run-light.svg",
+          "dark": "assets/toolbar/run-dark.svg"
+        },
         "category": "Tua"
       },
       {

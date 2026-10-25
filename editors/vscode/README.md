@@ -127,7 +127,8 @@ failed requests. Existing commands remain available in the Command Palette.
 
 Choose Development, Debug, Hot reload, or Package in **Run Configuration**.
 The choice is remembered per workspace and drives the compact toolbar Run button,
-which opens the game console. Direct run commands retain their task terminal.
+which opens the game console. Run uses a green play icon and Stop a red square,
+with light/dark variants. Direct run commands retain their task terminal.
 Customize names and modes in `tua.run.configurations`; packaging configurations
 can specify `packageTarget` (`love`, `windows`, or `macos`). Existing launch
 configurations and direct commands still work. Each action uses the project of
