@@ -154,6 +154,8 @@ skips the shim entirely on new launches.
 immediately and survive reconnects. Faster updates increase collection cost.
 Pause and manual refresh still work at every interval.
 
+Unexpected connection loss retries automatically; explicit Disable stops the
+connection. Disabling an existing game leaves wrappers until that game exits.
 Debugger pauses also pause snapshots.
 Ended or disconnected players retain their last data with a status and age.
 

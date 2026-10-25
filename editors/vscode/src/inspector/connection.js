@@ -16,7 +16,7 @@ async function listen({ onSnapshot, onStatus, updateInterval }) {
   let interval = normalizeOptions({ updateInterval }).updateInterval;
   const token = randomBytes(32).toString("hex");
   const sockets = new Set();
-  let active, disposed = false, paused = false;
+  let active, disposed = false, paused = false, stopRequested = false;
   const server = net.createServer(socket => {
     if (sockets.size >= 4 || disposed) { socket.destroy(); return; }
     sockets.add(socket);
@@ -64,9 +64,19 @@ async function listen({ onSnapshot, onStatus, updateInterval }) {
     port: server.address().port, token,
     pause(value) { paused = value; if (active && active.writableLength < 1024) active.write(value ? "pause\n" : "resume\n"); },
     setInterval(value) { interval = normalizeOptions({ updateInterval: value }).updateInterval; if (active && active.writableLength < 1024) active.write(`interval ${interval}\n`); },
-    stop() { if (active && active.writableLength < 1024) active.end("stop\n"); },
+    stop() { stopRequested = true; if (active && active.writableLength < 1024) active.end("stop\n"); },
     refresh() { if (active && active.writableLength < 1024) active.write("snapshot\n"); },
-    dispose() { disposed = true; for (const socket of sockets) socket.destroy(); server.close(); },
+    dispose() {
+      disposed = true;
+      for (const socket of sockets) {
+        if (socket === active && stopRequested) {
+          socket.destroySoon();
+          const deadline = setTimeout(() => socket.destroy(), 500); deadline.unref();
+          socket.once("close", () => clearTimeout(deadline));
+        } else socket.destroy();
+      }
+      server.close();
+    },
   };
 }
 module.exports = { listen, validSnapshot, MAX_FRAME };

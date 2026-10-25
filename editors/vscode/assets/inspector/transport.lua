@@ -33,7 +33,7 @@ return function(port, token, snapshot, updateInterval)
     end
     local data, err, partial = client:receive(1024)
     incoming = incoming .. (data or partial or "")
-    if err == "closed" then stopped = true; disconnect(); return end
+    if err == "closed" and #incoming == 0 then disconnect(); return end
     if #incoming > 4096 then disconnect(); return end
     local consumed = 0
     while consumed < 8 do
@@ -50,6 +50,7 @@ return function(port, token, snapshot, updateInterval)
       end
       consumed = consumed + 1
     end
+    if err == "closed" then disconnect(); return end
     if not pending and (requested or (not paused and now >= nextSnapshot)) then
       pending = snapshot() .. "\n"
       offset = 1
