@@ -1358,3 +1358,41 @@ local w = --[[ opens
     assert_eq!(format(&output), output);
     assert_no_multiline_layout_lint(&output);
 }
+
+#[test]
+fn keeps_the_space_after_wrapped_groups() {
+    let source = r#"local total = compute(alpha_value, beta_value, gamma_value) + offset
+report(alpha_value, beta_value, gamma_value) -- note
+local config = { alpha = 1, beta = 2, gamma = 3, delta = 4 } -- defaults
+"#;
+    let expected = r#"local total = compute(
+  alpha_value,
+  beta_value,
+  gamma_value
+) + offset
+report(
+  alpha_value,
+  beta_value,
+  gamma_value
+) -- note
+local config = {
+  alpha = 1,
+  beta = 2,
+  gamma = 3,
+  delta = 4,
+} -- defaults
+"#;
+    let options = FormatOptions {
+        line_width: 40,
+        ..FormatOptions::default()
+    };
+
+    let output = format_tua_source("src/main.tua", source, &options).expect("source should format");
+
+    assert_eq!(output, expected);
+    assert_eq!(
+        format_tua_source("src/main.tua", &output, &options).expect("output should reformat"),
+        output
+    );
+    assert_no_multiline_layout_lint(&output);
+}

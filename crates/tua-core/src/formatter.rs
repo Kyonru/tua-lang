@@ -1063,7 +1063,7 @@ fn break_long_table(line: &str, indent: &str, options: &FormatOptions) -> Option
     let (open, close) = outer_group(line, b'{', b'}')?;
     let before = line[..open].trim_end();
     let inner = &line[open + 1..close];
-    let after = line[close + 1..].trim_start();
+    let after = &line[close + 1..];
     let items = split_top_level(inner, b',');
 
     if items.len() < 2 {
@@ -1107,7 +1107,7 @@ fn break_long_call(line: &str, indent: &str, options: &FormatOptions) -> Option<
     }
 
     let inner = &line[open + 1..close];
-    let after = line[close + 1..].trim_start();
+    let after = &line[close + 1..];
     let args = split_top_level(inner, b',');
 
     if args.len() < 2 {
