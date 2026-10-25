@@ -209,7 +209,7 @@ async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
     await extension.activate(context);
 
     assertRegisteredCommands(state);
-    assert.strictEqual(state.clients.length, 1, "activation should create one language client");
+    assert.strictEqual(state.clients.length, 1, `activation should create one language client\n${state.outputLines.join("\n")}\n${state.warningMessages.join("\n")}`);
     assert.strictEqual(state.clients[0].starts, 1, "activation should start the client");
     assert(
       state.executedCommands.some(

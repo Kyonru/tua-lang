@@ -134,6 +134,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: 22
@@ -147,6 +148,8 @@ jobs:
         run: make extension-check
       - name: Test extension host
         run: xvfb-run --auto-servernum npm --prefix editors/vscode run test:vscode
+      - name: Test extension with the real server
+        run: xvfb-run --auto-servernum make extension-real-server-test
 
   benchmark-smoke:
     name: Benchmark smoke

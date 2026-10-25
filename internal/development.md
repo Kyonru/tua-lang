@@ -87,3 +87,10 @@ make love-api-drift-check LOVE_API_ROOT=/path/to/love-api
 When changing a diagnostic, update `DiagnosticCode` and its registry in
 `crates/tua-core/src/diagnostic/mod.rs`, add focused core and LSP tests, and
 update the public diagnostic and configuration references.
+
+## Real-server editor gate
+
+Trusted CI and release verification run `make extension-real-server-test` in
+addition to the mock-server host suite. It stages the release server and tests
+actual Lua/Tua/LOVE completion, navigation, diagnostics and editor behavior in
+VS Code. Run it locally after changes that cross the extension/LSP boundary.
