@@ -164,6 +164,24 @@
       "description": "Select the ECS runtime profile; tua uses the bundled zero-setup runtime."
     },
     {
+      "path": "shaders.validate",
+      "type": "string",
+      "default": "auto",
+      "enum": [
+        "auto",
+        "off"
+      ],
+      "description": "Compile shader assets with LOVE's validateShader during tua check. Auto validates when a LOVE executable is found."
+    },
+    {
+      "path": "shaders.targets",
+      "type": "string-array",
+      "default": [
+        "desktop"
+      ],
+      "description": "Shader targets to validate: desktop OpenGL, and gles for Android, iOS, and the web."
+    },
+    {
       "path": "diagnostics.rules",
       "type": "boolean",
       "default": true,

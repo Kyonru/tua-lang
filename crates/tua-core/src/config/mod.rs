@@ -55,6 +55,10 @@ hot_loop_hints = true
 enabled = true
 backend = \"tua\"
 
+[shaders]
+validate = \"auto\"
+targets = [\"desktop\"]
+
 [diagnostics]
 # rules enables Tua's standard diagnostics. The individual switches below
 # control additional opt-in checks; false does not disable a standard rule.
@@ -111,6 +115,7 @@ pub struct ProjectConfig {
     pub format: FormatConfig,
     pub jit: JitConfig,
     pub ecs: EcsConfig,
+    pub shaders: ShadersConfig,
     pub diagnostics: DiagnosticsConfig,
 }
 
@@ -129,6 +134,7 @@ impl Default for ProjectConfig {
             format: FormatConfig::default(),
             jit: JitConfig::default(),
             ecs: EcsConfig::default(),
+            shaders: ShadersConfig::default(),
             diagnostics: DiagnosticsConfig::default(),
         }
     }
@@ -297,6 +303,53 @@ impl Default for EcsConfig {
         Self {
             enabled: true,
             backend: "tua".to_owned(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+#[serde(default, deny_unknown_fields)]
+pub struct ShadersConfig {
+    pub validate: ShaderValidationMode,
+    pub targets: Vec<crate::shader_validation::ShaderTarget>,
+}
+
+impl Default for ShadersConfig {
+    fn default() -> Self {
+        Self {
+            validate: ShaderValidationMode::Auto,
+            targets: vec![crate::shader_validation::ShaderTarget::Desktop],
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ShaderValidationMode {
+    /// Validate when a LÖVE executable is found.
+    Auto,
+    Off,
+}
+
+impl ShaderValidationMode {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Auto => "auto",
+            Self::Off => "off",
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for ShaderValidationMode {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        match String::deserialize(deserializer)?.as_str() {
+            "auto" => Ok(Self::Auto),
+            "off" => Ok(Self::Off),
+            other => Err(D::Error::custom(format!(
+                "unknown shader validation mode `{other}`; expected `auto` or `off`"
+            ))),
         }
     }
 }

@@ -51,6 +51,20 @@ impl ShaderTarget {
     }
 }
 
+impl<'de> serde::Deserialize<'de> for ShaderTarget {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        Self::parse(&value).ok_or_else(|| {
+            serde::de::Error::custom(format!(
+                "unknown shader target `{value}`; expected `desktop` or `gles`"
+            ))
+        })
+    }
+}
+
 /// One framed request: `SHADER <id> <target> <byte-count>\n<source>`.
 pub fn encode_request(id: usize, target: ShaderTarget, source: &str) -> Vec<u8> {
     let mut request = format!("SHADER {id} {} {}\n", target.as_str(), source.len()).into_bytes();

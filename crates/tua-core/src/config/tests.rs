@@ -51,6 +51,7 @@ fn default_config_matches_spec() {
             format: FormatConfig::default(),
             jit: JitConfig::default(),
             ecs: EcsConfig::default(),
+            shaders: ShadersConfig::default(),
             diagnostics: DiagnosticsConfig::default(),
         }
     );
@@ -290,6 +291,7 @@ severity = { TL1003 = "warning", TL4035 = "allow" }
                 enabled: true,
                 backend: "tiny-ecs".to_owned(),
             },
+            shaders: ShadersConfig::default(),
             diagnostics: DiagnosticsConfig {
                 rules: true,
                 duplicate_keys: true,
@@ -848,4 +850,34 @@ fn init_does_not_overwrite_existing_main_file() {
         fs::read_to_string(main_path).expect("failed to read main"),
         existing
     );
+}
+
+#[test]
+fn parses_shader_validation_settings() {
+    let config = parse_config("[shaders]\nvalidate = \"off\"\ntargets = [\"desktop\", \"gles\"]\n")
+        .expect("shader settings should parse");
+
+    assert_eq!(config.shaders.validate, ShaderValidationMode::Off);
+    assert_eq!(
+        config.shaders.targets,
+        [
+            crate::shader_validation::ShaderTarget::Desktop,
+            crate::shader_validation::ShaderTarget::Gles
+        ]
+    );
+    assert_eq!(
+        parse_config("").expect("defaults").shaders,
+        ShadersConfig::default()
+    );
+
+    for invalid in [
+        "[shaders]\nvalidate = \"always\"\n",
+        "[shaders]\ntargets = [\"metal\"]\n",
+        "[shaders]\nvalidator = \"/usr/bin/evil\"\n",
+    ] {
+        assert!(
+            parse_config(invalid).is_err(),
+            "{invalid} should be rejected"
+        );
+    }
 }

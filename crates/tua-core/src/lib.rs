@@ -118,8 +118,8 @@ pub use completion::{
 pub use config::{
     init_project, load_config_from_dir, parse_config, AnnotationMode, AssetPipelineConfig,
     ConfigError, ConfigParseError, DiagnosticLevel, DiagnosticsConfig, EcsConfig, EmitConfig,
-    FormatConfig, InitResult, JitConfig, LoadedConfig, ProjectConfig, TypeLibraryConfig,
-    CONFIG_FILE, DEFAULT_CONFIG_TEXT, DEFAULT_MAIN_TEXT,
+    FormatConfig, InitResult, JitConfig, LoadedConfig, ProjectConfig, ShaderValidationMode,
+    ShadersConfig, TypeLibraryConfig, CONFIG_FILE, DEFAULT_CONFIG_TEXT, DEFAULT_MAIN_TEXT,
 };
 pub use definition::{
     definition_parsed_source, definition_parsed_source_with_hir, definition_tua_source, Definition,

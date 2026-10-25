@@ -28,6 +28,10 @@ hot_loop_hints = true
 enabled = true
 backend = "tua"
 
+[shaders]
+validate = "auto"
+targets = ["desktop"]
+
 [diagnostics]
 # rules enables Tua's standard diagnostics. The individual switches below
 # control additional opt-in checks; false does not disable a standard rule.
