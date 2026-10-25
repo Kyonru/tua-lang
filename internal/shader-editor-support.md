@@ -40,15 +40,17 @@ validation, and a persistent idle LSP worker with content/target caching.
 Diagnostics use `TL2016` on shader files and loader calls. The editor forwards
 unsaved shader buffers without taking over GLSL language features. Validation
 requires a client workspace-trust signal, and no executable paths are read from
-project configuration. Discovery currently uses CLI `--love`, `TUA_LOVE`, PATH,
-and the macOS app; it does not yet use `tua.love.command` for the server.
+project configuration. Discovery uses CLI `--love`, `TUA_LOVE`, PATH, and the
+macOS app. In trusted workspaces the editor passes `tua.love.command` and the
+machine-scoped `tua.shaders.glslangPath` to the server as `TUA_LOVE` and
+`TUA_GLSLANG`.
 
 Fake-process timeout/protocol tests, editor synchronization tests, and a blocked
 validator/interactive-hover regression cover the boundaries. Real LÖVE 11.5 on
 macOS was tested; Windows `lovec.exe` remains unverified. Phase 1 editor features
 and Phase 2 value-shape diagnostics are also implemented below. The
-glslangValidator fallback and Phase 5 shader hot reload are implemented;
-Phase 4 setup tooling remains planned.
+glslangValidator fallback, Phase 4 setup tooling, and Phase 5 shader hot reload
+are implemented.
 
 ## Current state
 
@@ -142,9 +144,8 @@ pub(crate) struct ShaderUniformSet {
 
 Requirements:
 
-- Positions are line and column in the original file, after comment stripping
-  keeps offsets. The current stripper replaces block comments with one space,
-  which shifts columns and must preserve length instead.
+- Positions are line and column in the original file. The comment stripper
+  replaces comments with same-length blanks, so offsets survive.
 - A per-analysis cache keyed by resolved path and content hash, shared by the
   checker, completion, hover, and definition. The checker's `shader_locals`
   map holds handles into this cache rather than copies.
@@ -275,7 +276,11 @@ asset-index models. Queries perform no shader file reads. Macro-generated
 uniforms and uniform blocks remain unsupported.
 
 All three features key off `shader_send_call`'s first argument position and
-the receiver's shader local.
+the receiver's shader local. The receiver resolves through the lexical
+assignment at the call. A local declared without a value, as when `love.load`
+assigns the shader that `love.draw` uses, resolves to its only loader
+assignment in the file. Several loader assignments or any other non-nil
+assignment leave it unresolved, and the checker uses the same resolver.
 
 ### Completion
 
@@ -549,6 +554,42 @@ CHANGELOG entries, and documentation.
   macOS when run with graphics access. A sandboxed launch exited before READY.
 - Repeat native probes on Linux and Windows, including console pipes and
   graphics-window behavior. macOS and fake-process tests do not qualify them.
+
+## Audit (2026-10-25)
+
+A review of Phases 1–6 fixed these defects, each in its own commit with a
+regression test:
+
+- Name checks (`TL2013`, `TL2014`) had stopped running for a shader local
+  assigned in another function. Editor features had never supported that
+  pattern. Both now resolve it, as described in Phase 1.
+- The glslang fallback published glslang's `compilation terminated` follow-up
+  as a second error and left messages uncleaned.
+- Message cleanup dropped identifier names, for example
+  `'tint' : undeclared identifier`.
+- Validator requests now use LF line endings. LÖVE reads stdin in text mode on
+  Windows, so CRLF shaders would desynchronize the byte-counted protocol. This
+  was found by reading the code; Windows has not been tested.
+- The glslang timeout covered the whole batch, so large projects timed out in
+  CI. It now covers each process.
+- In `tua dev`, a failing shader edit resumed callbacks that an earlier Lua
+  error had paused.
+- `tua check` aborted with a usage error, hiding all other diagnostics, when a
+  referenced shader was not UTF-8 or exceeded the size limit.
+
+Known limitations, left as follow-ups:
+
+- Shaders that are not UTF-8 are skipped by validation and the uniform model.
+  Decoding them lossily would cover Latin-1 comments, which LÖVE accepts.
+- The checker records shader locals in traversal order, so it does not check a
+  send in a function defined above the function that assigns the shader. Editor
+  features are not affected.
+- `TL2018` only traces `local x = shader(...)` declarations. Shaders assigned
+  later are not linted.
+- LÖVE detects stages in raw text, comments included, while `TL2017` strips
+  comments first. A signature such as `vec4/*x*/effect(` passes `TL2017`, and
+  LÖVE then rejects it at load (reported as `TL2016` when validation runs).
+- Hover shows the shader's absolute path.
 
 ## References
 
