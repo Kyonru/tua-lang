@@ -1076,6 +1076,42 @@
         "title": "Copy Console Message",
         "category": "Tua",
         "icon": "$(copy)"
+      },
+      {
+        "command": "tua.checks.run",
+        "title": "Check Project Setup",
+        "category": "Tua",
+        "icon": "$(checklist)"
+      },
+      {
+        "command": "tua.checks.fix",
+        "title": "Resolve Setup Finding",
+        "category": "Tua",
+        "icon": "$(wrench)"
+      },
+      {
+        "command": "tua.checks.chooseLove",
+        "title": "Choose LOVE Executable",
+        "category": "Tua",
+        "icon": "$(folder-opened)"
+      },
+      {
+        "command": "tua.checks.enableMaps",
+        "title": "Enable Project Source Maps",
+        "category": "Tua",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "command": "tua.checks.build",
+        "title": "Build Source Maps",
+        "category": "Tua",
+        "icon": "$(tools)"
+      },
+      {
+        "command": "tua.buildProject",
+        "title": "Build Project",
+        "category": "Tua",
+        "icon": "$(tools)"
       }
     ],
     "views": {
@@ -1099,6 +1135,12 @@
           "id": "tua.sessions",
           "name": "Run Sessions",
           "when": "tua.hasProject"
+        },
+        {
+          "id": "tua.checks",
+          "name": "Project Checks",
+          "when": "tua.hasProject",
+          "visibility": "collapsed"
         }
       ],
       "tua-console": [
@@ -1314,6 +1356,18 @@
         {
           "command": "tua.console.copy",
           "when": "false"
+        },
+        {
+          "command": "tua.checks.fix",
+          "when": "false"
+        },
+        {
+          "command": "tua.checks.enableMaps",
+          "when": "false"
+        },
+        {
+          "command": "tua.checks.build",
+          "when": "false"
         }
       ],
       "editor/context": [
@@ -1378,6 +1432,11 @@
           "command": "tua.console.clear",
           "when": "view == tua.console",
           "group": "navigation@3"
+        },
+        {
+          "command": "tua.checks.run",
+          "when": "view == tua.checks",
+          "group": "navigation"
         }
       ],
       "view/item/context": [
@@ -1430,6 +1489,11 @@
           "command": "tua.console.copy",
           "when": "view == tua.console && viewItem == tuaConsoleEntry",
           "group": "navigation"
+        },
+        {
+          "command": "tua.checks.fix",
+          "when": "view == tua.checks && viewItem == tuaSetupFinding",
+          "group": "inline"
         }
       ],
       "tua.editorTools": [

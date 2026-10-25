@@ -150,6 +150,16 @@ conservative text/stderr classification. The original task terminal stays availa
 The console keeps the latest 2,000 entries in memory and caps each message at
 16,000 characters. Clear removes captured messages; nothing is transmitted.
 
+## Project checks
+
+Run **Tua: Check Project Setup** or use the action in **Project Checks** to verify
+the compiler, LOVE executable, debugger extension, and source maps. Each finding
+has a relevant action: select a compiler or LOVE executable, install the optional
+debugger, enable source maps, or build the project. Source-map edits stay open
+for review and saving. Executable probes run only after you request checks in a
+trusted workspace, with a three-second timeout. **Tua: Build Project** builds
+without launching the game.
+
 ## What You Get
 
 ### Core Tua Editing

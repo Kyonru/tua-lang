@@ -61,6 +61,10 @@ class TuaCommandTerminal extends LoveProjectTerminal {
 
 function registerGameCommands({ appendOutputLine, getClient, getServerCommand, activity }) {
   return vscode.Disposable.from(
+    vscode.commands.registerCommand("tua.buildProject", () => runTuaTask({
+      appendOutputLine, activity, getClient, getServerCommand,
+      action: "building", taskName: "Build Project", args: () => ["build"],
+    })),
     vscode.commands.registerCommand(COMMANDS.runLoveProjectWithHotReload, () =>
       runTuaTask({
         appendOutputLine,
@@ -116,15 +120,16 @@ async function runTuaTask({ appendOutputLine, getClient, getServerCommand, activ
     return undefined;
   }
 
+  const tuaArgs = args();
   const options = {
     activity,
-    kind: action === "packaging" ? "package" : "dev",
+    kind: tuaArgs[0],
     title: taskName,
     appendOutputLine,
     cwd: layout.configDirectory,
     loveCommand: configuredLoveCommand(),
     outputDirectory: layout.outputDirectory,
-    tuaArgs: args(),
+    tuaArgs,
     tuaCommand: getServerCommand?.() || "tua",
   };
   const task = new vscode.Task(
