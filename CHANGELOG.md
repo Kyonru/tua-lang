@@ -24,6 +24,9 @@ language or editor behavior, and migration notes call out those changes.
 - Wrapping a long call or table keeps the space before whatever follows its
   closing bracket, so a trailing `-- comment` or `+ offset` is no longer glued
   to `)` or `}`.
+- Wrapping splits the outermost group of a long line first. A call such as
+  `each({ 1, 2, 3 }, function(value) ... end)` now puts each argument on its
+  own line instead of expanding the table and leaving the callback over width.
 
 ## [0.4.1] - 2026-10-25
 

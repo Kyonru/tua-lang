@@ -1054,9 +1054,21 @@ fn break_long_groups(line: &str, indent: &str, options: &FormatOptions) -> Strin
         return inline;
     }
 
-    break_long_table(line, indent, options)
-        .or_else(|| break_long_call(line, indent, options))
-        .unwrap_or(inline)
+    let table = || break_long_table(line, indent, options);
+    let call = || break_long_call(line, indent, options);
+    // Split the outermost group first. Expanding a table passed as an
+    // argument would leave the arguments after it on one long line.
+    let call_opens_first = matches!(
+        (top_level_byte(line, b'('), top_level_byte(line, b'{')),
+        (Some(paren), Some(brace)) if paren < brace
+    );
+    let wrapped = if call_opens_first {
+        call().or_else(table)
+    } else {
+        table().or_else(call)
+    };
+
+    wrapped.unwrap_or(inline)
 }
 
 fn break_long_table(line: &str, indent: &str, options: &FormatOptions) -> Option<String> {

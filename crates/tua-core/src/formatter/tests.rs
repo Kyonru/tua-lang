@@ -1396,3 +1396,39 @@ local config = {
     );
     assert_no_multiline_layout_lint(&output);
 }
+
+#[test]
+fn wraps_the_outermost_group_first() {
+    let source = r#"each({ 1, 2, 3 }, function(value) print(value) end)
+consume({ alpha = 1, beta = 2, gamma = 3, delta = 4 })
+local rows = { lookup(alpha, beta), lookup(gamma, delta) }
+"#;
+    let expected = r#"each(
+  { 1, 2, 3 },
+  function(value) print(value) end
+)
+consume({
+  alpha = 1,
+  beta = 2,
+  gamma = 3,
+  delta = 4,
+})
+local rows = {
+  lookup(alpha, beta),
+  lookup(gamma, delta),
+}
+"#;
+    let options = FormatOptions {
+        line_width: 40,
+        ..FormatOptions::default()
+    };
+
+    let output = format_tua_source("src/main.tua", source, &options).expect("source should format");
+
+    assert_eq!(output, expected);
+    assert_eq!(
+        format_tua_source("src/main.tua", &output, &options).expect("output should reformat"),
+        output
+    );
+    assert_no_multiline_layout_lint(&output);
+}
