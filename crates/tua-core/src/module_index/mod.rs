@@ -2,7 +2,6 @@ use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::time::SystemTime;
 
 use full_moon::ast::{
     self, Expression, Field, FunctionArgs, LastStmt, Prefix, Suffix, TableConstructor, Var,
@@ -32,8 +31,7 @@ thread_local! {
 
 #[derive(Clone, Debug)]
 struct CachedRequiredModuleExports {
-    modified: Option<SystemTime>,
-    len: Option<u64>,
+    source: String,
     exports: Option<ModuleExports>,
 }
 
@@ -243,33 +241,31 @@ fn parse_module_source(
 
 fn required_module_exports_for_path(path: &Path) -> Option<ModuleExports> {
     let path = path.to_path_buf();
-    let metadata = fs::metadata(&path).ok();
-    let modified = metadata
-        .as_ref()
-        .and_then(|metadata| metadata.modified().ok());
-    let len = metadata.as_ref().map(fs::Metadata::len);
+    let source = fs::read_to_string(&path).ok()?;
 
     if let Some(cached) = REQUIRED_MODULE_EXPORT_CACHE.with(|cache| {
         cache
             .borrow()
             .get(&path)
-            .filter(|cached| cached.modified == modified && cached.len == len)
+            .filter(|cached| cached.source == source)
             .cloned()
     }) {
         return cached.exports;
     }
 
-    let exports = fs::read_to_string(&path)
+    let exports = parse_module_source(&path, source.clone())
         .ok()
-        .and_then(|source| parse_module_source(&path, source).ok())
         .and_then(|parsed| infer_module_exports(&parsed));
 
     REQUIRED_MODULE_EXPORT_CACHE.with(|cache| {
-        cache.borrow_mut().insert(
+        let mut cache = cache.borrow_mut();
+        if cache.len() >= 128 {
+            cache.clear();
+        }
+        cache.insert(
             path,
             CachedRequiredModuleExports {
-                modified,
-                len,
+                source,
                 exports: exports.clone(),
             },
         );
@@ -461,6 +457,22 @@ impl<'a> ExportInferer<'a> {
 
         for stmt in self.parsed.ast.nodes().stmts() {
             self.collect_stmt(stmt);
+            if let ast::Stmt::LocalFunction(function) = stmt {
+                if let Some(position) = function.start_position() {
+                    if let Some(plain) = crate::source_text::leading_doc_comment(
+                        &self.parsed.source,
+                        position.line(),
+                    ) {
+                        let name = token_text(function.name());
+                        let docs = self.function_docs.entry(name).or_default();
+                        *docs = if docs.is_empty() {
+                            plain
+                        } else {
+                            format!("{plain}\n{docs}")
+                        };
+                    }
+                }
+            }
         }
 
         if let Some(LastStmt::Return(return_stmt)) = self.parsed.ast.nodes().last_stmt() {

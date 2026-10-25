@@ -1,5 +1,4 @@
 use std::collections::BTreeMap;
-use std::fs;
 use std::path::Path;
 
 use crate::deprecation::deprecated_declarations;
@@ -11,7 +10,7 @@ use crate::module_index::{
 use crate::module_link::module_specifier_at_position;
 use crate::narrowing::narrowed_type_at_position;
 use crate::semantic::{resolve_aliases, SemanticModel};
-use crate::source_text::dotted_chain_at_position;
+use crate::source_text::{dotted_chain_at_position, leading_doc_comment};
 use crate::types::{
     build_type_environment, format_named_function_pretty, format_type_with_prefix,
     FunctionParameter, FunctionType, Type, TypeEnvironment, TypedFunction, TypedFunctionOverload,
@@ -591,45 +590,11 @@ fn merge_documentation<'a>(parts: impl IntoIterator<Item = Option<&'a str>>) -> 
 }
 
 fn documentation_for_definition(parsed: &ParsedSource, definition: &Definition) -> Option<String> {
-    let source;
-    let source = if definition.path == parsed.path {
-        parsed.source.as_str()
-    } else {
-        source = fs::read_to_string(&definition.path).ok()?;
-        source.as_str()
-    };
-
-    leading_doc_comment(source, definition.span.start.line)
-}
-
-fn leading_doc_comment(source: &str, declaration_line: usize) -> Option<String> {
-    let mut docs = Vec::new();
-    let mut line_number = declaration_line.checked_sub(1)?;
-
-    while line_number > 0 {
-        let Some(line) = source.lines().nth(line_number - 1) else {
-            break;
-        };
-        let trimmed = line.trim_start();
-
-        if !trimmed.starts_with("---") {
-            break;
-        }
-
-        if !trimmed.starts_with("---@") {
-            let text = trimmed.trim_start_matches("---").trim_start();
-
-            if !text.is_empty() {
-                docs.push(text.to_owned());
-            }
-        }
-
-        line_number -= 1;
-    }
-
-    docs.reverse();
-
-    (!docs.is_empty()).then(|| docs.join("\n"))
+    // External documentation belongs to the resolved module/snapshot. Reading
+    // disk here could mix a saved declaration with an unsaved editor buffer.
+    (definition.path == parsed.path)
+        .then(|| leading_doc_comment(&parsed.source, definition.span.start.line))
+        .flatten()
 }
 
 fn declaration_context(definition: Option<&Definition>, kind: Option<&str>) -> Vec<String> {

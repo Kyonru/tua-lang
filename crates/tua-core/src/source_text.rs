@@ -3,6 +3,36 @@ use full_moon::tokenizer::{Lexer, LexerResult, TokenType};
 
 use crate::{SourcePosition, SourceSpan};
 
+pub(crate) fn leading_doc_comment(source: &str, declaration_line: usize) -> Option<String> {
+    let mut docs = Vec::new();
+    let mut line_number = declaration_line.checked_sub(1)?;
+
+    while line_number > 0 {
+        let Some(line) = source.lines().nth(line_number - 1) else {
+            break;
+        };
+        let trimmed = line.trim_start();
+
+        if !trimmed.starts_with("---") {
+            break;
+        }
+
+        if !trimmed.starts_with("---@") {
+            let text = trimmed.trim_start_matches("---").trim_start();
+
+            if !text.is_empty() {
+                docs.push(text.to_owned());
+            }
+        }
+
+        line_number -= 1;
+    }
+
+    docs.reverse();
+
+    (!docs.is_empty()).then(|| docs.join("\n"))
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct DottedChain {
     pub parts: Vec<IdentifierPart>,

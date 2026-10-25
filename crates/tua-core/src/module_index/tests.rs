@@ -4,6 +4,33 @@ use std::fs;
 use std::path::PathBuf;
 
 #[test]
+fn module_cache_detects_same_size_same_timestamp_edits() {
+    let project = TempProject::new("cache_content");
+    project.write("module.lua", "return { value = 123 }");
+    let path = project.path.join("module.lua");
+    let modified = fs::metadata(&path).unwrap().modified().unwrap();
+    assert_eq!(
+        required_module_exports_for_path(&path)
+            .unwrap()
+            .field("value"),
+        Some(&Type::number())
+    );
+    project.write("module.lua", "return { value = 'x' }");
+    fs::File::options()
+        .write(true)
+        .open(&path)
+        .unwrap()
+        .set_times(fs::FileTimes::new().set_modified(modified))
+        .unwrap();
+    assert_eq!(
+        required_module_exports_for_path(&path)
+            .unwrap()
+            .field("value"),
+        Some(&Type::string())
+    );
+}
+
+#[test]
 fn infers_exports_from_returned_table_literal() {
     let parsed = parse_lua_source(
         "src/audio.lua",

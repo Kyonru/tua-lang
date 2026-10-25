@@ -6,6 +6,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Module export caches compare source contents, and hover documentation no
+  longer falls back to reading another file outside the analysis snapshot.
+
 - Output guards reject parent traversal and Windows reparse points, including
   junctions. The security model now states the concurrent-filesystem boundary.
 
