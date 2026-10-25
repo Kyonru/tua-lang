@@ -258,3 +258,16 @@ fn package_accepts_a_target_runtime_name_and_identifier() {
     assert!(parse_args(["package", "--love"]).is_err());
     assert!(parse_args(["build", "--target", "love"]).is_err());
 }
+
+#[test]
+fn dev_can_prepare_hot_reload_without_launching_a_game() {
+    let action = parse_args(["dev", "--no-launch"]).unwrap();
+    match action {
+        CliAction::Command { name, options } => {
+            assert_eq!(name, CommandName::Dev);
+            assert!(options.dev_no_launch);
+        }
+        other => panic!("unexpected action: {other:?}"),
+    }
+    assert!(parse_args(["build", "--no-launch"]).is_err());
+}

@@ -35,6 +35,7 @@ Options:
   --target <kind>   With package, love (default), windows, or macos
   --love <path>     With package, the LOVE for Windows directory or love.app to fuse with;
                     with dev or check, the LOVE executable to run
+  --no-launch       With dev, watch and prepare hot reload output without starting LOVE
   --name <name>     With package, the game name (default: project directory name)
   --identifier <id> With package --target macos, the app bundle identifier
   -h, --help        Print command help
@@ -55,6 +56,7 @@ pub enum CliAction {
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct CommandOptions {
     pub love_executable: Option<PathBuf>,
+    pub dev_no_launch: bool,
     pub emit_on_error: bool,
     pub package: PackageOptions,
     pub fmt_check: bool,
@@ -111,7 +113,7 @@ pub fn command_help(command: CommandName) -> &'static str {
         CommandName::Package => "tua package - build and package a LOVE game\n\nUsage:\n  tua package [--target love|windows|macos] [--love PATH] [--name NAME] [--identifier ID]\n",
         CommandName::Traceback => "tua traceback - remap generated Lua traceback lines\n\nUsage:\n  tua traceback [--maps PATH] [FILE]\n",
         CommandName::Watch => "tua watch - rebuild when source files change\n\nUsage:\n  tua watch\n",
-        CommandName::Dev => "tua dev - rebuild and hot reload a LOVE game\n\nUsage:\n  tua dev [--love PATH]\n",
+        CommandName::Dev => "tua dev - rebuild and hot reload a LOVE game\n\nUsage:\n  tua dev [--love PATH] [--no-launch]\n",
         CommandName::Lsp => "tua lsp - start the language server\n\nUsage:\n  tua lsp [--stdio]\n",
         CommandName::Api => "tua api - start the read-only JSON-RPC API\n\nUsage:\n  tua api [--stdio] [--workspace PATH]\n",
         CommandName::Mcp => "tua mcp - start the read-only MCP server\n\nUsage:\n  tua mcp [--stdio] [--workspace PATH]\n",
@@ -154,6 +156,7 @@ where
         let arg = &args[index];
 
         match arg.as_str() {
+            "--no-launch" if command == CommandName::Dev => options.dev_no_launch = true,
             "--emit-on-error" if command == CommandName::Build => options.emit_on_error = true,
             "--love" if matches!(command, CommandName::Dev | CommandName::Check) => {
                 index += 1;

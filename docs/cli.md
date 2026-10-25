@@ -218,12 +218,19 @@ importer before Tua rebuilds the generated module consumers.
 ```bash
 cargo run -p tua-cli -- dev
 cargo run -p tua-cli -- dev --love /path/to/love
+cargo run -p tua-cli -- dev --no-launch
 ```
 
 Builds like `watch`, starts LOVE on the output, and hot reloads the running
 game after every error-free rebuild. `--love` or `TUA_LOVE` chooses the LOVE
 executable; otherwise `love` on `PATH` is used, then `/Applications/love.app`
 on macOS. Closing the game ends the command. See [Hot Reload](hot-reload.md).
+
+Use `--no-launch` when an editor manages the game processes. It prepares the same
+hot-reload runtime and signal file, prints `dev: ready <output-directory>` only
+after the first successful build, and keeps watching without launching LOVE.
+Multiple game processes can share that output and reload after each successful
+build. The caller owns their lifetimes and must stop the watcher when finished.
 
 ## `lsp`
 

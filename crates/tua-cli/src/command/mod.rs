@@ -69,7 +69,7 @@ pub fn run_command(
         CommandName::Dev => {
             let loaded =
                 tua_core::load_config_from_dir(&cwd).map_err(CliError::from_config_error)?;
-            run_dev(cwd, loaded, options.love_executable)?;
+            run_dev(cwd, loaded, options.love_executable, options.dev_no_launch)?;
 
             Ok("dev stopped".to_owned())
         }

@@ -24,6 +24,7 @@ pub(crate) fn run_dev(
     cwd: impl AsRef<Path>,
     loaded: LoadedConfig,
     love: Option<PathBuf>,
+    no_launch: bool,
 ) -> Result<(), CliError> {
     let cwd = cwd.as_ref();
     let workspace = ProjectWorkspace::from_loaded(cwd, loaded.clone());
@@ -51,8 +52,13 @@ pub(crate) fn run_dev(
         write_signal(&output_guard, &out_dir, generation)
             .map_err(|error| io_error(&out_dir, error))?;
         if !launched {
-            let child = launch(love.as_deref(), &out_dir)?;
-            exit_with_game(child);
+            if no_launch {
+                // Emitted only after all output and the initial reload signal are ready.
+                println!("dev: ready {}", out_dir.display());
+            } else {
+                let child = launch(love.as_deref(), &out_dir)?;
+                exit_with_game(child);
+            }
             launched = true;
         } else {
             println!("dev: sent reload {generation} to the game");
