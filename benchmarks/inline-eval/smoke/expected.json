@@ -456,14 +456,14 @@
     "phase1": {
       "overall": {
         "eligible": 2415,
-        "suggested": 255,
+        "suggested": 257,
         "exact": 18,
         "template_match": 42,
-        "correct_prefix": 222,
-        "first_token": 223,
+        "correct_prefix": 223,
+        "first_token": 225,
         "first_three_tokens": 0,
-        "chars_saved": 547,
-        "incorrect_chars": 91
+        "chars_saved": 552,
+        "incorrect_chars": 92
       },
       "abstain": {
         "eligible": 132,
@@ -479,24 +479,24 @@
       "by_language": {
         "lua": {
           "eligible": 1238,
-          "suggested": 168,
+          "suggested": 169,
           "exact": 11,
           "template_match": 29,
           "correct_prefix": 152,
-          "first_token": 156,
+          "first_token": 157,
           "first_three_tokens": 0,
           "chars_saved": 381,
-          "incorrect_chars": 30
+          "incorrect_chars": 31
         },
         "tua": {
           "eligible": 1177,
-          "suggested": 87,
+          "suggested": 88,
           "exact": 7,
           "template_match": 13,
-          "correct_prefix": 70,
-          "first_token": 67,
+          "correct_prefix": 71,
+          "first_token": 68,
           "first_three_tokens": 0,
-          "chars_saved": 166,
+          "chars_saved": 171,
           "incorrect_chars": 61
         }
       },
@@ -525,14 +525,14 @@
         },
         "edit": {
           "eligible": 1114,
-          "suggested": 149,
+          "suggested": 151,
           "exact": 13,
           "template_match": 22,
-          "correct_prefix": 131,
-          "first_token": 132,
+          "correct_prefix": 132,
+          "first_token": 134,
           "first_three_tokens": 0,
-          "chars_saved": 332,
-          "incorrect_chars": 77
+          "chars_saved": 337,
+          "incorrect_chars": 78
         }
       },
       "by_prefix": {
@@ -593,14 +593,14 @@
         },
         "whitespace": {
           "eligible": 362,
-          "suggested": 41,
+          "suggested": 43,
           "exact": 4,
           "template_match": 4,
-          "correct_prefix": 37,
-          "first_token": 37,
+          "correct_prefix": 38,
+          "first_token": 39,
           "first_three_tokens": 0,
-          "chars_saved": 69,
-          "incorrect_chars": 11
+          "chars_saved": 74,
+          "incorrect_chars": 12
         }
       }
     },
