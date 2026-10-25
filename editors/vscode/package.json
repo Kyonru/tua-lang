@@ -1219,6 +1219,12 @@
         "category": "Tua",
         "icon": "$(debug-continue)",
         "enablement": "tua.inspectorCanControl && tua.inspectorPaused"
+      },
+      {
+        "command": "tua.inspector.goToSource",
+        "title": "Go to Runtime Object Creation Site",
+        "category": "Tua",
+        "icon": "$(go-to-file)"
       }
     ],
     "views": {
@@ -1488,6 +1494,10 @@
         {
           "command": "tua.inlayHints.inspect",
           "when": "editorLangId == tua"
+        },
+        {
+          "command": "tua.inspector.goToSource",
+          "when": "false"
         }
       ],
       "editor/context": [
@@ -1648,6 +1658,11 @@
         {
           "command": "tua.checks.fix",
           "when": "view == tua.checks && viewItem == tuaSetupFinding",
+          "group": "inline"
+        },
+        {
+          "command": "tua.inspector.goToSource",
+          "when": "view == tua.inspector && viewItem == tuaRuntimeObject.source",
           "group": "inline"
         }
       ],

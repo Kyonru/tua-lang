@@ -4,8 +4,8 @@ const { listen } = require("./connection");
 const { createLauncher } = require("./launcher");
 
 class InspectorSessions {
-  constructor({ activity, enabled, assetsDirectory, reportError = () => {} }) {
-    Object.assign(this, { activity, enabled, assetsDirectory, reportError });
+  constructor({ activity, enabled, assetsDirectory, describeObject, reportError = () => {} }) {
+    Object.assign(this, { activity, enabled, assetsDirectory, describeObject, reportError });
     this.entries = new Map(); this.events = new EventEmitter(); this.disposed = false;
     this.subscription = activity.subscribe(() => {
       for (const [id, entry] of this.entries) {
@@ -23,8 +23,8 @@ class InspectorSessions {
     this.entries.set(session.id, entry); this.changed();
     try {
       entry.connection = await listen({
-        onSnapshot: snapshot => { entry.previousSnapshot = entry.snapshot; entry.snapshot = snapshot; entry.received = Date.now(); this.changed(); },
-        onStatus: status => { if (status === "connected") { entry.previousSnapshot = undefined; entry.snapshot = undefined; } entry.status = status; this.changed(); },
+        onSnapshot: snapshot => { for (const object of snapshot.objects) object.origin = this.describeObject?.(entry, object); entry.previousSnapshot = entry.snapshot; entry.snapshot = snapshot; entry.received = Date.now(); this.changed(); },
+        onStatus: status => { if (status === "connected") { entry.connectionGeneration = (entry.connectionGeneration || 0) + 1; entry.previousSnapshot = undefined; entry.snapshot = undefined; } entry.status = status; this.changed(); },
       });
       if (this.disposed || !session.active || !this.enabled()) { this.close(entry); return undefined; }
       entry.launcher = createLauncher(outputDirectory, this.assetsDirectory, entry.connection);

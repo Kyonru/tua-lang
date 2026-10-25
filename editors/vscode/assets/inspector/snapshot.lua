@@ -49,7 +49,8 @@ end
 function M.register(kind, object, reader, label)
   serial = serial + 1
   local info = debug and debug.getinfo and debug.getinfo(3, "Sl") or {}
-  objects[object] = { id = serial, kind = kind, reader = reader,
+  local call = debug and debug.getinfo and debug.getinfo(2, "n") or {}
+  objects[object] = { constructor = call.name, id = serial, kind = kind, reader = reader,
     label = type(label) == "string" and label or kind .. " " .. serial,
     source = info.source, line = info.currentline, emitted = 0, events = {} }
   return object
@@ -90,7 +91,7 @@ function M.snapshot()
     end
     if entry.kind == "signals" then data.emitted = entry.emitted; data.recent = entry.events end
     entries[#entries + 1] = encode({ id = entry.id, kind = entry.kind, label = entry.label,
-      source = entry.source, line = entry.line, data = data }, budget, {}, 0)
+      source = entry.source, line = entry.line, constructor = entry.constructor, data = data }, budget, {}, 0)
   end
   sequence = sequence + 1
   local bytes = 0

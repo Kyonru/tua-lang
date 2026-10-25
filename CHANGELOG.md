@@ -8,6 +8,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Added
 
+- Runtime Inspector objects show recognizable binding names and creation-site
+  navigation, using source maps for Tua and generated Lua as a fallback.
+
 - The development-only Runtime Inspector now includes stores: current state,
   successful update counts and age, subscriber/watcher counts, and markers for
   fields added, changed, or removed between snapshots. Production store runtimes

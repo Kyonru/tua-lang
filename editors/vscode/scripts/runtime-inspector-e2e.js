@@ -7,10 +7,12 @@ const path = require("node:path");
 const { spawn, spawnSync } = require("node:child_process");
 const { ActivityStore } = require("../src/workspace/activity-store");
 const { InspectorSessions } = require("../src/inspector/sessions");
+const { RuntimeOrigins } = require("../src/inspector/origins");
+const origins = new RuntimeOrigins();
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "tua-inspector-native-"));
 const output = path.join(root, "build");
 const activity = new ActivityStore();
-const inspector = new InspectorSessions({ activity, enabled: () => true, assetsDirectory: path.resolve(__dirname, "../assets/inspector"), reportError: message => { throw new Error(message); } });
+const inspector = new InspectorSessions({ describeObject: (entry, object) => origins.describe(entry, object), activity, enabled: () => true, assetsDirectory: path.resolve(__dirname, "../assets/inspector"), reportError: message => { throw new Error(message); } });
 const children = []; let logs = "";
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 async function until(predicate) { for (let i = 0; i < 300; i++) { if (predicate()) return; await sleep(50); } throw new Error("Native inspector timed out\n" + logs); }
@@ -29,12 +31,16 @@ local world = ecs.world()
 local position = ecs.component("Position", {})
 local data = { x = 42, y = 7, huge = string.rep("x", 10000) }; data.self = data
 world:add(world:create(), position, data)
-local machine = require("tuastatemachine").create({ initial = "idle", events = {{ name = "move", from = "idle", to = "walking" }} })
+local stateMachine = require("tuastatemachine")
+local machine = stateMachine.create({ initial = "idle", events = {{ name = "move", from = "idle", to = "walking" }} })
 machine:move()
-local bus = require("tuasignal").new()
-local pool = require("tuaobjectpool")({ create = function() return {} end, initial = 4 })
+local signals = require("tuasignal")
+local bus = signals.new()
+local objectPool = require("tuaobjectpool")
+local pool = objectPool({ create = function() return {} end, initial = 4 })
 local bullet = pool:acquire()
-local store = require("tuastore")({ score = 0 })
+local makeStore = require("tuastore")
+local store = makeStore({ score = 0 })
 store:subscribe(function() end)
 store:watch("score", function() end)
 store:set({ score = 1 })
@@ -67,6 +73,12 @@ end
   }
   await until(() => players.every(player => kind(player.entry, "signals")?.emitted > 0));
   for (const player of players) {
+    for (const [kindName, name] of Object.entries({ ecs: "world", states: "machine", signals: "bus", pools: "pool", stores: "store" })) {
+      const object = player.entry.snapshot.objects.find(item => item.kind === kindName);
+      assert.equal(object.origin?.name, name, JSON.stringify(object));
+      assert.equal(object.origin.path, path.join(output, "main.lua"));
+      assert(object.origin.line > 0);
+    }
     assert.equal(kind(player.entry, "states").current, "walking");
     assert.equal(kind(player.entry, "stores").state.score, 2);
     assert.equal(kind(player.entry, "stores").state.player, player.session.title);

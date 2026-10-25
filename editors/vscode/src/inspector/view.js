@@ -2,6 +2,8 @@
 const path = require("node:path");
 const vscode = require("vscode");
 const { InspectorSessions } = require("./sessions");
+const { RuntimeOrigins } = require("./origins");
+const { loadSourceMapForGeneratedPath } = require("../editor/source-maps");
 const GROUPS = [["ecs", "Entities and components", "symbol-struct"], ["states", "State machines", "type-hierarchy"], ["signals", "Signal activity", "radio-tower"], ["pools", "Object pools", "database"], ["stores", "Stores", "symbol-variable"]];
 
 class InspectorTree {
@@ -16,8 +18,9 @@ class InspectorTree {
     const item = new vscode.TreeItem(node.label, node.children?.length ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None);
     item.id = node.id; item.description = node.description;
     item.tooltip = node.tooltip || node.description || node.label;
+    if (node.origin) item.contextValue = "tuaRuntimeObject.source";
     if (node.icon) item.iconPath = new vscode.ThemeIcon(node.icon);
-    if (node.command) item.command = { command: node.command, title: node.label };
+    if (node.command) item.command = { command: node.command, title: node.label, ...(node.arguments ? { arguments: node.arguments } : {}) };
     return item;
   }
   getChildren(node) {
@@ -29,12 +32,19 @@ class InspectorTree {
     const result = GROUPS.map(([kind, label, icon]) => {
       const objects = entry.snapshot.objects.filter(object => object.kind === kind).sort((a, b) => a.id - b.id);
       return { id: prefix + ":" + kind, label, icon, description: String(objects.length),
-        children: objects.length ? objects.map(object => ({ id: prefix + ":object:" + object.id, label: object.label,
-          description: kind === "states" ? String(object.data.current || "") : kind === "signals" ? `${object.data.emitted || 0} emitted` : kind === "stores" ? `${object.data.updates || 0} updates` : undefined,
-          children: object.kind === "stores"
-            ? storeNodes(object.data, prefix + ":object:" + object.id, entry.previousSnapshot?.objects.find(previous => previous.kind === "stores" && previous.id === object.id)?.data)
-            : valueNodes(object.data, prefix + ":object:" + object.id),
-        })) : [{ id: prefix + ":" + kind + ":empty", label: "No live objects registered", icon: "info" }],
+        children: objects.length ? objects.map(object => {
+          const id = prefix + ":object:" + object.id;
+          const origin = object.origin;
+          const summary = kind === "states" ? String(object.data.current || "") : kind === "signals" ? `${object.data.emitted || 0} emitted` : kind === "stores" ? `${object.data.updates || 0} updates` : undefined;
+          const children = object.kind === "stores"
+            ? storeNodes(object.data, id, entry.previousSnapshot?.objects.find(previous => previous.kind === "stores" && previous.id === object.id)?.data)
+            : valueNodes(object.data, id);
+          if (origin) children.unshift({ id: id + ":source", label: "Go to Creation Site", description: `${origin.file}:${origin.line}`, icon: "go-to-file", command: "tua.inspector.goToSource", arguments: [{ origin }] });
+          return { id, label: origin?.name || object.label, origin,
+            description: origin ? [`#${object.id}`, summary, `${origin.file}:${origin.line}`].filter(Boolean).join(" · ") : summary,
+            tooltip: origin ? `${origin.name || object.label} (#${object.id})\nCreated at ${origin.path}:${origin.line}${origin.generated ? " (generated Lua; no source mapping available)" : ""}` : `${object.label}\nCreation source unavailable`,
+            children };
+        }) : [{ id: prefix + ":" + kind + ":empty", label: "No live objects registered", icon: "info" }],
       };
     });
     if (entry.snapshot.truncated) result.push({ id: prefix + ":limited", label: "Snapshot limits reached", description: "Large values are abbreviated", icon: "info" });
@@ -89,7 +99,8 @@ function inspectorToolbarState(entry) {
 
 function registerRuntimeInspector(context, activity) {
   const enabled = () => vscode.workspace.isTrusted && vscode.workspace.getConfiguration("tua").get("runtimeInspector.enabled", false);
-  const sessions = new InspectorSessions({ activity, enabled,
+  const origins = new RuntimeOrigins(loadSourceMapForGeneratedPath);
+  const sessions = new InspectorSessions({ activity, enabled, describeObject: (entry, object) => origins.describe(entry, object),
     assetsDirectory: path.join(context.extensionPath, "assets", "inspector"),
     reportError: message => vscode.window.showWarningMessage(message),
   });
@@ -122,6 +133,15 @@ function registerRuntimeInspector(context, activity) {
     vscode.workspace.onDidChangeConfiguration(event => { if (event.affectsConfiguration("tua.runtimeInspector.enabled")) { if (!enabled()) sessions.disconnectAll(); refresh(); } }),
     vscode.commands.registerCommand("tua.inspector.enable", () => setEnabled(true)),
     vscode.commands.registerCommand("tua.inspector.disable", () => setEnabled(false)),
+    vscode.commands.registerCommand("tua.inspector.goToSource", async node => {
+      if (!node?.origin?.path || !Number.isSafeInteger(node.origin.line) || node.origin.line < 1) return;
+      try {
+        const document = await vscode.workspace.openTextDocument(vscode.Uri.file(node.origin.path));
+        const line = Math.min(node.origin.line - 1, document.lineCount - 1);
+        const character = Math.min(node.origin.character || 0, document.lineAt(line).text.length);
+        await vscode.window.showTextDocument(document, { preview: true, selection: new vscode.Range(line, character, line, character) });
+      } catch { await vscode.window.showInformationMessage("The creation source is no longer available. Start a new run to refresh its location."); }
+    }),
     vscode.commands.registerCommand("tua.inspector.open", () => vscode.commands.executeCommand("tua.inspector.focus")),
     vscode.commands.registerCommand("tua.inspector.select", async () => {
       const items = [...sessions.entries.values()].map(entry => ({ label: entry.session.title, description: entry.session.active ? entry.status : "Ended", entry }));

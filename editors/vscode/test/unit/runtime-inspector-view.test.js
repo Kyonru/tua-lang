@@ -77,3 +77,17 @@ test("inspector pause/resume icons follow the selected player's state and connec
   assert.notEqual(manifest.contributes.commands.find(item => item.command === pause.command).icon,
     manifest.contributes.commands.find(item => item.command === resume.command).icon);
 });
+
+test("named runtime objects expose creation-site actions and retain separate runtime identities", () => {
+  const origin = { path: "/game/src/state.tua", file: "src/state.tua", line: 2, character: 6, name: "player", generated: false };
+  const entry = { session: { id: "host", active: true }, snapshot: { objects: [1, 2].map(id => ({ id, kind: "stores", label: `stores ${id}`, data: { state: {}, updates: 0 }, origin })) } };
+  const tree = new InspectorTree({ entries: new Map([["host", entry]]) });
+  const stores = tree.getChildren().find(node => node.label === "Stores").children;
+  assert.equal(stores[0].label, "player"); assert.notEqual(stores[0].id, stores[1].id);
+  assert.match(stores[0].description, /#1/);
+  const item = tree.getTreeItem(stores[0]);
+  assert.equal(item.contextValue, "tuaRuntimeObject.source");
+  const link = tree.getTreeItem(stores[0].children[0]);
+  assert.equal(link.command.command, "tua.inspector.goToSource");
+  assert.deepEqual(link.command.arguments, [{ origin }]);
+});

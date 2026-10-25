@@ -238,6 +238,14 @@ The view shows live objects from Tua's built-in runtimes:
   and connections after a restart start a new comparison baseline. Watcher counts
   sample at most 128 watched keys and report when that limit is reached.
 
+Objects use recognizable source binding names (for example, `player` or
+`game_state`) when their creation site is unambiguous. Runtime IDs distinguish
+instances created by the same factory. Use the inline **Go to Runtime Object
+Creation Site** action or expand **Go to Creation Site** to navigate to source.
+Source maps resolve generated Lua locations back to Tua; without a map, navigation
+opens generated Lua. Anonymous or ambiguous bindings retain their runtime label.
+These links identify creation sites, not every later assignment or reference.
+
 Snapshots arrive twice per second. **Pause Inspector Updates** / **Resume Inspector Updates** pauses
 snapshot updates without pausing the game; **Refresh Runtime Snapshot** requests a
 snapshot even while updates are paused. A stopped or disconnected player retains

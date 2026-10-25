@@ -114,6 +114,14 @@ pool usage, and store state with update/subscription counts. It complements sour
    must be restarted. Custom debug configurations need `tuaProject: true`.
 4. Use **Select Runtime Player** to choose a player in a multi-instance run.
 
+Objects use recognizable source binding names (for example, `player` or
+`game_state`) when their creation site is unambiguous. Runtime IDs distinguish
+instances created by the same factory. Use the inline **Go to Runtime Object
+Creation Site** action or expand **Go to Creation Site** to navigate to source.
+Source maps resolve generated Lua locations back to Tua; without a map, navigation
+opens generated Lua. Anonymous or ambiguous bindings retain their runtime label.
+These links identify creation sites, not every later assignment or reference.
+
 Snapshots update twice per second. **Pause Inspector Updates** / **Resume Inspector Updates** pauses
 snapshot updates without stopping the game; **Refresh Runtime Snapshot** also
 works while updates are paused. Debugger pauses suspend snapshots until the game
