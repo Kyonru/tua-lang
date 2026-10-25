@@ -687,32 +687,30 @@ impl RequestScheduler {
         }
     }
 
-    pub(super) fn finish(&mut self, server: &mut LspServer, result: WorkerResult) -> Vec<Value> {
-        let mut outbound = self.finish_job(server, result);
-        while let Some(index) = self
+    // Called only after the coordinator has checked newly arrived input.
+    // Dispatch one job so a large refresh backlog cannot monopolize it.
+    pub(super) fn dispatch_deferred(&mut self, server: &mut LspServer) -> Option<Vec<Value>> {
+        let index = self
             .deferred
             .iter()
             .enumerate()
             .filter(|(_, request)| self.has_worker_capacity(request.non_interactive))
             .min_by_key(|(index, request)| (request.non_interactive, *index))
-            .map(|(index, _)| index)
-        {
-            let request = self.deferred.remove(index).expect("queued request exists");
-            let stale = document_uri(&request.message).is_some_and(|uri| {
-                server.document_generations.get(uri).copied() != request.generation
-                    || self.received_document_version_is_stale(uri, request.document_version)
-            });
-            if stale {
-                outbound.push(error_response(
-                    request.message["id"].clone(),
-                    CONTENT_MODIFIED,
-                    "document changed while request was queued".to_owned(),
-                ));
-            } else {
-                outbound.extend(self.dispatch(server, request.message, request.document_version));
-            }
-        }
-        outbound
+            .map(|(index, _)| index)?;
+        let request = self.deferred.remove(index).expect("queued request exists");
+        let stale = document_uri(&request.message).is_some_and(|uri| {
+            server.document_generations.get(uri).copied() != request.generation
+                || self.received_document_version_is_stale(uri, request.document_version)
+        });
+        Some(if stale {
+            vec![error_response(
+                request.message["id"].clone(),
+                CONTENT_MODIFIED,
+                "document changed while request was queued".to_owned(),
+            )]
+        } else {
+            self.dispatch(server, request.message, request.document_version)
+        })
     }
 
     fn has_worker_capacity(&self, non_interactive: bool) -> bool {
@@ -720,7 +718,7 @@ impl RequestScheduler {
             && (!non_interactive || self.non_interactive_job_count() < MAX_NON_INTERACTIVE_JOBS)
     }
 
-    fn finish_job(&mut self, server: &mut LspServer, result: WorkerResult) -> Vec<Value> {
+    pub(super) fn finish(&mut self, server: &mut LspServer, result: WorkerResult) -> Vec<Value> {
         let speculative_active = self.has_speculative_in_flight();
         let Some(job) = self.remove_job(result.job_id) else {
             return Vec::new();

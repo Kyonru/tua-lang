@@ -143,6 +143,32 @@ pub(crate) fn run(reader: impl Read + Send + 'static, writer: impl Write) -> io:
             continue;
         }
 
+        if pending_messages.is_empty() {
+            // Give input already in the transport channel priority over
+            // snapshot preparation for previously queued background work.
+            match event_rx.try_recv() {
+                Ok(event) => {
+                    process_server_event(
+                        event,
+                        &mut server,
+                        &mut scheduler,
+                        &mut pending_messages,
+                        &mut reader_closed,
+                        &mut writer,
+                    )?;
+                    continue;
+                }
+                Err(TryRecvError::Disconnected) => reader_closed = true,
+                Err(TryRecvError::Empty) => {}
+            }
+            if let Some(messages) = scheduler.dispatch_deferred(&mut server) {
+                for message in messages {
+                    write_message(&mut writer, &message)?;
+                }
+                continue;
+            }
+        }
+
         if pending_messages.is_empty()
             && !reader_closed
             && !server.shutdown_requested

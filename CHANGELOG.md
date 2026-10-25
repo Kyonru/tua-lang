@@ -8,6 +8,8 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Queued editor refreshes yield to newly arrived input between dispatches,
+  preventing background bursts from delaying typing and completion.
 - Editor request bursts now wait in a bounded language-server queue instead
   of failing when worker slots fill. Queued requests remain cancellable,
   document edits discard stale work, and interactive requests retain priority.

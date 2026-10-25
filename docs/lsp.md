@@ -27,6 +27,8 @@ Editor request bursts wait in a bounded queue when worker slots are occupied.
 Interactive requests retain priority over background refreshes; cancelled or
 outdated queued requests are discarded before analysis starts. Capacity errors
 can still occur at the overall limit of 256 outstanding client requests.
+The coordinator checks newly arrived input between queued-job dispatches so
+background refreshes do not fill worker slots in one uninterrupted batch.
 
 !!! info "Everything runs locally"
     The server and extension send no source code or completion-learning data

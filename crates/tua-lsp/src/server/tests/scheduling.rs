@@ -154,6 +154,12 @@ fn scheduler_drains_editor_bursts_and_cancels_stale_deferred_requests() {
     ));
     assert_eq!(response_with_id(&output, 40)["error"]["code"], -32801);
     while scheduler.has_in_flight() {
+        while let Some(messages) = scheduler.dispatch_deferred(&mut server) {
+            output.extend(messages);
+        }
+        if !scheduler.has_in_flight() {
+            break;
+        }
         if let ServerEvent::RequestFinished(result) = event_rx
             .recv_timeout(Duration::from_secs(5))
             .expect("queued editor requests should complete")
@@ -171,6 +177,43 @@ fn scheduler_drains_editor_bursts_and_cancels_stale_deferred_requests() {
             assert!(response_with_id(&output, id).get("error").is_none());
         }
     }
+}
+
+#[test]
+fn finishing_a_worker_leaves_room_for_new_input_before_draining_backlog() {
+    let mut server = LspServer::default();
+    let (event_tx, event_rx) = std::sync::mpsc::sync_channel(EVENT_QUEUE_CAPACITY);
+    let mut scheduler = RequestScheduler::new(event_tx, SharedReceivedInputState::default());
+    for id in 0..40 {
+        assert!(scheduler
+            .dispatch(
+                &mut server,
+                document_symbol_request(id, &format!("file:///tmp/latency-{id}.tua")),
+                None
+            )
+            .is_empty());
+    }
+    let before = scheduler.in_flight_count();
+    let result = loop {
+        if let ServerEvent::RequestFinished(result) = event_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("worker should finish")
+        {
+            break result;
+        }
+    };
+    scheduler.finish(&mut server, *result);
+    assert_eq!(
+        scheduler.in_flight_count(),
+        before - 1,
+        "finishing must not refill the queue before the coordinator checks input"
+    );
+    assert!(scheduler.dispatch_deferred(&mut server).is_some());
+    assert_eq!(
+        scheduler.in_flight_count(),
+        before,
+        "only one deferred job is dispatched per coordinator input check"
+    );
 }
 
 #[test]
