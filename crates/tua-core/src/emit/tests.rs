@@ -48,6 +48,22 @@ end
 }
 
 #[test]
+fn snapshot_erases_annotations_on_locals_without_values() {
+    // The erased annotation's line break and comment stay after the name;
+    // dropping them fused the name with the next statement.
+    let emitted = emit_tua_source(
+        "src/locals.tua",
+        "local shader: any\nlocal count: number -- set in load\nlocal a, b: string\ndo local inner: any end\nprint(shader, count, a, b)\n",
+    )
+    .expect("annotated locals without values should emit");
+
+    assert_eq!(
+        emitted,
+        "local shader\nlocal count -- set in load\nlocal a, b\ndo local inner end\nprint(shader, count, a, b)\n"
+    );
+}
+
+#[test]
 fn snapshot_erases_local_annotations() {
     let emitted = emit_tua_source(
         "src/locals.tua",

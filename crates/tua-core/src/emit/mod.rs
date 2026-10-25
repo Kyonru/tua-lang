@@ -1475,8 +1475,32 @@ fn erase_stmt(
                 local.equal_token().cloned()
             };
 
+            // Without `=`, the erased annotation's trailing trivia (the line
+            // break or comment after `local x: T`) must stay after the name.
+            let names = match local.type_specifiers().last().flatten() {
+                Some(specifier) if equal_token.is_none() => {
+                    let trailing: Vec<_> = full_moon::node::Node::tokens(specifier)
+                        .last()
+                        .map(|token| token.trailing_trivia().cloned().collect())
+                        .unwrap_or_default();
+                    let mut names = local.names().clone();
+                    if let Some(name) = names.iter_mut().last() {
+                        let mut name_trailing: Vec<_> = name.trailing_trivia().cloned().collect();
+                        name_trailing.extend(trailing);
+                        *name = TokenReference::new(
+                            name.leading_trivia().cloned().collect(),
+                            name.token().clone(),
+                            name_trailing,
+                        );
+                    }
+                    names
+                }
+                _ => local.names().clone(),
+            };
+
             Some(ast::Stmt::LocalAssignment(
                 local
+                    .with_names(names)
                     .with_type_specifiers(Vec::new())
                     .with_equal_token(equal_token),
             ))

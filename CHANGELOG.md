@@ -127,6 +127,9 @@ language or editor behavior, and migration notes call out those changes.
 - Runtime Inspector keeps object identity fields intact when snapshots reach the
   serialization budget, preventing large inspected worlds from disconnecting.
 
+- An annotated local without a value, such as `local shader: Shader` followed by
+  another statement, no longer emits invalid Lua (`TL2010`). Erasing the
+  annotation keeps its line break and trailing comment.
 - Module Graph, ECS Explorer, and Object Pool Explorer keep content reachable
   when toolbars grow or editor panes are short. Sprite preview controls scroll
   inside their sticky panel instead of extending below the viewport.
