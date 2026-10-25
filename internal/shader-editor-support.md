@@ -424,6 +424,9 @@ Executable paths come only from the sources listed under [Trust](#trust).
 
 ## Phase 4: VS Code setup step
 
+Language, highlighting installation, opt-in workspace associations, and reversible
+setup are implemented. Validator discovery and path selection are next.
+
 Add a step to the `tua.setup` walkthrough, after the icon step:
 
 **Shader support (optional)**

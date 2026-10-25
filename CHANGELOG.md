@@ -10,6 +10,7 @@ language or editor behavior, and migration notes call out those changes.
 
 - Runtime Inspector objects show recognizable binding names and creation-site
   navigation, using source maps for Tua and generated Lua as a fallback.
+- Optional LÖVE Shader setup associates workspace shader files with a dedicated language, offers GLSL highlighting installation, and restores associations while preserving later manual edits.
 
 - The development-only Runtime Inspector now includes stores: current state,
   successful update counts and age, subscriber/watcher counts, and markers for

@@ -693,3 +693,12 @@ permit external validation, and synchronize shader text documents to validate
 unsaved buffers. The VS Code extension supplies trust and shader synchronization
 without claiming GLSL formatting or completion. Restricted Mode never starts
 the validator.
+
+### Optional shader editor setup
+
+Open **Tua: Set Up Tua** and choose **Shader support (optional)** to associate
+workspace shader files with **LÖVE Shader**. This keeps GLSL Lint from checking
+LÖVE sources without their engine headers. The optional Shader languages
+extension provides full GLSL highlighting. Restore removes only associations
+owned by setup and preserves subsequent manual edits. Nothing is installed or
+reconfigured automatically. Validation prefers LÖVE, then glslang.

@@ -1225,6 +1225,26 @@
         "title": "Go to Runtime Object Creation Site",
         "category": "Tua",
         "icon": "$(go-to-file)"
+      },
+      {
+        "command": "tua.setup.applyShaders",
+        "title": "Use LÖVE Shader Associations",
+        "category": "Tua"
+      },
+      {
+        "command": "tua.setup.restoreShaders",
+        "title": "Restore Shader Associations",
+        "category": "Tua"
+      },
+      {
+        "command": "tua.setup.installShaderHighlighting",
+        "title": "Install Shader Highlighting",
+        "category": "Tua"
+      },
+      {
+        "command": "tua.setup.skipShaders",
+        "title": "Skip Shader Setup",
+        "category": "Tua"
       }
     ],
     "views": {
@@ -1734,6 +1754,13 @@
         "filenames": [
           "tua.toml"
         ]
+      },
+      {
+        "id": "love-glsl",
+        "aliases": [
+          "LÖVE Shader",
+          "love-glsl"
+        ]
       }
     ],
     "grammars": [
@@ -1741,6 +1768,11 @@
         "language": "tua",
         "scopeName": "source.tua",
         "path": "./syntaxes/tua.tmLanguage.json"
+      },
+      {
+        "language": "love-glsl",
+        "scopeName": "source.love-glsl",
+        "path": "./syntaxes/love-glsl.tmLanguage.json"
       }
     ],
     "semanticTokenScopes": [
@@ -1868,6 +1900,18 @@
             },
             "completionEvents": [
               "onSettingChanged:workbench.iconTheme"
+            ]
+          },
+          {
+            "id": "shaders",
+            "title": "Shader support (optional)",
+            "description": "Associate this workspace’s shader files with LÖVE Shader. This avoids duplicate checks from GLSL Lint. Highlighting is optional; validation uses LÖVE first, then glslang.\n[Use LÖVE Shader Associations](command:tua.setup.applyShaders)\n[Install Shader Highlighting](command:tua.setup.installShaderHighlighting)\n[Restore Shader Associations](command:tua.setup.restoreShaders)\n[Skip](command:tua.setup.skipShaders)",
+            "media": {
+              "markdown": "assets/setup/shaders.md"
+            },
+            "completionEvents": [
+              "onContext:tua.setup.shadersApplied",
+              "onCommand:tua.setup.skipShaders"
             ]
           },
           {

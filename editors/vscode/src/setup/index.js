@@ -5,7 +5,10 @@ const { COMMANDS } = require("../constants");
 const { formatError } = require("../shared/errors");
 const { createPresetManager, MATERIAL_ICONS_EXTENSION } = require("./presets");
 
+const { createShaderSetup } = require("./shaders");
+
 function registerSetup(context) {
+  const shaders = createShaderSetup({ workspace: vscode.workspace, state: context.workspaceState, target: vscode.ConfigurationTarget.Workspace });
   const presets = createPresetManager({
     workspace: vscode.workspace,
     state: context.globalState,
@@ -72,6 +75,17 @@ function registerSetup(context) {
     vscode.commands.registerCommand(COMMANDS.openSetup, () =>
       vscode.commands.executeCommand("workbench.action.openWalkthrough", `${context.extension.id}#tua.setup`, false),
     ),
+    register(COMMANDS.setupApplyShaders, async () => {
+      await shaders.apply();
+      await vscode.commands.executeCommand("setContext", "tua.setup.shadersApplied", true);
+      void vscode.window.showInformationMessage("LÖVE shader associations applied to this workspace. Tua validates them; GLSL Lint only checks the glsl language. Restore is available in Tua setup.");
+    }),
+    register(COMMANDS.setupRestoreShaders, async () => {
+      await shaders.restore();
+      await vscode.commands.executeCommand("setContext", "tua.setup.shadersApplied", false);
+    }),
+    register(COMMANDS.setupSkipShaders, () => undefined),
+    register(COMMANDS.setupInstallShaderHighlighting, () => vscode.commands.executeCommand("workbench.extensions.installExtension", "slevesque.shader")),
     register(COMMANDS.setupApplyTheme, () => apply("theme", "Indigo Carbon")),
     register(COMMANDS.setupRestoreTheme, () => restore("theme", "Theme")),
     register(COMMANDS.setupApplyLayout, () => apply("layout", "Tua layout")),

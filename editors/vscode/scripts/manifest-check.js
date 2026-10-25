@@ -268,8 +268,8 @@ function assertExistingJson(relativePath, label) {
 
 // Setup must be discoverable and self-contained in the packaged extension.
 const walkthrough = manifest.contributes.walkthroughs?.find((item) => item.id === "tua.setup");
-if (!walkthrough || walkthrough.steps.length !== 4) {
-  throw new Error("Tua setup should expose four optional steps.");
+if (!walkthrough || walkthrough.steps.length !== 5) {
+  throw new Error("Tua setup should expose five optional steps.");
 }
 for (const step of walkthrough.steps) {
   const media = step.media?.image || step.media?.markdown;
@@ -283,3 +283,7 @@ for (const step of walkthrough.steps) {
   }
 }
 if (!commands.has("tua.openSetup")) throw new Error("Missing Set Up Tua command.");
+
+const shaderGrammar = grammars.find((grammar) => grammar.language === "love-glsl");
+if (!shaderGrammar) throw new Error("Missing LÖVE shader grammar");
+assertExistingJson(shaderGrammar.path, "LÖVE shader grammar");

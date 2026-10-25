@@ -1,0 +1,35 @@
+{
+  "scopeName": "source.love-glsl",
+  "patterns": [
+    {
+      "include": "#comments"
+    },
+    {
+      "name": "storage.type.love-glsl",
+      "match": "\\b(?:extern|number|Image|ArrayImage|CubeImage|VolumeImage)\\b"
+    },
+    {
+      "name": "support.function.love-glsl",
+      "match": "\\b(?:Texel|effect|position)\\b"
+    },
+    {
+      "include": "source.glsl"
+    }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.double-slash.glsl",
+          "begin": "//",
+          "end": "$"
+        },
+        {
+          "name": "comment.block.glsl",
+          "begin": "/\\*",
+          "end": "\\*/"
+        }
+      ]
+    }
+  }
+}
