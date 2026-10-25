@@ -21,6 +21,11 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Function return inference now uses the Lua/LOVE catalog, including `math.tan`,
+  and preserves narrowing after an early nil return. Imported projection helpers
+  retain numeric coordinates instead of producing false nil arithmetic errors;
+  local hovers also show the narrowed type.
+
 - Queued editor refreshes yield to newly arrived input between dispatches,
   preventing background bursts from delaying typing and completion.
 - Editor request bursts now wait in a bounded language-server queue instead

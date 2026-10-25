@@ -279,6 +279,23 @@ end
 A truthy value can still be `true`, so truthiness removes `nil` but keeps
 `boolean`. The `else` branch keeps the original type.
 
+An early return also narrows the remaining statements. Return inference keeps
+that information in returned records, including functions exported by modules:
+
+```tua
+local function position(x: number | nil)
+  if not x then
+    return nil
+  end
+  return { x = x } -- inferred as { x: number }
+end
+
+local target = position(10)
+if target then
+  print(target.x + 1)
+end
+```
+
 Use `value is Type` when Tua can emit an equivalent runtime identity check:
 
 ```tua

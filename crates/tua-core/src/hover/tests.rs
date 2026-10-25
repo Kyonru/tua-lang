@@ -1872,3 +1872,53 @@ impl Drop for TempProject {
         let _ = fs::remove_dir_all(&self.path);
     }
 }
+
+#[test]
+fn hovers_guarded_projection_from_tua_and_lua_modules() {
+    for extension in ["tua", "lua"] {
+        let temp = TempProject::new("guarded-projection-hover");
+        let source = r#"local projection = require("projection")
+local function projected()
+  local x, y = projection.project(7)
+  if not x then return nil end
+  return { x = x, y = y }
+end
+local target = projected()
+if target then
+  local _normalized: number = 640 - target.x
+end
+"#;
+        let module = r#"---@param z number
+local function project(z)
+  if z <= 0.05 then return nil end
+  local width, height = love.graphics.getDimensions()
+  local focal = (width / 2) / math.tan(math.rad(75) / 2)
+  return width / 2 + focal / z, height / 2, focal / z, z
+end
+return { project = project }
+"#;
+        temp.write("tua.toml", "source = \"src\"\n");
+        temp.write("src/main.tua", source);
+        temp.write(&format!("src/projection.{extension}"), module);
+        let path = temp.path.join("src/main.tua");
+        let hover = hover_tua_source(&path, source, position_at(source, "projected()"))
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            hover.contents, "function projected(): nil | { x: number, y: nil | number }",
+            "{extension}"
+        );
+        crate::check_tua_source(&path, source).unwrap();
+    }
+}
+
+#[test]
+fn hovers_inferred_local_after_early_nil_return() {
+    let source = r#"local function project(value: number | nil)
+  local x = value
+  if not x then return nil end
+  return { x = x }
+end
+"#;
+    assert_hover_in_source(source, "x = x }", "x = ".len(), "local x: number");
+}

@@ -2237,6 +2237,12 @@ const MATH_ITEMS: &[LuaItem] = &[
         "Seeds the pseudo-random generator.",
     ),
     item(
+        "tan",
+        LuaItemKind::Function,
+        "function math.tan(x: number): number",
+        "Returns the tangent of an angle in radians.",
+    ),
+    item(
         "sin",
         LuaItemKind::Function,
         "function math.sin(x: number): number",

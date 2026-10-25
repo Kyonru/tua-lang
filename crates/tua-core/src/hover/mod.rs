@@ -333,7 +333,8 @@ impl<'a> HoverResolver<'a> {
         position: SourcePosition,
         hover_span: SourceSpan,
     ) -> Option<Hover> {
-        let ty = self.semantic.type_of_local_assignment(name, position)?;
+        let base = self.semantic.type_of_local_assignment(name, position)?;
+        let ty = self.semantic.type_of_name(name, position).unwrap_or(base);
         if let Some(hover) = object_pool_local_hover(self.environment, name, &ty, hover_span) {
             return Some(hover);
         }

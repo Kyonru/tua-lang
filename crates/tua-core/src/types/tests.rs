@@ -1505,3 +1505,34 @@ fn vec2_type() -> Type {
         ("y", TableField::required(Type::number())),
     ])
 }
+
+#[test]
+fn infers_projected_coordinates_after_nil_guard() {
+    let source = r#"
+local function project(z: number)
+  if z <= 0.05 then return nil end
+  local width, height = love.graphics.getDimensions()
+  local focal = (width / 2) / math.tan(math.rad(75) / 2)
+  return width / 2 + focal / z, height / 2, focal / z, z
+end
+local function projected()
+  local x, y = project(7)
+  if not x then return nil end
+  return { x = x, y = y }
+end
+"#;
+    let parsed = parse_tua_source("src/projection.tua", source).unwrap();
+    let environment = build_type_environment(&parsed).unwrap();
+    let optional_number = Type::union([Type::nil(), Type::number()]);
+    assert_eq!(
+        environment.function("project").unwrap().return_types,
+        vec![optional_number; 4]
+    );
+    let returns = environment
+        .function("projected")
+        .unwrap()
+        .return_type
+        .as_ref()
+        .unwrap();
+    assert_eq!(returns.to_string(), "nil | { x: number, y: nil | number }");
+}

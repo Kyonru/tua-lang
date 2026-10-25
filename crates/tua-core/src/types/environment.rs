@@ -14,7 +14,9 @@ use crate::ast_utils::{
 use crate::classes::nominal_class_identity;
 use crate::deprecation::Deprecation;
 use crate::module_index::required_module_export_type_for_fields;
-use crate::narrowing::{directly_assigned_name, narrowed_locals_for_condition};
+use crate::narrowing::{
+    directly_assigned_name, narrowed_locals_after_false_condition, narrowed_locals_for_condition,
+};
 use crate::parser::{
     FunctionAnnotation as ParsedFunctionAnnotation, FunctionTypeParameter, LuaDocAnnotation,
     LuaDocAnnotationKind, LuaDocParam, LuaDocReturnType, ParsedLanguage, ParsedSource, SourceSpan,
@@ -2647,6 +2649,17 @@ fn collect_return_types_in_block(
                 if let Some(else_block) = if_stmt.else_block() {
                     collect_return_types_in_block(else_block, context, &scoped_locals, returns);
                 }
+                if if_stmt.else_if().is_none()
+                    && if_stmt.else_block().is_none()
+                    && !block_may_fall_through(if_stmt.block())
+                {
+                    let narrowed = narrowed_locals_after_false_condition(
+                        if_stmt.condition(),
+                        context.aliases,
+                        |name| scoped_locals.get(name).cloned(),
+                    );
+                    scoped_locals.extend(narrowed);
+                }
             }
             ast::Stmt::NumericFor(for_stmt) => {
                 collect_return_types_in_block(for_stmt.block(), context, &scoped_locals, returns)
@@ -3268,6 +3281,15 @@ fn infer_function_call_return_types(
         &parts,
     )
     .map(|ty| function_return_types(query.context.aliases, &ty))
+    .or_else(|| {
+        let root = parts.first()?;
+        if query.locals.contains_key(root) || query.context.function_types.contains_key(root) {
+            return None;
+        }
+        lua::hover_item(&parts)
+            .filter(|item| item.kind == lua::LuaItemKind::Function)
+            .map(|item| return_types_from_lua_function_detail(item.detail))
+    })
     .unwrap_or_default()
 }
 
