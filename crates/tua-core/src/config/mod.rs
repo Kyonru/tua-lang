@@ -599,18 +599,28 @@ pub fn init_project(dir: impl AsRef<Path>) -> Result<InitResult, ConfigError> {
     })?;
 
     let config_path = dir.join(CONFIG_FILE);
-    let config_created = write_file_without_overwrite(&config_path, DEFAULT_CONFIG_TEXT)?;
     let defaults = ProjectConfig::default();
     let source_dir = dir.join(&defaults.source);
+    let main_path = source_dir.join(&defaults.main);
+    let gitignore_path = dir.join(GITIGNORE_FILE);
+    // Preflight every destination before creating any project files. In
+    // particular, create_new protects a leaf but not a symlinked parent.
+    for path in [&config_path, &source_dir, &main_path, &gitignore_path] {
+        crate::path_security::reject_symlink_path(dir, path).map_err(|message| {
+            ConfigError::Io {
+                path: path.clone(),
+                source: io::Error::new(io::ErrorKind::PermissionDenied, message),
+            }
+        })?;
+    }
+    let config_created = write_file_without_overwrite(&config_path, DEFAULT_CONFIG_TEXT)?;
     let source_created = !source_dir.exists();
 
     fs::create_dir_all(&source_dir).map_err(|source| ConfigError::Io {
         path: source_dir.clone(),
         source,
     })?;
-    let main_path = source_dir.join(&defaults.main);
     let main_created = write_file_without_overwrite(&main_path, DEFAULT_MAIN_TEXT)?;
-    let gitignore_path = dir.join(GITIGNORE_FILE);
     let (gitignore_created, gitignore_updated) = ensure_recommended_gitignore(&gitignore_path)?;
 
     Ok(InitResult {

@@ -768,6 +768,32 @@ fn init_extends_an_existing_gitignore_without_duplication() {
     );
 }
 
+#[cfg(unix)]
+#[test]
+fn init_rejects_symlink_destinations_before_creating_files() {
+    use std::os::unix::fs::symlink;
+    for name in [".gitignore", "src", "tua.toml"] {
+        let project = TempDir::new("init-link-project");
+        let outside = TempDir::new("init-link-outside");
+        let victim = outside.path().join("victim");
+        fs::write(&victim, "keep me\n").unwrap();
+        let target = if name == "src" {
+            outside.path()
+        } else {
+            &victim
+        };
+        symlink(target, project.path().join(name)).unwrap();
+        let error = init_project(project.path()).unwrap_err();
+        assert!(error.to_string().contains("symbolic link"));
+        assert_eq!(fs::read_to_string(&victim).unwrap(), "keep me\n");
+        assert!(!outside.path().join("main.tua").exists());
+        assert!(!project.path().join("src/main.tua").exists());
+        if name != "tua.toml" {
+            assert!(!project.path().join("tua.toml").exists());
+        }
+    }
+}
+
 #[test]
 fn init_preserves_existing_gitignore_line_endings() {
     let temp = TempDir::new("init-gitignore-crlf");

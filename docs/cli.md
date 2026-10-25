@@ -25,6 +25,8 @@ cargo run -p tua-cli -- init
 Creates `tua.toml`, `src/`, and `src/main.tua` if they do not already exist. It
 also creates or extends `.gitignore` with the generated `build/`, `dist/`, and
 `.tua/` directories without removing existing entries.
+Initialization rejects symlinked destinations, including `src` and `.gitignore`,
+before creating project files.
 
 ## `check`
 

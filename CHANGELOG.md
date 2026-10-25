@@ -6,6 +6,8 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- `tua init` rejects symlinked destinations before creating or appending files.
+
 ### Added
 
 - Plain Lua files can now explicitly import Tua's bundled runtimes with normal
