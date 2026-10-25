@@ -54,7 +54,9 @@ built-in, following the same replacement rule as other Tua helpers.
 
 `play` returns an `AudioVoice | nil` and `"started"`, `"stolen"`, or
 `"rejected"`. Limits apply globally and at bus and cue level. When a constrained
-group is full, `steal` selects its lowest-priority, oldest voice. An incoming
+group is full, `steal` selects its lowest-priority, oldest voice. Voices started
+in the same update are ordered by their play calls, including reused voices.
+An incoming
 voice cannot steal a higher-priority voice. `overflow = "reject"` can be set at
 system, bus, or cue level; the nearest setting wins.
 

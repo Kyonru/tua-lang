@@ -136,6 +136,9 @@ from 0.3.0:
 
 ### Fixed
 
+- Audio voice stealing deterministically selects the oldest equal-priority
+  voice, including voices started in the same update and reused pooled voices.
+
 - Plain Lua modules that use LuaJIT `goto`, labels, or number suffixes now
   parse for typed `require`, instead of silently losing every inferred export.
   Tua source still does not accept `goto`.

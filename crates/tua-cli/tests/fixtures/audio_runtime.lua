@@ -26,6 +26,32 @@ love = {
 local audioSystem = require("tuaaudio")
 local source = setmetatable({}, Source)
 
+-- Hash iteration must not decide which equal-priority voice is oldest.
+-- Force newest-first candidates, then exercise repeated pooled-record reuse
+-- without advancing the audio clock.
+do
+  local ordered = audioSystem({ maxVoices = 2, cues = { tone = { source = source } } })
+  local ranks = {}
+  local oldest = assert(ordered:play("tone"))
+  ranks[oldest._record] = 1
+  local newest = assert(ordered:play("tone"))
+  ranks[newest._record] = 2
+  local sort = table.sort
+  table.sort = function(list, compare)
+    sort(list, function(a, b) return ranks[a] > ranks[b] end)
+    return sort(list, compare)
+  end
+  for order = 3, 34 do
+    local nextVoice, result = ordered:play("tone")
+    assert(nextVoice and result == "stolen")
+    assert(oldest:status() == "released", "same-tick stealing must release the oldest handle")
+    assert(newest:status() ~= "released", "same-tick stealing must preserve the newer handle")
+    ranks[nextVoice._record] = order
+    oldest, newest = newest, nextVoice
+  end
+  table.sort = sort
+end
+
 -- Idle updates reuse their bus cache, do not build active-voice lists, and do
 -- not wake control subscribers until the public control state changes.
 do

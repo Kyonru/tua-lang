@@ -270,7 +270,7 @@ function Audio:_limitVictims(cueName, cue, bus)
   local list = {}
   for record in pairs(candidates) do list[#list + 1] = record end
   table.sort(list, function(a, b)
-    if a.priority == b.priority then return a.startedAt < b.startedAt end
+    if a.priority == b.priority then return a.startOrder < b.startOrder end
     return a.priority < b.priority
   end)
   return list[1]
@@ -369,6 +369,8 @@ function Audio:play(cueName, options)
   record.system, record.source = self, source
   record.cueName, record.bus = cueName, cue.bus or "master"
   record.priority, record.startedAt = priority, self._clock
+  self._nextStartOrder = self._nextStartOrder + 1
+  record.startOrder = self._nextStartOrder
   record.volume = clamp(options.volume or cue.volume or 1, 0, 1)
   record._gain = 0
   record.pitch = options.pitch or cue.pitch or 1
@@ -700,7 +702,7 @@ local function create(options)
     _control = store({ activeVoices = 0, musicState = nil }),
     _buses = buses, _cues = copy(options.cues), _effects = copy(options.effects),
     _music = copy(options.music), _analysis = options.analysis or {}, _analysisStatus = {},
-    _voices = {}, _pool = {}, _activeVoiceCount = 0,
+    _voices = {}, _pool = {}, _activeVoiceCount = 0, _nextStartOrder = 0,
     _stats = { started = 0, stolen = 0, rejected = 0 },
     _busGains = {}, _busGainState = {}, _busGainsDirty = true,
     _effectNames = {},
