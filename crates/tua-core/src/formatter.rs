@@ -1940,4 +1940,6 @@ fn is_identifier_continue(byte: u8) -> bool {
 }
 
 #[cfg(test)]
+mod corpus;
+#[cfg(test)]
 mod tests;
