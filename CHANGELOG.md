@@ -8,6 +8,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Added
 
+- Runtime Inspector presents concise per-object summaries and direct store values,
+  groups source links and counters under Details, and hides empty categories.
+
 - Contextual declaration tools for local state machines, input players, stores,
   and object pools: existing previews, API references, and direct selection of
   source-matched runtime instances, including a multi-player/instance picker.

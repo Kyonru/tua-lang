@@ -7,7 +7,7 @@ Module._load = function(id, ...args) {
   if (id === "vscode") return {
     EventEmitter: class { constructor() { this.event = () => {}; } dispose() {} },
     TreeItem: class { constructor(label) { this.label = label; } },
-    TreeItemCollapsibleState: { Collapsed: 1, None: 0 }, ThemeIcon: class {},
+    TreeItemCollapsibleState: { Collapsed: 1, Expanded: 2, None: 0 }, ThemeIcon: class {},
   };
   return original.call(this, id, ...args);
 };
@@ -30,7 +30,7 @@ test("runtime view switches player data and preserves object identities across s
   assert.notEqual(state().id, originalId);
   entries.get("client").session.active = false;
   assert.equal(state().description, "walking", "retain the selected player's final snapshot");
-  assert.equal(tree.getChildren().find(node => node.label === "Entities and components").children[0].label, "No live objects registered");
+  assert.equal(tree.getChildren().find(node => node.label === "Entities and components"), undefined, "empty categories stay out of the way");
 });
 
 test("runtime values are displayed as data, with bounded depth and stable escaped keys", () => {
@@ -85,11 +85,12 @@ test("named runtime objects expose creation-site actions and retain separate run
   const stores = tree.getChildren().find(node => node.label === "Stores").children;
   assert.equal(tree.getParent(stores[0]).label, "Stores");
   assert.equal(tree.getParent(tree.getParent(stores[0])), undefined);
-  assert.equal(stores[0].label, "player"); assert.notEqual(stores[0].id, stores[1].id);
-  assert.match(stores[0].description, /#1/);
+  assert.equal(stores[0].label, "player #1"); assert.notEqual(stores[0].id, stores[1].id);
+  assert.equal(stores[0].description, "0 fields");
+  assert(!stores[0].description.includes("state.tua"));
   const item = tree.getTreeItem(stores[0]);
   assert.equal(item.contextValue, "tuaRuntimeObject.source");
-  const link = tree.getTreeItem(stores[0].children[0]);
+  const link = tree.getTreeItem(stores[0].children.find(node => node.label === "Details").children[0]);
   assert.equal(link.command.command, "tua.inspector.goToSource");
   assert.deepEqual(link.command.arguments, [{ origin }]);
 });
@@ -106,4 +107,45 @@ test("inspector can be re-enabled from its toolbar while a retained snapshot hid
   assert.equal(disable.when, "view == tua.inspector && config.tua.runtimeInspector.enabled");
   assert.equal(enable.group, disable.group);
   assert(enable.group.startsWith("navigation"), "enable is visible directly in the toolbar");
+});
+
+
+test("inspector exposes store values directly and collapses bookkeeping", () => {
+  const origin = { path: "/game/state.tua", file: "state.tua", line: 2, name: "player" };
+  const object = { id: 1, kind: "stores", label: "stores 1", origin, data: { state: { health: 80, position: { x: 1.23456789, y: 20 } }, updates: 12, secondsSinceUpdate: 0.54833, subscribers: 2, watchers: 1 } };
+  const tree = new InspectorTree({ entries: new Map([["host", { session: { id: "host", active: true }, snapshot: { objects: [object] } }]]) });
+  const group = tree.getChildren()[0], store = group.children[0];
+  assert.equal(group.expanded, true);
+  assert.equal(store.label, "player"); assert.equal(store.description, "2 fields");
+  assert.deepEqual(store.children.map(node => node.label), ["health", "position", "Details"]);
+  const details = store.children.at(-1);
+  assert(!details.expanded);
+  assert(details.children.some(node => node.label === "Updates" && node.description === "12"));
+  assert.equal(details.children.find(node => node.label === "Last update").description, "Just now");
+  const position = store.children[1];
+  assert.equal(position.description, "x 1.23457 · y 20");
+  assert.match(position.children[0].tooltip, /1.23456789/);
+  assert(store.tooltip.includes("/game/state.tua:2"));
+});
+
+test("type-specific rows replace raw runtime field dumps without losing essentials", () => {
+  const { presentObject } = require("../../src/inspector/presentation");
+  const pool = presentObject({ kind: "pools", data: { active: 2, available: 6, capacity: 8 } }, "pool");
+  assert.equal(pool.summary, "2 active · 6 available");
+  assert.deepEqual(pool.children.map(node => node.label), ["Active", "Available", "Capacity"]);
+  const signal = presentObject({ kind: "signals", data: { emitted: 20, listeners: { hit: 2, jump: 1 }, recent: { 1: { name: "hit", sequence: 20 }, 2: { name: "jump", sequence: 19 } } } }, "signal");
+  assert.equal(signal.summary, "3 listeners · 20 emitted");
+  assert.deepEqual(signal.children[1].children.map(node => node.label), ["hit", "jump"]);
+  assert.equal(signal.children[1].children[0].children, undefined);
+  const ecs = presentObject({ kind: "ecs", data: { sampledEntities: 1, entities: { 42: { Position: { x: 1, y: 2 } } } } }, "world");
+  assert.equal(ecs.children[0].label, "Entity 42");
+  assert.equal(ecs.children[0].description, "1 component");
+  const state = presentObject({ kind: "states", data: { current: "idle", asyncState: "none" } }, "machine");
+  assert.deepEqual(state.children.map(node => node.label), ["Current state"]);
+  assert.equal(state.details[0].label, "Async phase");
+});
+
+test("empty snapshots and sampling limits remain explicit", () => {
+  const tree = new InspectorTree({ entries: new Map([["host", { session: { id: "host", active: true }, snapshot: { objects: [], truncated: true } }]]) });
+  assert.deepEqual(tree.getChildren().map(node => node.label), ["No runtime objects yet", "Snapshot limits reached"]);
 });

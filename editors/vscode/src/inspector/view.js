@@ -5,6 +5,7 @@ const { InspectorSessions } = require("./sessions");
 const { matchingInstances } = require("../editor/declaration-target");
 const { RuntimeOrigins } = require("./origins");
 const { loadSourceMapForGeneratedPath } = require("../editor/source-maps");
+const { valueNodes, storeNodes, presentObject } = require("./presentation");
 const GROUPS = [["ecs", "Entities and components", "symbol-struct"], ["states", "State machines", "type-hierarchy"], ["signals", "Signal activity", "radio-tower"], ["pools", "Object pools", "database"], ["stores", "Stores", "symbol-variable"]];
 
 class InspectorTree {
@@ -19,7 +20,7 @@ class InspectorTree {
     return this.getChildren().find(group => group.children?.some(child => child.id === node.id));
   }
   getTreeItem(node) {
-    const item = new vscode.TreeItem(node.label, node.children?.length ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None);
+    const item = new vscode.TreeItem(node.label, node.children?.length ? (node.expanded ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.Collapsed) : vscode.TreeItemCollapsibleState.None);
     item.id = node.id; item.description = node.description;
     item.tooltip = node.tooltip || node.description || node.label;
     if (node.origin) item.contextValue = "tuaRuntimeObject.source";
@@ -33,68 +34,31 @@ class InspectorTree {
     if (!entry) return [];
     const prefix = `inspector:${entry.session.id}`;
     if (!entry.snapshot) return [{ id: prefix + ":waiting", label: entry.status === "unavailable" ? "Inspection could not start" : "Waiting for runtime connection", description: entry.session.title, icon: "info" }];
-    const result = GROUPS.map(([kind, label, icon]) => {
+    const result = GROUPS.filter(([kind]) => entry.snapshot.objects.some(object => object.kind === kind)).map(([kind, label, icon]) => {
       const objects = entry.snapshot.objects.filter(object => object.kind === kind).sort((a, b) => a.id - b.id);
-      return { id: prefix + ":" + kind, label, icon, description: String(objects.length),
-        children: objects.length ? objects.map(object => {
+      return { id: prefix + ":" + kind, label, icon, expanded: true, description: String(objects.length),
+        children: objects.map(object => {
           const id = prefix + ":object:" + object.id;
           const origin = object.origin;
-          const summary = kind === "states" ? String(object.data.current || "") : kind === "signals" ? `${object.data.emitted || 0} emitted` : kind === "stores" ? `${object.data.updates || 0} updates` : undefined;
-          const children = object.kind === "stores"
-            ? storeNodes(object.data, id, entry.previousSnapshot?.objects.find(previous => previous.kind === "stores" && previous.id === object.id)?.data)
-            : valueNodes(object.data, id);
-          if (origin) children.unshift({ id: id + ":source", label: "Go to Creation Site", description: `${origin.file}:${origin.line}`, icon: "go-to-file", command: "tua.inspector.goToSource", arguments: [{ origin }] });
-          return { id, label: origin?.name || object.label, origin,
-            description: origin ? [`#${object.id}`, summary, `${origin.file}:${origin.line}`].filter(Boolean).join(" · ") : summary,
+          const { summary, children, details } = presentObject(object, id,
+            entry.previousSnapshot?.objects.find(previous => previous.kind === kind && previous.id === object.id)?.data);
+          const name = origin?.name || object.label;
+          const duplicate = objects.some(other => other.id !== object.id && (other.origin?.name || other.label) === name);
+          if (origin) details.unshift({ id: id + ":source", label: "Creation site", description: `${origin.file}:${origin.line}`, tooltip: `${origin.path}:${origin.line}`, icon: "go-to-file", command: "tua.inspector.goToSource", arguments: [{ origin }] });
+          details.push({ id: id + ":runtimeId", label: "Runtime ID", description: String(object.id) });
+          children.push({ id: id + ":details", label: "Details", icon: "info", children: details });
+          return { id, label: duplicate ? `${name} #${object.id}` : name, origin,
+            description: summary,
             tooltip: origin ? `${origin.name || object.label} (#${object.id})\nCreated at ${origin.path}:${origin.line}${origin.generated ? " (generated Lua; no source mapping available)" : ""}` : `${object.label}\nCreation source unavailable`,
             children };
-        }) : [{ id: prefix + ":" + kind + ":empty", label: "No live objects registered", icon: "info" }],
+        }),
       };
     });
+    if (!result.length) result.push({ id: prefix + ":empty", label: "No runtime objects yet", description: "Waiting for supported objects", icon: "info" });
     if (entry.snapshot.truncated) result.push({ id: prefix + ":limited", label: "Snapshot limits reached", description: "Large values are abbreviated", icon: "info" });
     return result;
   }
   dispose() { this.changed.dispose(); }
-}
-
-function valueNodes(value, prefix, depth = 0) {
-  if (!value || typeof value !== "object" || depth >= 8) return [];
-  return Object.keys(value).slice(0, 128).sort((a, b) => a.localeCompare(b, undefined, { numeric: true })).map(key => {
-    const child = value[key];
-    const nested = child !== null && typeof child === "object";
-    return { id: `${prefix}/${encodeURIComponent(key)}`, label: key,
-      description: nested ? `${Object.keys(child).length} fields` : String(child),
-      children: nested ? valueNodes(child, `${prefix}/${encodeURIComponent(key)}`, depth + 1) : undefined };
-  });
-}
-
-// Compare only serialized state, never runtime references or volatile age counters.
-function storeNodes(data, prefix, previous) {
-  const nodes = valueNodes(data, prefix);
-  const state = nodes.find(node => node.label === "state");
-  if (state && previous?.state && data.state && typeof data.state === "object") {
-    state.children = changedValueNodes(data.state, previous.state, `${prefix}/state`);
-  }
-  return nodes;
-}
-
-function changedValueNodes(current, previous, prefix, depth = 0) {
-  if (depth >= 8) return [];
-  const keys = [...new Set([...Object.keys(current || {}), ...Object.keys(previous || {})])].slice(0, 128);
-  return keys.sort((a, b) => a.localeCompare(b, undefined, { numeric: true })).map(key => {
-    const present = Object.hasOwn(current || {}, key), wasPresent = Object.hasOwn(previous || {}, key);
-    const value = present ? current[key] : previous[key], old = previous?.[key];
-    const nested = value !== null && typeof value === "object";
-    const children = nested ? changedValueNodes(present ? value : {}, wasPresent && old && typeof old === "object" ? old : {}, `${prefix}/${encodeURIComponent(key)}`, depth + 1) : undefined;
-    const change = !present ? "removed" : !wasPresent ? "added" : nested
-      ? (old === null || typeof old !== "object" || children.some(child => child.change) ? "changed" : undefined)
-      : !Object.is(value, old) ? "changed" : undefined;
-    const summary = nested ? `${Object.keys(value).length} fields` : String(value);
-    return { id: `${prefix}/${encodeURIComponent(key)}`, label: key, change, children,
-      description: `${summary}${change ? ` · ${change}` : ""}`,
-      icon: change ? (change === "added" ? "diff-added" : change === "removed" ? "diff-removed" : "diff-modified") : undefined,
-      tooltip: change === "changed" && !nested ? `Previous: ${old !== null && typeof old === "object" ? "[table]" : String(old)}\nCurrent: ${summary}` : undefined };
-  });
 }
 
 function inspectorToolbarState(entry) {
@@ -111,7 +75,7 @@ function registerRuntimeInspector(context, activity) {
   const tree = new InspectorTree(sessions);
   const view = vscode.window.createTreeView("tua.inspector", { treeDataProvider: tree, showCollapseAll: true });
   let toolbarState;
-  const refresh = () => {
+  const refresh = (updateTree = true) => {
     const entry = tree.entry();
     const nextState = inspectorToolbarState(entry);
     if (toolbarState?.canControl !== nextState.canControl) void vscode.commands.executeCommand("setContext", "tua.inspectorCanControl", nextState.canControl);
@@ -120,12 +84,12 @@ function registerRuntimeInspector(context, activity) {
     view.description = entry?.session.title;
     if (entry) {
       const age = entry.received ? Math.floor((Date.now() - entry.received) / 1000) : undefined;
-      const status = !entry.session.active ? "Ended · last snapshot" : entry.paused ? "Updates paused" : entry.status === "connected" ? "Connected" : entry.status === "waiting" ? "Connecting" : entry.status;
-      view.message = `${status}${age === undefined ? "" : ` · ${age}s since snapshot`}`;
+      const status = !enabled() ? "Inspection disabled" : !entry.session.active ? "Ended · last snapshot" : entry.paused ? "Updates paused" : entry.status === "connected" ? "Live" : entry.status === "waiting" ? "Connecting" : entry.status;
+      view.message = `${status}${age === undefined || (status === "Live" && age < 2) ? "" : ` · updated ${age}s ago`}`;
     } else view.message = enabled() ? "Launch a Tua run to inspect live runtime objects." : undefined;
-    tree.changed.fire();
+    if (updateTree) tree.changed.fire();
   };
-  const timer = setInterval(() => { if (view.visible) refresh(); }, 1000); timer.unref();
+  const timer = setInterval(() => { if (view.visible) refresh(false); }, 1000); timer.unref();
   const setEnabled = async value => {
     if (!vscode.workspace.isTrusted) return vscode.window.showWarningMessage("Trust this workspace before enabling runtime inspection.");
     await vscode.workspace.getConfiguration("tua").update("runtimeInspector.enabled", value,
