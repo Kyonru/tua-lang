@@ -1,7 +1,9 @@
 -- Loaded exclusively by the editor's temporary development launcher.
-local directory, port, token = ...
+local directory, port, token, options = ...
+options = options or {}
+local categories = options.categories or { ecs = true, states = true, signals = true, pools = true, stores = true }
 local inspect = assert(loadfile(directory .. "/snapshot.lua"))()
-local tick = assert(loadfile(directory .. "/transport.lua"))()(port, token, inspect.snapshot)
+local tick = assert(loadfile(directory .. "/transport.lua"))()(port, token, inspect.snapshot, options.updateInterval)
 local originalRequire = require
 local wrapped = setmetatable({}, { __mode = "k" })
 local function worldData(world)
@@ -73,16 +75,16 @@ local function constructor(original, kind, reader)
   return fn
 end
 local function instrument(name, module)
-  if name == "tuaecs" and type(module) == "table" and type(module.world) == "function" then
+  if categories.ecs and name == "tuaecs" and type(module) == "table" and type(module.world) == "function" then
     module.world = constructor(module.world, "ecs", worldData)
-  elseif name == "tuastatemachine" and type(module) == "table" and type(module.create) == "function" then
+  elseif categories.states and name == "tuastatemachine" and type(module) == "table" and type(module.create) == "function" then
     module.create = constructor(module.create, "states", stateData)
-  elseif name == "tuasignal" and type(module) == "table" and type(module.new) == "function" then
+  elseif categories.signals and name == "tuasignal" and type(module) == "table" and type(module.new) == "function" then
     module.new = constructor(module.new, "signals", signalData)
-  elseif name == "tuastore" and type(module) == "function" then
+  elseif categories.stores and name == "tuastore" and type(module) == "function" then
     module = constructor(module, "stores", storeData)
     package.loaded[name] = module
-  elseif name == "tuaobjectpool" and type(module) == "function" then
+  elseif categories.pools and name == "tuaobjectpool" and type(module) == "function" then
     module = constructor(module, "pools", poolData)
     package.loaded[name] = module
   end

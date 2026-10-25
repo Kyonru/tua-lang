@@ -244,6 +244,11 @@ to jump to Tua when source maps are available.
 snapshot even while paused. After disabling inspection, the toolbar's **Enable**
 (plug) action remains available; start a new run after re-enabling it.
 
+Use **Configure Runtime Inspection** (gear) to select collected categories and
+an update interval (100–10,000 ms; default 500 ms). Frequency changes apply live;
+restart games for category changes. Unselected categories are not wrapped, and
+selecting no categories skips the shim on the next launch.
+
 See the [Runtime Inspector guide](../../docs/debugging.md#live-runtime-inspector)
 for source navigation, troubleshooting, limits, and development-only behavior.
 

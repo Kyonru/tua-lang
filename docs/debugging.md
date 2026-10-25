@@ -143,7 +143,18 @@ but do not increment that counter. A new connection starts a fresh comparison.
 | Disable Runtime Inspection | Disconnect; retain the last snapshot |
 | Enable Runtime Inspection (plug icon) | Enable inspection for the next run |
 
-Updates normally arrive twice per second. Debugger pauses also pause snapshots.
+Use **Configure Runtime Inspection** (gear) to choose categories and update
+frequency. `tua.runtimeInspector.categories` accepts `ecs`, `states`, `signals`,
+`pools`, and `stores` (all enabled by default). Only selected categories receive
+runtime wrappers; restart running games to change collection. An empty array
+skips the shim entirely on new launches.
+
+`tua.runtimeInspector.updateInterval` sets milliseconds between snapshots:
+100–10,000, default 500 (twice per second). Changes apply to connected players
+immediately and survive reconnects. Faster updates increase collection cost.
+Pause and manual refresh still work at every interval.
+
+Debugger pauses also pause snapshots.
 Ended or disconnected players retain their last data with a status and age.
 
 ### Navigate between source and runtime

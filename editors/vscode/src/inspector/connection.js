@@ -1,6 +1,7 @@
 "use strict";
 const net = require("node:net");
 const { randomBytes, timingSafeEqual } = require("node:crypto");
+const { normalizeOptions } = require("./options");
 const MAX_FRAME = 1024 * 1024;
 const KINDS = new Set(["ecs", "states", "signals", "pools", "stores"]);
 
@@ -11,7 +12,8 @@ function validSnapshot(value) {
       item.data && typeof item.data === "object" && !Array.isArray(item.data));
 }
 
-async function listen({ onSnapshot, onStatus }) {
+async function listen({ onSnapshot, onStatus, updateInterval }) {
+  let interval = normalizeOptions({ updateInterval }).updateInterval;
   const token = randomBytes(32).toString("hex");
   const sockets = new Set();
   let active, disposed = false, paused = false;
@@ -42,7 +44,7 @@ async function listen({ onSnapshot, onStatus }) {
               !timingSafeEqual(provided, Buffer.from(token))) { socket.destroy(); return; }
           authenticated = true; clearTimeout(timeout);
           active?.destroy(); active = socket;
-          socket.write(paused ? "pause\n" : "resume\n");
+          socket.write(`interval ${interval}\n${paused ? "pause" : "resume"}\n`);
           onStatus?.("connected");
         } else {
           if (active !== socket || !validSnapshot(message)) { socket.destroy(); return; }
@@ -61,6 +63,7 @@ async function listen({ onSnapshot, onStatus }) {
   return {
     port: server.address().port, token,
     pause(value) { paused = value; if (active && active.writableLength < 1024) active.write(value ? "pause\n" : "resume\n"); },
+    setInterval(value) { interval = normalizeOptions({ updateInterval: value }).updateInterval; if (active && active.writableLength < 1024) active.write(`interval ${interval}\n`); },
     stop() { if (active && active.writableLength < 1024) active.end("stop\n"); },
     refresh() { if (active && active.writableLength < 1024) active.write("snapshot\n"); },
     dispose() { disposed = true; for (const socket of sockets) socket.destroy(); server.close(); },

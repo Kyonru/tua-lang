@@ -1,6 +1,7 @@
 -- Bounded non-blocking loopback transport. No disk writes or remote hosts.
 local socket = require("socket")
-return function(port, token, snapshot)
+return function(port, token, snapshot, updateInterval)
+  local interval = math.max(0.1, math.min(10, (tonumber(updateInterval) or 500) / 1000))
   local client, connected, pending, offset, incoming
   local paused, requested, stopped = false, true, false
   local nextConnect, nextSnapshot = 0, 0
@@ -42,14 +43,18 @@ return function(port, token, snapshot)
       if line == "stop" then stopped = true; disconnect(); return
       elseif line == "pause" then paused = true
       elseif line == "resume" then paused = false; requested = true
-      elseif line == "snapshot" then requested = true end
+      elseif line == "snapshot" then requested = true
+      elseif line:match("^interval %d+$") then
+        interval = math.max(0.1, math.min(10, tonumber(line:sub(10)) / 1000))
+        nextSnapshot = math.min(nextSnapshot, now + interval)
+      end
       consumed = consumed + 1
     end
     if not pending and (requested or (not paused and now >= nextSnapshot)) then
       pending = snapshot() .. "\n"
       offset = 1
       requested = false
-      nextSnapshot = now + 0.5
+      nextSnapshot = now + interval
     end
     if pending then
       -- At most 16 KiB per frame. Slow readers cannot grow an output queue.

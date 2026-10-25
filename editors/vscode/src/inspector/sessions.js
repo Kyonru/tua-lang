@@ -1,11 +1,12 @@
 "use strict";
 const { EventEmitter } = require("node:events");
 const { listen } = require("./connection");
+const { normalizeOptions } = require("./options");
 const { createLauncher } = require("./launcher");
 
 class InspectorSessions {
-  constructor({ activity, enabled, assetsDirectory, describeObject, reportError = () => {} }) {
-    Object.assign(this, { activity, enabled, assetsDirectory, describeObject, reportError });
+  constructor({ activity, enabled, assetsDirectory, describeObject, options = () => ({}), reportError = () => {} }) {
+    Object.assign(this, { activity, enabled, assetsDirectory, describeObject, options, reportError });
     this.entries = new Map(); this.events = new EventEmitter(); this.disposed = false;
     this.subscription = activity.subscribe(() => {
       for (const [id, entry] of this.entries) {
@@ -19,15 +20,18 @@ class InspectorSessions {
   changed() { if (!this.disposed) this.events.emit("change"); }
   async launch(session, outputDirectory) {
     if (!session?.active || !this.enabled() || this.disposed) return undefined;
-    const entry = { session, outputDirectory, status: "waiting", paused: false };
+    const options = normalizeOptions(this.options());
+    if (!options.categories.length) return undefined;
+    const entry = { session, outputDirectory, options, status: "waiting", paused: false };
     this.entries.set(session.id, entry); this.changed();
     try {
       entry.connection = await listen({
+        updateInterval: options.updateInterval,
         onSnapshot: snapshot => { for (const object of snapshot.objects) object.origin = this.describeObject?.(entry, object); entry.previousSnapshot = entry.snapshot; entry.snapshot = snapshot; entry.received = Date.now(); this.changed(); },
         onStatus: status => { if (status === "connected") { entry.connectionGeneration = (entry.connectionGeneration || 0) + 1; entry.previousSnapshot = undefined; entry.snapshot = undefined; } entry.status = status; this.changed(); },
       });
       if (this.disposed || !session.active || !this.enabled()) { this.close(entry); return undefined; }
-      entry.launcher = createLauncher(outputDirectory, this.assetsDirectory, entry.connection);
+      entry.launcher = createLauncher(outputDirectory, this.assetsDirectory, entry.connection, options);
       return entry.launcher.directory;
     } catch (error) {
       this.close(entry); entry.status = "unavailable"; this.changed();
@@ -41,6 +45,10 @@ class InspectorSessions {
     entry.status = "ended";
   }
   pause(id, paused) { const entry = this.entries.get(id); if (!entry?.connection) return; entry.paused = paused ?? !entry.paused; entry.connection.pause(entry.paused); this.changed(); }
+  updateInterval(value) {
+    const interval = normalizeOptions({ updateInterval: value }).updateInterval;
+    for (const entry of this.entries.values()) entry.connection?.setInterval(interval);
+  }
   refresh(id) { this.entries.get(id)?.connection?.refresh(); }
   disconnectAll() {
     for (const entry of this.entries.values()) {

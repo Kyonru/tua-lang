@@ -2,12 +2,15 @@
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const { normalizeOptions } = require("./options");
 const { createHash } = require("node:crypto");
 
 // Decimal byte escapes are portable to Lua 5.1 and never interpret path contents.
 function luaString(value) { return '"' + [...Buffer.from(value)].map(byte => "\\" + String(byte).padStart(3, "0")).join("") + '"'; }
 
-function createLauncher(outputDirectory, assetsDirectory, connection) {
+function createLauncher(outputDirectory, assetsDirectory, connection, settings) {
+  const options = normalizeOptions(settings);
+  const luaOptions = `{ updateInterval = ${options.updateInterval}, categories = { ${options.categories.map(kind => `[${luaString(kind)}] = true`).join(", ")} } }`;
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "tua-inspector-"));
   const directory = path.join(root, path.basename(outputDirectory));
   let watcher, timer, reconciliation, disposed = false;
@@ -20,7 +23,7 @@ function createLauncher(outputDirectory, assetsDirectory, connection) {
     const bootstrap = [
       "-- Tua editor-only inspector launcher. Original build remains untouched.",
       `assert(not love.filesystem.isFused(), "Inspector cannot run in a fused game")`,
-      `local ok, reason = pcall(function() assert(loadfile(${luaString(path.join(assetsDirectory, "shim.lua"))}))(${luaString(assetsDirectory)}, ${connection.port}, ${luaString(connection.token)}) end)`,
+      `local ok, reason = pcall(function() assert(loadfile(${luaString(path.join(assetsDirectory, "shim.lua"))}))(${luaString(assetsDirectory)}, ${connection.port}, ${luaString(connection.token)}, ${luaOptions}) end)`,
       `if not ok then print("[tua inspector] " .. tostring(reason)) end`,
       `local file = io.open(${luaString(originalConf)}, "rb")`,
       `if file then file:close(); assert(loadfile(${luaString(originalConf)}))() end`,

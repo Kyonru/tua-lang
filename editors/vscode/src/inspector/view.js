@@ -1,6 +1,7 @@
 "use strict";
 const path = require("node:path");
 const vscode = require("vscode");
+const { normalizeOptions, CATEGORIES } = require("./options");
 const { InspectorSessions } = require("./sessions");
 const { matchingInstances } = require("../editor/declaration-target");
 const { RuntimeOrigins } = require("./origins");
@@ -67,8 +68,9 @@ function inspectorToolbarState(entry) {
 
 function registerRuntimeInspector(context, activity) {
   const enabled = () => vscode.workspace.isTrusted && vscode.workspace.getConfiguration("tua").get("runtimeInspector.enabled", false);
+  const options = () => { const config = vscode.workspace.getConfiguration("tua"); return normalizeOptions({ categories: config.get("runtimeInspector.categories"), updateInterval: config.get("runtimeInspector.updateInterval", 500) }); };
   const origins = new RuntimeOrigins(loadSourceMapForGeneratedPath);
-  const sessions = new InspectorSessions({ activity, enabled, describeObject: (entry, object) => origins.describe(entry, object),
+  const sessions = new InspectorSessions({ activity, enabled, options, describeObject: (entry, object) => origins.describe(entry, object),
     assetsDirectory: path.join(context.extensionPath, "assets", "inspector"),
     reportError: message => vscode.window.showWarningMessage(message),
   });
@@ -86,7 +88,7 @@ function registerRuntimeInspector(context, activity) {
       const age = entry.received ? Math.floor((Date.now() - entry.received) / 1000) : undefined;
       const status = !enabled() ? "Inspection disabled" : !entry.session.active ? "Ended · last snapshot" : entry.paused ? "Updates paused" : entry.status === "connected" ? "Live" : entry.status === "waiting" ? "Connecting" : entry.status;
       view.message = `${status}${age === undefined || (status === "Live" && age < 2) ? "" : ` · updated ${age}s ago`}`;
-    } else view.message = enabled() ? "Launch a Tua run to inspect live runtime objects." : undefined;
+    } else view.message = enabled() ? (options().categories.length ? "Launch a Tua run to inspect live runtime objects." : "No inspection categories selected. Use Configure Runtime Inspection.") : undefined;
     if (updateTree) tree.changed.fire();
   };
   const timer = setInterval(() => { if (view.visible) refresh(false); }, 1000); timer.unref();
@@ -98,7 +100,22 @@ function registerRuntimeInspector(context, activity) {
     refresh();
   };
   const disposables = [tree, view, sessions, sessions.subscribe(refresh),
-    vscode.workspace.onDidChangeConfiguration(event => { if (event.affectsConfiguration("tua.runtimeInspector.enabled")) { if (!enabled()) sessions.disconnectAll(); refresh(); } }),
+    vscode.workspace.onDidChangeConfiguration(event => { if (event.affectsConfiguration("tua.runtimeInspector.updateInterval")) sessions.updateInterval(options().updateInterval); if (event.affectsConfiguration("tua.runtimeInspector.categories")) refresh(); if (event.affectsConfiguration("tua.runtimeInspector.enabled")) { if (!enabled()) sessions.disconnectAll(); refresh(); } }),
+    vscode.commands.registerCommand("tua.inspector.configure", async () => {
+      const current = options();
+      const labels = Object.fromEntries(GROUPS.map(([key, label]) => [key, label]));
+      const picked = await vscode.window.showQuickPick(CATEGORIES.map(kind => ({ label: labels[kind], kind, picked: current.categories.includes(kind) })), { canPickMany: true, title: "Runtime Inspector categories", placeHolder: "Only selected categories are instrumented in new runs" });
+      if (!picked) return;
+      const choices = [100, 200, 500, 1000, 2000, 5000, 10000];
+      if (!choices.includes(current.updateInterval)) choices.push(current.updateInterval);
+      const rate = await vscode.window.showQuickPick(choices.sort((a, b) => a - b).map(value => ({ label: `${value} ms · ${1000 / value} updates/s`, description: value === current.updateInterval ? "Current" : value === 500 ? "Default" : undefined, value })), { title: "Inspector update interval", placeHolder: "Applies to connected players immediately; faster updates cost more" });
+      if (!rate) return;
+      const scope = vscode.workspace.workspaceFolders?.length ? vscode.ConfigurationTarget.Workspace : vscode.ConfigurationTarget.Global;
+      const config = vscode.workspace.getConfiguration("tua");
+      await config.update("runtimeInspector.categories", picked.map(item => item.kind), scope);
+      await config.update("runtimeInspector.updateInterval", rate.value, scope);
+      await vscode.window.showInformationMessage("Inspection settings saved. Restart running games to apply category changes; update frequency applies immediately.");
+    }),
     vscode.commands.registerCommand("tua.inspector.enable", () => setEnabled(true)),
     vscode.commands.registerCommand("tua.inspector.disable", () => setEnabled(false)),
     vscode.commands.registerCommand("tua.inspector.goToSource", async node => {

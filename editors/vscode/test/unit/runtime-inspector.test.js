@@ -33,6 +33,8 @@ test("inspector authenticates loopback connections, handles partial frames and r
   client.write(JSON.stringify(snapshot) + "\n");
   await until(() => received.length === 1);
   assert.deepEqual(received[0], snapshot);
+  endpoint.setInterval(1000);
+  await until(() => commands.includes("interval 1000\n"));
   endpoint.pause(true); endpoint.refresh();
   await until(() => commands.includes("pause\n") && commands.includes("snapshot\n"));
   const closed = once(client, "close");
@@ -165,4 +167,43 @@ io.write(inspect.snapshot(), "\\n")`;
   assert.equal(second.objects[0].data.watchers, 0);
   assert.equal(second.objects[0].data.state.nested.health, 5);
   assert.equal(second.objects[0].data.updates, 2, "direct mutations are not successful API calls");
+});
+
+test("collection options exclude disabled wrappers and preserve enabled store inspection", t => {
+  const { spawnSync } = require("node:child_process");
+  const lua = ["lua", "luajit"].find(command => spawnSync(command, ["-v"]).status === 0);
+  if (!lua) return t.skip("Lua interpreter unavailable");
+  const script = `local assets, runtime = arg[1], arg[2]
+package.path = runtime .. '/?.lua;' .. package.path
+local store = require('tuastore')
+local pool = require('tuaobjectpool')
+local machine = require('tuastatemachine').create
+local original = loadfile
+loadfile = function(file)
+ if file:match('transport.lua$') then return function() return function(_, _, _, interval) assert(interval == 1000); return function() end end end end
+ return original(file)
+end
+local inspect = assert(loadfile(assets .. '/shim.lua'))(assets, 1, 'test', { categories = { stores = true }, updateInterval = 1000 })
+assert(require('tuaobjectpool') == pool)
+assert(require('tuastatemachine').create == machine)
+assert(require('tuastore') ~= store)
+local keep = require('tuastore')({ health = 100 })
+keep:update(function(value) value.health = 80 end)
+io.write(inspect.snapshot())`;
+  const result = spawnSync(lua, ["-", path.resolve(__dirname, "../../assets/inspector"), path.resolve(__dirname, "../../../../vendor/runtime")], { input: script, encoding: "utf8" });
+  assert.equal(result.status, 0, result.stderr);
+  const value = JSON.parse(result.stdout);
+  assert.equal(value.objects.length, 1); assert.equal(value.objects[0].kind, "stores");
+  assert.equal(value.objects[0].data.state.health, 80);
+});
+
+test("empty categories skip launchers and intervals are clamped", async t => {
+  const { normalizeOptions } = require("../../src/inspector/options");
+  assert.deepEqual(normalizeOptions({ categories: ["stores", "unknown", "stores"], updateInterval: 1 }), { categories: ["stores"], updateInterval: 100 });
+  assert.equal(normalizeOptions({ updateInterval: 999999 }).updateInterval, 10000);
+  const activity = new ActivityStore();
+  const inspector = new InspectorSessions({ activity, enabled: () => true, options: () => ({ categories: [] }) });
+  t.after(() => { inspector.dispose(); activity.dispose(); });
+  assert.equal(await inspector.launch(activity.begin({ title: "No categories" }), "/unused"), undefined);
+  assert.equal(inspector.entries.size, 0);
 });

@@ -696,6 +696,35 @@
           "default": "",
           "scope": "machine",
           "description": "Optional glslangValidator executable. LÖVE remains preferred; this selects the fallback. Empty uses TUA_GLSLANG or PATH. Changing it restarts the language server."
+        },
+        "tua.runtimeInspector.categories": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "ecs",
+              "states",
+              "signals",
+              "pools",
+              "stores"
+            ]
+          },
+          "uniqueItems": true,
+          "default": [
+            "ecs",
+            "states",
+            "signals",
+            "pools",
+            "stores"
+          ],
+          "description": "Runtime categories instrumented in new inspected runs. Disabled categories receive no wrappers. Restart running games after changing; an empty list loads no shim."
+        },
+        "tua.runtimeInspector.updateInterval": {
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 10000,
+          "default": 500,
+          "description": "Milliseconds between runtime snapshots. Applies to connected players immediately. Lower values increase collection overhead."
         }
       }
     },
@@ -1272,6 +1301,12 @@
         "command": "tua.inspector.forDeclaration",
         "title": "Inspect Runtime Declaration",
         "category": "Tua"
+      },
+      {
+        "command": "tua.inspector.configure",
+        "title": "Configure Runtime Inspection…",
+        "category": "Tua",
+        "icon": "$(settings-gear)"
       }
     ],
     "views": {
@@ -1663,6 +1698,11 @@
           "command": "tua.inspector.resume",
           "when": "view == tua.inspector && config.tua.runtimeInspector.enabled && tua.inspectorCanControl && tua.inspectorPaused",
           "group": "navigation@2"
+        },
+        {
+          "command": "tua.inspector.configure",
+          "when": "view == tua.inspector",
+          "group": "navigation@4"
         }
       ],
       "view/item/context": [
