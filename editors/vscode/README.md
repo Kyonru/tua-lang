@@ -238,7 +238,7 @@ The view shows live objects from Tua's built-in runtimes:
   and connections after a restart start a new comparison baseline. Watcher counts
   sample at most 128 watched keys and report when that limit is reached.
 
-Snapshots arrive twice per second. **Pause or Resume Inspector Updates** pauses
+Snapshots arrive twice per second. **Pause Inspector Updates** / **Resume Inspector Updates** pauses
 snapshot updates without pausing the game; **Refresh Runtime Snapshot** requests a
 snapshot even while updates are paused. A stopped or disconnected player retains
 its last snapshot with an explicit status and age. A debugger pause also stops
@@ -371,7 +371,8 @@ inspection. This mode is optional and does not change your global hint settings.
 - `Tua: Enable Runtime Inspection`
 - `Tua: Disable Runtime Inspection`
 - `Tua: Select Runtime Player`
-- `Tua: Pause or Resume Inspector Updates`
+- `Tua: Pause Inspector Updates`
+- `Tua: Resume Inspector Updates`
 - `Tua: Refresh Runtime Snapshot`
 - `Tua: Focus Output`
 - `Tua: Open Generated Lua Beside Tua`

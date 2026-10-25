@@ -56,3 +56,24 @@ test("store state marks nested changes, additions and removals without flagging 
   assert.equal(nodes.player.children.find(node => node.label === "ammo").change, "added");
   assert.equal(storeNodes(now, "store").find(node => node.label === "state").children[0].change, undefined);
 });
+
+test("inspector pause/resume icons follow the selected player's state and connection", () => {
+  const { inspectorToolbarState } = require("../../src/inspector/view");
+  const entry = { session: { active: true }, connection: {}, status: "connected", paused: false };
+  assert.deepEqual(inspectorToolbarState(entry), { canControl: true, paused: false });
+  entry.paused = true;
+  assert.deepEqual(inspectorToolbarState(entry), { canControl: true, paused: true });
+  assert.deepEqual(inspectorToolbarState({ ...entry, paused: false }), { canControl: true, paused: false });
+  entry.status = "disconnected";
+  assert.equal(inspectorToolbarState(entry).canControl, false);
+  assert.equal(inspectorToolbarState(undefined).canControl, false);
+  const manifest = require("../../package.json");
+  const menus = manifest.contributes.menus["view/title"];
+  const pause = menus.find(item => item.command === "tua.inspector.pause");
+  const resume = menus.find(item => item.command === "tua.inspector.resume");
+  assert(pause.when.includes("!tua.inspectorPaused"));
+  assert(resume.when.includes("tua.inspectorPaused"));
+  assert.equal(pause.group, resume.group);
+  assert.notEqual(manifest.contributes.commands.find(item => item.command === pause.command).icon,
+    manifest.contributes.commands.find(item => item.command === resume.command).icon);
+});

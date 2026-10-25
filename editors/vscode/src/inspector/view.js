@@ -83,6 +83,10 @@ function changedValueNodes(current, previous, prefix, depth = 0) {
   });
 }
 
+function inspectorToolbarState(entry) {
+  return { canControl: Boolean(entry?.session.active && entry.connection && entry.status === "connected"), paused: Boolean(entry?.paused) };
+}
+
 function registerRuntimeInspector(context, activity) {
   const enabled = () => vscode.workspace.isTrusted && vscode.workspace.getConfiguration("tua").get("runtimeInspector.enabled", false);
   const sessions = new InspectorSessions({ activity, enabled,
@@ -91,8 +95,13 @@ function registerRuntimeInspector(context, activity) {
   });
   const tree = new InspectorTree(sessions);
   const view = vscode.window.createTreeView("tua.inspector", { treeDataProvider: tree, showCollapseAll: true });
+  let toolbarState;
   const refresh = () => {
     const entry = tree.entry();
+    const nextState = inspectorToolbarState(entry);
+    if (toolbarState?.canControl !== nextState.canControl) void vscode.commands.executeCommand("setContext", "tua.inspectorCanControl", nextState.canControl);
+    if (toolbarState?.paused !== nextState.paused) void vscode.commands.executeCommand("setContext", "tua.inspectorPaused", nextState.paused);
+    toolbarState = nextState;
     view.description = entry?.session.title;
     if (entry) {
       const age = entry.received ? Math.floor((Date.now() - entry.received) / 1000) : undefined;
@@ -120,11 +129,12 @@ function registerRuntimeInspector(context, activity) {
       const picked = await vscode.window.showQuickPick(items, { placeHolder: "Choose a player to inspect" });
       if (picked) { tree.selected = picked.entry.session.id; refresh(); }
     }),
-    vscode.commands.registerCommand("tua.inspector.pause", () => sessions.pause(tree.entry()?.session.id)),
+    vscode.commands.registerCommand("tua.inspector.pause", () => sessions.pause(tree.entry()?.session.id, true)),
+    vscode.commands.registerCommand("tua.inspector.resume", () => sessions.pause(tree.entry()?.session.id, false)),
     vscode.commands.registerCommand("tua.inspector.refresh", () => sessions.refresh(tree.entry()?.session.id)),
-    { dispose() { clearInterval(timer); } },
+    { dispose() { clearInterval(timer); void vscode.commands.executeCommand("setContext", "tua.inspectorCanControl", false); void vscode.commands.executeCommand("setContext", "tua.inspectorPaused", false); } },
   ];
   refresh();
   return { sessions, dispose: () => vscode.Disposable.from(...disposables).dispose() };
 }
-module.exports = { InspectorTree, valueNodes, storeNodes, registerRuntimeInspector };
+module.exports = { InspectorTree, valueNodes, storeNodes, inspectorToolbarState, registerRuntimeInspector };

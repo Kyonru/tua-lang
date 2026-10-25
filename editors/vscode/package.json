@@ -1202,15 +1202,23 @@
       },
       {
         "command": "tua.inspector.pause",
-        "title": "Pause or Resume Inspector Updates",
+        "title": "Pause Inspector Updates",
         "category": "Tua",
-        "icon": "$(debug-pause)"
+        "icon": "$(debug-pause)",
+        "enablement": "tua.inspectorCanControl && !tua.inspectorPaused"
       },
       {
         "command": "tua.inspector.refresh",
         "title": "Refresh Runtime Snapshot",
         "category": "Tua",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "tua.inspector.resume",
+        "title": "Resume Inspector Updates",
+        "category": "Tua",
+        "icon": "$(debug-continue)",
+        "enablement": "tua.inspectorCanControl && tua.inspectorPaused"
       }
     ],
     "views": {
@@ -1572,13 +1580,18 @@
         },
         {
           "command": "tua.inspector.pause",
-          "when": "view == tua.inspector && config.tua.runtimeInspector.enabled",
+          "when": "view == tua.inspector && config.tua.runtimeInspector.enabled && tua.inspectorCanControl && !tua.inspectorPaused",
           "group": "navigation@2"
         },
         {
           "command": "tua.inspector.disable",
           "when": "view == tua.inspector && config.tua.runtimeInspector.enabled",
           "group": "navigation@3"
+        },
+        {
+          "command": "tua.inspector.resume",
+          "when": "view == tua.inspector && config.tua.runtimeInspector.enabled && tua.inspectorCanControl && tua.inspectorPaused",
+          "group": "navigation@2"
         }
       ],
       "view/item/context": [

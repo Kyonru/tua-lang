@@ -40,7 +40,7 @@ class InspectorSessions {
     entry.launcher?.dispose(); entry.launcher = undefined;
     entry.status = "ended";
   }
-  pause(id) { const entry = this.entries.get(id); if (!entry?.connection) return; entry.paused = !entry.paused; entry.connection.pause(entry.paused); this.changed(); }
+  pause(id, paused) { const entry = this.entries.get(id); if (!entry?.connection) return; entry.paused = paused ?? !entry.paused; entry.connection.pause(entry.paused); this.changed(); }
   refresh(id) { this.entries.get(id)?.connection?.refresh(); }
   disconnectAll() {
     for (const entry of this.entries.values()) {

@@ -114,7 +114,7 @@ pool usage, and store state with update/subscription counts. It complements sour
    must be restarted. Custom debug configurations need `tuaProject: true`.
 4. Use **Select Runtime Player** to choose a player in a multi-instance run.
 
-Snapshots update twice per second. **Pause or Resume Inspector Updates** pauses
+Snapshots update twice per second. **Pause Inspector Updates** / **Resume Inspector Updates** pauses
 snapshot updates without stopping the game; **Refresh Runtime Snapshot** also
 works while updates are paused. Debugger pauses suspend snapshots until the game
 resumes. Disconnected or ended players retain their last snapshot, labeled with

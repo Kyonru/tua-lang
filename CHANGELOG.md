@@ -93,6 +93,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Runtime Inspector updates now use separate Pause and Resume icons that follow
+  the selected player, and disable when its connection is unavailable.
+
 - The Tua Assets inspector excludes configured build output and its generated
   references, avoiding duplicate assets and unused-asset hints for build copies.
 
