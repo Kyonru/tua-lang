@@ -4543,6 +4543,81 @@ end
 }
 
 #[test]
+fn reports_shader_uniforms_missing_from_the_shader_asset() {
+    let temp = TempProject::new("shader-uniforms");
+    let source = r#"
+local water = shader "assets/water.glsl"
+water:send("time", 1)
+water:send("tim", 1)
+for i = 1, 2 do
+  water:send("ripple" .. tostring(i), { 0, 0, 0, 0 })
+  water:send("splash" .. tostring(i), { 0, 0, 0, 0 })
+end
+water:sendColor("tint", { 1, 1, 1, 1 })
+local dynamic = "time"
+water:send(dynamic, 1)
+water = shader "assets/blocks.glsl"
+water:send("anything", 1)
+"#;
+
+    temp.write("src/main.tua", source);
+    temp.write(
+        "game/assets/water.glsl",
+        r#"// uniform float commented;
+extern number time;
+uniform highp vec4 ripple1, ripple2;
+/* uniform vec4 alsoCommented; */
+uniform Image textures[2];
+vec4 effect(vec4 color, Image tex, vec2 uv, vec2 screen) { return color; }
+"#,
+    );
+    temp.write(
+        "game/assets/blocks.glsl",
+        "uniform Lights { vec4 color; };\n",
+    );
+
+    let diagnostics = check_tua_source_with_asset_roots_and_diagnostics_config(
+        temp.path.join("src/main.tua"),
+        source,
+        &[temp.path.join("game")],
+        &diagnostics_without_standard_rules(),
+    )
+    .expect_err("unknown shader uniforms should be reported");
+    let reported = diagnostics
+        .iter()
+        .map(|diagnostic| {
+            (
+                diagnostic.line,
+                diagnostic.code,
+                diagnostic.message.as_str(),
+            )
+        })
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        reported,
+        vec![
+            (
+                4,
+                Some(DiagnosticCode::ASSET_SHADER_UNIFORM),
+                "shader `assets/water.glsl` has no uniform `tim`, so LOVE raises an error when it is sent; did you mean `time`?"
+            ),
+            (
+                7,
+                Some(DiagnosticCode::ASSET_SHADER_UNIFORM),
+                "shader `assets/water.glsl` has no uniform starting with `splash`, so LOVE raises an error when it is sent; it declares `ripple1`, `ripple2`, `textures`, `time`"
+            ),
+            (
+                9,
+                Some(DiagnosticCode::ASSET_SHADER_UNIFORM),
+                "shader `assets/water.glsl` has no uniform `tint`, so LOVE raises an error when it is sent; it declares `ripple1`, `ripple2`, `textures`, `time`"
+            ),
+        ],
+        "{diagnostics:#?}"
+    );
+}
+
+#[test]
 fn accepts_vector_and_color_tables_for_love_table_parameters() {
     check_tua_source(
         "src/main.tua",

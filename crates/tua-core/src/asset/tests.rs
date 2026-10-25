@@ -279,3 +279,32 @@ fn png_header(width: u32, height: u32) -> Vec<u8> {
 
     bytes
 }
+
+#[test]
+fn lists_shader_uniform_declarations() {
+    let names = shader_uniform_names(
+        r#"#pragma language glsl3
+// uniform float commented;
+/* uniform vec4 blockComment; */
+extern number time;
+uniform highp vec4 first, second;
+uniform Image layers[2];
+const float scale = 2.0;
+vec4 effect(vec4 color, Image tex, vec2 uv, vec2 screen) { return color * scale; }
+"#,
+    )
+    .expect("plain declarations should be listed");
+
+    assert_eq!(
+        names.into_iter().collect::<Vec<_>>(),
+        ["first", "layers", "second", "time"]
+    );
+    assert_eq!(
+        shader_uniform_names("uniform Lights { vec4 color; };"),
+        None
+    );
+    assert_eq!(
+        shader_uniform_names("#define PARAM(name) uniform float name;\nPARAM(time)"),
+        None
+    );
+}

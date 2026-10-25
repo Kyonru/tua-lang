@@ -201,7 +201,15 @@ struct Checker<'a> {
     exact_module_references: BTreeMap<(usize, usize), String>,
     runtime_imports: BTreeMap<String, String>,
     unknown_record_fields: bool,
+    /// Locals holding a shader asset, with the uniforms its source declares.
+    shader_locals: BTreeMap<String, ShaderUniforms>,
     diagnostics: Vec<Diagnostic>,
+}
+
+#[derive(Clone, Debug)]
+struct ShaderUniforms {
+    asset_path: String,
+    names: BTreeSet<String>,
 }
 
 impl<'a> Checker<'a> {
@@ -280,6 +288,7 @@ impl<'a> Checker<'a> {
             exact_module_references,
             runtime_imports,
             unknown_record_fields: diagnostics_config.unknown_record_fields,
+            shader_locals: BTreeMap::new(),
             diagnostics: Vec::new(),
         }
     }
@@ -562,6 +571,12 @@ impl<'a> Checker<'a> {
 
     fn check_local_assignment(&mut self, local: &ast::LocalAssignment) {
         let expressions = local.expressions().iter().collect::<Vec<_>>();
+        for (index, name) in local.names().iter().enumerate() {
+            let expression = assignment_expression_for_local(&expressions, index)
+                .filter(|(_, return_index)| *return_index == 0)
+                .map(|(expression, _)| expression);
+            self.record_shader_local(token_text(name), expression);
+        }
         let lua_doc_contract = local
             .start_position()
             .is_some_and(|position| has_leading_lua_doc_type(self.parsed, position.line()));
@@ -759,6 +774,9 @@ impl<'a> Checker<'a> {
 
     fn check_assignment(&mut self, assignment: &ast::Assignment) {
         for (variable, expression) in assignment.variables().iter().zip(assignment.expressions()) {
+            if let Some(name) = directly_assigned_name(variable) {
+                self.record_shader_local(name, Some(expression));
+            }
             let source = self.infer_expression(expression);
             let target = self.infer_var_assignment_target(variable);
 
@@ -1744,6 +1762,7 @@ impl<'a> Checker<'a> {
     fn check_first_call_returns(&mut self, function_call: &FunctionCall) -> Vec<Type> {
         self.check_asset_loader_call(function_call);
         self.check_dot_love_method_call(function_call);
+        self.check_shader_send_call(function_call);
 
         if let Some(ty) = self.setmetatable_return_type(function_call) {
             return vec![ty];
@@ -2027,6 +2046,106 @@ impl<'a> Checker<'a> {
             }
             asset::AssetValidationStatus::Valid | asset::AssetValidationStatus::Unchecked => {}
         }
+    }
+
+    /// Remembers the uniforms of a shader asset assigned to `name`, so that
+    /// `name:send(...)` can be checked; any other value forgets them.
+    fn record_shader_local(&mut self, name: String, expression: Option<&Expression>) {
+        let uniforms = expression.and_then(|expression| {
+            let Expression::FunctionCall(function_call) = expression else {
+                return None;
+            };
+            let call = asset::asset_loader_call(function_call)?;
+            if call.kind != asset::AssetLoaderKind::Shader {
+                return None;
+            }
+            let metadata = asset::validate_asset_with_index(
+                call.kind,
+                &call.path,
+                call.path_span,
+                &self.asset_roots,
+                self.asset_index,
+            );
+            let path = asset::resolved_asset_path(&metadata, &self.asset_roots, self.asset_index)?;
+            let source = read_shader_source(&path)?;
+
+            Some(ShaderUniforms {
+                asset_path: call.path,
+                names: asset::shader_uniform_names(&source)?,
+            })
+        });
+
+        match uniforms {
+            Some(uniforms) => {
+                self.shader_locals.insert(name, uniforms);
+            }
+            None => {
+                self.shader_locals.remove(&name);
+            }
+        }
+    }
+
+    fn check_shader_send_call(&mut self, function_call: &FunctionCall) {
+        let Some(call) = asset::shader_send_call(function_call) else {
+            return;
+        };
+        let Some(uniforms) = self.shader_locals.get(&call.receiver) else {
+            return;
+        };
+        let (declared, described) = match &call.uniform {
+            asset::ShaderUniformReference::Exact(name) => {
+                (uniforms.names.contains(name), format!("uniform `{name}`"))
+            }
+            asset::ShaderUniformReference::Prefix(prefix) => (
+                uniforms
+                    .names
+                    .iter()
+                    .any(|name| name.starts_with(prefix.as_str())),
+                format!("uniform starting with `{prefix}`"),
+            ),
+        };
+        if declared {
+            return;
+        }
+
+        let requested = match &call.uniform {
+            asset::ShaderUniformReference::Exact(name)
+            | asset::ShaderUniformReference::Prefix(name) => name,
+        };
+        let available = match closest_uniform(&uniforms.names, requested) {
+            Some(suggestion) => format!("did you mean `{suggestion}`?"),
+            None if uniforms.names.is_empty() => "it declares no uniforms".to_owned(),
+            None => {
+                let mut names = uniforms
+                    .names
+                    .iter()
+                    .take(6)
+                    .map(|name| format!("`{name}`"))
+                    .collect::<Vec<_>>();
+                if uniforms.names.len() > names.len() {
+                    names.push("...".to_owned());
+                }
+                format!("it declares {}", names.join(", "))
+            }
+        };
+        self.push_asset_diagnostic(
+            Diagnostic::error(
+                &self.parsed.path,
+                call.span.start.line,
+                call.span.start.column,
+                format!(
+                    "shader `{}` has no {described}, so LOVE raises an error when it is sent; {available}",
+                    uniforms.asset_path
+                ),
+            )
+            .with_range(
+                call.span.start.line,
+                call.span.start.column,
+                call.span.end.line,
+                call.span.end.column,
+            )
+            .with_code(DiagnosticCode::ASSET_SHADER_UNIFORM),
+        );
     }
 
     fn push_asset_diagnostic(&mut self, diagnostic: Diagnostic) {
@@ -4210,6 +4329,47 @@ fn missing_asset_diagnostic(
 
     Diagnostic::error(path, position.line, position.column, message)
         .with_code(DiagnosticCode::ASSET_MISSING)
+}
+
+/// The declared uniform nearest to a misspelled name, if any is close.
+fn closest_uniform<'a>(names: &'a BTreeSet<String>, requested: &str) -> Option<&'a str> {
+    names
+        .iter()
+        .map(|name| (edit_distance(name, requested), name))
+        .filter(|(distance, name)| *distance <= (name.len().max(requested.len()) / 3).max(1))
+        .min_by_key(|(distance, _)| *distance)
+        .map(|(_, name)| name.as_str())
+}
+
+fn edit_distance(left: &str, right: &str) -> usize {
+    let right = right.chars().collect::<Vec<_>>();
+    let mut previous = (0..=right.len()).collect::<Vec<_>>();
+
+    for (row, left_char) in left.chars().enumerate() {
+        let mut current = vec![row + 1];
+        for (column, right_char) in right.iter().enumerate() {
+            let substitution = previous[column] + usize::from(left_char != *right_char);
+            current.push(
+                substitution
+                    .min(previous[column + 1] + 1)
+                    .min(current[column] + 1),
+            );
+        }
+        previous = current;
+    }
+
+    previous[right.len()]
+}
+
+/// Shader sources are small; a larger file is not read for uniform checks.
+const MAX_SHADER_SOURCE_BYTES: u64 = 1024 * 1024;
+
+fn read_shader_source(path: &Path) -> Option<String> {
+    let metadata = std::fs::metadata(path).ok()?;
+    if metadata.len() > MAX_SHADER_SOURCE_BYTES {
+        return None;
+    }
+    std::fs::read_to_string(path).ok()
 }
 
 fn wrong_asset_kind_diagnostic(

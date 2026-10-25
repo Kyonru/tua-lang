@@ -772,6 +772,24 @@ type mismatches such as using an audio file where an image is expected. Today
 that optional binary metadata is conservative; for example, valid PNG headers
 can provide dimensions, while audio duration is left unknown.
 
+A local that holds a shader asset also checks the uniform names it is sent.
+LOVE raises an error at runtime when `Shader:send` or `Shader:sendColor` names
+a uniform the shader does not declare, so Tua reports `TL2013` for a literal
+name that no `uniform` or `extern` declaration in the shader file matches:
+
+```tua
+local wave = shader "assets/wave.glsl" -- declares `extern number time;`
+wave:send("time", love.timer.getTime())
+wave:send("tim", 0) -- TL2013: did you mean `time`?
+wave:send("light" .. tostring(index), color) -- needs a uniform starting with `light`
+```
+
+Names built at runtime are not checked, and neither are shaders whose uniforms
+come from uniform blocks or preprocessor macros. LOVE also rejects a declared
+uniform that the GLSL compiler removed because the shader never reads it; that
+case still appears only at runtime, so `Shader:hasUniform` remains the guard for
+optional uniforms.
+
 ### LOVE Methods And Callbacks
 
 Prefer `:` for LOVE object methods. These methods usually need `self`, and Lua

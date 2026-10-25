@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -1219,6 +1219,130 @@ pub(crate) fn asset_category_for_extension(extension: &str) -> Option<AssetCateg
 
 fn fold_asset_path(path: &str) -> String {
     path.replace('\\', "/").to_lowercase()
+}
+
+/// Names declared with `uniform` or LOVE's `extern` in shader source. Returns
+/// `None` when the declarations cannot be listed reliably: a uniform block or a
+/// preprocessor macro that spells a declaration.
+pub(crate) fn shader_uniform_names(source: &str) -> Option<BTreeSet<String>> {
+    let code = strip_glsl_comments(source);
+    let mut names = BTreeSet::new();
+
+    for line in code.lines() {
+        let line = line.trim_start();
+        if line.starts_with('#') && (line.contains("uniform") || line.contains("extern")) {
+            return None;
+        }
+    }
+
+    for declaration in code.split(';') {
+        let mut words = declaration
+            .split(|character: char| character.is_whitespace())
+            .filter(|word| !word.is_empty())
+            .skip_while(|word| word.starts_with('#') || !matches!(*word, "uniform" | "extern"));
+        if words.next().is_none() {
+            continue;
+        }
+        let rest = words.collect::<Vec<_>>().join(" ");
+        if rest.contains('{') {
+            return None;
+        }
+        // Skip precision qualifiers and the type; the rest is the name list.
+        let rest = rest
+            .split_whitespace()
+            .skip_while(|word| matches!(*word, "lowp" | "mediump" | "highp" | "const"))
+            .skip(1)
+            .collect::<Vec<_>>()
+            .join(" ");
+        for name in rest.split(',') {
+            let name = name.split(['[', '=']).next().unwrap_or_default().trim();
+            if !name.is_empty() && name.chars().all(|c| c == '_' || c.is_ascii_alphanumeric()) {
+                names.insert(name.to_owned());
+            }
+        }
+    }
+
+    Some(names)
+}
+
+fn strip_glsl_comments(source: &str) -> String {
+    let mut output = String::with_capacity(source.len());
+    let mut rest = source;
+
+    while !rest.is_empty() {
+        if let Some(after) = rest.strip_prefix("//") {
+            rest = after.find('\n').map_or("", |end| &after[end..]);
+        } else if let Some(after) = rest.strip_prefix("/*") {
+            output.push(' ');
+            rest = after.find("*/").map_or("", |end| &after[end + 2..]);
+        } else {
+            let character = rest.chars().next().expect("rest is not empty");
+            output.push(character);
+            rest = &rest[character.len_utf8()..];
+        }
+    }
+
+    output
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) enum ShaderUniformReference {
+    Exact(String),
+    /// `"light" .. index` names one of several uniforms sharing a prefix.
+    Prefix(String),
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct ShaderSendCall {
+    pub(crate) receiver: String,
+    pub(crate) uniform: ShaderUniformReference,
+    pub(crate) span: SourceSpan,
+}
+
+/// Recognizes `receiver:send("name", ...)` and `receiver:sendColor(...)`.
+pub(crate) fn shader_send_call(function_call: &FunctionCall) -> Option<ShaderSendCall> {
+    let Prefix::Name(receiver) = function_call.prefix() else {
+        return None;
+    };
+    let mut suffixes = function_call.suffixes();
+    let Some(Suffix::Call(Call::MethodCall(method))) = suffixes.next() else {
+        return None;
+    };
+    if suffixes.next().is_some()
+        || !matches!(token_text(method.name()).as_str(), "send" | "sendColor")
+    {
+        return None;
+    }
+    let first = match method.args() {
+        FunctionArgs::Parentheses { arguments, .. } => arguments.iter().next()?,
+        _ => return None,
+    };
+    let (uniform, token) = match first {
+        Expression::String(token) => (
+            ShaderUniformReference::Exact(string_literal_value(token)?),
+            token,
+        ),
+        Expression::BinaryOperator {
+            lhs,
+            binop: full_moon::ast::BinOp::TwoDots(_),
+            ..
+        } => {
+            let Expression::String(token) = lhs.as_ref() else {
+                return None;
+            };
+            (
+                ShaderUniformReference::Prefix(string_literal_value(token)?),
+                token,
+            )
+        }
+        _ => return None,
+    };
+
+    Some(ShaderSendCall {
+        receiver: token_text(receiver),
+        uniform,
+        span: node_span(token)?,
+    })
 }
 
 fn string_literal_value(token: &TokenReference) -> Option<String> {

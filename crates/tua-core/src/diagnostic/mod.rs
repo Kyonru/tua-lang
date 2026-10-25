@@ -63,6 +63,7 @@ impl DiagnosticCode {
     pub const EMIT_UNSUPPORTED_SYNTAX: Self = Self(2010);
     pub const ASSET_PIPELINE: Self = Self(2011);
     pub const AUDIO_ANALYSIS: Self = Self(2012);
+    pub const ASSET_SHADER_UNIFORM: Self = Self(2013);
     pub const CONFIG_PARSE: Self = Self(3001);
     pub const CONFIG_IO: Self = Self(3002);
     pub const LINT_DUPLICATE_TABLE_KEY: Self = Self(4001);
@@ -199,6 +200,7 @@ impl DiagnosticCode {
                 | Self::EMIT_UNSUPPORTED_SYNTAX
                 | Self::ASSET_PIPELINE
                 | Self::AUDIO_ANALYSIS
+                | Self::ASSET_SHADER_UNIFORM
                 | Self::CONFIG_PARSE
                 | Self::CONFIG_IO
                 | Self::LINT_DUPLICATE_TABLE_KEY

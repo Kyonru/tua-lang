@@ -11,6 +11,10 @@ language or editor behavior, and migration notes call out those changes.
 - Property accesses expose optional `propertyChain1` through `propertyChain4`
   semantic modifiers, allowing themes or user settings to color successive
   properties while preserving their existing semantic classifications.
+- `Shader:send` and `Shader:sendColor` on a local loaded from a shader asset
+  check the uniform name against the shader's `uniform` and `extern`
+  declarations. A misspelled name reports `TL2013` with a suggestion instead of
+  failing when LOVE runs the call.
 
 ### Changed
 
