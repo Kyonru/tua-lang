@@ -489,3 +489,29 @@ return {
         "local enemyFromLuaDocModule: {\n  hp: number,\n  name: string,\n  type: \"friendly\" | \"mad\"\n}",
     );
 }
+
+#[test]
+fn imported_event_parameter_hover_reaches_project_inference() {
+    let temp = TempProject::new("signal-parameter-project-hover");
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/events.tua", "return { enemies = signal() }\n");
+    temp.write(
+        "src/combat.tua",
+        r#"local Events = require "events"
+local EnemyEvents = Events.enemies
+EnemyEvents:emit("hit", vec2(1, 2))
+"#,
+    );
+    let source = r#"local Events = require "events"
+local EnemyEvents = Events.enemies
+EnemyEvents:on("hit", function(position)
+  print(position.x)
+end)
+"#;
+    let uri = temp.uri_for("src/main.tua");
+    let mut server = TestServer::new();
+    server.send(initialize_with_pull_diagnostics(1, temp.uri(), false));
+    server.send(did_open(&uri, source));
+    server.send(hover_request(2, &uri, source, "position"));
+    assert_hover_contains(server.output(), 2, "parameter position: Vec2");
+}

@@ -955,6 +955,11 @@ impl AnalysisHost {
         if let Some(chain) = dotted_chain_at_position(&parsed.source, position) {
             let required = require_bindings_for_parsed_source(parsed);
             let root = chain.parts.first().map(|part| part.text.as_str());
+            if root.is_some_and(|name| {
+                crate::signal::handler_parameter_context(parsed, name, position).is_some()
+            }) {
+                return None;
+            }
             let copied_from_required_module = root
                 .and_then(|name| {
                     SemanticModel::new(parsed, &semantics.environment)
