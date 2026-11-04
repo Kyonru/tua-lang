@@ -163,12 +163,14 @@ impl<'a> SemanticModel<'a> {
         let local = self.local_assignment_value(name, position)?;
 
         let ty = match local.expression {
-            Some(expression) => self.type_of_expression_return_at_depth(
-                expression,
-                local.evaluation_position,
-                local.return_index,
-                0,
-            )?,
+            Some(expression) => self
+                .type_of_expression_return_at_depth(
+                    expression,
+                    local.evaluation_position,
+                    local.return_index,
+                    0,
+                )
+                .unwrap_or(Type::Any),
             None => Type::nil(),
         };
 

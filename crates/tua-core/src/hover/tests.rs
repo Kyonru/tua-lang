@@ -2006,3 +2006,17 @@ fn shared_love_color_alias_hovers() {
         "type LoveColor = number[]",
     );
 }
+
+#[test]
+fn dynamic_class_multi_return_locals_keep_their_names_in_hover() {
+    let source = r#"final class Dialogue {
+  text: any
+  draw() {
+    local text_w, text_h = self.text:getDimensions()
+    print(text_w, text_h)
+  }
+}
+"#;
+    assert_hover_in_source(source, "text_w,", 0, "local text_w: any");
+    assert_hover_in_source(source, "text_h =", 0, "local text_h: any");
+}
