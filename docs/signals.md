@@ -148,7 +148,8 @@ completion infer handler parameters from consistent emitted payload types.
 This also works across modules through aliases such as
 `local EnemyEvents = Events.enemies`, when `Events` is a required module.
 An explicit schema takes precedence; conflicting inferred payloads remain
-unknown.
+unknown. Reassigned bus aliases are treated conservatively and do not
+contribute payload inference to their original bus.
 
 ## Pattern Methods
 

@@ -64,11 +64,13 @@ impl FileUsageIndex {
             let semantic = crate::semantic::SemanticModel::new(parsed, environment);
             index.signal_events = collect_potential_event_mentions(parsed, environment, scope)
                 .into_iter()
-                .map(|mention| {
-                    let resolved = scope
-                        .map(|scope| crate::signal::canonical_receiver(&semantic, scope, &mention))
-                        .unwrap_or_else(|| mention.clone());
-                    (mention, resolved)
+                .filter_map(|mention| {
+                    let resolved = if let Some(scope) = scope {
+                        crate::signal::canonical_receiver(parsed, &semantic, scope, &mention)?
+                    } else {
+                        mention.clone()
+                    };
+                    Some((mention, resolved))
                 })
                 .collect();
             index.require_bindings = scope

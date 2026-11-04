@@ -6433,6 +6433,26 @@ Events.enemies:on("hit", function(payload) print(payload) end)
 "#,
             "any",
         ),
+        (
+            "return { enemies = signal() }",
+            r#"local Events = require "events"
+local E = Events.enemies
+E = signal()
+E:emit("hit", "wrong")
+Events.enemies:on("hit", function(payload) print(payload) end)
+"#,
+            "any",
+        ),
+        (
+            "return { enemies = signal() }",
+            r#"local Events = require "events"
+Events = { enemies = signal() }
+Events.enemies:emit("hit", "wrong")
+local Other = require "events"
+Other.enemies:on("hit", function(payload) print(payload) end)
+"#,
+            "any",
+        ),
     ] {
         let mut host = AnalysisHost::new();
         host.set_file("src/events.tua", events);

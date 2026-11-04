@@ -1259,15 +1259,21 @@ fn root_definition_span(
 }
 
 pub(crate) fn canonical_receiver(
+    parsed: &ParsedSource,
     semantic: &SemanticModel<'_>,
     scope: &ScopeMap,
     mention: &SignalEventMention,
-) -> SignalEventMention {
+) -> Option<SignalEventMention> {
     let mut resolved = mention.clone();
     let mut position = mention.position;
     let mut seen = BTreeSet::new();
     while let Some(root) = resolved.receiver_parts.first().cloned() {
         let binding = crate::semantic::binding_at(scope, &root, position);
+        if binding.is_some_and(|binding| {
+            receiver_reassigned(parsed, scope, binding.id, binding.name_span.start, position)
+        }) {
+            return None;
+        }
         resolved.root_definition = binding.map(|binding| binding.name_span);
         let key = (
             root.clone(),
@@ -1287,7 +1293,48 @@ pub(crate) fn canonical_receiver(
         resolved.receiver_parts = alias;
         position = evaluation;
     }
-    resolved
+    Some(resolved)
+}
+
+fn receiver_reassigned(
+    parsed: &ParsedSource,
+    scope: &ScopeMap,
+    symbol: crate::ScopeSymbolId,
+    after: SourcePosition,
+    before: SourcePosition,
+) -> bool {
+    struct Writes<'a> {
+        scope: &'a ScopeMap,
+        symbol: crate::ScopeSymbolId,
+        after: SourcePosition,
+        before: SourcePosition,
+        found: bool,
+    }
+    impl Visitor for Writes<'_> {
+        fn visit_assignment(&mut self, assignment: &ast::Assignment) {
+            for variable in assignment.variables() {
+                let ast::Var::Name(token) = variable else {
+                    continue;
+                };
+                let position = node_start(token);
+                if (self.after.line, self.after.column) < (position.line, position.column)
+                    && (position.line, position.column) < (self.before.line, self.before.column)
+                    && self.scope.symbol_at_position(position) == Some(self.symbol)
+                {
+                    self.found = true;
+                }
+            }
+        }
+    }
+    let mut writes = Writes {
+        scope,
+        symbol,
+        after,
+        before,
+        found: false,
+    };
+    writes.visit_ast(&parsed.ast);
+    writes.found
 }
 
 pub(crate) fn local_event_index(
@@ -1298,10 +1345,14 @@ pub(crate) fn local_event_index(
     SignalEventIndex::new(
         collect_event_mentions(parsed, environment, Some(scope), None)
             .into_iter()
-            .map(|mention| {
-                let resolved =
-                    canonical_receiver(&SemanticModel::new(parsed, environment), scope, &mention);
-                IndexedSignalEvent {
+            .filter_map(|mention| {
+                let resolved = canonical_receiver(
+                    parsed,
+                    &SemanticModel::new(parsed, environment),
+                    scope,
+                    &mention,
+                )?;
+                Some(IndexedSignalEvent {
                     identity: SignalBusIdentity {
                         origin: parsed.path.clone(),
                         root_definition: resolved
@@ -1311,7 +1362,7 @@ pub(crate) fn local_event_index(
                     },
                     path: parsed.path.clone(),
                     mention,
-                }
+                })
             })
             .collect(),
     )
