@@ -1792,3 +1792,19 @@ fn rename_unknown_document_returns_null() {
 
     assert!(response["result"].is_null());
 }
+
+#[test]
+fn definition_resolves_inferred_imported_class_array_receivers() {
+    let actors_uri = "file:///tmp/gameplay-array-nav/actors.tua";
+    let main_uri = "file:///tmp/gameplay-array-nav/main.tua";
+    let actors = "open class Actor {\n  damage(amount: number): boolean {\n    return amount > 100\n  }\n}\nexport type ActorInstance = Actor\nreturn { Actor = Actor }\n";
+    let main = "import type { ActorInstance } from \"./actors\"\nlocal actors: ActorInstance[] = {}\nlocal target = actors[1]\ntarget:damage(1)\nfor _, actor in ipairs(actors) do\n  actor:damage(2)\nend\n";
+    let output = run_messages(vec![
+        did_open(actors_uri, actors),
+        did_open(main_uri, main),
+        definition_request(2, main_uri, main, "target:damage", "target:".len()),
+        definition_request(3, main_uri, main, "actor:damage", "actor:".len()),
+    ]);
+    assert_definition_text(&output, 2, actors_uri, actors, "damage");
+    assert_definition_text(&output, 3, actors_uri, actors, "damage");
+}

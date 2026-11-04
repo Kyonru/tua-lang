@@ -20,6 +20,11 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Hovers inside class methods recognize parameter types and shadowed builtin names
+  using original source positions.
+
+- Class member definitions resolve through inferred array elements and loop
+  variables, including arrays exported by other modules.
 - Event handler payload inference follows imported and local bus aliases,
   preserves shadowing, and no longer recurses indefinitely when handlers forward events.
 - Class source positions handle inline and unindented methods accurately;

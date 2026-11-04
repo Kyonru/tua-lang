@@ -6471,3 +6471,48 @@ Other.enemies:on("hit", function(payload) print(payload) end)
         );
     }
 }
+
+#[test]
+fn snapshot_navigates_inferred_class_array_receivers() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/actors.tua
+open class Actor {
+  hp: number = 100
+  <|damage_def|>damage<|/damage_def|>(amount: number): boolean {
+    self.hp -= amount
+    return self.hp <= 0
+  }
+}
+export type ActorInstance = Actor
+return { Actor = Actor }
+-- file: src/world.tua
+import type { ActorInstance } from "./actors"
+local actors: ActorInstance[] = {}
+local target = actors[1]
+target:<|indexed|>damage<|/indexed|>(1)
+return { actors = actors }
+-- file: src/main.tua
+local world = require("world")
+for _, actor in ipairs(world.actors) do
+  actor:<|iterated|>damage<|/iterated|>(1)
+end
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+    let snapshot = host.snapshot();
+    for (path, marker) in [("src/world.tua", "indexed"), ("src/main.tua", "iterated")] {
+        let definition = snapshot
+            .definition(path, fixture.position(marker))
+            .expect("inferred class receiver should navigate");
+        assert_eq!(definition.path, PathBuf::from("src/actors.tua"));
+        assert_eq!(definition.span, fixture.range("damage_def"));
+        assert!(snapshot
+            .completion(path, fixture.position(marker))
+            .iter()
+            .any(|item| item.label == "damage"));
+    }
+}

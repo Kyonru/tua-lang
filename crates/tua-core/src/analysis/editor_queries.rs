@@ -321,9 +321,8 @@ impl AnalysisSnapshot {
         position: SourcePosition,
     ) -> Option<Type> {
         let (root, fields) = parts.split_first()?;
-        let mut current = environment
-            .local(root)
-            .cloned()
+        let mut current = SemanticModel::new(parsed, environment)
+            .type_of_name(root, position)
             .or_else(|| parameter_type_before_position(parsed, root, position))?;
 
         for field in fields {
