@@ -43,6 +43,31 @@ end
 }
 
 #[test]
+fn folding_ranges_include_if_and_do_blocks() {
+    let source = r#"
+if typing ~= "" then
+  do
+    love.graphics.clear()
+    love.graphics.draw(text)
+  end
+end
+"#;
+    let ranges = folding_ranges_tua_source(Path::new("src/main.tua"), source)
+        .expect("folding ranges should be recoverable");
+
+    assert!(ranges.iter().any(|range| {
+        range.kind == FoldingRangeKind::Function
+            && range.range.start.line == 2
+            && range.range.end.line == 7
+    }));
+    assert!(ranges.iter().any(|range| {
+        range.kind == FoldingRangeKind::Function
+            && range.range.start.line == 3
+            && range.range.end.line == 6
+    }));
+}
+
+#[test]
 fn folding_ranges_include_comments_and_multiline_type_aliases() {
     let source = r#"
 -- First line

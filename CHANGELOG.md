@@ -12,6 +12,7 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- LSP folding ranges now include multiline `if` and `do` blocks.
 - VS Code Marketplace and Open VSX listings show the extension README
   screenshots and repository links. Packaging now resolves them against the
   release tag's `editors/vscode` directory instead of the repository root.

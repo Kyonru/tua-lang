@@ -219,13 +219,13 @@ fn block_folding_ranges(source: &str) -> Vec<FoldingRange> {
         }
 
         if is_block_end(code) {
-            if let Some((kind, start)) = stack.pop() {
+            if let Some((_kind, start)) = stack.pop() {
                 let end = SourcePosition {
                     line: line_number,
                     column: line.chars().count() + 1,
                 };
 
-                if kind == BlockKind::Function && start.line < end.line {
+                if start.line < end.line {
                     ranges.push(FoldingRange {
                         range: SourceSpan { start, end },
                         kind: FoldingRangeKind::Function,

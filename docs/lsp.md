@@ -604,6 +604,9 @@ indexed `.lua`, assets, and `tua.toml` when supported.
 | Formatting | Full-document, range, and on-type formatting |
 | Workspace | Workspace folders, watched files, and will-rename file edits |
 
+Folding ranges include multiline functions, `if`/loop/`do` blocks, table
+constructors, multiline type aliases, and adjacent comment blocks.
+
 ### Tua Extension Requests
 
 The bundled VS Code extension also uses version-matched Tua requests:
