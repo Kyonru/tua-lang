@@ -5118,3 +5118,18 @@ fn formatted_class_call_has_no_continuation_warning() {
         "{formatted}\n{diagnostics:#?}"
     );
 }
+
+#[test]
+fn implicit_class_constructor_has_no_generated_lints() {
+    let diagnostics = check_standard_rules_source(
+        "final class Actor {
+  attack(): number { return 1 }
+}
+",
+    );
+    assert!(diagnostics.iter().all(|d| d.line <= 3), "{diagnostics:#?}");
+    assert!(
+        !diagnostics.iter().any(|d| d.message.contains("Actor_init")),
+        "{diagnostics:#?}"
+    );
+}

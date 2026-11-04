@@ -4994,3 +4994,17 @@ fn missing_shader_entry_points_are_checked_without_external_tools() {
         assert_eq!(diagnostics.iter().any(|diagnostic| diagnostic.code == Some(DiagnosticCode::ASSET_SHADER_ENTRY_POINT)), expected, "{shader}: {diagnostics:?}");
     }
 }
+
+#[test]
+fn inline_class_return_error_points_to_original_expression() {
+    let source = r#"final class Actor {
+  attack(): number { return "wrong" }
+}
+"#;
+    let diagnostics = check_tua_source("src/classes.tua", source).expect_err("wrong return");
+    let mismatch = diagnostics
+        .iter()
+        .find(|d| d.code == Some(DiagnosticCode::TYPE_MISMATCH))
+        .expect("return mismatch");
+    assert_eq!((mismatch.line, mismatch.column), (2, 29));
+}

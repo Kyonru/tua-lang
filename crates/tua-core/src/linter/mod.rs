@@ -137,7 +137,20 @@ pub(crate) fn lint_parsed_source(
     }
 
     if symbol_lints_enabled(config) {
-        diagnostics.extend(SymbolAnalyzer::new(parsed, config).analyze().diagnostics);
+        let mut symbol_diagnostics = SymbolAnalyzer::new(parsed, config).analyze().diagnostics;
+        symbol_diagnostics.retain(|diagnostic| {
+            !parsed
+                .raw
+                .parser_position_origin(SourcePosition {
+                    line: diagnostic.line,
+                    column: diagnostic.column,
+                })
+                .is_some_and(|origin| origin.class_generated)
+        });
+        for diagnostic in &mut symbol_diagnostics {
+            parsed.raw.remap_parser_diagnostic(diagnostic);
+        }
+        diagnostics.extend(symbol_diagnostics);
     }
 
     if config.rules {

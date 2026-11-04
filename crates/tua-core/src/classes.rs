@@ -313,14 +313,15 @@ fn class_parser_line_provenance(
             if body_text.trim() != body_line.trim() {
                 continue;
             }
-            if source_line == method.body_span.start.line && !body_line.trim().is_empty() {
-                continue;
-            }
-
-            let source_indent = original_line
-                .chars()
-                .take_while(|character| character.is_whitespace())
-                .count();
+            let source_indent = if body_offset == 0 {
+                method.body_span.start.column - 1
+                    + body_line.chars().take_while(|c| c.is_whitespace()).count()
+            } else {
+                original_line
+                    .chars()
+                    .take_while(|c| c.is_whitespace())
+                    .count()
+            };
             let source_start = SourcePosition {
                 line: source_line,
                 column: source_indent.saturating_sub(1).max(1),

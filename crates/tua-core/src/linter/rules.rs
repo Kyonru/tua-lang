@@ -29,16 +29,12 @@ pub(super) fn lint<'a>(
         .class_declarations
         .iter()
         .flat_map(|class| {
-            class
-                .init
-                .iter()
-                .map(|_| format!("{}_init", class.name))
-                .chain(
-                    class
-                        .methods
-                        .iter()
-                        .map(|method| format!("{}_{}", class.name, method.name)),
-                )
+            std::iter::once(format!("{}_init", class.name)).chain(
+                class
+                    .methods
+                    .iter()
+                    .map(|method| format!("{}_{}", class.name, method.name)),
+            )
         })
         .collect();
     let terminating_builtin_references = scope
