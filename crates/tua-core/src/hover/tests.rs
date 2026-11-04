@@ -1963,3 +1963,14 @@ dialogue:append("hello")
     );
     assert!(result.contents.contains("boolean"));
 }
+
+#[test]
+fn signal_handler_forwarding_does_not_recurse_during_inference() {
+    let source = r#"local events = signal()
+events:on("input", function(value)
+  events:emit("output", value)
+end)
+events:emit("input", 1)
+"#;
+    assert_hover_in_source(source, "value)", 0, "parameter value: number");
+}

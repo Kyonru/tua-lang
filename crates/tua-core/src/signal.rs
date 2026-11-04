@@ -820,6 +820,19 @@ pub(crate) fn event_schema_for_receiver(
     name: &str,
     position: SourcePosition,
 ) -> Option<SignalEventSchema> {
+    thread_local! {
+        static RESOLVING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    }
+    if RESOLVING.with(|active| active.replace(true)) {
+        return None;
+    }
+    struct Reset;
+    impl Drop for Reset {
+        fn drop(&mut self) {
+            RESOLVING.with(|active| active.set(false));
+        }
+    }
+    let _reset = Reset;
     let scope = crate::scope_map_parsed_source(parsed);
     let index = local_event_index(parsed, environment, &scope);
 
