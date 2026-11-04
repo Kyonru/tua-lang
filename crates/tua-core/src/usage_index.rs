@@ -19,8 +19,8 @@ pub(crate) struct FileUsageIndex {
     receiver_member_counts: BTreeMap<String, BTreeMap<String, usize>>,
     call_counts: BTreeMap<String, usize>,
     member_lines: BTreeMap<String, Vec<usize>>,
-    signal_events: Vec<(SignalEventMention, Vec<String>)>,
-    require_bindings: BTreeMap<String, String>,
+    signal_events: Vec<(SignalEventMention, SignalEventMention)>,
+    require_bindings: BTreeMap<(usize, usize), String>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -65,26 +65,24 @@ impl FileUsageIndex {
             index.signal_events = collect_potential_event_mentions(parsed, environment, scope)
                 .into_iter()
                 .map(|mention| {
-                    let mut parts = mention.receiver_parts.clone();
-                    let mut seen = std::collections::BTreeSet::new();
-                    while let Some(root) = parts.first().cloned() {
-                        if !seen.insert(root.clone()) {
-                            break;
-                        }
-                        let Some(mut alias) =
-                            semantic.local_initializer_field_chain(&root, mention.position)
-                        else {
-                            break;
-                        };
-                        alias.extend(parts.into_iter().skip(1));
-                        parts = alias;
-                    }
-                    (mention, parts)
+                    let resolved = scope
+                        .map(|scope| crate::signal::canonical_receiver(&semantic, scope, &mention))
+                        .unwrap_or_else(|| mention.clone());
+                    (mention, resolved)
                 })
                 .collect();
-            index.require_bindings = crate::require_bindings_for_parsed_source(parsed)
+            index.require_bindings = scope
                 .into_iter()
-                .map(|binding| (binding.alias, binding.module))
+                .flat_map(|scope| scope.declarations())
+                .filter_map(|binding| {
+                    let crate::ScopeDeclarationKind::ModuleAlias { module } = &binding.kind else {
+                        return None;
+                    };
+                    Some((
+                        (binding.name_span.start.line, binding.name_span.start.column),
+                        module.clone(),
+                    ))
+                })
                 .collect();
         }
 
@@ -197,9 +195,7 @@ impl ProjectUsageIndex {
             }
 
             let path = normalize_path(path);
-            for (mention, resolved_parts) in &file.signal_events {
-                let mut resolved = mention.clone();
-                resolved.receiver_parts = resolved_parts.clone();
+            for (mention, resolved) in &file.signal_events {
                 if !mention.confirmed_bus
                     && !project_receiver_is_signal_bus(
                         &path,
@@ -211,7 +207,7 @@ impl ProjectUsageIndex {
                     continue;
                 }
 
-                let identity = signal_bus_identity(&path, file, &resolved, module_graph);
+                let identity = signal_bus_identity(&path, file, resolved, module_graph);
                 index.signal_bus_identities.insert(
                     (path.clone(), mention.receiver_parts.clone()),
                     identity.clone(),
@@ -380,10 +376,10 @@ fn signal_bus_identity(
     mention: &SignalEventMention,
     module_graph: &ModuleGraph,
 ) -> SignalBusIdentity {
-    let Some(receiver) = mention.receiver_parts.first() else {
-        return local_signal_bus_identity(path, mention);
-    };
-    let Some(module) = file.require_bindings.get(receiver) else {
+    let binding = mention
+        .root_definition
+        .map(|span| (span.start.line, span.start.column));
+    let Some(module) = binding.and_then(|binding| file.require_bindings.get(&binding)) else {
         return local_signal_bus_identity(path, mention);
     };
     let Some(resolution) = module_graph.resolve_require(path, module) else {
@@ -397,6 +393,21 @@ fn signal_bus_identity(
         }
     };
 
+    if let Some(export) = mention
+        .receiver_parts
+        .get(1)
+        .and_then(|field| module_graph.export(&origin, field))
+        .filter(|export| export.symbol_id.is_some())
+    {
+        return SignalBusIdentity {
+            origin: normalize_path(&origin),
+            root_definition: Some((
+                export.definition_span.start.line,
+                export.definition_span.start.column,
+            )),
+            receiver_parts: mention.receiver_parts.iter().skip(2).cloned().collect(),
+        };
+    }
     SignalBusIdentity {
         origin: normalize_path(origin),
         root_definition: None,
@@ -410,7 +421,7 @@ fn local_signal_bus_identity(path: &Path, mention: &SignalEventMention) -> Signa
         root_definition: mention
             .root_definition
             .map(|span| (span.start.line, span.start.column)),
-        receiver_parts: mention.receiver_parts.clone(),
+        receiver_parts: mention.receiver_parts.iter().skip(1).cloned().collect(),
     }
 }
 

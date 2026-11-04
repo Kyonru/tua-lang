@@ -213,6 +213,18 @@ impl<'a> SemanticModel<'a> {
         plain_field_chain_from_expression(expression)
     }
 
+    pub(crate) fn local_initializer_field_chain_with_position(
+        &self,
+        name: &str,
+        position: SourcePosition,
+    ) -> Option<(Vec<String>, SourcePosition)> {
+        let local = self.local_assignment_value(name, position)?;
+        Some((
+            plain_field_chain_from_expression(local.expression?)?,
+            local.evaluation_position,
+        ))
+    }
+
     pub(crate) fn type_of_expression_return(
         &self,
         expression: &Expression,
@@ -3259,7 +3271,7 @@ fn token_text(token: &full_moon::tokenizer::TokenReference) -> String {
     token.token().to_string().trim().to_owned()
 }
 
-fn binding_at<'a>(
+pub(crate) fn binding_at<'a>(
     scope: &'a crate::ScopeMap,
     name: &str,
     position: SourcePosition,

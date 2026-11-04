@@ -6398,3 +6398,56 @@ fn lazy_emission_diagnostics_preserve_lowering_errors_and_refresh_after_edits() 
         .iter()
         .any(|d| d.code == Some(DiagnosticCode::TYPE_UNSUPPORTED_RUNTIME_CHECK)));
 }
+
+#[test]
+fn event_bus_identity_tracks_alias_bindings_and_export_origins() {
+    for (events, source, expected) in [
+        (
+            "",
+            r#"local events = signal()
+local E = events
+E:emit("hit", 42)
+events:on("hit", function(payload) print(payload) end)
+"#,
+            "number",
+        ),
+        (
+            r#"local bus = signal()
+bus:emit("hit", 42)
+return { enemies = bus }
+"#,
+            r#"local Events = require "events"
+local E = Events.enemies
+E:on("hit", function(payload) print(payload) end)
+"#,
+            "number",
+        ),
+        (
+            "return { enemies = signal() }",
+            r#"local Events = require "events"
+do
+  local Events = { enemies = signal() }
+  Events.enemies:emit("hit", "wrong")
+end
+Events.enemies:on("hit", function(payload) print(payload) end)
+"#,
+            "any",
+        ),
+    ] {
+        let mut host = AnalysisHost::new();
+        host.set_file("src/events.tua", events);
+        host.set_file("src/main.tua", source);
+        let hover = host
+            .snapshot()
+            .hover(
+                "src/main.tua",
+                crate::source_text::position_at(source, "payload)"),
+            )
+            .expect("parameter hover");
+        assert_eq!(
+            hover.contents,
+            format!("parameter payload: {expected}"),
+            "{source}"
+        );
+    }
+}

@@ -1258,6 +1258,38 @@ fn root_definition_span(
         .map(|declaration| declaration.name_span)
 }
 
+pub(crate) fn canonical_receiver(
+    semantic: &SemanticModel<'_>,
+    scope: &ScopeMap,
+    mention: &SignalEventMention,
+) -> SignalEventMention {
+    let mut resolved = mention.clone();
+    let mut position = mention.position;
+    let mut seen = BTreeSet::new();
+    while let Some(root) = resolved.receiver_parts.first().cloned() {
+        let binding = crate::semantic::binding_at(scope, &root, position);
+        resolved.root_definition = binding.map(|binding| binding.name_span);
+        let key = (
+            root.clone(),
+            resolved
+                .root_definition
+                .map(|span| (span.start.line, span.start.column)),
+        );
+        if !seen.insert(key) {
+            break;
+        }
+        let Some((mut alias, evaluation)) =
+            semantic.local_initializer_field_chain_with_position(&root, position)
+        else {
+            break;
+        };
+        alias.extend(resolved.receiver_parts.into_iter().skip(1));
+        resolved.receiver_parts = alias;
+        position = evaluation;
+    }
+    resolved
+}
+
 pub(crate) fn local_event_index(
     parsed: &ParsedSource,
     environment: &TypeEnvironment,
@@ -1266,16 +1298,20 @@ pub(crate) fn local_event_index(
     SignalEventIndex::new(
         collect_event_mentions(parsed, environment, Some(scope), None)
             .into_iter()
-            .map(|mention| IndexedSignalEvent {
-                identity: SignalBusIdentity {
-                    origin: parsed.path.clone(),
-                    root_definition: mention
-                        .root_definition
-                        .map(|span| (span.start.line, span.start.column)),
-                    receiver_parts: mention.receiver_parts.clone(),
-                },
-                path: parsed.path.clone(),
-                mention,
+            .map(|mention| {
+                let resolved =
+                    canonical_receiver(&SemanticModel::new(parsed, environment), scope, &mention);
+                IndexedSignalEvent {
+                    identity: SignalBusIdentity {
+                        origin: parsed.path.clone(),
+                        root_definition: resolved
+                            .root_definition
+                            .map(|span| (span.start.line, span.start.column)),
+                        receiver_parts: resolved.receiver_parts.iter().skip(1).cloned().collect(),
+                    },
+                    path: parsed.path.clone(),
+                    mention,
+                }
             })
             .collect(),
     )
