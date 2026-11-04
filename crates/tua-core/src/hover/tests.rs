@@ -1943,6 +1943,8 @@ end
 fn class_method_usage_hover_preserves_source_documentation() {
     let source = r#"final class Dialogue {
   --- Append a word to the dialogue.
+  ---@param word string The word to append.
+  ---@return boolean Whether the word was appended.
   append(word: string): boolean {
     return true
   }
@@ -1957,11 +1959,15 @@ dialogue:append("hello")
     )
     .unwrap()
     .unwrap();
-    assert_eq!(
-        result.documentation.as_deref(),
-        Some("Append a word to the dialogue.")
-    );
+    assert!(result
+        .documentation
+        .as_deref()
+        .unwrap()
+        .starts_with("Append a word to the dialogue."));
     assert!(result.contents.contains("boolean"));
+    let docs = result.documentation.as_deref().unwrap();
+    assert!(docs.contains("**@param** word string The word to append."));
+    assert!(docs.contains("**@return** boolean Whether the word was appended."));
 }
 
 #[test]

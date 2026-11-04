@@ -17,12 +17,19 @@ pub(crate) fn leading_doc_comment(source: &str, declaration_line: usize) -> Opti
             break;
         }
 
-        if !trimmed.starts_with("---@") {
-            let text = trimmed.trim_start_matches("---").trim_start();
-
-            if !text.is_empty() {
-                docs.push(text.to_owned());
+        let text = trimmed.trim_start_matches("---").trim_start();
+        if let Some(tagged) = text.strip_prefix('@') {
+            if let Some((tag, description)) = tagged.split_once(char::is_whitespace) {
+                if matches!(tag, "param" | "return") {
+                    docs.push(format!(
+                        "
+- **@{tag}** {}",
+                        description.trim()
+                    ));
+                }
             }
+        } else if !text.is_empty() {
+            docs.push(text.to_owned());
         }
 
         line_number -= 1;
