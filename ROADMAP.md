@@ -37,6 +37,11 @@ workflow pages under `docs/`. Completed work belongs in
   compiler-proven.
 - Expand LuaDoc/LuaCATS interoperability for common existing Lua libraries.
 - Improve safe project-wide refactors and module changes.
+- Resolve expression receivers consistently across completion, hover, signatures,
+  and navigation; preserve imported nominal class identity through fluent `Self` returns.
+- Propagate project-aware inferred call results into event payloads, and align
+  callback-field and loop-variable hovers with completion.
+  See the [simulated development trials](internal/devex-trials-2026-11.md) for reproductions.
 - Preserve `any` and ordinary Lua as explicit dynamic escape paths.
 
 ### Make Releases Easier To Trust
