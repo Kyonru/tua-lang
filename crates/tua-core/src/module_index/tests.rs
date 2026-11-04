@@ -424,6 +424,20 @@ fn resolves_required_modules_from_configured_source_and_out_dirs() {
 }
 
 #[test]
+fn recognizes_lua_string_call_require_bindings_for_module_properties() {
+    let temp = TempProject::new("string-call-require-binding");
+    temp.write("tua.toml", "source = \"src\"\nout = \"game\"\n");
+    temp.write("src/events.tua", "return { enemies = signal() }\n");
+    let main = temp.path.join("src/main.tua");
+    let parsed = parse_tua_source(&main, "local Events = require \"events\"\n")
+        .expect("string-call require should parse");
+
+    let required = required_module_for_receiver(&parsed, "Events")
+        .expect("string-call require should bind the module receiver");
+    assert_eq!(required.path, temp.path.join("src/events.tua"));
+}
+
+#[test]
 fn resolves_require_binding_exports_for_receiver() {
     let temp = TempProject::new("require-binding");
 

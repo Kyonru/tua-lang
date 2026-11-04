@@ -329,14 +329,20 @@ fn module_specifier_from_expression(
         Suffix::Call(call) => Some(call),
         _ => None,
     })?;
-    let ast::Call::AnonymousCall(FunctionArgs::Parentheses { arguments, .. }) = first_call else {
-        return None;
+    let module = match first_call {
+        ast::Call::AnonymousCall(FunctionArgs::Parentheses { arguments, .. }) => {
+            let Expression::String(module) = arguments.iter().next()? else {
+                return None;
+            };
+            unquote_string(&module.to_string())
+        }
+        ast::Call::AnonymousCall(FunctionArgs::String(module))
+            if kind == ModuleSpecifierKind::Require =>
+        {
+            unquote_string(&module.to_string())
+        }
+        _ => return None,
     };
-    let Expression::String(module) = arguments.iter().next()? else {
-        return None;
-    };
-
-    let module = unquote_string(&module.to_string());
 
     if kind == ModuleSpecifierKind::Import && !is_static_import_specifier(&module) {
         return None;
