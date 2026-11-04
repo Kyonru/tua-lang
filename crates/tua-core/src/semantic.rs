@@ -1669,6 +1669,11 @@ impl<'a> SemanticModel<'a> {
     }
 
     fn contextual_call_parameter_type(&self, name: &str, position: SourcePosition) -> Option<Type> {
+        let scope = crate::scope_map_parsed_source(self.parsed);
+        let binding = scope
+            .symbol_at_position(position)
+            .and_then(|id| scope.declaration(id))
+            .or_else(|| binding_at(&scope, name, position))?;
         let mut collector = FunctionCallCollector::default();
         collector.visit_ast(&self.parsed.ast);
 
@@ -1697,7 +1702,10 @@ impl<'a> SemanticModel<'a> {
                         .iter()
                         .enumerate()
                         .find_map(|(index, parameter)| match parameter {
-                            ast::Parameter::Name(parameter) if token_text(parameter) == name => {
+                            ast::Parameter::Name(parameter)
+                                if token_text(parameter) == name
+                                    && node_span(parameter) == Some(binding.name_span) =>
+                            {
                                 Some(index)
                             }
                             ast::Parameter::Name(_) | ast::Parameter::Ellipsis(_) => None,

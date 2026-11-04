@@ -851,6 +851,7 @@ pub(crate) fn handler_parameter_context(
     struct Collector<'a> {
         name: &'a str,
         position: SourcePosition,
+        scope: &'a ScopeMap,
         result: Option<(Vec<String>, String, usize)>,
     }
 
@@ -882,7 +883,9 @@ pub(crate) fn handler_parameter_context(
                 return;
             }
             let Some((index, _)) = function.body().parameters().iter().enumerate().find(|(_, parameter)| {
-                matches!(parameter, ast::Parameter::Name(token) if token_text(token) == self.name)
+                matches!(parameter, ast::Parameter::Name(token) if token_text(token) == self.name
+                    && self.scope.symbol_at_position(node_start(token)).is_some()
+                    && self.scope.symbol_at_position(node_start(token)) == self.scope.symbol_at_position(self.position))
             }) else {
                 return;
             };
@@ -890,9 +893,11 @@ pub(crate) fn handler_parameter_context(
         }
     }
 
+    let scope = crate::scope_map_parsed_source(parsed);
     let mut collector = Collector {
         name,
         position,
+        scope: &scope,
         result: None,
     };
     collector.visit_ast(&parsed.ast);

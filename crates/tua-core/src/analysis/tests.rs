@@ -6293,3 +6293,30 @@ fn snapshot_clones_share_immutable_files_and_keep_old_revisions() {
 
 #[path = "shader_tests.rs"]
 mod shader_uniforms;
+
+#[test]
+fn signal_handler_inference_preserves_shadowed_parameter_types() {
+    let source = r#"type Player = { hp: number }
+local events = signal()
+local player: Player = { hp = 10 }
+events:on("hit", function(target)
+  local function nested(target: string)
+    print(target)
+  end
+end)
+events:emit("hit", player)
+"#;
+    let mut host = AnalysisHost::new();
+    host.set_file("src/main.tua", source);
+    let hover = host
+        .snapshot()
+        .hover(
+            "src/main.tua",
+            SourcePosition {
+                line: 6,
+                column: 11,
+            },
+        )
+        .expect("nested parameter should hover");
+    assert_eq!(hover.contents, "parameter target: string");
+}
