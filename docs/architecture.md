@@ -192,6 +192,11 @@ cache.
     recovery or degraded semantic facts. A private fallback environment inside
     completion, hover, or an LSP handler will drift from the checker.
 
+Lua emission validation runs lazily when pipeline diagnostics are requested.
+Its result is cached within the immutable snapshot; completion and hover do
+not emit every project file while building their snapshot. Emission reuses
+the file's semantic environment.
+
 ### Project Products
 
 Snapshots aggregate per-file summaries into project-aware structures:
@@ -558,8 +563,3 @@ change, include the relevant integration test and run `make diff-check`.
 - [Lua Interoperability](lua-interop.md)
 - [Diagnostics](luahelper-code-matrix.md)
 - [External API Bridge](external-api-bridge.md)
-
-Lua emission validation runs lazily when pipeline diagnostics are requested.
-Its result is cached within the immutable snapshot; completion and hover do
-not emit every project file while building their snapshot. Emission reuses
-the file's semantic environment.

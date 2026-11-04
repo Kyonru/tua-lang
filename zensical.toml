@@ -22,6 +22,7 @@ nav = [
   { "Language" = [
     { "Overview" = "language.md" },
     { "Typing" = "typing.md" },
+    { "Comments And Documentation" = "comments.md" },
     { "Lua Interop" = "lua-interop.md" },
     { "Asset Pipelines" = "asset-pipelines.md" },
   ] },

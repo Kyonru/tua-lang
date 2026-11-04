@@ -147,6 +147,9 @@ Completion combines syntax context with local and project semantics. It covers:
 - statement snippets for `if`/`then`/`end`, loops, `repeat`/`until`, `do`/`end`,
   functions, classes, and common game-helper workflows.
 
+For comment placement, supported annotation effects, and the **document function**
+completion, see [Comments And Documentation](comments.md).
+
 Normal `require(...)` and non-relative static-import path completion use the
 same ordered workspace require roots as module resolution. Child-relative
 imports continue to complete from the current file's directory.
@@ -322,7 +325,8 @@ rename, and project-wide rename. The same identity follows locally inferred
 instances and nominal instances exported through a static module, so navigating
 `Module.player.health` reaches the original class field rather than generated
 Lua or the module's `player` export. Diagnostics and generated-Lua source maps
-for class method bodies also point back to the original method source. Resolved
+for source-backed class method body lines point back to the original method
+source; compiler-generated code can map to the enclosing class. Resolved
 named table-shape fields are also renameable when Tua can prove their
 declaration identity.
 

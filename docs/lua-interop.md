@@ -488,6 +488,8 @@ type-only imports have no runtime representation.
 
 Tua parses LuaHelper/LuaLS-style annotations in both `.lua` and `.tua` files.
 The most useful annotations establish types at module and callback boundaries.
+For comment placement, native class methods, and editor generation, start with
+[Comments And Documentation](comments.md).
 
 ### Type-Bearing Tags
 
@@ -498,7 +500,7 @@ The most useful annotations establish types at module and callback boundaries.
 | `---@alias` | Declares a reusable type alias or literal union, on one line or as a bare `---@alias Name` followed by `---\| member` lines. |
 | `---@type` | Types an attached local or value where the relationship is statically clear. |
 | `---@param` | Types and documents a function parameter. |
-| `---@return` | Types and documents one or more function returns. |
+| `---@return` | Types and documents a comma-separated list of return values, such as `number, string`. |
 | `---@overload` | Adds another callable signature to a known function. |
 | `---@vararg` | Types extra `...` arguments. |
 
@@ -601,7 +603,9 @@ and completion plus semantic tokens identify deprecated APIs. A direct call
 statement that discards the result of a resolved `---@nodiscard` function reports
 `TL4068`; assigning, returning, or passing that result is valid. Other
 metadata-only tags are preserved with source spans and documentation but do not
-currently change type checking.
+currently change type checking. `---@meta` also identifies declaration-library
+modules when configured through `type_libraries`; `---@diagnostic` does not
+replace Tua's `-- tua-ignore-*` directives.
 
 !!! note "Recognition does not imply full LuaLS semantics"
     Tua implements the practical annotation subset needed for typed Lua

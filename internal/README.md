@@ -8,6 +8,7 @@ are not part of the public language and toolchain documentation.
 - [Completion benchmarks](completion-benchmarks.md)
 - [LLM language evaluation](llm-language-evaluation.md)
 - [November 2026 simulated development trials](devex-trials-2026-11.md)
+- [November 2026 documentation and annotation review](documentation-review-2026-11.md)
 - [Fuzzing](fuzzing.md)
 - [Release readiness](release-readiness.md)
 - [Local inline-completion plan](better-autocompletion.md)

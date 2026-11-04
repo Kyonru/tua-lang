@@ -8,6 +8,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Changed
 
+- Added a comments and documentation guide covering LuaDoc tags, native types,
+  documentation completion, and current annotation limitations.
+
 - Added `LoveColor` for shared numeric LOVE color arrays.
 - Class method hovers include parameter/return documentation tags, including
   methods reached through imported class instances.

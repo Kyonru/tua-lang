@@ -613,7 +613,9 @@ and hover documentation. Place a `---` description immediately above a method
 to show it when hovering a resolved method usage, including imported instances. Native
 parameter and return annotations supply the displayed signature. Add
 `---@param name Type description` and `---@return Type description` lines
-to include parameter and return descriptions in the hover.
+to include parameter and return descriptions in the hover. See
+[Comments And Documentation](comments.md) for placement, examples, and supported
+annotation behavior.
 
 Class names, fields, and methods also support rename. This includes accesses through locally inferred instances and
 instances exported from static modules; edits target the original class syntax,
@@ -909,6 +911,20 @@ missing core `love.load`, `love.update`, and `love.draw` declarations, organize
 or sort static imports, remove unused static import bindings, and fix all safe
 diagnostics in the current file.
 
+### LOVE Color Values
+
+Use the built-in `LoveColor` alias for shared color fields and parameters:
+
+```tua
+local background: LoveColor = { 0.1, 0.2, 0.3 }
+local shadow: LoveColor = { 0, 0, 0, 0.5 }
+love.graphics.setColor(background)
+```
+
+`LoveColor` is a `number[]` alias. Supply RGB or RGBA components in LOVE's
+usual 0–1 range; the type checker validates component types, but does not
+enforce array length or numeric bounds.
+
 ## Practical Metatable Typing
 
 Tua recognizes a small, conservative subset of common Lua metatable patterns.
@@ -1038,17 +1054,3 @@ deliberately does not provide:
 - full compatibility with other Lua language servers or typed Lua dialects.
 
 Pre-1.0 releases follow the migration policy in [Releases](releases.md).
-
-### LOVE color values
-
-Use the built-in `LoveColor` alias for shared color fields and parameters:
-
-```tua
-local background: LoveColor = { 0.1, 0.2, 0.3 }
-local shadow: LoveColor = { 0, 0, 0, 0.5 }
-love.graphics.setColor(background)
-```
-
-`LoveColor` is a `number[]` alias. Supply RGB or RGBA components in LOVE's
-usual 0–1 range; the type checker validates component types, but does not
-enforce array length or numeric bounds.
