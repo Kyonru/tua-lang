@@ -422,7 +422,7 @@ local Player = spriteSheet({
 
     assert_hover_contains(server.output(), 2, "(field) image: string");
     assert_hover_contains(server.output(), 3, "(field) width: number");
-    assert_hover_contains(server.output(), 4, "local loops: number");
+    assert_hover_contains(server.output(), 4, "parameter loops: number");
     assert_hover_contains(server.output(), 5, "(field) score: number");
     assert_eq!(
         response_with_id(server.output(), 6)["result"]["uri"],
