@@ -2935,6 +2935,8 @@ fn imported_type_alias_can_name_a_runtime_class_instance() {
 import type { DialogueInstance } from "./dialogue"
 local DialogueModule = require("dialogue")
 local dialogue: DialogueInstance = DialogueModule.Dialogue.new("Hello")
+local _ = dialogue.up<|members|>
+dialogue:update(<|signature|>2)
 dialogue.<|field|>text = "Goodbye"
 -- file: src/dialogue.tua
 final class Dialogue {
@@ -2942,6 +2944,10 @@ final class Dialogue {
 
   init(text: string) {
     self.text = text
+  }
+
+  update(dt: number): string {
+    return self.text
   }
 }
 
@@ -2967,6 +2973,18 @@ return { Dialogue = Dialogue }
         .expect("imported class instance field should hover");
 
     assert_eq!(hover.contents, "(field) text: string");
+
+    let completions = snapshot.completion("src/main.tua", fixture.position("members"));
+    assert!(
+        completions
+            .iter()
+            .any(|completion| completion.label == "update"),
+        "imported instance completion should include class methods: {completions:#?}"
+    );
+    let signature = snapshot
+        .signature_help("src/main.tua", fixture.position("signature"))
+        .expect("imported instance method should provide signature help");
+    assert!(signature.signatures[0].label.contains("update(dt: number)"));
 }
 
 #[test]
