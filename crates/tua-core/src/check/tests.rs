@@ -3659,8 +3659,8 @@ fn class_body_type_diagnostics_use_source_provenance() {
         .find(|diagnostic| diagnostic.code == Some(DiagnosticCode::TYPE_MISMATCH))
         .expect("class body mismatch should be present");
 
-    assert_eq!((diagnostic.line, diagnostic.column), (1, 1));
-    assert!(diagnostic.end_line <= source.lines().count());
+    assert_eq!((diagnostic.line, diagnostic.column), (5, 18));
+    assert_eq!((diagnostic.end_line, diagnostic.end_column), (5, 25));
 }
 
 #[test]

@@ -8,8 +8,8 @@ use full_moon::visitors::{Visit, Visitor};
 
 use crate::ast_utils::{field_chain_before_first_call, plain_field_chain_from_var, token_text};
 use crate::parser::{
-    parse_raw_tua_source, parse_tua_type_text, ParsedSource, RawParsedSource, SourcePosition,
-    SourceSpan, TuaType, TypedSourceModel,
+    parse_raw_tua_source, parse_tua_type_text, ParsedSource, ParserLineProvenance, RawParsedSource,
+    SourcePosition, SourceSpan, TuaType, TypedSourceModel,
 };
 use crate::scope::{scope_map_parsed_source, ScopeDeclarationKind, ScopeSymbolId};
 use crate::source_text::SourcePositionIndex;
@@ -102,6 +102,7 @@ pub(crate) struct ClassLoweringEdit {
     pub range: Range<usize>,
     pub replacement: String,
     pub source_span: SourceSpan,
+    pub parser_provenance: Vec<ParserLineProvenance>,
 }
 
 #[derive(Clone, Debug)]
@@ -258,13 +259,86 @@ pub(crate) fn class_lowering_edits(source: &str) -> Vec<ClassLoweringEdit> {
                 replacement.insert_str(0, &forward_parent_declarations);
             }
 
+            let parser_provenance = class_parser_line_provenance(&replacement, declaration, source);
+
             ClassLoweringEdit {
                 range: block.start..block.end,
                 replacement,
                 source_span: declaration.span,
+                parser_provenance,
             }
         })
         .collect()
+}
+
+fn class_parser_line_provenance(
+    replacement: &str,
+    class: &ClassDeclaration,
+    source: &str,
+) -> Vec<ParserLineProvenance> {
+    let default = || ParserLineProvenance {
+        source_span: class.span,
+        class_generated: true,
+    };
+    let mut provenance = replacement
+        .split_inclusive('\n')
+        .map(|_| default())
+        .collect::<Vec<_>>();
+    let replacement_lines = replacement.lines().collect::<Vec<_>>();
+    let source_lines = source.lines().collect::<Vec<_>>();
+    let methods = class.init.iter().chain(class.methods.iter());
+
+    for method in methods {
+        let generated_header = format!("local function {}_{}(", class.name, method.name);
+        let Some(header_line) = replacement_lines
+            .iter()
+            .position(|line| line.starts_with(&generated_header))
+        else {
+            continue;
+        };
+
+        for (body_offset, body_line) in method.body.lines().enumerate() {
+            let generated_line = header_line + body_offset + 1;
+            let source_line = method.body_span.start.line + body_offset;
+            let Some(line) = replacement_lines.get(generated_line) else {
+                break;
+            };
+            let Some(original_line) = source_lines.get(source_line.saturating_sub(1)) else {
+                continue;
+            };
+
+            // Method bodies keep their source text after the generated two-space
+            // indent. Rewritten `super` calls remain generated and map to the class.
+            let body_text = line.strip_prefix("  ").unwrap_or(line);
+            if body_text.trim() != body_line.trim() {
+                continue;
+            }
+            if source_line == method.body_span.start.line && !body_line.trim().is_empty() {
+                continue;
+            }
+
+            let source_indent = original_line
+                .chars()
+                .take_while(|character| character.is_whitespace())
+                .count();
+            let source_start = SourcePosition {
+                line: source_line,
+                column: source_indent.saturating_sub(1).max(1),
+            };
+            provenance[generated_line] = ParserLineProvenance {
+                source_span: SourceSpan {
+                    start: source_start,
+                    end: SourcePosition {
+                        line: source_line,
+                        column: original_line.chars().count() + 1,
+                    },
+                },
+                class_generated: false,
+            };
+        }
+    }
+
+    provenance
 }
 
 pub(crate) fn class_by_name<'a>(

@@ -1,6 +1,7 @@
 use std::fmt;
 use std::ops::Range;
 
+use crate::parser::ParserLineProvenance;
 use crate::SourceSpan;
 
 use super::{split_lines, LoweredLine, LoweringKind};
@@ -11,6 +12,7 @@ pub(crate) struct LoweringOperation {
     pub(crate) replacement: String,
     pub(crate) source_span: SourceSpan,
     pub(crate) lowering: LoweringKind,
+    pub(crate) parser_provenance: Option<Vec<ParserLineProvenance>>,
 }
 
 impl LoweringOperation {
@@ -25,6 +27,23 @@ impl LoweringOperation {
             replacement: replacement.into(),
             source_span,
             lowering,
+            parser_provenance: None,
+        }
+    }
+
+    pub(crate) fn replace_with_parser_provenance(
+        range: Range<usize>,
+        replacement: impl Into<String>,
+        source_span: SourceSpan,
+        lowering: LoweringKind,
+        parser_provenance: Vec<ParserLineProvenance>,
+    ) -> Self {
+        Self {
+            range,
+            replacement: replacement.into(),
+            source_span,
+            lowering,
+            parser_provenance: Some(parser_provenance),
         }
     }
 
@@ -100,6 +119,7 @@ pub(super) fn apply_operations(
             operation.source_span,
             operation.lowering,
             true,
+            operation.parser_provenance.as_deref(),
         );
         cursor = operation.range.end;
     }
@@ -161,6 +181,7 @@ fn append_old_range(old: &[LoweredLine], range: Range<usize>, output: &mut Vec<L
                 line.source_span,
                 line.lowering,
                 false,
+                None,
             );
         }
         if line_end >= range.end {
@@ -176,8 +197,18 @@ fn append_segment(
     source_span: SourceSpan,
     lowering: LoweringKind,
     generated: bool,
+    parser_provenance: Option<&[ParserLineProvenance]>,
 ) {
-    for piece in split_lines(text) {
+    for (index, piece) in split_lines(text).into_iter().enumerate() {
+        let line_provenance = parser_provenance.and_then(|items| items.get(index));
+        let source_span = line_provenance
+            .map(|item| item.source_span)
+            .unwrap_or(source_span);
+        let lowering = if line_provenance.is_some_and(|item| !item.class_generated) {
+            LoweringKind::Source
+        } else {
+            lowering
+        };
         if let Some(line) = output.last_mut().filter(|line| !line.text.ends_with('\n')) {
             line.text.push_str(piece);
             if generated {

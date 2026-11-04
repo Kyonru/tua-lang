@@ -1948,6 +1948,32 @@ local Sheet = spriteSheet({
 }
 
 #[test]
+fn class_method_body_keeps_source_provenance_in_generated_lua() {
+    let emission = emit_tua_source_artifact(
+        "src/class_method.tua",
+        r#"final class Counter {
+  value: number
+
+  init() {
+    self.value = "wrong"
+  }
+}
+"#,
+    )
+    .expect("class method should emit");
+    let line = emission
+        .code
+        .lines()
+        .position(|line| line.trim() == "self.value = \"wrong\"")
+        .expect("generated assignment should exist");
+    let provenance = emission.provenance[line];
+
+    assert_eq!(provenance.lowering, LoweringKind::Source);
+    assert_eq!(provenance.source_span.start.line, 5);
+    assert_eq!(provenance.source_span.start.column, 3);
+}
+
+#[test]
 fn class_normalization_preserves_following_multiline_and_non_ascii_provenance() {
     let emission = emit_tua_source_artifact(
         "src/class_following.tua",

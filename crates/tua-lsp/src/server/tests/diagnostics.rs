@@ -103,6 +103,32 @@ fn did_open_publishes_matching_core_diagnostics() {
 }
 
 #[test]
+fn class_method_diagnostics_point_to_the_original_error_expression() {
+    let uri = "file:///tmp/class-method-diagnostic.tua";
+    let source = r#"final class Counter {
+  value: number
+
+  init() {
+    self.value = "wrong"
+  }
+}
+"#;
+    let mut server = TestServer::new();
+
+    server.send(did_open(uri, source));
+
+    let diagnostic = last_published_diagnostics(server.output(), uri)
+        .into_iter()
+        .find(|diagnostic| diagnostic["code"] == "TL1003")
+        .expect("class body mismatch should be published");
+
+    assert_eq!(diagnostic["range"]["start"]["line"], 4);
+    assert_eq!(diagnostic["range"]["start"]["character"], 17);
+    assert_eq!(diagnostic["range"]["end"]["line"], 4);
+    assert_eq!(diagnostic["range"]["end"]["character"], 24);
+}
+
+#[test]
 fn did_open_rejects_luau_syntax_as_tl0004() {
     let uri = "file:///tmp/luau-only.tua";
     let mut server = TestServer::new();

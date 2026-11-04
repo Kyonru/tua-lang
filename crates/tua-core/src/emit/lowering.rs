@@ -239,11 +239,12 @@ pub(crate) fn lower_classes_for_parser(source: &str) -> (String, Vec<ParserLineP
     let operations = classes::class_lowering_edits(source)
         .into_iter()
         .map(|edit| {
-            LoweringOperation::replace(
+            LoweringOperation::replace_with_parser_provenance(
                 edit.range,
                 edit.replacement,
                 edit.source_span,
                 LoweringKind::Class,
+                edit.parser_provenance,
             )
         })
         .collect();

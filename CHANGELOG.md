@@ -12,6 +12,8 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Diagnostics and generated-Lua source maps now point into original class
+  method bodies instead of the class declaration header.
 - LSP folding ranges now include multiline `if` and `do` blocks.
 - VS Code Marketplace and Open VSX listings show the extension README
   screenshots and repository links. Packaging now resolves them against the
