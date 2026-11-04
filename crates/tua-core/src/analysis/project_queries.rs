@@ -1208,7 +1208,7 @@ impl AnalysisSnapshot {
         }
         let chain = dotted_chain_at_position(&parsed.source, position)?;
 
-        if chain.cursor_index != 0 || chain.parts.len() != 1 {
+        if chain.cursor_index != 0 {
             return None;
         }
 
@@ -1220,7 +1220,7 @@ impl AnalysisSnapshot {
             .parameter_type_at_position(&part.text, position);
         let (prefix, ty) = match declared_ty {
             Some(ty) if ty != Type::Any => ("parameter", ty),
-            _ => ("local", contextual_ty),
+            _ => ("parameter", contextual_ty),
         };
 
         Some(Hover {

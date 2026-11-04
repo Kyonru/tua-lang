@@ -19,7 +19,7 @@ pub(crate) struct FileUsageIndex {
     receiver_member_counts: BTreeMap<String, BTreeMap<String, usize>>,
     call_counts: BTreeMap<String, usize>,
     member_lines: BTreeMap<String, Vec<usize>>,
-    signal_events: Vec<SignalEventMention>,
+    signal_events: Vec<(SignalEventMention, Vec<String>)>,
     require_bindings: BTreeMap<String, String>,
 }
 
@@ -61,7 +61,27 @@ impl FileUsageIndex {
 
         index.collect_member_usage(source);
         if let (Some(parsed), Some(environment)) = (parsed, environment) {
-            index.signal_events = collect_potential_event_mentions(parsed, environment, scope);
+            let semantic = crate::semantic::SemanticModel::new(parsed, environment);
+            index.signal_events = collect_potential_event_mentions(parsed, environment, scope)
+                .into_iter()
+                .map(|mention| {
+                    let mut parts = mention.receiver_parts.clone();
+                    let mut seen = std::collections::BTreeSet::new();
+                    while let Some(root) = parts.first().cloned() {
+                        if !seen.insert(root.clone()) {
+                            break;
+                        }
+                        let Some(mut alias) =
+                            semantic.local_initializer_field_chain(&root, mention.position)
+                        else {
+                            break;
+                        };
+                        alias.extend(parts.into_iter().skip(1));
+                        parts = alias;
+                    }
+                    (mention, parts)
+                })
+                .collect();
             index.require_bindings = crate::require_bindings_for_parsed_source(parsed)
                 .into_iter()
                 .map(|binding| (binding.alias, binding.module))
@@ -177,14 +197,21 @@ impl ProjectUsageIndex {
             }
 
             let path = normalize_path(path);
-            for mention in &file.signal_events {
+            for (mention, resolved_parts) in &file.signal_events {
+                let mut resolved = mention.clone();
+                resolved.receiver_parts = resolved_parts.clone();
                 if !mention.confirmed_bus
-                    && !project_receiver_is_signal_bus(&path, mention, module_graph, type_database)
+                    && !project_receiver_is_signal_bus(
+                        &path,
+                        &resolved,
+                        module_graph,
+                        type_database,
+                    )
                 {
                     continue;
                 }
 
-                let identity = signal_bus_identity(&path, file, mention, module_graph);
+                let identity = signal_bus_identity(&path, file, &resolved, module_graph);
                 index.signal_bus_identities.insert(
                     (path.clone(), mention.receiver_parts.clone()),
                     identity.clone(),

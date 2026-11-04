@@ -1232,7 +1232,7 @@ local customFrame: CustomFrame = {
     let loops = snapshot
         .hover(&path, fixture.position("sprite_loops"))
         .expect("sprite callback parameters should be contextually typed");
-    assert_eq!(loops.contents, "local loops: number");
+    assert_eq!(loops.contents, "parameter loops: number");
 
     let bullet = snapshot
         .hover(&path, fixture.position("pool_bullet"))
@@ -6319,4 +6319,37 @@ events:emit("hit", player)
         )
         .expect("nested parameter should hover");
     assert_eq!(hover.contents, "parameter target: string");
+}
+
+#[test]
+fn event_payload_inference_follows_imported_module_property_aliases() {
+    let mut host = AnalysisHost::new();
+    host.set_file(
+        "src/events.tua",
+        "local enemies = signal()
+return { enemies = enemies }
+",
+    );
+    host.set_file(
+        "src/combat.tua",
+        r#"local Events = require "events"
+local EnemyEvents = Events.enemies
+EnemyEvents:emit("duck.hit", vec2(1, 2))
+"#,
+    );
+    let source = r#"local Events = require "events"
+local EnemyEvents = Events.enemies
+EnemyEvents:on("duck.hit", function(position)
+  print(position.x)
+end)
+"#;
+    host.set_file("src/main.tua", source);
+    let hover = host
+        .snapshot()
+        .hover(
+            "src/main.tua",
+            crate::source_text::position_at(source, "position.x"),
+        )
+        .expect("payload hover");
+    assert_eq!(hover.contents, "parameter position: Vec2");
 }
