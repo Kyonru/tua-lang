@@ -1703,6 +1703,28 @@ impl<'a> SemanticModel<'a> {
                             ast::Parameter::Name(_) | ast::Parameter::Ellipsis(_) => None,
                             _ => None,
                         })?;
+
+                if let Some((receiver_parts, event_name)) = signal_handler_event(call) {
+                    if let Some(receiver_type) =
+                        self.type_of_field_chain(&receiver_parts, call_span.start)
+                    {
+                        if signal::type_is_signal_bus(self.environment, &receiver_type) {
+                            if let Some(parameter) = signal::event_schema_for_receiver(
+                                self.parsed,
+                                self.environment,
+                                &receiver_parts,
+                                &event_name,
+                                call_span.start,
+                            )
+                            .and_then(|schema| {
+                                schema.payload.get(callback_parameter_index).cloned()
+                            }) {
+                                return Some((span_size(call_span), parameter.ty));
+                            }
+                        }
+                    }
+                }
+
                 let function = self.typed_function_for_call(call, call_span.start)?;
                 let argument_index = argument_index + usize::from(function_call_is_method(call));
                 let expected = &function.parameters.get(argument_index)?.ty;
@@ -2688,6 +2710,20 @@ fn signal_typed_method_for_receiver(
     } else {
         None
     }
+}
+
+fn signal_handler_event(call: &FunctionCall) -> Option<(Vec<String>, String)> {
+    let parts = field_chain_before_first_call(call)?;
+    let method = parts.last()?;
+
+    if !matches!(method.as_str(), "on" | "once" | "register") {
+        return None;
+    }
+
+    Some((
+        parts[..parts.len().checked_sub(1)?].to_vec(),
+        signal::event_name_for_call(call)?,
+    ))
 }
 
 fn typed_function_from_asset_loader(kind: AssetLoaderKind) -> TypedFunction {

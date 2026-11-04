@@ -1444,6 +1444,24 @@ impl AnalysisSnapshot {
         name: &str,
         position: SourcePosition,
     ) -> Option<(Type, PathBuf)> {
+        if let Some((receiver_parts, event_name, parameter_index)) =
+            crate::signal::handler_parameter_context(parsed, name, position)
+        {
+            let schema = self.usage_index.signal_event_index().schema_for_receiver(
+                &parsed.path,
+                &receiver_parts,
+                &event_name,
+                position,
+            )?;
+            let parameter = schema.payload.get(parameter_index)?;
+            let ty = self.type_database.resolve_type(
+                &self.module_graph,
+                &schema.origin_path,
+                &parameter.ty,
+            );
+            return Some((ty, schema.origin_path));
+        }
+
         let expected = self.expected_table_type(parsed, position)?;
         let (field, function) = table_callback_field_at_position(&expected.table, position)?;
         let parameter_index =

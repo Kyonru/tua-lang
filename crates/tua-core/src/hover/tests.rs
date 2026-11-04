@@ -1213,6 +1213,22 @@ events:emit("player.hit", "ada", 4)
 }
 
 #[test]
+fn hovers_unannotated_signal_handler_parameters_from_emitted_payloads() {
+    let source = r#"type Player = { hp: number }
+
+local events = signal()
+local player: Player = { hp = 10 }
+events:on("player.hit", function(target, damage)
+  print(target.hp, damage)
+end)
+events:emit("player.hit", player, 4)
+"#;
+
+    assert_hover_in_source(source, "target.hp", 0, "parameter target: Player");
+    assert_hover_in_source(source, "damage)", 0, "parameter damage: number");
+}
+
+#[test]
 fn hovers_typed_builtin_object_pool_constructor_items_and_methods() {
     let source = r#"
 type Bullet = { active: boolean }

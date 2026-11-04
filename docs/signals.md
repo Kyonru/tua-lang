@@ -9,8 +9,10 @@ event and any number of handlers react to it, so a damage system, a score
 display, and a sound effect can respond to `"player.hit"` without knowing about
 each other.
 
-Tua checks event names and payloads from the handlers and declarations it can
-see, completes known event names, and lets you rename an event across a project.
+Tua checks event names and payloads from the handlers, declarations, and emit
+calls it can connect, completes known event names, and lets you rename an event
+across a project. Emitted values can also provide contextual types for an
+unannotated handler's parameters, including field completion in the handler.
 
 === "Tua"
 

@@ -527,11 +527,22 @@ impl SignalEventIndex {
     }
 
     fn schema_for_key(&self, key: &SignalEventKey) -> Option<SignalEventSchema> {
-        let mut schemas = self
-            .group_events(key)
+        let events = self.group_events(key);
+        let explicit = events
+            .iter()
+            .copied()
             .into_iter()
             .filter(|event| event.mention.payload.is_some())
             .collect::<Vec<_>>();
+        let has_explicit = !explicit.is_empty();
+        let mut schemas = if !has_explicit {
+            events
+                .into_iter()
+                .filter(|event| event.mention.inferred_emit_payload.is_some())
+                .collect::<Vec<_>>()
+        } else {
+            explicit
+        };
 
         schemas.sort_by_key(|event| {
             (
@@ -544,14 +555,19 @@ impl SignalEventIndex {
         });
 
         let selected = schemas.first()?;
-        let selected_payload = selected.mention.payload.clone()?;
+        let selected_payload = selected
+            .mention
+            .payload
+            .clone()
+            .or_else(|| selected.mention.inferred_emit_payload.clone())?;
 
         if schemas.iter().any(|event| {
-            event
-                .mention
-                .payload
-                .as_ref()
-                .is_some_and(|payload| !payload_types_match(payload, &selected_payload))
+            let payload = if !has_explicit {
+                event.mention.inferred_emit_payload.as_deref()
+            } else {
+                event.mention.payload.as_deref()
+            };
+            payload.is_some_and(|payload| !payload_types_match(payload, &selected_payload))
         }) {
             return None;
         }
@@ -559,6 +575,7 @@ impl SignalEventIndex {
         Some(SignalEventSchema {
             name: key.name.clone(),
             receiver_parts: selected.mention.receiver_parts.clone(),
+            origin_path: selected.path.clone(),
             payload: selected_payload,
         })
     }
@@ -755,6 +772,7 @@ fn graph_call_role(method: &str) -> SignalGraphCallRole {
 pub(crate) struct SignalEventSchema {
     pub name: String,
     pub receiver_parts: Vec<String>,
+    pub origin_path: PathBuf,
     pub payload: Vec<TypedParameter>,
 }
 
@@ -806,6 +824,66 @@ pub(crate) fn event_schema_for_receiver(
     let index = local_event_index(parsed, environment, &scope);
 
     index.schema_for_receiver(&parsed.path, receiver_parts, name, position)
+}
+
+pub(crate) fn event_name_for_call(function_call: &FunctionCall) -> Option<String> {
+    first_string_argument(function_call).map(|(name, _, _)| name)
+}
+
+pub(crate) fn handler_parameter_context(
+    parsed: &ParsedSource,
+    name: &str,
+    position: SourcePosition,
+) -> Option<(Vec<String>, String, usize)> {
+    struct Collector<'a> {
+        name: &'a str,
+        position: SourcePosition,
+        result: Option<(Vec<String>, String, usize)>,
+    }
+
+    impl Visitor for Collector<'_> {
+        fn visit_function_call(&mut self, call: &FunctionCall) {
+            if self.result.is_some() {
+                return;
+            }
+            let Some(parts) = field_chain_before_first_call(call) else {
+                return;
+            };
+            if !matches!(
+                parts.last().map(String::as_str),
+                Some("on" | "once" | "register")
+            ) {
+                return;
+            }
+            let receiver = parts[..parts.len().saturating_sub(1)].to_vec();
+            let Some(event_name) = event_name_for_call(call) else {
+                return;
+            };
+            let Some(Expression::Function(function)) = argument_expression(call, 1) else {
+                return;
+            };
+            let Some(body_span) = node_span(function.body()) else {
+                return;
+            };
+            if !span_contains_position(body_span, self.position) {
+                return;
+            }
+            let Some((index, _)) = function.body().parameters().iter().enumerate().find(|(_, parameter)| {
+                matches!(parameter, ast::Parameter::Name(token) if token_text(token) == self.name)
+            }) else {
+                return;
+            };
+            self.result = Some((receiver, event_name, index));
+        }
+    }
+
+    let mut collector = Collector {
+        name,
+        position,
+        result: None,
+    };
+    collector.visit_ast(&parsed.ast);
+    collector.result
 }
 
 pub(crate) fn event_schema_diagnostics(

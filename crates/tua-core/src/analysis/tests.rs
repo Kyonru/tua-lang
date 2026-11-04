@@ -650,6 +650,61 @@ ui:declare("player.hit", function(message: string) end)
 }
 
 #[test]
+fn signal_hover_infers_payload_from_emit_when_no_schema_is_declared() {
+    let source = r#"local events = signal()
+events:emit("player.hit", vec2(10, 20))
+"#;
+    let mut host = AnalysisHost::new();
+    host.set_file("src/main.tua", source);
+
+    let hover = host
+        .snapshot()
+        .hover(
+            "src/main.tua",
+            crate::source_text::position_at(source, "player.hit"),
+        )
+        .expect("event name should hover from its emitted payload");
+
+    assert_eq!(
+        hover.contents,
+        "SignalBus event \"player.hit\"(value1: Vec2)"
+    );
+}
+
+#[test]
+fn signal_handler_parameter_hover_and_completion_use_emitted_payloads() {
+    let source = r#"type Player = { hp: number, name: string }
+local events = signal()
+local player: Player = { hp = 10, name = "Ada" }
+events:on("duck.hit", function(target)
+  print(target.hp)
+end)
+events:emit("duck.hit", player)
+"#;
+    let mut host = AnalysisHost::new();
+    host.set_file("src/main.tua", source);
+    let snapshot = host.snapshot();
+
+    let hover = snapshot
+        .hover(
+            "src/main.tua",
+            crate::source_text::position_at(source, "target.hp"),
+        )
+        .expect("handler parameter should use emitted payload type");
+    assert_eq!(hover.contents, "parameter target: Player");
+
+    let target = crate::source_text::position_at(source, "target.hp");
+    let completions = snapshot.completion(
+        "src/main.tua",
+        SourcePosition {
+            line: target.line,
+            column: target.column + "target.".len(),
+        },
+    );
+    assert!(completions.iter().any(|item| item.label == "hp"));
+}
+
+#[test]
 fn signal_event_payload_conflicts_are_diagnosed_per_bus() {
     let path = PathBuf::from("src/main.tua");
     let mut host = AnalysisHost::new();
