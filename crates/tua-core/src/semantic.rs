@@ -1669,11 +1669,6 @@ impl<'a> SemanticModel<'a> {
     }
 
     fn contextual_call_parameter_type(&self, name: &str, position: SourcePosition) -> Option<Type> {
-        let scope = crate::scope_map_parsed_source(self.parsed);
-        let binding = scope
-            .symbol_at_position(position)
-            .and_then(|id| scope.declaration(id))
-            .or_else(|| binding_at(&scope, name, position))?;
         let mut collector = FunctionCallCollector::default();
         collector.visit_ast(&self.parsed.ast);
 
@@ -1702,10 +1697,7 @@ impl<'a> SemanticModel<'a> {
                         .iter()
                         .enumerate()
                         .find_map(|(index, parameter)| match parameter {
-                            ast::Parameter::Name(parameter)
-                                if token_text(parameter) == name
-                                    && node_span(parameter) == Some(binding.name_span) =>
-                            {
+                            ast::Parameter::Name(parameter) if token_text(parameter) == name => {
                                 Some(index)
                             }
                             ast::Parameter::Name(_) | ast::Parameter::Ellipsis(_) => None,
@@ -1713,6 +1705,9 @@ impl<'a> SemanticModel<'a> {
                         })?;
 
                 if let Some((receiver_parts, event_name)) = signal_handler_event(call) {
+                    // Signal schemas must apply to this callback's parameter,
+                    // not an identically named binding in a nested function.
+                    signal::handler_parameter_context(self.parsed, name, position)?;
                     if let Some(receiver_type) =
                         self.type_of_field_chain(&receiver_parts, call_span.start)
                     {

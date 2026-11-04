@@ -852,6 +852,7 @@ pub(crate) fn handler_parameter_context(
         name: &'a str,
         position: SourcePosition,
         scope: &'a ScopeMap,
+        symbol: crate::ScopeSymbolId,
         result: Option<(Vec<String>, String, usize)>,
     }
 
@@ -884,8 +885,7 @@ pub(crate) fn handler_parameter_context(
             }
             let Some((index, _)) = function.body().parameters().iter().enumerate().find(|(_, parameter)| {
                 matches!(parameter, ast::Parameter::Name(token) if token_text(token) == self.name
-                    && self.scope.symbol_at_position(node_start(token)).is_some()
-                    && self.scope.symbol_at_position(node_start(token)) == self.scope.symbol_at_position(self.position))
+                    && self.scope.symbol_at_position(node_start(token)) == Some(self.symbol))
             }) else {
                 return;
             };
@@ -894,10 +894,27 @@ pub(crate) fn handler_parameter_context(
     }
 
     let scope = crate::scope_map_parsed_source(parsed);
+    let symbol = scope
+        .symbol_at_position(position)
+        .filter(|id| scope.declaration(*id).is_some_and(|d| d.name == name))
+        .or_else(|| {
+            scope
+                .declarations()
+                .iter()
+                .filter(|d| {
+                    d.name == name
+                        && span_contains_position(d.scope_span, position)
+                        && (d.name_span.start.line, d.name_span.start.column)
+                            <= (position.line, position.column)
+                })
+                .max_by_key(|d| (d.name_span.start.line, d.name_span.start.column))
+                .map(|d| d.id)
+        })?;
     let mut collector = Collector {
         name,
         position,
         scope: &scope,
+        symbol,
         result: None,
     };
     collector.visit_ast(&parsed.ast);
