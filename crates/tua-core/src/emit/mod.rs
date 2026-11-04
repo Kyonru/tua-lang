@@ -760,7 +760,7 @@ fn luacats_annotation_operations(
             if let Some(return_type) = function.return_type.as_ref() {
                 comments.push(format!(
                     "---@return {}",
-                    type_renderer.tua_type(return_type, 0)
+                    luacats_return_list(return_type, |ty| type_renderer.tua_type(ty, 0))
                 ));
             }
 
@@ -1178,7 +1178,12 @@ impl<'a> LuacatsTypeRenderer<'a> {
             .join(", ");
         function.return_type.as_ref().map_or_else(
             || format!("fun({parameters})"),
-            |return_type| format!("fun({parameters}): {}", self.tua_type(return_type, 0)),
+            |return_type| {
+                format!(
+                    "fun({parameters}): {}",
+                    luacats_return_list(return_type, |ty| self.tua_type(ty, 0))
+                )
+            },
         )
     }
 
@@ -1277,6 +1282,15 @@ fn luacats_array_item(ty: &TuaType) -> String {
     }
 }
 
+fn luacats_return_list(ty: &TuaType, render: impl Fn(&TuaType) -> String) -> String {
+    // Tuples in native return position are multiple values. Elsewhere a
+    // LuaCATS tuple remains a single positional table type.
+    match ty {
+        TuaType::Tuple(items) => items.iter().map(render).collect::<Vec<_>>().join(", "),
+        ty => render(ty),
+    }
+}
+
 fn luacats_function_type(function: &crate::FunctionAnnotation) -> String {
     let parameters = function
         .parameters
@@ -1286,7 +1300,10 @@ fn luacats_function_type(function: &crate::FunctionAnnotation) -> String {
         .join(", ");
 
     if let Some(return_type) = &function.return_type {
-        format!("fun({parameters}): {}", luacats_type(return_type))
+        format!(
+            "fun({parameters}): {}",
+            luacats_return_list(return_type, luacats_type)
+        )
     } else {
         format!("fun({parameters})")
     }

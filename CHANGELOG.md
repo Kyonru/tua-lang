@@ -20,6 +20,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- LuaCATS output preserves native multiple returns in both function documentation
+  and exported callable signatures instead of emitting one tuple value.
+
 - Function documentation completion generates valid LuaDoc multiple-return lists;
   LuaDoc return annotations retain every comma-separated return type.
 

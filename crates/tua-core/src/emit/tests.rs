@@ -2155,3 +2155,28 @@ return audioSystem({})
     assert!(!emitted.contains("require(\"tuaaudio\")"));
     assert!(emitted.contains("return audioSystem({})"));
 }
+
+#[test]
+fn luacats_emission_preserves_multiple_function_returns() {
+    let emitted = emit_tua_source_with_mode(
+        "api.tua",
+        r#"local function dimensions(): (number, string)
+  return 320, "width"
+end
+return { dimensions = dimensions }
+"#,
+        AnnotationMode::Luacats,
+    )
+    .unwrap();
+    assert!(emitted.contains("---@return number, string"), "{emitted}");
+    assert!(
+        emitted.contains("---@field dimensions fun(): number, string"),
+        "{emitted}"
+    );
+    let parsed = crate::parse_lua_source("api.lua", emitted).unwrap();
+    let environment = crate::build_type_environment(&parsed).unwrap();
+    assert_eq!(
+        environment.function("dimensions").unwrap().return_types,
+        vec![crate::Type::number(), crate::Type::string()]
+    );
+}
