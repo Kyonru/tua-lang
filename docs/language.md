@@ -1037,3 +1037,17 @@ deliberately does not provide:
 - full compatibility with other Lua language servers or typed Lua dialects.
 
 Pre-1.0 releases follow the migration policy in [Releases](releases.md).
+
+### LOVE color values
+
+Use the built-in `LoveColor` alias for shared color fields and parameters:
+
+```tua
+local background: LoveColor = { 0.1, 0.2, 0.3 }
+local shadow: LoveColor = { 0, 0, 0, 0.5 }
+love.graphics.setColor(background)
+```
+
+`LoveColor` is a `number[]` alias. Supply RGB or RGBA components in LOVE's
+usual 0–1 range; the type checker validates component types, but does not
+enforce array length or numeric bounds.

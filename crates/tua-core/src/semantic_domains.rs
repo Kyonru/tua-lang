@@ -67,12 +67,14 @@ impl BuiltinDomainRegistry {
     pub(crate) fn builtin_type_names(self) -> Vec<&'static str> {
         self.domains()
             .flat_map(BuiltinDomain::builtin_type_names)
+            .chain(["LoveColor"])
             .collect()
     }
 
     pub(crate) fn builtin_aliases(self) -> Vec<(String, Type)> {
         self.domains()
             .flat_map(BuiltinDomain::builtin_aliases)
+            .chain([("LoveColor".to_owned(), Type::array(Type::number()))])
             .collect()
     }
 

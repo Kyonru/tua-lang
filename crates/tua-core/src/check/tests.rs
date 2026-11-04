@@ -5008,3 +5008,25 @@ fn inline_class_return_error_points_to_original_expression() {
         .expect("return mismatch");
     assert_eq!((mismatch.line, mismatch.column), (2, 29));
 }
+
+#[test]
+fn shared_love_color_type_accepts_numeric_components() {
+    check_tua_source(
+        "src/colors.tua",
+        r#"
+local background: LoveColor = { 0.1, 0.2, 0.3 }
+local shadow: LoveColor = { 0, 0, 0, 0.5 }
+love.graphics.setColor(background)
+love.graphics.setColor(shadow)
+"#,
+    )
+    .expect("RGB and RGBA colors should check");
+    let errors = check_tua_source(
+        "src/colors.tua",
+        r#"local invalid: LoveColor = { "red", 0, 0 }"#,
+    )
+    .expect_err("components must be numbers");
+    assert!(errors
+        .iter()
+        .any(|d| d.code == Some(DiagnosticCode::TYPE_MISMATCH)));
+}

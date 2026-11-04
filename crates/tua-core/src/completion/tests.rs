@@ -3189,3 +3189,12 @@ fn temp_project_dir(name: &str) -> PathBuf {
 
     path
 }
+
+#[test]
+fn completes_shared_love_color_type() {
+    let source = "local background: LoveC
+";
+    let completions = complete_tua_source("src/main.tua", source, position_after(source, "LoveC"))
+        .expect("color completion");
+    assert!(labels(&completions).contains(&"LoveColor".to_owned()));
+}

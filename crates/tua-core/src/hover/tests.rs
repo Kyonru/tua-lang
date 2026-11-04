@@ -1990,3 +1990,13 @@ fn class_method_multi_return_locals_hover_with_names() {
     assert_hover_in_source(source, "print(text_w", 6, "local text_w: number");
     assert_hover_in_source(source, "text_h)", 0, "local text_h: number");
 }
+
+#[test]
+fn shared_love_color_alias_hovers() {
+    assert_hover_in_source(
+        "local background: LoveColor = { 0, 0, 0 }",
+        "LoveColor",
+        0,
+        "type LoveColor = number[]",
+    );
+}
