@@ -577,6 +577,37 @@ interchangeable. Duplicate `init` declarations, inheritance cycles, extending
 non-open classes, missing or spurious `override`, and override signature drift
 are diagnosed.
 
+Export an instance type alias when another module needs to annotate a value
+created by the runtime class:
+
+```tua
+-- dialogue.tua
+final class Dialogue {
+  text: string
+
+  init(text: string) {
+    self.text = text
+  }
+}
+
+export type DialogueInstance = Dialogue
+return { Dialogue = Dialogue }
+```
+
+```tua
+-- main.tua
+import type { DialogueInstance } from "./dialogue"
+local DialogueModule = require("dialogue")
+
+local dialogue: DialogueInstance = DialogueModule.Dialogue.new("Hello")
+dialogue.text = "Goodbye"
+```
+
+The type-only import supplies the instance type; the runtime `require` supplies
+the constructor value. Imported instances retain class member completion and
+method signatures. Use colon calls for instances reached through module
+boundaries so the generated Lua passes the receiver explicitly.
+
 Class names, fields, and methods participate in source definition, references,
 and rename. This includes accesses through locally inferred instances and
 instances exported from static modules; edits target the original class syntax,
