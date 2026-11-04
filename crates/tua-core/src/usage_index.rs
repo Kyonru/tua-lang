@@ -199,12 +199,7 @@ impl ProjectUsageIndex {
             let path = normalize_path(path);
             for (mention, resolved) in &file.signal_events {
                 if !mention.confirmed_bus
-                    && !project_receiver_is_signal_bus(
-                        &path,
-                        &resolved,
-                        module_graph,
-                        type_database,
-                    )
+                    && !project_receiver_is_signal_bus(&path, resolved, module_graph, type_database)
                 {
                     continue;
                 }

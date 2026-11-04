@@ -531,7 +531,6 @@ impl SignalEventIndex {
         let explicit = events
             .iter()
             .copied()
-            .into_iter()
             .filter(|event| event.mention.payload.is_some())
             .collect::<Vec<_>>();
         let has_explicit = !explicit.is_empty();
