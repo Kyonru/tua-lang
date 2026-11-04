@@ -4,6 +4,18 @@ use full_moon::tokenizer::{Lexer, LexerResult, TokenType};
 use crate::{SourcePosition, SourceSpan};
 
 pub(crate) fn leading_doc_comment(source: &str, declaration_line: usize) -> Option<String> {
+    leading_doc_comment_impl(source, declaration_line, false)
+}
+
+pub(crate) fn leading_method_doc_comment(source: &str, declaration_line: usize) -> Option<String> {
+    leading_doc_comment_impl(source, declaration_line, true)
+}
+
+fn leading_doc_comment_impl(
+    source: &str,
+    declaration_line: usize,
+    include_tags: bool,
+) -> Option<String> {
     let mut docs = Vec::new();
     let mut line_number = declaration_line.checked_sub(1)?;
 
@@ -20,7 +32,7 @@ pub(crate) fn leading_doc_comment(source: &str, declaration_line: usize) -> Opti
         let text = trimmed.trim_start_matches("---").trim_start();
         if let Some(tagged) = text.strip_prefix('@') {
             if let Some((tag, description)) = tagged.split_once(char::is_whitespace) {
-                if matches!(tag, "param" | "return") {
+                if include_tags && matches!(tag, "param" | "return") {
                     docs.push(format!(
                         "
 - **@{tag}** {}",

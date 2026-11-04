@@ -601,7 +601,23 @@ fn documentation_for_definition(parsed: &ParsedSource, definition: &Definition) 
     // External documentation belongs to the resolved module/snapshot. Reading
     // disk here could mix a saved declaration with an unsaved editor buffer.
     (definition.path == parsed.path)
-        .then(|| leading_doc_comment(&parsed.source, definition.span.start.line))
+        .then(|| {
+            let is_class_method = parsed.class_declarations.iter().any(|class| {
+                class
+                    .init
+                    .iter()
+                    .chain(class.methods.iter())
+                    .any(|method| method.name_span == definition.span)
+            });
+            if is_class_method {
+                crate::source_text::leading_method_doc_comment(
+                    &parsed.source,
+                    definition.span.start.line,
+                )
+            } else {
+                leading_doc_comment(&parsed.source, definition.span.start.line)
+            }
+        })
         .flatten()
 }
 
