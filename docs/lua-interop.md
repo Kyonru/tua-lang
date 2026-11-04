@@ -349,6 +349,35 @@ produce an unknown-type diagnostic, missing modules use the normal project
 module diagnostic, and aliases from imported namespaces work in locals,
 parameters, returns, arrays, and nested table shapes.
 
+To let consumers annotate instances of a runtime class, export a type alias for
+the class in the same module as the class:
+
+```tua title="src/dialogue.tua"
+final class Dialogue {
+  text: string
+
+  init(text: string) {
+    self.text = text
+  }
+}
+
+export type DialogueInstance = Dialogue
+return { Dialogue = Dialogue }
+```
+
+Then import that alias alongside the ordinary runtime module:
+
+```tua title="src/main.tua"
+import type { DialogueInstance } from "./dialogue"
+
+local DialogueModule = require("dialogue")
+local dialogue: DialogueInstance = DialogueModule.Dialogue.new("Hello")
+```
+
+`DialogueModule.Dialogue` is the runtime constructor; `DialogueInstance` names
+the instance shape and keeps the class's nominal identity across the module
+boundary.
+
 Imported names cannot collide with runtime locals or local type aliases.
 Export visibility is consistent for type-only imports and types reached through
 runtime module aliases: cross-module Tua aliases must use `export type`.

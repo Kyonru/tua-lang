@@ -17,7 +17,7 @@ fn snapshot_reports_invalid_primitive_operator() {
         .any(|d| d.code == Some(crate::DiagnosticCode::TYPE_MISMATCH)
             && d.message.contains("operator")));
 }
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -2871,6 +2871,47 @@ return player
             .any(|diagnostic| diagnostic.code == Some(DiagnosticCode::TYPE_MISMATCH)),
         "the project-aware pass must still report the real mismatch: {settled:#?}"
     );
+}
+
+#[test]
+fn imported_type_alias_can_name_a_runtime_class_instance() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+import type { DialogueInstance } from "./dialogue"
+local DialogueModule = require("dialogue")
+local dialogue: DialogueInstance = DialogueModule.Dialogue.new("Hello")
+dialogue.<|field|>text = "Goodbye"
+-- file: src/dialogue.tua
+final class Dialogue {
+  text: string
+
+  init(text: string) {
+    self.text = text
+  }
+}
+
+export type DialogueInstance = Dialogue
+return { Dialogue = Dialogue }
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+
+    let snapshot = host.snapshot();
+    let diagnostics = snapshot.diagnostics("src/main.tua");
+    assert!(
+        diagnostics.is_empty(),
+        "unexpected diagnostics: {diagnostics:#?}"
+    );
+    let hover = snapshot
+        .hover("src/main.tua", fixture.position("field"))
+        .expect("imported class instance field should hover");
+
+    assert_eq!(hover.contents, "(field) text: string");
 }
 
 #[test]
