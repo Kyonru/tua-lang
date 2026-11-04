@@ -302,7 +302,9 @@ impl<'a> HoverResolver<'a> {
         position: SourcePosition,
         hover_span: SourceSpan,
     ) -> Option<Hover> {
-        let base = self.semantic.parameter_type_at_position(name, position)?;
+        let base = self
+            .semantic
+            .parameter_type_at_source_position(name, position)?;
         let aliases = self
             .environment
             .aliases()
@@ -327,6 +329,11 @@ impl<'a> HoverResolver<'a> {
 
     fn is_parameter_at_position(&self, position: SourcePosition) -> bool {
         let scope = crate::scope_map_parsed_source(self.parsed);
+        let position = self
+            .parsed
+            .raw
+            .parser_position_for_source(position)
+            .unwrap_or(position);
 
         scope
             .symbol_at_position(position)

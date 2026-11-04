@@ -1659,6 +1659,19 @@ impl<'a> SemanticModel<'a> {
         Some(local)
     }
 
+    pub(crate) fn parameter_type_at_source_position(
+        &self,
+        name: &str,
+        position: SourcePosition,
+    ) -> Option<Type> {
+        let parser_position = self
+            .parsed
+            .raw
+            .parser_position_for_source(position)
+            .unwrap_or(position);
+        self.parameter_type_at_position(name, parser_position)
+    }
+
     pub(crate) fn parameter_type_at_position(
         &self,
         name: &str,

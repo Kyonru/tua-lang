@@ -2029,3 +2029,45 @@ a() { local v = 1; print(v) } b() { local v = "hello"; print(v) }
     assert_hover_in_source(source, "v = 1", 0, "local v: number");
     assert_hover_in_source(source, "v = \"hello\"", 0, "local v: string");
 }
+
+#[test]
+fn class_method_parameter_uses_keep_source_ranges_and_shadow_builtin_names() {
+    let source = r#"final class Label {
+  text: Text
+  init(font: Font, value: string) {
+    self.text = love.graphics.newText(font, value)
+  }
+  setValue(value: string): Self {
+    self.text:set(value)
+    return self
+  }
+}
+"#;
+    for (needle, expected) in [
+        ("font, value)", "parameter font: Font"),
+        ("value)\n  }", "parameter value: string"),
+        ("value)\n    return", "parameter value: string"),
+    ] {
+        let position = position_at(source, needle);
+        let hover = hover_tua_source("label.tua", source, position)
+            .unwrap()
+            .unwrap();
+        assert_eq!(hover.contents, expected);
+        assert_eq!(hover.span.unwrap().start, position);
+    }
+}
+
+#[test]
+fn class_method_parameter_hovers_respect_nested_parameters() {
+    let source = r#"final class Label {
+  measure(font: Font): number {
+    local function inner(font: Text): number
+      return font:getWidth()
+    end
+    return font:getHeight()
+  }
+}
+"#;
+    assert_hover_in_source(source, "font:getWidth", 0, "parameter font: Text");
+    assert_hover_in_source(source, "font:getHeight", 0, "parameter font: Font");
+}
