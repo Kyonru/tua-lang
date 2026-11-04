@@ -45,6 +45,7 @@ pub(crate) struct NativeArrayTypeSyntax {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct ParserLineProvenance {
     pub source_span: SourceSpan,
+    pub parser_start_column: usize,
     pub class_generated: bool,
 }
 
@@ -172,7 +173,8 @@ impl RawParsedSource {
                     && source_position.column <= origin.source_span.end.column)
                     .then(|| SourcePosition {
                         line: line + 1,
-                        column: source_position.column - origin.source_span.start.column + 1,
+                        column: source_position.column - origin.source_span.start.column
+                            + origin.parser_start_column,
                     })
             })
     }
@@ -189,11 +191,11 @@ impl RawParsedSource {
         } else {
             SourcePosition {
                 line: provenance.source_span.start.line,
-                column: provenance
-                    .source_span
-                    .start
-                    .column
-                    .saturating_add(parser_position.column.saturating_sub(1)),
+                column: provenance.source_span.start.column.saturating_add(
+                    parser_position
+                        .column
+                        .saturating_sub(provenance.parser_start_column),
+                ),
             }
         };
 

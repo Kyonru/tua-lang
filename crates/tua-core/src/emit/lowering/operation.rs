@@ -213,11 +213,13 @@ fn append_segment(
             line.text.push_str(piece);
             if generated {
                 line.source_span = source_span;
+                line.parser_start_column = line_provenance.map_or(1, |p| p.parser_start_column);
                 line.lowering = lowering;
             }
         } else {
             output.push(LoweredLine {
                 text: piece.to_owned(),
+                parser_start_column: line_provenance.map_or(1, |p| p.parser_start_column),
                 source_span,
                 lowering,
             });

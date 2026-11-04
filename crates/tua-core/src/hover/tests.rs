@@ -2020,3 +2020,12 @@ fn dynamic_class_multi_return_locals_keep_their_names_in_hover() {
     assert_hover_in_source(source, "text_w,", 0, "local text_w: any");
     assert_hover_in_source(source, "text_h =", 0, "local text_h: any");
 }
+
+#[test]
+fn same_line_class_methods_keep_separate_local_hover_origins() {
+    let source = r#"final class X {
+a() { local v = 1; print(v) } b() { local v = "hello"; print(v) }
+}"#;
+    assert_hover_in_source(source, "v = 1", 0, "local v: number");
+    assert_hover_in_source(source, "v = \"hello\"", 0, "local v: string");
+}

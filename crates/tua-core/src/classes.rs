@@ -278,6 +278,7 @@ fn class_parser_line_provenance(
 ) -> Vec<ParserLineProvenance> {
     let default = || ParserLineProvenance {
         source_span: class.span,
+        parser_start_column: 1,
         class_generated: true,
     };
     let mut provenance = replacement
@@ -310,7 +311,7 @@ fn class_parser_line_provenance(
             // Method bodies keep their source text after the generated two-space
             // indent. Rewritten `super` calls remain generated and map to the class.
             let body_text = line.strip_prefix("  ").unwrap_or(line);
-            if body_text.trim() != body_line.trim() {
+            if body_line.trim().is_empty() || body_text.trim() != body_line.trim() {
                 continue;
             }
             let source_indent = if body_offset == 0 {
@@ -324,14 +325,19 @@ fn class_parser_line_provenance(
             };
             let source_start = SourcePosition {
                 line: source_line,
-                column: source_indent.saturating_sub(1).max(1),
+                column: source_indent + 1,
             };
             provenance[generated_line] = ParserLineProvenance {
+                parser_start_column: 3,
                 source_span: SourceSpan {
                     start: source_start,
                     end: SourcePosition {
                         line: source_line,
-                        column: original_line.chars().count() + 1,
+                        column: if source_line == method.body_span.end.line {
+                            method.body_span.end.column
+                        } else {
+                            original_line.chars().count() + 1
+                        },
                     },
                 },
                 class_generated: false,

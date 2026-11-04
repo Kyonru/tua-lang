@@ -295,6 +295,7 @@ fn source_line_provenance(source: &str) -> Vec<ParserLineProvenance> {
             let line_number = index + 1;
             let text = line.trim_end_matches(['\r', '\n']);
             ParserLineProvenance {
+                parser_start_column: 1,
                 source_span: SourceSpan {
                     start: SourcePosition {
                         line: line_number,

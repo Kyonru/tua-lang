@@ -1970,7 +1970,7 @@ fn class_method_body_keeps_source_provenance_in_generated_lua() {
 
     assert_eq!(provenance.lowering, LoweringKind::Source);
     assert_eq!(provenance.source_span.start.line, 5);
-    assert_eq!(provenance.source_span.start.column, 3);
+    assert_eq!(provenance.source_span.start.column, 5);
 }
 
 #[test]

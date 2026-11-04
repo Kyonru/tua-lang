@@ -5030,3 +5030,14 @@ love.graphics.setColor(shadow)
         .iter()
         .any(|d| d.code == Some(DiagnosticCode::TYPE_MISMATCH)));
 }
+
+#[test]
+fn unindented_class_error_has_exact_source_column() {
+    let source = "final class X {\na(): number {\nreturn \"wrong\"\n}\n}\n";
+    let errors = check_tua_source("src/main.tua", source).expect_err("return mismatch");
+    let error = errors
+        .iter()
+        .find(|d| d.code == Some(DiagnosticCode::TYPE_MISMATCH))
+        .unwrap();
+    assert_eq!((error.line, error.column), (3, 8));
+}
