@@ -296,6 +296,7 @@ struct AnalysisSemanticFacts {
 struct DegradedFileSemantics {
     parsed: ParsedSource,
     hir: HirModule,
+    scope: ScopeMap,
     environment: TypeEnvironment,
 }
 

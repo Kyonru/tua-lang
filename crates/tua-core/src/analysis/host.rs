@@ -588,8 +588,14 @@ impl AnalysisHost {
             ModuleGraph::build(
                 files.iter().map(|(path, file)| ModuleGraphInput {
                     path,
-                    parsed: file.parsed.as_ref().ok(),
-                    hir: file.hir(),
+                    parsed: file
+                        .parsed
+                        .as_ref()
+                        .ok()
+                        .or_else(|| file.degraded_semantics.as_ref().map(|facts| &facts.parsed)),
+                    hir: file
+                        .hir()
+                        .or_else(|| file.degraded_semantics.as_ref().map(|facts| &facts.hir)),
                     exports: file.exports.as_ref(),
                     source_kind: file.kind,
                 }),
@@ -602,22 +608,31 @@ impl AnalysisHost {
                 },
             )
         };
-        let type_database = {
-            let _profile = profile::span("analysis.index.type_database");
-            let _trace =
-                profile::diagnostics_span(profile::DiagnosticsTraceCategory::TypeEnvironment);
+        let type_database =
+            {
+                let _profile = profile::span("analysis.index.type_database");
+                let _trace =
+                    profile::diagnostics_span(profile::DiagnosticsTraceCategory::TypeEnvironment);
 
-            ProjectTypeDatabase::build(
-                files.iter().map(|(path, file)| ProjectTypeDatabaseInput {
-                    path,
-                    source_kind: file.kind,
-                    environment: file.environment(),
-                    scope: file.scope(),
-                    parsed: file.parsed.as_ref().ok(),
-                }),
-                &module_graph,
-            )
-        };
+                ProjectTypeDatabase::build(
+                    files.iter().map(|(path, file)| ProjectTypeDatabaseInput {
+                        path,
+                        source_kind: file.kind,
+                        environment: file.environment().or_else(|| {
+                            file.degraded_semantics
+                                .as_ref()
+                                .map(|facts| &facts.environment)
+                        }),
+                        scope: file
+                            .scope()
+                            .or_else(|| file.degraded_semantics.as_ref().map(|facts| &facts.scope)),
+                        parsed: file.parsed.as_ref().ok().or_else(|| {
+                            file.degraded_semantics.as_ref().map(|facts| &facts.parsed)
+                        }),
+                    }),
+                    &module_graph,
+                )
+            };
         let symbol_index = {
             let _profile = profile::span("analysis.index.symbol_index");
 

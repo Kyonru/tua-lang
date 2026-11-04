@@ -98,6 +98,7 @@ pub(super) fn build_degraded_file_semantics(
     let (environment, _) = build_analysis_type_environment_with_diagnostics(&parsed, config);
 
     Some(DegradedFileSemantics {
+        scope: scope_map_parsed_source(&parsed),
         parsed,
         hir,
         environment,
@@ -144,6 +145,7 @@ pub(super) fn parse_degraded_analysis_source(
 }
 
 pub(super) fn source_without_recoverable_incomplete_lines(source: &str) -> String {
+    let source = source_without_unfinished_member_access(source);
     let mut recovered = String::with_capacity(source.len());
 
     for line in source.split_inclusive('\n') {
@@ -170,6 +172,51 @@ pub(super) fn source_without_recoverable_incomplete_lines(source: &str) -> Strin
         }
     }
 
+    recovered
+}
+
+fn source_without_unfinished_member_access(source: &str) -> String {
+    use full_moon::ast::LuaVersion;
+    use full_moon::tokenizer::{Lexer, LexerResult, Symbol, TokenType};
+
+    let tokens = match Lexer::new(source, LuaVersion::luau()).collect() {
+        LexerResult::Ok(tokens) | LexerResult::Recovered(tokens, _) => tokens,
+        LexerResult::Fatal(_) => return source.to_owned(),
+    };
+    let significant = tokens
+        .iter()
+        .filter(|token| {
+            !matches!(
+                token.token_type(),
+                TokenType::Whitespace { .. }
+                    | TokenType::SingleLineComment { .. }
+                    | TokenType::MultiLineComment { .. }
+            )
+        })
+        .collect::<Vec<_>>();
+    let mut recovered = source.to_owned();
+    for pair in significant.windows(2) {
+        if matches!(
+            pair[0].token_type(),
+            TokenType::Symbol {
+                symbol: Symbol::Dot
+            }
+        ) && matches!(
+            pair[1].token_type(),
+            TokenType::Symbol {
+                symbol: Symbol::RightParen
+                    | Symbol::RightBracket
+                    | Symbol::RightBrace
+                    | Symbol::Comma
+                    | Symbol::TwoDots
+            }
+        ) {
+            // Preserve all source positions and the surrounding callback scope.
+            // Lexing prevents punctuation inside strings/comments being repaired.
+            let start = pair[0].start_position().bytes();
+            recovered.replace_range(start..start + 1, " ");
+        }
+    }
     recovered
 }
 

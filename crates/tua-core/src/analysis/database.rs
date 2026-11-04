@@ -540,9 +540,18 @@ fn build_analysis_file(
         let _profile = profile::span_for_path("analysis.index.usage.file", path);
         Arc::new(FileUsageIndex::build(
             &source,
-            parsed.as_ref().ok(),
-            semantics.as_ref().map(|semantics| &semantics.environment),
-            semantics.as_ref().map(|semantics| &semantics.scope),
+            parsed
+                .as_ref()
+                .ok()
+                .or_else(|| degraded_semantics.as_ref().map(|facts| &facts.parsed)),
+            semantics
+                .as_ref()
+                .map(|semantics| &semantics.environment)
+                .or_else(|| degraded_semantics.as_ref().map(|facts| &facts.environment)),
+            semantics
+                .as_ref()
+                .map(|semantics| &semantics.scope)
+                .or_else(|| degraded_semantics.as_ref().map(|facts| &facts.scope)),
         ))
     };
     let ecs_index = {

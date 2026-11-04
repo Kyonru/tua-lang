@@ -1691,3 +1691,33 @@ return Player
 
     assert_completion_labels(&output, 2, ["active", "name", "update", "x"]);
 }
+
+#[test]
+fn completion_recovers_unsaved_event_callback_member_inside_call() {
+    let fixture = Fixture::parse(
+        r#"-- file: tua.toml
+source = "src"
+-- file: src/events.tua
+return { combat = signal() }
+-- file: src/emitter.tua
+local Events = require("events")
+Events.combat:emit("hit", { amount = 12 })
+-- file: src/main.tua
+local Events = require("events")
+Events.combat:on("hit", function(payload)
+  print(payload.amount)
+end)
+"#,
+    );
+    let temp = fixture.write_to_temp("event-edit-completion").unwrap();
+    let main = fixture.source("src/main.tua");
+    let edited = main.replace("payload.amount", "payload.");
+    let uri = path_uri(&temp.join("src/main.tua"));
+    let output = run_messages(vec![
+        initialize_with_root(1, path_uri(temp.path())),
+        did_open(&uri, main),
+        did_change(&uri, &edited, 2),
+        completion_request(2, &uri, &edited, "payload."),
+    ]);
+    assert_completion_labels(&output, 2, ["amount"]);
+}

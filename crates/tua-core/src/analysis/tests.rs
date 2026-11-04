@@ -6552,6 +6552,45 @@ return { Label = Label }
 }
 
 #[test]
+fn incomplete_event_payload_member_keeps_callback_scope() {
+    for statement in [
+        "print(payload.<|cursor|>)",
+        "local label = payload.<|cursor|> .. \" hit\"",
+    ] {
+        let fixture = Fixture::parse(&format!(
+            r#"-- file: src/events.tua
+return {{ combat = signal() }}
+-- file: src/emitter.tua
+local Events = require("events")
+Events.combat:emit("hit", {{ amount = 12, name = "Slime" }})
+-- file: src/main.tua
+local Events = require("events")
+Events.combat:on("hit", function(payload)
+  {statement}
+end)
+"#
+        ));
+        let mut host = AnalysisHost::new();
+        host.set_source_roots([PathBuf::from("src")]);
+        for file in fixture.files() {
+            host.set_file(&file.path, file.source.clone());
+        }
+        let snap = host.snapshot();
+        let completions = snap.completion("src/main.tua", fixture.position("cursor"));
+        assert!(
+            completions.iter().any(|item| item.label == "amount"),
+            "{statement}: {completions:?}"
+        );
+        assert!(completions.iter().any(|item| item.label == "name"));
+    }
+    let literal = "local label = 'target.)' -- target.)\n";
+    assert_eq!(
+        source_without_recoverable_incomplete_lines(literal),
+        literal
+    );
+}
+
+#[test]
 fn snapshot_chained_factory_uses_final_multiple_returns() {
     let fixture = Fixture::parse(
         r#"-- file: src/main.tua
