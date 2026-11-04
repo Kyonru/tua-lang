@@ -5089,3 +5089,32 @@ print(y * 2)
         .collect::<Vec<_>>();
     assert_eq!(lines, vec![13], "{diagnostics:#?}");
 }
+
+#[test]
+fn formatted_class_call_has_no_continuation_warning() {
+    let source = r#"open class Renderer {
+  draw() {
+    do
+      love.graphics.rectangle(
+        "fill",
+        10 + 2,
+        100 + 4,
+        12,
+        14,
+        8,
+        8
+      )
+    end
+  }
+}
+"#;
+    let formatted =
+        crate::format_tua_source("src/main.tua", source, &crate::FormatOptions::default()).unwrap();
+    let diagnostics = check_standard_rules_source(&formatted);
+    assert!(
+        !diagnostics
+            .iter()
+            .any(|d| d.code == Some(DiagnosticCode::LINT_MULTI_LINE_STATEMENT)),
+        "{formatted}\n{diagnostics:#?}"
+    );
+}

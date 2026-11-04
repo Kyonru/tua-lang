@@ -542,6 +542,12 @@ impl LintRuleVisitor<'_> {
             .range()
             .map(|(start, _)| SourcePosition::from_full_moon(start))
             .unwrap_or(SourcePosition { line: 1, column: 1 });
+        let start = self
+            .parsed
+            .raw
+            .parser_position_origin(start)
+            .map(|origin| origin.source_position)
+            .unwrap_or(start);
         self.multiline_statements.push(MultiLineStatement {
             start,
             last_line: start.line,
@@ -559,19 +565,25 @@ impl LintRuleVisitor<'_> {
             return;
         };
         let position = SourcePosition::from_full_moon(start);
+        let source_position = self
+            .parsed
+            .raw
+            .parser_position_origin(position)
+            .map(|origin| origin.source_position)
+            .unwrap_or(position);
         let should_warn = self
             .multiline_statements
             .last_mut()
             .is_some_and(|statement| {
                 if statement.flagged
                     || statement.ignore_expressions
-                    || position.line <= statement.last_line
+                    || source_position.line <= statement.last_line
                 {
                     return false;
                 }
 
-                statement.last_line = position.line;
-                statement.flagged = position.column <= statement.start.column;
+                statement.last_line = source_position.line;
+                statement.flagged = source_position.column <= statement.start.column;
                 statement.flagged
             });
 
