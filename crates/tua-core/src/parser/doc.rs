@@ -343,12 +343,20 @@ fn parse_return(
     line_number: usize,
     cursor: usize,
 ) -> Result<(LuaDocAnnotationKind, Option<String>), String> {
-    let (ty, type_span, cursor) = required_type(line, line_number, cursor, "return type")?;
+    let mut cursor = cursor;
+    let mut returns = Vec::new();
+    loop {
+        let (ty, type_span, next) = required_type(line, line_number, cursor, "return type")?;
+        returns.push(LuaDocReturnType { ty, type_span });
+        cursor = skip_spaces(line, next);
+        if line.as_bytes().get(cursor) != Some(&b',') {
+            break;
+        }
+        cursor += 1;
+    }
 
     Ok((
-        LuaDocAnnotationKind::Return(LuaDocReturn {
-            returns: vec![LuaDocReturnType { ty, type_span }],
-        }),
+        LuaDocAnnotationKind::Return(LuaDocReturn { returns }),
         documentation_from(line, cursor),
     ))
 }

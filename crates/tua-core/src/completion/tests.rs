@@ -3199,3 +3199,34 @@ fn completes_shared_love_color_type() {
         .expect("color completion");
     assert!(labels(&completions).contains(&"LoveColor".to_owned()));
 }
+
+#[test]
+fn generated_multi_return_documentation_checks_after_insertion() {
+    let source =
+        "---\nlocal function size(): (number, string)\n  return 10, \"wide\"\nend\nprint(size())\n";
+    let completions =
+        complete_tua_source("main.tua", source, position_after(source, "---")).unwrap();
+    let snippet = completions
+        .iter()
+        .find(|item| item.label == "document function")
+        .unwrap()
+        .insert_text
+        .as_deref()
+        .unwrap();
+    assert_eq!(snippet, "@return number, string ${1:description}");
+    let documented = source.replacen(
+        "---",
+        &format!(
+            "---{}",
+            snippet.replace("${1:description}", "Width and label.")
+        ),
+        1,
+    );
+    let parsed = crate::parse_tua_source("main.tua", documented).unwrap();
+    let environment = crate::build_type_environment(&parsed)
+        .expect("generated docs must agree with the native signature");
+    assert_eq!(
+        environment.function("size").unwrap().return_types,
+        vec![Type::number(), Type::string()]
+    );
+}

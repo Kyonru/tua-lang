@@ -2026,3 +2026,40 @@ fn name_diagnostics_preserve_builtin_shadowing_and_other_syntax_errors() {
             .all(|error| !error.message.contains("reserved keyword")));
     }
 }
+
+#[test]
+fn lua_doc_multiple_returns_preserve_nested_types_and_description() {
+    let source =
+        "---@return number, { x: number, y: number }, [string, boolean] Dimensions and metadata.\n";
+    let parsed = parse_lua_doc_annotations_with_options(
+        "api.lua",
+        source,
+        LuaDocParseOptions {
+            diagnostics_enabled: true,
+        },
+    );
+    assert!(parsed.diagnostics.is_empty(), "{:?}", parsed.diagnostics);
+    let annotation = &parsed.annotations[0];
+    let LuaDocAnnotationKind::Return(result) = &annotation.kind else {
+        panic!("return annotation")
+    };
+    assert_eq!(result.returns.len(), 3);
+    assert_eq!(result.returns[0].ty, TuaType::Named("number".to_owned()));
+    assert!(matches!(&result.returns[1].ty, TuaType::Table(fields) if fields.len() == 2));
+    assert!(matches!(&result.returns[2].ty, TuaType::Tuple(items) if items.len() == 2));
+    assert_eq!(
+        annotation.documentation.as_deref(),
+        Some("Dimensions and metadata.")
+    );
+    for malformed in ["---@return number,", "---@return number,, string"] {
+        assert!(!parse_lua_doc_annotations_with_options(
+            "api.lua",
+            malformed,
+            LuaDocParseOptions {
+                diagnostics_enabled: true
+            }
+        )
+        .diagnostics
+        .is_empty());
+    }
+}

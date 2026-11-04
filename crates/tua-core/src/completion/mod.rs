@@ -1267,8 +1267,15 @@ fn documentation_snippet_for_function(
         }
     }
 
-    if signature.return_type.is_none() {
-        signature.return_type = function.return_type.as_ref().map(format_tua_type);
+    if let Some(ty) = &function.return_type {
+        signature.return_type = Some(match ty {
+            TuaType::Tuple(items) => items
+                .iter()
+                .map(format_tua_type)
+                .collect::<Vec<_>>()
+                .join(", "),
+            ty => format_tua_type(ty),
+        });
     }
 
     documentation_snippet_from_signature(signature)
@@ -1342,7 +1349,17 @@ fn parse_function_signature_line(line: &str) -> Option<FunctionSignature> {
         .strip_prefix(':')
         .map(|ty| ty.trim())
         .filter(|ty| !ty.is_empty())
-        .map(type_prefix);
+        .map(type_prefix)
+        .map(|ty| {
+            // The lossy path still has the signature text when another edit
+            // prevents parsing. Native multiple returns use parentheses; LuaDoc
+            // uses a comma-separated return list.
+            if ty.starts_with('(') && matching_close_paren(&ty, 0) == Some(ty.len() - 1) {
+                ty[1..ty.len() - 1].trim().to_owned()
+            } else {
+                ty
+            }
+        });
 
     Some(FunctionSignature {
         parameters,

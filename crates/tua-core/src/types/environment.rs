@@ -1697,10 +1697,7 @@ pub(crate) fn typed_function_from_lua_doc_body(
 ) -> Option<TypedFunction> {
     let param_annotations = lua_doc_param_annotations(docs);
     let return_annotation = docs.iter().find_map(|annotation| match &annotation.kind {
-        LuaDocAnnotationKind::Return(return_annotation) => return_annotation
-            .returns
-            .first()
-            .map(|ty| (*annotation, ty)),
+        LuaDocAnnotationKind::Return(return_annotation) => Some(return_annotation),
         _ => None,
     });
     let vararg_annotation = docs.iter().find_map(|annotation| match &annotation.kind {
@@ -1771,14 +1768,20 @@ pub(crate) fn typed_function_from_lua_doc_body(
         })
         .collect::<Vec<_>>();
     let return_types = return_annotation
-        .map(|(_, ty)| {
-            vec![resolve_lua_doc_return_type(
-                &parsed.path,
-                ty,
-                alias_names,
-                diagnostics,
-                &context,
-            )]
+        .map(|annotation| {
+            annotation
+                .returns
+                .iter()
+                .map(|ty| {
+                    resolve_lua_doc_return_type(
+                        &parsed.path,
+                        ty,
+                        alias_names,
+                        diagnostics,
+                        &context,
+                    )
+                })
+                .collect::<Vec<_>>()
         })
         .unwrap_or_default();
     let return_type = return_types.first().cloned();

@@ -20,6 +20,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Function documentation completion generates valid LuaDoc multiple-return lists;
+  LuaDoc return annotations retain every comma-separated return type.
+
 - Chained-call local and return inference uses the final method result, including
   multiple LOVE return values and imported factory results.
 

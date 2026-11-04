@@ -6617,3 +6617,32 @@ return { canvas = canvas }
         assert_eq!(hover.contents, format!("local {marker}: number"));
     }
 }
+
+#[test]
+fn lua_doc_multiple_returns_reach_imported_local_hovers() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+local Api = require("api")
+local width, label = Api.measure()
+print(<|width|>width, <|label|>label)
+-- file: src/api.lua
+---@return number, string Width and display label.
+local function measure()
+  return 10, "wide"
+end
+return { measure = measure }
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+    let snapshot = host.snapshot();
+    for (marker, ty) in [("width", "number"), ("label", "string")] {
+        let hover = snapshot
+            .hover("src/main.tua", fixture.position(marker))
+            .unwrap();
+        assert_eq!(hover.contents, format!("local {marker}: {ty}"));
+    }
+}
