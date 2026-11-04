@@ -136,6 +136,7 @@ pub fn emit_lua_artifact_with_mode(
     )
 }
 
+#[cfg(test)]
 pub(crate) fn emit_lua_with_mode_and_import_resolver(
     parsed: &ParsedSource,
     annotation_mode: AnnotationMode,
@@ -165,7 +166,7 @@ fn emit_lua_artifact_with_mode_and_import_resolver(
     )
 }
 
-fn emit_lua_artifact_with_mode_import_resolver_and_environment(
+pub(crate) fn emit_lua_artifact_with_mode_import_resolver_and_environment(
     parsed: &ParsedSource,
     annotation_mode: AnnotationMode,
     import_resolver: ImportResolver<'_>,

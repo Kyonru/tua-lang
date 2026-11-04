@@ -75,6 +75,7 @@ impl AnalysisSnapshot {
             return Vec::new();
         };
         let mut diagnostics = file.diagnostics.clone();
+        diagnostics.extend(self.emission_diagnostics(path.as_ref(), file));
 
         let project_type_diagnostics = self.project_type_diagnostics(path.as_ref(), file);
         if self.project_type_check_required(file) {
@@ -125,6 +126,51 @@ impl AnalysisSnapshot {
             diagnostics,
             &self.config.diagnostics,
         )
+    }
+
+    fn emission_diagnostics(&self, path: &Path, file: &AnalysisFile) -> Vec<Diagnostic> {
+        if file.kind != AnalysisSourceKind::Tua {
+            return Vec::new();
+        }
+        let Ok(parsed) = &file.parsed else {
+            return Vec::new();
+        };
+        let path = normalize_path(path);
+        if let Some(cached) = self
+            .emission_diagnostics_cache
+            .lock()
+            .expect("emission diagnostics cache poisoned")
+            .get(&path)
+        {
+            return cached.clone();
+        }
+        let _profile = profile::span_for_path("analysis.emit.check", &path);
+        let known_paths = self.files.keys().cloned().collect::<BTreeSet<_>>();
+        let resolver = |specifier: &str| {
+            module_name_for_import_specifier(
+                &path,
+                specifier,
+                &known_paths,
+                self.vfs.source_roots(),
+                &self.vfs.options().output_roots,
+                &self.config.extension,
+                self.require_path_separator,
+            )
+        };
+        let diagnostics = crate::emit::emit_lua_artifact_with_mode_import_resolver_and_environment(
+            parsed,
+            self.config.emit.annotation_mode,
+            Some(&resolver),
+            self.config.ecs.enabled,
+            file.environment(),
+        )
+        .err()
+        .unwrap_or_default();
+        self.emission_diagnostics_cache
+            .lock()
+            .expect("emission diagnostics cache poisoned")
+            .insert(path, diagnostics.clone());
+        diagnostics
     }
 
     pub(super) fn file(&self, path: &Path) -> Option<&AnalysisFile> {

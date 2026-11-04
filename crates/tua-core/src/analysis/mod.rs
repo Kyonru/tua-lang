@@ -213,6 +213,7 @@ pub struct AnalysisSnapshot {
     definition_cache: Arc<Mutex<BTreeMap<DefinitionRequestKey, Option<Definition>>>>,
     shader_lint_cache: Arc<OnceLock<BTreeMap<PathBuf, Vec<Diagnostic>>>>,
     project_diagnostics_cache: Arc<Mutex<BTreeMap<PathBuf, Vec<Diagnostic>>>>,
+    emission_diagnostics_cache: Arc<Mutex<BTreeMap<PathBuf, Vec<Diagnostic>>>>,
     reverse_reference_index: Arc<OnceLock<ReverseReferenceIndex>>,
     call_hierarchy_symbols: BTreeMap<PathBuf, Vec<CallHierarchySymbol>>,
     call_hierarchy_calls: BTreeMap<PathBuf, Vec<CallHierarchyCallSite>>,
@@ -348,9 +349,6 @@ struct ProjectAliasFieldOrigin {
 struct AnalysisBuildContext<'a> {
     config: &'a ProjectConfig,
     source_roots: &'a [PathBuf],
-    output_roots: &'a [PathBuf],
-    known_paths: &'a BTreeSet<PathBuf>,
-    require_path_separator: ModulePathSeparator,
     asset_roots: &'a [PathBuf],
     asset_index: Option<&'a asset::AssetIndex>,
 }

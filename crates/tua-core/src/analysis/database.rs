@@ -445,32 +445,6 @@ fn build_analysis_file(
             }
         }
     };
-    if kind == AnalysisSourceKind::Tua {
-        if let Ok(parsed) = &parsed {
-            let _profile = profile::span_for_path("analysis.emit.check", path);
-            let _trace = profile::diagnostics_span(profile::DiagnosticsTraceCategory::Checker);
-
-            let import_resolver = |specifier: &str| {
-                module_name_for_import_specifier(
-                    &parsed.path,
-                    specifier,
-                    context.known_paths,
-                    context.source_roots,
-                    context.output_roots,
-                    &context.config.extension,
-                    context.require_path_separator,
-                )
-            };
-
-            if let Err(mut emit_diagnostics) = crate::emit::emit_lua_with_mode_and_import_resolver(
-                parsed,
-                context.config.emit.annotation_mode,
-                Some(&import_resolver),
-            ) {
-                diagnostics.append(&mut emit_diagnostics);
-            }
-        }
-    }
     let assets = {
         let _profile = profile::span_for_path("analysis.assets.metadata", path);
 

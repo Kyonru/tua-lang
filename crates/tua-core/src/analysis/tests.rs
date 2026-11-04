@@ -6353,3 +6353,48 @@ end)
         .expect("payload hover");
     assert_eq!(hover.contents, "parameter position: Vec2");
 }
+
+#[test]
+fn editor_snapshot_defers_emission_validation_until_diagnostics() {
+    let mut host = AnalysisHost::new();
+    host.set_file(
+        "src/main.tua",
+        "local value = 1
+print(value)
+",
+    );
+    let snapshot = host.snapshot();
+    assert!(snapshot
+        .emission_diagnostics_cache
+        .lock()
+        .unwrap()
+        .is_empty());
+    snapshot.completion("src/main.tua", SourcePosition { line: 2, column: 8 });
+    assert!(snapshot
+        .emission_diagnostics_cache
+        .lock()
+        .unwrap()
+        .is_empty());
+    snapshot.pipeline_diagnostics("src/main.tua");
+    assert_eq!(snapshot.emission_diagnostics_cache.lock().unwrap().len(), 1);
+}
+
+#[test]
+fn lazy_emission_diagnostics_preserve_lowering_errors_and_refresh_after_edits() {
+    let mut host = AnalysisHost::new();
+    host.set_file(
+        "src/main.tua",
+        "if value is Array<string> then print(value) end\n",
+    );
+    let snapshot = host.snapshot();
+    assert!(snapshot
+        .pipeline_diagnostics("src/main.tua")
+        .iter()
+        .any(|d| d.code == Some(DiagnosticCode::TYPE_UNSUPPORTED_RUNTIME_CHECK)));
+    host.set_file("src/main.tua", "if value is string then print(value) end\n");
+    assert!(!host
+        .snapshot()
+        .pipeline_diagnostics("src/main.tua")
+        .iter()
+        .any(|d| d.code == Some(DiagnosticCode::TYPE_UNSUPPORTED_RUNTIME_CHECK)));
+}

@@ -572,9 +572,6 @@ impl AnalysisHost {
                         AnalysisBuildContext {
                             config: &self.config,
                             source_roots: &source_roots,
-                            output_roots: &vfs.options().output_roots,
-                            known_paths: &live_paths,
-                            require_path_separator: self.require_path_separator,
                             asset_roots: &self.asset_roots,
                             asset_index: self.asset_index.as_ref(),
                         },
@@ -692,6 +689,7 @@ impl AnalysisHost {
             definition_cache: Arc::clone(&self.definition_cache),
             shader_lint_cache: Arc::new(OnceLock::new()),
             project_diagnostics_cache: Arc::new(Mutex::new(BTreeMap::new())),
+            emission_diagnostics_cache: Arc::new(Mutex::new(BTreeMap::new())),
             reverse_reference_index: Arc::new(OnceLock::new()),
             call_hierarchy_symbols,
             call_hierarchy_calls,
@@ -1849,8 +1847,6 @@ impl AnalysisHost {
         let source = self.vfs.source(&path)?.to_owned();
         let kind = analysis_source_kind(self.vfs.kind(&path)?);
         let source_roots = self.vfs.options().source_roots.clone();
-        let output_roots = self.vfs.options().output_roots.clone();
-        let known_paths = self.vfs.paths();
         Some(self.cache.borrow_mut().cached_file(
             &path,
             &source,
@@ -1858,9 +1854,6 @@ impl AnalysisHost {
             AnalysisBuildContext {
                 config: &self.config,
                 source_roots: &source_roots,
-                output_roots: &output_roots,
-                known_paths: &known_paths,
-                require_path_separator: self.require_path_separator,
                 asset_roots: &self.asset_roots,
                 asset_index: self.asset_index.as_ref(),
             },
