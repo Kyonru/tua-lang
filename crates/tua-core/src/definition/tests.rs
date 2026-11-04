@@ -88,6 +88,8 @@ fn resolves_love_builtin_function_to_virtual_stub() {
     assert_eq!(uri, "tua:/builtins/love.graphics.newImage.tua");
     assert_eq!(source_text_owned(&document, definition.span), "newImage");
     assert!(document.contains("function love.graphics.newImage"));
+    assert!(document.contains("Creates a new Image from a filepath"));
+    assert!(document.contains("LOVE wiki: https://love2d.org/wiki/love.graphics.newImage"));
 }
 
 #[test]
@@ -106,6 +108,8 @@ player:setFilter()
     assert_eq!(uri, "tua:/builtins/Image.setFilter.tua");
     assert_eq!(source_text_owned(&document, definition.span), "setFilter");
     assert!(document.contains("function Image:setFilter"));
+    assert!(document.contains("Sets the filter mode used when scaling the Image"));
+    assert!(document.contains("LOVE wiki: https://love2d.org/wiki/Image:setFilter"));
 }
 
 #[test]

@@ -412,10 +412,13 @@ pub(crate) fn builtin_definition_source_for_item(item: LuaItem) -> String {
     } else {
         format!("local {}: {}", item.label, item.detail)
     };
+    let wiki_link = love_wiki_url(item)
+        .map(|url| format!("\n--- LOVE wiki: {url}"))
+        .unwrap_or_default();
 
     format!(
-        "-- Tua builtin stub\n-- This virtual document is generated from Tua's builtin Lua/LOVE catalog.\n\n--- {}\n{}\n",
-        item.documentation, declaration
+        "-- Tua builtin stub\n-- This virtual document is generated from Tua's builtin Lua/LOVE catalog.\n\n--- {}{}\n{}\n",
+        item.documentation, wiki_link, declaration
     )
 }
 

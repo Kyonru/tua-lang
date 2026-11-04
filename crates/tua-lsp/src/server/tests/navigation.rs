@@ -378,6 +378,8 @@ player:setFilter()
         .expect("builtin document should be returned");
 
     assert!(document.contains("function Image:setFilter"));
+    assert!(document.contains("Sets the filter mode used when scaling the Image"));
+    assert!(document.contains("LOVE wiki: https://love2d.org/wiki/Image:setFilter"));
     assert_eq!(range_text(document, &method["range"]), "setFilter");
 }
 
