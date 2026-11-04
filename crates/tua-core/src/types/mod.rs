@@ -16,6 +16,7 @@ pub use environment::{
 pub(crate) use environment::{
     build_type_environment_with_diagnostics, build_type_environment_with_domain_registry,
     inferred_function_type_from_body, lua_doc_required_parameter_count,
+    resolve_chained_call_returns,
 };
 pub(crate) use format::{format_named_function_pretty, format_type_with_prefix};
 pub use model::{

@@ -2071,3 +2071,24 @@ fn class_method_parameter_hovers_respect_nested_parameters() {
     assert_hover_in_source(source, "font:getWidth", 0, "parameter font: Text");
     assert_hover_in_source(source, "font:getHeight", 0, "parameter font: Font");
 }
+
+#[test]
+fn chained_love_calls_hover_the_final_return_values() {
+    let source = r#"local width, height = love.graphics.newCanvas(320, 180):getDimensions()
+local function measure()
+  local inner = love.graphics.newCanvas(320, 180):getWidth()
+  return inner
+end
+print(width, height, measure())
+"#;
+    for (needle, expected) in [
+        ("width, height,", "local width: number"),
+        ("height, measure", "local height: number"),
+        ("inner\nend", "local inner: number"),
+    ] {
+        let hover = hover_tua_source("main.tua", source, position_at(source, needle))
+            .unwrap()
+            .unwrap();
+        assert_eq!(hover.contents, expected);
+    }
+}

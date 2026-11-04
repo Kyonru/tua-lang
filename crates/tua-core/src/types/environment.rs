@@ -3347,6 +3347,50 @@ fn infer_function_call_return_types(
     query: ExpressionInferenceQuery<'_, '_>,
     function_call: &FunctionCall,
 ) -> Vec<Type> {
+    let first = infer_first_function_call_return_types(query, function_call);
+    resolve_chained_call_returns(query.context.aliases, function_call, first)
+}
+
+/// Apply the remaining suffixes after a call's initial result. Both lexical
+/// inference and position-aware editor queries must use the final call's full
+/// return list, rather than accidentally reporting its constructor's type.
+pub(crate) fn resolve_chained_call_returns(
+    aliases: &BTreeMap<String, Type>,
+    function_call: &FunctionCall,
+    mut returns: Vec<Type>,
+) -> Vec<Type> {
+    let mut suffixes = function_call
+        .suffixes()
+        .skip_while(|s| !matches!(s, Suffix::Call(_)));
+    suffixes.next();
+    for suffix in suffixes {
+        let Some(current) = returns.first() else {
+            return Vec::new();
+        };
+        returns = match suffix {
+            Suffix::Index(Index::Dot { name, .. }) => {
+                resolve_table_field_type_from_map(aliases, current, &token_text(name))
+                    .into_iter()
+                    .collect()
+            }
+            Suffix::Call(Call::AnonymousCall(_)) => function_return_types(aliases, current),
+            Suffix::Call(Call::MethodCall(method)) => {
+                let name = token_text(method.name());
+                match resolve_table_field_type_from_map(aliases, current, &name) {
+                    Some(callable) => function_return_types(aliases, &callable),
+                    None => love_object_method_return_types(aliases, current, &name),
+                }
+            }
+            _ => Vec::new(),
+        };
+    }
+    returns
+}
+
+fn infer_first_function_call_return_types(
+    query: ExpressionInferenceQuery<'_, '_>,
+    function_call: &FunctionCall,
+) -> Vec<Type> {
     if let Some(ty) = query
         .context
         .domains

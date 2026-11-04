@@ -6550,3 +6550,31 @@ return { Label = Label }
         assert_eq!(hover.contents, format!("local {marker}: number"));
     }
 }
+
+#[test]
+fn snapshot_chained_factory_uses_final_multiple_returns() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+local Factory = require("factory")
+local width, height = Factory.canvas():getDimensions()
+print(<|width|>width, <|height|>height)
+-- file: src/factory.tua
+local function canvas(): Canvas
+  return love.graphics.newCanvas(320, 180)
+end
+return { canvas = canvas }
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+    let snapshot = host.snapshot();
+    for marker in ["width", "height"] {
+        let hover = snapshot
+            .hover("src/main.tua", fixture.position(marker))
+            .unwrap();
+        assert_eq!(hover.contents, format!("local {marker}: number"));
+    }
+}

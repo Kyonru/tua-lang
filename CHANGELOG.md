@@ -20,6 +20,11 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Chained-call local and return inference uses the final method result, including
+  multiple LOVE return values and imported factory results.
+
+- Completion preserves cross-file event payloads during incomplete member edits,
+  including member access inside calls, using shared recovered project facts.
 - Locals initialized in the first statement of a guarded branch retain narrowed
   receiver types, including multiple values returned by imported class methods.
 

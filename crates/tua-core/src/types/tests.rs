@@ -1594,3 +1594,23 @@ end
         .unwrap();
     assert_eq!(returns.to_string(), "nil | { x: number, y: number }");
 }
+
+#[test]
+fn chained_call_inference_preserves_multi_return_and_void_boundaries() {
+    let source = r#"local function measure()
+  return love.graphics.newCanvas(10, 20):getDimensions()
+end
+local w, h = measure()
+local text = love.graphics.newText(love.graphics.newFont(12), "Hi")
+local invalid = text:set("Bye"):getWidth()
+"#;
+    let parsed = parse_tua_source("main.tua", source).unwrap();
+    let environment = build_type_environment(&parsed).unwrap();
+    let semantic = crate::semantic::SemanticModel::new(&parsed, &environment);
+    let position = crate::SourcePosition { line: 8, column: 1 };
+    assert_eq!(semantic.type_of_name("w", position), Some(Type::number()));
+    assert_eq!(semantic.type_of_name("h", position), Some(Type::number()));
+    assert!(semantic
+        .type_of_name("invalid", position)
+        .is_none_or(|ty| ty == Type::Any));
+}

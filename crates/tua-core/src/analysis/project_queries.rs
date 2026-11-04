@@ -714,6 +714,26 @@ impl AnalysisSnapshot {
             Expression::FunctionCall(function_call) => {
                 let parts = field_chain_before_first_call(function_call)?;
 
+                if function_call
+                    .suffixes()
+                    .filter(|suffix| matches!(suffix, full_moon::ast::Suffix::Call(_)))
+                    .count()
+                    > 1
+                {
+                    let first =
+                        self.project_type_for_function_call_parts(parsed, &parts, 0, local_types)?;
+                    let aliases = self
+                        .project_imported_alias_types(parsed)
+                        .into_iter()
+                        .collect();
+                    return crate::types::resolve_chained_call_returns(
+                        &aliases,
+                        function_call,
+                        vec![first],
+                    )
+                    .get(return_index)
+                    .cloned();
+                }
                 self.project_type_for_function_call_parts(parsed, &parts, return_index, local_types)
             }
             Expression::Var(var) if return_index == 0 => {

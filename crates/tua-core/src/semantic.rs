@@ -279,6 +279,23 @@ impl<'a> SemanticModel<'a> {
         function_call: &FunctionCall,
         position: SourcePosition,
     ) -> Vec<Type> {
+        let first = self.return_types_of_first_call(function_call, position);
+        if function_call
+            .suffixes()
+            .filter(|s| matches!(s, Suffix::Call(_)))
+            .count()
+            == 1
+        {
+            return first;
+        }
+        crate::types::resolve_chained_call_returns(&self.alias_map(), function_call, first)
+    }
+
+    fn return_types_of_first_call(
+        &self,
+        function_call: &FunctionCall,
+        position: SourcePosition,
+    ) -> Vec<Type> {
         let domains =
             BuiltinDomainRegistry::with_ecs(self.environment.alias(ecs::WORLD_TYPE).is_some());
         if let Some(ty) = domains.runtime_module_type_from_call(function_call) {
