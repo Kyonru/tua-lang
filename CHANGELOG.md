@@ -23,6 +23,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Event payload fields and inferred loop bindings now hover with their semantic
+  types; member completion retains callback scope when its only statement is incomplete.
+
 - LuaCATS output preserves native multiple returns in both function documentation
   and exported callable signatures instead of emitting one tuple value.
 

@@ -1218,29 +1218,37 @@ impl AnalysisSnapshot {
         parsed: &ParsedSource,
         position: SourcePosition,
     ) -> Option<Hover> {
+        let chain = dotted_chain_at_position(&parsed.source, position)?;
+        let root = chain.parts.first()?;
+        let root_position = parsed
+            .raw
+            .parser_position_for_source(root.span.start)
+            .unwrap_or(root.span.start);
         let scope = scope_map_parsed_source(parsed);
         let resolves_to_parameter = scope
-            .symbol_at_position(position)
+            .symbol_at_position(root_position)
             .and_then(|symbol| scope.declaration(symbol))
             .is_some_and(|declaration| declaration.kind == ScopeDeclarationKind::Parameter);
         if !resolves_to_parameter {
             return None;
         }
-        let chain = dotted_chain_at_position(&parsed.source, position)?;
-
-        if chain.cursor_index != 0 {
-            return None;
-        }
-
-        let part = chain.parts.first()?;
-        let (contextual_ty, _) =
-            self.contextual_callback_parameter_type(parsed, &part.text, position)?;
+        let part = chain.parts.get(chain.cursor_index)?;
+        let (contextual_ty, origin) =
+            self.contextual_callback_parameter_type(parsed, &root.text, root.span.start)?;
         let (environment, _) = build_type_environment_with_diagnostics(parsed);
         let declared_ty = SemanticModel::new(parsed, &environment)
-            .parameter_type_at_position(&part.text, position);
-        let (prefix, ty) = match declared_ty {
-            Some(ty) if ty != Type::Any => ("parameter", ty),
-            _ => ("parameter", contextual_ty),
+            .parameter_type_at_source_position(&root.text, root.span.start);
+        let mut ty = match declared_ty {
+            Some(ty) if ty != Type::Any => ty,
+            _ => contextual_ty,
+        };
+        for field in chain.parts.iter().take(chain.cursor_index + 1).skip(1) {
+            ty = self.field_type_for_type(&origin, &ty, &field.text)?;
+        }
+        let prefix = if chain.cursor_index == 0 {
+            "parameter"
+        } else {
+            "(field)"
         };
 
         Some(Hover {

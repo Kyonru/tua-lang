@@ -480,7 +480,9 @@ impl<'a> ScopeBuilder<'a> {
         parent: Option<ScopeSymbolId>,
         implicit_self: Option<SourceSpan>,
     ) {
-        let span = node_span(body.block()).unwrap_or_else(default_span);
+        // Parameters remain in scope throughout the body, including whitespace
+        // and temporarily recovered empty statements before the closing `end`.
+        let span = node_span(body).unwrap_or_else(default_span);
 
         self.enter_scope(span);
 

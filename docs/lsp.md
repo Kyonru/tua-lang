@@ -91,6 +91,9 @@ Open documents retain their last valid semantic facts while syntax is
 temporarily incomplete. Completion uses the current cursor context with those
 facts on both manually invoked and trigger-character requests, while hover and
 inlay hints remain useful until valid project analysis is available again.
+A callback whose only statement is an unfinished member access retains its
+parameter scope. Known event record fields and inferred loop variables use
+their semantic types in hover as well as completion.
 Parse-independent Lua, LOVE, keyword, snippet, and module-path candidates stay
 available even when no valid semantic snapshot exists yet. Ordinary type
 errors do not reduce completion availability.

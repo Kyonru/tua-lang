@@ -46,9 +46,6 @@ implementation and regression changes remain separated by behavior.
 | High | `title:setValue("x"):draw(` has no signature; completion after the returned expression is incomplete. This affects inferred and annotated receivers and LOVE constructor chains. | Split the chain into named locals. Add a shared expression-receiver context used by completion, signatures, hover and navigation; current contexts accept identifier chains. Test completed and incomplete expressions together. |
 | High | Imported `LabelInstance` method returning `Self` displays `any`; an inferred constructor receiver can retain `Label`. | Avoid relying on fluent calls across the explicit instance alias. Preserve nominal class identity through recursive project-type expansion, then rehydrate members through that identity. Do not remove recursive LuaCATS safeguards or merely change displayed text. |
 | Medium | `local dead = target:damage(amount)` is locally `boolean`, but emitting it through another module yields handler parameter `dead: any`. | Annotate `local dead: boolean`. Feed project-aware call-result facts into event indexing with bounded dependency/cycle handling. Target and numeric amount already propagate. |
-| Medium | An object payload completes fields correctly, but hovering `payload.amount` can return the enclosing `(payload: any) -> any` expression and range. | Use completion or an explicit handler annotation. Resolve the smallest field expression using the same project event facts. |
-| Medium | A loop receiver can complete Actor members and now navigate correctly while its own hover still says `expression: any`. | Use an explicit typed local if hover is needed. Align loop-variable hover with the semantic resolver. |
-| Medium | A standalone unfinished `payload.` as the only callback statement can lose its scope when recovery removes the line. The UI scenario with other statements now completes after `title:`; the empty-body case remains. | Keep an enclosing expression such as `print(payload.)`, or complete the method name. Preserve scope extent while recovering an otherwise empty body. |
 | Medium | Class parameter member completion still has source/parser coordinate inconsistencies beyond the corrected hover path. | Use a typed local as needed. Make coordinate contracts explicit across semantic entry points; avoid heuristic double mapping. |
 | Low, needs isolation | At an empty `Text:getWidth(` argument slot, signature selection prefers the index overload over the zero-argument overload. | Both overloads remain available. Distinguish an empty argument slot from a supplied first argument before changing overload selection globally. |
 
@@ -57,22 +54,54 @@ policy defect. No performance improvement is claimed from these tiny projects.
 Large-project cold typing, require analysis, hot reload, and format-on-save
 need separate traces and live-editor validation.
 
-## What Tua needs next
+## What Tua needs next — implementation epics
 
-1. **Editor agreement during typing.** A conformance matrix should cover inferred
-   and annotated values, nullable guards, imported aliases, event callbacks,
-   classes, LOVE objects, and incomplete expressions across all editor surfaces.
-   Successful compilation alone misses these failures.
-2. **Less friction importing class types.** Runtime `require`, explicit type
-   import, and an exported instance alias work, but are verbose. Discoverable
-   type auto-import and annotation actions would improve the common workflow.
-3. **Clearer syntax-error guidance.** Mixing class-method braces with Lua
-   function `end` syntax caused an initial development mistake. Better targeted
-   diagnostics would help without changing the language.
-4. **Keep abstractions evidence-led.** The gameplay trial demonstrates useful
-   current single-inheritance polymorphism. These findings justify fixing editor
-   consistency before adding generics, protocols, or multiple inheritance. A
-   protocol feature should be driven by a concrete unrelated-class API need.
+Each epic is a behavior-sized delivery with its own acceptance checks and commit.
+The remaining-defects table above remains the backlog; completing one of these
+scoped deliveries does not imply that every semantic limitation is resolved.
+
+### Epic 1: Editor agreement during typing
+
+**Delivered:** shared callback-field types now drive field hovers with exact
+identifier ranges; inferred loop bindings hover with their actual type; function
+parameter scopes include recovered empty bodies so a lone `payload.` retains
+completion. No synthetic runtime statements are inserted for recovery.
+
+**Acceptance matrix:**
+
+| Scenario | Checks |
+| --- | --- |
+| Inferred, annotated, and nullable imported class instances | Hover, completion, signature help, definition |
+| Imported base-class array iteration | Receiver hover, completion, signature help, definition |
+| Cross-file event record payload | Field type/range hover and completion |
+| Callback edited to one incomplete member access | Cold snapshot completion and unsaved LSP completion |
+| LOVE chained return values and class parameter hovers | Existing trial regressions retained |
+
+Core `devex_*` tests and the LSP `devex_event_field_*` test exercise this matrix.
+Fluent expression receivers, imported `Self`, emitted-call payload inference,
+and class parameter completion remain separate semantic follow-ups.
+
+### Epic 2: Less friction importing class types
+
+**Planned delivery:** a discoverable class action exports an instance type,
+which existing type completion and unknown-type import actions can consume.
+Reuse existing aliases when possible and avoid duplicate/colliding declarations.
+Validate the edited provider and a consumer across the module boundary.
+
+### Epic 3: Clearer syntax-error guidance
+
+**Planned delivery:** explain native class-method brace syntax when a class
+contains Lua-style `function`/`end` declarations. Preserve ordinary Lua bodies,
+including nested functions, and do not change the language grammar.
+Validate location, actionable message, and unaffected valid syntax.
+
+### Epic 4: Keep abstractions evidence-led
+
+**Planned delivery:** a runnable, documented polymorphism example demonstrating
+base-typed collections, overridden dispatch, imported instance types, and the
+boundary between shared ancestry and unrelated behaviors. Verify generated
+Lua behavior; record a concrete future protocol use case without claiming
+protocols, generics, or multiple inheritance are implemented.
 
 ## Positive results and limits
 

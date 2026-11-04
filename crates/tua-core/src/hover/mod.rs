@@ -277,6 +277,26 @@ impl<'a> HoverResolver<'a> {
             return Some(hover);
         }
 
+        let scope = crate::scope_map_parsed_source(self.parsed);
+        let parser_position = self
+            .parsed
+            .raw
+            .parser_position_for_source(position)
+            .unwrap_or(position);
+        if chain.cursor_index == 0
+            && scope
+                .symbol_at_position(parser_position)
+                .and_then(|id| scope.declaration(id))
+                .is_some_and(|declaration| declaration.kind == crate::ScopeDeclarationKind::Local)
+        {
+            if let Some(ty) = self.semantic.type_of_name(&current_part.text, position) {
+                return Some(hover(
+                    format_type_with_prefix(format!("local {}: ", current_part.text), &ty),
+                    Some(current_part.span),
+                ));
+            }
+        }
+
         self.environment
             .function(&current_part.text)
             .map(|function| self.function_hover(function, position, current_part.span))

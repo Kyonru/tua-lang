@@ -6646,3 +6646,154 @@ return { measure = measure }
         assert_eq!(hover.contents, format!("local {marker}: {ty}"));
     }
 }
+
+#[test]
+fn devex_event_fields_agree_between_hover_and_completion_during_edits() {
+    for access in ["print(payload.<|member|>amount)", "payload.<|member|>"] {
+        let fixture = Fixture::parse(&format!(
+            r#"-- file: src/events.tua
+return {{ combat = signal() }}
+-- file: src/emitter.tua
+local Events = require("events")
+Events.combat:emit("hit", {{ amount = 12, name = "Slime" }})
+-- file: src/main.tua
+local Events = require("events")
+Events.combat:on("hit", function(payload)
+  {access}
+end)
+"#
+        ));
+        let mut host = AnalysisHost::new();
+        host.set_source_roots([PathBuf::from("src")]);
+        for file in fixture.files() {
+            host.set_file(&file.path, file.source.clone());
+        }
+        let snapshot = host.snapshot();
+        let completions = snapshot.completion("src/main.tua", fixture.position("member"));
+        assert!(
+            completions.iter().any(|item| item.label == "amount"),
+            "{access}: {completions:?}"
+        );
+        if access.contains("amount") {
+            let hover = snapshot
+                .hover("src/main.tua", fixture.position("member"))
+                .unwrap();
+            assert_eq!(hover.contents, "(field) amount: number");
+            assert_eq!(hover.span.unwrap().start, fixture.position("member"));
+        }
+    }
+}
+
+#[test]
+fn devex_imported_loop_receiver_agrees_across_editor_surfaces() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/actors.tua
+open class Actor {
+  hp: number = 100
+  update(dt: number): number { return self.hp + dt }
+}
+export type ActorInstance = Actor
+return { Actor = Actor }
+-- file: src/main.tua
+import type { ActorInstance } from "./actors"
+local actors: ActorInstance[] = {}
+for _, actor in ipairs(actors) do
+  print(<|hover|>actor)
+  actor:<|completion|>update(<|signature|>1)
+end
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+    let snapshot = host.snapshot();
+    let hover = snapshot
+        .hover("src/main.tua", fixture.position("hover"))
+        .unwrap();
+    assert!(hover.contents.contains("local actor: Actor"), "{hover:?}");
+    assert!(snapshot
+        .completion("src/main.tua", fixture.position("completion"))
+        .iter()
+        .any(|item| item.label == "update"));
+    assert!(snapshot
+        .signature_help("src/main.tua", fixture.position("signature"))
+        .unwrap()
+        .signatures[0]
+        .label
+        .contains("dt: number"));
+    assert_eq!(
+        snapshot
+            .definition("src/main.tua", fixture.position("completion"))
+            .unwrap()
+            .path,
+        PathBuf::from("src/actors.tua")
+    );
+}
+
+#[test]
+fn devex_class_instance_conformance_matrix() {
+    for binding in [
+        "local label = Labels.Label.new()",
+        "local label: LabelInstance = Labels.Label.new()",
+        "local label: LabelInstance? = Labels.Label.new()",
+    ] {
+        let fixture = Fixture::parse(&format!(
+            r#"-- file: src/main.tua
+import type {{ LabelInstance }} from "./label"
+local Labels = require("label")
+{binding}
+if label then
+  local width = label:measure(1)
+  print(<|width|>width)
+  label:<|member|>measure(<|signature|>1)
+end
+-- file: src/label.tua
+final class Label {{
+  measure(scale: number): number {{ return 10 * scale }}
+}}
+export type LabelInstance = Label
+return {{ Label = Label }}
+"#
+        ));
+        let mut host = AnalysisHost::new();
+        host.set_source_roots([PathBuf::from("src")]);
+        for file in fixture.files() {
+            host.set_file(&file.path, file.source.clone());
+        }
+        let snapshot = host.snapshot();
+        assert_eq!(
+            snapshot
+                .hover("src/main.tua", fixture.position("width"))
+                .unwrap()
+                .contents,
+            "local width: number",
+            "{binding}"
+        );
+        assert!(
+            snapshot
+                .completion("src/main.tua", fixture.position("member"))
+                .iter()
+                .any(|item| item.label == "measure"),
+            "{binding}"
+        );
+        assert!(
+            snapshot
+                .signature_help("src/main.tua", fixture.position("signature"))
+                .unwrap()
+                .signatures[0]
+                .label
+                .contains("scale: number"),
+            "{binding}"
+        );
+        assert_eq!(
+            snapshot
+                .definition("src/main.tua", fixture.position("member"))
+                .unwrap()
+                .path,
+            PathBuf::from("src/label.tua"),
+            "{binding}"
+        );
+    }
+}
