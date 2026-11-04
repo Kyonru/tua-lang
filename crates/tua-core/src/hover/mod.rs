@@ -154,10 +154,17 @@ impl<'a> HoverResolver<'a> {
             }
 
             if let Some(ty) = self.semantic.type_of_field_chain(&field_parts, position) {
-                return Some(hover(
+                let mut result = hover(
                     format_type_with_prefix(format!("(field) {}: ", current_part.text), &ty),
                     Some(current_part.span),
-                ));
+                );
+                let definition = definition_parsed_source(self.parsed, position)
+                    .ok()
+                    .flatten();
+                result.documentation = definition
+                    .as_ref()
+                    .and_then(|definition| documentation_for_definition(self.parsed, definition));
+                return Some(result);
             }
 
             if self.environment.local(&field_parts[0]).is_none() {

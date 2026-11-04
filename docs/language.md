@@ -609,6 +609,11 @@ method signatures. Use colon calls for instances reached through module
 boundaries so the generated Lua passes the receiver explicitly.
 
 Class names, fields, and methods participate in source definition, references,
+and hover documentation. Place a `---` description immediately above a method
+to show it when hovering a resolved method usage in the same file. Native
+parameter and return annotations supply the displayed signature.
+
+Class names, fields, and methods also participate in source definition, references,
 and rename. This includes accesses through locally inferred instances and
 instances exported from static modules; edits target the original class syntax,
 not generated Lua. Dynamic values typed as `any` remain outside this guarantee.

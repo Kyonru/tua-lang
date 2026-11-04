@@ -1938,3 +1938,28 @@ end
 "#;
     assert_hover_in_source(source, "x = x }", "x = ".len(), "local x: number");
 }
+
+#[test]
+fn class_method_usage_hover_preserves_source_documentation() {
+    let source = r#"final class Dialogue {
+  --- Append a word to the dialogue.
+  append(word: string): boolean {
+    return true
+  }
+}
+local dialogue = Dialogue.new()
+dialogue:append("hello")
+"#;
+    let result = hover_tua_source(
+        "src/main.tua",
+        source,
+        position_at(source, "append(\"hello\")"),
+    )
+    .unwrap()
+    .unwrap();
+    assert_eq!(
+        result.documentation.as_deref(),
+        Some("Append a word to the dialogue.")
+    );
+    assert!(result.contents.contains("boolean"));
+}
