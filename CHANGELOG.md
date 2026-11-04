@@ -8,6 +8,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Changed
 
+- The **Export instance type** class action creates or exports an alias for use
+  with type auto-import completion in consuming modules.
+
 - Added a comments and documentation guide covering LuaDoc tags, native types,
   documentation completion, and current annotation limitations.
 

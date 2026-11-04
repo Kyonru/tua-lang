@@ -132,6 +132,7 @@ pub(crate) fn code_actions_parsed_source_with_kinds_and_diagnostics_config(
         ));
         actions.extend(love_constructor_helper_actions(parsed, range));
         actions.extend(object_pool_constructor_actions(parsed, range));
+        actions.extend(export_class_instance_type_actions(parsed, range));
 
         if diagnostics.is_empty() {
             actions.extend(extract_expression_actions(parsed, range));
@@ -1950,6 +1951,75 @@ fn render_table_type_fields(output: &mut String, fields: &[TableTypeField], inde
             }
         }
     }
+}
+
+fn export_class_instance_type_actions(parsed: &ParsedSource, range: AssistRange) -> Vec<Assist> {
+    let scope = scope_map_parsed_source(parsed);
+    parsed
+        .class_declarations
+        .iter()
+        .filter(|class| {
+            range.contains(class.name_span.start) || span_contains(class.name_span, range.start)
+        })
+        .filter_map(|class| {
+            let aliases = parsed
+                .type_aliases
+                .iter()
+                .filter(
+                    |alias| matches!(&alias.ty, crate::TuaType::Named(name) if name == &class.name),
+                )
+                .collect::<Vec<_>>();
+            if aliases.iter().any(|alias| alias.exported) {
+                return None;
+            }
+            let (name, position, new_text) = if let Some(alias) = aliases.first() {
+                (
+                    alias.name.clone(),
+                    parsed
+                        .raw
+                        .parser_position_origin(alias.span?.start)?
+                        .source_position,
+                    "export ".to_owned(),
+                )
+            } else {
+                let name = format!("{}Instance", class.name);
+                if parsed.type_aliases.iter().any(|alias| alias.name == name)
+                    || parsed.type_imports.iter().any(|import| {
+                        !import.reexport
+                            && (import.namespace == name
+                                || import.bindings.iter().any(|binding| binding.local == name))
+                    })
+                    || scope
+                        .declarations()
+                        .iter()
+                        .any(|declaration| declaration.name == name)
+                    || parsed
+                        .class_declarations
+                        .iter()
+                        .any(|other| other.name == name)
+                {
+                    return None;
+                }
+                let text = format!("\nexport type {name} = {}\n", class.name);
+                (name, class.span.end, text)
+            };
+            Some(Assist {
+                title: format!("Export instance type `{name}`"),
+                kind: AssistKind::QuickFix,
+                edit: edit_for(
+                    parsed.path.clone(),
+                    TextEdit {
+                        path: parsed.path.clone(),
+                        span: SourceSpan {
+                            start: position,
+                            end: position,
+                        },
+                        new_text,
+                    },
+                ),
+            })
+        })
+        .collect()
 }
 
 fn add_missing_local_annotation_actions(parsed: &ParsedSource, range: AssistRange) -> Vec<Assist> {

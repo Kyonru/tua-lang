@@ -577,6 +577,11 @@ interchangeable. Duplicate `init` declarations, inheritance cycles, extending
 non-open classes, missing or spurious `override`, and override signature drift
 are diagnosed.
 
+Place the cursor on a class name and choose **Export instance type** to create
+its exported alias. The action exports an existing private alias when available
+and avoids duplicate exports or name collisions. In a consumer, type completion
+can then insert the type-only import.
+
 Export an instance type alias when another module needs to annotate a value
 created by the runtime class:
 

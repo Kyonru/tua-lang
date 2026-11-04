@@ -1154,3 +1154,59 @@ fn range_line(line: usize) -> CodeActionRange {
 fn action_document_text<'a>(action: &'a Assist, path: &str) -> &'a str {
     &action.edit.changes[&std::path::PathBuf::from(path)][0].new_text
 }
+
+#[test]
+fn exports_class_instance_type_for_existing_import_workflow() {
+    for suffix in ["", "\ntype DialogueView = Dialogue\n"] {
+        let source = format!("final class Dialogue {{\n  text: string = \"Hi\"\n}}{suffix}\nreturn {{ Dialogue = Dialogue }}\n");
+        let parsed = parse_tua_source("src/dialogue.tua", &source).unwrap();
+        let actions =
+            code_actions_parsed_source(&parsed, &[], range(1, 16), Path::new("src"), "tua");
+        let action = actions
+            .iter()
+            .find(|action| action.title.starts_with("Export instance type"))
+            .unwrap();
+        let edit = &action.edit.changes[Path::new("src/dialogue.tua")][0];
+        let offset = crate::source_text::byte_for_position(&source, edit.span.start).unwrap();
+        let mut edited = source.clone();
+        edited.insert_str(offset, &edit.new_text);
+        let alias = if suffix.is_empty() {
+            "DialogueInstance"
+        } else {
+            "DialogueView"
+        };
+        assert!(
+            edited.contains(&format!("export type {alias} = Dialogue")),
+            "{edited}"
+        );
+        let reparsed = parse_tua_source("src/dialogue.tua", &edited).unwrap();
+        assert!(export_class_instance_type_actions(&reparsed, range_line(1)).is_empty());
+        let mut host = AnalysisHost::new();
+        host.set_source_roots([PathBuf::from("src")]);
+        host.set_file("src/dialogue.tua", edited);
+        host.set_file("src/main.tua", format!("import type {{ {alias} }} from \"./dialogue\"\nlocal Dialogues = require(\"dialogue\")\nlocal dialogue: {alias} = Dialogues.Dialogue.new()\nprint(dialogue.text)\n"));
+        assert!(host
+            .snapshot()
+            .diagnostics("src/main.tua")
+            .iter()
+            .all(|d| d.severity != crate::DiagnosticSeverity::Error));
+    }
+}
+
+#[test]
+fn instance_type_export_action_avoids_collisions_and_existing_exports() {
+    for suffix in [
+        "type DialogueInstance = number",
+        "local DialogueInstance = 1",
+        "export type View = Dialogue",
+        "import type { DialogueInstance } from \"./other\"",
+        "import type DialogueInstance from \"./other\"",
+    ] {
+        let source = format!("final class Dialogue {{}}\n{suffix}\nreturn Dialogue\n");
+        let parsed = parse_tua_source("src/dialogue.tua", &source).unwrap();
+        assert!(
+            export_class_instance_type_actions(&parsed, range_line(1)).is_empty(),
+            "{suffix}"
+        );
+    }
+}

@@ -83,10 +83,12 @@ and class parameter completion remain separate semantic follow-ups.
 
 ### Epic 2: Less friction importing class types
 
-**Planned delivery:** a discoverable class action exports an instance type,
-which existing type completion and unknown-type import actions can consume.
-Reuse existing aliases when possible and avoid duplicate/colliding declarations.
-Validate the edited provider and a consumer across the module boundary.
+**Delivered:** the **Export instance type** action on a class name creates an
+exported alias or promotes an existing private alias. It avoids duplicate exports
+and collisions with values, types, or type imports. Existing type completion and
+unknown-type import actions consume the export. Core tests apply the provider
+edit and check a typed consumer; an LSP test resolves auto-import completion
+after the provider changes without saving. No new type syntax is introduced.
 
 ### Epic 3: Clearer syntax-error guidance
 

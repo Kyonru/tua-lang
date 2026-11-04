@@ -806,3 +806,65 @@ missing_requires = true
         json!([])
     );
 }
+
+#[test]
+fn class_instance_export_action_feeds_type_auto_import_completion() {
+    let fixture = Fixture::parse(
+        r#"-- file: tua.toml
+source = "src"
+-- file: src/dialogue.tua
+final class Dialogue {
+  text: string = "Hi"
+}
+return { Dialogue = Dialogue }
+-- file: src/main.tua
+local dialogue: Dialog = nil
+"#,
+    );
+    let temp = fixture.write_to_temp("class-instance-export").unwrap();
+    let provider = fixture.source("src/dialogue.tua");
+    let provider_uri = path_uri(&temp.join("src/dialogue.tua"));
+    let main = fixture.source("src/main.tua");
+    let uri = path_uri(&temp.join("src/main.tua"));
+    let mut server = TestServer::new();
+    server.send(initialize_with_root(1, path_uri(temp.path())));
+    server.send(did_open(&provider_uri, provider));
+    server.send(code_action_request(
+        2,
+        &provider_uri,
+        0,
+        15,
+        0,
+        15,
+        Vec::new(),
+    ));
+    let actions = response_with_id(server.output(), 2)["result"]
+        .as_array()
+        .unwrap();
+    let action = actions
+        .iter()
+        .find(|item| item["title"] == "Export instance type `DialogueInstance`")
+        .unwrap();
+    let edit = &action["edit"]["changes"][&provider_uri][0];
+    assert_eq!(edit["range"]["start"], json!({"line": 2, "character": 1}));
+    let text = edit["newText"].as_str().unwrap();
+    let edited = provider.replacen("}\nreturn", &format!("}}{text}\nreturn"), 1);
+    server.send(did_change(&provider_uri, &edited, 2));
+    server.send(did_open(&uri, main));
+    server.send(completion_request(3, &uri, main, "dialogue: Dialog"));
+    assert_completion_labels(server.output(), 3, ["DialogueInstance"]);
+    let completions = response_with_id(server.output(), 3)["result"]
+        .as_array()
+        .unwrap();
+    let completion = completions
+        .iter()
+        .find(|item| item["label"] == "DialogueInstance")
+        .unwrap();
+    let completion = completion.clone();
+    server.send(completion_resolve_request(4, completion));
+    let resolved = &response_with_id(server.output(), 4)["result"];
+    assert_eq!(
+        resolved["additionalTextEdits"][0]["newText"],
+        "import type { DialogueInstance } from \"./dialogue\"\n"
+    );
+}
