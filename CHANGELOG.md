@@ -8,11 +8,26 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Changed
 
+- Added `LoveColor` for shared numeric LOVE color arrays.
+- Class method hovers include parameter/return documentation tags, including
+  methods reached through imported class instances.
+- Editor snapshots defer Lua emission validation until diagnostics are requested,
+  reducing cold and post-edit completion work.
+
 - Indigo Carbon tabs now use a distinct tab bar color for inactive tabs, while the active tab matches the editor background.
 - VS Code bundles the LÖVE 11.5 API reference for offline use; LOVE definition
   stubs include the catalog descriptions and direct wiki links.
 
 ### Fixed
+
+- Event handler payload inference follows imported and local bus aliases,
+  preserves shadowing, and no longer recurses indefinitely when handlers forward events.
+- Class source positions handle inline and unindented methods accurately;
+  local hovers retain variable names, and valid formatted calls avoid false TL4037 warnings.
+- Reloaded constructors retain nested exported class identity across successive
+  reloads, so both existing and newly created instances receive later method updates.
+- Imported event-parameter hovers use project inference instead of stopping at
+  a file-local `any` result.
 
 - Diagnostics and generated-Lua source maps now point into original class
   method bodies instead of the class declaration header.
