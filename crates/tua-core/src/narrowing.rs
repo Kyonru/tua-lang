@@ -388,7 +388,17 @@ fn collect_if_branch_narrowing(
         return;
     };
 
-    if !contains_position(block_span, position) {
+    // Assignment inference evaluates the RHS just before its statement so a
+    // reassignment still sees the previous binding. Include that boundary for
+    // the first statement too: it already executes under this branch's guard.
+    let evaluation_span = SourceSpan {
+        start: SourcePosition {
+            column: block_span.start.column.saturating_sub(1),
+            ..block_span.start
+        },
+        ..block_span
+    };
+    if !contains_position(evaluation_span, position) {
         return;
     }
 

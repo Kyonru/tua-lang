@@ -6516,3 +6516,37 @@ end
             .any(|item| item.label == "damage"));
     }
 }
+
+#[test]
+fn guarded_imported_instance_preserves_multi_returns_in_first_statement() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+import type { LabelInstance } from "./label"
+local title: LabelInstance? = nil
+function love.draw()
+  if title then
+    local width, height = title:getSize()
+    print(<|width|>width, <|height|>height)
+  end
+end
+-- file: src/label.tua
+final class Label {
+  getSize(): (number, number) { return 10, 20 }
+}
+export type LabelInstance = Label
+return { Label = Label }
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+    let snapshot = host.snapshot();
+    for marker in ["width", "height"] {
+        let hover = snapshot
+            .hover("src/main.tua", fixture.position(marker))
+            .unwrap();
+        assert_eq!(hover.contents, format!("local {marker}: number"));
+    }
+}

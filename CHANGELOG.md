@@ -20,6 +20,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Locals initialized in the first statement of a guarded branch retain narrowed
+  receiver types, including multiple values returned by imported class methods.
+
 - Hovers inside class methods recognize parameter types and shadowed builtin names
   using original source positions.
 
