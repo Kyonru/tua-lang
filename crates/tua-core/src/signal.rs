@@ -496,7 +496,7 @@ impl SignalEventIndex {
             let message = format!(
                 "conflicting payload schemas for SignalBus event `{}` on `{}`: {}",
                 key.name,
-                bus_label(&key.identity),
+                bus_label(&key.identity, &events[0].mention.receiver_parts),
                 schemas.join(" vs ")
             );
 
@@ -1351,9 +1351,9 @@ fn payload_label(payload: &[TypedParameter]) -> String {
     )
 }
 
-pub(crate) fn bus_label(identity: &SignalBusIdentity) -> String {
+pub(crate) fn bus_label(identity: &SignalBusIdentity, receiver_parts: &[String]) -> String {
     if identity.receiver_parts.is_empty() {
-        "module SignalBus".to_owned()
+        receiver_parts.join(".")
     } else {
         identity.receiver_parts.join(".")
     }

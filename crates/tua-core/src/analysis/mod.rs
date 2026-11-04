@@ -1234,7 +1234,7 @@ fn signal_event_hover(
         span: Some(event.mention.name_span),
         documentation: Some(format!(
             "Bus: `{}`. {declarations} declarations, {listeners} listeners, {emits} emits.",
-            crate::signal::bus_label(&event.identity)
+            crate::signal::bus_label(&event.identity, &event.mention.receiver_parts)
         )),
         context: Vec::new(),
     })

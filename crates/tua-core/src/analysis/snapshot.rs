@@ -315,7 +315,7 @@ impl AnalysisSnapshot {
             .filter_map(|group| {
                 let first = group.first()?;
                 let name = first.mention.name.clone();
-                let bus = bus_label(&first.identity);
+                let bus = bus_label(&first.identity, &first.mention.receiver_parts);
                 let id = graph_event_id(&first.identity, &name);
                 let bus_path = first.identity.origin.clone();
                 let (resolved_payload, schema_conflict) = graph_schema_summary(&group);
