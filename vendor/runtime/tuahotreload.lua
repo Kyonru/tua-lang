@@ -154,35 +154,45 @@ local function swap(old, new, seen)
   end
 end
 
--- Functions compiled by a reload close over the new module table. Rebind that
--- root upvalue before installing them into the old table, or conventional
--- `local M = {}; function M.update() M.state = ... end; return M` modules
--- would mutate an invisible second copy instead of their preserved state.
-local function rebind_module_upvalues(value, new_root, old_root, seen)
+-- Match nested exported tables before rebinding closures. Constructors for an
+-- exported class must capture the preserved class table, including objects
+-- created between successive reloads.
+local function table_replacements(old, new, replacements)
+  if replacements[new] then return end
+  replacements[new] = old
+  for key, value in pairs(new) do
+    local current = rawget(old, key)
+    if type(value) == "table" and type(current) == "table"
+      and not is_shader(value) then
+      table_replacements(current, value, replacements)
+    end
+  end
+  local old_meta, new_meta = getmetatable(old), getmetatable(new)
+  if type(old_meta) == "table" and type(new_meta) == "table" then
+    table_replacements(old_meta, new_meta, replacements)
+  end
+end
+
+local function rebind_module_upvalues(value, replacements, seen)
   local kind = type(value)
   if kind == "function" then
     local index = 1
     while true do
       local name, upvalue = debug.getupvalue(value, index)
-      if not name then
-        break
-      end
-      if upvalue == new_root then
-        debug.setupvalue(value, index, old_root)
-      end
+      if not name then break end
+      local replacement = replacements[upvalue]
+      if replacement then debug.setupvalue(value, index, replacement) end
       index = index + 1
     end
     return
   end
-  if kind ~= "table" or seen[value] then
-    return
-  end
+  if kind ~= "table" or seen[value] then return end
   seen[value] = true
   for key, nested in pairs(value) do
-    rebind_module_upvalues(key, new_root, old_root, seen)
-    rebind_module_upvalues(nested, new_root, old_root, seen)
+    rebind_module_upvalues(key, replacements, seen)
+    rebind_module_upvalues(nested, replacements, seen)
   end
-  rebind_module_upvalues(getmetatable(value), new_root, old_root, seen)
+  rebind_module_upvalues(getmetatable(value), replacements, seen)
 end
 
 local function reload(name, source)
@@ -198,7 +208,9 @@ local function reload(name, source)
   end
   local old = package.loaded[name]
   if type(old) == "table" and type(result) == "table" then
-    rebind_module_upvalues(result, result, old, {})
+    local replacements = {}
+    table_replacements(old, result, replacements)
+    rebind_module_upvalues(result, replacements, {})
     swap(old, result, {})
   elseif result ~= nil then
     package.loaded[name] = result

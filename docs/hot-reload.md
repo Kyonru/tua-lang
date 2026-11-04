@@ -43,7 +43,12 @@ A module reload runs the new file and copies its functions into the table the
 game already has. Code that captured the module, and objects whose metatable
 is a class from it, use the new functions straight away. Values already in the
 table, such as `M.score` or a cached list, are kept, so the game's state
-survives the edit.
+survives the edit. Nested exported classes retain their table identity, so
+instances constructed after a reload participate in later reloads too.
+Constructors are not rerun for existing objects; changed initialization and
+field defaults apply to newly constructed objects. Captured method functions
+and compiler-inlined final method calls keep their captured implementation
+until the owning module is reloaded.
 
 !!! warning "Keep state where reloading can see it"
     The new functions run with the new file's local variables. A module-level

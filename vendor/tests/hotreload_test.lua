@@ -44,6 +44,32 @@ assert(enemy.hp == 7, "existing data is kept")
 assert(enemy.damage(2) == 5 and enemy.hp == 5,
   "new functions keep using the preserved module table")
 
+-- Constructors in nested exported class tables keep the preserved metatable,
+-- including instances constructed after a reload.
+local function class_source(speed)
+  return "local Actor = {}; Actor.__index = Actor; " ..
+    "function Actor.new() return setmetatable({ hp = 3 }, Actor) end; " ..
+    "function Actor:speed() return " .. speed .. " end; return { Actor = Actor }"
+end
+files["game/actors.lua"] = class_source(1)
+package.loaded["game.actors"] = assert(loadstring(files["game/actors.lua"]))()
+local Actor = package.loaded["game.actors"].Actor
+local original_actor = Actor.new()
+original_actor.hp = 9
+files[".tuahotreload"] = "class-0\n"
+tick()
+files["game/actors.lua"] = class_source(2)
+files[".tuahotreload"] = "class-1\n"
+tick()
+local later_actor = Actor.new()
+assert(getmetatable(later_actor) == Actor, "reloaded constructors retain class identity")
+assert(original_actor:speed() == 2 and original_actor.hp == 9)
+files["game/actors.lua"] = class_source(3)
+files[".tuahotreload"] = "class-2\n"
+tick()
+assert(original_actor:speed() == 3 and later_actor:speed() == 3,
+  "successive class reloads update both old and newly constructed instances")
+
 -- A broken reload pauses the game's callbacks instead of ending it.
 files["game/enemy.lua"] = "local M = {\nreturn M\n"
 files[".tuahotreload"] = "3\n"
