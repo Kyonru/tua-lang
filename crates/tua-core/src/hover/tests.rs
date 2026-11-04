@@ -1974,3 +1974,19 @@ events:emit("input", 1)
 "#;
     assert_hover_in_source(source, "value)", 0, "parameter value: number");
 }
+
+#[test]
+fn class_method_multi_return_locals_hover_with_names() {
+    let source = r#"final class Dialogue {
+  text: Text
+  draw() {
+    local text_w, text_h = self.text:getDimensions()
+    print(text_w, text_h)
+  }
+}
+"#;
+    assert_hover_in_source(source, "text_w,", 0, "local text_w: number");
+    assert_hover_in_source(source, "text_h =", 0, "local text_h: number");
+    assert_hover_in_source(source, "print(text_w", 6, "local text_w: number");
+    assert_hover_in_source(source, "text_h)", 0, "local text_h: number");
+}

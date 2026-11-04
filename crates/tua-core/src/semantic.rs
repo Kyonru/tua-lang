@@ -1618,12 +1618,31 @@ impl<'a> SemanticModel<'a> {
         name: &str,
         position: SourcePosition,
     ) -> Option<LocalAssignmentValue<'a>> {
-        local_assignment_value_in_block(
+        let has_classes = !self.parsed.class_declarations.is_empty();
+        let parser_position = if has_classes {
+            self.parsed
+                .raw
+                .parser_position_for_source(position)
+                .unwrap_or(position)
+        } else {
+            position
+        };
+        let mut local = local_assignment_value_in_block(
             self.parsed.ast.nodes(),
             name,
-            position,
+            parser_position,
             self.parsed.raw.language == ParsedLanguage::Lua,
-        )
+        )?;
+        if has_classes {
+            if let Some(origin) = self
+                .parsed
+                .raw
+                .parser_position_origin(local.evaluation_position)
+            {
+                local.evaluation_position = origin.source_position;
+            }
+        }
+        Some(local)
     }
 
     pub(crate) fn parameter_type_at_position(

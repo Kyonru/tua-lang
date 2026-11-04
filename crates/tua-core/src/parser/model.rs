@@ -158,6 +158,25 @@ impl RawParsedSource {
         self.source != self.parser_source
     }
 
+    pub(crate) fn parser_position_for_source(
+        &self,
+        source_position: SourcePosition,
+    ) -> Option<SourcePosition> {
+        self.parser_provenance
+            .iter()
+            .enumerate()
+            .find_map(|(line, origin)| {
+                (!origin.class_generated
+                    && origin.source_span.start.line == source_position.line
+                    && origin.source_span.start.column <= source_position.column
+                    && source_position.column <= origin.source_span.end.column)
+                    .then(|| SourcePosition {
+                        line: line + 1,
+                        column: source_position.column - origin.source_span.start.column + 1,
+                    })
+            })
+    }
+
     pub(crate) fn parser_position_origin(
         &self,
         parser_position: SourcePosition,
