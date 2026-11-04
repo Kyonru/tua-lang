@@ -36,6 +36,17 @@ impl AnalysisSnapshot {
                 )
             }
         }
+        .map(|mut hover| {
+            if hover.documentation.is_none() {
+                if let Some(definition) = self.definition(path, position) {
+                    if let Some(Ok(target)) = self.parse(&definition.path) {
+                        hover.documentation =
+                            crate::hover::documentation_for_definition(target, &definition);
+                    }
+                }
+            }
+            hover
+        })
     }
 
     fn signal_event_hover(&self, path: &Path, position: SourcePosition) -> Option<Hover> {

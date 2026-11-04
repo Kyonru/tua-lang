@@ -1008,7 +1008,17 @@ impl AnalysisHost {
             return None;
         }
 
-        hover_parsed_source_with_environment(parsed, position, &semantics.environment)
+        let hover = hover_parsed_source_with_environment(parsed, position, &semantics.environment)?;
+        // A method reached through an imported constructor may already have a
+        // type locally, but its declaration docs belong to the project snapshot.
+        if hover.documentation.is_none()
+            && !require_bindings_for_parsed_source(parsed).is_empty()
+            && dotted_chain_at_position(&parsed.source, position)
+                .is_some_and(|chain| chain.cursor_index > 0)
+        {
+            return None;
+        }
+        Some(hover)
     }
 
     pub fn current_file_completion(

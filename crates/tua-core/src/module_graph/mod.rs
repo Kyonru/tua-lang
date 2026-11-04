@@ -959,7 +959,8 @@ fn export_entries_for_module(
             let definition_span = symbol_id
                 .and_then(|symbol_id| hir?.symbol(symbol_id).map(|symbol| symbol.name_span))
                 .or_else(|| export_definition_span(hir, public_name))
-                .or_else(|| export.map(|export| export.name_span))?;
+                .or_else(|| export.map(|export| export.name_span))
+                .or_else(|| returned_class_member_span(parsed?, public_name))?;
             let export_span = export
                 .map(|export| export.name_span)
                 .unwrap_or(definition_span);
@@ -975,6 +976,36 @@ fn export_entries_for_module(
             })
         })
         .collect()
+}
+
+fn returned_class_member_span(parsed: &ParsedSource, member: &str) -> Option<SourceSpan> {
+    let LastStmt::Return(returned) = parsed.ast.nodes().last_stmt()? else {
+        return None;
+    };
+    let Expression::Var(ast::Var::Name(name)) = returned.returns().iter().next()? else {
+        return None;
+    };
+    let name = token_text(name);
+    let class = parsed
+        .class_declarations
+        .iter()
+        .find(|class| class.name == name)?;
+    if member == "new" {
+        return Some(class.name_span);
+    }
+    class
+        .init
+        .iter()
+        .chain(class.methods.iter())
+        .find(|method| method.name == member)
+        .map(|method| method.name_span)
+        .or_else(|| {
+            class
+                .fields
+                .iter()
+                .find(|field| field.name == member)
+                .map(|field| field.name_span)
+        })
 }
 
 fn runtime_export_forwards(

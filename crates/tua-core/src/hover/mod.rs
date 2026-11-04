@@ -597,7 +597,10 @@ fn merge_documentation<'a>(parts: impl IntoIterator<Item = Option<&'a str>>) -> 
     (!lines.is_empty()).then(|| lines.join("\n"))
 }
 
-fn documentation_for_definition(parsed: &ParsedSource, definition: &Definition) -> Option<String> {
+pub(crate) fn documentation_for_definition(
+    parsed: &ParsedSource,
+    definition: &Definition,
+) -> Option<String> {
     // External documentation belongs to the resolved module/snapshot. Reading
     // disk here could mix a saved declaration with an unsaved editor buffer.
     (definition.path == parsed.path)

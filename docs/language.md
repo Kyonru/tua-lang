@@ -610,7 +610,7 @@ boundaries so the generated Lua passes the receiver explicitly.
 
 Class names, fields, and methods participate in source definition, references,
 and hover documentation. Place a `---` description immediately above a method
-to show it when hovering a resolved method usage in the same file. Native
+to show it when hovering a resolved method usage, including imported instances. Native
 parameter and return annotations supply the displayed signature. Add
 `---@param name Type description` and `---@return Type description` lines
 to include parameter and return descriptions in the hover.

@@ -515,3 +515,33 @@ end)
     server.send(hover_request(2, &uri, source, "position"));
     assert_hover_contains(server.output(), 2, "parameter position: Vec2");
 }
+
+#[test]
+fn imported_class_method_hover_reads_docs_from_the_project_snapshot() {
+    let temp = TempProject::new("imported-class-method-docs");
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write(
+        "src/dialog.tua",
+        r#"final class Dialogue {
+  --- Append words.
+  ---@param word string A word.
+  append(word: string): boolean { return true }
+}
+return Dialogue
+"#,
+    );
+    let source =
+        "local Dialogue = require(\"dialog\")\nlocal d = Dialogue.new()\nd:append(\"hello\")\n";
+    let uri = temp.uri_for("src/main.tua");
+    let mut server = TestServer::new();
+    server.send(initialize_with_pull_diagnostics(1, temp.uri(), false));
+    server.send(did_open(&uri, source));
+    server.send(hover_request(2, &uri, source, "append"));
+    assert_hover_contains(server.output(), 2, "Append words.");
+    assert_hover_contains(server.output(), 2, "**@param** word string A word.");
+    server.send(definition_request(3, &uri, source, "append", 0));
+    assert_eq!(
+        response_with_id(server.output(), 3)["result"]["uri"],
+        temp.uri_for("src/dialog.tua")
+    );
+}
