@@ -419,6 +419,11 @@ See [Configuration](configuration.md) for every option and its default.
 
 The built-in LOVE catalog provides API completion, hover, signatures,
 overloads, object return types, enum values, and callback declaration snippets.
+LOVE API hover shows the catalog documentation and a wiki link. Go to
+definition opens a generated API stub with the same description and a direct
+wiki link. VS Code also bundles the LÖVE 11.5 single-page reference; run
+**Tua: Open LÖVE API Reference (Offline)** from the Command Palette to read it
+without a network connection.
 Callbacks are checked against their known signatures while still allowing
 unused trailing Lua parameters to be omitted. Close callback-name typos can
 offer a rename fix.

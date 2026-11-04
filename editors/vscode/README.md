@@ -15,6 +15,7 @@ Code without changing the normal Lua and LOVE workflow.
 - LOVE-aware authoring: callback snippets, callback signature checking, LOVE
   API documentation and overloads, colon-call guidance, and config-aware
   `love.conf(t)` completion are built in.
+- Offline LÖVE 11.5 API reference, available from the Command Palette.
 - Better game-project tooling: sprite sheets, SignalBus events, assets, audio
   systems, module dependencies, ECS, and object pools all have editor support
   instead of living as untyped strings and conventions.
@@ -118,6 +119,7 @@ end
 From there you can:
 
 - use normal completion and hover on LOVE APIs;
+- run **Tua: Open LÖVE API Reference (Offline)** from the Command Palette;
 - rebuild and open emitted Lua with `Tua: Open Generated Lua Beside Tua`;
 - jump between source and output with `Tua: Jump Between Tua and Generated Lua`;
 - run and restart the LOVE project without leaving VS Code.

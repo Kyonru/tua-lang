@@ -740,6 +740,11 @@
     },
     "commands": [
       {
+        "command": "tua.openLoveApiReference",
+        "title": "Open LÖVE API Reference (Offline)",
+        "category": "Tua"
+      },
+      {
         "command": "tua.initProject",
         "title": "Initialize Tua Project",
         "category": "Tua",
@@ -1444,6 +1449,9 @@
         }
       ],
       "commandPalette": [
+        {
+          "command": "tua.openLoveApiReference"
+        },
         {
           "command": "tua.initProject"
         },

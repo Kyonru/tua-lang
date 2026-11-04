@@ -9,6 +9,8 @@ language or editor behavior, and migration notes call out those changes.
 ### Changed
 
 - Indigo Carbon tabs now use a distinct tab bar color for inactive tabs, while the active tab matches the editor background.
+- VS Code bundles the LÖVE 11.5 API reference for offline use; LOVE definition
+  stubs include the catalog descriptions and direct wiki links.
 
 ### Fixed
 
