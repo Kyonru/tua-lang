@@ -2858,6 +2858,25 @@ second
 }
 
 #[test]
+fn class_method_lints_point_into_the_original_method_body() {
+    let source = r#"final class Renderer {
+  draw() {
+    love.graphics.draw(
+    "sprite"
+    )
+  }
+}
+"#;
+    let diagnostics = check_standard_rules_source(source);
+    let continuation = diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_MULTI_LINE_STATEMENT))
+        .expect("misindented class continuation should be reported");
+
+    assert_eq!((continuation.line, continuation.column), (4, 5));
+}
+
+#[test]
 fn same_line_statement_counts_unseparated_pairs_in_nested_blocks() {
     let diagnostics = check_standard_rules_source(
         r#"

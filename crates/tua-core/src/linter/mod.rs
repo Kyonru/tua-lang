@@ -94,6 +94,9 @@ pub(crate) fn lint_parsed_source(
         };
 
         visitor.visit_ast(&parsed.ast);
+        for diagnostic in &mut visitor.diagnostics {
+            parsed.raw.remap_parser_diagnostic(diagnostic);
+        }
         diagnostics.extend(visitor.diagnostics);
     }
 
@@ -140,13 +143,17 @@ pub(crate) fn lint_parsed_source(
     if config.rules {
         diagnostics.extend(unused_type_diagnostics(parsed));
         diagnostics.extend(class_rules::lint(parsed, environment));
-        diagnostics.extend(rules::lint(
+        let mut rule_diagnostics = rules::lint(
             parsed,
             scope
                 .as_ref()
                 .expect("standard rules should build a scope map"),
             environment,
-        ));
+        );
+        for diagnostic in &mut rule_diagnostics {
+            parsed.raw.remap_parser_diagnostic(diagnostic);
+        }
+        diagnostics.extend(rule_diagnostics);
     }
 
     if config.love_callback_order {
