@@ -628,13 +628,18 @@ impl<'a> ExportInferer<'a> {
             entry.deprecation = self.deprecations.get(&parts.join(".")).cloned();
             entry.must_use = self.must_use_paths.contains(parts);
         } else {
-            insert_nested_field(&mut entry.ty, nested, ty);
+            if !matches!(entry.ty, Type::Table(_)) {
+                entry.ty = Type::empty_table();
+            }
+            if let Type::Table(table) = &mut entry.ty {
+                table.insert_field_path(nested, ty);
+            }
         }
     }
 
     fn exports(&mut self) -> Option<ModuleExports> {
         let expression = self.return_expr?;
-        let (value_type, fields) = match expression {
+        let (value_type, mut fields) = match expression {
             Expression::TableConstructor(table) => {
                 let fields = self.infer_table_fields(table);
                 (table_type_from_export_fields(&fields), fields)
@@ -674,6 +679,9 @@ impl<'a> ExportInferer<'a> {
             _ => (self.infer_expression(expression), BTreeMap::new()),
         };
 
+        if fields.is_empty() && matches!(value_type, Type::Table(_)) {
+            collect_table_fields(&value_type, &mut fields);
+        }
         (!fields.is_empty() || module_value_is_informative(&value_type)).then(|| ModuleExports {
             path: self.parsed.path.clone(),
             value_type,
@@ -790,7 +798,7 @@ impl<'a> ExportInferer<'a> {
                     inferred_function_type_from_body(self.parsed, environment, function.body())
                 })
                 .unwrap_or_else(|| function_type_from_body(function.body())),
-            Expression::FunctionCall(_) => self
+            Expression::FunctionCall(_) | Expression::Var(Var::Expression(_)) => self
                 .environment
                 .and_then(|environment| {
                     let position = node_span(expression)?.start;
@@ -1218,33 +1226,6 @@ fn table_type_from_export_fields(fields: &BTreeMap<String, ModuleExportField>) -
             .iter()
             .map(|(name, field)| (name.clone(), TableField::required(field.ty.clone()))),
     )
-}
-
-fn insert_nested_field(ty: &mut Type, path: &[String], value: Type) {
-    let Some((field, rest)) = path.split_first() else {
-        *ty = value;
-        return;
-    };
-
-    if !matches!(ty, Type::Table(_)) {
-        *ty = Type::empty_table();
-    }
-
-    let Type::Table(table) = ty else {
-        return;
-    };
-
-    if rest.is_empty() {
-        table.insert(field.clone(), TableField::required(value));
-        return;
-    }
-
-    let mut nested = table
-        .field(field)
-        .map(|field| field.ty.clone())
-        .unwrap_or_else(Type::empty_table);
-    insert_nested_field(&mut nested, rest, value);
-    table.insert(field.clone(), TableField::required(nested));
 }
 
 fn resolve_export_aliases(environment: &TypeEnvironment, ty: &Type) -> Type {

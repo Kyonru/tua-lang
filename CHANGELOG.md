@@ -36,6 +36,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Nested module functions retain their signatures through table re-exports and
+  callable `setmetatable` exports, including completion and argument checking.
+
 - Local native/LuaDoc contracts follow declaration identities across scopes,
   checking, hover and return inference; same-named locals no longer borrow
   unrelated annotations. File-local completion remains available in trailing edits.

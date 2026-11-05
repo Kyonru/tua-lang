@@ -6954,3 +6954,47 @@ return {count = count, text = text, pose = pose}
         .iter()
         .any(|c| c.label == "x"));
 }
+
+#[test]
+fn nested_callable_module_exports_support_editor_and_checker() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+local Camera = require("vendor")
+local value = Camera.smooth.<|hover|>damped(5)
+local typed: number = value
+print(Camera.smooth.<|complete|>damped(2))
+Camera.smooth.damped("wrong")
+local dynamic: any = require("vendor")
+dynamic.unknown.member()
+-- file: src/vendor.lua
+local camera = {}
+camera.__index = camera
+camera.smooth = {}
+---@param speed number
+---@return number
+function camera.smooth.damped(speed) return speed end
+return setmetatable({smooth = camera.smooth}, {__call = function() return {} end})
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+    let snapshot = host.snapshot();
+    let diagnostics = snapshot.pipeline_diagnostics("src/main.tua");
+    let errors = diagnostics
+        .iter()
+        .filter(|d| d.severity == DiagnosticSeverity::Error)
+        .collect::<Vec<_>>();
+    assert_eq!(errors.len(), 1, "{diagnostics:?}");
+    assert_eq!(errors[0].code, Some(DiagnosticCode::TYPE_MISMATCH));
+    assert!(snapshot
+        .completion("src/main.tua", fixture.position("complete"))
+        .iter()
+        .any(|item| item.label == "damped"));
+    let hover = snapshot
+        .hover("src/main.tua", fixture.position("hover"))
+        .unwrap();
+    assert!(hover.contents.contains("speed"), "{hover:?}");
+}

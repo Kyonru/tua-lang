@@ -300,6 +300,29 @@ impl TableShape {
         self.fields.insert(name.into(), field);
     }
 
+    /// Record a statically named field write without recursive path traversal.
+    pub(crate) fn insert_field_path(&mut self, path: &[String], value: Type) {
+        let mut table = self;
+        for (index, name) in path.iter().enumerate() {
+            if index + 1 == path.len() {
+                table.insert(name.clone(), TableField::required(value));
+                return;
+            }
+            let field = table
+                .fields
+                .entry(name.clone())
+                .or_insert_with(|| TableField::required(Type::empty_table()));
+            field.optional = false;
+            if !matches!(field.ty, Type::Table(_)) {
+                field.ty = Type::empty_table();
+            }
+            let Type::Table(nested) = &mut field.ty else {
+                unreachable!()
+            };
+            table = nested;
+        }
+    }
+
     pub fn field(&self, name: &str) -> Option<&TableField> {
         self.fields.get(name)
     }

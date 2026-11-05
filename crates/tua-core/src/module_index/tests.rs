@@ -735,3 +735,33 @@ fn lua_exported_wrappers_preserve_untyped_named_and_variadic_parameters() {
     assert_eq!(ty.parameters[0].name.as_deref(), Some("first"));
     assert_eq!(ty.vararg_type.as_deref(), Some(&crate::Type::Any));
 }
+
+#[test]
+fn nested_callable_module_exports_preserve_declared_functions() {
+    for returned in [
+        "{ smooth = camera.smooth }",
+        "setmetatable({ smooth = camera.smooth }, { __call = function() return {} end })",
+    ] {
+        let source = format!(
+            r#"
+local camera = {{}}
+camera.__index = camera
+camera.smooth = {{}}
+---@param speed number
+---@return number
+function camera.smooth.damped(speed) return speed end
+return {returned}
+"#
+        );
+        let parsed = parse_lua_source("src/vendor.lua", source).unwrap();
+        let exports = infer_module_exports(&parsed).unwrap();
+        let Some(Type::Table(smooth)) = exports.field("smooth") else {
+            panic!("nested table missing: {exports:?}");
+        };
+        let Some(Type::Function(damped)) = smooth.field("damped").map(|field| &field.ty) else {
+            panic!("nested function missing: {smooth:?}");
+        };
+        assert_eq!(damped.parameters[0].ty, Type::number());
+        assert_eq!(damped.return_types_or_any(), vec![Type::number()]);
+    }
+}

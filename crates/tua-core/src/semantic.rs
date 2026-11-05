@@ -1098,16 +1098,19 @@ impl<'a> SemanticModel<'a> {
                         let Some(parts) = plain_field_chain_from_var(variable) else {
                             continue;
                         };
-                        let [root, field] = parts.as_slice() else {
+                        let Some((root, fields)) = parts.split_first() else {
                             continue;
                         };
+                        if fields.is_empty() {
+                            continue;
+                        }
 
                         if root != name {
                             continue;
                         }
 
                         let is_self_index =
-                            field == "__index" && expression_is_name(expression, name);
+                            fields == ["__index"] && expression_is_name(expression, name);
                         if is_self_index {
                             table.mark_self_index();
                         }
@@ -1123,7 +1126,7 @@ impl<'a> SemanticModel<'a> {
                             )
                             .unwrap_or(Type::Any)
                         };
-                        table.insert(field.to_owned(), TableField::required(ty));
+                        table.insert_field_path(fields, ty);
                     }
                 }
                 ast::Stmt::FunctionDeclaration(function) => {
@@ -1132,7 +1135,12 @@ impl<'a> SemanticModel<'a> {
                         continue;
                     };
 
-                    if root != name {
+                    let path = root
+                        .split('.')
+                        .chain(std::iter::once(field.as_str()))
+                        .map(str::to_owned)
+                        .collect::<Vec<_>>();
+                    if path.first().is_none_or(|root| root != name) {
                         continue;
                     }
 
@@ -1143,10 +1151,13 @@ impl<'a> SemanticModel<'a> {
                         .unwrap_or_else(|| {
                             function_type_from_body_with_receiver(function.body(), is_method)
                         });
-                    if is_method && function_body_returns_setmetatable_self(function.body()) {
+                    if path.len() == 2
+                        && is_method
+                        && function_body_returns_setmetatable_self(function.body())
+                    {
                         table.mark_constructor_method(&field);
                     }
-                    table.insert(field, TableField::required(ty));
+                    table.insert_field_path(&path[1..], ty);
                 }
                 ast::Stmt::FunctionCall(function_call) => {
                     let Some((target, meta)) = setmetatable_arguments(function_call) else {

@@ -212,6 +212,12 @@ field outside its export surface reports `TL1012` instead of allowing a call
 that would read `nil` at runtime. Unresolved modules, `any` values, and modules
 with a dynamic `__index` remain permissive.
 
+Statically named nested assignments and functions, such as
+`function camera.smooth.damped(speed) ... end`, also contribute to the export
+surface. Re-exporting `camera.smooth` preserves those members, including when
+the returned table uses `setmetatable` to make the module callable. An explicit
+local `any` annotation opts out of that inferred module contract.
+
 !!! tip "Keep exports statically visible"
     Return a table literal, or return a local that contains a clear table
     literal, when you want Tua to understand a Lua module's fields. Runtime

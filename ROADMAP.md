@@ -23,9 +23,6 @@ workflow pages under `docs/`. Completed work belongs in
 
 ### Resolve Correctness Defects Found In Full Ports
 
-- Resolve nested vendor-module re-exports without false missing-member errors
-  (HUMP `Camera.smooth.damped`); make explicit dynamic interop annotations
-  consistently override inferred module contracts where the language permits it.
 - Preserve cross-file global module identity before injecting built-in modules:
   BYTEPATH loads HUMP Camera globally, but another file's `Camera.smooth` can
   inject Tua Camera and change runtime behavior. An explicit local `_G.Camera`
