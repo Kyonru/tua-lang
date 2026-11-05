@@ -26,6 +26,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Invalid Lua-style class methods now explain the required brace syntax at the
+  offending member, while nested Lua functions keep their usual `end` syntax.
+
 - Event payload fields and inferred loop bindings now hover with their semantic
   types; member completion retains callback scope when its only statement is incomplete.
 

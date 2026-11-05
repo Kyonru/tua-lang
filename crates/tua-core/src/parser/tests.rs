@@ -2063,3 +2063,47 @@ fn lua_doc_multiple_returns_preserve_nested_types_and_description() {
         .is_empty());
     }
 }
+
+#[test]
+fn class_method_syntax_guidance_targets_lua_style_members() {
+    for (header, message) in [
+        ("function update(dt)", "remove `function`"),
+        ("local function update(dt)", "remove `function`"),
+        ("update(dt)", "braces around the body"),
+        ("override final update(dt)", "braces around the body"),
+    ] {
+        let source = format!("final class Enemy {{\n  {header}\n    print(dt)\n  end\n}}\n");
+        let diagnostics = parse_tua_source("src/enemy.tua", &source).unwrap_err();
+        let diagnostic = diagnostics
+            .iter()
+            .find(|d| d.code == Some(DiagnosticCode::TYPE_CLASS))
+            .unwrap();
+        assert_eq!((diagnostic.line, diagnostic.column), (2, 3));
+        assert!(
+            diagnostic.message.contains(message),
+            "{}",
+            diagnostic.message
+        );
+    }
+}
+
+#[test]
+fn class_method_syntax_guidance_preserves_nested_lua_functions() {
+    let source = r#"local function outside(value)
+  return value
+end
+final class Enemy {
+  -- function update(dt) ... end is only a comment.
+  update(dt: number) {
+    local function inside(value)
+      if value then
+        return outside(value)
+      end
+    end
+    print(inside(dt), "function update(dt) end")
+  }
+}
+"#;
+    let parsed = parse_tua_source("src/enemy.tua", source).unwrap();
+    assert_eq!(parsed.class_declarations[0].methods.len(), 1);
+}

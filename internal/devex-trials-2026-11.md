@@ -92,10 +92,11 @@ after the provider changes without saving. No new type syntax is introduced.
 
 ### Epic 3: Clearer syntax-error guidance
 
-**Planned delivery:** explain native class-method brace syntax when a class
-contains Lua-style `function`/`end` declarations. Preserve ordinary Lua bodies,
-including nested functions, and do not change the language grammar.
-Validate location, actionable message, and unaffected valid syntax.
+**Delivered:** invalid member diagnostics distinguish Lua-style `function`
+declarations from malformed method headers and show native brace syntax. Tests
+check the offending source location, actionable messages, and valid nested Lua
+functions, comments, and strings. The grammar is unchanged. Recovery for a wholly
+unclosed class remains outside this delivery.
 
 ### Epic 4: Keep abstractions evidence-led
 

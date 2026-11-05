@@ -172,6 +172,26 @@ pub(crate) fn class_member_target(
     None
 }
 
+fn invalid_class_member_message(source: &str, span: SourceSpan) -> &'static str {
+    let offset = crate::source_text::byte_for_position(source, span.start).unwrap_or(source.len());
+    let header = source[offset..].lines().next().unwrap_or("").trim();
+    let header = header.strip_prefix("local ").unwrap_or(header).trim_start();
+    if starts_keyword(header, 0, "function") {
+        return "class methods use `name(args) { ... }`; remove `function` and replace the method's `end` with `}`";
+    }
+    let header = header
+        .strip_prefix("override ")
+        .unwrap_or(header)
+        .trim_start();
+    let header = header.strip_prefix("final ").unwrap_or(header).trim_start();
+    if let Some((_, _, end)) = take_identifier(header, 0) {
+        if header[end..].trim_start().starts_with('(') {
+            return "invalid class method; use `name(args) { ... }` with braces around the body; Lua blocks inside the method still use `end`";
+        }
+    }
+    "unrecognized class member; expected a typed field or method declaration"
+}
+
 pub(crate) fn parse_class_declarations(
     path: &Path,
     source: &str,
@@ -183,7 +203,7 @@ pub(crate) fn parse_class_declarations(
         diagnostics.push(class_diagnostic(
             path,
             span.start,
-            "unrecognized class member; expected a typed field or method declaration",
+            invalid_class_member_message(source, span),
         ));
     }
 
