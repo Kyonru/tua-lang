@@ -130,3 +130,9 @@ visual or long-session evidence.
   lexical scope map, with a depth bound matching default lowering. Outer reads
   count as uses and support definition/rename; inner parameter shadows remain
   distinct. Core/LSP suites pass (1,633/375, `default-usage-core-lsp.log`).
+
+- Completed unclosed-class recovery: shared class scanning provides precise
+  syntax guidance and editor-only closure of missing braces, bounded to 32.
+  Cold snapshots retain class members, outer locals and valid nested Lua scopes;
+  strings/comments are not repaired as code. Strict source parsing still fails.
+  Verification: `class-recovery-core-lsp.log`.

@@ -482,6 +482,62 @@ fn class_method_declaration_with_visited<'a>(
         })
 }
 
+fn unclosed_class(source: &str) -> Option<(ClassHeader, usize)> {
+    if !source.contains("class") {
+        return None;
+    }
+    let positions = SourcePositionIndex::new(source);
+    let mut index = 0;
+    while index < source.len() {
+        if source[index..].starts_with("--") {
+            index = consume_comment(source, index);
+            continue;
+        }
+        if let Some(end) = consume_string_literal(source, index) {
+            index = end;
+            continue;
+        }
+        if let Some(header) = parse_class_header(source, &positions, index) {
+            match matching_delimiter(source, header.body_open, '{', '}') {
+                Ok(end) => {
+                    index = end + 1;
+                    continue;
+                }
+                Err(depth) if depth > 0 => return Some((header, depth)),
+                _ => return None,
+            }
+        }
+        index += next_char_len(source, index);
+    }
+    None
+}
+
+pub(crate) fn unclosed_class_diagnostic(path: &Path, source: &str) -> Option<Diagnostic> {
+    let (header, _) = unclosed_class(source)?;
+    Some(
+        Diagnostic::error(
+            path,
+            header.name_span.start.line,
+            header.name_span.start.column,
+            format!(
+                "unclosed class `{}`; close its method and class bodies with `}}`",
+                header.name
+            ),
+        )
+        .with_code(DiagnosticCode::SYNTAX_PARSE),
+    )
+}
+
+/// Editor-only recovery. Keep the original prefix and let the normal parser
+/// reject incomplete Lua blocks or other ambiguous syntax; never emit this text.
+pub(crate) fn source_with_closed_class_bodies(source: &str) -> Option<String> {
+    let (_, depth) = unclosed_class(source)?;
+    if depth > 32 {
+        return None;
+    }
+    Some(format!("{source}{}", "\n}".repeat(depth)))
+}
+
 fn class_blocks(source: &str) -> Vec<ClassBlock> {
     let mut blocks = Vec::new();
     let mut index = 0usize;
@@ -2328,8 +2384,12 @@ fn find_matching_paren(source: &str, open: usize) -> Option<usize> {
 }
 
 fn find_matching_delimiter(source: &str, open: usize, left: char, right: char) -> Option<usize> {
+    matching_delimiter(source, open, left, right).ok()
+}
+
+fn matching_delimiter(source: &str, open: usize, left: char, right: char) -> Result<usize, usize> {
     if !source[open..].starts_with(left) {
-        return None;
+        return Err(0);
     }
 
     let mut depth = 0usize;
@@ -2354,17 +2414,17 @@ fn find_matching_delimiter(source: &str, open: usize, left: char, right: char) -
         if character == left {
             depth += 1;
         } else if character == right {
-            depth = depth.checked_sub(1)?;
+            depth = depth.checked_sub(1).ok_or(0usize)?;
 
             if depth == 0 {
-                return Some(index);
+                return Ok(index);
             }
         }
 
         index += character.len_utf8();
     }
 
-    None
+    Err(depth)
 }
 
 fn take_identifier(source: &str, index: usize) -> Option<(String, usize, usize)> {

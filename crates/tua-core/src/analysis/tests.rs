@@ -8032,3 +8032,32 @@ fn nested_default_reads_share_lexical_navigation_and_rename() {
         assert_eq!(&source[start..end], "seed");
     }
 }
+
+#[test]
+fn unclosed_native_classes_recover_members_without_erasing_outer_scopes() {
+    for closing in ["", " }"] {
+        let fixture = Fixture::parse(&format!("-- file: draft.tua\nlocal label = 'ready'\nfinal class Draft {{\n count: number = 0\n show() {{\n  if true then print(<|hover|>label) end\n  self.<|complete|>\n{closing}\n"));
+        let mut host = AnalysisHost::new();
+        host.set_file("draft.tua", fixture.files()[0].source.clone());
+        let snapshot = host.snapshot();
+        let labels =
+            completion_labels(&snapshot.completion("draft.tua", fixture.position("complete")));
+        assert!(
+            labels.contains(&"count".into()) && labels.contains(&"show".into()),
+            "{closing}: {labels:?}"
+        );
+        let hover = snapshot
+            .hover("draft.tua", fixture.position("hover"))
+            .unwrap();
+        assert!(
+            hover.contents.contains("string") || hover.contents.contains("ready"),
+            "{hover:?}"
+        );
+        assert!(snapshot
+            .diagnostics("draft.tua")
+            .iter()
+            .any(|diagnostic| diagnostic.message.contains("unclosed class `Draft`")));
+    }
+    let literal = "local text = [=[final class Draft {]=] -- final class Other {\n";
+    assert!(crate::classes::source_with_closed_class_bodies(literal).is_none());
+}

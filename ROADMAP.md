@@ -73,16 +73,6 @@ results. Evidence: [development trials](internal/devex-trials-2026-11.md).
 - Improve safe project-wide refactors and module changes.
 - Preserve `any` and ordinary Lua as explicit dynamic escape paths.
 
-### Finish Semantic Editor Consistency
-
-- **Unclosed classes:** extend recovery and syntax guidance to wholly unclosed
-  class bodies while preserving surrounding scopes and valid nested Lua blocks.
-
-Owner: shared core semantics/parser, surfaced through LSP. Acceptance: extend
-cross-surface conformance tests with exact cursor positions, cold snapshots,
-and unsaved edits. The [trial report](internal/devex-trials-2026-11.md) owns the
-reproductions and current workarounds.
-
 ### Complete Typed Lua Porting Workflows
 
 - Evaluate literal `false` support for LOVE configuration without accepting

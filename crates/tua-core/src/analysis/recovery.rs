@@ -139,11 +139,13 @@ pub(super) fn parse_degraded_analysis_source(
     source: &str,
     kind: AnalysisSourceKind,
 ) -> Result<ParsedSource, Vec<Diagnostic>> {
-    parse_analysis_source(
-        path,
-        source_without_recoverable_incomplete_lines(source),
-        kind,
-    )
+    let source = source_without_recoverable_incomplete_lines(source);
+    let recovered = if kind == AnalysisSourceKind::Tua {
+        crate::classes::source_with_closed_class_bodies(&source)
+    } else {
+        None
+    };
+    parse_analysis_source(path, recovered.unwrap_or(source), kind)
 }
 
 pub(super) fn source_without_recoverable_incomplete_lines(source: &str) -> String {

@@ -1047,8 +1047,11 @@ fn parse_signature_help_source(
     source: &str,
     position: SourcePosition,
 ) -> Result<ParsedSource, Vec<Diagnostic>> {
-    parse_tua_source(path, source.to_owned())
-        .or_else(|_| parse_tua_source(path, source_with_line_removed(source, position.line)))
+    parse_tua_source(path, source.to_owned()).or_else(|_| {
+        let source = source_with_line_removed(source, position.line);
+        let recovered = crate::classes::source_with_closed_class_bodies(&source).unwrap_or(source);
+        parse_tua_source(path, recovered)
+    })
 }
 
 fn source_with_line_removed(source: &str, line_to_remove: usize) -> String {

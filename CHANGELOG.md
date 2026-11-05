@@ -8,6 +8,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Changed
 
+- Unclosed native class/method bodies retain editor semantics through bounded
+  brace recovery, while strict parsing reports an actionable unclosed-class
+  error. Strings, comments and valid nested Lua blocks retain their meaning.
+
 - Nested callback defaults retain lexical reads of outer locals. Unused-local
   diagnostics, definition navigation and rename share those parsed references;
   inner parameter shadows do not count as reads of outer names.

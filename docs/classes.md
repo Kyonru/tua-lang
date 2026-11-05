@@ -175,6 +175,14 @@ later parent a stable forward table, so inherited methods and `super` calls work
 once the parent declaration has executed; source order does not cause the
 parent declaration to run early.
 
+## Editing Incomplete Classes
+
+While you are typing, the editor can recover missing closing braces on a class
+and its methods, retaining member suggestions and surrounding local bindings.
+Valid Lua blocks inside methods keep their scopes. The source still reports an
+unclosed-class error and cannot be built until you add the missing braces;
+editor recovery does not modify your file or guess missing Lua `end` keywords.
+
 ## Initialization Order And Generated Lua
 
 Generated Lua uses ordinary tables, `__index`, local method functions, and
