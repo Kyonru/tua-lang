@@ -62,8 +62,6 @@ results. Evidence: [development trials](internal/devex-trials-2026-11.md).
   testing, richer Busted API declarations, and coverage/report integration.
 - Add an explicit LOVE runtime test mode; the Busted backend currently tests
   headless Lua logic and requires doubles for LOVE-dependent behavior.
-- Correct TL4005 usage tracking for outer names used only in nested callback
-  default expressions.
 
 ## Next
 

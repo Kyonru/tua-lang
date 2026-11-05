@@ -125,3 +125,8 @@ visual or long-session evidence.
   reported nested-callback import use. A permanent linter regression now proves
   that the used alias stays live while an unused sibling import still warns
   (`import-usage.log`). Removed the resolved roadmap entry.
+
+- Completed TL4005 follow-up: recursively parsed default facts feed the shared
+  lexical scope map, with a depth bound matching default lowering. Outer reads
+  count as uses and support definition/rename; inner parameter shadows remain
+  distinct. Core/LSP suites pass (1,633/375, `default-usage-core-lsp.log`).

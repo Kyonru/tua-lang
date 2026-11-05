@@ -323,6 +323,7 @@ fn source_line_provenance(source: &str) -> Vec<ParserLineProvenance> {
 
 #[derive(Default)]
 struct TuaSyntax {
+    default_analysis_depth: usize,
     type_aliases: Vec<TypeAlias>,
     type_imports: Vec<TypeImport>,
     local_annotations: Vec<LocalAnnotation>,
@@ -333,7 +334,19 @@ struct TuaSyntax {
 }
 
 fn collect_tua_syntax(path: &Path, source: &str, ast: &ast::Ast) -> TuaSyntax {
-    let mut syntax = TuaSyntax::default();
+    collect_tua_syntax_at_depth(path, source, ast, 0)
+}
+
+fn collect_tua_syntax_at_depth(
+    path: &Path,
+    source: &str,
+    ast: &ast::Ast,
+    default_analysis_depth: usize,
+) -> TuaSyntax {
+    let mut syntax = TuaSyntax {
+        default_analysis_depth,
+        ..TuaSyntax::default()
+    };
 
     collect_block_tua_syntax(path, source, ast.nodes(), &mut syntax);
     struct AnonymousSyntax<'a> {
@@ -1327,13 +1340,18 @@ fn collect_parameter_default_references(
         };
 
         syntax.parameter_default_references.extend(
-            parameter_default_references(source, &default.expression, expression_start)
-                .into_iter()
-                .map(|(name, position)| model::ParameterDefaultReference {
-                    function_span,
-                    name,
-                    position,
-                }),
+            parameter_default_references(
+                source,
+                &default.expression,
+                expression_start,
+                syntax.default_analysis_depth + 1,
+            )
+            .into_iter()
+            .map(|(name, position)| model::ParameterDefaultReference {
+                function_span,
+                name,
+                position,
+            }),
         );
     }
 }
@@ -1342,7 +1360,13 @@ fn parameter_default_references(
     source: &str,
     expression: &str,
     expression_start: usize,
+    depth: usize,
 ) -> Vec<(String, SourcePosition)> {
+    // Nested defaults are strictly smaller expressions, with the same bounded
+    // depth as default lowering. Reuse their parsed facts rather than scanning text.
+    if depth > 64 {
+        return Vec::new();
+    }
     const RETURN_PREFIX: &str = "return ";
 
     let wrapper = format!("{RETURN_PREFIX}{expression}");
@@ -1358,7 +1382,14 @@ fn parameter_default_references(
     ) else {
         return Vec::new();
     };
-    let parsed = ParsedSource::from_raw_and_typed(raw, TypedSourceModel::default());
+    let syntax = collect_tua_syntax_at_depth(&raw.path, &raw.source, &raw.ast, depth);
+    let parsed = ParsedSource::from_raw_and_typed(
+        raw,
+        TypedSourceModel {
+            parameter_default_references: syntax.parameter_default_references,
+            ..TypedSourceModel::default()
+        },
+    );
     let scope_map = crate::scope::scope_map_parsed_source(&parsed);
     let mut seen = BTreeSet::new();
     let mut references = Vec::new();

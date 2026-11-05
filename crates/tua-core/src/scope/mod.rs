@@ -542,6 +542,20 @@ impl<'a> ScopeBuilder<'a> {
             }
         }
 
+        let defaults = self
+            .parsed
+            .parameter_default_references
+            .iter()
+            .filter(|reference| reference.function_span == span)
+            .map(|reference| (reference.name.clone(), reference.position))
+            .collect::<Vec<_>>();
+        for (name, start) in defaults {
+            let end = SourcePosition {
+                column: start.column + name.chars().count(),
+                ..start
+            };
+            self.read_reference(name, SourceSpan { start, end });
+        }
         self.analyze_block_contents_without_new_scope(body.block(), parent);
         self.exit_scope();
     }
@@ -740,6 +754,10 @@ impl<'a> ScopeBuilder<'a> {
         let Some(span) = node_span(token) else {
             return;
         };
+        self.read_reference(name, span);
+    }
+
+    fn read_reference(&mut self, name: String, span: SourceSpan) {
         let resolution = self
             .resolve_local(&name)
             .map(ScopeResolution::Symbol)

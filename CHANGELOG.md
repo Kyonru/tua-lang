@@ -8,6 +8,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Changed
 
+- Nested callback defaults retain lexical reads of outer locals. Unused-local
+  diagnostics, definition navigation and rename share those parsed references;
+  inner parameter shadows do not count as reads of outer names.
+
 - `TL4077` warns when a class field default follows a direct source-written
   assignment in `init`, making existing initialization order visible without
   changing runtime behavior. The warning respects lexical receiver identity.

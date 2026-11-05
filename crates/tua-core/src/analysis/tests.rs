@@ -8010,3 +8010,25 @@ fn bundled_hump_timer_declarations_support_typed_migration() {
         .unwrap();
     assert!(hover.contents.contains("number"), "{hover:?}");
 }
+
+#[test]
+fn nested_default_reads_share_lexical_navigation_and_rename() {
+    let fixture = Fixture::parse("-- file: defaults.tua\nlocal <|declaration|>seed = 4\nlocal f = function(callback = function(value: number = <|use|>seed) return value end) return callback() end\nprint(f())\n");
+    let source = &fixture.files()[0].source;
+    let mut host = AnalysisHost::new();
+    host.set_file("defaults.tua", source.clone());
+    let snapshot = host.snapshot();
+    let definition = snapshot
+        .definition("defaults.tua", fixture.position("use"))
+        .unwrap();
+    assert_eq!(definition.span.start, fixture.position("declaration"));
+    let rename = snapshot
+        .rename("defaults.tua", fixture.position("declaration"), "base")
+        .unwrap();
+    assert_eq!(rename.edits.len(), 2, "{rename:?}");
+    for edit in rename.edits {
+        let start = crate::source_text::byte_for_position(source, edit.span.start).unwrap();
+        let end = crate::source_text::byte_for_position(source, edit.span.end).unwrap();
+        assert_eq!(&source[start..end], "seed");
+    }
+}

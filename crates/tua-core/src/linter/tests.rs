@@ -5175,3 +5175,23 @@ fn nested_callback_annotations_keep_type_imports_live() {
     assert_eq!(unused.len(), 1, "{diagnostics:?}");
     assert!(unused[0].message.contains("Unused"), "{unused:?}");
 }
+
+#[test]
+fn nested_callback_defaults_count_lexically_resolved_outer_reads() {
+    let source = "local seed = 4\nlocal f = function(callback = function(value: number = seed) return value end) return callback() end\nprint(f())\n";
+    let diagnostics = check_standard_rules_source(source);
+    assert!(
+        !diagnostics.iter().any(|diagnostic| diagnostic.code
+            == Some(DiagnosticCode::LINT_UNUSED_LOCAL)
+            && diagnostic.message.contains("seed")),
+        "{diagnostics:?}"
+    );
+    let source = "local seed = 4\nlocal f = function(callback = function(seed: number, value: number = seed) return value end) return callback(2) end\nprint(f())\n";
+    let diagnostics = check_standard_rules_source(source);
+    assert!(
+        diagnostics.iter().any(|diagnostic| diagnostic.code
+            == Some(DiagnosticCode::LINT_UNUSED_LOCAL)
+            && diagnostic.message.contains("seed")),
+        "nested parameter must not read outer seed: {diagnostics:?}"
+    );
+}
