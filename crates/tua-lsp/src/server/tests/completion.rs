@@ -1770,3 +1770,14 @@ fn port_audit_class_parameter_completion_survives_unsaved_partial_access() {
     ]);
     assert_completion_labels(&output, 2, ["dead"]);
 }
+
+#[test]
+fn completion_recovers_indexed_record_receivers_in_unsaved_buffers() {
+    let uri = "file:///tmp/indexed-record-completion.tua";
+    let source = "local items: { speed: number }[] = {}\nprint(items[1].)\n";
+    let output = run_messages(vec![
+        did_open(uri, source),
+        completion_request(2, uri, source, "items[1]."),
+    ]);
+    assert_completion_labels(&output, 2, ["speed"]);
+}

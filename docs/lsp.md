@@ -100,6 +100,11 @@ Parse-independent Lua, LOVE, keyword, snippet, and module-path candidates stay
 available even when no valid semantic snapshot exists yet. Ordinary type
 errors do not reduce completion availability.
 
+Member completion follows typed indexed receivers such as `items[index].` and
+`State.allBullets[b].`, including incomplete edits and unsaved imported types.
+Nested indexes retain their element types; dynamic `any` receivers do not
+invent members.
+
 Chained expressions can infer their final return values, but editor assistance
 after a call expression such as `makeLabel():draw(...)` is still incomplete.
 For dependable member completion and signature help, assign the receiver to a

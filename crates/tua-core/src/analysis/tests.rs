@@ -7325,3 +7325,87 @@ fn completion_defers_checker_and_diagnostics_cache_follows_file_identity() {
         );
     }
 }
+
+#[test]
+fn indexed_receiver_completion_uses_project_types_and_unsaved_edits() {
+    let temp = TempProject::new("indexed-receiver");
+    temp.write("tua.toml", "source = 'src'\n");
+    temp.write(
+        "src/items.tua",
+        "export type Item = { speed: number }\nreturn {}\n",
+    );
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+import type { Item } from "items"
+local items: Item[] = {}
+local index = 1
+print(items[index].<|complete|>speed)
+"#,
+    );
+    let file = &fixture.files()[0];
+    let path = temp.path.join("src/main.tua");
+    temp.write("src/main.tua", &file.source);
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([temp.path.join("src")]);
+    host.set_file(&path, file.source.clone());
+    host.set_file(
+        temp.path.join("src/items.tua"),
+        "export type Item = { speed: number }\nreturn {}\n",
+    );
+    let snapshot = host.snapshot();
+    assert!(
+        completion_labels(&snapshot.completion(&path, fixture.position("complete")))
+            .contains(&"speed".into())
+    );
+    let hover = snapshot
+        .hover(&path, fixture.position("complete"))
+        .expect("indexed member hover");
+    assert!(hover.contents.contains("number"), "{hover:?}");
+    let partial = file.source.replace(".speed)", ".)");
+    host.open_document(&path, partial);
+    assert!(completion_labels(
+        &host
+            .snapshot()
+            .completion(&path, fixture.position("complete"))
+    )
+    .contains(&"speed".into()));
+    host.open_document(
+        temp.path.join("src/items.tua"),
+        "export type Item = { health: number }\nreturn {}\n",
+    );
+    let labels = completion_labels(
+        &host
+            .snapshot()
+            .completion(&path, fixture.position("complete")),
+    );
+    assert!(labels.contains(&"health".into()), "{labels:?}");
+    assert!(!labels.contains(&"speed".into()), "{labels:?}");
+}
+
+#[test]
+fn indexed_receiver_completion_handles_nested_indexes_and_dynamic_values() {
+    for (source, expected) in [
+        (
+            "local items: { speed: number }[] = {}\nprint(items[1].<|complete|>)",
+            Some("speed"),
+        ),
+        (
+            "local items: { speed: number }[][] = {}\nprint(items[1][1].<|complete|>)",
+            Some("speed"),
+        ),
+        ("local items: any = {}\nprint(items[1].<|complete|>)", None),
+    ] {
+        let fixture = Fixture::parse(&format!("-- file: test.tua\n{source}"));
+        let mut host = AnalysisHost::new();
+        host.set_file("test.tua", fixture.files()[0].source.clone());
+        let labels = completion_labels(
+            &host
+                .snapshot()
+                .completion("test.tua", fixture.position("complete")),
+        );
+        match expected {
+            Some(label) => assert!(labels.contains(&label.to_owned()), "{labels:?}"),
+            None => assert!(labels.is_empty(), "{labels:?}"),
+        }
+    }
+}

@@ -1856,6 +1856,12 @@ fn complete_fields(
     let semantic = SemanticModel::new(parsed, environment);
     let Some(receiver_type) = love_conf_receiver_type(parsed, source, receiver_parts, position)
         .or_else(|| semantic.type_of_field_chain(receiver_parts, position))
+        .or_else(|| {
+            receiver_parts
+                .is_empty()
+                .then(|| semantic.type_of_receiver_before(source, separator_span.start, position))
+                .flatten()
+        })
     else {
         return Vec::new();
     };

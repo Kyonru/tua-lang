@@ -326,3 +326,113 @@ mod tests {
         );
     }
 }
+
+/// Find a member/call receiver without treating punctuation in literals or
+/// comments as syntax. Limit look-behind and nesting for incomplete editor input.
+pub(crate) fn receiver_before(source: &str, end: usize) -> Option<&str> {
+    use full_moon::tokenizer::Symbol;
+    let prefix = source.get(..end)?.trim_end();
+    let start = prefix.len().saturating_sub(8192);
+    let start = if start == 0 {
+        0
+    } else {
+        start + prefix.get(start..)?.find('\n')? + 1
+    };
+    let window = &prefix[start..];
+    let tokens = match Lexer::new(window, LuaVersion::luau()).collect() {
+        LexerResult::Ok(tokens) | LexerResult::Recovered(tokens, _) => tokens,
+        LexerResult::Fatal(_) => return None,
+    };
+    let tokens = tokens
+        .iter()
+        .filter(|token| {
+            !matches!(
+                token.token_type(),
+                TokenType::Whitespace { .. }
+                    | TokenType::SingleLineComment { .. }
+                    | TokenType::MultiLineComment { .. }
+                    | TokenType::Eof
+            )
+        })
+        .collect::<Vec<_>>();
+    if tokens.last()?.end_position().bytes() != window.len() {
+        return None;
+    }
+    let mut stack = Vec::new();
+    let mut receiver_start = window.len();
+    let mut needs_connector = false;
+    for token in tokens.into_iter().rev() {
+        if needs_connector
+            && !matches!(
+                token.token_type(),
+                TokenType::Symbol {
+                    symbol: Symbol::Dot | Symbol::Colon
+                }
+            )
+        {
+            break;
+        }
+        match token.token_type() {
+            TokenType::Symbol {
+                symbol: Symbol::RightParen,
+            } => stack.push(Symbol::LeftParen),
+            TokenType::Symbol {
+                symbol: Symbol::RightBracket,
+            } => stack.push(Symbol::LeftBracket),
+            TokenType::Symbol {
+                symbol: Symbol::RightBrace,
+            } => stack.push(Symbol::LeftBrace),
+            TokenType::Symbol {
+                symbol: Symbol::LeftParen | Symbol::LeftBracket | Symbol::LeftBrace,
+            } => {
+                let TokenType::Symbol { symbol } = token.token_type() else {
+                    unreachable!()
+                };
+                if stack.last() != Some(symbol) {
+                    break;
+                }
+                stack.pop();
+            }
+            _ if !stack.is_empty() => {}
+            TokenType::Identifier { .. } => {}
+            TokenType::Symbol {
+                symbol: Symbol::Dot | Symbol::Colon,
+            } => {}
+            _ => break,
+        }
+        if stack.len() > 32 {
+            return None;
+        }
+        needs_connector =
+            stack.is_empty() && matches!(token.token_type(), TokenType::Identifier { .. });
+        receiver_start = token.start_position().bytes();
+    }
+    if !stack.is_empty() || receiver_start == window.len() {
+        return None;
+    }
+    Some(&prefix[start + receiver_start..])
+}
+
+#[cfg(test)]
+mod receiver_tests {
+    use super::*;
+
+    #[test]
+    fn receiver_extraction_respects_nested_syntax_literals_and_comments() {
+        for (source, expected) in [
+            ("print(items[lookup(1)])", "print(items[lookup(1)])"),
+            ("return items[lookup(1)]", "items[lookup(1)]"),
+            ("print(1)\nitems[1]", "items[1]"),
+            ("print(items[1]", "items[1]"),
+            ("return factory(') ]').child", "factory(') ]').child"),
+            ("return items[\"a.b\"]", "items[\"a.b\"]"),
+        ] {
+            assert_eq!(receiver_before(source, source.len()), Some(expected));
+        }
+        for source in ["-- items[1]", "local s = 'items[1]", "items[broken("] {
+            assert_eq!(receiver_before(source, source.len()), None, "{source}");
+        }
+        let deep = format!("{}x{}", "(".repeat(40), ")".repeat(40));
+        assert_eq!(receiver_before(&deep, deep.len()), None);
+    }
+}

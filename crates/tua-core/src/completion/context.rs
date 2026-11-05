@@ -245,11 +245,18 @@ fn field_access_context(
         _ => return None,
     };
     let separator_column = line[..receiver_end].chars().count() + 1;
-    let receiver_start = reverse_field_chain_start(line, receiver_end)?;
-    let receiver = &line[receiver_start..receiver_end];
-    let receiver_parts = receiver.split('.').map(str::to_owned).collect::<Vec<_>>();
-
-    if receiver_parts.is_empty() || !receiver_parts.iter().all(|part| is_identifier(part)) {
+    // Empty parts mark an expression receiver; its original location is retained
+    // by separator_span for the shared semantic expression resolver.
+    let receiver_parts = reverse_field_chain_start(line, receiver_end)
+        .map(|start| {
+            line[start..receiver_end]
+                .split('.')
+                .map(str::to_owned)
+                .collect::<Vec<_>>()
+        })
+        .filter(|parts| parts.iter().all(|part| is_identifier(part)))
+        .unwrap_or_default();
+    if receiver_parts.is_empty() && !line[..receiver_end].contains([']', ')']) {
         return None;
     }
 

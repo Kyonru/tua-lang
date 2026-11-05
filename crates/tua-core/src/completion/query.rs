@@ -63,7 +63,12 @@ impl<'a> CompletionQuery<'a> {
                     };
                     let fields = self.complete_fields(field_context);
 
-                    if !fields.is_empty() || self.environment.local(&receiver_parts[0]).is_some() {
+                    if !fields.is_empty()
+                        || receiver_parts.is_empty()
+                        || receiver_parts
+                            .first()
+                            .is_some_and(|root| self.environment.local(root).is_some())
+                    {
                         fields
                     } else {
                         complete_lua_fields(self.source, &receiver_parts, prefix.as_str(), position)

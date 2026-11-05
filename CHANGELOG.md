@@ -50,6 +50,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Indexed record receivers now offer members during incomplete edits and retain
+  fresh imported element types after unsaved changes in another module.
+
 - Alias-identity checks reuse the shared built-in catalog instead of rebuilding
   every domain type for each lookup during module and class inference.
 

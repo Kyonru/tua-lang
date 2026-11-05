@@ -257,6 +257,23 @@ impl<'a> SemanticModel<'a> {
         self.type_of_expression_return_at_depth(expression, position, return_index, 0)
     }
 
+    /// Resolve a bounded expression fragment against this snapshot's environment,
+    /// keeping the original query position for lexical and class scopes.
+    pub(crate) fn type_of_receiver_before(
+        &self,
+        source: &str,
+        end: SourcePosition,
+        position: SourcePosition,
+    ) -> Option<Type> {
+        let end = crate::source_text::byte_for_position(source, end)?;
+        let receiver = crate::source_text::receiver_before(source, end)?;
+        let ast = full_moon::parse(&format!("local __receiver = {receiver}")).ok()?;
+        let ast::Stmt::LocalAssignment(local) = ast.nodes().stmts().next()? else {
+            return None;
+        };
+        self.type_of_expression_return(local.expressions().iter().next()?, position, 0)
+    }
+
     pub(crate) fn type_of_expression_at_position(
         &self,
         position: SourcePosition,

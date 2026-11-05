@@ -77,9 +77,6 @@ results. Evidence: [development trials](internal/devex-trials-2026-11.md).
 
 ### Finish Semantic Editor Consistency
 
-- **Indexed expression receivers:** resolve record-array entries such as
-  `State.allBullets[b].` and `value_to_emoji_data[a.value].`, including incomplete
-  edits without unbounded analysis.
 - **Side-effect module globals:** define a sound navigation model for functions
   introduced by `require` without an explicit returned module contract.
 - **Fluent expression receivers:** support completion, hover, signatures, and
