@@ -336,6 +336,11 @@ declaration identity.
 Renaming a source or asset file can update unambiguous static `require(...)`,
 `import(...)`, and LOVE asset paths through LSP file-operation edits.
 
+Class-method parameters and loop bindings use the same member completion, hover,
+and signature resolution as ordinary functions, including imported record and
+class types. Completion also follows unsaved partial member accesses. Parameter
+rename in native class headers remains a separate navigation limitation.
+
 ### Inlay Hints And Highlighting
 
 The server supplies inferred type hints and parameter-name hints. Use

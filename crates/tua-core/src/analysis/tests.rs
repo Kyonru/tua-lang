@@ -6797,3 +6797,107 @@ return {{ Label = Label }}
         );
     }
 }
+
+#[test]
+fn port_audit_class_parameter_members_use_source_coordinates() {
+    for parameter_type in ["LocalItem", "ImportedItem"] {
+        let fixture = Fixture::parse(&format!(
+            r#"-- file: src/main.tua
+import type {{ ImportedItem }} from "./item"
+final class LocalItem {{
+  dead: boolean = false
+  velocity(scale: number): number {{ return scale }}
+}}
+final class Inspector {{
+  inspect(item: {parameter_type}): number {{
+    local n = item:<|completion|>velocity(<|signature|>1)
+    if item.<|hover|>dead then return 0 end
+    return n
+  }}
+}}
+return Inspector
+-- file: src/item.tua
+final class Item {{
+  dead: boolean = false
+  velocity(scale: number): number {{ return scale }}
+}}
+export type ImportedItem = Item
+return {{ Item = Item }}
+"#
+        ));
+        let mut host = AnalysisHost::new();
+        host.set_source_roots([PathBuf::from("src")]);
+        for file in fixture.files() {
+            host.set_file(&file.path, file.source.clone());
+        }
+        let snapshot = host.snapshot();
+        assert!(
+            snapshot
+                .completion("src/main.tua", fixture.position("completion"))
+                .iter()
+                .any(|item| item.label == "velocity"),
+            "{parameter_type}"
+        );
+        assert!(snapshot
+            .hover("src/main.tua", fixture.position("hover"))
+            .unwrap()
+            .contents
+            .contains("boolean"));
+        assert!(snapshot
+            .signature_help("src/main.tua", fixture.position("signature"))
+            .unwrap()
+            .signatures[0]
+            .label
+            .contains("scale: number"));
+    }
+}
+
+#[test]
+fn port_audit_class_loop_members_use_source_coordinates() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+local Layout = require("layout")
+final class Viewer {
+  draw() {
+    local layers = Layout.layers()
+    for _, layer in ipairs(layers) do
+      print(layer.<|hover|>rotation)
+      print(layer.<|completion|>rotation)
+    end
+    for index = 1, 3 do
+      print(<|index|>index)
+    end
+  }
+}
+return Viewer
+-- file: src/layout.tua
+export type Layer = { rotation: number, y: number }
+local function layers(): Layer[]
+  return { { rotation = 1, y = 2 } }
+end
+return { layers = layers }
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+    let snapshot = host.snapshot();
+    assert!(snapshot
+        .hover("src/main.tua", fixture.position("hover"))
+        .unwrap()
+        .contents
+        .contains("number"));
+    assert!(snapshot
+        .completion("src/main.tua", fixture.position("completion"))
+        .iter()
+        .any(|item| item.label == "y"));
+    assert_eq!(
+        snapshot
+            .hover("src/main.tua", fixture.position("index"))
+            .unwrap()
+            .contents,
+        "local index: number"
+    );
+}

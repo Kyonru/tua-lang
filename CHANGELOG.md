@@ -29,6 +29,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Class-method parameter and loop receivers retain their types for member
+  completion, hover, and signatures across normalized source coordinates.
+
 - Invalid Lua-style class methods now explain the required brace syntax at the
   offending member, while nested Lua functions keep their usual `end` syntax.
 

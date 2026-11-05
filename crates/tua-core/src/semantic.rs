@@ -898,7 +898,7 @@ impl<'a> SemanticModel<'a> {
                 Some(ty)
             })
             .or_else(|| self.loop_variable_type_at_position(name, position, depth + 1))
-            .or_else(|| self.parameter_type_at_position(name, position))?;
+            .or_else(|| self.parameter_type_at_source_position(name, position))?;
 
         Some(self.apply_table_mutations_to_name(name, ty, position, depth + 1))
     }
@@ -1815,6 +1815,13 @@ impl<'a> SemanticModel<'a> {
         position: SourcePosition,
         depth: usize,
     ) -> Option<Type> {
+        // AST scopes use normalized parser coordinates, while semantic expression
+        // queries below use source coordinates.
+        let position = self
+            .parsed
+            .raw
+            .parser_position_for_source(position)
+            .unwrap_or(position);
         let mut candidates = Vec::new();
 
         self.collect_loop_variable_types_in_block(
@@ -1964,6 +1971,12 @@ impl<'a> SemanticModel<'a> {
         let Some((iterator, value_expression)) = iterator_call(function_call) else {
             return vec![Type::Any; for_stmt.names().into_iter().count()];
         };
+        let position = self
+            .parsed
+            .raw
+            .parser_position_origin(position)
+            .map(|origin| origin.source_position)
+            .unwrap_or(position);
         let value_type = self
             .type_of_expression_return_at_depth(value_expression, position, 0, depth + 1)
             .unwrap_or(Type::Any);

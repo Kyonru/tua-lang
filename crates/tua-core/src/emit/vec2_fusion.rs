@@ -92,6 +92,7 @@ pub(super) fn fuse_vec2_arithmetic(
         })
         .collect();
     let mut planner = Planner {
+        parsed,
         semantic: SemanticModel::new(parsed, environment),
         environment,
         vec2: vector::vec2_type(),
@@ -328,6 +329,7 @@ fn negate(operand: Fragment) -> Fragment {
 }
 
 struct Planner<'a> {
+    parsed: &'a ParsedSource,
     semantic: SemanticModel<'a>,
     environment: &'a TypeEnvironment,
     vec2: Type,
@@ -614,11 +616,16 @@ impl Planner<'_> {
 
     fn resolved_type(&self, expression: &Expression) -> Option<Type> {
         let (start, _) = expression.range()?;
-        let ty = self.semantic.type_of_expression_return(
-            expression,
-            SourcePosition::from_full_moon(start),
-            0,
-        )?;
+        let parser_position = SourcePosition::from_full_moon(start);
+        let source_position = self
+            .parsed
+            .raw
+            .parser_position_origin(parser_position)
+            .map(|origin| origin.source_position)
+            .unwrap_or(parser_position);
+        let ty = self
+            .semantic
+            .type_of_expression_return(expression, source_position, 0)?;
 
         Some(self.environment.resolve_aliases(&ty))
     }

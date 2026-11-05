@@ -1757,3 +1757,16 @@ end)
     ]);
     assert_completion_labels(&output, 3, ["amount"]);
 }
+
+#[test]
+fn port_audit_class_parameter_completion_survives_unsaved_partial_access() {
+    let uri = "file:///tmp/port-audit-class-parameter.tua";
+    let source = "final class Item {\n  dead: boolean = false\n}\nfinal class Inspector {\n  inspect(item: Item) {\n    print(item.dead)\n  }\n}\n";
+    let edited = source.replace("item.dead", "item.");
+    let output = run_messages(vec![
+        did_open(uri, source),
+        did_change(uri, &edited, 2),
+        completion_request(2, uri, &edited, "item."),
+    ]);
+    assert_completion_labels(&output, 2, ["dead"]);
+}
