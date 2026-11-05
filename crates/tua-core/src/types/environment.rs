@@ -106,10 +106,13 @@ impl TypeEnvironment {
 
     /// Resolves aliases throughout a type while keeping recursive LuaCATS
     /// declarations finite. A repeated alias on the current expansion path is
-    /// the recursive back-edge, so only that edge becomes `any`; the outer
-    /// table, union, and function structure remains available to semantic and
-    /// editor features.
+    /// the recursive back-edge: native classes retain a nominal reference,
+    /// while structural LuaCATS back-edges become `any`. Outer structure remains
+    /// available to semantic and editor features.
     pub(crate) fn resolve_aliases(&self, ty: &Type) -> Type {
+        if let Some(resolved) = resolve_nominal_reference(&self.aliases, ty) {
+            return resolved;
+        }
         if !type_contains_alias_cycle(self, ty, 0, &mut BTreeSet::new()) {
             return resolve_shallow_alias_chain(self, ty, 0, &mut BTreeSet::new());
         }
@@ -488,7 +491,11 @@ impl AliasResolutionContext {
                 };
                 if !self.visiting.insert(name.clone()) {
                     self.depth -= 1;
-                    return Type::Any;
+                    return match alias {
+                        Type::Table(table) => table.nominal_reference().map(Type::Table),
+                        _ => None,
+                    }
+                    .unwrap_or(Type::Any);
                 }
 
                 let resolved = self.resolve(environment, alias);
@@ -4396,6 +4403,26 @@ fn resolve_metatable_facts_from_map(
     }
 }
 
+/// Hydrate a recursive class back-edge only when it becomes the current receiver.
+/// Do not expand its fields recursively: they carry their own finite references.
+fn resolve_nominal_reference(aliases: &BTreeMap<String, Type>, ty: &Type) -> Option<Type> {
+    let Type::Table(reference) = ty else {
+        return None;
+    };
+    if reference.fields().next().is_some() {
+        return None;
+    }
+    let identity = reference.nominal_identity()?;
+    aliases.values().find_map(|candidate| match candidate {
+        Type::Table(table)
+            if table.nominal_identity() == Some(identity) && table.fields().next().is_some() =>
+        {
+            Some(candidate.clone())
+        }
+        _ => None,
+    })
+}
+
 fn resolve_aliases_from_map(aliases: &BTreeMap<String, Type>, ty: &Type, depth: usize) -> Type {
     fn resolve_chain(
         aliases: &BTreeMap<String, Type>,
@@ -4407,7 +4434,7 @@ fn resolve_aliases_from_map(aliases: &BTreeMap<String, Type>, ty: &Type, depth: 
             return ty.clone();
         }
         let Type::Alias(name) = ty else {
-            return ty.clone();
+            return resolve_nominal_reference(aliases, ty).unwrap_or_else(|| ty.clone());
         };
         let Some(alias) = aliases.get(name) else {
             return ty.clone();

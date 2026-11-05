@@ -7524,3 +7524,41 @@ fn chained_imported_factory_completion_tracks_unsaved_return_types() {
             .contains(&"speed".into())
     );
 }
+
+#[test]
+fn recursive_imported_self_preserves_members_at_arbitrary_access_depth() {
+    let temp = TempProject::new("recursive-imported-self");
+    temp.write("tua.toml", "source = 'src'\n");
+    let producer = "final class Unit {\n speed: number = 1\n followers: Self[] = {}\n same(): Self { return self }\n}\nexport type UnitInstance = Unit\nreturn { Unit = Unit }\n";
+    temp.write("src/unit.tua", producer);
+    for import in [
+        "import type { UnitInstance } from 'unit'",
+        "import type Types from 'unit'\ntype UnitInstance = Types.UnitInstance",
+    ] {
+        let fixture = Fixture::parse(&format!("-- file: src/main.tua\n{import}\nlocal function inspect(unit: UnitInstance)\n print(unit.followers[1].followers[1].<|complete|>speed)\n print(unit:same():same().<|hover|>speed)\nend\n"));
+        let path = temp.path.join("src/main.tua");
+        temp.write("src/main.tua", &fixture.files()[0].source);
+        let mut host = AnalysisHost::new();
+        host.set_source_roots([temp.path.join("src")]);
+        host.set_file(&path, fixture.files()[0].source.clone());
+        host.set_file(temp.path.join("src/unit.tua"), producer);
+        let snapshot = host.snapshot();
+        let labels = completion_labels(&snapshot.completion(&path, fixture.position("complete")));
+        assert!(labels.contains(&"speed".into()), "{labels:?}");
+        let hover = snapshot.hover(&path, fixture.position("hover")).unwrap();
+        assert!(hover.contents.contains("number"), "{hover:?}");
+        host.set_file(
+            temp.path.join("src/unit.tua"),
+            producer.replace("speed", "health"),
+        );
+        let labels = completion_labels(
+            &host
+                .snapshot()
+                .completion(&path, fixture.position("complete")),
+        );
+        assert!(
+            labels.contains(&"health".into()) && !labels.contains(&"speed".into()),
+            "{labels:?}"
+        );
+    }
+}

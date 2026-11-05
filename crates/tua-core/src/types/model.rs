@@ -428,6 +428,14 @@ impl TableShape {
         self.nominal_supertypes = supertypes.into_iter().collect();
     }
 
+    /// A finite back-edge for recursive native class types.
+    pub(crate) fn nominal_reference(&self) -> Option<Self> {
+        self.nominal_identity()?;
+        let mut reference = Self::new();
+        reference.copy_semantic_metadata_from(self);
+        Some(reference)
+    }
+
     pub(crate) fn nominal_identity(&self) -> Option<&str> {
         self.nominal_identity.as_deref()
     }

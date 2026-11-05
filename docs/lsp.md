@@ -108,8 +108,9 @@ invent members.
 Member completion, hover, and signature help follow typed call results such as
 `makeLabel():draw(...)` and LOVE constructor chains, including incomplete calls.
 A void method such as `Text:set(...)` ends the chain: it does not return a Text
-receiver. Navigation through call expressions and imported class methods
-returning recursive `Self` still have unresolved limitations.
+receiver. Imported instance aliases preserve recursive `Self` identity through
+fields, arrays and fluent returns. Navigation through call expressions and some
+source-class parameter/captured-local contexts still have unresolved limitations.
 
 Exact-code inline suppressions use the same syntax as `tua check` and are
 enabled by default:

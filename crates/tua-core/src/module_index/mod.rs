@@ -1351,12 +1351,7 @@ fn nominal_alias_stub(environment: &TypeEnvironment, name: &str) -> Option<Type>
     let Type::Table(table) = environment.alias(name)? else {
         return None;
     };
-    table.nominal_identity()?;
-
-    let mut stub = crate::TableShape::new();
-    stub.copy_semantic_metadata_from(table);
-
-    Some(Type::Table(stub))
+    table.nominal_reference().map(Type::Table)
 }
 
 fn lua_doc_code_field_annotations(

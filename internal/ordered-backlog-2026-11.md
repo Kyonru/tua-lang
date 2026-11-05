@@ -17,7 +17,11 @@ reproductions and relevant checks pass.
   Core/LSP suites pass (1,602 core, one ignored; 375 LSP); the feature smoke
   passes. Evidence: `chained-core-lsp.log`, `chained-smoke.log`.
   Call-result navigation remains in the navigation phase.
-- Pending: recursive imported `Self`.
+- Completed: recursive imported instance aliases retain nominal `Self` references.
+  Selected/namespace imports, repeated arrays/fluent returns, and unsaved producer
+  edits have regression coverage. SNKRX follower completion/hover is restored
+  (`self-snkrx.json`); source-class parameter/parent contexts still fail and stay
+  in the class-context phase. Recursive LuaCATS controls remain unchanged.
 - Pending: callback/event call results across modules.
 - Pending: captured narrowed locals and full-method nested receivers.
 

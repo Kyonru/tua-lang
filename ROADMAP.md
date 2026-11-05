@@ -82,14 +82,13 @@ results. Evidence: [development trials](internal/devex-trials-2026-11.md).
 - **Fluent expression navigation:** extend definition/reference provenance through
   call results. Completion, hover and signatures now use shared receiver types,
   including incomplete edits and void-call boundaries.
-- **Imported `Self`:** retain nominal identity through imported instance aliases
-  and recursive project-type expansion so fluent method results do not become
-  `any`. Preserve recursive LuaCATS safeguards.
 - **Cross-file event call results:** propagate the inferred boolean from
   `local dead = target:damage(amount)` into handlers in other modules. Bound
   dependency traversal and cycles; test unsaved producer edits.
 - **Remaining class contexts:** restore captured narrowed-local completion in
   delayed callbacks and isolate full-method nested imported-field resolution.
+  Recheck source-class `Self` parameters and guarded parents separately from
+  the now-preserved recursive imported instance aliases.
   The porting audit retains failing cases alongside working minimal controls.
 - **Native class parameter navigation:** preserve header identities and source
   provenance for definition, references, and rename, including shadowing and

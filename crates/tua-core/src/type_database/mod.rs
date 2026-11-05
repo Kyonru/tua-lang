@@ -321,8 +321,13 @@ impl ProjectTypeDatabase {
                     // expand the cycle indefinitely: replacing the back-edge
                     // with `any` preserves the outer table shape and allows
                     // shallow completion while keeping all resolution callers
-                    // stack-safe.
-                    return Type::Any;
+                    // stack-safe. Native classes instead retain a finite nominal
+                    // reference, which the receiver resolver can hydrate later.
+                    return match &binding.ty {
+                        Type::Table(table) => table.nominal_reference().map(Type::Table),
+                        _ => None,
+                    }
+                    .unwrap_or(Type::Any);
                 }
 
                 resolving.push(key);

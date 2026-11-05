@@ -8,6 +8,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Changed
 
+- Imported native instance aliases retain recursive `Self` identity through
+  arrays and fluent returns, preserving completion and hover without unbounded
+  type expansion. Recursive LuaCATS safeguards remain in place.
+
 - Completion, hover and signature help follow typed factory and indexed call
   receivers, including incomplete LOVE constructor chains. Void calls do not
   invent a receiver, and unsaved imported return types stay current.
