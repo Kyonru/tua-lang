@@ -74,30 +74,6 @@ impl AssetLoaderKind {
         }
     }
 
-    pub(crate) fn emitted_call(self, arguments: &[String]) -> Option<String> {
-        if arguments.len() < self.required_argument_count() {
-            return None;
-        }
-
-        match self {
-            Self::Sound => Some(format!(
-                "{}({}, \"static\")",
-                self.emitted_callee(),
-                arguments.first()?
-            )),
-            Self::Music => Some(format!(
-                "{}({}, \"stream\")",
-                self.emitted_callee(),
-                arguments.first()?
-            )),
-            _ => Some(format!(
-                "{}({})",
-                self.emitted_callee(),
-                arguments.join(", ")
-            )),
-        }
-    }
-
     pub(crate) fn return_type(self) -> Type {
         match self {
             Self::Image => Type::alias("Image"),

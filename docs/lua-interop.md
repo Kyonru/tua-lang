@@ -105,6 +105,11 @@ string literal. A computed call such as `require(runtimeName)` remains dynamic
 and must provide its dependency separately. A project-owned runtime file with
 the same module name takes precedence and is never overwritten.
 
+Local bindings and parameters can use helper names such as `image`, `input`,
+or `vec2`. Calls through those bindings retain ordinary Lua behavior; Tua only
+lowers calls that resolve to its built-in helpers. This also applies to helper
+calls inside default parameter expressions.
+
 Compiler transformations remain Tua-only. Asset helpers, `spriteSheet`,
 generated game-math helpers, native type syntax, and vector-expression fusion
 cannot change a `.lua` file because builds preserve that file byte for byte.

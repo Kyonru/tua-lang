@@ -12,7 +12,8 @@ language or editor behavior, and migration notes call out those changes.
   only for proven ECS operations, avoiding recursive work in ordinary Lua games.
 
 - Semantic indexing reuses its resolver and skips impossible builtin-member
-  lookups before attempting expensive receiver inference.
+  lookups before attempting expensive receiver inference. Module literals are
+  scanned once per index instead of once per identifier.
 
 - Added a runnable cross-module polymorphism example covering base-typed
   collections, virtual dispatch, and typed adapters for unrelated objects.
@@ -34,6 +35,11 @@ language or editor behavior, and migration notes call out those changes.
   stubs include the catalog descriptions and direct wiki links.
 
 ### Fixed
+
+- Asset and runtime helper calls respect local bindings and parameters instead
+  of rewriting engine wrappers or declarations with the same names. Nested
+  default expressions and callback-local shadows use the same lexical lowering;
+  helper comments and following source-map locations are preserved.
 
 - LOVE configuration accepts `t.window = nil` to defer window creation while
   retaining window field checks and completion.

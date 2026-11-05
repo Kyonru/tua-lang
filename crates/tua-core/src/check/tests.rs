@@ -5058,3 +5058,31 @@ fn love_conf_window_can_be_disabled_without_losing_field_checks() {
         .iter()
         .any(|d| d.code == Some(DiagnosticCode::TYPE_MISMATCH)));
 }
+
+#[test]
+fn locally_shadowed_asset_helpers_use_their_declared_contracts() {
+    check_tua_source(
+        "src/main.tua",
+        r#"
+local image = function(value: number): number return value + 1 end
+assert(image(2) == 3)
+local function nested(shader: (value: number) -> number): number
+  local function wrapper(): number
+    return shader(2)
+  end
+  return wrapper()
+end
+local result: number = nested(image)
+"#,
+    )
+    .expect("local and captured parameter helpers must retain their own contracts");
+
+    let diagnostics = check_tua_source(
+        "src/main.tua",
+        r#"local image = function(value: number): number return value + 1 end
+image("wrong")
+"#,
+    )
+    .expect_err("shadowed helper arguments must still be checked");
+    assert_single_mismatch(&diagnostics, "expected number, found string");
+}

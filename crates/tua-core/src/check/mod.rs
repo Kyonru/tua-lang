@@ -1981,7 +1981,7 @@ impl<'a> Checker<'a> {
             let [name] = parts.as_slice() else {
                 return None;
             };
-            if self.environment.local(name).is_some() || self.environment.function(name).is_some() {
+            if self.infer_named_value(name).is_some() {
                 return None;
             }
             domains.constructor_domain(name)
@@ -2018,6 +2018,11 @@ impl<'a> Checker<'a> {
     }
 
     fn check_asset_loader_call(&mut self, function_call: &FunctionCall) {
+        if field_chain_before_first_call(function_call)
+            .is_some_and(|parts| parts.len() == 1 && self.infer_named_value(&parts[0]).is_some())
+        {
+            return;
+        }
         if let Some(inline) = asset::inline_shader_call(function_call) {
             if inline.source.missing_entry_point() {
                 self.push_asset_diagnostic(
@@ -2382,6 +2387,14 @@ impl<'a> Checker<'a> {
         let (root, fields) = parts.split_first()?;
 
         if fields.is_empty() {
+            if let Some(local) = self
+                .scoped_locals
+                .iter()
+                .rev()
+                .find_map(|locals| locals.get(root))
+            {
+                return callable_from_type(local, self.environment);
+            }
             if let Some(local) = self.environment.local(root) {
                 return callable_from_type(local, self.environment);
             }

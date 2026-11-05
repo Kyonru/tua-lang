@@ -11,11 +11,12 @@ use crate::runtime_type;
 use crate::semantic::SemanticModel;
 use crate::types::{build_type_environment_with_diagnostics, TypeEnvironment};
 use crate::{
-    asset, audio, ecs, game_math, infer_module_exports, input, object_pool, parse_tua_source,
-    signal, state_machine, store, vector, AnnotationMode, Diagnostic, DiagnosticCode,
-    ParameterDefault, ParsedSource, ProjectWorkspace, SourcePosition, SourceSpan, TuaType, Type,
+    audio, ecs, game_math, infer_module_exports, input, object_pool, parse_tua_source, signal,
+    state_machine, store, vector, AnnotationMode, Diagnostic, DiagnosticCode, ParameterDefault,
+    ParsedSource, ProjectWorkspace, SourcePosition, SourceSpan, TuaType, Type,
 };
 
+mod builtin_calls;
 pub(crate) mod lowering;
 mod vec2_fusion;
 
@@ -184,15 +185,22 @@ pub(crate) fn emit_lua_artifact_with_mode_import_resolver_and_environment(
         .or(built_environment.as_ref())
         .expect("an environment is supplied or built locally");
     let ast = vec2_fusion::fuse_vec2_arithmetic(parsed, environment, parsed.ast.clone());
+    let (ast, mut builtin_constructor_spans) = builtin_calls::lower(ast, parsed);
     let ast = erase_ast(&parsed.path, ast, &mut diagnostics);
 
     if diagnostics.is_empty() {
         let mut document = lowering::LoweringDocument::from_erased_ast(&ast, parsed);
 
-        let operations = lower_default_parameter_operations(&document, parsed);
+        let operations =
+            lower_default_parameter_operations(&document, parsed, &mut builtin_constructor_spans)?;
         apply_lowering_operations(&mut document, operations, parsed)?;
 
-        let operations = lower_builtin_call_operations(&document, parsed, ecs_enabled);
+        let operations = lower_builtin_call_operations(
+            &document,
+            parsed,
+            ecs_enabled,
+            builtin_constructor_spans,
+        );
         apply_lowering_operations(&mut document, operations, parsed)?;
 
         let operations = lower_import_call_operations(&document, parsed, import_resolver)?;
@@ -1777,17 +1785,32 @@ fn lower_builtin_call_operations(
     document: &lowering::LoweringDocument,
     parsed: &ParsedSource,
     ecs_enabled: bool,
+    builtin_constructor_spans: BTreeMap<String, SourceSpan>,
 ) -> Vec<lowering::LoweringOperation> {
     let output = document.code();
     let mut operations = Vec::new();
     let mut index = 0;
-    let mut brinevector_span = None;
-    let mut tuasignal_span = None;
-    let mut tuaobjectpool_span = None;
-    let mut tuastatemachine_span = None;
-    let mut tuastore_span = None;
-    let mut tuaaudio_span = None;
-    let mut baton_span = None;
+    let brinevector_span = builtin_constructor_spans
+        .get(vector::CONSTRUCTOR_NAME)
+        .copied();
+    let tuasignal_span = builtin_constructor_spans
+        .get(signal::CONSTRUCTOR_NAME)
+        .copied();
+    let tuaobjectpool_span = builtin_constructor_spans
+        .get(object_pool::CONSTRUCTOR_NAME)
+        .copied();
+    let tuastatemachine_span = builtin_constructor_spans
+        .get(state_machine::CONSTRUCTOR_NAME)
+        .copied();
+    let tuastore_span = builtin_constructor_spans
+        .get(store::CONSTRUCTOR_NAME)
+        .copied();
+    let tuaaudio_span = builtin_constructor_spans
+        .get(audio::CONSTRUCTOR_NAME)
+        .copied();
+    let baton_span = builtin_constructor_spans
+        .get(input::CONSTRUCTOR_NAME)
+        .copied();
     let mut tuaecs_span = None;
     let game_math_helpers = game_math::used_helpers(parsed);
     let explicit_ecs_binding = explicit_binding_position(parsed, ecs::MODULE_NAME);
@@ -1796,14 +1819,6 @@ fn lower_builtin_call_operations(
         .map(|module| explicit_binding_position(parsed, module.name))
         .collect::<Vec<_>>();
     let mut builtin_module_spans = vec![None; crate::builtin_module::MODULES.len()];
-    let explicit_object_pool_binding =
-        explicit_binding_position(parsed, object_pool::CONSTRUCTOR_NAME);
-    let explicit_state_machine_binding =
-        explicit_binding_position(parsed, state_machine::CONSTRUCTOR_NAME);
-    let explicit_store_binding = explicit_binding_position(parsed, store::CONSTRUCTOR_NAME);
-    let explicit_input_binding = explicit_binding_position(parsed, input::CONSTRUCTOR_NAME);
-    let explicit_audio_binding = explicit_binding_position(parsed, audio::CONSTRUCTOR_NAME);
-
     while index < output.len() {
         let rest = &output[index..];
 
@@ -1819,192 +1834,6 @@ fn lower_builtin_call_operations(
 
         if let Some(identifier_end) = consume_identifier(rest) {
             let name = &output[index..index + identifier_end];
-
-            if can_start_asset_loader(&output, index) {
-                if let Some(kind) = asset::loader_kind(name) {
-                    let argument_start = skip_whitespace(&output, index + identifier_end);
-
-                    if let Some((replacement, end)) =
-                        lower_asset_loader_call(&output, argument_start, kind)
-                    {
-                        operations.push(document.operation(
-                            LoweringKind::BuiltinCall,
-                            index..end,
-                            replacement,
-                        ));
-                        index = end;
-                        continue;
-                    }
-                }
-            }
-
-            if can_start_builtin_call(&output, index) && vector::is_constructor(name) {
-                let argument_start = skip_whitespace(&output, index + identifier_end);
-
-                if let Some((replacement, end)) =
-                    lower_vec2_constructor_call(&output, argument_start)
-                {
-                    let source_span = document.source_span_at(index);
-                    brinevector_span.get_or_insert(source_span);
-                    operations.push(lowering::LoweringOperation::replace(
-                        index..end,
-                        replacement,
-                        source_span,
-                        LoweringKind::BuiltinCall,
-                    ));
-                    index = end;
-                    continue;
-                }
-            }
-
-            if can_start_builtin_call(&output, index) && signal::is_constructor(name) {
-                let argument_start = skip_whitespace(&output, index + identifier_end);
-
-                if let Some((replacement, end)) = lower_runtime_constructor_call(
-                    &output,
-                    argument_start,
-                    signal::EMITTED_CONSTRUCTOR_LOCAL,
-                ) {
-                    let source_span = document.source_span_at(index);
-                    tuasignal_span.get_or_insert(source_span);
-                    operations.push(lowering::LoweringOperation::replace(
-                        index..end,
-                        replacement,
-                        source_span,
-                        LoweringKind::BuiltinCall,
-                    ));
-                    index = end;
-                    continue;
-                }
-            }
-
-            if can_start_builtin_call(&output, index) && object_pool::is_constructor(name) {
-                let argument_start = skip_whitespace(&output, index + identifier_end);
-                let source_span = document.source_span_at(index);
-                let binding_is_active = explicit_object_pool_binding.is_some_and(|position| {
-                    (position.line, position.column)
-                        <= (source_span.start.line, source_span.start.column)
-                });
-
-                if !binding_is_active {
-                    if let Some((replacement, end)) = lower_runtime_constructor_call(
-                        &output,
-                        argument_start,
-                        object_pool::EMITTED_CONSTRUCTOR_LOCAL,
-                    ) {
-                        tuaobjectpool_span.get_or_insert(source_span);
-                        operations.push(lowering::LoweringOperation::replace(
-                            index..end,
-                            replacement,
-                            source_span,
-                            LoweringKind::BuiltinCall,
-                        ));
-                        index = end;
-                        continue;
-                    }
-                }
-            }
-
-            if can_start_builtin_call(&output, index) && state_machine::is_constructor(name) {
-                let argument_start = skip_whitespace(&output, index + identifier_end);
-                let source_span = document.source_span_at(index);
-                let binding_is_active = explicit_state_machine_binding.is_some_and(|position| {
-                    (position.line, position.column)
-                        <= (source_span.start.line, source_span.start.column)
-                });
-
-                if !binding_is_active {
-                    if let Some((replacement, end)) = lower_runtime_constructor_call(
-                        &output,
-                        argument_start,
-                        state_machine::EMITTED_CONSTRUCTOR_LOCAL,
-                    ) {
-                        tuastatemachine_span.get_or_insert(source_span);
-                        operations.push(lowering::LoweringOperation::replace(
-                            index..end,
-                            replacement,
-                            source_span,
-                            LoweringKind::BuiltinCall,
-                        ));
-                        index = end;
-                        continue;
-                    }
-                }
-            }
-
-            if can_start_builtin_call(&output, index) && store::is_constructor(name) {
-                let argument_start = skip_whitespace(&output, index + identifier_end);
-                let source_span = document.source_span_at(index);
-                let binding_is_active = explicit_store_binding.is_some_and(|position| {
-                    (position.line, position.column)
-                        <= (source_span.start.line, source_span.start.column)
-                });
-
-                if !binding_is_active {
-                    if let Some((replacement, end)) = lower_runtime_constructor_call(
-                        &output,
-                        argument_start,
-                        store::EMITTED_CONSTRUCTOR_LOCAL,
-                    ) {
-                        tuastore_span.get_or_insert(source_span);
-                        operations.push(lowering::LoweringOperation::replace(
-                            index..end,
-                            replacement,
-                            source_span,
-                            LoweringKind::BuiltinCall,
-                        ));
-                        index = end;
-                        continue;
-                    }
-                }
-            }
-
-            if can_start_builtin_call(&output, index) && input::is_constructor(name) {
-                let argument_start = skip_whitespace(&output, index + identifier_end);
-                let source_span = document.source_span_at(index);
-                let binding_is_active = explicit_input_binding.is_some_and(|position| {
-                    (position.line, position.column)
-                        <= (source_span.start.line, source_span.start.column)
-                });
-
-                if !binding_is_active {
-                    if let Some((replacement, end)) = lower_runtime_constructor_call(
-                        &output,
-                        argument_start,
-                        input::EMITTED_CONSTRUCTOR_LOCAL,
-                    ) {
-                        baton_span.get_or_insert(source_span);
-                        operations.push(lowering::LoweringOperation::replace(
-                            index..end,
-                            replacement,
-                            source_span,
-                            LoweringKind::BuiltinCall,
-                        ));
-                        index = end;
-                        continue;
-                    }
-                }
-            }
-
-            if can_start_builtin_call(&output, index) && audio::is_constructor(name) {
-                let argument_start = skip_whitespace(&output, index + identifier_end);
-                let source_span = document.source_span_at(index);
-                let binding_is_active = explicit_audio_binding.is_some_and(|position| {
-                    (position.line, position.column)
-                        <= (source_span.start.line, source_span.start.column)
-                });
-                if !binding_is_active && output[argument_start..].starts_with('(') {
-                    tuaaudio_span.get_or_insert(source_span);
-                    operations.push(lowering::LoweringOperation::replace(
-                        index..index + identifier_end,
-                        audio::EMITTED_CONSTRUCTOR_LOCAL,
-                        source_span,
-                        LoweringKind::BuiltinCall,
-                    ));
-                    index += identifier_end;
-                    continue;
-                }
-            }
 
             if let Some(module_index) = crate::builtin_module::MODULES
                 .iter()
@@ -2451,10 +2280,12 @@ fn lua_string_literal(value: &str) -> String {
 fn lower_default_parameter_operations(
     document: &lowering::LoweringDocument,
     parsed: &ParsedSource,
-) -> Vec<lowering::LoweringOperation> {
+    builtin_constructor_spans: &mut BTreeMap<String, SourceSpan>,
+) -> Result<Vec<lowering::LoweringOperation>, Vec<Diagnostic>> {
     let output = document.code();
     let mut operations = Vec::new();
     let mut search_start = 0usize;
+    let mut outer_scope = None;
 
     for function in parsed
         .function_annotations
@@ -2494,9 +2325,17 @@ fn lower_default_parameter_operations(
                 .span
                 .or(function.span)
                 .unwrap_or_else(|| document.source_span_at(header_start));
+            let guard = default_parameter_guard_text(std::slice::from_ref(default), &body_indent);
+            let guard = lower_generated_default_helpers(
+                &guard,
+                parsed,
+                outer_scope.get_or_insert_with(|| crate::scope::scope_map_parsed_source(parsed)),
+                source_span,
+                builtin_constructor_spans,
+            )?;
             operations.push(lowering::LoweringOperation::insert(
                 insert_at,
-                default_parameter_guard_text(std::slice::from_ref(default), &body_indent),
+                guard,
                 source_span,
                 LoweringKind::DefaultParameter,
             ));
@@ -2504,7 +2343,49 @@ fn lower_default_parameter_operations(
         search_start = close + 1;
     }
 
-    operations
+    Ok(operations)
+}
+
+// Default expressions are absent from the normalized source AST. Parse each
+// generated guard once, then reuse lexical helper lowering with inherited outer
+// bindings. This also resolves callback-local shadows and nested helpers.
+fn lower_generated_default_helpers(
+    text: &str,
+    parsed: &ParsedSource,
+    outer_scope: &crate::scope::ScopeMap,
+    span: SourceSpan,
+    used: &mut BTreeMap<String, SourceSpan>,
+) -> Result<String, Vec<Diagnostic>> {
+    let remap_diagnostics = |mut diagnostics: Vec<Diagnostic>| {
+        let position = parsed
+            .raw
+            .parser_position_origin(span.start)
+            .map(|origin| origin.source_position)
+            .unwrap_or(span.start);
+        for diagnostic in &mut diagnostics {
+            diagnostic.line = position.line;
+            diagnostic.column = position.column;
+            diagnostic.end_line = position.line;
+            diagnostic.end_column = position.column;
+        }
+        diagnostics
+    };
+    let guard = parse_tua_source(&parsed.path, text).map_err(remap_diagnostics)?;
+    let (ast, helpers) = builtin_calls::lower_with_outer_scope(
+        guard.ast.clone(),
+        &guard,
+        Some((outer_scope, span.start)),
+    );
+    for helper in helpers.into_keys() {
+        used.entry(helper).or_insert(span);
+    }
+    let mut diagnostics = Vec::new();
+    let ast = erase_ast(&parsed.path, ast, &mut diagnostics);
+    if diagnostics.is_empty() {
+        Ok(ast.to_string())
+    } else {
+        Err(remap_diagnostics(diagnostics))
+    }
 }
 
 fn default_parameter_guard_text(defaults: &[ParameterDefault], body_indent: &str) -> String {
@@ -2638,79 +2519,6 @@ fn source_position_from_byte(source: &str, byte: usize) -> SourcePosition {
 
 fn source_position_tuple(position: SourcePosition) -> (usize, usize) {
     (position.line, position.column)
-}
-
-fn lower_vec2_constructor_call(output: &str, argument_start: usize) -> Option<(String, usize)> {
-    if !output[argument_start..].starts_with('(') {
-        return None;
-    }
-
-    let close = find_matching_paren(output, argument_start)?;
-    let arguments = split_top_level_arguments(&output[argument_start + 1..close])?;
-
-    let [x, y] = arguments.as_slice() else {
-        return None;
-    };
-
-    if x.is_empty() || y.is_empty() {
-        return None;
-    }
-
-    Some((
-        format!("{}({x}, {y})", vector::EMITTED_CONSTRUCTOR_LOCAL),
-        close + 1,
-    ))
-}
-
-fn lower_runtime_constructor_call(
-    output: &str,
-    argument_start: usize,
-    emitted_constructor: &str,
-) -> Option<(String, usize)> {
-    if !output[argument_start..].starts_with('(') {
-        return None;
-    }
-
-    let close = find_matching_paren(output, argument_start)?;
-    let arguments = output[argument_start + 1..close].trim();
-
-    Some((format!("{emitted_constructor}({arguments})"), close + 1))
-}
-
-fn lower_asset_loader_call(
-    output: &str,
-    argument_start: usize,
-    kind: asset::AssetLoaderKind,
-) -> Option<(String, usize)> {
-    if kind.supports_string_sugar() {
-        if let Some(path_end) = consume_string_literal(output, argument_start) {
-            let path_literal = output[argument_start..path_end].to_owned();
-
-            return Some((kind.emitted_call(&[path_literal])?, path_end));
-        }
-    }
-
-    if !output[argument_start..].starts_with('(') {
-        return None;
-    }
-
-    let close = find_matching_paren(output, argument_start)?;
-    let arguments = split_top_level_arguments(&output[argument_start + 1..close])?;
-    let arguments = arguments.into_iter().map(str::to_owned).collect::<Vec<_>>();
-
-    if arguments
-        .iter()
-        .take(kind.required_argument_count())
-        .any(|argument| argument.is_empty())
-    {
-        return None;
-    }
-
-    Some((kind.emitted_call(&arguments)?, close + 1))
-}
-
-fn can_start_asset_loader(output: &str, index: usize) -> bool {
-    can_start_builtin_call(output, index)
 }
 
 fn can_start_builtin_call(output: &str, index: usize) -> bool {

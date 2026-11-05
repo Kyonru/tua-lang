@@ -2180,3 +2180,225 @@ return { dimensions = dimensions }
         vec![crate::Type::number(), crate::Type::string()]
     );
 }
+
+#[test]
+fn input_helper_lowering_preserves_lexical_bindings_and_exports() {
+    for source in [
+        "local function input(value: number): number return value + 1 end\nlocal exported = { call = input }\nassert(exported.call(2) == 3)\n",
+        "function input(value: number): number return value + 1 end\nassert(input(2) == 3)\n",
+        "local function run(input: (value: number) -> number): number return input(2) end\nreturn run\n",
+        "local function outer() local function input(value: number): number return value end; return input(2) end\nreturn outer\n",
+        "local object = {}\nfunction object.input(value: number): number return value end\nreturn object.input(2)\n",
+    ] {
+        let emitted = emit_tua_source("src/input.tua", source).unwrap();
+        assert!(!emitted.contains("__tua_input"), "{emitted}");
+        assert!(!emitted.contains("baton"), "{emitted}");
+        assert!(emitted.contains("input"));
+    }
+}
+
+#[test]
+fn input_helper_lowering_respects_scope_and_local_initializer_visibility() {
+    let source = r#"local function wrapper(input: (value: number) -> number)
+  return input(2)
+end
+local input = input({ controls = {} })
+return wrapper, input
+"#;
+    let emitted = emit_tua_source("src/input.tua", source).unwrap();
+    assert!(emitted.starts_with("local __tua_input = require(\"baton\").new\n"));
+    assert!(emitted.contains("return input(2)"), "{emitted}");
+    assert!(
+        emitted.contains("local input = __tua_input({ controls = {} })"),
+        "{emitted}"
+    );
+}
+
+#[test]
+fn helper_defaults_keep_builtin_lowering_and_outer_lexical_shadows() {
+    let builtin = emit_tua_source(
+        "src/defaults.tua",
+        "local function load(icon: Image = image(\"icon.png\"))\n  return icon\nend\n",
+    )
+    .unwrap();
+    assert!(
+        builtin.contains("icon = love.graphics.newImage(\"icon.png\")"),
+        "{builtin}"
+    );
+    let shadowed = emit_tua_source("src/defaults.tua", "local function image(n: number): number return n end\nlocal function load(icon: number = image(2))\n  return icon\nend\n").unwrap();
+    assert!(shadowed.contains("icon = image(2)"), "{shadowed}");
+    assert!(!shadowed.contains("love.graphics"), "{shadowed}");
+}
+
+#[test]
+fn callable_helpers_preserve_shadowing_across_helper_families() {
+    for helper in [
+        "image",
+        "font",
+        "sound",
+        "shader",
+        "vec2",
+        "signal",
+        "objectPool",
+        "stateMachine",
+        "store",
+        "input",
+        "audioSystem",
+    ] {
+        let source = format!("local function run({helper}: (value: number) -> number)\n  return {helper}(2)\nend\nreturn run\n");
+        let emitted = emit_tua_source("src/shadow.tua", source).unwrap();
+        assert!(
+            emitted.contains(&format!("return {helper}(2)")),
+            "{emitted}"
+        );
+        assert!(!emitted.contains("require("), "{emitted}");
+    }
+}
+
+#[test]
+fn nested_default_helpers_lower_and_preserve_lexical_shadows() {
+    let source = "local function make(value: any = store({position = vec2(1, 2)}))\n  return value\nend\nreturn make\n";
+    let emitted = emit_tua_source("src/defaults.tua", source).unwrap();
+    assert!(emitted.contains("require(\"brinevector\")"), "{emitted}");
+    assert!(
+        emitted.contains("__tua_store({position = __tua_vec2(1, 2)})"),
+        "{emitted}"
+    );
+
+    let shadowed =
+        format!("local function vec2(x: number, y: number): number return x + y end\n{source}");
+    let emitted = emit_tua_source("src/defaults.tua", shadowed).unwrap();
+    assert!(
+        emitted.contains("__tua_store({position = vec2(1, 2)})"),
+        "{emitted}"
+    );
+    assert!(!emitted.contains("require(\"brinevector\")"), "{emitted}");
+}
+
+#[test]
+fn helper_callee_trivia_survives_ast_lowering() {
+    for (source, callee) in [
+        (
+            "local p = vec2 -- preserve vector explanation\n  (1, 2)\nreturn p\n",
+            "__tua_vec2 -- preserve vector explanation\n",
+        ),
+        (
+            "local p = image -- preserve image explanation\n  (\"icon.png\")\nreturn p\n",
+            "love.graphics.newImage -- preserve image explanation\n",
+        ),
+        (
+            "local p = image -- preserve sugar explanation\n  \"icon.png\"\nreturn p\n",
+            "love.graphics.newImage -- preserve sugar explanation\n",
+        ),
+    ] {
+        let emitted = emit_tua_source("src/helpers.tua", source).unwrap();
+        assert!(emitted.contains(callee), "{emitted}");
+        crate::parse_raw_lua_source("build/helpers.lua", emitted).unwrap();
+    }
+}
+
+#[test]
+fn helper_ast_lowering_preserves_following_source_provenance() {
+    let emitted = emit_tua_source_artifact(
+        "src/helpers.tua",
+        "local p = vec2 -- keep explanation\n  (1, 2)\nlocal tone = sound(\"tone.wav\")\nerror(\"after helpers\")\n",
+    ).unwrap();
+    let error_line = emitted
+        .code
+        .lines()
+        .position(|line| line.contains("error(\"after helpers\")"))
+        .unwrap();
+    assert_eq!(emitted.provenance[error_line].source_span.start.line, 4);
+    let sound_line = emitted
+        .code
+        .lines()
+        .position(|line| line.contains("local tone"))
+        .unwrap();
+    assert_eq!(emitted.provenance[sound_line].source_span.start.line, 3);
+}
+
+#[test]
+fn default_callback_helpers_use_callback_and_outer_lexical_scopes() {
+    let source = r#"local function make(handler: any = function(image) return image(2) end)
+  return handler
+end
+local function makeVector(handler: any = function() return vec2(1, 2) end)
+  return handler
+end
+local function vec2(x: number, y: number): number return x + y end
+local function makeShadow(handler: any = function() return vec2(3, 4) end)
+  return handler
+end
+return make, makeVector, makeShadow
+"#;
+    let emitted = emit_tua_source("src/defaults.tua", source).unwrap();
+    assert!(
+        emitted.contains("function(image) return image(2) end"),
+        "{emitted}"
+    );
+    assert!(
+        emitted.contains("function() return __tua_vec2(1, 2) end"),
+        "{emitted}"
+    );
+    assert!(
+        emitted.contains("function() return vec2(3, 4) end"),
+        "{emitted}"
+    );
+    assert!(!emitted.contains("love.graphics.newImage"), "{emitted}");
+}
+
+#[test]
+fn default_helpers_respect_parameters_later_in_the_header() {
+    let source = r#"local function make(value: any = vec2(1, 2), vec2: any = nil)
+  return value
+end
+local function makeCallback(handler: any = function() return image(2) end, image: any = nil)
+  return handler
+end
+final class Later {
+  run(value: any = vec2(3, 4), vec2: any = nil): any { return value }
+}
+return make, makeCallback, Later
+"#;
+    let emitted = emit_tua_source("src/defaults.tua", source).unwrap();
+    assert!(emitted.contains("value = vec2(1, 2)"), "{emitted}");
+    assert!(
+        emitted.contains("function() return image(2) end"),
+        "{emitted}"
+    );
+    assert!(!emitted.contains("require("), "{emitted}");
+    assert!(!emitted.contains("love.graphics.newImage"), "{emitted}");
+}
+
+#[test]
+fn generated_default_guard_errors_use_available_source_origins() {
+    let parsed = parse_tua_source(
+        "src/defaults.tua",
+        "final class Example {\n  init(value: number = 1) {\n  }\n}\nlocal function after(value: number = 1)\nend\n",
+    ).unwrap();
+    let scope = crate::scope::scope_map_parsed_source(&parsed);
+    // Generated class headers currently map to the enclosing class. A following
+    // ordinary function retains its exact source line despite class expansion.
+    for (name, source_line) in [("Example_init", 1), ("after", 5)] {
+        let function = parsed
+            .function_annotations
+            .iter()
+            .find(|function| function.name.as_deref() == Some(name))
+            .unwrap();
+        let span = function.default_parameters[0].span.unwrap();
+        let diagnostics = lower_generated_default_helpers(
+            "if value == nil then\n value = )\nend\n",
+            &parsed,
+            &scope,
+            span,
+            &mut BTreeMap::new(),
+        )
+        .unwrap_err();
+        assert!(!diagnostics.is_empty());
+        assert!(diagnostics
+            .iter()
+            .all(|diagnostic| diagnostic.line == source_line
+                && diagnostic.end_line == source_line
+                && diagnostic.column == diagnostic.end_column));
+    }
+}
