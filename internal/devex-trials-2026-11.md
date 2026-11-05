@@ -100,11 +100,17 @@ unclosed class remains outside this delivery.
 
 ### Epic 4: Keep abstractions evidence-led
 
-**Planned delivery:** a runnable, documented polymorphism example demonstrating
-base-typed collections, overridden dispatch, imported instance types, and the
-boundary between shared ancestry and unrelated behaviors. Verify generated
-Lua behavior; record a concrete future protocol use case without claiming
-protocols, generics, or multiple inheritance are implemented.
+**Delivered:** `examples/features/src/polymorphism.tua` imports the actor
+instance alias, iterates a base-typed collection, and asserts subclass dispatch.
+It also adapts an unrelated UI panel and an actor into typed update tasks. A CLI
+regression compiles these exact example sources and executes their Lua assertions.
+
+**Next abstraction decision:** a shared update scheduler for gameplay actors and
+UI objects is a concrete protocol use case. Today it requires explicit wrappers
+that bind receivers; there is no implicit unrelated-class conformance. Any
+protocol proposal should specify receiver binding, method compatibility,
+diagnostics, and editor navigation before replacing these adapters. Protocols,
+generic classes, and multiple inheritance remain future work.
 
 ## Positive results and limits
 
@@ -118,9 +124,24 @@ The trials did not launch a graphical game or validate an installed extension.
 They do not establish subjective editor usability or zombie-scale performance.
 Final verification and artifact checks are recorded in `target/tua-devex`.
 
-Final verification passed: `RUST_MIN_STACK=16777216 make verify` (with local
+Original trial verification (before the implementation epics) passed:
+`RUST_MIN_STACK=16777216 make verify` (with local
 loopback permission), `make docs-build`, `make lsp-features-smoke`, both trial
 check/build runs, gameplay Lua runtime, and rebuilt-server replays. The release
 replay confirms chained Canvas width is `number`. `make extension-package`
 passed and the resulting VSIX passed archive integrity checks. Detailed logs
 and SHA-256 are in `target/tua-devex`.
+
+## Implementation epic verification
+
+The four scoped epics passed `RUST_MIN_STACK=16777216 RUST_TEST_THREADS=4 make verify`:
+1,547 core tests, 371 LSP tests, 155 extension tests, and the CLI/integration
+suites, including the example's generated-Lua assertions. The first unrestricted
+concurrency run hit shader subprocess timeouts while other builds were active;
+the bounded-concurrency rerun passed those tests and the complete gate.
+
+`make docs-build`, `make check-example EXAMPLE=examples/features`,
+`make build-features`, and `make lsp-features-smoke` also passed. Build output
+remains ignored rather than committed. Logs are in `target/tua-devex-epics`.
+These checks do not establish installed-editor usability or large-project
+performance; the remaining-defects table is still active.

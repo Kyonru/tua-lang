@@ -1,0 +1,39 @@
+import type { ActorInstance } from "./polymorphism/actors"
+local Actors = require("polymorphism.actors")
+
+-- Calls through the base type retain each subclass's implementation.
+local actors: ActorInstance[] = { Actors.Fighter.new(), Actors.Mage.new() }
+for _, actor in ipairs(actors) do
+  actor:update(0.5)
+end
+assert(actors[1].elapsed == 1)
+assert(actors[2].elapsed == 1.5)
+
+-- A UI object need not inherit from a gameplay actor just to join an update loop.
+final class Panel {
+  elapsed: number = 0
+
+  tick(dt: number) {
+    self.elapsed += dt
+  }
+}
+local panel = Panel.new()
+
+-- Explicit adapters use existing structural table/function types.
+-- These wrappers bind receivers; they are not implicit protocol conformance.
+type UpdateTask = { update: (dt: number) -> nil }
+local tasks: UpdateTask[] = {
+  { update = function(dt: number)
+    actors[1]:update(dt)
+  end },
+  { update = function(dt: number)
+    panel:tick(dt)
+  end },
+}
+for _, task in ipairs(tasks) do
+  task.update(0.5)
+end
+assert(actors[1].elapsed == 2)
+assert(panel.elapsed == 0.5)
+
+return { actors = actors, panel = panel }

@@ -558,6 +558,14 @@ particle:update(0.016)
 private members, getters/setters, generic classes, mixins, and multiple
 inheritance are not part of v1.
 
+For a runnable cross-module example, see
+[`polymorphism.tua`](https://github.com/Kyonru/tua-lang/blob/main/examples/features/src/polymorphism.tua)
+and its actor module. A base-typed array dispatches overridden methods to each
+subclass. Unrelated objects can join a shared loop through explicitly typed
+table/function adapters that bind their receivers. This does not make unrelated
+classes assignable to one another. Interfaces/protocols and abstract classes or
+methods are not implemented; adapters are an explicit option today.
+
 Class fields use the same native types as locals and aliases, including `T[]`,
 dictionaries, unions, function types, and scoped `Self`. Assigning `{}`
 to an annotated array or dictionary field is valid. Fields not declared by the

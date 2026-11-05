@@ -1,0 +1,25 @@
+-- Shared ancestry: every actor promises the same update method.
+open class Actor {
+  elapsed: number = 0
+
+  update(dt: number) {
+    self.elapsed += dt
+  }
+}
+
+final class Fighter extends Actor {
+  override update(dt: number) {
+    self.elapsed += dt * 2
+  }
+}
+
+final class Mage extends Actor {
+  override update(dt: number) {
+    self.elapsed += dt * 3
+  }
+}
+
+-- A type export describes instances; runtime exports provide constructors.
+export type ActorInstance = Actor
+
+return { Fighter = Fighter, Mage = Mage }

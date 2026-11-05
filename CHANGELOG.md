@@ -8,6 +8,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Changed
 
+- Added a runnable cross-module polymorphism example covering base-typed
+  collections, virtual dispatch, and typed adapters for unrelated objects.
+
 - The **Export instance type** class action creates or exports an alias for use
   with type auto-import completion in consuming modules.
 

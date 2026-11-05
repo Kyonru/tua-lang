@@ -20,6 +20,7 @@ local LuaHelperLints = require("luahelper_lints")
 local LuaJit = require("luajit")
 local Ecs = require("ecs")
 local Classes = require("classes")
+local Polymorphism = require("polymorphism")
 local Sprites = require("sprites")
 local Signals = require("signals")
 local StateMachine = require("state_machine")
@@ -49,6 +50,7 @@ return {
   luajit = LuaJit,
   ecs = Ecs,
   classes = Classes,
+  polymorphism = Polymorphism,
   sprites = Sprites,
   signals = Signals,
   state_machine = StateMachine,

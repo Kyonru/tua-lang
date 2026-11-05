@@ -47,6 +47,10 @@ make build-features
   `super`, `Self`, typed array fields initialized with `{}`, constructor
   lowering, exact method contracts, final-method devirtualization, and class
   runtime `is` checks.
+- `src/polymorphism.tua` and `src/polymorphism/actors.tua` demonstrate imported
+  instance types, base-typed collections, virtual dispatch, and explicit typed
+  adapters for unrelated objects. After building, run their assertions without
+  LOVE using `cd build && lua -e 'require("polymorphism")'`.
 - `src/lua_cheatsheet.tua` is an extensive Lua-in-Tua cheatsheet based on the
   referenced Lua cheatsheet. It covers comments, primitives, tables, operators,
   shorthand function calls, lookups, control flow, functions, closures,
