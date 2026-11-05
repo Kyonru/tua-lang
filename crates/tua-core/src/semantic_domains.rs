@@ -212,7 +212,8 @@ impl BuiltinDomainRegistry {
         mut type_of_expression: impl FnMut(&Expression) -> Option<Type>,
     ) -> Option<Vec<Type>> {
         if self.ecs_enabled {
-            let component_type = ecs::component_argument(call).and_then(&mut type_of_expression);
+            let component_type =
+                ecs::component_argument(receiver_type, call).and_then(&mut type_of_expression);
             if let Some(returns) =
                 ecs::inferred_method_return_types(receiver_type, call, component_type.as_ref())
             {

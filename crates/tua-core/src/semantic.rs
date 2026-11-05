@@ -569,8 +569,8 @@ impl<'a> SemanticModel<'a> {
         if self.environment.alias(ecs::WORLD_TYPE).is_some() {
             if let Some((_, receiver_parts)) = parts.split_last() {
                 if let Some(receiver_type) = self.type_of_field_chain(receiver_parts, position) {
-                    let component_type =
-                        ecs::component_argument(function_call).and_then(|expression| {
+                    let component_type = ecs::component_argument(&receiver_type, function_call)
+                        .and_then(|expression| {
                             self.type_of_expression_return_at_depth(expression, position, 0, 1)
                         });
                     if let Some(returns) = ecs::inferred_method_return_types(

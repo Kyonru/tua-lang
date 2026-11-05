@@ -187,7 +187,17 @@ pub(crate) fn inferred_method_return_types(
         .unwrap_or(Type::Any)])
 }
 
-pub(crate) fn component_argument(call: &FunctionCall) -> Option<&Expression> {
+pub(crate) fn component_argument<'a>(
+    receiver_type: &Type,
+    call: &'a FunctionCall,
+) -> Option<&'a Expression> {
+    let parts = field_chain_before_first_call(call)?;
+    let method = parts.last()?.as_str();
+    // Only these proven ECS operations consume a component argument type.
+    // Ordinary calls must not recursively infer an irrelevant second argument.
+    if !is_world_type_direct(receiver_type) || !matches!(method, "add" | "get" | "remove") {
+        return None;
+    }
     call_argument(call, 1)
 }
 
@@ -514,6 +524,8 @@ pub(crate) fn diagnostics(parsed: &ParsedSource, environment: &TypeEnvironment) 
         environment,
         semantic: SemanticModel::new(parsed, environment),
         diagnostics: Vec::new(),
+        #[cfg(test)]
+        receiver_queries: 0,
     };
 
     visitor.visit_ast(&parsed.ast);
@@ -525,6 +537,8 @@ struct EcsDiagnosticVisitor<'a> {
     environment: &'a TypeEnvironment,
     semantic: SemanticModel<'a>,
     diagnostics: Vec<Diagnostic>,
+    #[cfg(test)]
+    receiver_queries: usize,
 }
 
 impl Visitor for EcsDiagnosticVisitor<'_> {
@@ -538,6 +552,15 @@ impl Visitor for EcsDiagnosticVisitor<'_> {
         let Some((member, receiver)) = parts.split_last() else {
             return;
         };
+        // Only these calls have ECS-specific diagnostics. Resolving arbitrary
+        // game/library receivers here can recursively infer entire object graphs.
+        if !matches!(member.as_str(), "add" | "system" | "query") {
+            return;
+        }
+        #[cfg(test)]
+        {
+            self.receiver_queries += 1;
+        }
         let Some(receiver_type) = self.semantic.type_of_field_chain(receiver, span.start) else {
             return;
         };
@@ -844,5 +867,107 @@ end
         assert_eq!(diagnostics.len(), 1, "{diagnostics:#?}");
         assert_eq!(diagnostics[0].code, Some(DiagnosticCode::DOMAIN_ECS_QUERY));
         assert!(diagnostics[0].message.contains("NotAComponent"));
+    }
+    #[test]
+    fn diagnostics_skip_semantic_queries_for_unrelated_methods() {
+        let source = r#"local object = factory()
+object:update(1)
+object:draw()
+object:clone():render()
+local input = controls()
+input:pressed("fire")
+"#;
+        let parsed = parse_tua_source("src/game.tua", source).unwrap();
+        let (environment, _) = crate::types::build_type_environment_with_domain_registry(
+            &parsed,
+            crate::semantic_domains::BuiltinDomainRegistry::with_ecs(true),
+        );
+        let mut visitor = EcsDiagnosticVisitor {
+            parsed: &parsed,
+            environment: &environment,
+            semantic: SemanticModel::new(&parsed, &environment),
+            diagnostics: Vec::new(),
+            receiver_queries: 0,
+        };
+        visitor.visit_ast(&parsed.ast);
+        assert_eq!(visitor.receiver_queries, 0);
+        assert!(visitor.diagnostics.is_empty());
+    }
+
+    #[test]
+    fn diagnostic_method_filter_preserves_module_and_world_aliases() {
+        let diagnostics = diagnostics_for(
+            r#"local api = ecs
+local Position = api.component("Position", { x = "number" })
+local world = api.world()
+local alias = world
+alias:add(alias:create(), Position, { x = "bad" })
+api.system(alias, {}, function() end)
+alias:query({})
+local function other(object)
+  object:add(1)
+  object:query({})
+  object:system({})
+end
+"#,
+        );
+        assert_eq!(diagnostics.len(), 3, "{diagnostics:#?}");
+        assert_eq!(
+            diagnostics[0].code,
+            Some(DiagnosticCode::DOMAIN_ECS_COMPONENT_VALUE)
+        );
+        assert!(diagnostics[1..]
+            .iter()
+            .all(|d| d.code == Some(DiagnosticCode::DOMAIN_ECS_QUERY)));
+    }
+    #[test]
+    fn component_inference_is_lazy_for_non_ecs_calls() {
+        for (source, receiver) in [
+            ("object:draw(1, nested())", Type::Any),
+            ("object:get(1, nested())", Type::Any),
+            ("world:query(nested())", Type::alias(WORLD_TYPE)),
+            (
+                "api.component(\"Position\", { x = \"number\" })",
+                ecs_module_type(),
+            ),
+        ] {
+            let parsed = parse_tua_source("src/lazy.tua", source).unwrap();
+            let full_moon::ast::Stmt::FunctionCall(call) =
+                parsed.ast.nodes().stmts().next().unwrap()
+            else {
+                panic!("expected call")
+            };
+            let returns = crate::semantic_domains::BuiltinDomainRegistry::with_ecs(true)
+                .method_return_types_from_call(&receiver, call, |_| {
+                    panic!("unrelated argument inference: {source}")
+                });
+            if source.starts_with("api.component") {
+                assert!(returns.is_some());
+            }
+        }
+    }
+
+    #[test]
+    fn component_inference_keeps_add_get_remove_return_types() {
+        for method in ["add", "get", "remove"] {
+            for receiver in [Type::alias(WORLD_TYPE), world_type()] {
+                let source = format!("world:{method}(entity, Position, {{ x = 1 }})");
+                let parsed = parse_tua_source("src/returns.tua", &source).unwrap();
+                let full_moon::ast::Stmt::FunctionCall(call) =
+                    parsed.ast.nodes().stmts().next().unwrap()
+                else {
+                    panic!("expected call")
+                };
+                let mut queries = 0;
+                let returns = crate::semantic_domains::BuiltinDomainRegistry::with_ecs(true)
+                    .method_return_types_from_call(&receiver, call, |expression| {
+                        queries += 1;
+                        assert_eq!(expression.to_string().trim(), "Position");
+                        Some(component_type(Type::number()))
+                    });
+                assert_eq!(queries, 1);
+                assert_eq!(returns, Some(vec![Type::number()]));
+            }
+        }
     }
 }

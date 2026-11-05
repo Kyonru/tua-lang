@@ -8,6 +8,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Changed
 
+- ECS analysis skips unrelated method receivers and infers component arguments
+  only for proven ECS operations, avoiding recursive work in ordinary Lua games.
+
 - Semantic indexing reuses its resolver and skips impossible builtin-member
   lookups before attempting expensive receiver inference.
 
