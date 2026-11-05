@@ -136,6 +136,11 @@ impl TypeEnvironment {
         self.alias_docs.get(name).map(String::as_str)
     }
 
+    /// Borrow the immutable alias catalog for shared semantic queries.
+    pub(crate) fn alias_map(&self) -> &BTreeMap<String, Type> {
+        &self.aliases
+    }
+
     pub fn aliases(&self) -> impl Iterator<Item = (&str, &Type)> {
         self.aliases.iter().map(|(name, ty)| (name.as_str(), ty))
     }

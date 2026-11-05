@@ -307,7 +307,7 @@ impl<'a> SemanticModel<'a> {
 
         if let Some(ty) = crate::narrowing::guarded_member_type(
             self.parsed,
-            &self.alias_map(),
+            self.alias_map(),
             parts,
             position,
             |name| {
@@ -364,7 +364,7 @@ impl<'a> SemanticModel<'a> {
         {
             return first;
         }
-        crate::types::resolve_chained_call_returns(&self.alias_map(), function_call, first)
+        crate::types::resolve_chained_call_returns(self.alias_map(), function_call, first)
     }
 
     fn return_types_of_first_call(
@@ -931,7 +931,7 @@ impl<'a> SemanticModel<'a> {
         if let Some(base) = self.type_of_name_without_narrowing(name, position, depth) {
             let aliases = self.alias_map();
             if let Some(narrowed) =
-                narrowed_type_at_position(self.parsed, &aliases, name, position, |lookup_name| {
+                narrowed_type_at_position(self.parsed, aliases, name, position, |lookup_name| {
                     if lookup_name == "assert" && self.environment.assert_is_overridden() {
                         Some(Type::Any)
                     } else {
@@ -980,7 +980,7 @@ impl<'a> SemanticModel<'a> {
 
         let aliases = self.alias_map();
         let guard_type =
-            narrowed_type_at_position(self.parsed, &aliases, guard, position, |lookup_name| {
+            narrowed_type_at_position(self.parsed, aliases, guard, position, |lookup_name| {
                 if lookup_name == "assert" && self.environment.assert_is_overridden() {
                     Some(Type::Any)
                 } else {
@@ -1436,11 +1436,8 @@ impl<'a> SemanticModel<'a> {
         false
     }
 
-    fn alias_map(&self) -> BTreeMap<String, Type> {
-        self.environment
-            .aliases()
-            .map(|(name, ty)| (name.to_owned(), ty.clone()))
-            .collect()
+    fn alias_map(&self) -> &BTreeMap<String, Type> {
+        self.environment.alias_map()
     }
 
     fn type_of_expression_return_at_depth(
@@ -1812,7 +1809,7 @@ impl<'a> SemanticModel<'a> {
         if let Some(parts) = crate::ast_utils::plain_field_chain_from_var_expression(expression) {
             if let Some(ty) = crate::narrowing::guarded_member_type(
                 self.parsed,
-                &self.alias_map(),
+                self.alias_map(),
                 &parts,
                 position,
                 |name| {

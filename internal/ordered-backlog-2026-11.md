@@ -143,3 +143,48 @@ visual or long-session evidence.
   bundled resource. Focused parser/completion/hover tests and extension/package
   checks pass. Partial annotation hover, signature documentation updates and
   annotation type navigation remain in the roadmap.
+
+## Performance revisit
+
+The first final replay caught new overhead (291 ms cold, 62 ms post-edit,
+27 ms incomplete-edit completion). Semantic queries rebuilt the entire alias
+map repeatedly. They now borrow the immutable map already owned by the type
+environment; inference and snapshot invalidation are unchanged.
+
+Three alternating accepted-baseline/candidate sessions ran without concurrent
+builds/tests. Baseline binary SHA-256 is
+`725823130d919faad937fcdd3a01237efea999dd6bed8452acd3823b8b3d4799`.
+All expected response and completion-label assertions passed. These are local
+protocol measurements, not VS Code key-to-menu latency or a cold filesystem.
+Evidence: `target/ordered-backlog/borrow-{baseline,candidate}-{1,2,3}.json`
+and `borrow-aggregate.json`. The initial regressed measurements are retained as
+`performance-*.json`.
+
+| Request | Baseline p50 / p95 ms | Final p50 / p95 ms |
+| --- | ---: | ---: |
+| `cold.module-completion` | 282.5 / 286.1 | 288.3 / 290.9 |
+| `warm.self-completion` | 1.0 / 1.2 | 0.9 / 1.1 |
+| `warm.module-completion` | 0.5 / 0.5 | 0.5 / 0.7 |
+| `warm.hover` | 9.8 / 23.5 | 9.3 / 21.4 |
+| `warm.format` | 3.3 / 3.6 | 3.4 / 3.5 |
+| `edit.module-completion` | 53.4 / 67.2 | 54.1 / 65.5 |
+| `edit.hover` | 18.0 / 19.6 | 17.0 / 18.7 |
+| `partial.self-completion` | 23.9 / 27.7 | 24.1 / 29.5 |
+| `cross-file.module-completion` | 26.6 / 77.6 | 23.6 / 71.0 |
+| `cross-file.hover` | 15.3 / 21.1 | 17.6 / 20.3 |
+| `immediate.format` | 25.9 / 27.9 | 24.4 / 26.1 |
+| `post-save.format` | 16.3 / 18.2 | 16.5 / 21.0 |
+| `save.hover` | 47.4 / 50.2 | 46.4 / 50.5 |
+| `other.main-completion` | 0.4 / 227.8 | 0.4 / 240.2 |
+| `other.main-hover` | 0.5 / 13.0 | 0.6 / 13.1 |
+| `other.combat-completion` | 0.4 / 0.5 | 0.4 / 0.6 |
+| `other.combat-hover` | 1.2 / 71.0 | 1.3 / 73.7 |
+| `import.path-completion` | 0.4 / 0.7 | 0.4 / 0.7 |
+| `contended.inline` | 0.2 / 0.3 | 0.2 / 0.3 |
+| `contended.self-completion` | 1.1 / 1.2 | 0.9 / 1.0 |
+| `contended.hover` | 9.6 / 18.4 | 9.3 / 19.8 |
+
+Cold completion and cross-file hover remain optimization work. The larger
+semantic feature set is not a claim of zero latency cost: cross-file hover
+in this replay rises from 15.3 to 17.6 ms. Installed-editor and long-session
+qualification remains pending.

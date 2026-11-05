@@ -8,6 +8,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Changed
 
+- Semantic queries borrow the immutable alias catalog instead of copying it
+  repeatedly, recovering completion/format latency after the inference fixes.
+
 - All 18 recognized LuaDoc tags share one parser/completion/hover catalog.
   Explanations distinguish checked contracts from metadata-only tags, with
   a bundled **Tua: Open Annotation Guide (Offline)** command.

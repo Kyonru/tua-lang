@@ -35,7 +35,10 @@ workflow pages under `docs/`. Completed work belongs in
 - Reduce cold project completion and post-edit dependency-surface analysis on
   the input coordinator. The November follow-up replay measured about 277 ms cold
   (previously 433 ms) and 52 ms median post-edit module completion (previously 94 ms).
-  Preserve fresh imported types and diagnostics while moving or reusing this work.
+  The ordered-backlog replay retains roughly 288 ms cold and 54 ms post-edit,
+  with incomplete-edit completion at 24 ms after removing repeated alias-map
+  copies. See `internal/ordered-backlog-2026-11.md` for all rows, including hover
+  costs. Preserve fresh imported types and diagnostics while reusing this work.
 - Preserve the recovered incomplete-edit and immediate-format performance:
   63 → 24 ms and 44 → 25 ms respectively in the follow-up replay. Repeat the real
   project replay and representative contention gate before accepting another
