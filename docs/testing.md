@@ -145,7 +145,34 @@ Locations in native Tua and ordinary Lua specs refer to source files. User `prin
 output cannot corrupt the JSON. A run that fails before Busted completes leaves
 `completed: false` instead of stale results from a previous run. The destination's
 parent directory must exist. Check both the command exit status and the report;
-`--list` and `--report` are mutually exclusive.
+`--list` cannot be combined with result or coverage output.
+
+## Measure Line Coverage
+
+Install [LuaCov](https://lunarmodules.github.io/luacov/) for the same interpreter
+as Busted, then run:
+
+```sh
+luarocks install luacov
+tua test --coverage coverage.json --report test-results.json
+```
+
+The coverage file contains `version`, `completed`, and `files`. Each file has an
+absolute source `path`, `covered` and `total` line counts, and `lines` containing
+one-based `line` numbers and `hits`. Native Tua locations use compiler source
+maps; ordinary Lua retains its original lines. Unloaded project modules appear
+as uncovered. Comments and blank lines do not enter the denominator. Both
+production modules and test sources are included, while generated helpers and
+external dependencies are excluded.
+
+LuaCov classifies executable Lua lines. When several generated lines map to one
+Tua line, Tua keeps the largest hit count; it is not a statement or branch count.
+This does not measure branch or function coverage. Coverage reflects only the
+selected tests. A build/backend/reporting error leaves `completed: false`; a
+completed run with failing assertions can still produce coverage. Check the
+command exit status too. The destination parent must exist, and coverage and
+test results must use different paths. Project `.luacov` configuration is not
+loaded; each run uses isolated statistics and removes them after reporting.
 
 ## Run In VS Code Or CI
 

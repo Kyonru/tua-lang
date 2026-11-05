@@ -14,11 +14,15 @@ Artifacts and verification logs are in `target/remaining-backlog/`.
   mapped native/Lua locations, stdout isolation and stale-report prevention.
   Parser, argument, real Busted report and documentation checks pass.
 
-## In progress
-
-- VS Code Test Explorer: lazy discovery, selected runs, cancellation, and
+- `887c609`: VS Code Test Explorer: lazy discovery, selected runs, cancellation, and
   opt-in continuous runs. Unit and extension activation checks pass; installed
   editor qualification remains part of the final release pass.
+- CLI LuaCov coverage: mapped native/Lua line counts, unloaded modules, generated
+  helper exclusion and incomplete-run state. Verified against isolated LuaCov
+  0.17.0 with real Busted, including a build failure after a successful run.
+
+## In progress
+
 - Richer Busted contracts, coverage and explicit LOVE runtime testing.
 - Annotation generation/update, documentation-aware parameter rename and
   annotation navigation/recovery.

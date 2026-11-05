@@ -59,7 +59,7 @@ results. Evidence: [development trials](internal/devex-trials-2026-11.md).
 
 ### Unit testing follow-ups
 
-- Add richer Busted API declarations and coverage integration.
+- Add richer Busted API declarations and display CLI coverage in Test Explorer.
 - Add an explicit LOVE runtime test mode; the Busted backend currently tests
   headless Lua logic and requires doubles for LOVE-dependent behavior.
 

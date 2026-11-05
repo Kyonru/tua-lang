@@ -5396,3 +5396,85 @@ fn unit_test_json_report_keeps_stdout_and_maps_native_and_lua_locations() {
     assert_eq!(incomplete["completed"], false);
     assert!(incomplete["tests"].as_array().unwrap().is_empty());
 }
+
+#[test]
+fn unit_test_coverage_maps_native_lines_and_includes_unloaded_lua() {
+    if !Command::new("lua")
+        .args(["-e", "require('luacov.runner'); require('busted')"])
+        .current_dir(std::env::temp_dir())
+        .output()
+        .is_ok_and(|o| o.status.success())
+    {
+        return;
+    }
+    let temp = TempDir::new("test-coverage");
+    unit_test_project(&temp);
+    fs::write(
+        temp.path().join("src/unused.lua"),
+        "-- comment\nlocal function unused()\n  return 42\nend\nreturn unused\n",
+    )
+    .unwrap();
+    let result = tua()
+        .args([
+            "test",
+            "--coverage",
+            "coverage.json",
+            "--report",
+            "report.json",
+        ])
+        .current_dir(temp.path())
+        .output()
+        .unwrap();
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    let report: serde_json::Value =
+        serde_json::from_slice(&fs::read(temp.path().join("coverage.json")).unwrap()).unwrap();
+    assert_eq!(report["completed"], true, "{report}");
+    let files = report["files"].as_array().unwrap();
+    assert!(
+        files
+            .iter()
+            .all(|file| !file["path"].as_str().unwrap().contains(".tua/test-")),
+        "{report}"
+    );
+    let native = files
+        .iter()
+        .find(|file| file["path"].as_str().unwrap().ends_with("src/mathlib.tua"))
+        .unwrap();
+    assert!(
+        native["lines"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|row| row["line"] == 2 && row["hits"].as_u64().unwrap() > 0),
+        "{report}"
+    );
+    let unused = files
+        .iter()
+        .find(|file| file["path"].as_str().unwrap().ends_with("src/unused.lua"))
+        .unwrap();
+    assert_eq!(unused["covered"], 0);
+    assert!(unused["total"].as_u64().unwrap() > 0);
+    assert!(
+        !unused["lines"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|row| row["line"] == 1),
+        "{report}"
+    );
+    fs::write(temp.path().join("src/mathlib.tua"), "invalid ???").unwrap();
+    let result = tua()
+        .args(["test", "--coverage", "coverage.json"])
+        .current_dir(temp.path())
+        .output()
+        .unwrap();
+    assert!(!result.status.success());
+    let report: serde_json::Value =
+        serde_json::from_slice(&fs::read(temp.path().join("coverage.json")).unwrap()).unwrap();
+    assert_eq!(report["completed"], false);
+    assert_eq!(report["files"], serde_json::json!([]));
+}

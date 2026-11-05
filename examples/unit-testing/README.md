@@ -29,3 +29,7 @@ Use **Tua: Run Unit Tests** in VS Code, or see
 
 The dedicated `tests/` directory is included in checking and formatting, but
 omitted from production builds and packages. Specs import `counter` from `src/`.
+
+With LuaCov installed for the Busted interpreter, run `tua test --coverage coverage.json`
+to export line coverage mapped to these source files. See [testing](../../docs/testing.md#measure-line-coverage)
+for the report format and limitations.

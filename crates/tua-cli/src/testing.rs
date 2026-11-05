@@ -7,6 +7,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use tua_core::{DiagnosticSeverity, LoadedConfig, ProjectWorkspace};
 
+mod coverage;
 mod discovery;
 mod report;
 
@@ -26,6 +27,7 @@ pub struct TestOptions {
     pub lua: Option<PathBuf>,
     pub list: bool,
     pub report: Option<PathBuf>,
+    pub coverage: Option<PathBuf>,
 }
 
 pub(crate) fn run_tests(
@@ -35,13 +37,23 @@ pub(crate) fn run_tests(
 ) -> Result<String, CliError> {
     let cwd = fs::canonicalize(cwd)
         .map_err(|e| CliError::usage(format!("cannot open test project: {e}")))?;
-    if options.list && options.report.is_some() {
+    if options.list && (options.report.is_some() || options.coverage.is_some()) {
         return Err(CliError::usage(
-            "--list and --report cannot be used together",
+            "--list cannot be used with --report or --coverage",
         ));
+    }
+    if let (Some(report), Some(coverage)) = (&options.report, &options.coverage) {
+        if paths_same_location(&cwd.join(report), &cwd.join(coverage)) {
+            return Err(CliError::usage(
+                "test and coverage reports must use different paths",
+            ));
+        }
     }
     if let Some(destination) = &options.report {
         report::initialize(&cwd, destination)?;
+    }
+    if let Some(destination) = &options.coverage {
+        coverage::initialize(&cwd, destination)?;
     }
     let workspace = ProjectWorkspace::from_loaded(&cwd, loaded.clone());
     let test_root = workspace.test_source_root();
@@ -152,13 +164,17 @@ pub(crate) fn run_tests(
         .clone()
         .or_else(|| std::env::var_os("TUA_BUSTED").map(PathBuf::from))
         .unwrap_or_else(|| PathBuf::from("busted"));
-    let report_output = options
-        .report
-        .as_ref()
-        .map(|_| TestOutput::new(&cwd))
+    let report_output = (options.report.is_some() || options.coverage.is_some())
+        .then(|| TestOutput::new(&cwd))
         .transpose()?;
-    let reporter_path = report_output.as_ref().map(|dir| dir.0.join("reporter.lua"));
-    let raw_report = report_output.as_ref().map(|dir| dir.0.join("results.json"));
+    let reporter_path = report_output
+        .as_ref()
+        .filter(|_| options.report.is_some())
+        .map(|dir| dir.0.join("reporter.lua"));
+    let raw_report = report_output
+        .as_ref()
+        .filter(|_| options.report.is_some())
+        .map(|dir| dir.0.join("results.json"));
     if let Some(path) = &reporter_path {
         fs::write(path, include_str!("testing/reporter.lua"))
             .map_err(|error| CliError::usage(format!("cannot prepare test reporter: {error}")))?;
@@ -188,6 +204,22 @@ pub(crate) fn run_tests(
     if let Some(lua) = &options.lua {
         command.arg("--lua").arg(resolve_executable(&cwd, lua));
     }
+    let raw_coverage = if options.coverage.is_some() {
+        let directory = &report_output.as_ref().expect("coverage output").0;
+        let config = directory.join("coverage.lua");
+        let raw = directory.join("coverage.json");
+        fs::write(&config, include_str!("testing/coverage.lua"))
+            .map_err(|error| CliError::usage(format!("cannot prepare coverage: {error}")))?;
+        command
+            .arg("--coverage")
+            .arg("--coverage-config-file")
+            .arg(config)
+            .env("TUA_COVERAGE_STATS", directory.join("coverage.stats"))
+            .env("TUA_COVERAGE_REPORT", &raw);
+        Some(raw)
+    } else {
+        None
+    };
     command.arg("--").args(&tests);
     let result = command.output().map_err(|e| CliError::usage(format!(
         "could not run Busted ({}): {e}. Install Busted for your Lua interpreter with `luarocks install busted`, or use --busted PATH / TUA_BUSTED", executable.display()
@@ -215,6 +247,9 @@ pub(crate) fn run_tests(
             result.status.success(),
             &report,
         )?;
+    }
+    if let (Some(destination), Some(raw)) = (&options.coverage, &raw_coverage) {
+        coverage::save(&workspace, &output.0, raw, destination)?;
     }
     if result.status.success() {
         Ok(report)

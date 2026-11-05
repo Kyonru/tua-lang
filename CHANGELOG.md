@@ -8,6 +8,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Changed
 
+- `tua test --coverage PATH` exports source-mapped LuaCov line coverage, including
+  unloaded project modules and explicit incomplete-run state. Coverage requires
+  LuaCov in the Busted interpreter and excludes generated runtime helpers.
+
 - VS Code Test Explorer discovers Tua/Busted projects and literal cases lazily,
   runs selected tests with mapped results, and supports cancellation and opt-in
   continuous testing after saved changes. Discovery never executes spec code.

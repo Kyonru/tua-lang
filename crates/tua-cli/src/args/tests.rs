@@ -315,3 +315,15 @@ fn parses_test_discovery_and_report_options() {
     assert!(parse_args(["test", "--report"]).is_err());
     assert!(parse_args(["build", "--list"]).is_err());
 }
+
+#[test]
+fn parses_test_coverage_destination() {
+    let CliAction::Command { options, .. } =
+        parse_args(["test", "--coverage", "coverage.json"]).unwrap()
+    else {
+        panic!("expected test command")
+    };
+    assert_eq!(options.test.coverage, Some(PathBuf::from("coverage.json")));
+    assert!(parse_args(["test", "--coverage"]).is_err());
+    assert!(parse_args(["build", "--coverage", "coverage.json"]).is_err());
+}
