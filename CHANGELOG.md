@@ -8,6 +8,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Changed
 
+- Reorganized the documentation around setup and everyday tasks, with focused
+  Lua-basics, module/type-import, class, troubleshooting, and upgrade guidance.
+  Added format-on-save setup and simpler audio onboarding examples.
+
 - Added a Lua migration guide for singleton state, explicit services, native
   classes and typed adapters, including initialization and legacy loader pitfalls.
 
