@@ -106,9 +106,7 @@ impl BuiltinDomainRegistry {
     }
 
     pub(crate) fn defines_alias(self, name: &str, ty: &Type) -> bool {
-        self.builtin_aliases()
-            .into_iter()
-            .any(|(alias, builtin_ty)| alias == name && &builtin_ty == ty)
+        self.shared_builtin_aliases().get(name) == Some(ty)
     }
 
     pub(crate) fn builtin_locals(self) -> Vec<(String, Type)> {
@@ -420,6 +418,29 @@ impl BuiltinDomain {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn cached_alias_identity_preserves_names_types_and_ecs_configuration() {
+        for registry in [
+            BuiltinDomainRegistry::standard(),
+            BuiltinDomainRegistry::with_ecs(true),
+        ] {
+            let aliases = registry.builtin_aliases();
+            let cached = registry.shared_builtin_aliases();
+            assert_eq!(aliases.len(), cached.len(), "built-in names must be unique");
+            for (name, ty) in aliases {
+                assert!(registry.defines_alias(&name, &ty), "{name}");
+                assert!(
+                    !registry.defines_alias(&name, &Type::Any),
+                    "shadowed {name}"
+                );
+            }
+            assert!(!registry.defines_alias("UserClass", &Type::Any));
+        }
+        let ecs = BuiltinDomainRegistry::with_ecs(true).shared_builtin_aliases();
+        assert!(!BuiltinDomainRegistry::standard()
+            .defines_alias(ecs::WORLD_TYPE, &ecs[ecs::WORLD_TYPE]));
+    }
 
     #[test]
     fn registry_keeps_ecs_explicit_and_constructor_order_stable() {

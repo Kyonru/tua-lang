@@ -50,6 +50,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Alias-identity checks reuse the shared built-in catalog instead of rebuilding
+  every domain type for each lookup during module and class inference.
+
 - Incomplete-file checking reuses the recovered type environment, preserving
   environment and body diagnostics without rebuilding the same semantic facts.
 
