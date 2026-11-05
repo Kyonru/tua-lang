@@ -6998,3 +6998,115 @@ return setmetatable({smooth = camera.smooth}, {__call = function() return {} end
         .unwrap();
     assert!(hover.contents.contains("speed"), "{hover:?}");
 }
+
+#[test]
+fn project_global_modules_keep_runtime_ownership_across_unsaved_edits() {
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    host.set_file("src/main.tua", "Camera = require('vendor')\n");
+    host.set_file(
+        "src/vendor.lua",
+        "return {smooth = {damped = function(n) return n end}}\n",
+    );
+    host.set_file("src/scene.tua", "local value = Camera.smooth.damped(5)\n");
+    let check = |snapshot: &AnalysisSnapshot, builtin: bool| {
+        let file = snapshot.file(Path::new("src/scene.tua")).unwrap();
+        let parsed = file.parsed.as_ref().unwrap();
+        let environment = snapshot.project_type_environment("src/scene.tua").unwrap();
+        let emitted = crate::emit::emit_lua_artifact_with_mode_import_resolver_and_environment(
+            parsed,
+            crate::AnnotationMode::Off,
+            None,
+            false,
+            Some(&environment),
+        )
+        .unwrap();
+        assert_eq!(
+            emitted.code.contains("require(\"tuacamera\")"),
+            builtin,
+            "{}",
+            emitted.code
+        );
+        if !builtin {
+            let errors = snapshot
+                .pipeline_diagnostics("src/scene.tua")
+                .into_iter()
+                .filter(|d| d.severity == DiagnosticSeverity::Error)
+                .collect::<Vec<_>>();
+            assert!(errors.is_empty(), "{errors:?}");
+            if let Some(hover) = snapshot.hover(
+                "src/scene.tua",
+                SourcePosition {
+                    line: 1,
+                    column: 16,
+                },
+            ) {
+                assert!(!hover.contents.contains("built-in module"), "{hover:?}");
+            }
+            assert!(!snapshot
+                .completion(
+                    "src/scene.tua",
+                    SourcePosition {
+                        line: 1,
+                        column: 22
+                    }
+                )
+                .iter()
+                .any(|item| item.label == "follow"));
+        }
+    };
+    let original = host.snapshot();
+    check(&original, false);
+    host.set_file("src/main.tua", "local Camera = require('vendor')\n");
+    check(&host.snapshot(), true);
+    check(&original, false);
+    host.set_file("src/main.tua", "Camera = require('vendor')\n");
+    check(&host.snapshot(), false);
+    host.set_file(
+        "src/scene.tua",
+        "local Camera = require('vendor')\nlocal value: number = Camera.smooth.damped(5)\n",
+    );
+    let snapshot = host.snapshot();
+    let environment = snapshot.project_type_environment("src/scene.tua").unwrap();
+    assert!(!matches!(environment.local("Camera"), Some(Type::Any)));
+    assert!(!snapshot
+        .pipeline_diagnostics("src/scene.tua")
+        .iter()
+        .any(|d| d.severity == DiagnosticSeverity::Error));
+}
+
+#[test]
+fn project_global_tween_suppresses_injection_but_unrelated_globals_do_not() {
+    for (declaration, expected_builtin) in [
+        ("function tween() end", false),
+        ("tween = {}", false),
+        ("local tween = {}", true),
+        ("other = {}", true),
+    ] {
+        let mut host = AnalysisHost::new();
+        host.set_file("globals.lua", declaration);
+        host.set_file("scene.tua", "tween.update(1)");
+        let snapshot = host.snapshot();
+        let parsed = snapshot
+            .file(Path::new("scene.tua"))
+            .unwrap()
+            .parsed
+            .as_ref()
+            .unwrap();
+        let environment = snapshot.project_type_environment("scene.tua").unwrap();
+        let emitted = crate::emit::emit_lua_artifact_with_mode_import_resolver_and_environment(
+            parsed,
+            crate::AnnotationMode::Off,
+            None,
+            false,
+            Some(&environment),
+        )
+        .unwrap();
+        assert_eq!(
+            emitted.code.contains("require(\"tuatween\")"),
+            expected_builtin,
+            "{declaration}: {}",
+            emitted.code
+        );
+    }
+}

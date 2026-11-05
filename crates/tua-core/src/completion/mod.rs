@@ -1564,6 +1564,7 @@ fn complete_identifier_items(
     for module in crate::builtin_module::MODULES {
         if completion_text_matches(module.name, prefix)
             && crate::builtin_module::is_visible(parsed, module.name)
+            && !environment.project_owns_module(module.name)
         {
             push_unique_completion(
                 &mut completions,

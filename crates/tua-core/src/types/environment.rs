@@ -49,6 +49,7 @@ pub struct TypeEnvironment {
     must_use_accesses: BTreeSet<Vec<String>>,
     exact_module_bindings: BTreeMap<String, String>,
     table_remove_overridden: bool,
+    project_module_globals: BTreeSet<String>,
 }
 
 /// Annotation contracts belong to declarations, not names shared across scopes.
@@ -293,6 +294,26 @@ impl TypeEnvironment {
         }
 
         context
+    }
+
+    /// Project assignments own these module names; the compiler must not inject
+    /// a different runtime. Unknown cross-file values remain dynamically typed.
+    pub(crate) fn with_project_module_globals(
+        mut self,
+        parsed: &ParsedSource,
+        names: &BTreeSet<String>,
+    ) -> Self {
+        self.project_module_globals = names.clone();
+        for name in names {
+            if crate::builtin_module::is_visible(parsed, name) {
+                Arc::make_mut(&mut self.locals).insert(name.clone(), Type::Any);
+            }
+        }
+        self
+    }
+
+    pub(crate) fn project_owns_module(&self, name: &str) -> bool {
+        self.project_module_globals.contains(name)
     }
 
     pub(crate) fn with_local_types(
@@ -821,6 +842,7 @@ pub(crate) fn build_type_environment_with_domain_registry(
             must_use_accesses: BTreeSet::new(),
             exact_module_bindings: BTreeMap::new(),
             table_remove_overridden: lua::table_remove_is_overridden(parsed),
+            project_module_globals: BTreeSet::new(),
         },
         diagnostics,
     )

@@ -99,6 +99,13 @@ parameter contract.
 | `tween` | `local tween = require("tuatween")` |
 | `Camera` | `local Camera = require("tuacamera")` |
 
+Global assignments to `Camera` or `tween` in project source files reserve those
+names for the project across files, suppressing implicit built-in imports and
+built-in editor descriptions. This does not establish runtime initialization
+order or infer an exact cross-file global contract: load the defining file
+before use, or use explicit local imports for typed member access. Computed
+global writes such as `_G[name] = value` do not establish this ownership.
+
 The local name is your choice; Tua recognizes the required module, not a
 special alias. Runtime discovery intentionally requires a statically visible
 string literal. A computed call such as `require(runtimeName)` remains dynamic

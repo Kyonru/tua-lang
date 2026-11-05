@@ -157,12 +157,15 @@ impl AnalysisSnapshot {
                 self.require_path_separator,
             )
         };
+        let environment = file.environment().cloned().map(|environment| {
+            environment.with_project_module_globals(parsed, self.project_module_globals())
+        });
         let diagnostics = crate::emit::emit_lua_artifact_with_mode_import_resolver_and_environment(
             parsed,
             self.config.emit.annotation_mode,
             Some(&resolver),
             self.config.ecs.enabled,
-            file.environment(),
+            environment.as_ref(),
         )
         .err()
         .unwrap_or_default();

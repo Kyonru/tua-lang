@@ -36,6 +36,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Project-assigned `Camera` and `tween` globals prevent built-in module
+  injection across files. Editor metadata follows the same ownership, including
+  unsaved assignment changes; explicit local imports retain their types.
+
 - Nested module functions retain their signatures through table re-exports and
   callable `setmetatable` exports, including completion and argument checking.
 

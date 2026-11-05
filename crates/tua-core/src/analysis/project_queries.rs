@@ -484,6 +484,21 @@ impl AnalysisSnapshot {
         self.semantic_facts_for_parsed(parsed).environment.clone()
     }
 
+    pub(super) fn project_module_globals(&self) -> &BTreeSet<String> {
+        self.project_module_globals.get_or_init(|| {
+            self.files
+                .values()
+                .filter_map(|file| file.semantics())
+                .flat_map(|semantics| semantics.scope.globals().values())
+                .filter(|global| {
+                    global.kind == crate::scope::ScopeGlobalKind::Assigned
+                        && crate::builtin_module::module(&global.name).is_some()
+                })
+                .map(|global| global.name.clone())
+                .collect()
+        })
+    }
+
     pub(super) fn project_type_environment_for_parsed(
         &self,
         parsed: &ParsedSource,
@@ -492,6 +507,7 @@ impl AnalysisSnapshot {
     ) -> TypeEnvironment {
         let _profile = profile::span("analysis.semantic.environment");
         let environment = base_environment
+            .with_project_module_globals(parsed, self.project_module_globals())
             .with_alias_types(self.project_imported_alias_types(parsed))
             .with_local_types(self.project_module_binding_types(parsed))
             .with_exact_module_bindings(self.project_exact_module_bindings(parsed))

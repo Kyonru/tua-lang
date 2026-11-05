@@ -200,6 +200,7 @@ pub(crate) fn emit_lua_artifact_with_mode_import_resolver_and_environment(
             parsed,
             ecs_enabled,
             builtin_constructor_spans,
+            environment,
         );
         apply_lowering_operations(&mut document, operations, parsed)?;
 
@@ -1786,6 +1787,7 @@ fn lower_builtin_call_operations(
     parsed: &ParsedSource,
     ecs_enabled: bool,
     builtin_constructor_spans: BTreeMap<String, SourceSpan>,
+    environment: &TypeEnvironment,
 ) -> Vec<lowering::LoweringOperation> {
     let output = document.code();
     let mut operations = Vec::new();
@@ -1853,7 +1855,7 @@ fn lower_builtin_call_operations(
                                 <= (source_span.start.line, source_span.start.column)
                         });
 
-                    if !binding_is_active {
+                    if !binding_is_active && !environment.project_owns_module(name) {
                         builtin_module_spans[module_index].get_or_insert(source_span);
                     }
                 }

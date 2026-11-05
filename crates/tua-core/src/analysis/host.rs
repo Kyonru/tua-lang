@@ -706,6 +706,7 @@ impl AnalysisHost {
             project_diagnostics_cache: Arc::new(Mutex::new(BTreeMap::new())),
             emission_diagnostics_cache: Arc::new(Mutex::new(BTreeMap::new())),
             reverse_reference_index: Arc::new(OnceLock::new()),
+            project_module_globals: Arc::new(OnceLock::new()),
             call_hierarchy_symbols,
             call_hierarchy_calls,
         };

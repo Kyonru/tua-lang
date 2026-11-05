@@ -12,7 +12,10 @@ unchanged apart from LuaDoc types, so flux's documentation and examples apply
 as written.
 
 A file that declares its own `tween` (a local, parameter, function, or global
-assignment) uses that instead, and nothing is injected.
+assignment) uses that instead, and nothing is injected. A global `tween`
+assignment in another project file also prevents injection. Load the defining
+file before using that global; prefer explicit local imports when you need
+precise cross-file member types.
 
 ## Animate A Value
 

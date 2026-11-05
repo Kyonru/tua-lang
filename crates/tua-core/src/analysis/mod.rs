@@ -215,6 +215,7 @@ pub struct AnalysisSnapshot {
     project_diagnostics_cache: Arc<Mutex<BTreeMap<PathBuf, Vec<Diagnostic>>>>,
     emission_diagnostics_cache: Arc<Mutex<BTreeMap<PathBuf, Vec<Diagnostic>>>>,
     reverse_reference_index: Arc<OnceLock<ReverseReferenceIndex>>,
+    project_module_globals: Arc<OnceLock<BTreeSet<String>>>,
     call_hierarchy_symbols: BTreeMap<PathBuf, Vec<CallHierarchySymbol>>,
     call_hierarchy_calls: BTreeMap<PathBuf, Vec<CallHierarchyCallSite>>,
 }

@@ -21,17 +21,6 @@ workflow pages under `docs/`. Completed work belongs in
 - Fix correctness or responsiveness regressions before expanding language
   syntax.
 
-### Resolve Correctness Defects Found In Full Ports
-
-- Preserve cross-file global module identity before injecting built-in modules:
-  BYTEPATH loads HUMP Camera globally, but another file's `Camera.smooth` can
-  inject Tua Camera and change runtime behavior. An explicit local `_G.Camera`
-  alias is the current workaround; use shared project binding provenance for the fix.
-
-Owner: shared binding, project/module and checker semantics. Acceptance: retain
-the SNKRX and BYTEPATH minimal reproductions, test editor/checker/emitter agreement,
-and replay the full ports without their temporary interop workarounds.
-
 ### Deepen Everyday LOVE Workflows
 
 - Harden asset path navigation and diagnostics across realistic project roots.

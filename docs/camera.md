@@ -8,7 +8,10 @@ icon: lucide/video
 configuration: when a file uses it, Tua emits
 `local Camera = require("tuacamera")` and `tua build` copies the bundled
 runtime into the output. A file that declares its own `Camera` uses that
-instead.
+instead. A global `Camera` assignment in another project file also prevents
+built-in injection. Load that file before using the global; Tua does not
+reorder initialization. Use an explicit local import for precise cross-file
+member types.
 
 !!! note "A starting point, not a framework"
     The camera covers the common cases so a game can start moving quickly:
