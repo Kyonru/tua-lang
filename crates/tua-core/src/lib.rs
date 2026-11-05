@@ -70,6 +70,7 @@ mod source_text;
 mod sprite;
 mod state_machine;
 mod store;
+pub mod testing;
 mod text_match;
 pub mod type_database;
 pub mod type_explanation;

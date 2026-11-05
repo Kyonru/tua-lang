@@ -299,3 +299,19 @@ fn test_command_accepts_selection_and_backend_options() {
     assert!(parse_args(["test", "one", "two"]).is_err());
     assert!(parse_args(["build", "--filter", "x"]).is_err());
 }
+
+#[test]
+fn parses_test_discovery_and_report_options() {
+    let CliAction::Command { options, .. } = parse_args(["test", "--list"]).unwrap() else {
+        panic!()
+    };
+    assert!(options.test.list);
+    let CliAction::Command { options, .. } =
+        parse_args(["test", "--report", "results.json"]).unwrap()
+    else {
+        panic!()
+    };
+    assert_eq!(options.test.report, Some(PathBuf::from("results.json")));
+    assert!(parse_args(["test", "--report"]).is_err());
+    assert!(parse_args(["build", "--list"]).is_err());
+}

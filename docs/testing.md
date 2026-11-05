@@ -125,6 +125,28 @@ Use Busted's standard hooks, assertions, spies, and mocks inside specs. See
 The command currently exposes executable, interpreter, name-filter, and tag
 selection rather than forwarding every Busted CLI option.
 
+## Discover Tests And Export Results
+
+```sh
+tua test --list
+tua test --report test-results.json
+```
+
+`--list` returns versioned JSON with absolute file paths, source-root-relative
+selectors, parse errors and statically discovered cases. It does not compile,
+run Busted, execute specs or create test output. Literal, unshadowed
+`describe`/`context` and `it`/`pending` registrations include full names and
+one-based source positions. Dynamic names, escaped names and aliased registration
+functions remain runnable at file level; discovery does not claim they are absent.
+
+`--report PATH` preserves terminal output and writes JSON containing completion
+and success flags, captured output, and passed/failed/errored/skipped cases.
+Locations in native Tua and ordinary Lua specs refer to source files. User `print`
+output cannot corrupt the JSON. A run that fails before Busted completes leaves
+`completed: false` instead of stale results from a previous run. The destination's
+parent directory must exist. Check both the command exit status and the report;
+`--list` and `--report` are mutually exclusive.
+
 ## Run In VS Code Or CI
 
 Save your files, then run **Tua: Run Unit Tests** in a trusted workspace. It

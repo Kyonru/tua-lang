@@ -112,7 +112,7 @@ impl CommandName {
 
 pub fn command_help(command: CommandName) -> &'static str {
     match command {
-        CommandName::Test => "tua test - build and run unit tests with Busted\n\nUsage:\n  tua test [SOURCE-PATH] [--busted PATH] [--filter PATTERN] [--tags TAGS] [--lua PATH]\n\nDiscovers *_spec.tua and *_spec.lua below [test].source or source.\nSOURCE-PATH is relative to that discovery root. Builds into temporary .tua output,\nthen runs an installed Busted executable (TUA_BUSTED or busted on PATH).\nTests run with the generated output as their working directory.\n",
+        CommandName::Test => "tua test - build and run unit tests with Busted\n\nUsage:\n  tua test [SOURCE-PATH] [--busted PATH] [--filter PATTERN] [--tags TAGS] [--lua PATH] [--list] [--report PATH]\n\n--list returns JSON discovery without executing tests.\n--report writes structured JSON results with mapped source locations.\n\nDiscovers *_spec.tua and *_spec.lua below [test].source or source.\nSOURCE-PATH is relative to that discovery root. Builds into temporary .tua output,\nthen runs an installed Busted executable (TUA_BUSTED or busted on PATH).\nTests run with the generated output as their working directory.\n",
         CommandName::ShaderTools => "tua shader-tools - test installed shader validators\n\nUsage:\n  tua shader-tools\n\nReports JSON using a built-in shader in an isolated directory; does not load the project.\n",
         CommandName::Init => "tua init - create a Tua project\n\nUsage:\n  tua init\n\nCreates tua.toml and src/main.tua without overwriting existing files, and adds generated folders to .gitignore.\n",
         CommandName::Check => "tua check - parse and type-check the project\n\nUsage:\n  tua check [--deny-warnings] [--love PATH]\n",
@@ -165,7 +165,8 @@ where
         let arg = &args[index];
 
         match arg.as_str() {
-            flag @ ("--busted" | "--filter" | "--tags" | "--lua")
+            "--list" if command == CommandName::Test => options.test.list = true,
+            flag @ ("--busted" | "--filter" | "--tags" | "--lua" | "--report")
                 if command == CommandName::Test =>
             {
                 index += 1;
@@ -177,6 +178,7 @@ where
                     "--busted" => options.test.busted = Some(PathBuf::from(value)),
                     "--filter" => options.test.filter = Some(value.clone()),
                     "--tags" => options.test.tags = Some(value.clone()),
+                    "--report" => options.test.report = Some(PathBuf::from(value)),
                     _ => options.test.lua = Some(PathBuf::from(value)),
                 }
             }

@@ -7,6 +7,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use tua_core::{DiagnosticSeverity, LoadedConfig, ProjectWorkspace};
 
+mod discovery;
+mod report;
+
 use crate::build::{build_project_excluding, OutputGuard};
 use crate::error::CliError;
 use crate::source::{discover_build_files_with_exclusions, paths_same_location};
@@ -21,6 +24,8 @@ pub struct TestOptions {
     pub filter: Option<String>,
     pub tags: Option<String>,
     pub lua: Option<PathBuf>,
+    pub list: bool,
+    pub report: Option<PathBuf>,
 }
 
 pub(crate) fn run_tests(
@@ -30,6 +35,14 @@ pub(crate) fn run_tests(
 ) -> Result<String, CliError> {
     let cwd = fs::canonicalize(cwd)
         .map_err(|e| CliError::usage(format!("cannot open test project: {e}")))?;
+    if options.list && options.report.is_some() {
+        return Err(CliError::usage(
+            "--list and --report cannot be used together",
+        ));
+    }
+    if let Some(destination) = &options.report {
+        report::initialize(&cwd, destination)?;
+    }
     let workspace = ProjectWorkspace::from_loaded(&cwd, loaded.clone());
     let test_root = workspace.test_source_root();
     let source = test_root
@@ -53,16 +66,23 @@ pub(crate) fn run_tests(
     let selected = tua_core::normalize_path(source.join(selector));
     let files = discover_build_files_with_exclusions(source, &loaded.config.extension, &excluded)
         .map_err(|d| CliError::from_diagnostics("cannot discover tests", vec![d]))?;
-    let tests = files
+    let selected_tests = files
         .iter()
         .filter(|f| {
             (f.path == selected || f.path.starts_with(&selected))
                 && !workspace.is_type_library_path(&f.path)
                 && workspace.is_spec_path(&f.path)
         })
-        .map(|f| {
+        .map(|f| f.path.as_path())
+        .collect::<Vec<_>>();
+    if options.list {
+        return Ok(discovery::list(&workspace, &selected_tests).to_string());
+    }
+    let tests = selected_tests
+        .iter()
+        .map(|path| {
             workspace
-                .mirrored_output_path_for_source(&f.path)
+                .mirrored_output_path_for_source(path)
                 .expect("discovered test output")
                 .strip_prefix(production_output)
                 .expect("relative output")
@@ -132,14 +152,34 @@ pub(crate) fn run_tests(
         .clone()
         .or_else(|| std::env::var_os("TUA_BUSTED").map(PathBuf::from))
         .unwrap_or_else(|| PathBuf::from("busted"));
+    let report_output = options
+        .report
+        .as_ref()
+        .map(|_| TestOutput::new(&cwd))
+        .transpose()?;
+    let reporter_path = report_output.as_ref().map(|dir| dir.0.join("reporter.lua"));
+    let raw_report = report_output.as_ref().map(|dir| dir.0.join("results.json"));
+    if let Some(path) = &reporter_path {
+        fs::write(path, include_str!("testing/reporter.lua"))
+            .map_err(|error| CliError::usage(format!("cannot prepare test reporter: {error}")))?;
+    }
     let mut command = Command::new(resolve_executable(&cwd, &executable));
-    command.current_dir(&output.0).args([
-        "--output",
-        "plainTerminal",
-        "--verbose",
-        "--lpath",
-        "./?.lua;./?/init.lua;./__tua_tests__/?.lua;./__tua_tests__/?/init.lua",
-    ]);
+    command
+        .current_dir(&output.0)
+        .arg("--output")
+        .arg(
+            reporter_path
+                .as_deref()
+                .unwrap_or(Path::new("plainTerminal")),
+        )
+        .args([
+            "--verbose",
+            "--lpath",
+            "./?.lua;./?/init.lua;./__tua_tests__/?.lua;./__tua_tests__/?/init.lua",
+        ]);
+    if let Some(path) = &raw_report {
+        command.env("TUA_TEST_REPORT", path);
+    }
     for (flag, value) in [("--filter", &options.filter), ("--tags", &options.tags)] {
         if let Some(value) = value {
             command.arg(format!("{flag}={value}"));
@@ -166,6 +206,16 @@ pub(crate) fn run_tests(
         .collect::<Vec<_>>()
         .join("\n");
     let report = format!("{diagnostics}{}", remap_traceback_text(&normalized, &maps));
+    if let (Some(destination), Some(raw_report)) = (&options.report, &raw_report) {
+        report::save(
+            &workspace,
+            &output.0,
+            raw_report,
+            destination,
+            result.status.success(),
+            &report,
+        )?;
+    }
     if result.status.success() {
         Ok(report)
     } else {

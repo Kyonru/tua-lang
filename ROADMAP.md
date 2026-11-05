@@ -60,7 +60,7 @@ results. Evidence: [development trials](internal/devex-trials-2026-11.md).
 ### Unit testing follow-ups
 
 - Add VS Code Test Explorer discovery, individual test execution, watch-mode
-  testing, richer Busted API declarations, and coverage/report integration.
+  testing, richer Busted API declarations, and coverage integration.
 - Add an explicit LOVE runtime test mode; the Busted backend currently tests
   headless Lua logic and requires doubles for LOVE-dependent behavior.
 

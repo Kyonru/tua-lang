@@ -106,7 +106,7 @@ fn remap_traceback_line(line: &str, maps: &[TracebackSourceMap]) -> String {
     output
 }
 
-fn lookup_source_location<'a>(
+pub(crate) fn lookup_source_location<'a>(
     maps: &'a [TracebackSourceMap],
     generated_path: &str,
     generated_line: usize,

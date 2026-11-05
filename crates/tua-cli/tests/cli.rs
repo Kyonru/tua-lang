@@ -5299,3 +5299,100 @@ fn unit_test_spec_exclusion_can_be_disabled_and_cleans_owned_output() {
     assert!(!temp.path().join("build/demo_spec.lua").exists());
     assert!(!temp.path().join("build/demo_spec.lua.map").exists());
 }
+
+#[test]
+fn unit_test_discovery_is_static_and_reports_invalid_files() {
+    let temp = TempDir::new("test-discovery");
+    unit_test_project(&temp);
+    fs::write(
+        temp.path().join("src/spec/invalid_spec.tua"),
+        "local broken =\n",
+    )
+    .unwrap();
+    fs::write(
+        temp.path().join("src/spec/static_spec.tua"),
+        "error('must not execute')\ndescribe('suite', function() it('case', function() end) end)\n",
+    )
+    .unwrap();
+    let result = tua()
+        .args(["test", "--list", "--busted", "/no/backend"])
+        .current_dir(temp.path())
+        .output()
+        .unwrap();
+    assert!(result.status.success(), "{result:?}");
+    let json: serde_json::Value = serde_json::from_slice(&result.stdout).unwrap();
+    let files = json["files"].as_array().unwrap();
+    assert_eq!(files.len(), 3);
+    assert!(files.iter().any(|file| file["error"].as_str().is_some()));
+    assert!(files
+        .iter()
+        .any(|file| file["cases"][0]["full_name"] == "suite case"));
+    assert!(!temp.path().join(".tua").exists());
+}
+
+#[test]
+fn unit_test_json_report_keeps_stdout_and_maps_native_and_lua_locations() {
+    if !Command::new("busted")
+        .arg("--version")
+        .output()
+        .is_ok_and(|o| o.status.success())
+    {
+        return;
+    }
+    let temp = TempDir::new("test-report");
+    unit_test_project(&temp);
+    fs::rename(temp.path().join("src/spec"), temp.path().join("tests")).unwrap();
+    fs::write(temp.path().join("tua.toml"), "[test]\nsource='tests'\n").unwrap();
+    fs::write(
+        temp.path().join("tests/plain_spec.lua"),
+        "it('lua failure', function() assert(false, 'failure') end)\n",
+    )
+    .unwrap();
+    fs::write(temp.path().join("tests/report_spec.tua"), "print('stdout noise')\nit('native failure', function() assert.equals(1, 2) end)\npending('later')\n").unwrap();
+    let run = tua()
+        .args(["test", "--report", "report.json"])
+        .current_dir(temp.path())
+        .output()
+        .unwrap();
+    assert!(!run.status.success());
+    let report: serde_json::Value =
+        serde_json::from_slice(&fs::read(temp.path().join("report.json")).unwrap()).unwrap();
+    assert_eq!(report["completed"], true, "{report}");
+    assert_eq!(report["success"], false);
+    assert!(report["output"].as_str().unwrap().contains("stdout noise"));
+    let tests = report["tests"].as_array().unwrap();
+    let native = tests
+        .iter()
+        .find(|case| case["name"] == "native failure")
+        .unwrap();
+    assert!(
+        native["file"]
+            .as_str()
+            .unwrap()
+            .ends_with("tests/report_spec.tua"),
+        "{native}"
+    );
+    assert_eq!(native["line"], 2);
+    let lua = tests
+        .iter()
+        .find(|case| case["name"] == "lua failure")
+        .unwrap();
+    assert!(
+        lua["file"]
+            .as_str()
+            .unwrap()
+            .ends_with("tests/plain_spec.lua"),
+        "{lua}"
+    );
+    fs::write(temp.path().join("tests/report_spec.tua"), "invalid ???").unwrap();
+    assert!(!tua()
+        .args(["test", "--report", "report.json"])
+        .current_dir(temp.path())
+        .status()
+        .unwrap()
+        .success());
+    let incomplete: serde_json::Value =
+        serde_json::from_slice(&fs::read(temp.path().join("report.json")).unwrap()).unwrap();
+    assert_eq!(incomplete["completed"], false);
+    assert!(incomplete["tests"].as_array().unwrap().is_empty());
+}

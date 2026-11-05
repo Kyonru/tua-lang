@@ -8,6 +8,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Changed
 
+- `tua test --list` discovers literal Busted cases without executing source.
+  `--report PATH` exports versioned JSON results with mapped source locations,
+  captured logs and explicit incomplete-run state for editor/CI integrations.
+
 - `[test] source` provides a dedicated test root shared by analysis and Busted
   builds. Production builds/packages exclude that directory and, by default,
   `_spec` sources; `test.exclude_specs = false` preserves intentional production
