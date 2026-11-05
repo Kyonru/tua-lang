@@ -7598,3 +7598,41 @@ fn cross_file_event_payload_uses_imported_method_return_and_unsaved_edits() {
         .contents
         .contains("boolean"));
 }
+
+#[test]
+fn class_self_parameters_and_guarded_captures_share_source_coordinates() {
+    let fixture = Fixture::parse(
+        r#"-- file: nodes.tua
+final class Node {
+ enabled: boolean = true
+ parent: Self | nil
+ inspect(other: Self) {
+   print(other.<|parameter|>enabled)
+   local parent = self.parent
+   if parent then
+     print(parent.<|guard|>enabled)
+   end
+ }
+ later() {
+   local parent = self.parent
+   if not parent then return end
+   local callback = function()
+     print(parent.<|capture|>enabled)
+   end
+   callback()
+ }
+}
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_file("nodes.tua", fixture.files()[0].source.clone());
+    let snapshot = host.snapshot();
+    for marker in ["parameter", "guard", "capture"] {
+        let labels = completion_labels(&snapshot.completion("nodes.tua", fixture.position(marker)));
+        assert!(labels.contains(&"enabled".into()), "{marker}: {labels:?}");
+        let hover = snapshot
+            .hover("nodes.tua", fixture.position(marker))
+            .unwrap();
+        assert!(hover.contents.contains("boolean"), "{marker}: {hover:?}");
+    }
+}

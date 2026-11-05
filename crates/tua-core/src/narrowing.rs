@@ -198,6 +198,12 @@ pub(crate) fn narrowed_type_at_position(
     position: SourcePosition,
     lookup: impl Fn(&str) -> Option<Type> + Copy,
 ) -> Option<Type> {
+    // Callers use original source positions; control-flow nodes use the
+    // normalized parser coordinates (notably inside native classes).
+    let position = parsed
+        .raw
+        .parser_position_for_source(position)
+        .unwrap_or(position);
     let mut narrowed = None;
 
     collect_narrowed_type_at_position(

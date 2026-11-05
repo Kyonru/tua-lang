@@ -92,6 +92,32 @@ impl TypeEnvironment {
         &self.path
     }
 
+    pub(crate) fn annotation_parameter_type(
+        &self,
+        annotation: &ParsedFunctionAnnotation,
+        name: &str,
+    ) -> Option<Type> {
+        let parameter = annotation
+            .parameters
+            .iter()
+            .find(|parameter| parameter.name == name)?;
+        // Native methods already have resolved scoped Self contracts. Reuse
+        // those facts rather than rebuilding an alias environment per lookup.
+        if let Some(function_name) = annotation.name.as_deref() {
+            if generated_class_function_owner(function_name, &self.class_names).is_some() {
+                if let Some(parameter) = self.function(function_name).and_then(|function| {
+                    function
+                        .parameters
+                        .iter()
+                        .find(|parameter| parameter.name == name)
+                }) {
+                    return Some(parameter.ty.clone());
+                }
+            }
+        }
+        Some(super::type_from_tua_type(&parameter.ty))
+    }
+
     pub fn alias(&self, name: &str) -> Option<&Type> {
         self.aliases.get(name)
     }

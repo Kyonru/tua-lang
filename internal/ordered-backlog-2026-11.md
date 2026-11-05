@@ -28,7 +28,13 @@ reproductions and relevant checks pass.
   The regression checks unsaved return-type changes and old snapshot isolation.
   All 1,604 core and 375 LSP tests pass (`event-core-lsp.log`); the gameplay
   replay reports `dead: boolean` (`event-gameplay.json`).
-- Pending: captured narrowed locals and full-method nested receivers.
+- Completed: source-class `Self` parameters and guarded parent receivers use
+  resolved contracts and correct source/parser coordinates. SNKRX parameter
+  fields and parent metadata work (`class-snkrx.log`); core/LSP suites pass
+  (1,605/375, `class-core-lsp.log`).
+- Pending: Emoji Merge captured narrowed locals after field writes. Its full
+  replay still returns no members (`class-emoji.json`); the smaller guarded
+  callback regression now passes.
 
 ## 2. Navigation and rename
 

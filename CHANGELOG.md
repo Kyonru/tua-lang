@@ -8,6 +8,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Changed
 
+- Native method parameter queries reuse resolved class contracts for `Self`;
+  editor narrowing maps original positions into parser coordinates, restoring
+  guarded parent access inside class methods.
+
 - Cross-file event payload inference uses imported method return contracts,
   including locals initialized from calls and unsaved producer changes. A single
   bounded refinement pass preserves conservative handling of dynamic calls.

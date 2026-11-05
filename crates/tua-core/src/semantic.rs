@@ -24,8 +24,8 @@ use crate::narrowing::{
 };
 use crate::semantic_domains::BuiltinDomainRegistry;
 use crate::types::{
-    deduplicate_inferred_types, type_from_tua_type, FunctionType, MetatableFacts, PrimitiveType,
-    TableField, Type, TypeEnvironment, TypedFunction,
+    deduplicate_inferred_types, FunctionType, MetatableFacts, PrimitiveType, TableField, Type,
+    TypeEnvironment, TypedFunction,
 };
 use crate::{
     ecs, input, object_pool, signal, sprite, state_machine, store, vector, ParsedLanguage,
@@ -1876,14 +1876,8 @@ impl<'a> SemanticModel<'a> {
 
                 contains_position(span, position).then_some(function)
             })
-            .filter_map(|function| {
-                function
-                    .parameters
-                    .iter()
-                    .find(|parameter| parameter.name == name)
-            })
+            .filter_map(|function| self.environment.annotation_parameter_type(function, name))
             .next_back()
-            .map(|parameter| type_from_tua_type(&parameter.ty))
             .or_else(|| self.contextual_call_parameter_type(name, position))
             .or_else(|| {
                 let mut collector = FunctionBodyCollector::default();
