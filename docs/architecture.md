@@ -92,6 +92,12 @@ flowchart TD
   ProjectFacts --> Queries
 ```
 
+Interactive current-file queries can reuse immutable file facts published in
+a matching worker snapshot. Reuse checks the host revision and VFS source
+identity. Before an edit, the coordinator adopts missing facts from its current
+snapshot so ordinary dependency invalidation can preserve unaffected files.
+This avoids rebuilding the same file in successive request-worker clones.
+
 ### Inputs And Identity
 
 `ProjectModel` interprets workspace configuration: source and output roots,

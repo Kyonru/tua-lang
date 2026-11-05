@@ -39,6 +39,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Interactive requests reuse file facts published by other analysis workers.
+  Edits retain unaffected snapshot facts before dependency invalidation, avoiding
+  repeated file analysis during completion and hover.
+
 - Locals with unresolved initializers still shadow outer or unrelated annotation
   contracts. Reassignments respect the nearest binding, including LuaDoc locals.
 

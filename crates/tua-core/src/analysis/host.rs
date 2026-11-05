@@ -437,6 +437,7 @@ impl AnalysisHost {
             return false;
         }
 
+        self.adopt_current_snapshot_files();
         let invalidated_dependents =
             self.cache
                 .borrow_mut()
@@ -460,6 +461,7 @@ impl AnalysisHost {
         self.input_errors.remove(&path);
         let had_module_path = self.has_module_path(&path);
         self.indexed_module_paths.remove(&path);
+        self.adopt_current_snapshot_files();
         self.cache.borrow_mut().invalidate_file(path.as_ref(), true);
         self.clear_query_caches();
         self.last_good_files.borrow_mut().remove(&path);
@@ -472,6 +474,7 @@ impl AnalysisHost {
     }
 
     pub fn invalidate_file_analysis(&mut self, path: impl AsRef<Path>) {
+        self.adopt_current_snapshot_files();
         self.cache
             .borrow_mut()
             .invalidate_file(path.as_ref(), false);
@@ -504,6 +507,7 @@ impl AnalysisHost {
             return;
         }
 
+        self.adopt_current_snapshot_files();
         let invalidated_dependents =
             self.cache
                 .borrow_mut()
@@ -526,6 +530,7 @@ impl AnalysisHost {
     pub fn close_document(&mut self, path: impl AsRef<Path>) {
         let path = normalize_path(path.as_ref());
         let had_module_path = self.has_module_path(&path);
+        self.adopt_current_snapshot_files();
         self.cache.borrow_mut().invalidate_file(path.as_ref(), true);
         self.clear_query_caches();
         self.vfs.close_file(&path);
@@ -1872,15 +1877,68 @@ impl AnalysisHost {
             .unwrap_or_default()
     }
 
+    /// Preserve worker-published file facts before an edit invalidates its
+    /// snapshot. Normal dependency invalidation then removes only affected facts.
+    fn adopt_current_snapshot_files(&self) {
+        let snapshot_cache = self
+            .snapshot_cache
+            .lock()
+            .expect("analysis snapshot cache lock poisoned");
+        let Some(snapshot) = snapshot_cache
+            .as_ref()
+            .filter(|cached| cached.revision == self.revision)
+        else {
+            return;
+        };
+        let mut cache = self.cache.borrow_mut();
+        for (path, file) in &snapshot.snapshot.files {
+            if cache.files.contains_key(path)
+                || snapshot.snapshot.vfs.source_version(path) != self.vfs.source_version(path)
+                || self.vfs.source(path) != Some(file.source.as_str())
+                || self.vfs.kind(path).map(analysis_source_kind) != Some(file.kind)
+            {
+                continue;
+            }
+            cache.update_dependencies(path, file);
+            cache.files.insert(
+                path.clone(),
+                CachedAnalysisFile {
+                    source: file.source.clone(),
+                    kind: file.kind,
+                    file: file.clone(),
+                },
+            );
+        }
+    }
+
     fn current_analysis_file(&self, path: &Path) -> Option<AnalysisFile> {
         let path = normalize_path(path);
         let _profile = profile::span_for_path("analysis.current_file", &path);
-        let source = self.vfs.source(&path)?.to_owned();
+        let source = self.vfs.source(&path)?;
         let kind = analysis_source_kind(self.vfs.kind(&path)?);
+        // Request workers share immutable snapshots but clone their local query
+        // caches. Reuse facts another worker already published before building
+        // the same file again in this worker's otherwise cold cache.
+        if let Some(file) = self
+            .snapshot_cache
+            .lock()
+            .expect("analysis snapshot cache lock poisoned")
+            .as_ref()
+            .filter(|cached| {
+                cached.revision == self.revision
+                    && cached.snapshot.vfs.source_version(&path) == self.vfs.source_version(&path)
+            })
+            .and_then(|cached| cached.snapshot.files.get(&path))
+            .filter(|file| file.kind == kind && file.source == source)
+            .cloned()
+        {
+            self.cache.borrow_mut().record_file_hit();
+            return Some(file);
+        }
         let source_roots = self.vfs.options().source_roots.clone();
         Some(self.cache.borrow_mut().cached_file(
             &path,
-            &source,
+            source,
             kind,
             AnalysisBuildContext {
                 config: &self.config,

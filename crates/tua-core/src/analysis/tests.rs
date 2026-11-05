@@ -7125,3 +7125,76 @@ fn returned_native_instance_preserves_colon_call_receivers() {
         .collect::<Vec<_>>();
     assert!(errors.is_empty(), "{errors:?}");
 }
+
+#[test]
+fn current_file_queries_reuse_a_worker_snapshot_without_rebuilding() {
+    let mut coordinator = AnalysisHost::new();
+    let path = PathBuf::from("main.tua");
+    coordinator.set_file(&path, "local function before() end\n");
+    let worker = coordinator.clone();
+    worker.snapshot();
+    assert_eq!(coordinator.cache_stats().parse_misses, 0);
+    let symbols = coordinator.document_symbols(&path);
+    assert!(symbols.iter().any(|symbol| symbol.name == "before"));
+    assert_eq!(coordinator.cache_stats().parse_misses, 0);
+    assert_eq!(coordinator.cache_stats().type_environment_misses, 0);
+
+    coordinator.set_file(&path, "local function after() end\n");
+    let symbols = coordinator.document_symbols(&path);
+    assert!(symbols.iter().any(|symbol| symbol.name == "after"));
+    assert!(!symbols.iter().any(|symbol| symbol.name == "before"));
+    assert_eq!(coordinator.cache_stats().parse_misses, 1);
+}
+
+#[test]
+fn worker_snapshot_reuse_checks_source_identity_for_divergent_edits() {
+    let mut coordinator = AnalysisHost::new();
+    let path = PathBuf::from("main.tua");
+    coordinator.set_file(&path, "local function original() end\n");
+    let mut worker = coordinator.clone();
+    worker.set_file(&path, "local function worker_edit() end\n");
+    worker.snapshot();
+    coordinator.set_file(&path, "local function current_edit() end\n");
+    let symbols = coordinator.document_symbols(&path);
+    assert!(symbols.iter().any(|symbol| symbol.name == "current_edit"));
+    assert!(!symbols.iter().any(|symbol| symbol.name == "worker_edit"));
+}
+
+#[test]
+fn edits_adopt_worker_facts_and_invalidate_only_affected_dependencies() {
+    let project = TempProject::new("worker-snapshot-handoff");
+    let producer = project.write("src/producer.tua", "return {value = 1}\n");
+    let consumer = project.write(
+        "src/consumer.tua",
+        "local api = require('producer')\nlocal value: number = api.value\n",
+    );
+    let unrelated = project.write("src/unrelated.tua", "local independent = 1\n");
+    let mut coordinator = AnalysisHost::new();
+    coordinator.set_source_roots([project.path().join("src")]);
+    coordinator.set_file(&producer, "return {value = 1}\n");
+    coordinator.set_file(
+        &consumer,
+        "local api = require('producer')\nlocal value: number = api.value\n",
+    );
+    coordinator.set_file(&unrelated, "local independent = 1\n");
+    coordinator.clone().snapshot();
+    assert_eq!(coordinator.cache_stats().parse_misses, 0);
+    coordinator.open_document(&producer, "return {value = 'changed'}\n");
+    let snapshot = coordinator.snapshot();
+    assert!(snapshot
+        .diagnostics(&consumer)
+        .iter()
+        .any(|d| d.code == Some(DiagnosticCode::TYPE_MISMATCH)));
+    let stats = coordinator.cache_stats();
+    assert_eq!(
+        stats.parse_misses, 2,
+        "producer and affected consumer only: {stats:?}"
+    );
+    assert_eq!(stats.dependent_invalidations, 1);
+    coordinator.close_document(&producer);
+    assert!(!coordinator
+        .snapshot()
+        .diagnostics(&consumer)
+        .iter()
+        .any(|d| d.code == Some(DiagnosticCode::TYPE_MISMATCH)));
+}
