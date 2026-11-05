@@ -8,6 +8,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Changed
 
+- Cross-file event payload inference uses imported method return contracts,
+  including locals initialized from calls and unsaved producer changes. A single
+  bounded refinement pass preserves conservative handling of dynamic calls.
+
 - Imported native instance aliases retain recursive `Self` identity through
   arrays and fluent returns, preserving completion and hover without unbounded
   type expansion. Recursive LuaCATS safeguards remain in place.

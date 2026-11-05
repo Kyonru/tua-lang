@@ -560,21 +560,7 @@ impl AnalysisSnapshot {
     }
 
     fn project_imported_alias_types(&self, parsed: &ParsedSource) -> Vec<(String, Type)> {
-        referenced_type_names(parsed)
-            .into_iter()
-            .filter_map(|name| {
-                self.type_database
-                    .resolve_type_name(&self.module_graph, &parsed.path, &name)
-                    .map(|binding| {
-                        let ty = self.type_database.resolve_type(
-                            &self.module_graph,
-                            &binding.module_path,
-                            &binding.ty,
-                        );
-                        (name, ty)
-                    })
-            })
-            .collect()
+        database::project_imported_alias_types(parsed, &self.module_graph, &self.type_database)
     }
 
     fn project_module_binding_deprecations(

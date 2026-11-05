@@ -662,11 +662,43 @@ impl AnalysisHost {
         let usage_index = {
             let _profile = profile::span("analysis.index.usage.project");
 
+            let usages = files
+                .iter()
+                .map(|(path, file)| {
+                    let mut usage = Arc::clone(&file.usage_index);
+                    if usage.needs_project_payload_types() {
+                        let facts = file
+                            .parsed
+                            .as_ref()
+                            .ok()
+                            .zip(file.semantics())
+                            .map(|(parsed, facts)| (parsed, &facts.environment, &facts.scope))
+                            .or_else(|| {
+                                file.degraded_semantics
+                                    .as_ref()
+                                    .map(|facts| (&facts.parsed, &facts.environment, &facts.scope))
+                            });
+                        if let Some((parsed, base_environment, scope)) = facts {
+                            let environment = base_environment.clone().with_alias_types(
+                                database::project_imported_alias_types(
+                                    parsed,
+                                    &module_graph,
+                                    &type_database,
+                                ),
+                            );
+                            usage = Arc::new(usage.with_project_payload_types(
+                                parsed,
+                                &environment,
+                                scope,
+                            ));
+                        }
+                    }
+                    (path.as_path(), usage)
+                })
+                .collect::<Vec<_>>();
             ProjectUsageIndex::build(
                 self.revision,
-                files
-                    .iter()
-                    .map(|(path, file)| (path.as_path(), &file.usage_index)),
+                usages.iter().map(|(path, usage)| (*path, usage)),
                 &module_graph,
                 &type_database,
             )

@@ -882,3 +882,20 @@ pub(super) fn analysis_source_kind(kind: VfsSourceKind) -> AnalysisSourceKind {
         VfsSourceKind::Tua => AnalysisSourceKind::Tua,
     }
 }
+
+/// Resolve annotation imports once through the project database, without depending
+/// on callback/event facts that are still being indexed.
+pub(super) fn project_imported_alias_types(
+    parsed: &ParsedSource,
+    module_graph: &ModuleGraph,
+    type_database: &ProjectTypeDatabase,
+) -> Vec<(String, Type)> {
+    referenced_type_names(parsed)
+        .into_iter()
+        .filter_map(|name| {
+            type_database
+                .resolve_type_name(module_graph, &parsed.path, &name)
+                .map(|binding| (name, binding.ty))
+        })
+        .collect()
+}

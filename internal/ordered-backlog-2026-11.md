@@ -22,7 +22,12 @@ reproductions and relevant checks pass.
   edits have regression coverage. SNKRX follower completion/hover is restored
   (`self-snkrx.json`); source-class parameter/parent contexts still fail and stay
   in the class-context phase. Recursive LuaCATS controls remain unchanged.
-- Pending: callback/event call results across modules.
+- Completed: imported method result locals propagate into cross-file event
+  handlers. A bounded import-aware payload pass shares annotation resolution
+  with editor queries; unknown/cyclic event inference stays conservative.
+  The regression checks unsaved return-type changes and old snapshot isolation.
+  All 1,604 core and 375 LSP tests pass (`event-core-lsp.log`); the gameplay
+  replay reports `dead: boolean` (`event-gameplay.json`).
 - Pending: captured narrowed locals and full-method nested receivers.
 
 ## 2. Navigation and rename

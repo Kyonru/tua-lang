@@ -7562,3 +7562,39 @@ fn recursive_imported_self_preserves_members_at_arbitrary_access_depth() {
         );
     }
 }
+
+#[test]
+fn cross_file_event_payload_uses_imported_method_return_and_unsaved_edits() {
+    let temp = TempProject::new("event-method-result");
+    temp.write("tua.toml", "source = 'src'\n");
+    let producer = "export type Actor = { damage: (amount: number) -> boolean }\nreturn {}\n";
+    temp.write("src/actor.tua", producer);
+    temp.write("src/events.tua", "return { combat = signal() }\n");
+    temp.write("src/world.tua", "import type { Actor } from 'actor'\nlocal events = require('events')\nlocal actors: Actor[] = {}\nlocal function hit(amount: number)\n local target = actors[1]\n local dead = target:damage(amount)\n events.combat:emit('hit', dead)\nend\nreturn { hit = hit }\n");
+    let fixture = Fixture::parse("-- file: src/main.tua\nlocal events = require('events')\nevents.combat:on('hit', function(dead)\n print(<|hover|>dead)\nend)\n");
+    let path = temp.path.join("src/main.tua");
+    temp.write("src/main.tua", &fixture.files()[0].source);
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([temp.path.join("src")]);
+    for file in ["actor.tua", "events.tua", "world.tua", "main.tua"] {
+        let path = temp.path.join("src").join(file);
+        host.set_file(&path, fs::read_to_string(&path).unwrap());
+    }
+    let old = host.snapshot();
+    let hover = old.hover(&path, fixture.position("hover")).unwrap();
+    assert!(hover.contents.contains("boolean"), "{hover:?}");
+    host.set_file(
+        temp.path.join("src/actor.tua"),
+        producer.replace("boolean", "string"),
+    );
+    let hover = host
+        .snapshot()
+        .hover(&path, fixture.position("hover"))
+        .unwrap();
+    assert!(hover.contents.contains("string"), "{hover:?}");
+    assert!(old
+        .hover(&path, fixture.position("hover"))
+        .unwrap()
+        .contents
+        .contains("boolean"));
+}

@@ -91,6 +91,39 @@ impl FileUsageIndex {
         index
     }
 
+    pub(crate) fn needs_project_payload_types(&self) -> bool {
+        self.signal_events.iter().any(|(mention, _)| {
+            mention
+                .inferred_emit_payload
+                .as_ref()
+                .is_some_and(|payload| payload.iter().any(|parameter| parameter.ty == Type::Any))
+        })
+    }
+
+    /// Refine payloads after project imports are known. Receiver ownership and
+    /// lexical usage counts remain the cached file facts. This is one bounded
+    /// pass, never a recursive traversal through handler/event dependencies.
+    pub(crate) fn with_project_payload_types(
+        &self,
+        parsed: &ParsedSource,
+        environment: &TypeEnvironment,
+        scope: &ScopeMap,
+    ) -> Self {
+        let mut refined = self.clone();
+        let mentions = collect_potential_event_mentions(parsed, environment, Some(scope));
+        for (mention, _) in &mut refined.signal_events {
+            if let Some(project) = mentions
+                .iter()
+                .find(|project| project.call_span == mention.call_span)
+            {
+                if let Some(payload) = &project.inferred_emit_payload {
+                    mention.inferred_emit_payload = Some(payload.clone());
+                }
+            }
+        }
+        refined
+    }
+
     fn collect_member_usage(&mut self, source: &str) {
         let bytes = source.as_bytes();
         let mut index = 0;
