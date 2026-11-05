@@ -32,9 +32,10 @@ reproductions and relevant checks pass.
   resolved contracts and correct source/parser coordinates. SNKRX parameter
   fields and parent metadata work (`class-snkrx.log`); core/LSP suites pass
   (1,605/375, `class-core-lsp.log`).
-- Pending: Emoji Merge captured narrowed locals after field writes. Its full
-  replay still returns no members (`class-emoji.json`); the smaller guarded
-  callback regression now passes.
+- Completed: Emoji Merge captured locals retain non-nil guards after member
+  writes and OR-guard fallthrough. Root reassignment still invalidates narrowing.
+  Saved and unsaved callback completion now pass (`capture-emoji.log`);
+  1,606 core and 375 LSP tests pass (`capture-core-lsp.log`).
 
 ## 2. Navigation and rename
 

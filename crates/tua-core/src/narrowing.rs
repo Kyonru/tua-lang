@@ -250,8 +250,17 @@ fn collect_narrowed_type_at_position(
         if !starts_before(span.end, position) {
             break;
         }
-        if stmt_mutates_name_before(stmt, name, position) {
-            *narrowed = None;
+        if narrowed.is_some() && stmt_mutates_name_before(stmt, name, position, true) {
+            let only_non_nil =
+                narrowed
+                    .as_ref()
+                    .zip(lookup(name))
+                    .is_some_and(|(current, base)| {
+                        *current == remove_nil(&resolve_aliases_from_map(aliases, &base, 0))
+                    });
+            if !only_non_nil || stmt_mutates_name_before(stmt, name, position, false) {
+                *narrowed = None;
+            }
         }
         if let Some(guarded) = narrowed_type_after_guard(stmt, aliases, name, lookup) {
             *narrowed = Some(guarded);
@@ -408,7 +417,7 @@ fn collect_if_branch_narrowing(
         return;
     }
 
-    if !block_mutates_name_before(block, name, position) {
+    if !block_mutates_name_before(block, name, position, true) {
         let branch_narrowing = condition_narrowings(condition)
             .into_iter()
             .find(|narrowing| narrowing.name == name)
@@ -426,50 +435,73 @@ fn collect_if_branch_narrowing(
     collect_narrowed_type_at_position(block, aliases, name, position, lookup, narrowed);
 }
 
-fn block_mutates_name_before(block: &ast::Block, name: &str, position: SourcePosition) -> bool {
+fn block_mutates_name_before(
+    block: &ast::Block,
+    name: &str,
+    position: SourcePosition,
+    fields: bool,
+) -> bool {
     block
         .stmts()
-        .any(|stmt| stmt_mutates_name_before(stmt, name, position))
+        .any(|stmt| stmt_mutates_name_before(stmt, name, position, fields))
 }
 
-fn stmt_mutates_name_before(stmt: &ast::Stmt, name: &str, position: SourcePosition) -> bool {
+fn stmt_mutates_name_before(
+    stmt: &ast::Stmt,
+    name: &str,
+    position: SourcePosition,
+    fields: bool,
+) -> bool {
     if node_start(stmt).is_some_and(|start| !starts_before(start, position)) {
         return false;
     }
 
     match stmt {
-        ast::Stmt::Assignment(assignment) => assignment
-            .variables()
-            .iter()
-            .any(|var| assigned_name(var).as_deref() == Some(name)),
+        ast::Stmt::Assignment(assignment) => assignment.variables().iter().any(|var| {
+            (if fields {
+                assigned_name(var)
+            } else {
+                directly_assigned_name(var)
+            })
+            .as_deref()
+                == Some(name)
+        }),
         ast::Stmt::LocalAssignment(local) => local
             .names()
             .iter()
             .any(|local_name| token_text(local_name) == name),
         ast::Stmt::CompoundAssignment(assignment) => {
-            assigned_name(assignment.lhs()).as_deref() == Some(name)
+            (if fields {
+                assigned_name(assignment.lhs())
+            } else {
+                directly_assigned_name(assignment.lhs())
+            })
+            .as_deref()
+                == Some(name)
         }
-        ast::Stmt::Do(block) => block_mutates_name_before(block.block(), name, position),
+        ast::Stmt::Do(block) => block_mutates_name_before(block.block(), name, position, fields),
         ast::Stmt::GenericFor(for_stmt) => {
-            block_mutates_name_before(for_stmt.block(), name, position)
+            block_mutates_name_before(for_stmt.block(), name, position, fields)
         }
         ast::Stmt::If(if_stmt) => {
-            block_mutates_name_before(if_stmt.block(), name, position)
+            block_mutates_name_before(if_stmt.block(), name, position, fields)
                 || if_stmt.else_if().is_some_and(|else_ifs| {
-                    else_ifs
-                        .iter()
-                        .any(|else_if| block_mutates_name_before(else_if.block(), name, position))
+                    else_ifs.iter().any(|else_if| {
+                        block_mutates_name_before(else_if.block(), name, position, fields)
+                    })
                 })
-                || if_stmt
-                    .else_block()
-                    .is_some_and(|else_block| block_mutates_name_before(else_block, name, position))
+                || if_stmt.else_block().is_some_and(|else_block| {
+                    block_mutates_name_before(else_block, name, position, fields)
+                })
         }
         ast::Stmt::NumericFor(for_stmt) => {
-            block_mutates_name_before(for_stmt.block(), name, position)
+            block_mutates_name_before(for_stmt.block(), name, position, fields)
         }
-        ast::Stmt::Repeat(repeat) => block_mutates_name_before(repeat.block(), name, position),
+        ast::Stmt::Repeat(repeat) => {
+            block_mutates_name_before(repeat.block(), name, position, fields)
+        }
         ast::Stmt::While(while_stmt) => {
-            block_mutates_name_before(while_stmt.block(), name, position)
+            block_mutates_name_before(while_stmt.block(), name, position, fields)
         }
         _ => false,
     }
@@ -508,6 +540,15 @@ fn condition_narrowings(condition: &Expression) -> Vec<TypeNarrowing> {
 
 fn false_condition_narrowings(condition: &Expression) -> Vec<TypeNarrowing> {
     match condition {
+        // Both operands must be false when an OR guard falls through.
+        Expression::BinaryOperator {
+            lhs,
+            binop: ast::BinOp::Or(_),
+            rhs,
+        } => false_condition_narrowings(lhs)
+            .into_iter()
+            .chain(false_condition_narrowings(rhs))
+            .collect(),
         Expression::UnaryOperator {
             unop: ast::UnOp::Not(_),
             expression,

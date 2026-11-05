@@ -8,6 +8,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Changed
 
+- Falling through an `or` guard retains the non-nil local type after member
+  writes, restoring captured callback completion. Reassigning the local still
+  invalidates that guard; discriminant-based narrowing stays conservative.
+
 - Native method parameter queries reuse resolved class contracts for `Self`;
   editor narrowing maps original positions into parser coordinates, restoring
   guarded parent access inside class methods.

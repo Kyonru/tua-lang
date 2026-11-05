@@ -7636,3 +7636,22 @@ final class Node {
         assert!(hover.contents.contains("boolean"), "{marker}: {hover:?}");
     }
 }
+
+#[test]
+fn guarded_capture_keeps_non_nil_after_member_writes_but_not_reassignment() {
+    for (write, expected) in [("item.enabled = true", true), ("item = nil", false)] {
+        let fixture = Fixture::parse(&format!("-- file: capture.tua\ntype Item = {{ enabled: boolean }}\nlocal function later(item: Item | nil)\n if not item or item.enabled then return end\n {write}\n local callback = function() print(item.<|complete|>enabled) end\nend\n"));
+        let mut host = AnalysisHost::new();
+        host.set_file("capture.tua", fixture.files()[0].source.clone());
+        let labels = completion_labels(
+            &host
+                .snapshot()
+                .completion("capture.tua", fixture.position("complete")),
+        );
+        assert_eq!(
+            labels.contains(&"enabled".into()),
+            expected,
+            "{write}: {labels:?}"
+        );
+    }
+}

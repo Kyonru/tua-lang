@@ -82,11 +82,6 @@ results. Evidence: [development trials](internal/devex-trials-2026-11.md).
 - **Fluent expression navigation:** extend definition/reference provenance through
   call results. Completion, hover and signatures now use shared receiver types,
   including incomplete edits and void-call boundaries.
-- **Remaining class contexts:** restore captured narrowed-local completion in
-  delayed callbacks and isolate full-method nested imported-field resolution.
-  Source-class `Self` parameters and guarded parents now resolve correctly;
-  the Emoji Merge captured-local reproduction still fails after field writes.
-  The porting audit retains failing cases alongside working minimal controls.
 - **Native class parameter navigation:** preserve header identities and source
   provenance for definition, references, and rename, including shadowing and
   exact original-source edits.
