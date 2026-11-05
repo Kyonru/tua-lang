@@ -8,6 +8,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Changed
 
+- Added a Lua migration guide for singleton state, explicit services, native
+  classes and typed adapters, including initialization and legacy loader pitfalls.
+
 - ECS analysis skips unrelated method receivers and infers component arguments
   only for proven ECS operations, avoiding recursive work in ordinary Lua games.
 

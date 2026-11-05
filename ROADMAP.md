@@ -108,9 +108,8 @@ reproductions and current workarounds.
 - Make init-before-field-default behavior easier to discover, and consider a
   targeted diagnostic when a default overwrites an init assignment. Changing
   ordering requires a compatibility decision, not a silent fix.
-- Document migration from singleton tables and mixins to explicit services,
-  native classes, and typed adapters. Evaluate reusable declarations for existing
-  timer libraries before adding a built-in scheduler domain.
+- Evaluate reusable declarations for existing timer libraries before adding
+  a built-in scheduler domain.
 
 Owner: shared semantics/checker and documentation. Acceptance: focused core/LSP
 regressions and replay of the [five upstream porting trials](internal/upstream-port-audit-2026-11.md),
@@ -118,10 +117,6 @@ including ordinary functions, class bodies, unsaved edits, custom library
 mutations, and runtime equivalence. Preserve full-game regression harnesses;
 installed-editor, long-session, external-service and visual parity validation
 remain distinct follow-up work.
-
-Migration tooling should also explain supported `emit_maps = false` for legacy
-loaders that require every directory entry, documented `.tua` restrictions on
-`goto`, and LOVE version compatibility without rewriting vendor dependencies.
 
 ### Improve Comment And Annotation Authoring
 

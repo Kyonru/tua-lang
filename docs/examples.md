@@ -24,7 +24,9 @@ without depending on real art or audio files.
 
 It also includes focused modules for the Baton-backed `input({...})` helper,
 state machines, stores, Signals, ECS, object pools, sprite sheets, vectors, and
-Lua interoperability.
+Lua interoperability. `src/polymorphism.tua` demonstrates cross-module native
+inheritance and typed adapters for unrelated gameplay and UI objects; it also
+serves as a runnable companion to the [migration guidance](lua-interop.md#migrate-singleton-tables-and-mixins).
 
 ## `examples/linter`
 

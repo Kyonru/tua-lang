@@ -49,6 +49,57 @@ Tua analyzes them with LuaJIT syntax, so a Lua module that uses `goto`,
 labels, or LuaJIT number suffixes keeps its inferred exports. `.tua` source
 does not accept `goto`.
 
+## Migrate Singleton Tables And Mixins
+
+Keep existing modules running while adding types at their public boundaries.
+A Lua singleton returned by `require` already shares one runtime value; changing
+its file extension does not require converting it to a class. Annotate stable
+parameters and return shapes first, retaining dynamic vendor libraries as Lua.
+
+When a singleton's hidden state makes tests or multiple game sessions difficult,
+pass that state explicitly to a service function:
+
+```tua title="src/counter.tua"
+export type Counter = { value: number }
+
+local function increment(counter: Counter, amount: number): number
+  counter.value += amount
+  return counter.value
+end
+
+return { increment = increment }
+```
+
+```tua title="src/main.tua"
+import type { Counter } from "counter"
+local counters = require("counter")
+local session: Counter = { value = 0 }
+print(counters.increment(session, 1))
+```
+
+Use a native class when instance identity, constructor guarantees, or shared
+base behavior helps the model. Export an instance alias alongside its runtime
+constructor as shown in [imported class types](#share-types-without-runtime-imports).
+Call imported instance methods with `:` so their receiver is explicit in Lua.
+For fields computed in `init`, omit a field default: defaults run after `init`
+and would overwrite its assignment. See the [class initialization rules](language.md#classes).
+
+Do not translate a mixin mechanically into inheritance. Keep independent
+behaviors as explicit collaborators, or adapt unrelated objects to a small
+record of typed functions. The runnable
+[polymorphism example](examples.md) shows native inheritance
+and typed adapters side by side. Tua does not currently have interfaces,
+protocols, or generic classes; the adapter's functions make receiver binding
+explicit without requiring those features.
+
+Before changing a legacy game's runtime, preserve its LOVE version and dependency
+licenses, then compare the original and emitted application under the same
+runtime. In particular, LOVE 0.10 and 11 use different color ranges; changing
+source syntax does not upgrade those APIs. Keep LuaJIT-only `goto` code in `.lua`
+modules. For loaders that require every directory entry, either filter for
+`.lua` or set `emit_maps = false` in `tua.toml` so map sidecars are not treated as
+modules. This trades source-mapped errors for compatibility with that loader.
+
 ## Use Tua Runtimes From Lua
 
 Plain Lua does not receive Tua's compiler-injected globals. Import the runtime
