@@ -8,6 +8,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Changed
 
+- Full file checking and linting are deferred until diagnostic queries, reducing
+  cold and post-edit completion work while retaining cached diagnostic results.
+
 - Added `tua test` and **Tua: Run Unit Tests** using an installed Busted backend.
   Typed/Lua specs run from isolated build output with source-mapped failures,
   name/tag filtering, and explicit backend/interpreter selection.

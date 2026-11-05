@@ -75,6 +75,7 @@ impl AnalysisSnapshot {
             return Vec::new();
         };
         let mut diagnostics = file.diagnostics.clone();
+        diagnostics.extend(self.checker_diagnostics(path.as_ref(), file));
         diagnostics.extend(self.emission_diagnostics(path.as_ref(), file));
 
         let project_type_diagnostics = self.project_type_diagnostics(path.as_ref(), file);
@@ -126,6 +127,56 @@ impl AnalysisSnapshot {
             diagnostics,
             &self.config.diagnostics,
         )
+    }
+
+    fn checker_diagnostics(&self, path: &Path, file: &AnalysisFile) -> Vec<Diagnostic> {
+        file.checker_diagnostics
+            .get_or_init(|| {
+                let default_ecs = crate::config::EcsConfig::default();
+                let (parsed, environment, environment_diagnostics, ecs) = match &file.parsed {
+                    Ok(parsed) => {
+                        let semantics = file
+                            .semantics
+                            .as_ref()
+                            .expect("parsed file must have semantic facts");
+                        (
+                            parsed,
+                            &semantics.environment,
+                            &semantics.environment_diagnostics,
+                            &default_ecs,
+                        )
+                    }
+                    Err(_) => {
+                        let Some(degraded) = &file.degraded_semantics else {
+                            return Vec::new();
+                        };
+                        (
+                            &degraded.parsed,
+                            &degraded.environment,
+                            &degraded.environment_diagnostics,
+                            &self.config.ecs,
+                        )
+                    }
+                };
+                if !environment_diagnostics.is_empty() {
+                    return Vec::new();
+                }
+                let _profile = profile::span_for_path("analysis.check", path);
+                let mut diagnostics_config = self.config.diagnostics.clone();
+                diagnostics_config.inline_ignores = false;
+                check_parsed_source_with_environment_and_ecs_config(
+                    parsed,
+                    environment,
+                    analysis_asset_roots(self.vfs.source_roots(), &self.asset_roots),
+                    &diagnostics_config,
+                    &self.config.jit,
+                    ecs,
+                    self.asset_index.as_ref(),
+                )
+                .err()
+                .unwrap_or_default()
+            })
+            .clone()
     }
 
     fn emission_diagnostics(&self, path: &Path, file: &AnalysisFile) -> Vec<Diagnostic> {

@@ -7280,3 +7280,48 @@ fn recovered_file_checking_preserves_environment_and_body_errors() {
         }
     }
 }
+
+#[test]
+fn completion_defers_checker_and_diagnostics_cache_follows_file_identity() {
+    for partial in [false, true] {
+        let suffix = if partial { "item.\n" } else { "" };
+        let source =
+            format!("local value: number = 'wrong'\nlocal item = {{ field = 1 }}\n{suffix}");
+        let mut host = AnalysisHost::new();
+        host.set_file("lazy.tua", source.clone());
+        let snapshot = host.snapshot();
+        let file = snapshot.file(Path::new("lazy.tua")).unwrap();
+        assert!(file.checker_diagnostics.get().is_none());
+        snapshot.completion("lazy.tua", SourcePosition { line: 2, column: 6 });
+        assert!(
+            file.checker_diagnostics.get().is_none(),
+            "completion must not check function bodies"
+        );
+        let diagnostics = snapshot.diagnostics("lazy.tua");
+        assert!(file.checker_diagnostics.get().is_some());
+        assert!(
+            diagnostics
+                .iter()
+                .any(|d| d.code == Some(DiagnosticCode::TYPE_MISMATCH)),
+            "{diagnostics:?}"
+        );
+        assert_eq!(diagnostics, snapshot.diagnostics("lazy.tua"));
+        host.set_file("lazy.tua", source.replace("'wrong'", "1"));
+        let changed = host.snapshot();
+        assert!(changed
+            .file(Path::new("lazy.tua"))
+            .unwrap()
+            .checker_diagnostics
+            .get()
+            .is_none());
+        assert!(!changed
+            .diagnostics("lazy.tua")
+            .iter()
+            .any(|d| d.code == Some(DiagnosticCode::TYPE_MISMATCH)));
+        assert_eq!(
+            diagnostics,
+            snapshot.diagnostics("lazy.tua"),
+            "old snapshots retain their own diagnostics"
+        );
+    }
+}

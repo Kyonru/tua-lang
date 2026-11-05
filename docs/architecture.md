@@ -198,7 +198,13 @@ cache.
     recovery or degraded semantic facts. A private fallback environment inside
     completion, hover, or an LSP handler will drift from the checker.
 
-Lua emission validation runs lazily when pipeline diagnostics are requested.
+Full checking and linting run lazily when pipeline diagnostics are requested.
+Results are cached on the immutable file analysis and replaced when its inputs
+change. Recovery reuses its existing type environment for checking, including
+environment errors and configured ECS behavior. Completion does not trigger
+full checking of every project file while assembling a snapshot.
+
+Lua emission validation also runs lazily when pipeline diagnostics are requested.
 Its result is cached within the immutable snapshot; completion and hover do
 not emit every project file while building their snapshot. Emission reuses
 the file's semantic environment.

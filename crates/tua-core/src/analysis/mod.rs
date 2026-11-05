@@ -245,6 +245,7 @@ struct AnalysisFileData {
     semantics: Option<AnalysisFileSemantics>,
     degraded_semantics: Option<DegradedFileSemantics>,
     diagnostics: Vec<Diagnostic>,
+    checker_diagnostics: OnceLock<Vec<Diagnostic>>,
     exports: Option<ModuleExports>,
     require_edges: Vec<ModuleLink>,
     assets: Vec<AssetMetadata>,

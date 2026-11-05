@@ -355,7 +355,7 @@ fn build_analysis_file(
     context: AnalysisBuildContext<'_>,
     parsed: Result<ParsedSource, Vec<Diagnostic>>,
 ) -> AnalysisFile {
-    let (semantics, mut semantic_diagnostics) = match &parsed {
+    let (semantics, semantic_diagnostics) = match &parsed {
         Ok(parsed) => {
             let hir = {
                 let _profile = profile::span_for_path("analysis.lower.hir", path);
@@ -392,62 +392,14 @@ fn build_analysis_file(
         .is_err()
         .then(|| build_degraded_file_semantics(path, &source, kind, context.config))
         .flatten();
-    let mut diagnostics = {
-        let _profile = profile::span_for_path("analysis.check", path);
-        let mut diagnostics_config = context.config.diagnostics.clone();
-
-        diagnostics_config.inline_ignores = false;
-
-        match &parsed {
-            Ok(parsed) => {
-                let asset_roots = analysis_asset_roots(context.source_roots, context.asset_roots);
-                let environment = &semantics
-                    .as_ref()
-                    .expect("parsed file must have semantic facts")
-                    .environment;
-
-                if semantic_diagnostics.is_empty() {
-                    semantic_diagnostics.extend(
-                        check_parsed_source_with_environment_asset_roots_diagnostics_jit_config_and_asset_index(
-                            parsed,
-                            environment,
-                            asset_roots,
-                            &diagnostics_config,
-                            &context.config.jit,
-                            context.asset_index,
-                        )
-                        .err()
-                        .unwrap_or_default(),
-                    );
-                }
-
-                std::mem::take(&mut semantic_diagnostics)
-            }
-            Err(diagnostics) => {
-                let mut diagnostics = diagnostics.clone();
-
-                if let Some(degraded) = &degraded_semantics {
-                    diagnostics.extend(if !degraded.environment_diagnostics.is_empty() {
-                        degraded.environment_diagnostics.clone()
-                    } else {
-                        check_parsed_source_with_environment_and_ecs_config(
-                            &degraded.parsed,
-                            &degraded.environment,
-                            analysis_asset_roots(context.source_roots, context.asset_roots),
-                            &diagnostics_config,
-                            &context.config.jit,
-                            &context.config.ecs,
-                            context.asset_index,
-                        )
-                        .err()
-                        .unwrap_or_default()
-                    });
-                }
-
-                diagnostics
-            }
+    // Full checking belongs to diagnostic queries, not snapshot construction.
+    let mut diagnostics = semantic_diagnostics;
+    if let Err(parse_diagnostics) = &parsed {
+        diagnostics.extend(parse_diagnostics.iter().cloned());
+        if let Some(degraded) = &degraded_semantics {
+            diagnostics.extend(degraded.environment_diagnostics.iter().cloned());
         }
-    };
+    }
     let assets = {
         let _profile = profile::span_for_path("analysis.assets.metadata", path);
 
@@ -593,6 +545,7 @@ fn build_analysis_file(
         semantics,
         degraded_semantics,
         diagnostics,
+        checker_diagnostics: OnceLock::new(),
         exports,
         require_edges,
         assets,
