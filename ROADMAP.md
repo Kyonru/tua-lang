@@ -33,12 +33,13 @@ workflow pages under `docs/`. Completed work belongs in
 - Keep full SNKRX/BYTEPATH check and build timings as regression workloads;
   bound receiver inference and source rescanning, then profile remaining cost.
 - Reduce cold project completion and post-edit dependency-surface analysis on
-  the input coordinator. The November editor replay measured about 431 ms cold,
-  92 ms median post-edit module completion, and 62 ms incomplete-code completion.
+  the input coordinator. The November follow-up replay measured about 277 ms cold
+  (previously 433 ms) and 52 ms median post-edit module completion (previously 94 ms).
   Preserve fresh imported types and diagnostics while moving or reusing this work.
-- Address the incomplete-edit and immediate-format regressions recorded in
-  `internal/editor-performance-audit-2026-11.md`; repeat the real project replay
-  and representative contention gate before accepting another optimization.
+- Preserve the recovered incomplete-edit and immediate-format performance:
+  63 → 24 ms and 44 → 25 ms respectively in the follow-up replay. Repeat the real
+  project replay and representative contention gate before accepting another
+  optimization. Evidence: `internal/completion-latency-followup-2026-11.md`.
 - Measure actual VS Code key-to-menu latency, pull-diagnostic client behavior,
   larger-project imports, and LOVE hot reload. Protocol replay covers dialogue,
   main, combat, import paths and format-apply-save, but not UI/rendering latency.

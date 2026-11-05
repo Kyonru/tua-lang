@@ -1,5 +1,8 @@
 # Editor performance audit — November 2026
 
+Follow-up: [cold and incomplete completion](completion-latency-followup-2026-11.md)
+records newer measurements and fixes. The results below describe the original pass.
+
 ## Outcome
 
 Repeated completion and hover are substantially faster in the zombie project.
