@@ -44,7 +44,11 @@ reproductions and relevant checks pass.
   and nested shadowing pass; the Emoji Merge rename replay succeeds
   (`navigation-emoji.log`). All 1,607 core and 375 LSP tests pass
   (`navigation-core-lsp.log`). Default-expression errors now point to the header.
-- Pending: side-effect import global navigation.
+- Completed: unique global functions reachable through static runtime imports
+  navigate across files; cycles, local shadows and competing definitions have
+  coverage. Snapshot revisions prevent stale dependency navigation. Gravity Wars
+  now reaches `globals.tua` from `loadExternalAssets()` (`globals-gravity.log`).
+  All 1,608 core and 375 LSP tests pass (`globals-core-lsp.log`).
 
 ## 3. Callback syntax and checker support
 

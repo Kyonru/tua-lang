@@ -7690,3 +7690,45 @@ fn native_class_parameter_navigation_and_rename_preserve_original_spans() {
         }
     }
 }
+
+#[test]
+fn side_effect_global_definition_follows_runtime_imports_without_guessing() {
+    let temp = TempProject::new("side-effect-navigation");
+    temp.write("tua.toml", "source = 'src'\n");
+    temp.write("src/globals.tua", "function loadAssets() return true end\n");
+    temp.write("src/bridge.tua", "require('globals')\nrequire('main')\n");
+    temp.write(
+        "src/unrelated.tua",
+        "function loadAssets() return false end\n",
+    );
+    let fixture = Fixture::parse("-- file: src/main.tua\nrequire('bridge')\n<|call|>loadAssets()\nlocal function shadow(loadAssets) <|shadow|>loadAssets() end\n");
+    let path = temp.path.join("src/main.tua");
+    temp.write("src/main.tua", &fixture.files()[0].source);
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([temp.path.join("src")]);
+    for file in ["globals.tua", "bridge.tua", "unrelated.tua", "main.tua"] {
+        let path = temp.path.join("src").join(file);
+        host.set_file(&path, fs::read_to_string(&path).unwrap());
+    }
+    let old = host.snapshot();
+    let definition = old.definition(&path, fixture.position("call")).unwrap();
+    assert_eq!(definition.path, temp.path.join("src/globals.tua"));
+    assert_eq!(
+        old.definition(&path, fixture.position("shadow"))
+            .unwrap()
+            .kind,
+        DefinitionKind::Parameter
+    );
+    host.set_file(
+        temp.path.join("src/bridge.tua"),
+        "require('globals')\nrequire('unrelated')\n",
+    );
+    assert!(host
+        .snapshot()
+        .definition(&path, fixture.position("call"))
+        .is_none());
+    assert_eq!(
+        old.definition(&path, fixture.position("call")).unwrap(),
+        definition
+    );
+}

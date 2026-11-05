@@ -77,8 +77,6 @@ results. Evidence: [development trials](internal/devex-trials-2026-11.md).
 
 ### Finish Semantic Editor Consistency
 
-- **Side-effect module globals:** define a sound navigation model for functions
-  introduced by `require` without an explicit returned module contract.
 - **Fluent expression navigation:** extend definition/reference provenance through
   call results. Completion, hover and signatures now use shared receiver types,
   including incomplete edits and void-call boundaries.

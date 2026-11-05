@@ -8,6 +8,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Changed
 
+- Definition navigation follows unique global functions introduced by static
+  runtime imports, with cycle and ambiguity guards. Definition caches include
+  the snapshot revision so unsaved dependency changes cannot reuse stale targets.
+
 - Native class parameter definition, references and rename preserve original
   source spans through lowering, including multiline/defaulted headers and
   nested shadowing. Generated helper declarations remain hidden.

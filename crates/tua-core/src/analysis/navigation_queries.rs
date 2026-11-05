@@ -27,7 +27,7 @@ impl AnalysisSnapshot {
         }
 
         let file = self.file(path)?;
-        let key = definition_request_key(path, &file.source, position);
+        let key = definition_request_key(self.revision, path, &file.source, position);
 
         if let Some(definition) = self
             .definition_cache
@@ -65,6 +65,7 @@ impl AnalysisSnapshot {
             for column in span.start.column..=span.end.column {
                 cache.insert(
                     definition_request_key(
+                        self.revision,
                         path,
                         &file.source,
                         SourcePosition {
@@ -214,6 +215,62 @@ impl AnalysisSnapshot {
         definition_parsed_source_with_hir(parsed, hir, position)
             .ok()
             .flatten()
+            .or_else(|| self.side_effect_global_definition(parsed, position))
+    }
+
+    fn side_effect_global_definition(
+        &self,
+        parsed: &ParsedSource,
+        position: SourcePosition,
+    ) -> Option<Definition> {
+        let chain = dotted_chain_at_position(&parsed.source, position)?;
+        if chain.cursor_index != 0 {
+            return None;
+        }
+        let name = &chain.parts.first()?.text;
+        let file = self.file(&parsed.path)?;
+        let scope = file.scope()?;
+        let parser_position = parsed
+            .raw
+            .parser_position_for_source(position)
+            .unwrap_or(position);
+        let reference = scope
+            .references()
+            .iter()
+            .find(|reference| span_contains_position(reference.span, parser_position))?;
+        if !is_project_global_reference(&reference.resolution) {
+            return None;
+        }
+
+        // Follow only statically resolved runtime imports. A visited set bounds
+        // cycles, and multiple definitions deliberately produce no guessed target.
+        let mut pending = vec![parsed.path.clone()];
+        let mut reachable = BTreeSet::new();
+        while let Some(path) = pending.pop() {
+            if !reachable.insert(path.clone()) {
+                continue;
+            }
+            if let Some(module) = self.module_graph.module(&path) {
+                for edge in module.require_edges.iter().filter(|edge| !edge.type_only) {
+                    match &edge.resolution {
+                        RequireResolution::Resolved { path } => pending.push(path.clone()),
+                        RequireResolution::Duplicate { selected, .. } => {
+                            pending.push(selected.clone())
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+        let mut candidates = self.global_function_definitions().remove(name)?;
+        candidates.retain(|definition| reachable.contains(&definition.path));
+        if candidates.len() != 1 {
+            return None;
+        }
+        let mut definition = candidates.pop()?;
+        let producer = self.file(&definition.path)?.parsed.as_ref().ok()?;
+        definition.span = crate::definition::source_backed_span(producer, definition.span)?;
+        Some(definition)
     }
 
     pub(super) fn project_class_member_definition_at_position(

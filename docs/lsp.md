@@ -322,6 +322,11 @@ Tua supports definition, type definition, implementation, references, prepare
 rename, rename, document highlights, document symbols, workspace symbols,
 document links, call hierarchy, and reference code lenses.
 
+Definition navigation can also find a global function introduced by a static
+runtime `require`, including transitive imports. It follows a unique reachable
+declaration, respects local shadows, and declines competing definitions.
+Computed imports and dynamic `_G` writes are not inferred by this lookup.
+
 Cross-file navigation uses the project module graph for `.tua` and indexed
 `.lua` modules. Known aliases, exported types, class members, LuaDoc symbols,
 LOVE builtins, and static asset strings navigate to their source or generated

@@ -651,6 +651,7 @@ struct CompletionRequestKey {
 
 #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 struct DefinitionRequestKey {
+    revision: u64,
     path: PathBuf,
     line: usize,
     column: usize,
@@ -1851,11 +1852,13 @@ fn completion_request_key(
 }
 
 fn definition_request_key(
+    revision: u64,
     path: &Path,
     source: &str,
     position: SourcePosition,
 ) -> DefinitionRequestKey {
     DefinitionRequestKey {
+        revision,
         path: normalize_path(path),
         line: position.line,
         column: position.column,
