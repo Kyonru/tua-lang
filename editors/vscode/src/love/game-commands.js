@@ -63,6 +63,10 @@ class TuaCommandTerminal extends LoveProjectTerminal {
 
 function registerGameCommands({ appendOutputLine, getClient, getServerCommand, activity, inspector }) {
   return vscode.Disposable.from(
+    vscode.commands.registerCommand("tua.testProject", () => runTuaTask({
+      appendOutputLine, activity, getClient, getServerCommand,
+      action: "testing", taskName: "Run Unit Tests", args: () => ["test"],
+    })),
     vscode.commands.registerCommand("tua.buildProject", () => runTuaTask({
       appendOutputLine, activity, getClient, getServerCommand,
       action: "building", taskName: "Build Project", args: () => ["build"],
@@ -115,7 +119,7 @@ function registerGameCommands({ appendOutputLine, getClient, getServerCommand, a
 
 async function runTuaTask({ appendOutputLine, getClient, getServerCommand, activity, action, taskName, args, showConsole = false, instances, configurationName, inspector }) {
   if (!vscode.workspace.isTrusted) {
-    vscode.window.showWarningMessage("Trust this workspace before running Tua game tasks.");
+    vscode.window.showWarningMessage("Trust this workspace before running Tua tasks.");
     return undefined;
   }
   if (!vscode.tasks?.executeTask) {
@@ -124,7 +128,9 @@ async function runTuaTask({ appendOutputLine, getClient, getServerCommand, activ
   }
   const layout = await activeProjectLayout(getClient);
   if (!layout) {
-    vscode.window.showWarningMessage(projectSelectionMessage(action));
+    vscode.window.showWarningMessage(action === "testing"
+      ? "Open a file in the Tua project you want to test."
+      : projectSelectionMessage(action));
     return undefined;
   }
 

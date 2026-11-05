@@ -1207,6 +1207,12 @@
         "icon": "$(tools)"
       },
       {
+        "command": "tua.testProject",
+        "title": "Run Unit Tests",
+        "category": "Tua",
+        "icon": "$(beaker)"
+      },
+      {
         "command": "tua.buildProject",
         "title": "Build Project",
         "category": "Tua",

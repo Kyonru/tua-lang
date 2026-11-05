@@ -433,6 +433,7 @@ to refresh source locations. Static previews retain their existing preview setti
 ### Project and Runtime
 
 - `Tua: Initialize Tua Project`
+- `Tua: Run Unit Tests` (requires an installed Busted backend; save files first)
 - `Tua: Run LOVE Project`
 - `Tua: Stop LOVE Project`
 - `Tua: Debug LOVE Project`

@@ -568,6 +568,9 @@ and launch guidance.
 
 ## VS Code Commands
 
+**Tua: Run Unit Tests** runs the native Busted-backed test command in a task
+terminal. Save source first; see [Testing Tua](testing.md) for backend setup.
+
 Open the command palette and type **Tua**. The most useful commands are:
 
 | Command | Purpose |

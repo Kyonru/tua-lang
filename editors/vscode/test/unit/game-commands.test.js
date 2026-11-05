@@ -41,8 +41,29 @@ Module._load = function load(request, parent, isMain) {
   }
   return originalLoad.call(this, request, parent, isMain);
 };
-const { PACKAGE_TARGETS, TuaCommandTerminal } = require("../../src/love/game-commands");
+const { PACKAGE_TARGETS, TuaCommandTerminal, registerGameCommands } = require("../../src/love/game-commands");
 Module._load = originalLoad;
+
+test("unit testing refuses to execute code in an untrusted workspace", async () => {
+  const commands = new Map();
+  const warnings = [];
+  const previousRegister = vscodeMock.commands.registerCommand;
+  vscodeMock.commands.registerCommand = (name, callback) => {
+    commands.set(name, callback);
+    return { dispose() {} };
+  };
+  vscodeMock.workspace.isTrusted = false;
+  vscodeMock.window.showWarningMessage = (message) => warnings.push(message);
+  try {
+    registerGameCommands({ getServerCommand: () => { throw new Error("must not run"); } });
+    await commands.get("tua.testProject")();
+    assert.match(warnings[0], /Trust this workspace/);
+  } finally {
+    vscodeMock.commands.registerCommand = previousRegister;
+    delete vscodeMock.workspace.isTrusted;
+    delete vscodeMock.window.showWarningMessage;
+  }
+});
 
 function runTerminal(script, outputDirectory) {
   const lines = [];
