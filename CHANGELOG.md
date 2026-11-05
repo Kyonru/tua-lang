@@ -8,6 +8,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Changed
 
+- Plain nullable record paths share guard refinement across checking and editor
+  inference, with conservative invalidation for calls, alias writes and captures.
+
 - Builtin `assert` narrows local values across checking, completion, hover and
   return inference. Shadowed/replaced assertions and calls inside arguments
   remain conservative; reassignment ends the guard.

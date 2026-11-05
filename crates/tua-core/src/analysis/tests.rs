@@ -7848,3 +7848,22 @@ fn assertion_completion_does_not_narrow_shadowed_calls() {
         );
     }
 }
+
+#[test]
+fn stable_member_guards_agree_across_queries() {
+    let fixture = Fixture::parse("-- file: paths.tua\ntype State = { target: { value: number } | nil }\nlocal function read(state: State)\n if state.target then\n  local value = state.target.<|complete|>value\n  return state.target\n end\n return { value = 0 }\nend\nlocal <|hover|>result = read({target = nil})\n");
+    let mut host = AnalysisHost::new();
+    host.set_file("paths.tua", fixture.files()[0].source.clone());
+    let snapshot = host.snapshot();
+    assert!(
+        completion_labels(&snapshot.completion("paths.tua", fixture.position("complete")))
+            .contains(&"value".into())
+    );
+    let hover = snapshot
+        .hover("paths.tua", fixture.position("hover"))
+        .unwrap();
+    assert!(
+        !hover.contents.contains("nil") && !hover.contents.contains("any"),
+        "{hover:?}"
+    );
+}

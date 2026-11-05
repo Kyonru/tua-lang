@@ -5209,3 +5209,26 @@ fn builtin_assert_narrows_locals_but_shadowing_and_reassignment_do_not() {
         assert!(check_tua_source("assertions.tua", source).is_err(), "{source}");
     }
 }
+
+#[test]
+fn stable_member_guards_expire_on_effects() {
+    let header = "type State = { target: { value: number } | nil }\nlocal function read(state: State, mutate: any): number\n";
+    for body in [
+        "if state.target then return state.target.value end\nreturn 0",
+        "assert(state.target)\nreturn state.target.value",
+    ] {
+        check_tua_source("paths.tua", &format!("{header}{body}\nend\n")).expect(body);
+    }
+    for body in [
+        "if state.target then mutate() return state.target.value end return 0",
+        "if state.target and mutate() then return state.target.value end return 0",
+        "assert(state.target) if mutate() then return state.target.value end return 0",
+        "assert(state.target) return mutate(mutate(), state.target.value)",
+        "if state.target then return mutate(mutate(), state.target.value) end return 0",
+        "assert(state.target) local f = function(): number return state.target.value end return f()",
+
+        "if state.target then state.target = nil return state.target.value end return 0",
+        "if state.target then local alias = state alias.target = nil return state.target.value end return 0",
+        "if state.target then local f = function(): number return state.target.value end return f() end return 0",
+    ] { assert!(check_tua_source("paths.tua", &format!("{header}{body}\nend\n")).is_err(), "{body}"); }
+}

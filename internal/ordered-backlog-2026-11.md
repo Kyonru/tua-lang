@@ -70,7 +70,10 @@ reproductions and relevant checks pass.
   and argument calls have conservative regression coverage. Core/LSP suites
   pass (1,616/375, `assert-core-lsp.log`); final argument-call controls pass
   (`assert-final.log`).
-- Pending: stable member-path narrowing.
+- Completed: stable plain-record member paths share source-position guard queries
+  across checking, completion and return inference. Calls, alias/member writes,
+  root changes and captures invalidate refinement; metatable paths remain
+  conservative. Core/LSP verification: `member-final.log` (1,618/375).
 - Pending: contextual `table.sort` comparator types.
 
 ## 4. LOVE and assets

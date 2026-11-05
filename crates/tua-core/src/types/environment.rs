@@ -3596,6 +3596,29 @@ fn infer_var_type(query: ExpressionInferenceQuery<'_, '_>, var: &Var) -> Option<
         }
         Var::Expression(expression) => {
             if let Some(parts) = plain_field_chain_from_var_expression(expression) {
+                let parser_position = node_span(expression)?.start;
+                let position = query
+                    .context
+                    .parsed
+                    .raw
+                    .parser_position_origin(parser_position)
+                    .map(|origin| origin.source_position)
+                    .unwrap_or(parser_position);
+                if let Some(ty) = crate::narrowing::guarded_member_type(
+                    query.context.parsed,
+                    query.context.aliases,
+                    &parts,
+                    position,
+                    |name| {
+                        if name == "assert" && query.context.assert_overridden {
+                            Some(Type::Any)
+                        } else {
+                            query.locals.get(name).cloned()
+                        }
+                    },
+                ) {
+                    return Some(ty);
+                }
                 if let Some(ty) = infer_field_chain_type(
                     query.context.parsed,
                     query.context.aliases,

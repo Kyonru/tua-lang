@@ -305,6 +305,22 @@ impl<'a> SemanticModel<'a> {
             return self.type_of_name(root, position);
         }
 
+        if let Some(ty) = crate::narrowing::guarded_member_type(
+            self.parsed,
+            &self.alias_map(),
+            parts,
+            position,
+            |name| {
+                if name == "assert" && self.environment.assert_is_overridden() {
+                    Some(Type::Any)
+                } else {
+                    self.type_of_name(name, position)
+                }
+            },
+        ) {
+            return Some(ty);
+        }
+
         if let Some(ty) = resolve_field_chain_type(self.environment, parts) {
             return Some(ty);
         }
@@ -1774,6 +1790,24 @@ impl<'a> SemanticModel<'a> {
     ) -> Option<Type> {
         if depth >= MAX_SEMANTIC_INFERENCE_DEPTH {
             return None;
+        }
+
+        if let Some(parts) = crate::ast_utils::plain_field_chain_from_var_expression(expression) {
+            if let Some(ty) = crate::narrowing::guarded_member_type(
+                self.parsed,
+                &self.alias_map(),
+                &parts,
+                position,
+                |name| {
+                    if name == "assert" && self.environment.assert_is_overridden() {
+                        Some(Type::Any)
+                    } else {
+                        self.type_of_name_at_depth(name, position, depth + 1)
+                    }
+                },
+            ) {
+                return Some(ty);
+            }
         }
 
         let mut current = match expression.prefix() {

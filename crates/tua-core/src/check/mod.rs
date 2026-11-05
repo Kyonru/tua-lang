@@ -1451,6 +1451,35 @@ impl<'a> Checker<'a> {
     }
 
     fn infer_var_expression(&mut self, expression: &ast::VarExpression) -> Option<Type> {
+        if let Some(parts) = crate::ast_utils::plain_field_chain_from_var_expression(expression) {
+            let aliases = self
+                .environment
+                .aliases()
+                .map(|(name, ty)| (name.to_owned(), ty.clone()))
+                .collect();
+            let parser_position = node_position(expression);
+            let position = self
+                .parsed
+                .raw
+                .parser_position_origin(parser_position)
+                .map(|origin| origin.source_position)
+                .unwrap_or(parser_position);
+            if let Some(ty) = crate::narrowing::guarded_member_type(
+                self.parsed,
+                &aliases,
+                &parts,
+                position,
+                |name| {
+                    if name == "assert" && self.environment.assert_is_overridden() {
+                        Some(Type::Any)
+                    } else {
+                        self.infer_named_value(name)
+                    }
+                },
+            ) {
+                return Some(ty);
+            }
+        }
         let mut current = match expression.prefix() {
             Prefix::Name(name) => self.infer_named_value(&token_text(name))?,
             Prefix::Expression(expression) => self.infer_expression(expression)?,

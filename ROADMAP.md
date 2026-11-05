@@ -96,8 +96,6 @@ reproductions and current workarounds.
   evaluate literal `false` support without accepting arbitrary booleans.
 - Infer `table.sort` comparator parameter types from its input array, with
   matching member completion and argument checking.
-- Design stable nullable member-path narrowing with mutation/call invalidation;
-  capturing and guarding a local remains the current workaround.
 - Make init-before-field-default behavior easier to discover, and consider a
   targeted diagnostic when a default overwrites an init assignment. Changing
   ordering requires a compatibility decision, not a silent fix.

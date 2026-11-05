@@ -331,6 +331,14 @@ This applies to expressions in assignments as well as `if` conditions.
 A truthy value can still be `true`, so truthiness removes `nil` but keeps
 `boolean`. The `else` branch keeps the original type.
 
+Plain record paths can also be guarded: after `if state.target then`,
+`state.target.value` uses the non-nil target type. The same applies after
+`assert(state.target)` and a nil-check guard that returns early. These refinements
+are shared by checking, completion, hover and return inference. Calls, member
+writes (including writes through aliases), root reassignment and closure capture
+invalidate the path guard. Metatable-backed paths remain conservative; capture
+and guard a local when you need a stable value across those operations.
+
 A call to the builtin `assert(value)` also narrows a local for subsequent
 statements, including completion, hover and inferred returns. Nil comparisons
 such as `assert(value ~= nil)` work too. Reassigning the local ends the guard.

@@ -218,6 +218,51 @@ pub(crate) fn narrowed_type_at_position(
     narrowed
 }
 
+/// Resolve guarded plain-record paths without persisting refinements in local
+/// scopes. Every consumer queries the same source-position and invalidation rules.
+pub(crate) fn guarded_member_type(
+    parsed: &ParsedSource,
+    aliases: &BTreeMap<String, Type>,
+    parts: &[String],
+    position: SourcePosition,
+    lookup: impl Fn(&str) -> Option<Type> + Copy,
+) -> Option<Type> {
+    let (root, fields) = parts.split_first()?;
+    if fields.is_empty() {
+        return None;
+    }
+    let mut current = lookup(root)?;
+    let mut path = root.clone();
+    let mut refined = false;
+    for field in fields {
+        let Type::Table(table) = resolve_aliases_from_map(aliases, &current, 0) else {
+            return None;
+        };
+        if table.metatable_facts().is_some() {
+            return None;
+        }
+        current = table.semantic_field(field)?.ty.clone();
+        path.push('.');
+        path.push_str(field);
+        if !type_may_be_nil(&current) || matches!(current, Type::Any) {
+            continue;
+        }
+        if let Some(narrowed) =
+            narrowed_type_at_position(parsed, aliases, &path, position, |name| {
+                if name == path {
+                    Some(current.clone())
+                } else {
+                    lookup(name)
+                }
+            })
+        {
+            current = narrowed;
+            refined = true;
+        }
+    }
+    refined.then_some(current)
+}
+
 pub(crate) fn assigned_name(var: &Var) -> Option<String> {
     match var {
         Var::Name(name) => Some(token_text(name)),
@@ -258,12 +303,24 @@ fn collect_narrowed_type_at_position(
                     .is_some_and(|(current, base)| {
                         *current == remove_nil(&resolve_aliases_from_map(aliases, &base, 0))
                     });
-            if !only_non_nil || stmt_mutates_name_before(stmt, name, position, false) {
+            if name.contains('.')
+                || !only_non_nil
+                || stmt_mutates_name_before(stmt, name, position, false)
+            {
                 *narrowed = None;
             }
         }
         if let Some(guarded) = narrowed_type_after_guard(stmt, aliases, name, lookup) {
             *narrowed = Some(guarded);
+        }
+    }
+
+    if let Some((root, _)) = name.split_once('.') {
+        if block
+            .last_stmt()
+            .is_some_and(|last| member_path_effect_before(last, root, position))
+        {
+            *narrowed = None;
         }
     }
 
@@ -274,6 +331,10 @@ fn collect_narrowed_type_at_position(
 
         if !contains_position(stmt_span, position) {
             continue;
+        }
+
+        if name.contains('.') && stmt_mutates_name_before(stmt, name, position, true) {
+            *narrowed = None;
         }
 
         match stmt {
@@ -457,7 +518,17 @@ fn collect_if_branch_narrowing(
         return;
     }
 
-    if !block_mutates_name_before(block, name, position, true) {
+    struct ConditionCalls(bool);
+    impl Visitor for ConditionCalls {
+        fn visit_function_call(&mut self, _: &FunctionCall) {
+            self.0 = true;
+        }
+    }
+    let mut calls = ConditionCalls(false);
+    if name.contains('.') {
+        condition.visit(&mut calls);
+    }
+    if !calls.0 && !block_mutates_name_before(block, name, position, true) {
         let branch_narrowing = condition_narrowings(condition)
             .into_iter()
             .find(|narrowing| narrowing.name == name)
@@ -481,9 +552,57 @@ fn block_mutates_name_before(
     position: SourcePosition,
     fields: bool,
 ) -> bool {
+    if let Some((root, _)) = name.split_once('.') {
+        return member_path_effect_before(block, root, position);
+    }
     block
         .stmts()
         .any(|stmt| stmt_mutates_name_before(stmt, name, position, fields))
+}
+
+fn member_path_effect_before(node: &impl Visit, root: &str, position: SourcePosition) -> bool {
+    struct Effects<'a> {
+        root: &'a str,
+        position: SourcePosition,
+        found: bool,
+    }
+    impl Visitor for Effects<'_> {
+        fn visit_function_call(&mut self, call: &FunctionCall) {
+            self.found |=
+                node_span(call).is_some_and(|span| starts_before(span.end, self.position));
+        }
+        fn visit_function_body(&mut self, body: &ast::FunctionBody) {
+            self.found |=
+                node_span(body).is_some_and(|span| contains_position(span, self.position));
+        }
+        fn visit_assignment(&mut self, assignment: &ast::Assignment) {
+            if node_span(assignment).is_some_and(|span| starts_before(span.end, self.position)) {
+                self.found |= assignment.variables().iter().any(|var| {
+                    !matches!(var, Var::Name(_))
+                        || directly_assigned_name(var).as_deref() == Some(self.root)
+                });
+            }
+        }
+        fn visit_compound_assignment(&mut self, assignment: &ast::CompoundAssignment) {
+            self.found |=
+                node_span(assignment).is_some_and(|span| starts_before(span.end, self.position));
+        }
+        fn visit_local_assignment(&mut self, local: &ast::LocalAssignment) {
+            self.found |= node_start(local)
+                .is_some_and(|start| starts_before(start, self.position))
+                && local
+                    .names()
+                    .iter()
+                    .any(|name| token_text(name) == self.root);
+        }
+    }
+    let mut effects = Effects {
+        root,
+        position,
+        found: false,
+    };
+    node.visit(&mut effects);
+    effects.found
 }
 
 fn stmt_mutates_name_before(
@@ -494,6 +613,10 @@ fn stmt_mutates_name_before(
 ) -> bool {
     if node_start(stmt).is_some_and(|start| !starts_before(start, position)) {
         return false;
+    }
+
+    if let Some((root, _)) = name.split_once('.') {
+        return member_path_effect_before(stmt, root, position);
     }
 
     match stmt {
@@ -565,10 +688,13 @@ fn condition_narrowings(condition: &Expression) -> Vec<TypeNarrowing> {
             .chain(condition_narrowings(rhs))
             .collect(),
         // A truthy value is not nil. It may still be `true`, so booleans stay.
-        Expression::Var(Var::Name(name)) => vec![TypeNarrowing {
-            name: token_text(name),
-            kind: TypeNarrowingKind::NonNil,
-        }],
+        Expression::Var(var) => crate::ast_utils::plain_field_chain_from_var(var)
+            .map(|parts| TypeNarrowing {
+                name: parts.join("."),
+                kind: TypeNarrowingKind::NonNil,
+            })
+            .into_iter()
+            .collect(),
         Expression::FunctionCall(function_call) => runtime_type_check_narrowing(function_call)
             .into_iter()
             .collect(),
@@ -607,10 +733,13 @@ fn false_condition_narrowings(condition: &Expression) -> Vec<TypeNarrowing> {
                 })
                 .collect()
         }
-        Expression::Var(Var::Name(name)) => vec![TypeNarrowing {
-            name: token_text(name),
-            kind: TypeNarrowingKind::Nil,
-        }],
+        Expression::Var(var) => crate::ast_utils::plain_field_chain_from_var(var)
+            .map(|parts| TypeNarrowing {
+                name: parts.join("."),
+                kind: TypeNarrowingKind::Nil,
+            })
+            .into_iter()
+            .collect(),
         Expression::Parentheses { expression, .. }
         | Expression::TypeAssertion { expression, .. } => false_condition_narrowings(expression),
         _ => Vec::new(),
@@ -675,7 +804,9 @@ fn type_call_string_target(expression: &Expression) -> Option<TypeNarrowingKind>
 
 fn expression_name(expression: &Expression) -> Option<String> {
     match expression {
-        Expression::Var(Var::Name(name)) => Some(token_text(name)),
+        Expression::Var(var) => {
+            crate::ast_utils::plain_field_chain_from_var(var).map(|parts| parts.join("."))
+        }
         Expression::Parentheses { expression, .. }
         | Expression::TypeAssertion { expression, .. } => expression_name(expression),
         _ => None,
