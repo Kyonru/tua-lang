@@ -533,3 +533,58 @@ gate; profiling requires `ps` (Linux/macOS). The trusted-push, weekly and manual
 workflow includes 5,000-line and 1,000-file fixtures with 500/3000 ms latency and
 4096 MiB RSS ceilings. Reports retain measurements for regression comparison;
 these ceilings are qualification limits, not a claim of typical latency.
+
+## Replay a Project Editing Session
+
+`editors/vscode/scripts/lsp-editor-profile.js` measures completion, hover,
+formatting, and inline requests against an existing project using unsaved LSP
+buffers. It never writes project source files. It records the compiler hash,
+input hashes, per-request timings, grouped p50/p95 values, response assertions,
+and cache statistics. Keep scenarios containing private source anchors local.
+
+```bash
+node editors/vscode/scripts/lsp-editor-profile.js \
+  target/release/tua /tmp/editor-scenario.json target/editor-performance/run.json
+```
+
+Example scenario (replace paths and unique source anchors for your project):
+
+```json
+{
+  "root": "/absolute/project",
+  "documents": { "main": "src/main.tua" },
+  "steps": [
+    { "open": "main" },
+    {
+      "request": "textDocument/completion",
+      "document": "main",
+      "after": "local width = love.graphics.",
+      "label": "cold.completion",
+      "expectNonNull": true,
+      "expectLabels": ["getWidth"]
+    },
+    {
+      "request": "textDocument/formatting",
+      "document": "main",
+      "params": { "options": { "tabSize": 2, "insertSpaces": true } },
+      "label": "save.format",
+      "applyFormatting": true
+    },
+    { "save": "main" }
+  ]
+}
+```
+
+Cursor positions are immediately after the exact, unique `after` string;
+missing or ambiguous anchors fail the replay. A `change` step accepts
+`replace: { "from": "unique original text", "to": "replacement" }`; replacements
+start from the document's original contents, and omitting `replace` restores
+those contents. A `parallel` array sends requests together. `expectHover`
+checks a substring of the serialized hover response. Add explicit expected
+labels or hover text: a fast empty result does not prove useful completion.
+
+Repeat identical scenarios against baseline and candidate binaries in alternating
+order with no build running. Report cold requests separately from warm samples,
+and retain spikes and regressions. `TUA_PROFILE=1` enables attribution traces;
+leave it unset for timing comparisons. This is a protocol replay, not a measure
+of VS Code rendering, menu visibility, or physical key-to-screen latency.
