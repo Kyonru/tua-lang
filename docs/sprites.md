@@ -9,6 +9,11 @@ animations. Tua checks the configuration while you type and compiles it to the
 bundled [anim8](https://github.com/kikito/anim8) runtime. Each sheet creates
 lightweight players that track their own animation, frame, and timing.
 
+For this example, put a sprite sheet at `src/assets/hero.png` in a default
+project. It needs at least eight 32-pixel columns and two 32-pixel rows
+(256 × 64 pixels). Grid rows and columns are **zero-based**, even though Lua
+sequence indices are one-based.
+
 ```tua
 local Hero = spriteSheet({
   image = "assets/hero.png",

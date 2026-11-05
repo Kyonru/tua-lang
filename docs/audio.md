@@ -9,6 +9,39 @@ polyphonic cues, hierarchical control buses, priorities, fades, music scenes,
 rhythm events, effects, positional sources, and development snapshots while
 leaving `sound(...)`, `music(...)`, and raw `love.audio` available.
 
+## Play One Sound
+
+Put a WAV file at `src/assets/jump.wav` in a default project, then use this as
+`src/main.tua`. Press Space to play it. No analysis pipeline is needed:
+
+```tua
+local audio = audioSystem({
+  cues = {
+    jump = { source = sound("assets/jump.wav") },
+  },
+})
+
+function love.update(dt: number)
+  audio:update(dt)
+end
+
+function love.keypressed(key: string)
+  if key == "space" then
+    audio:play("jump")
+  end
+end
+```
+
+For a project with included sound fixtures, open
+[the audio-system example](examples.md#examplesaudio-system).
+
+## Add Buses And Music
+
+The larger configuration below also needs the named music assets and the
+`generated.audio.catalog` module produced by the
+[audio-analysis pipeline](#cached-audio-analysis). The analysis catalog is
+optional: omit the `analysis` fields when you do not use generated metadata.
+
 ```tua
 local audio = audioSystem({
   maxVoices = 64,
@@ -75,7 +108,8 @@ changes, fades, music transitions, beats, bars, effects, and analysis.
 ## Music Scenes
 
 Scenes contain synchronized layers. `setMusicState` accepts an immediate,
-beat, or bar transition and an optional fade:
+beat, or bar transition and an optional fade. With a scene named `combat` and
+a layer named `drums` configured:
 
 ```tua
 audio:setMusicState("combat", { quantize = "bar", fade = 0.5 })
