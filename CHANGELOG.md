@@ -39,6 +39,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Background workspace warming can adopt reused snapshot facts without
+  rebuilding files or reporting them as failed warm jobs.
+
 - Opening or closing an unchanged indexed file preserves cached analysis, while
   overlays still protect unsaved contents and reveal disk changes on close.
 

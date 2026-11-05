@@ -782,6 +782,26 @@ impl AnalysisHost {
         let Some(file) = self.current_analysis_file(&path) else {
             return false;
         };
+        // A snapshot hit may bypass this worker's private cache. Warm results
+        // must own a per-file cache entry for the coordinator's adoption path.
+        {
+            let mut cache = self.cache.borrow_mut();
+            if cache
+                .files
+                .get(&path)
+                .is_none_or(|cached| cached.source != file.source || cached.kind != file.kind)
+            {
+                cache.update_dependencies(&path, &file);
+                cache.files.insert(
+                    path.clone(),
+                    CachedAnalysisFile {
+                        source: file.source.clone(),
+                        kind: file.kind,
+                        file: file.clone(),
+                    },
+                );
+            }
+        }
         self.publish_inline_statistical_scope(&path, &file);
         true
     }

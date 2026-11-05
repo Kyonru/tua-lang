@@ -7226,3 +7226,21 @@ fn unchanged_overlays_preserve_worker_analysis_and_track_disk_changes() {
     assert!(symbols.iter().any(|s| s.name == "disk_changed"));
     assert!(!symbols.iter().any(|s| s.name == "original"));
 }
+
+#[test]
+fn snapshot_reuse_keeps_background_warm_results_adoptable() {
+    let mut coordinator = AnalysisHost::new();
+    let path = PathBuf::from("main.tua");
+    coordinator.set_file(&path, "local function ready() end\n");
+    coordinator.clone().snapshot();
+    let worker = coordinator.clone();
+    assert!(worker.warm_file(&path, AnalysisWarmPriority::Low));
+    assert_eq!(worker.cache_stats().parse_misses, 0);
+    assert!(coordinator.adopt_warmed_file(&worker, &path));
+    assert!(coordinator
+        .document_symbols(&path)
+        .iter()
+        .any(|s| s.name == "ready"));
+    coordinator.set_file(&path, "local function changed() end\n");
+    assert!(!coordinator.adopt_warmed_file(&worker, &path));
+}
