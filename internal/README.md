@@ -12,6 +12,7 @@ are not part of the public language and toolchain documentation.
 - [November 2026 documentation and annotation review](documentation-review-2026-11.md)
 - [Fuzzing](fuzzing.md)
 - [Release readiness](release-readiness.md)
+- [Preparing a release](releasing.md)
 - [Local inline-completion plan](better-autocompletion.md)
 - [Lint review and enhancement plan](lint-enhancement.md)
 - [Shader editor support plan](shader-editor-support.md)

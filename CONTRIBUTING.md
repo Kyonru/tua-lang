@@ -133,7 +133,7 @@ Keep release credentials out of source, logs, fixtures, and pull-request
 artifacts. Release and registry publishing are maintainer operations: tagged
 releases must pass the trusted CI workflow before packaging, and extension
 publishing consumes checksum-verified assets from a completed GitHub release.
-See [docs/releases.md](docs/releases.md) for the release procedure.
+See [internal/releasing.md](internal/releasing.md) for the release procedure.
 
 By contributing, you agree that your contribution is licensed under the
 repository's [MIT License](LICENSE).
