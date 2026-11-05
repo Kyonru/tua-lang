@@ -120,3 +120,8 @@ editing, cold completion and runtime/editor qualification. Protocols/generics
 and changed initialization order need explicit compatibility design. Do not
 substitute check/build success for installed-editor, Steam, legacy-runtime,
 visual or long-session evidence.
+
+- Revisited TL4054: anonymous-function annotation collection already fixed the
+  reported nested-callback import use. A permanent linter regression now proves
+  that the used alias stays live while an unused sibling import still warns
+  (`import-usage.log`). Removed the resolved roadmap entry.

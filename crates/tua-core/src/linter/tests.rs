@@ -5164,3 +5164,14 @@ fn class_defaults_warn_when_they_follow_direct_init_assignments() {
         );
     }
 }
+
+#[test]
+fn nested_callback_annotations_keep_type_imports_live() {
+    let diagnostics = check_standard_rules_source("import type { Value, Unused } from 'types'\nlocal function run(callback: any) end\nrun(function()\n local inner = function(value: Value) return value end\n return inner\nend)\n");
+    let unused = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_UNUSED_IMPORT))
+        .collect::<Vec<_>>();
+    assert_eq!(unused.len(), 1, "{diagnostics:?}");
+    assert!(unused[0].message.contains("Unused"), "{unused:?}");
+}
