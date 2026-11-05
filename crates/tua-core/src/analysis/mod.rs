@@ -70,7 +70,7 @@ use crate::{
     call_hierarchy_calls_parsed_source, call_hierarchy_prepare_parsed_source,
     call_hierarchy_symbols_parsed_source,
     check::{
-        check_parsed_source_with_asset_roots_diagnostics_jit_and_ecs_config_and_asset_index,
+        check_parsed_source_with_environment_and_ecs_config,
         check_parsed_source_with_environment_asset_roots_diagnostics_jit_config_and_asset_index,
     },
     complete_lossy_identifier_source, complete_tua_source, definition_parsed_source_with_hir,
@@ -299,6 +299,7 @@ struct DegradedFileSemantics {
     hir: HirModule,
     scope: ScopeMap,
     environment: TypeEnvironment,
+    environment_diagnostics: Vec<Diagnostic>,
 }
 
 #[derive(Clone, Debug)]

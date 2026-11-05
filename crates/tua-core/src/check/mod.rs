@@ -145,8 +145,28 @@ pub(crate) fn check_parsed_source_with_asset_roots_diagnostics_jit_and_ecs_confi
     .run()
 }
 
-pub(crate) fn check_parsed_source_with_asset_roots_diagnostics_jit_and_ecs_config_and_asset_index(
+pub(crate) fn check_parsed_source_with_environment_asset_roots_diagnostics_jit_config_and_asset_index(
     parsed: &ParsedSource,
+    environment: &TypeEnvironment,
+    asset_roots: &[PathBuf],
+    diagnostics_config: &DiagnosticsConfig,
+    jit_config: &JitConfig,
+    asset_index: Option<&asset::AssetIndex>,
+) -> Result<(), Vec<Diagnostic>> {
+    check_parsed_source_with_environment_and_ecs_config(
+        parsed,
+        environment,
+        asset_roots,
+        diagnostics_config,
+        jit_config,
+        &EcsConfig::default(),
+        asset_index,
+    )
+}
+
+pub(crate) fn check_parsed_source_with_environment_and_ecs_config(
+    parsed: &ParsedSource,
+    environment: &TypeEnvironment,
     asset_roots: &[PathBuf],
     diagnostics_config: &DiagnosticsConfig,
     jit_config: &JitConfig,
@@ -160,27 +180,6 @@ pub(crate) fn check_parsed_source_with_asset_roots_diagnostics_jit_and_ecs_confi
             diagnostics_config,
             jit_config,
             ecs_config,
-            asset_index,
-        ),
-    )
-    .run()
-}
-
-pub(crate) fn check_parsed_source_with_environment_asset_roots_diagnostics_jit_config_and_asset_index(
-    parsed: &ParsedSource,
-    environment: &TypeEnvironment,
-    asset_roots: &[PathBuf],
-    diagnostics_config: &DiagnosticsConfig,
-    jit_config: &JitConfig,
-    asset_index: Option<&asset::AssetIndex>,
-) -> Result<(), Vec<Diagnostic>> {
-    CheckQuery::new(
-        parsed,
-        CheckQueryOptions::new(
-            asset_roots,
-            diagnostics_config,
-            jit_config,
-            &EcsConfig::default(),
             asset_index,
         ),
     )

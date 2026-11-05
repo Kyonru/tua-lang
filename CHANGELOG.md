@@ -47,6 +47,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Incomplete-file checking reuses the recovered type environment, preserving
+  environment and body diagnostics without rebuilding the same semantic facts.
+
 - Background workspace warming can adopt reused snapshot facts without
   rebuilding files or reporting them as failed warm jobs.
 

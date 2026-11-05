@@ -7244,3 +7244,39 @@ fn snapshot_reuse_keeps_background_warm_results_adoptable() {
     coordinator.set_file(&path, "local function changed() end\n");
     assert!(!coordinator.adopt_warmed_file(&worker, &path));
 }
+
+#[test]
+fn recovered_file_checking_preserves_environment_and_body_errors() {
+    for ecs_enabled in [false, true] {
+        for (declaration, expected) in [
+            (
+                "local value: MissingType = 1",
+                DiagnosticCode::TYPE_UNKNOWN_NAME,
+            ),
+            (
+                "local value: number = 'wrong'",
+                DiagnosticCode::TYPE_MISMATCH,
+            ),
+        ] {
+            let mut config = ProjectConfig::default();
+            config.ecs.enabled = ecs_enabled;
+            let mut host = AnalysisHost::with_config(config);
+            host.set_file(
+                "partial.tua",
+                format!("{declaration}\nlocal item = {{ value = 1 }}\nitem.\n"),
+            );
+            let snapshot = host.snapshot();
+            let diagnostics = snapshot.diagnostics("partial.tua");
+            assert!(
+                diagnostics.iter().any(|d| d.code == Some(expected)),
+                "{diagnostics:?}"
+            );
+            assert!(
+                diagnostics
+                    .iter()
+                    .any(|d| d.code == Some(DiagnosticCode::SYNTAX_PARSE)),
+                "{diagnostics:?}"
+            );
+        }
+    }
+}

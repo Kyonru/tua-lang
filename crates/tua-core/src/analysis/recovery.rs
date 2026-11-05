@@ -95,9 +95,11 @@ pub(super) fn build_degraded_file_semantics(
 ) -> Option<DegradedFileSemantics> {
     let parsed = parse_degraded_analysis_source(path, source, kind).ok()?;
     let hir = lower_parsed_source(&parsed);
-    let (environment, _) = build_analysis_type_environment_with_diagnostics(&parsed, config);
+    let (environment, environment_diagnostics) =
+        build_analysis_type_environment_with_diagnostics(&parsed, config);
 
     Some(DegradedFileSemantics {
+        environment_diagnostics,
         scope: scope_map_parsed_source(&parsed),
         parsed,
         hir,

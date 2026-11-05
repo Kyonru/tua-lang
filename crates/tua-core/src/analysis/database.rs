@@ -427,9 +427,12 @@ fn build_analysis_file(
                 let mut diagnostics = diagnostics.clone();
 
                 if let Some(degraded) = &degraded_semantics {
-                    diagnostics.extend(
-                        check_parsed_source_with_asset_roots_diagnostics_jit_and_ecs_config_and_asset_index(
+                    diagnostics.extend(if !degraded.environment_diagnostics.is_empty() {
+                        degraded.environment_diagnostics.clone()
+                    } else {
+                        check_parsed_source_with_environment_and_ecs_config(
                             &degraded.parsed,
+                            &degraded.environment,
                             analysis_asset_roots(context.source_roots, context.asset_roots),
                             &diagnostics_config,
                             &context.config.jit,
@@ -437,8 +440,8 @@ fn build_analysis_file(
                             context.asset_index,
                         )
                         .err()
-                        .unwrap_or_default(),
-                    );
+                        .unwrap_or_default()
+                    });
                 }
 
                 diagnostics
