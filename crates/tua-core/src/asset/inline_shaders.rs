@@ -97,17 +97,28 @@ pub(crate) fn map_position(origin: SourcePosition, position: SourcePosition) -> 
     }
 }
 
-pub(crate) fn inline_shaders(parsed: &ParsedSource) -> Vec<InlineShader> {
-    #[derive(Default)]
-    struct Collect(Vec<InlineShader>);
-    impl Visitor for Collect {
+pub(crate) fn inline_shaders(
+    parsed: &ParsedSource,
+    scope: &crate::scope::ScopeMap,
+) -> Vec<InlineShader> {
+    struct Collect<'a> {
+        shaders: Vec<InlineShader>,
+        scope: &'a crate::scope::ScopeMap,
+    }
+    impl Visitor for Collect<'_> {
         fn visit_function_call(&mut self, call: &FunctionCall) {
+            if !loader_binding_is_builtin(self.scope, call) {
+                return;
+            }
             if let Some(shader) = inline_shader_call(call) {
-                self.0.push(shader);
+                self.shaders.push(shader);
             }
         }
     }
-    let mut collect = Collect::default();
+    let mut collect = Collect {
+        shaders: Vec::new(),
+        scope,
+    };
     collect.visit_ast(&parsed.ast);
-    collect.0
+    collect.shaders
 }

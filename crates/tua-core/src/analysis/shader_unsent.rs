@@ -73,6 +73,9 @@ impl AnalysisSnapshot {
                 let Some(Expression::FunctionCall(call)) = local.expressions().iter().next() else {
                     continue;
                 };
+                if !asset::loader_binding_is_builtin(scope, call) {
+                    continue;
+                }
                 let Some(loader) =
                     asset::asset_loader_call(call).filter(|c| c.kind == AssetLoaderKind::Shader)
                 else {
@@ -127,6 +130,9 @@ impl AnalysisSnapshot {
                         if call.suffixes().any(|suffix| matches!(suffix, Suffix::Call(Call::AnonymousCall(FunctionArgs::Parentheses { arguments, .. })) if arguments.iter().count() != 1)) {
                     continue;
                 }
+                        if !asset::loader_binding_is_builtin(scope, call) {
+                            continue;
+                        }
                         let Some(loader) = asset::asset_loader_call(call) else {
                             // A dynamic loader could initialize any asset in this project.
                             return BTreeMap::new();

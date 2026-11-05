@@ -259,24 +259,7 @@ fn parentheses_with_trailing(
 // owns its inner lexical scopes; this position is the enclosing parameter
 // default's original parser position.
 pub(super) fn shadowed_at(scope: &ScopeMap, name: &str, position: SourcePosition) -> bool {
-    let key = |position: SourcePosition| (position.line, position.column);
-    scope.declarations().iter().any(|declaration| {
-        declaration.name == name
-            && !matches!(
-                declaration.kind,
-                crate::scope::ScopeDeclarationKind::TableField
-            )
-            && key(declaration.scope_span.start) <= key(position)
-            && key(position) <= key(declaration.scope_span.end)
-            // Defaults execute in the function body, where every parameter is
-            // already bound, including parameters later in the header. Ordinary
-            // outer locals still become visible only after their declaration.
-            && (declaration.kind == crate::scope::ScopeDeclarationKind::Parameter
-                || key(declaration.name_span.start) <= key(position))
-    }) || scope
-        .globals()
-        .get(name)
-        .is_some_and(|global| global.kind == ScopeGlobalKind::Assigned)
+    scope.has_non_builtin_binding_at(name, position)
 }
 
 fn with_trailing(token: &TokenReference, trailing: Vec<Token>) -> TokenReference {

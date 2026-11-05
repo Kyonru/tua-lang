@@ -87,7 +87,11 @@ reproductions and relevant checks pass.
   `love-core-lsp.log`); pinned-catalog drift check passes (`love-drift.log`).
   Actual headless LOVE File/FileData/ByteData smoke passes (`love-runtime.log`);
   this is API qualification, not installed-editor or visual game qualification.
-- Pending: binding-aware asset metadata and editor behavior.
+- Completed: cached lexical scope facts filter asset metadata, completion,
+  navigation/rename, diagnostics and shader inspection. Incomplete strings and
+  scope exit keep builtin suggestions. Local/parameter/global helper shadows
+  and custom LOVE roots have regression coverage. Core/LSP suites pass
+  (1,626/375, `assets-final.log`).
 - Pending: nullable LOVE configuration flow.
 
 ## 5. Migration support

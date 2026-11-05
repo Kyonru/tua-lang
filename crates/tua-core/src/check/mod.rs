@@ -2156,6 +2156,9 @@ impl<'a> Checker<'a> {
     }
 
     fn check_asset_loader_call(&mut self, function_call: &FunctionCall) {
+        if !asset::loader_binding_is_builtin(&self.scope, function_call) {
+            return;
+        }
         if field_chain_before_first_call(function_call)
             .is_some_and(|parts| parts.len() == 1 && self.infer_named_value(&parts[0]).is_some())
         {
@@ -2272,6 +2275,9 @@ impl<'a> Checker<'a> {
             let Expression::FunctionCall(function_call) = expression else {
                 return None;
             };
+            if !asset::loader_binding_is_builtin(&self.scope, function_call) {
+                return None;
+            }
             if let Some(inline) = asset::inline_shader_call(function_call) {
                 return Some(ShaderUniforms {
                     loader_span: inline.call_span,

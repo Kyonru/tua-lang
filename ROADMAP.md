@@ -88,8 +88,6 @@ reproductions and current workarounds.
 
 ### Complete Typed Lua Porting Workflows
 
-- Extend helper binding awareness to asset indexing and editor metadata, with
-  consistent local/parameter/global shadowing tests.
 - Model initial LOVE configuration state and subsequent nullable window writes;
   evaluate literal `false` support without accepting arbitrary booleans.
 - Make init-before-field-default behavior easier to discover, and consider a

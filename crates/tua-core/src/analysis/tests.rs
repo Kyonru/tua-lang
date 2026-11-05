@@ -7920,3 +7920,41 @@ fn love_image_file_signature_and_result_completion_agree() {
             .contains(&"getWidth".into())
     );
 }
+
+#[test]
+fn asset_metadata_and_completion_respect_loader_bindings() {
+    let temp = TempProject::new("asset-binding");
+    let image = temp.write("assets/player.png", png_header(16, 16));
+    for source in [
+        "local image = function(path) return path end\nlocal a = image 'assets/<|complete|>player.png'",
+        "local function load(image) return image 'assets/<|complete|>player.png' end",
+        "image = function(path) return path end\nlocal a = image 'assets/<|complete|>player.png'",
+        "local love = { graphics = { newImage = function(path) return path end } }\nlocal a = love.graphics.newImage('assets/<|complete|>player.png')",
+    ] {
+        let fixture = Fixture::parse(&format!("-- file: src/main.tua\n{source}\n"));
+        let mut host = AnalysisHost::new();
+        host.set_asset_roots([temp.path().to_path_buf()]);
+        host.set_file("src/main.tua", fixture.files()[0].source.clone());
+        host.refresh_asset_index_from_disk();
+        let snapshot = host.snapshot();
+        assert!(snapshot.hover("src/main.tua", fixture.position("complete")).is_none_or(|hover| !hover.contents.contains("asset `")), "{source}");
+        assert!(snapshot.definition("src/main.tua", fixture.position("complete")).is_none_or(|definition| definition.kind != DefinitionKind::Asset), "{source}");
+        assert!(!completion_labels(&snapshot.completion("src/main.tua", fixture.position("complete"))).contains(&"assets/player.png".into()), "{source}");
+        assert!(snapshot.asset_inventory().assets.iter().all(|asset| asset.references.is_empty()), "{source}");
+        assert!(snapshot.asset_file_rename_edits(&image, temp.path().join("assets/hero.png")).is_empty(), "{source}");
+    }
+}
+
+#[test]
+fn asset_paths_survive_incomplete_strings_and_scope_exit() {
+    let temp = TempProject::new("asset-recovery-binding");
+    temp.write("assets/player.png", png_header(16, 16));
+    for source in ["local value = image 'assets/<|complete|>", "do local image = function(path) return path end end\nlocal value = image 'assets/<|complete|>player.png'"] {
+        let fixture = Fixture::parse(&format!("-- file: src/main.tua\n{source}\n"));
+        let mut host = AnalysisHost::new();
+        host.set_asset_roots([temp.path().to_path_buf()]);
+        host.set_file("src/main.tua", fixture.files()[0].source.clone());
+        let labels = completion_labels(&host.snapshot().completion("src/main.tua", fixture.position("complete")));
+        assert!(labels.contains(&"assets/player.png".into()), "{source}: {labels:?}");
+    }
+}

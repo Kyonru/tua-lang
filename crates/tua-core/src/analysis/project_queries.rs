@@ -251,7 +251,7 @@ impl AnalysisSnapshot {
         if let Some(completions) = self.shader_uniform_completions(parsed, source, position) {
             return completions;
         }
-        let asset_completions = self.project_asset_path_completions(source, position);
+        let asset_completions = self.project_asset_path_completions(parsed, source, position);
 
         if !asset_completions.is_empty() {
             return asset_completions;
@@ -327,7 +327,7 @@ impl AnalysisSnapshot {
             return completions;
         }
 
-        let asset_completions = self.project_asset_path_completions(source, position);
+        let asset_completions = self.project_asset_path_completions(parsed, source, position);
 
         if !asset_completions.is_empty() {
             return asset_completions;
@@ -376,6 +376,7 @@ impl AnalysisSnapshot {
 
     pub(super) fn project_asset_path_completions(
         &self,
+        parsed: &ParsedSource,
         source: &str,
         position: SourcePosition,
     ) -> Vec<Completion> {
@@ -396,6 +397,18 @@ impl AnalysisSnapshot {
         let Some(kind) = asset::asset_loader_kind_for_callee_parts(&callee_parts) else {
             return Vec::new();
         };
+
+        let fallback_scope;
+        let scope = match self.file(&parsed.path).and_then(AnalysisFile::scope) {
+            Some(scope) => scope,
+            None => {
+                fallback_scope = scope_map_parsed_source(parsed);
+                &fallback_scope
+            }
+        };
+        if !asset::builtin_loader_at_position(parsed, scope, position, &callee_parts[0]) {
+            return Vec::new();
+        }
 
         self.asset_index
             .as_ref()

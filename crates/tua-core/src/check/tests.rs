@@ -5268,3 +5268,8 @@ fn love_image_file_and_data_contracts_match_runtime_inputs() {
         .is_err());
     }
 }
+
+#[test]
+fn custom_asset_loader_bindings_do_not_validate_paths_or_shaders() {
+    check_tua_source("custom.tua", "local image = function(path) return path end\nlocal a = image('missing.png')\nlocal love = { graphics = { newShader = function(code) return code end, newImage = function(path) return path end } }\nlocal b = love.graphics.newImage('missing.png')\nlocal c = love.graphics.newShader([[invalid; shader]])\n").expect("custom APIs are not asset loaders");
+}

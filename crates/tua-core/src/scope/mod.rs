@@ -71,6 +71,25 @@ pub enum ScopeGlobalKind {
 }
 
 impl ScopeMap {
+    /// Fallback for incomplete edits and separately parsed default expressions.
+    /// Complete call sites should prefer their exact reference resolution.
+    pub(crate) fn has_non_builtin_binding_at(&self, name: &str, position: SourcePosition) -> bool {
+        let key = |position: SourcePosition| (position.line, position.column);
+        self.declarations.iter().any(|declaration| {
+            declaration.name == name
+                && declaration.kind != ScopeDeclarationKind::TableField
+                && key(declaration.scope_span.start) <= key(position)
+                && key(position) <= key(declaration.scope_span.end)
+                && (declaration.kind == ScopeDeclarationKind::Parameter
+                    || key(declaration.name_span.start) <= key(position))
+        }) || self.globals.get(name).is_some_and(|global| {
+            matches!(
+                global.kind,
+                ScopeGlobalKind::Assigned | ScopeGlobalKind::Configured
+            )
+        })
+    }
+
     pub fn declarations(&self) -> &[ScopeDeclaration] {
         &self.declarations
     }

@@ -409,11 +409,16 @@ fn build_analysis_file(
             .map(|parsed| {
                 let asset_roots = analysis_asset_roots(context.source_roots, context.asset_roots);
 
-                if let Some(asset_index) = context.asset_index {
-                    asset::collect_asset_metadata_with_index(parsed, asset_roots, Some(asset_index))
-                } else {
-                    asset::collect_asset_metadata(parsed, asset_roots)
-                }
+                let scope = &semantics
+                    .as_ref()
+                    .expect("parsed files have semantics")
+                    .scope;
+                asset::collect_asset_metadata_with_scope(
+                    parsed,
+                    asset_roots,
+                    context.asset_index,
+                    scope,
+                )
             })
             .unwrap_or_default()
     };
@@ -536,7 +541,14 @@ fn build_analysis_file(
         .as_ref()
         .ok()
         .or_else(|| degraded_semantics.as_ref().map(|facts| &facts.parsed))
-        .map(asset::inline_shaders)
+        .map(|parsed| {
+            let scope = semantics
+                .as_ref()
+                .map(|facts| &facts.scope)
+                .or_else(|| degraded_semantics.as_ref().map(|facts| &facts.scope))
+                .expect("parsed or recovered files have scopes");
+            asset::inline_shaders(parsed, scope)
+        })
         .unwrap_or_default();
     AnalysisFile(Arc::new(AnalysisFileData {
         source,

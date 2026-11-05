@@ -663,6 +663,12 @@ local width = player:getWidth()
 jump:play()
 ```
 
+Asset tooling follows lexical bindings: a local, parameter or global function
+that shadows a loader such as `image` is treated as your function. Its strings
+are not asset references, path suggestions or asset-file rename targets. A
+shadowed `love` table is likewise excluded from native constructor metadata.
+Builtin loaders keep path suggestions while their strings are unfinished.
+
 Asset loader string paths also participate in editor tooling. In a configured
 project, completion inside helpers and native LOVE constructors with asset path
 arguments, such as `image "..."`, `sound "..."`, `font("...", 18)`,

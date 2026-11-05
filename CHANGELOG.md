@@ -8,6 +8,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Changed
 
+- Asset metadata, path completion, diagnostics and shader inspection respect
+  lexical loader bindings. Custom loaders no longer create false asset usage or
+  rename targets; unfinished strings retain builtin path suggestions.
+
 - Generated LOVE image decoder signatures accept `File` and `Data` (including
   `FileData`); `love.filesystem.newFileData` accepts a `File` source. Shared
   generator overrides keep checking and signature help aligned.

@@ -615,6 +615,7 @@ pub(crate) fn asset_source_type_label(path: &str) -> Option<&'static str> {
         .and_then(source_type_label_for_extension)
 }
 
+#[cfg(test)]
 pub(crate) fn collect_asset_metadata(
     parsed: &ParsedSource,
     asset_roots: &[PathBuf],
@@ -622,12 +623,24 @@ pub(crate) fn collect_asset_metadata(
     collect_asset_metadata_with_index(parsed, asset_roots, None)
 }
 
+#[cfg(test)]
 pub(crate) fn collect_asset_metadata_with_index(
     parsed: &ParsedSource,
     asset_roots: &[PathBuf],
     asset_index: Option<&AssetIndex>,
 ) -> Vec<AssetMetadata> {
+    let scope = crate::scope::scope_map_parsed_source(parsed);
+    collect_asset_metadata_with_scope(parsed, asset_roots, asset_index, &scope)
+}
+
+pub(crate) fn collect_asset_metadata_with_scope(
+    parsed: &ParsedSource,
+    asset_roots: &[PathBuf],
+    asset_index: Option<&AssetIndex>,
+    scope: &crate::scope::ScopeMap,
+) -> Vec<AssetMetadata> {
     let mut visitor = AssetVisitor {
+        scope,
         assets: Vec::new(),
         roots: if asset_index.is_some() {
             normalize_asset_roots_without_fs(asset_roots)
@@ -822,6 +835,7 @@ pub(crate) fn renamed_asset_reference_path(
 }
 
 struct AssetVisitor<'a> {
+    scope: &'a crate::scope::ScopeMap,
     assets: Vec<AssetMetadata>,
     roots: Vec<PathBuf>,
     index: Option<&'a AssetIndex>,
@@ -829,6 +843,9 @@ struct AssetVisitor<'a> {
 
 impl Visitor for AssetVisitor<'_> {
     fn visit_function_call(&mut self, function_call: &FunctionCall) {
+        if !loader_binding_is_builtin(self.scope, function_call) {
+            return;
+        }
         if let Some(call) = asset_loader_call(function_call) {
             let metadata = if let Some(index) = self.index {
                 validate_asset_with_index(
@@ -845,6 +862,76 @@ impl Visitor for AssetVisitor<'_> {
             self.assets.push(metadata);
         }
     }
+}
+
+/// Loader recognition requires the callee's lexical root to remain builtin.
+pub(crate) fn loader_binding_is_builtin(
+    scope: &crate::scope::ScopeMap,
+    call: &FunctionCall,
+) -> bool {
+    let Prefix::Name(name) = call.prefix() else {
+        return false;
+    };
+    let Some(position) = node_span(name).map(|span| span.start) else {
+        return false;
+    };
+    scope.references().iter().any(|reference| {
+        reference.span.start == position
+            && matches!(
+                &reference.resolution,
+                crate::scope::ScopeResolution::Unresolved
+                    | crate::scope::ScopeResolution::Global(crate::scope::ScopeGlobal {
+                        kind: crate::scope::ScopeGlobalKind::LuaBuiltin
+                            | crate::scope::ScopeGlobalKind::LoveBuiltin,
+                        ..
+                    })
+            )
+    })
+}
+
+pub(crate) fn builtin_loader_at_position(
+    parsed: &ParsedSource,
+    scope: &crate::scope::ScopeMap,
+    position: SourcePosition,
+    root: &str,
+) -> bool {
+    struct Loader<'a> {
+        scope: &'a crate::scope::ScopeMap,
+        position: SourcePosition,
+        best: Option<(SourceSpan, bool)>,
+    }
+    impl Visitor for Loader<'_> {
+        fn visit_function_call(&mut self, call: &FunctionCall) {
+            let Some(span) = node_span(call) else {
+                return;
+            };
+            let key = |p: SourcePosition| (p.line, p.column);
+            if key(span.start) <= key(self.position)
+                && key(self.position) <= key(span.end)
+                && self.best.is_none_or(|(best, _)| {
+                    key(best.start) <= key(span.start) && key(span.end) <= key(best.end)
+                })
+                && field_chain_before_first_call(call)
+                    .is_some_and(|(parts, _)| asset_loader_kind_for_callee_parts(&parts).is_some())
+            {
+                self.best = Some((span, loader_binding_is_builtin(self.scope, call)));
+            }
+        }
+    }
+    let position = parsed
+        .raw
+        .parser_position_for_source(position)
+        .unwrap_or(position);
+    let mut loader = Loader {
+        scope,
+        position,
+        best: None,
+    };
+    loader.visit_ast(&parsed.ast);
+    loader
+        .best
+        .map(|(_, builtin)| builtin)
+        .unwrap_or_else(|| !scope.has_non_builtin_binding_at(root, position))
 }
 
 pub(crate) struct AssetLoaderCall {

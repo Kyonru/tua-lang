@@ -25,6 +25,9 @@ impl AnalysisSnapshot {
         }) {
             return Some((parsed.path.clone(), inline.source.uniforms.clone()?));
         }
+        if !asset::loader_binding_is_builtin(scope, &loader) {
+            return None;
+        }
         let call = asset::asset_loader_call(&loader)?;
         if call.kind != AssetLoaderKind::Shader {
             return None;
