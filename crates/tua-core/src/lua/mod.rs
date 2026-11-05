@@ -7,15 +7,19 @@ use crate::{
 /// builtin unsafe. Keep this conservative across branches and nested functions;
 /// ordinary user-call inference remains responsible for the replacement.
 pub(crate) fn table_remove_is_overridden(parsed: &crate::ParsedSource) -> bool {
+    table_member_is_overridden(parsed, "remove")
+}
+
+pub(crate) fn table_member_is_overridden(parsed: &crate::ParsedSource, member: &str) -> bool {
     use crate::ast_utils::token_text;
     use full_moon::ast::{self, Index, Prefix, Suffix, Var};
     use full_moon::visitors::Visitor;
 
-    #[derive(Default)]
-    struct Writes {
+    struct Writes<'a> {
+        member: &'a str,
         overridden: bool,
     }
-    impl Visitor for Writes {
+    impl Visitor for Writes<'_> {
         fn visit_assignment(&mut self, assignment: &ast::Assignment) {
             for variable in assignment.variables() {
                 self.overridden |= match variable {
@@ -24,9 +28,9 @@ pub(crate) fn table_remove_is_overridden(parsed: &crate::ParsedSource) -> bool {
                     {
                         match expression.suffixes().next() {
                             Some(Suffix::Index(Index::Dot { name, .. })) => {
-                                token_text(name) == "remove"
+                                token_text(name) == self.member
                             }
-                            // An indexed write may replace remove, including a
+                            // An indexed write may replace this member, including a
                             // computed string key. Do not assume its identity.
                             Some(Suffix::Index(Index::Brackets { .. })) => true,
                             _ => false,
@@ -43,16 +47,45 @@ pub(crate) fn table_remove_is_overridden(parsed: &crate::ParsedSource) -> bool {
                 .iter()
                 .map(token_text)
                 .collect::<Vec<_>>();
-            self.overridden |= names == ["table", "remove"] || names == ["table"];
+            self.overridden |= names == ["table", self.member] || names == ["table"];
         }
     }
-    let mut writes = Writes::default();
+    let mut writes = Writes {
+        member,
+        overridden: false,
+    };
     writes.visit_ast(&parsed.ast);
     writes.overridden
 }
 
+/// The two standard `table.insert` forms share the collection's value contract.
+/// Other table shapes and explicit dynamic values retain ordinary Lua behavior.
+pub(crate) fn table_insert_signature(
+    collection: Type,
+    argument_count: usize,
+) -> Option<crate::FunctionType> {
+    let Type::Array(item) = collection else {
+        return None;
+    };
+    let mut parameters = vec![crate::FunctionParameter::named(
+        "list",
+        Type::array((*item).clone()),
+    )];
+    if argument_count >= 3 {
+        parameters.push(crate::FunctionParameter::named("position", Type::number()));
+    }
+    parameters.push(crate::FunctionParameter::named("value", *item));
+    let count = parameters.len();
+    Some(crate::FunctionType::new_signature(
+        parameters,
+        count,
+        None,
+        [Type::nil()],
+    ))
+}
+
 /// Argument-dependent standard-library facts shared by editor and body inference.
-pub(crate) fn table_remove_argument(
+pub(crate) fn first_call_argument(
     call: &full_moon::ast::FunctionCall,
 ) -> Option<&full_moon::ast::Expression> {
     use full_moon::ast::{Call, FunctionArgs, Suffix};

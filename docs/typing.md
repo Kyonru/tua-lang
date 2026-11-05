@@ -147,6 +147,12 @@ type flows through inferred function returns, hover, completion, and checking;
 `any` arrays and custom functions named `table.remove` remain dynamic or retain
 their declared contracts.
 
+For a typed `T[]`, `table.insert(values, value)` and
+`table.insert(values, index, value)` check the inserted value against `T`.
+The indexed form requires a number. Shadowed or replaced `table.insert`
+functions keep their own contracts, and an explicitly `any` collection remains
+dynamic. This check does not infer a contract for arbitrary dictionary shapes.
+
 Parenthesize a union or function type before making it an array:
 
 ```tua

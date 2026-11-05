@@ -1779,6 +1779,11 @@ impl<'a> Checker<'a> {
             return vec![Type::string()];
         }
 
+        if let Some(function) = self.table_insert_call_signature(function_call) {
+            self.check_call_arguments(function_call, &function);
+            return function.return_types;
+        }
+
         if let Some(ty) = self.checked_table_remove_return_type(function_call) {
             return vec![ty];
         }
@@ -1907,6 +1912,23 @@ impl<'a> Checker<'a> {
         }
     }
 
+    fn table_insert_call_signature(&mut self, call: &FunctionCall) -> Option<FunctionType> {
+        let parts = field_chain_before_first_call(call)?;
+        if parts.as_slice() != ["table", "insert"]
+            || self.environment.table_insert_is_overridden()
+            || self.infer_named_value("table").is_some()
+            || self.environment.function("table.insert").is_some()
+        {
+            return None;
+        }
+        let collection = crate::lua::first_call_argument(call)?;
+        let collection = self.infer_expression(collection)?;
+        crate::lua::table_insert_signature(
+            self.environment.resolve_aliases(&collection),
+            call_arguments(call)?.len(),
+        )
+    }
+
     fn checked_table_remove_return_type(&mut self, function_call: &FunctionCall) -> Option<Type> {
         let parts = field_chain_before_first_call(function_call)?;
         if parts.as_slice() != ["table", "remove"]
@@ -1916,7 +1938,7 @@ impl<'a> Checker<'a> {
         {
             return None;
         }
-        let collection = crate::lua::table_remove_argument(function_call)?;
+        let collection = crate::lua::first_call_argument(function_call)?;
         let collection = self.infer_expression(collection)?;
         let result =
             crate::lua::table_remove_return_type(self.environment.resolve_aliases(&collection))?;

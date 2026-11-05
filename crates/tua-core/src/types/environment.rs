@@ -49,6 +49,7 @@ pub struct TypeEnvironment {
     must_use_accesses: BTreeSet<Vec<String>>,
     exact_module_bindings: BTreeMap<String, String>,
     table_remove_overridden: bool,
+    table_insert_overridden: bool,
     project_module_globals: BTreeSet<String>,
 }
 
@@ -81,6 +82,10 @@ impl TypeEnvironment {
 
     pub(crate) fn table_remove_is_overridden(&self) -> bool {
         self.table_remove_overridden
+    }
+
+    pub(crate) fn table_insert_is_overridden(&self) -> bool {
+        self.table_insert_overridden
     }
 
     pub fn path(&self) -> &Path {
@@ -842,6 +847,7 @@ pub(crate) fn build_type_environment_with_domain_registry(
             must_use_accesses: BTreeSet::new(),
             exact_module_bindings: BTreeMap::new(),
             table_remove_overridden: lua::table_remove_is_overridden(parsed),
+            table_insert_overridden: lua::table_member_is_overridden(parsed, "insert"),
             project_module_globals: BTreeSet::new(),
         },
         diagnostics,
@@ -3672,7 +3678,7 @@ fn infer_first_function_call_return_types(
         && !query.context.function_types.contains_key("table")
         && !query.context.function_types.contains_key("table.remove")
     {
-        if let Some(result) = lua::table_remove_argument(function_call)
+        if let Some(result) = lua::first_call_argument(function_call)
             .and_then(|argument| query.type_of(argument))
             .and_then(|collection| {
                 lua::table_remove_return_type(resolve_aliases_from_map(

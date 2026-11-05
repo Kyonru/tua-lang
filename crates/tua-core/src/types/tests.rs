@@ -1741,3 +1741,47 @@ fn table_remove_mutation_preserves_user_return_contracts() {
         assert!(!diagnostics.iter().any(|d| d.severity == crate::DiagnosticSeverity::Error), "{mutation}: {diagnostics:?}");
     }
 }
+
+#[test]
+fn table_insert_checks_typed_array_values_and_preserves_dynamic_replacements() {
+    for (call, errors) in [
+        ("table.insert(values, 2)", 0),
+        ("table.insert(values, 1, 2)", 0),
+        ("table.insert(values, 'bad')", 1),
+        ("table.insert(values, 1, 'bad')", 1),
+        ("table.insert(values, 'bad', 2)", 1),
+        ("table.insert(values)", 1),
+        ("table.insert(values, 1, 2, 3)", 1),
+    ] {
+        let parsed = parse_tua_source(
+            "main.tua",
+            format!("local values: number[] = {{}}\n{call}\n"),
+        )
+        .unwrap();
+        let diagnostics = crate::check_parsed_source(&parsed)
+            .err()
+            .unwrap_or_default();
+        assert_eq!(
+            diagnostics
+                .iter()
+                .filter(|d| d.severity == crate::DiagnosticSeverity::Error)
+                .count(),
+            errors,
+            "{call}: {diagnostics:?}"
+        );
+    }
+    for source in [
+        "local values: number[] = {}\nlocal value: any = 'dynamic'\ntable.insert(values, value)",
+        "type Hero = {health: number}\nlocal heroes: Hero[] = {}\ntable.insert(heroes, {health = 5})",
+        "local function put(table: any) local values: number[] = {} table.insert(values, 'custom') end",
+        "local values: any = {}\ntable.insert(values, 'dynamic')",
+        "local table = {insert = function(items: number[], value: string) end}\nlocal values: number[] = {}\ntable.insert(values, 'custom')",
+        "table.insert = function(items: number[], value: string) end\nlocal values: number[] = {}\ntable.insert(values, 'custom')",
+        "table['insert'] = function(items: number[], value: string) end\nlocal values: number[] = {}\ntable.insert(values, 'custom')",
+        "function table.insert(items: number[], value: string) end\nlocal values: number[] = {}\ntable.insert(values, 'custom')",
+    ] {
+        let parsed = parse_tua_source("main.tua", source).unwrap();
+        let diagnostics = crate::check_parsed_source(&parsed).err().unwrap_or_default();
+        assert!(!diagnostics.iter().any(|d| d.severity == crate::DiagnosticSeverity::Error), "{source}: {diagnostics:?}");
+    }
+}

@@ -101,8 +101,6 @@ reproductions and current workarounds.
   consistent local/parameter/global shadowing tests.
 - Model initial LOVE configuration state and subsequent nullable window writes;
   evaluate literal `false` support without accepting arbitrary booleans.
-- Derive `table.insert` append/indexed value contracts from typed arrays;
-  preserve overridden library functions and dynamic `any` behavior.
 - Infer `table.sort` comparator parameter types from its input array, with
   matching member completion and argument checking.
 - Design stable nullable member-path narrowing with mutation/call invalidation;

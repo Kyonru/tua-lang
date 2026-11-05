@@ -36,6 +36,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- `table.insert` checks append and indexed values against typed array elements,
+  including index/count validation, while respecting custom library replacements
+  and explicit dynamic values.
+
 - Signature help selects zero-argument overloads for empty call slots, including
   `Text:getWidth(`, while retaining indexed overloads once an argument is typed.
 

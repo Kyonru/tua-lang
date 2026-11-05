@@ -168,7 +168,7 @@ impl<'a> SemanticModel<'a> {
         {
             return None;
         }
-        let argument = lua::table_remove_argument(call)?;
+        let argument = lua::first_call_argument(call)?;
         let collection =
             self.type_of_expression_return_at_depth(argument, position, 0, depth + 1)?;
         lua::table_remove_return_type(self.environment.resolve_aliases(&collection))
