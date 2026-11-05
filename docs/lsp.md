@@ -317,6 +317,10 @@ LOVE builtins, and static asset strings navigate to their source or generated
 stub. Dynamic dispatch through `any`, runtime-built tables, or unresolved
 modules returns no speculative location.
 
+Go to Definition on a named type-import binding or a type annotation follows
+the exported type to its declaration, including renamed imports and namespaced
+uses through re-exports.
+
 Built-in helper configuration fields navigate to generated virtual schema
 documents. Names derived from static source retain their source identity:
 `store` watcher keys navigate to the initial state field, sprite animation

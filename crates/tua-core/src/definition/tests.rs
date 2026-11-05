@@ -528,3 +528,58 @@ fn source_text_owned(source: &str, span: SourceSpan) -> String {
 
     line[start..end].to_owned()
 }
+
+#[test]
+fn project_definitions_follow_named_and_renamed_type_imports() {
+    for (binding, local) in [("Bullet", "Bullet"), ("Bullet as Shot", "Shot")] {
+        let source = format!("import type {{ {binding} }} from \"./model\"\nlocal function step(bullet: {local}): number\n  return bullet.x\nend\nreturn step\n");
+        let provider = "export type Bullet = { x: number, y: number }\nreturn {}\n";
+        let mut host = crate::AnalysisHost::new();
+        host.set_source_roots([PathBuf::from("src")]);
+        host.set_file("src/main.tua", source.clone());
+        host.set_file("src/model.tua", provider);
+        let snapshot = host.snapshot();
+        let mut use_position = position_at(&source, &format!("bullet: {local}"));
+        use_position.column += "bullet: ".len();
+        for position in [
+            position_at(&source, binding),
+            position_at(&source, local),
+            use_position,
+        ] {
+            let definition = snapshot
+                .definition("src/main.tua", position)
+                .expect("type import should navigate");
+            assert_eq!(definition.path, PathBuf::from("src/model.tua"));
+            assert_eq!(definition.kind, DefinitionKind::TypeAlias);
+            assert_eq!(source_text_from(provider, definition.span), "Bullet");
+        }
+        assert!(snapshot
+            .hover("src/main.tua", use_position)
+            .unwrap()
+            .contents
+            .contains(local));
+    }
+}
+
+#[test]
+fn project_definitions_follow_namespaced_and_reexported_type_uses() {
+    let mut host = crate::AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    let source =
+        "import type Models from \"./api\"\nlocal shot: Models.Shot = { x = 1 }\nreturn shot\n";
+    let provider = "export type Bullet = { x: number }\nreturn {}\n";
+    host.set_file("src/main.tua", source);
+    host.set_file(
+        "src/api.tua",
+        "export type { Bullet as Shot } from \"./model\"\n",
+    );
+    host.set_file("src/model.tua", provider);
+    let mut position = position_at(source, "Models.Shot");
+    position.column += "Models.".len();
+    let definition = host
+        .snapshot()
+        .definition("src/main.tua", position)
+        .unwrap();
+    assert_eq!(definition.path, PathBuf::from("src/model.tua"));
+    assert_eq!(source_text_from(provider, definition.span), "Bullet");
+}

@@ -134,6 +134,22 @@ impl AnalysisSnapshot {
         position: SourcePosition,
         degraded_facts: Option<&DegradedSemanticFacts>,
     ) -> Option<Definition> {
+        for import in parsed.type_imports.iter().filter(|import| !import.reexport) {
+            for binding in &import.bindings {
+                if span_contains_position(binding.imported_span, position)
+                    || span_contains_position(binding.local_span, position)
+                {
+                    return self.type_alias_definition_for_name(parsed, hir, &binding.local);
+                }
+            }
+        }
+        if is_type_reference_position(parsed, position) {
+            if let Some(definition) = self.type_alias_definition_at_position(parsed, hir, position)
+            {
+                return Some(definition);
+            }
+        }
+
         if let Some(definition) = self.project_store_watch_key_definition(parsed, position) {
             return Some(definition);
         }

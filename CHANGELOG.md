@@ -29,6 +29,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Go to Definition follows named and renamed type imports and namespaced type
+  uses through re-exports to the original type declaration.
+
 - `table.remove` preserves typed array elements as optional results across
   checking, inferred function returns, and editor queries. Empty arrays require
   a nil guard; previously accepted incompatible assignments can now be diagnosed.
