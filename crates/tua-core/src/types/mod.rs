@@ -269,8 +269,13 @@ pub(crate) fn function_type_from_body(body: &ast::FunctionBody) -> Type {
     let mut parameters = Vec::new();
     let mut vararg_type = None;
 
-    for (parameter, specifier) in body.parameters().iter().zip(body.type_specifiers()) {
-        let ty = specifier
+    // Plain Lua ASTs have parameters but no type-specifier entries. Zipping
+    // the lists would erase both named parameters and an untyped `...`.
+    let mut specifiers = body.type_specifiers();
+    for parameter in body.parameters() {
+        let ty = specifiers
+            .next()
+            .flatten()
             .map(|specifier| {
                 type_from_tua_type(&crate::parser::tua_type_from_type_info(
                     specifier.type_info(),

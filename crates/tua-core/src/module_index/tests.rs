@@ -703,3 +703,35 @@ return M
         "Tua source keeps rejecting goto"
     );
 }
+
+#[test]
+fn lua_exported_wrappers_preserve_untyped_named_and_variadic_parameters() {
+    let mut host = crate::AnalysisHost::new();
+    host.set_source_roots([std::path::PathBuf::from("src")]);
+    host.set_file("src/wrapper.lua", "return { call = function(...) return select('#', ...) end, named = function(first, ...) return first end }\n");
+    let source = "local Wrapper = require('wrapper')\nlocal count = Wrapper.call(1, 2, 3)\nlocal first = Wrapper.named('one', 2, 3)\n";
+    host.set_file("src/main.tua", source);
+    let snapshot = host.snapshot();
+    assert!(snapshot
+        .diagnostics("src/main.tua")
+        .iter()
+        .all(|d| d.severity != crate::DiagnosticSeverity::Error));
+    let parsed = crate::parse_lua_source(
+        "src/wrapper.lua",
+        "return function(first, ...) return first end\n",
+    )
+    .unwrap();
+    let function = match parsed.ast.nodes().last_stmt().unwrap() {
+        full_moon::ast::LastStmt::Return(stmt) => match stmt.returns().iter().next().unwrap() {
+            full_moon::ast::Expression::Function(function) => function,
+            _ => panic!("expected function"),
+        },
+        _ => panic!("expected return"),
+    };
+    let crate::Type::Function(ty) = crate::types::function_type_from_body(function.body()) else {
+        panic!("expected callable")
+    };
+    assert_eq!(ty.parameters.len(), 1);
+    assert_eq!(ty.parameters[0].name.as_deref(), Some("first"));
+    assert_eq!(ty.vararg_type.as_deref(), Some(&crate::Type::Any));
+}

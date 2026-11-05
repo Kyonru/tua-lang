@@ -29,6 +29,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Exported plain-Lua functions retain untyped named parameters and `...`;
+  wrappers such as SUIT callbacks no longer appear to accept zero arguments.
+
 - Go to Definition follows named and renamed type imports and namespaced type
   uses through re-exports to the original type declaration.
 
