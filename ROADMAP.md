@@ -21,6 +21,23 @@ workflow pages under `docs/`. Completed work belongs in
 - Fix correctness or responsiveness regressions before expanding language
   syntax.
 
+### Resolve Correctness Defects Found In Full Ports
+
+- Prevent explicit local annotations from leaking into unrelated same-named
+  locals in other functions; store contracts by declaration identity and verify
+  shadowing, callbacks, and cross-file imports.
+- Resolve nested vendor-module re-exports without false missing-member errors
+  (HUMP `Camera.smooth.damped`); make explicit dynamic interop annotations
+  consistently override inferred module contracts where the language permits it.
+- Preserve cross-file global module identity before injecting built-in modules:
+  BYTEPATH loads HUMP Camera globally, but another file's `Camera.smooth` can
+  inject Tua Camera and change runtime behavior. An explicit local `_G.Camera`
+  alias is the current workaround; use shared project binding provenance for the fix.
+
+Owner: shared binding, project/module and checker semantics. Acceptance: retain
+the SNKRX and BYTEPATH minimal reproductions, test editor/checker/emitter agreement,
+and replay the full ports without their temporary interop workarounds.
+
 ### Deepen Everyday LOVE Workflows
 
 - Harden asset path navigation and diagnostics across realistic project roots.
@@ -31,6 +48,8 @@ workflow pages under `docs/`. Completed work belongs in
 
 ### Qualify Real-Project Responsiveness And Editor Behavior
 
+- Keep full SNKRX/BYTEPATH check and build timings as regression workloads;
+  bound receiver inference and source rescanning, then profile remaining cost.
 - Trace cold typing/completion in the zombie project, including the reported
   delay beside `Dialogue.init`; compare cold and warm request latency.
 - Isolate slower require analysis outside `main`, hot-reload latency, and
@@ -59,6 +78,11 @@ results. Evidence: [development trials](internal/devex-trials-2026-11.md).
 
 ### Finish Semantic Editor Consistency
 
+- **Indexed expression receivers:** resolve record-array entries such as
+  `State.allBullets[b].` and `value_to_emoji_data[a.value].`, including incomplete
+  edits without unbounded analysis.
+- **Side-effect module globals:** define a sound navigation model for functions
+  introduced by `require` without an explicit returned module contract.
 - **Fluent expression receivers:** support completion, hover, signatures, and
   navigation after calls such as `title:setValue("x"):draw(` and LOVE constructor
   chains through one shared receiver context. Check completed and incomplete
@@ -69,9 +93,12 @@ results. Evidence: [development trials](internal/devex-trials-2026-11.md).
 - **Cross-file event call results:** propagate the inferred boolean from
   `local dead = target:damage(amount)` into handlers in other modules. Bound
   dependency traversal and cycles; test unsaved producer edits.
-- **Class parameter completion:** make source/parser coordinate contracts
-  explicit across semantic queries. Verify member completion inside class
-  methods, including shadowed parameters and incomplete edits.
+- **Remaining class contexts:** restore captured narrowed-local completion in
+  delayed callbacks and isolate full-method nested imported-field resolution.
+  The porting audit retains failing cases alongside working minimal controls.
+- **Native class parameter navigation:** preserve header identities and source
+  provenance for definition, references, and rename, including shadowing and
+  exact original-source edits.
 - **Empty-argument overload selection:** isolate why `Text:getWidth(` selects
   the index overload, then distinguish an empty slot from a supplied argument
   without hiding other valid overloads.
@@ -82,6 +109,41 @@ Owner: shared core semantics/parser, surfaced through LSP. Acceptance: extend
 cross-surface conformance tests with exact cursor positions, cold snapshots,
 and unsaved edits. The [trial report](internal/devex-trials-2026-11.md) owns the
 reproductions and current workarounds.
+
+### Complete Typed Lua Porting Workflows
+
+- Complete optional/default parameter support for anonymous callbacks using
+  parser-backed metadata; improve diagnostics for currently unsupported forms.
+- Add assertion-based narrowing with correct control-flow semantics.
+- Align LOVE File/FileData constructor overloads with the generated catalog;
+  preserve invalid-argument diagnostics and actual LOVE runtime coverage.
+- Extend helper binding awareness to asset indexing and editor metadata, with
+  consistent local/parameter/global shadowing tests.
+- Model initial LOVE configuration state and subsequent nullable window writes;
+  evaluate literal `false` support without accepting arbitrary booleans.
+- Derive `table.insert` append/indexed value contracts from typed arrays;
+  preserve overridden library functions and dynamic `any` behavior.
+- Infer `table.sort` comparator parameter types from its input array, with
+  matching member completion and argument checking.
+- Design stable nullable member-path narrowing with mutation/call invalidation;
+  capturing and guarding a local remains the current workaround.
+- Make init-before-field-default behavior easier to discover, and consider a
+  targeted diagnostic when a default overwrites an init assignment. Changing
+  ordering requires a compatibility decision, not a silent fix.
+- Document migration from singleton tables and mixins to explicit services,
+  native classes, and typed adapters. Evaluate reusable declarations for existing
+  timer libraries before adding a built-in scheduler domain.
+
+Owner: shared semantics/checker and documentation. Acceptance: focused core/LSP
+regressions and replay of the [five upstream porting trials](internal/upstream-port-audit-2026-11.md),
+including ordinary functions, class bodies, unsaved edits, custom library
+mutations, and runtime equivalence. Preserve full-game regression harnesses;
+installed-editor, long-session, external-service and visual parity validation
+remain distinct follow-up work.
+
+Migration tooling should also explain supported `emit_maps = false` for legacy
+loaders that require every directory entry, documented `.tua` restrictions on
+`goto`, and LOVE version compatibility without rewriting vendor dependencies.
 
 ### Improve Comment And Annotation Authoring
 
@@ -129,6 +191,10 @@ results rather than maintaining a second parser. Acceptance and rationale:
   clearly with concrete types. Abstract classes/methods and multiple inheritance
   remain deferred design questions, not promised features; require use cases
   beyond those already served by single inheritance and typed adapters.
+- Explore typed physics/contact ownership and checked optional configuration
+  schemas only against larger ports; investigate numeric units/nominal numeric
+  aliases if repeated angle, force, or dimension mistakes justify them. These
+  are evidence-gathering proposals from the porting audit, not commitments.
 - Keep executable third-party plugins out until ownership, ordering, security,
   and performance contracts can be made stable.
 

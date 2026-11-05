@@ -674,7 +674,19 @@ parent declaration to run early.
 Generated Lua uses ordinary tables, `__index`, local method functions, and
 per-class `__type_id` / `__is` metadata. `Class.new(...)` constructs instances.
 Within each class, the `init` body runs before that class's field defaults; this
-ordering is preserved across inheritance and constructor optimization.
+ordering is preserved across inheritance and constructor optimization. A default
+therefore overwrites a value assigned to the same field by `init`. For a value
+computed in `init`, declare the field without a default and initialize it there:
+
+```tua
+final class Spacing {
+  value: number
+  init(width: number) {
+    self.value = width / 16
+  }
+}
+```
+
 When a constructor is proven to contain only field defaults, `self.field = ...`,
 and a flattenable `super(...)`, Tua emits a direct table constructor. Otherwise
 it preserves explicit init calls. Calls to known final methods on known class
