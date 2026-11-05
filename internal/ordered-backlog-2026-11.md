@@ -188,3 +188,95 @@ Cold completion and cross-file hover remain optimization work. The larger
 semantic feature set is not a claim of zero latency cost: cross-file hover
 in this replay rises from 15.3 to 17.6 ms. Installed-editor and long-session
 qualification remains pending.
+
+## Remaining work
+
+The ordered implementation phases are complete for their documented static
+cases; unknown dynamic calls, ambiguous globals and mutation-sensitive paths
+remain conservative. This pass also revisited unresolved callback-use warnings,
+unfinished classes, annotation discovery and the performance regressions it
+introduced. It does not close every longer-term roadmap item.
+
+- Annotation authoring: parsed-signature documentation updates, parameter-doc
+  synchronization, annotation type navigation and incomplete tag hover.
+- Testing: dedicated test roots/package exclusions, Test Explorer/watch/report
+  integration, richer Busted declarations and an explicit LOVE test mode.
+- Semantics/design: literal false in LOVE config; protocols, generic classes and
+  changed initialization order need an explicit compatibility design.
+- Qualification: installed-editor key-to-menu/diagnostic behavior, hot reload,
+  visual and long-session game parity, legacy runtimes and external services.
+- Product follow-up: obtain a precise symbol/action/destination for the still
+  unspecified reference/implementation report. Cold completion remains a
+  measurable bottleneck; see the table above.
+
+## Commit inventory
+
+Each independent fix or feature is committed separately. The final lint-only
+cleanup does not change the optimized release-server bytes.
+
+| Commit | Change |
+| --- | --- |
+| `74dbfd4` | fix(completion): resolve indexed expression receivers |
+| `3cc3d9b` | fix(editor): resolve chained call receivers across IDE queries |
+| `2dd54b0` | fix(types): retain recursive imported class identity |
+| `12478dd` | fix(signals): infer imported method results in event payloads |
+| `932c939` | fix(semantics): resolve class parameters and narrowing coordinates |
+| `8891024` | fix(narrowing): retain non-nil captured locals after member writes |
+| `5ce6cc3` | fix(navigation): preserve native class parameter provenance |
+| `6c9a852` | fix(navigation): resolve globals from static runtime imports |
+| `89cdb37` | fix(navigation): follow fluent class and LOVE receivers |
+| `ae1b1e4` | feat(callbacks): support anonymous optional and default parameters |
+| `85cc35d` | feat(narrowing): recognize binding-aware builtin assertions |
+| `708d4f9` | feat(narrowing): refine stable nullable record paths |
+| `4624948` | feat(types): contextualize table.sort comparator contracts |
+| `89c4b15` | fix(love): align image File and Data overloads with runtime |
+| `ad3b02f` | fix(assets): respect lexical loader bindings across tooling |
+| `dee746e` | fix(love): track initial window configuration read state |
+| `070e5e1` | docs(interop): add typed timer and engine service migration |
+| `5588887` | feat(lint): explain defaults that overwrite initializer values |
+| `4d71a78` | test(lint): verify nested callback type import usage |
+| `d838422` | fix(scope): retain lexical reads inside nested defaults |
+| `3d9382f` | fix(editor): recover unfinished native class bodies |
+| `ae14e1a` | feat(editor): explain annotation tags with an offline guide |
+| `a85d91d` | perf(semantics): borrow the shared alias catalog for queries |
+| `df7aa0e` | chore(core): satisfy strict lint checks for backlog fixes |
+
+## Final verification and installable package — November 6
+
+- `RUST_MIN_STACK=16777216 RUST_TEST_THREADS=1 make verify`: passed.
+  Core: 1,637 passed, one ignored; LSP: 375 passed; CLI unit: 81 passed,
+  two ignored; CLI integration: 122 passed. Remaining integration/doc tests,
+  strict Clippy, version/schema/reference drift, language-evaluation checks,
+  extension checks (160 unit tests and activation smoke), JSON and whitespace
+  checks passed. Evidence: `final-verify.log`.
+- Release-server feature smoke and representative contention/freshness gate:
+  passed; all five representative gate groups passed with zero stale responses.
+  Evidence: `final-lsp-smoke.log`, `final-representative.log` and
+  `target/tua-speed/representative-profile-smoke.json`.
+- Docs build passed. Earlier real LOVE File/Data/config fixtures and actual
+  upstream HUMP timer adapter tests passed as recorded in their phase entries.
+- All five existing full ports check/build successfully with the final semantic
+  implementation: sprit3r 8 checked / 25 built files; SNKRX 12 / 391;
+  emoji-merge 2 / 152; BYTEPATH 90 / 315; Gravity Wars 8 / 14. Builds include
+  copied dependencies/assets, so these counts are not typed source counts.
+  Existing warnings are retained. Evidence: `final-*-{check,build}.log`.
+  This does not establish visual or full-game runtime parity.
+- `make extension-package` passed when run alone. ZIP integrity passed and the
+  bundled server hash matches the measured release binary. Earlier attempts
+  exposed timing-sensitive subprocess tests under concurrent load (a fake
+  shader validator and the activation mock's version probe); serialized/final
+  isolated checks passed. No product timeout was relaxed to make tests pass.
+
+The three ignored Rust tests require an installed glslang validator, a graphical
+LOVE session, or an explicitly manual corpus latency probe. Installed VS Code,
+visual gameplay, external services and long-session qualification were not run.
+
+Install with **Extensions: Install from VSIX…**:
+`target/ordered-backlog/tua-0.5.1-ordered-backlog-macos-arm64.vsix`.
+This is a local macOS Apple Silicon test build at version 0.5.1, not a published
+release. Restart the extension host after replacing the existing build.
+
+VSIX SHA-256:
+`04658542c6ae8f7209b5771bafe77c79b40457797c351b4650f24cb333bde87e`.
+Bundled server SHA-256:
+`e0e000a90a98b688e1d8fcd06254d2ba0fd66887b6644632d6ec8c87788a5b70`.
