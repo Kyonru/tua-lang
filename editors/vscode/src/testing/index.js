@@ -4,12 +4,14 @@ const fs = require("node:fs/promises");
 const os = require("node:os");
 const path = require("node:path");
 const vscode = require("vscode");
+const { mergeCoverage, publishCoverage } = require("./coverage");
 const { runProcess } = require("./process");
 const { descendants, planRuns, testArguments } = require("./model");
 
 function registerTesting({ getServerCommand, execute = runProcess }) {
   const controller = vscode.tests.createTestController("tua.busted", "Tua Unit Tests");
   const data = new WeakMap();
+  const coverageDetails = new WeakMap();
   const continuous = new Set();
   const cancellations = new Set();
   let watchedRoots = [], outputRoots = [], configPaths = [];
@@ -79,13 +81,14 @@ function registerTesting({ getServerCommand, execute = runProcess }) {
     if (!token?.isCancellationRequested) controller.items.replace(roots().filter(item => active.has(item.id)));
   }
 
-  async function run(request, token) {
+  async function run(request, token, withCoverage = false) {
     if (!vscode.workspace.isTrusted) {
       await vscode.window.showWarningMessage("Trust this workspace before running Tua tests.");
       return;
     }
     if (!initialized) await refresh(token);
     const run = controller.createTestRun(request);
+    const coverageFiles = new Map();
     const jobs = planRuns(roots(), request, data);
     try {
       for (const job of jobs) {
@@ -97,13 +100,15 @@ function registerTesting({ getServerCommand, execute = runProcess }) {
         try {
           const reportPath = path.join(temporary, "results.json");
           const settings = vscode.workspace.getConfiguration("tua", job.item.uri);
-          const result = await invoke(testArguments(job, reportPath, settings), { cwd: job.root, token });
+          const coveragePath = withCoverage ? path.join(temporary, "coverage.json") : undefined;
+          const result = await invoke(testArguments(job, reportPath, settings, coveragePath), { cwd: job.root, token });
           run.appendOutput((result.stdout + result.stderr).replace(/\r?\n/g, "\r\n"));
           if (result.cancelled) { expected.forEach(item => run.skipped(item)); break; }
           let report;
           try { report = JSON.parse(await fs.readFile(reportPath, "utf8")); }
           catch (error) { throw new Error(result.stderr || result.stdout || error.message); }
           if (!report.completed || report.version !== 1 || !Array.isArray(report.tests)) throw new Error(result.stderr || "Test run did not complete");
+          if (coveragePath) mergeCoverage(coverageFiles, JSON.parse(await fs.readFile(coveragePath, "utf8")));
           const observed = new Set();
           const failed = new Set();
           for (const result of report.tests) {
@@ -136,7 +141,10 @@ function registerTesting({ getServerCommand, execute = runProcess }) {
         } catch (error) { run.errored(job.item, new vscode.TestMessage(error.message)); }
         finally { await fs.rm(temporary, { recursive: true, force: true }); }
       }
-    } finally { run.end(); }
+    } finally {
+      try { if (withCoverage) publishCoverage(vscode, run, coverageFiles, coverageDetails); }
+      finally { run.end(); }
+    }
   }
 
   const schedule = () => {
@@ -168,6 +176,9 @@ function registerTesting({ getServerCommand, execute = runProcess }) {
     return enqueue(() => run(request, token));
   }, true);
   profile.supportsContinuousRun = true;
+  const coverageProfile = controller.createRunProfile("Coverage with LuaCov", vscode.TestRunProfileKind.Coverage,
+    (request, token) => enqueue(() => run(request, token, true)), true);
+  coverageProfile.loadDetailedCoverage = (_run, coverage) => coverageDetails.get(coverage) || [];
   controller.resolveHandler = () => enqueue(() => refresh());
   controller.refreshHandler = token => enqueue(() => refresh(token));
   // Watch mode is explicit through the Testing UI; edits alone never run tests.
@@ -180,7 +191,7 @@ function registerTesting({ getServerCommand, execute = runProcess }) {
     };
     watchers.push(watcher, watcher.onDidCreate(changed), watcher.onDidChange(changed), watcher.onDidDelete(changed));
   }
-  return vscode.Disposable.from(controller, profile, ...watchers,
+  return vscode.Disposable.from(controller, profile, coverageProfile, ...watchers,
     vscode.commands.registerCommand("tua.tests.refresh", () => enqueue(() => refresh())),
     { dispose() { disposed = true; clearTimeout(timer); for (const session of continuous) session.subscription.dispose(); continuous.clear(); [...cancellations].forEach(cancel => cancel()); cancellations.clear(); } });
 }

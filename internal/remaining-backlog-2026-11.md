@@ -17,13 +17,16 @@ Artifacts and verification logs are in `target/remaining-backlog/`.
 - `887c609`: VS Code Test Explorer: lazy discovery, selected runs, cancellation, and
   opt-in continuous runs. Unit and extension activation checks pass; installed
   editor qualification remains part of the final release pass.
-- CLI LuaCov coverage: mapped native/Lua line counts, unloaded modules, generated
+- `8c0e362`: CLI LuaCov coverage: mapped native/Lua line counts, unloaded modules, generated
   helper exclusion and incomplete-run state. Verified against isolated LuaCov
   0.17.0 with real Busted, including a build failure after a successful run.
 
+- Test Explorer coverage profile displays the CLI source-mapped line counts;
+  selected-run merging and failure/coverage coexistence have unit coverage.
+
 ## In progress
 
-- Richer Busted contracts, coverage and explicit LOVE runtime testing.
+- Richer Busted contracts and explicit LOVE runtime testing.
 - Annotation generation/update, documentation-aware parameter rename and
   annotation navigation/recovery.
 - Further cold responsiveness, installed-editor/visual/long-session evidence,

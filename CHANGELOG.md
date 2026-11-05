@@ -8,6 +8,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Changed
 
+- Test Explorer offers a LuaCov coverage profile with mapped source-line
+  decorations and per-file totals, combining coverage from selected test runs.
+
 - `tua test --coverage PATH` exports source-mapped LuaCov line coverage, including
   unloaded project modules and explicit incomplete-run state. Coverage requires
   LuaCov in the Busted interpreter and excludes generated runtime helpers.

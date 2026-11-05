@@ -666,4 +666,6 @@ Open the Testing view to discover Tua/Busted specs, run a project/file/case, and
 view mapped failures. The **Run with Busted** profile supports explicit
 continuous runs after saved changes. Discovery is lazy and does not execute
 specs. Configure `tua.test.bustedPath` / `tua.test.luaPath` if needed; running
-requires Workspace Trust. **Tua: Run Unit Tests** keeps the terminal workflow.
+requires Workspace Trust. **Coverage with LuaCov** shows per-file totals and
+source-line decorations when LuaCov is installed for the Busted interpreter.
+**Tua: Run Unit Tests** keeps the terminal workflow.

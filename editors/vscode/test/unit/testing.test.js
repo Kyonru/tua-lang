@@ -50,14 +50,14 @@ test("Test Explorer discovers lazily, runs selected cases, and watches only on e
   const root = "/tmp/tua-testing-project";
   const source = `${root}/tests/math_spec.tua`;
   const commands = new Map(), calls = [], runs = [], watchers = [];
-  let profile;
+  let profile, coverageProfile;
   const controller = {
     items: collection(),
     createTestItem: item,
-    createRunProfile(_name, _kind, handler) { profile = { handler, dispose() {} }; return profile; },
+    createRunProfile(_name, kind, handler) { const value = { handler, dispose() {} }; if (kind === 1) profile = value; else coverageProfile = value; return value; },
     createTestRun() {
       const events = [];
-      const run = { events, end() { events.push(["end"]); }, appendOutput(value) { events.push(["output", value]); } };
+      const run = { events, addCoverage(value) { events.push(["coverage", value]); }, end() { events.push(["end"]); }, appendOutput(value) { events.push(["output", value]); } };
       for (const status of ["enqueued", "started", "passed", "failed", "errored", "skipped"]) run[status] = (item, message) => events.push([status, item.id, message]);
       runs.push(run); return run;
     },
@@ -65,7 +65,7 @@ test("Test Explorer discovers lazily, runs selected cases, and watches only on e
   };
   const vscode = {
     tests: { createTestController: () => controller },
-    TestRunProfileKind: { Run: 1 },
+    TestRunProfileKind: { Run: 1, Coverage: 3 },
     TestMessage: class { constructor(message) { this.message = message; } },
     TestRunRequest: class { constructor(include, exclude, profile, continuous) { Object.assign(this, { include, exclude, profile, continuous }); } },
     Range: class { constructor(...values) { this.values = values; } },
@@ -86,6 +86,9 @@ test("Test Explorer discovers lazily, runs selected cases, and watches only on e
       },
     },
   };
+  vscode.FileCoverage = class { constructor(uri, statementCoverage) { Object.assign(this, { uri, statementCoverage }); } };
+  vscode.StatementCoverage = class { constructor(executed, location) { Object.assign(this, { executed, location }); } };
+  vscode.Position = class { constructor(line, character) { Object.assign(this, { line, character }); } };
   const original = Module._load;
   Module._load = function (id, ...args) { return id === "vscode" ? vscode : original.call(this, id, ...args); };
   const { registerTesting } = require("../../src/testing");
@@ -94,6 +97,7 @@ test("Test Explorer discovers lazily, runs selected cases, and watches only on e
   const execute = async (_command, args) => {
     calls.push(args);
     if (args.includes("--list")) return { code: 0, stdout: JSON.stringify({ version: 1, source_roots: [`${root}/src`, `${root}/tests`], output_root: `${root}/generated`, files: [{ path: source, selector: "math_spec.tua", cases: [{ full_name: "math works [1]", line: 2, column: 1 }] }] }) };
+    if (args.includes("--coverage")) await fs.writeFile(args[args.indexOf("--coverage") + 1], JSON.stringify({ version: 1, completed: true, files: [{path: source, lines: [{line: 2, hits: 3}, {line: 3, hits: 0}]}] }));
     const report = args[args.indexOf("--report") + 1];
     await fs.writeFile(report, JSON.stringify({ version: 1, completed: true, success: outcome === "passed", tests: [{ name: "math works [1]", status: outcome, message: "assertion", file: source, line: 3 }] }));
     return { code: outcome === "passed" ? 0 : 1, stdout: "test output\n", stderr: "" };
@@ -117,6 +121,14 @@ test("Test Explorer discovers lazily, runs selected cases, and watches only on e
     const failure = runs[1].events.find(event => event[0] === "failed" && event[2]?.location);
     assert.equal(failure[2].location.uri.fsPath, source);
     assert.deepEqual(failure[2].location.range.values, [2, 0, 2, 0]);
+    await coverageProfile.handler({ include: [selected] }, cancellation());
+    const coverage = runs[2].events.find(event => event[0] === "coverage")[1];
+    assert.deepEqual(coverage.statementCoverage, { covered: 1, total: 2 });
+    const details = coverageProfile.loadDetailedCoverage(runs[2], coverage);
+    assert.equal(details[0].location.line, 1);
+    assert.equal(details[0].executed, 3);
+    assert.equal(details[1].executed, 0);
+    assert.ok(runs[2].events.some(event => event[0] === "failed"));
     outcome = "passed";
     const baseline = runs.length;
     watchers[0].change({ fsPath: `${root}/src/library.tua` });
@@ -133,4 +145,14 @@ test("Test Explorer discovers lazily, runs selected cases, and watches only on e
     await new Promise(resolve => setTimeout(resolve, 350));
     assert.equal(runs.length, baseline + 2);
   } finally { disposable.dispose(); }
+});
+
+test("coverage merges selected runs and rejects incomplete data", () => {
+  const { mergeCoverage } = require("../../src/testing/coverage");
+  const files = new Map();
+  const report = hits => ({version: 1, completed: true, files: [{path: "/source.tua", lines: [{line: 2, hits}, {line: 4, hits: 0}]}]});
+  mergeCoverage(files, report(3)); mergeCoverage(files, report(2));
+  assert.deepEqual([...files.get("/source.tua")], [[2, 5], [4, 0]]);
+  assert.throws(() => mergeCoverage(files, {version: 1, completed: false, files: []}), /did not complete/);
+  assert.throws(() => mergeCoverage(new Map(), report(-1)), /Invalid coverage line/);
 });

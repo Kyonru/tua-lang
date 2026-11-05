@@ -35,11 +35,12 @@ function planRuns(roots, request, data) {
   return jobs;
 }
 
-function testArguments(job, reportPath, settings) {
+function testArguments(job, reportPath, settings, coveragePath) {
   const args = ["test"];
   if (job.selector) args.push(job.selector);
   if (job.caseName !== undefined) args.push("--filter", exactPattern(job.caseName));
   args.push("--report", reportPath);
+  if (coveragePath) args.push("--coverage", coveragePath);
   for (const [setting, flag] of [["test.bustedPath", "--busted"], ["test.luaPath", "--lua"]]) {
     const value = settings.get(setting, "").trim();
     if (value) args.push(flag, value);

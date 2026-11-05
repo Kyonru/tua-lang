@@ -195,6 +195,12 @@ values use the CLI defaults. It uses saved files, not unsaved editor buffers.
 Results show mapped failure locations and captured terminal output. No tests
 run just because a file was edited or the tree refreshed.
 
+Choose **Coverage with LuaCov** in the Testing view to run selected tests with
+coverage. VS Code shows per-file totals and source-line decorations, including
+uncovered lines. Install LuaCov for the same interpreter as Busted. Independent
+selected runs combine their line hits; coverage represents the selected tests,
+not necessarily the entire suite. The coverage profile runs on demand.
+
 **Tua: Run Unit Tests** remains available as a visible-terminal workflow.
 
 For CI, install the intended Lua interpreter and Busted, then run:
@@ -241,4 +247,4 @@ production source tree. Tests can import production modules and test helpers;
 production code should not import test-only modules. Test assets are available
 under `__tua_tests__/` relative to the temporary build directory.
 
-Coverage UI and a CLI watch loop remain follow-up work. For runtime/gameplay checks, see [Debugging](debugging.md).
+A CLI watch loop is not implemented; use Test Explorer continuous runs. For runtime/gameplay checks, see [Debugging](debugging.md).
