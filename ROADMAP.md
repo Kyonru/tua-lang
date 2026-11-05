@@ -46,9 +46,11 @@ workflow pages under `docs/`. Completed work belongs in
 - Measure actual VS Code key-to-menu latency, pull-diagnostic client behavior,
   larger-project imports, and LOVE hot reload. Protocol replay covers dialogue,
   main, combat, import paths and format-apply-save, but not UI/rendering latency.
-- Test the newly packaged VSIX in an installed editor and a graphical LOVE game.
-  Headless tests and synthetic trials do not establish interactive usability,
-  reload behavior, or large-project performance.
+- Extend installed-editor qualification to prolonged real-project editing,
+  Test Explorer/coverage interactions, hot reload and full-game visual parity.
+  Candidate installation, real-server language features and five graphical
+  LOVE/editor views passed; see `internal/remaining-backlog-2026-11.md`.
+  These checks do not establish long-session usability or full-port parity.
 - Turn any still-unspecified reference/implementation request into an exact
   symbol, editor command, expected destination, and reproducible test before
   treating it as a confirmed defect.
