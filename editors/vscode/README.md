@@ -659,3 +659,11 @@ narrow previews, including wrapped toolbars and sticky sprite controls.
 Use **Tua: Open Annotation Guide (Offline)** to browse recognized LuaDoc tags
 and distinguish checking contracts from metadata-only annotations. Tag
 completion and hover include these explanations and a link to the guide.
+
+### Unit tests
+
+Open the Testing view to discover Tua/Busted specs, run a project/file/case, and
+view mapped failures. The **Run with Busted** profile supports explicit
+continuous runs after saved changes. Discovery is lazy and does not execute
+specs. Configure `tua.test.bustedPath` / `tua.test.luaPath` if needed; running
+requires Workspace Trust. **Tua: Run Unit Tests** keeps the terminal workflow.

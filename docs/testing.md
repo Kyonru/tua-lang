@@ -149,8 +149,26 @@ parent directory must exist. Check both the command exit status and the report;
 
 ## Run In VS Code Or CI
 
-Save your files, then run **Tua: Run Unit Tests** in a trusted workspace. It
-runs the selected Tua server's `test` command in a visible terminal. Busted must be available to the editor process.
+Save your files, then open VS Code's **Testing** view. Tua discovers configured
+projects lazily using `tua test --list`; use **Tua: Refresh Unit Tests** to refresh
+manually. Run a project, spec file, or literal named case from the tree or its
+gutter icon. Dynamic registrations remain runnable through their spec file;
+executed cases also appear in the results. Tests with the same full name in one
+file run together because Busted filters by name.
+
+The **Run with Busted** profile supports **continuous run**: opt in through the
+Testing view to rerun the selected tests after saved source/config/asset changes.
+Runs are serialized and refreshes coalesced. Generated output and `.tua/` changes
+do not retrigger tests. Stop cancels the owned CLI/backend process group; abrupt
+cancellation can leave an ignored temporary `.tua/test-*` directory.
+
+Test Explorer requires a trusted workspace and an installed Busted backend.
+`tua.test.bustedPath` and `tua.test.luaPath` select optional executables; empty
+values use the CLI defaults. It uses saved files, not unsaved editor buffers.
+Results show mapped failure locations and captured terminal output. No tests
+run just because a file was edited or the tree refreshed.
+
+**Tua: Run Unit Tests** remains available as a visible-terminal workflow.
 
 For CI, install the intended Lua interpreter and Busted, then run:
 
@@ -196,5 +214,4 @@ production source tree. Tests can import production modules and test helpers;
 production code should not import test-only modules. Test assets are available
 under `__tua_tests__/` relative to the temporary build directory.
 
-Coverage UI, watch-mode testing, and VS Code Test Explorer discovery are still
-follow-up work. For runtime/gameplay checks, see [Debugging](debugging.md).
+Coverage UI and a CLI watch loop remain follow-up work. For runtime/gameplay checks, see [Debugging](debugging.md).

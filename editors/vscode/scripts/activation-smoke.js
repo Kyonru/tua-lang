@@ -2160,6 +2160,9 @@ function createMockState(workspace, options = {}) {
         this.insertions.push({ uri, position, newText });
       }
     },
+    RelativePattern: class RelativePattern { constructor(base, pattern) { this.base = base; this.pattern = pattern; } },
+    TestRunProfileKind: { Run: 1 },
+    tests: { createTestController() { return { items: new Map(), createRunProfile() { return { dispose() {} }; }, dispose() {} }; } },
     ViewColumn: {
       Beside: 2,
     },

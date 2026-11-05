@@ -8,6 +8,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Changed
 
+- VS Code Test Explorer discovers Tua/Busted projects and literal cases lazily,
+  runs selected tests with mapped results, and supports cancellation and opt-in
+  continuous testing after saved changes. Discovery never executes spec code.
+
 - `tua test --list` discovers literal Busted cases without executing source.
   `--report PATH` exports versioned JSON results with mapped source locations,
   captured logs and explicit incomplete-run state for editor/CI integrations.

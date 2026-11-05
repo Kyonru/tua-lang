@@ -23,6 +23,8 @@
       "supported": "limited",
       "description": "Tua uses only its bundled language server in Restricted Mode. Trust the workspace before using custom executables or running LOVE.",
       "restrictedConfigurations": [
+        "tua.test.bustedPath",
+        "tua.test.luaPath",
         "tua.server.path",
         "tua.love.command",
         "tua.love.windowsRuntime",
@@ -34,7 +36,8 @@
   "categories": [
     "Programming Languages",
     "Snippets",
-    "Themes"
+    "Themes",
+    "Testing"
   ],
   "activationEvents": [
     "onCommand:tua.initProject",
@@ -81,6 +84,18 @@
     "configuration": {
       "title": "tua",
       "properties": {
+        "tua.test.bustedPath": {
+          "type": "string",
+          "default": "",
+          "scope": "resource",
+          "description": "Optional Busted executable for Test Explorer. Empty uses TUA_BUSTED or PATH."
+        },
+        "tua.test.luaPath": {
+          "type": "string",
+          "default": "",
+          "scope": "resource",
+          "description": "Optional Lua interpreter for Test Explorer; Busted must be installed for that interpreter."
+        },
         "tua.server.path": {
           "type": "string",
           "default": "tua",
@@ -739,6 +754,11 @@
       }
     },
     "commands": [
+      {
+        "command": "tua.tests.refresh",
+        "title": "Refresh Unit Tests",
+        "category": "Tua"
+      },
       {
         "command": "tua.openAnnotationGuide",
         "title": "Open Annotation Guide (Offline)",

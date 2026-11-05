@@ -17,5 +17,5 @@ pub(super) fn list(workspace: &ProjectWorkspace, paths: &[&Path]) -> serde_json:
         };
         serde_json::json!({"path": path, "selector": path.strip_prefix(&root).unwrap_or(path), "cases": cases, "error": error})
     }).collect::<Vec<_>>();
-    serde_json::json!({"version": 1, "root": workspace.root(), "test_root": root, "files": files})
+    serde_json::json!({"version": 1, "root": workspace.root(), "test_root": root, "source_roots": workspace.source_roots(), "output_root": workspace.primary_output_root(), "files": files})
 }
