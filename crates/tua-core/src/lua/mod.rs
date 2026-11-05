@@ -3,6 +3,86 @@ use crate::{
     signal, sprite, state_machine, store, vector, Type,
 };
 
+/// Writes anywhere in the source make specialization of this mutable Lua
+/// builtin unsafe. Keep this conservative across branches and nested functions;
+/// ordinary user-call inference remains responsible for the replacement.
+pub(crate) fn table_remove_is_overridden(parsed: &crate::ParsedSource) -> bool {
+    use crate::ast_utils::token_text;
+    use full_moon::ast::{self, Index, Prefix, Suffix, Var};
+    use full_moon::visitors::Visitor;
+
+    #[derive(Default)]
+    struct Writes {
+        overridden: bool,
+    }
+    impl Visitor for Writes {
+        fn visit_assignment(&mut self, assignment: &ast::Assignment) {
+            for variable in assignment.variables() {
+                self.overridden |= match variable {
+                    Var::Name(name) => token_text(name) == "table",
+                    Var::Expression(expression) if matches!(expression.prefix(), Prefix::Name(name) if token_text(name) == "table") =>
+                    {
+                        match expression.suffixes().next() {
+                            Some(Suffix::Index(Index::Dot { name, .. })) => {
+                                token_text(name) == "remove"
+                            }
+                            // An indexed write may replace remove, including a
+                            // computed string key. Do not assume its identity.
+                            Some(Suffix::Index(Index::Brackets { .. })) => true,
+                            _ => false,
+                        }
+                    }
+                    _ => false,
+                };
+            }
+        }
+        fn visit_function_declaration(&mut self, function: &ast::FunctionDeclaration) {
+            let names = function
+                .name()
+                .names()
+                .iter()
+                .map(token_text)
+                .collect::<Vec<_>>();
+            self.overridden |= names == ["table", "remove"] || names == ["table"];
+        }
+    }
+    let mut writes = Writes::default();
+    writes.visit_ast(&parsed.ast);
+    writes.overridden
+}
+
+/// Argument-dependent standard-library facts shared by editor and body inference.
+pub(crate) fn table_remove_argument(
+    call: &full_moon::ast::FunctionCall,
+) -> Option<&full_moon::ast::Expression> {
+    use full_moon::ast::{Call, FunctionArgs, Suffix};
+    let first_call = call
+        .suffixes()
+        .find(|suffix| matches!(suffix, Suffix::Call(_)))?;
+    let Suffix::Call(Call::AnonymousCall(FunctionArgs::Parentheses { arguments, .. })) = first_call
+    else {
+        return None;
+    };
+    arguments.iter().next()
+}
+
+pub(crate) fn table_remove_return_type(collection: Type) -> Option<Type> {
+    let item = match collection {
+        Type::Any => return Some(Type::Any),
+        Type::Array(item) => *item,
+        Type::Tuple(items) => Type::union(items),
+        Type::Union(collections) => {
+            let items = collections
+                .into_iter()
+                .map(table_remove_return_type)
+                .collect::<Option<Vec<_>>>()?;
+            Type::union(items)
+        }
+        _ => return None,
+    };
+    Some(Type::union([item, Type::nil()]))
+}
+
 pub(crate) const BUILTIN_DEFINITION_URI_PREFIX: &str = "tua:/builtins/";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

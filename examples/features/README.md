@@ -30,7 +30,7 @@ make build-features
   varargs,
   stable inferred-local reassignment contracts, explicit optional
   initialization, array/index inference, numeric and generic loop variable
-  inference, and the permissive `any` boundary.
+  inference, optional typed `table.remove` results, and the permissive `any` boundary.
 - `src/modules.tua` covers normal Lua `require(...)` usage, plain Lua module
   interop, and cross-file go to definition for required module exports.
 - `src/imports.tua` covers static `import(...)` module bindings that resolve

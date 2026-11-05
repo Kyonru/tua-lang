@@ -29,6 +29,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- `table.remove` preserves typed array elements as optional results across
+  checking, inferred function returns, and editor queries. Empty arrays require
+  a nil guard; previously accepted incompatible assignments can now be diagnosed.
+
 - Class-method parameter and loop receivers retain their types for member
   completion, hover, and signatures across normalized source coordinates.
 

@@ -1614,3 +1614,130 @@ local invalid = text:set("Bye"):getWidth()
         .type_of_name("invalid", position)
         .is_none_or(|ty| ty == Type::Any));
 }
+
+#[test]
+fn table_remove_infers_optional_elements_and_preserves_dynamic_calls() {
+    let parsed = parse_tua_source(
+        "src/removal.tua",
+        r#"
+local function pop(values: number[])
+  return table.remove(values)
+end
+local function pop_at(values: number[], index: number)
+  return table.remove(values, index)
+end
+local function dynamic(values: any)
+  return table.remove(values)
+end
+local function custom(table: { remove: (values: number[]) -> string }, values: number[])
+  return table.remove(values)
+end
+"#,
+    )
+    .unwrap();
+    let environment = build_type_environment(&parsed).unwrap();
+    for name in ["pop", "pop_at"] {
+        assert_eq!(
+            environment.function(name).unwrap().return_types,
+            vec![Type::union([Type::number(), Type::nil()])]
+        );
+    }
+    assert_eq!(
+        environment.function("dynamic").unwrap().return_types,
+        vec![Type::Any]
+    );
+    assert_eq!(
+        environment.function("custom").unwrap().return_types,
+        vec![Type::string()]
+    );
+
+    let parsed = parse_tua_source(
+        "src/custom.tua",
+        r#"
+local table = { remove = function(values: number[]): string return "custom" end }
+local result = table.remove({1})
+"#,
+    )
+    .unwrap();
+    let environment = build_type_environment(&parsed).unwrap();
+    let semantic = crate::semantic::SemanticModel::new(&parsed, &environment);
+    assert_eq!(
+        semantic.type_of_name("result", crate::SourcePosition { line: 4, column: 1 }),
+        Some(Type::string())
+    );
+}
+
+#[test]
+fn table_remove_record_results_support_guarded_completion_and_checking() {
+    let fixture = crate::Fixture::parse(
+        r#"-- file: src/main.tua
+type Hero = { health: number }
+local heroes: Hero[] = {}
+local hero = table.remove(heroes, 1)
+print(<|hover|>hero)
+if hero then
+  print(hero.<|member|>health)
+end
+local numbers: number[] = {}
+local invalid: boolean = table.remove(numbers)
+local unsafe: number = table.remove(numbers)
+"#,
+    );
+    let mut host = crate::AnalysisHost::new();
+    host.set_file("src/main.tua", fixture.source("src/main.tua"));
+    let snapshot = host.snapshot();
+    let hover = snapshot
+        .hover("src/main.tua", fixture.position("hover"))
+        .unwrap();
+    assert!(hover.contents.contains("nil"), "{}", hover.contents);
+    assert!(snapshot
+        .completion("src/main.tua", fixture.position("member"))
+        .iter()
+        .any(|item| item.label == "health"));
+    let diagnostics = snapshot.diagnostics("src/main.tua");
+    for line in [9, 10] {
+        assert!(
+            diagnostics
+                .iter()
+                .any(|d| d.line == line && d.code == Some(DiagnosticCode::TYPE_MISMATCH)),
+            "{diagnostics:?}"
+        );
+    }
+}
+
+#[test]
+fn table_remove_nested_calls_respect_semantic_inference_budget() {
+    let expression = format!("{}values{}", "table.remove(".repeat(48), ")".repeat(48));
+    let source = format!("local values: any = {{}}\nlocal value = {expression}\nprint(value)\n");
+    let parsed = parse_tua_source("src/nested.tua", &source).unwrap();
+    let environment = build_type_environment(&parsed).unwrap();
+    let semantic = crate::semantic::SemanticModel::new(&parsed, &environment);
+    assert_eq!(
+        semantic.type_of_name("value", crate::SourcePosition { line: 3, column: 7 }),
+        None
+    );
+}
+
+#[test]
+fn table_remove_mutation_preserves_user_return_contracts() {
+    for mutation in [
+        "table.remove = function(items: number[]): string return \"custom\" end",
+        "table[\"remove\"] = function(items: number[]): string return \"custom\" end",
+        "if enabled then table.remove = function(items: number[]): string return \"custom\" end end",
+        "local function install() table.remove = function(items: number[]): string return \"custom\" end end\ninstall()",
+        "function table.remove(items: number[]): string return \"custom\" end",
+    ] {
+        let source = format!("local enabled: boolean = true\nlocal values: number[] = {{1}}\n{mutation}\nlocal custom: string = table.remove(values)\nlocal function take(): string return table.remove(values) end\nprint(custom, take())\n");
+        let parsed = parse_tua_source("src/override.tua", &source).unwrap();
+        let environment = build_type_environment(&parsed).unwrap();
+        assert!(environment.table_remove_is_overridden(), "{mutation}");
+        let semantic = crate::semantic::SemanticModel::new(&parsed, &environment);
+        let position = crate::SourcePosition { line: source.lines().count(), column: 7 };
+        assert_eq!(semantic.type_of_name("custom", position), Some(Type::string()), "{mutation}");
+        assert_eq!(environment.function("take").unwrap().return_types, vec![Type::string()], "{mutation}");
+        let mut host = crate::AnalysisHost::new();
+        host.set_file("src/override.tua", source);
+        let diagnostics = host.snapshot().diagnostics("src/override.tua");
+        assert!(!diagnostics.iter().any(|d| d.severity == crate::DiagnosticSeverity::Error), "{mutation}: {diagnostics:?}");
+    }
+}

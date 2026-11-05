@@ -134,9 +134,17 @@ impl<'a> SemanticModel<'a> {
         let [root] = parts else {
             return None;
         };
-        if self.environment.local(root).is_some()
-            || self.environment.function(root).is_some()
-            || self
+        if !self.is_unshadowed_lua_root(root) {
+            return None;
+        }
+
+        lua::hover_item(parts).filter(|item| item.kind == LuaItemKind::Function)
+    }
+
+    fn is_unshadowed_lua_root(&self, root: &str) -> bool {
+        self.environment.local(root).is_none()
+            && self.environment.function(root).is_none()
+            && !self
                 .shadowed_names
                 .get_or_init(|| {
                     let mut collector = ShadowedNameCollector::default();
@@ -144,11 +152,26 @@ impl<'a> SemanticModel<'a> {
                     collector.names
                 })
                 .contains(root)
+    }
+
+    fn table_remove_result(
+        &self,
+        call: &FunctionCall,
+        parts: &[String],
+        position: SourcePosition,
+        depth: usize,
+    ) -> Option<Type> {
+        if parts != ["table", "remove"]
+            || self.environment.table_remove_is_overridden()
+            || !self.is_unshadowed_lua_root("table")
+            || self.environment.function("table.remove").is_some()
         {
             return None;
         }
-
-        lua::hover_item(parts).filter(|item| item.kind == LuaItemKind::Function)
+        let argument = lua::table_remove_argument(call)?;
+        let collection =
+            self.type_of_expression_return_at_depth(argument, position, 0, depth + 1)?;
+        lua::table_remove_return_type(self.environment.resolve_aliases(&collection))
     }
 
     pub(crate) fn type_of_name(&self, name: &str, position: SourcePosition) -> Option<Type> {
@@ -279,7 +302,19 @@ impl<'a> SemanticModel<'a> {
         function_call: &FunctionCall,
         position: SourcePosition,
     ) -> Vec<Type> {
-        let first = self.return_types_of_first_call(function_call, position);
+        self.return_types_of_call_at_depth(function_call, position, 0)
+    }
+
+    fn return_types_of_call_at_depth(
+        &self,
+        function_call: &FunctionCall,
+        position: SourcePosition,
+        depth: usize,
+    ) -> Vec<Type> {
+        if depth >= MAX_SEMANTIC_INFERENCE_DEPTH {
+            return Vec::new();
+        }
+        let first = self.return_types_of_first_call(function_call, position, depth);
         if function_call
             .suffixes()
             .filter(|s| matches!(s, Suffix::Call(_)))
@@ -295,6 +330,7 @@ impl<'a> SemanticModel<'a> {
         &self,
         function_call: &FunctionCall,
         position: SourcePosition,
+        depth: usize,
     ) -> Vec<Type> {
         let domains =
             BuiltinDomainRegistry::with_ecs(self.environment.alias(ecs::WORLD_TYPE).is_some());
@@ -325,6 +361,10 @@ impl<'a> SemanticModel<'a> {
                 .constructor()
                 .map(|constructor| constructor.function_type().return_types_or_any().to_vec())
                 .unwrap_or_default();
+        }
+
+        if let Some(result) = self.table_remove_result(function_call, &parts, position, depth) {
+            return vec![result];
         }
 
         if parts.as_slice() == ["rawget"]
@@ -521,6 +561,10 @@ impl<'a> SemanticModel<'a> {
     ) -> Option<TypedFunction> {
         let parts = field_chain_before_first_call(function_call)?;
         let mut function = self.typed_function_for_call_parts(&parts, position)?;
+        if let Some(result) = self.table_remove_result(function_call, &parts, position, 0) {
+            function.return_type = Some(result.clone());
+            function.return_types = vec![result];
+        }
 
         if self.environment.alias(ecs::WORLD_TYPE).is_some() {
             if let Some((_, receiver_parts)) = parts.split_last() {
@@ -1251,7 +1295,7 @@ impl<'a> SemanticModel<'a> {
 
         match expression {
             Expression::FunctionCall(function_call) => self
-                .return_types_of_call(function_call, position)
+                .return_types_of_call_at_depth(function_call, position, depth + 1)
                 .get(return_index)
                 .cloned(),
             _ if return_index > 0 => None,

@@ -138,6 +138,13 @@ local dynamicValue = {
 }
 local innferenceFromDynamic = dynamicValue.deep.field
 
+-- Removing from a typed array can yield nil when it is empty.
+local pendingScores: number[] = { 10, 20 }
+local removedScore = table.remove(pendingScores)
+if removedScore then
+  print(removedScore + 1)
+end
+
 return {
   inferredNumber = inferredNumber,
   inferredString = inferredString,

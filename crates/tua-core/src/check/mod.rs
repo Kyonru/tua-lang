@@ -1770,6 +1770,10 @@ impl<'a> Checker<'a> {
             return vec![Type::string()];
         }
 
+        if let Some(ty) = self.checked_table_remove_return_type(function_call) {
+            return vec![ty];
+        }
+
         if let Some(ty) = self.checked_rawget_return_type(function_call) {
             return vec![ty];
         }
@@ -1892,6 +1896,29 @@ impl<'a> Checker<'a> {
         ) {
             self.report_unsafe_union_operation(function_call, &current, "call");
         }
+    }
+
+    fn checked_table_remove_return_type(&mut self, function_call: &FunctionCall) -> Option<Type> {
+        let parts = field_chain_before_first_call(function_call)?;
+        if parts.as_slice() != ["table", "remove"]
+            || self.environment.table_remove_is_overridden()
+            || self.infer_named_value("table").is_some()
+            || self.environment.function("table.remove").is_some()
+        {
+            return None;
+        }
+        let collection = crate::lua::table_remove_argument(function_call)?;
+        let collection = self.infer_expression(collection)?;
+        let result =
+            crate::lua::table_remove_return_type(self.environment.resolve_aliases(&collection))?;
+        // Later argument expressions still need diagnostics, even though the
+        // standard-library catalog does not yet constrain the index argument.
+        for argument in call_arguments(function_call)?.iter().skip(1) {
+            if let CallArgument::Expression(expression) = argument {
+                self.infer_expression(expression);
+            }
+        }
+        Some(result)
     }
 
     fn checked_rawget_return_type(&mut self, function_call: &FunctionCall) -> Option<Type> {

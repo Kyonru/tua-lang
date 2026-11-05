@@ -47,11 +47,16 @@ pub struct TypeEnvironment {
     deprecated_accesses: BTreeMap<Vec<String>, Deprecation>,
     must_use_accesses: BTreeSet<Vec<String>>,
     exact_module_bindings: BTreeMap<String, String>,
+    table_remove_overridden: bool,
 }
 
 impl TypeEnvironment {
     pub fn from_parsed(parsed: &ParsedSource) -> Result<Self, Vec<Diagnostic>> {
         build_type_environment(parsed)
+    }
+
+    pub(crate) fn table_remove_is_overridden(&self) -> bool {
+        self.table_remove_overridden
     }
 
     pub fn path(&self) -> &Path {
@@ -712,6 +717,7 @@ pub(crate) fn build_type_environment_with_domain_registry(
             deprecated_accesses: BTreeMap::new(),
             must_use_accesses: BTreeSet::new(),
             exact_module_bindings: BTreeMap::new(),
+            table_remove_overridden: lua::table_remove_is_overridden(parsed),
         },
         diagnostics,
     )
@@ -2275,6 +2281,7 @@ struct FunctionReturnQuery<'a> {
     function_types: &'a BTreeMap<String, Type>,
     parameters: &'a BTreeMap<String, Vec<TypedParameter>>,
     runtime_imports: &'a BTreeMap<String, String>,
+    table_remove_overridden: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -2285,6 +2292,7 @@ struct InferenceQueryContext<'a> {
     current_function: &'a str,
     domains: BuiltinDomainRegistry,
     runtime_imports: &'a BTreeMap<String, String>,
+    table_remove_overridden: bool,
 }
 
 impl<'a> InferenceQueryContext<'a> {
@@ -2294,6 +2302,7 @@ impl<'a> InferenceQueryContext<'a> {
         function_types: &'a BTreeMap<String, Type>,
         current_function: &'a str,
         runtime_imports: &'a BTreeMap<String, String>,
+        table_remove_overridden: bool,
     ) -> Self {
         Self {
             parsed,
@@ -2302,6 +2311,7 @@ impl<'a> InferenceQueryContext<'a> {
             current_function,
             domains: BuiltinDomainRegistry::standard(),
             runtime_imports,
+            table_remove_overridden,
         }
     }
 
@@ -2345,6 +2355,7 @@ fn infer_function_return_types(
     let mut returns = BTreeMap::new();
     let parameters = function_parameters_by_name(functions);
     let runtime_imports = runtime_import_bindings(parsed);
+    let table_remove_overridden = lua::table_remove_is_overridden(parsed);
 
     for _ in 0..8 {
         let previous_returns = returns.clone();
@@ -2356,6 +2367,7 @@ fn infer_function_return_types(
             function_types: &function_types,
             parameters: &parameters,
             runtime_imports: &runtime_imports,
+            table_remove_overridden,
         };
         collect_function_return_types(parsed.ast.nodes(), query, locals, &mut returns);
 
@@ -2401,8 +2413,14 @@ pub(crate) fn inferred_function_type_from_body(
     }
 
     let runtime_imports = runtime_import_bindings(parsed);
-    let context =
-        InferenceQueryContext::new(parsed, &aliases, &function_types, "", &runtime_imports);
+    let context = InferenceQueryContext::new(
+        parsed,
+        &aliases,
+        &function_types,
+        "",
+        &runtime_imports,
+        environment.table_remove_is_overridden(),
+    );
     if let Some(returns) = infer_block_return_types(body.block(), context, &locals) {
         *function.return_type = returns.types.first().cloned().unwrap_or(Type::Any);
         function.return_types = returns.types;
@@ -2495,6 +2513,7 @@ fn collect_function_return_types(
         query.function_types,
         "",
         query.runtime_imports,
+        query.table_remove_overridden,
     );
 
     for stmt in block.stmts() {
@@ -2515,6 +2534,7 @@ fn collect_function_return_types(
                     query.function_types,
                     &name,
                     query.runtime_imports,
+                    query.table_remove_overridden,
                 );
 
                 if let Some(return_types) =
@@ -2541,6 +2561,7 @@ fn collect_function_return_types(
                     query.function_types,
                     &name,
                     query.runtime_imports,
+                    query.table_remove_overridden,
                 );
 
                 if let Some(return_types) =
@@ -3439,6 +3460,26 @@ fn infer_first_function_call_return_types(
                 )
             })
             .unwrap_or_default();
+    }
+
+    if parts.as_slice() == ["table", "remove"]
+        && !query.context.table_remove_overridden
+        && !query.locals.contains_key("table")
+        && !query.context.function_types.contains_key("table")
+        && !query.context.function_types.contains_key("table.remove")
+    {
+        if let Some(result) = lua::table_remove_argument(function_call)
+            .and_then(|argument| query.type_of(argument))
+            .and_then(|collection| {
+                lua::table_remove_return_type(resolve_aliases_from_map(
+                    query.context.aliases,
+                    &collection,
+                    0,
+                ))
+            })
+        {
+            return vec![result];
+        }
     }
 
     if parts.len() == 1 {

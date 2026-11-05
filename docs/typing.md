@@ -141,6 +141,12 @@ dense-array contract. When the index may be outside the populated range, use
 Lua's `rawget(values, index)`: Tua infers `T | nil`, and direct indexed
 comparisons with `nil` remain valid runtime bounds checks.
 
+The built-in `table.remove(values[, index])` also returns `T | nil` for a
+`T[]`: the array may be empty. Guard the result before using its members. This
+type flows through inferred function returns, hover, completion, and checking;
+`any` arrays and custom functions named `table.remove` remain dynamic or retain
+their declared contracts.
+
 Parenthesize a union or function type before making it an array:
 
 ```tua
