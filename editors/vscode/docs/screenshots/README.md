@@ -1,7 +1,7 @@
 # README screenshot captures
 
 These PNGs are unedited captures of the production-bundled Tua extension in an
-isolated VSCodium window, at 1440×960 with the optional Indigo Carbon HC theme.
+isolated VS Code window, at 1440×960 with the optional Indigo Carbon HC theme.
 The source example is `examples/starfall`; the script adds a demo store and a
 sprite declaration using `examples/features/src/assets/player.png`. The runtime
 inspector receives real snapshots from the temporary game, not fabricated data.
