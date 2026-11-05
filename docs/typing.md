@@ -236,6 +236,21 @@ applied on each call, can refer to surrounding locals, and work in nested
 callbacks and single-line bodies. Optional parameters remain nullable inside
 the body. Required parameters must precede optional/defaulted parameters.
 
+`table.sort` infers both comparator parameters from the array element type:
+
+```tua
+local scores: { name: string, points: number }[] = {}
+table.sort(scores, function(a, b)
+  return a.points > b.points
+end)
+```
+
+The callback gets member completion and hover, and its body must return a
+boolean. Explicit parameter annotations are checked against the element type.
+A locally shadowed or replaced `table.sort` keeps its own function contract.
+For other typed callback arguments, unannotated parameters also inherit the
+expected function type and callback bodies are checked against its return type.
+
 Use `...: Type` in a declaration and `...Type` in a function type for typed
 varargs:
 

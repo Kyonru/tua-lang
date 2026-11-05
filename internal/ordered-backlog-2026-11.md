@@ -74,7 +74,11 @@ reproductions and relevant checks pass.
   across checking, completion and return inference. Calls, alias/member writes,
   root changes and captures invalidate refinement; metatable paths remain
   conservative. Core/LSP verification: `member-final.log` (1,618/375).
-- Pending: contextual `table.sort` comparator types.
+- Completed: `table.sort` shares an array-derived comparator contract across
+  checker and editor queries, including omitted/nil comparators and custom
+  library shadows. Callback bodies use contextual parameter/return contracts;
+  nested parameter shadows do not inherit outer callback types. Core/LSP
+  suites pass (1,621/375, `sort-final.log`).
 
 ## 4. LOVE and assets
 

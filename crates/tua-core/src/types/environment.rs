@@ -51,6 +51,7 @@ pub struct TypeEnvironment {
     table_remove_overridden: bool,
     assert_overridden: bool,
     table_insert_overridden: bool,
+    table_sort_overridden: bool,
     project_module_globals: BTreeSet<String>,
 }
 
@@ -87,6 +88,10 @@ impl TypeEnvironment {
 
     pub(crate) fn table_remove_is_overridden(&self) -> bool {
         self.table_remove_overridden
+    }
+
+    pub(crate) fn table_sort_is_overridden(&self) -> bool {
+        self.table_sort_overridden
     }
 
     pub(crate) fn table_insert_is_overridden(&self) -> bool {
@@ -891,6 +896,7 @@ pub(crate) fn build_type_environment_with_domain_registry(
             table_remove_overridden: lua::table_remove_is_overridden(parsed),
             assert_overridden: lua::global_name_is_assigned(parsed, "assert"),
             table_insert_overridden: lua::table_member_is_overridden(parsed, "insert"),
+            table_sort_overridden: lua::table_member_is_overridden(parsed, "sort"),
             project_module_globals: BTreeSet::new(),
         },
         diagnostics,

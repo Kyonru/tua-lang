@@ -8,6 +8,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Changed
 
+- `table.sort` comparator parameters inherit array element types in checking
+  and editor queries. Typed callback arguments now check their bodies against
+  contextual parameter/return contracts; nested parameter shadows stay local.
+
 - Plain nullable record paths share guard refinement across checking and editor
   inference, with conservative invalidation for calls, alias writes and captures.
 

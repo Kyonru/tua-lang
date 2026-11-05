@@ -7867,3 +7867,34 @@ fn stable_member_guards_agree_across_queries() {
         "{hover:?}"
     );
 }
+
+#[test]
+fn table_sort_comparator_editor_context_matches_array_items() {
+    let fixture = Fixture::parse("-- file: sort.tua\ntype Item = { score: number }\nlocal items: Item[] = {}\ntable.sort(items, function(a, b)\n return a.<|complete|>score < <|hover|>b.score\nend)\n");
+    let mut host = AnalysisHost::new();
+    host.set_file("sort.tua", fixture.files()[0].source.clone());
+    let snapshot = host.snapshot();
+    assert!(
+        completion_labels(&snapshot.completion("sort.tua", fixture.position("complete")))
+            .contains(&"score".into())
+    );
+    let hover = snapshot
+        .hover("sort.tua", fixture.position("hover"))
+        .unwrap();
+    assert!(!hover.contents.contains("any"), "{hover:?}");
+}
+
+#[test]
+fn table_sort_context_respects_library_and_nested_parameter_shadows() {
+    for source in [
+        "local table = { sort = function(list, callback) end }\nlocal items: { score: number }[] = {}\ntable.sort(items, function(a,b) return a.<|complete|>score end)",
+        "table.sort = function(list, callback) end\nlocal items: { score: number }[] = {}\ntable.sort(items, function(a,b) return a.<|complete|>score end)",
+        "local items: { score: number }[] = {}\ntable.sort(items, function(a,b) local f = function(a) return a.<|complete|>score end return true end)",
+    ] {
+        let fixture = Fixture::parse(&format!("-- file: sort.tua\n{source}\n"));
+        let mut host = AnalysisHost::new();
+        host.set_file("sort.tua", fixture.files()[0].source.clone());
+        let labels = completion_labels(&host.snapshot().completion("sort.tua", fixture.position("complete")));
+        assert!(!labels.contains(&"score".into()), "{source}: {labels:?}");
+    }
+}

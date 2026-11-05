@@ -1125,6 +1125,50 @@ impl<'a> Checker<'a> {
         target: &Type,
         root: Option<&str>,
     ) {
+        if let (Expression::Function(function), Some(expected)) = (
+            expression,
+            crate::types::contextual_function_type(self.environment.resolve_aliases(target)),
+        ) {
+            let Type::Function(mut signature) =
+                crate::types::function_type_from_body_with_metadata(self.parsed, function.body())
+            else {
+                unreachable!()
+            };
+            let mut annotations = function.body().type_specifiers();
+            for (index, parameter) in signature.parameters.iter_mut().enumerate() {
+                if annotations.next().flatten().is_none() {
+                    if let Some(context) = expected.parameters.get(index) {
+                        parameter.ty = context.ty.clone();
+                    }
+                }
+            }
+            if function.body().return_type().is_none() {
+                signature.return_types = expected.return_types.clone();
+            }
+            let locals = signature
+                .parameters
+                .iter()
+                .filter_map(|parameter| {
+                    parameter
+                        .name
+                        .as_ref()
+                        .map(|name| (name.clone(), parameter.ty.clone()))
+                })
+                .collect();
+            self.check_function_body(
+                function.body(),
+                Some(signature.return_types_or_any()),
+                locals,
+                true,
+            );
+            self.check_inferred_expression_assignable_at(
+                expression,
+                &Type::Function(signature),
+                target,
+                root,
+            );
+            return;
+        }
         let Some(source) = self.infer_expression(expression) else {
             return;
         };
@@ -1829,7 +1873,7 @@ impl<'a> Checker<'a> {
             return vec![Type::string()];
         }
 
-        if let Some(function) = self.table_insert_call_signature(function_call) {
+        if let Some(function) = self.table_mutation_call_signature(function_call) {
             self.check_call_arguments(function_call, &function);
             return function.return_types;
         }
@@ -1962,21 +2006,34 @@ impl<'a> Checker<'a> {
         }
     }
 
-    fn table_insert_call_signature(&mut self, call: &FunctionCall) -> Option<FunctionType> {
+    fn table_mutation_call_signature(&mut self, call: &FunctionCall) -> Option<FunctionType> {
         let parts = field_chain_before_first_call(call)?;
-        if parts.as_slice() != ["table", "insert"]
-            || self.environment.table_insert_is_overridden()
+        let member = match parts.as_slice() {
+            [root, member] if root == "table" => member.as_str(),
+            _ => return None,
+        };
+        let overridden = match member {
+            "insert" => self.environment.table_insert_is_overridden(),
+            "sort" => self.environment.table_sort_is_overridden(),
+            _ => return None,
+        };
+        if overridden
             || self.infer_named_value("table").is_some()
-            || self.environment.function("table.insert").is_some()
+            || self
+                .environment
+                .function(&format!("table.{member}"))
+                .is_some()
         {
             return None;
         }
         let collection = crate::lua::first_call_argument(call)?;
         let collection = self.infer_expression(collection)?;
-        crate::lua::table_insert_signature(
-            self.environment.resolve_aliases(&collection),
-            call_arguments(call)?.len(),
-        )
+        let collection = self.environment.resolve_aliases(&collection);
+        match member {
+            "insert" => crate::lua::table_insert_signature(collection, call_arguments(call)?.len()),
+            "sort" => crate::lua::table_sort_signature(collection),
+            _ => None,
+        }
     }
 
     fn checked_table_remove_return_type(&mut self, function_call: &FunctionCall) -> Option<Type> {

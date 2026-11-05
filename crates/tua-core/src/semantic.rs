@@ -657,6 +657,23 @@ impl<'a> SemanticModel<'a> {
         position: SourcePosition,
     ) -> Option<TypedFunction> {
         let parts = field_chain_before_first_call(function_call)?;
+        if parts == ["table", "sort"]
+            && !self.environment.table_sort_is_overridden()
+            && self.is_unshadowed_lua_root("table")
+            && self.environment.function("table.sort").is_none()
+        {
+            let collection = lua::first_call_argument(function_call).and_then(|argument| {
+                self.type_of_expression_return_at_depth(argument, position, 0, 1)
+            });
+            if let Some(signature) = collection.and_then(|collection| {
+                lua::table_sort_signature(self.environment.resolve_aliases(&collection))
+            }) {
+                return Some(typed_function_from_function_type(
+                    Some("table.sort".into()),
+                    signature,
+                ));
+            }
+        }
         let mut function = self.typed_function_for_call_parts(&parts, position)?;
         if let Some(result) = self.table_remove_result(function_call, &parts, position, 0) {
             function.return_type = Some(result.clone());
@@ -1944,6 +1961,12 @@ impl<'a> SemanticModel<'a> {
     }
 
     fn contextual_call_parameter_type(&self, name: &str, position: SourcePosition) -> Option<Type> {
+        let mut bodies = FunctionBodyCollector::default();
+        bodies.visit_ast(&self.parsed.ast);
+        let binding_body = bodies.bodies.iter().filter(|body| {
+            node_span(*body).is_some_and(|span| contains_position(span, position))
+                && body.parameters().iter().any(|parameter| matches!(parameter, ast::Parameter::Name(parameter) if token_text(parameter) == name))
+        }).min_by_key(|body| node_span(*body).map(span_size)).and_then(node_span)?;
         let mut collector = FunctionCallCollector::default();
         collector.visit_ast(&self.parsed.ast);
 
@@ -1967,6 +1990,9 @@ impl<'a> SemanticModel<'a> {
                         .is_some_and(|span| contains_position(span, position))
                         .then_some((index, body))
                 })?;
+                if node_span(body) != Some(binding_body) {
+                    return None;
+                }
                 let callback_parameter_index =
                     body.parameters()
                         .iter()
@@ -2006,10 +2032,11 @@ impl<'a> SemanticModel<'a> {
                 let function = self.typed_function_for_call(call, call_span.start)?;
                 let argument_index = argument_index + usize::from(function_call_is_method(call));
                 let expected = &function.parameters.get(argument_index)?.ty;
-                let Type::Function(callback) = resolve_aliases(self.environment, expected, 0)
-                else {
-                    return None;
-                };
+                let callback = crate::types::contextual_function_type(resolve_aliases(
+                    self.environment,
+                    expected,
+                    0,
+                ))?;
                 let ty = callback
                     .parameters
                     .get(callback_parameter_index)

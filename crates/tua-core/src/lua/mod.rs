@@ -114,6 +114,31 @@ pub(crate) fn table_insert_signature(
     ))
 }
 
+/// Sorting preserves the array and contextualizes both comparator parameters.
+pub(crate) fn table_sort_signature(collection: Type) -> Option<crate::FunctionType> {
+    let Type::Array(item) = collection else {
+        return None;
+    };
+    let comparator = Type::Function(crate::FunctionType::new_signature(
+        [
+            crate::FunctionParameter::named("a", (*item).clone()),
+            crate::FunctionParameter::named("b", (*item).clone()),
+        ],
+        2,
+        None,
+        [Type::boolean()],
+    ));
+    Some(crate::FunctionType::new_signature(
+        [
+            crate::FunctionParameter::named("list", Type::array(*item)),
+            crate::FunctionParameter::named("comp", Type::union([comparator, Type::nil()])),
+        ],
+        1,
+        None,
+        [Type::nil()],
+    ))
+}
+
 /// Argument-dependent standard-library facts shared by editor and body inference.
 pub(crate) fn first_call_argument(
     call: &full_moon::ast::FunctionCall,

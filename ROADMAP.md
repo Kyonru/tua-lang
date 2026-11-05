@@ -94,8 +94,6 @@ reproductions and current workarounds.
   consistent local/parameter/global shadowing tests.
 - Model initial LOVE configuration state and subsequent nullable window writes;
   evaluate literal `false` support without accepting arbitrary booleans.
-- Infer `table.sort` comparator parameter types from its input array, with
-  matching member completion and argument checking.
 - Make init-before-field-default behavior easier to discover, and consider a
   targeted diagnostic when a default overwrites an init assignment. Changing
   ordering requires a compatibility decision, not a silent fix.

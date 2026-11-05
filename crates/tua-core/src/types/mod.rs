@@ -24,6 +24,25 @@ pub use model::{
     TableField, TableShape, Type, TypeAlias,
 };
 
+/// A callback may be optional, but competing callable contracts are ambiguous.
+pub(crate) fn contextual_function_type(ty: Type) -> Option<FunctionType> {
+    match ty {
+        Type::Function(function) => Some(function),
+        Type::Union(types) => {
+            let mut callback = None;
+            for ty in types {
+                match ty {
+                    Type::Primitive(PrimitiveType::Nil) => {}
+                    Type::Function(function) if callback.is_none() => callback = Some(function),
+                    _ => return None,
+                }
+            }
+            callback
+        }
+        _ => None,
+    }
+}
+
 /// Remove duplicate inferred types without repeatedly comparing every deeply
 /// nested type with every type already seen. Generated table literals can
 /// contain thousands of structurally large records; the previous Vec::contains

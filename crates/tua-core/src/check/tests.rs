@@ -5232,3 +5232,27 @@ fn stable_member_guards_expire_on_effects() {
         "if state.target then local f = function(): number return state.target.value end return f() end return 0",
     ] { assert!(check_tua_source("paths.tua", &format!("{header}{body}\nend\n")).is_err(), "{body}"); }
 }
+
+#[test]
+fn table_sort_contextualizes_comparators_and_checks_their_contracts() {
+    let header = "type Item = { score: number }\nlocal items: Item[] = {}\n";
+    check_tua_source("sort.tua", &format!("{header}table.sort(items, function(a, b) return a.score < b.score end)\ntable.sort(items)\ntable.sort(items, nil)\n")).expect("array comparator context");
+    for comparator in [
+        "function(a, b) return a.score .. b.score end",
+        "function(a: string, b: string) return a < b end",
+    ] {
+        assert!(
+            check_tua_source(
+                "sort.tua",
+                &format!("{header}table.sort(items, {comparator})\n")
+            )
+            .is_err(),
+            "{comparator}"
+        );
+    }
+    check_tua_source(
+        "sort.tua",
+        "local table = { sort = function(a: number, b: string) end }\ntable.sort(1, 'custom')\n",
+    )
+    .expect("custom table contract");
+}
