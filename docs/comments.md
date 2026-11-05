@@ -93,7 +93,7 @@ Resolved method hovers include the description and parameter/return tags,
 including methods reached through imported instances. Native class method
 signatures remain the source for their types. Do not assume every LuaDoc tag
 has the same effect on native class syntax as on a Lua function declaration.
-See [Classes](language.md#classes) for imports, inheritance, and editor support.
+See [Classes](classes.md) for imports, inheritance, and editor support.
 
 ## Choose The Right Annotation
 

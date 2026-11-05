@@ -5,6 +5,22 @@ icon: lucide/flask-conical
 # Examples
 
 The repository includes examples for language features and LOVE workflows.
+Clone or download the repository first. Run the `make` commands below from its
+root; they build Tua from source and require Rust/Cargo and Make.
+
+If you already have the standalone CLI, enter an example folder containing
+`tua.toml`, then run `tua check` and `tua build`. For a LOVE example, run
+`love build` after building, or `tua dev` for hot reload. You can also open that
+folder in VS Code and use **Tua: Run LOVE Project** without building the compiler.
+
+| Start with | When you want |
+| --- | --- |
+| `love-minimal` | The smallest LOVE build/run example. |
+| `features` | Focused syntax and typing samples; this is a tour, not one game. |
+| `starfall` | A playable game with scenes, input, camera, and persistence. |
+| `love-tua` | A game combining typed systems with existing Lua libraries. |
+| `audio-system` | Audio buses, cues, music scenes, and analysis metadata. |
+| `linter` | Intentionally failing examples of diagnostics. |
 
 ## `examples/features`
 
@@ -92,8 +108,11 @@ uses the built-in [`Camera`](camera.md) and [`tween`](tweening.md) modules with
 
 ```bash
 make run-starfall
-cd examples/starfall && tua dev
-cd examples/starfall && tua package
+# Alternatively, with the standalone CLI:
+cd examples/starfall
+tua dev
+# After closing the game:
+tua package
 ```
 
 `tua dev` plays it with [hot reload](hot-reload.md), and `tua package` writes

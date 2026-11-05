@@ -37,9 +37,14 @@ flowchart LR
 | Install Tua and choose an editor or CLI setup | [Installation](installation.md) |
 | Create and run a first project in VS Code | [Quickstart](quickstart.md) |
 | Debug generated LOVE code from `.tua` source | [Debugging](debugging.md) |
+| Learn Lua values, tables, loops, and method calls | [Lua Basics](lua-basics.md) |
 | Learn the language by building a small LOVE project | [Learn Tua](learn.md) |
 | Add Tua to an existing Lua codebase | [Lua Interoperability](lua-interop.md) and [Configuration](configuration.md) |
-| Model data and share type-safe module APIs | [Typing In Tua](typing.md) |
+| Model data and share type-safe module APIs | [Typing](typing.md) and [Modules And Imports](modules.md) |
+| Import classes, annotate instances, and use inheritance | [Classes](classes.md) |
+| Write API comments and understand annotations | [Comments And Documentation](comments.md) |
+| Fix missing suggestions, formatting, imports, or run failures | [Troubleshooting](troubleshooting.md) |
+| Ship a game to players | [Packaging Games](packaging.md) |
 | Generate typed modules from source assets | [Asset Pipelines](asset-pipelines.md) |
 | Look up syntax or a specific feature | [Language Guide](language.md) |
 | Animate sprites from a sprite sheet | [Sprites And Animation](sprites.md) |
@@ -119,46 +124,33 @@ Tua does not introduce a VM, bytecode format, package manager, or replacement
 runtime. Generated files are ordinary Lua and can be inspected, debugged, and
 distributed with the rest of the project.
 
-## Find The Right Guide
+## Choose A Game Feature
 
-### Write Tua
+Use ordinary LOVE APIs whenever they fit. These optional helpers add typed
+configuration and editor support, and builds include their Lua runtimes when used.
 
-- [Learn Tua](learn.md) is the guided tutorial for types, tables, functions,
-  modules, classes, and LOVE callbacks.
-- [Language](language.md) is the syntax and semantics overview, covering source
-  forms and their emitted Lua.
-- [Typing In Tua](typing.md) explains inference, type forms, narrowing,
-  exported types, and declaration-only `.d.tua` modules.
-- [Lua Interoperability](lua-interop.md) covers mixed `.lua` and `.tua`
-  projects, module exports, and LuaDoc annotations.
-- [Asset Pipelines](asset-pipelines.md) covers cached external importers,
-  generated modules, and structured asset diagnostics.
-- [Examples](examples.md) explains the bundled feature tour and LOVE projects.
+| Task | Guide |
+| --- | --- |
+| Animate a sprite sheet | [Sprites And Animation](sprites.md) |
+| Move and interpolate values | [Vectors And Game Math](vectors.md), [Tweening](tweening.md) |
+| Follow a player or convert screen coordinates | [Camera](camera.md) |
+| Send typed events between systems | [Signals](signals.md) |
+| Share observable state | [State Stores](stores.md) |
+| Model states and transitions | [State Machines](state-machines.md) |
+| Map keyboard, mouse, and gamepad controls | [Input](input.md) |
+| Process entities by component | [ECS](ecs.md) |
+| Reuse frequently allocated objects | [Object Pooling](object-pooling.md) |
+| Manage sound effects, buses, and music | [Audio Systems](audio.md) |
 
-### Build Game Systems
+## Tooling References
 
-- [Sprites And Animation](sprites.md), [Vectors And Game Math](vectors.md),
-  [Signals](signals.md), [State Stores](stores.md),
-  [State Machines](state-machines.md), [Input](input.md),
-  [Tweening](tweening.md), [Camera](camera.md),
-  [Entity Component Systems](ecs.md), [Object Pooling](object-pooling.md), and
-  [Audio Systems](audio.md) document Tua's game-focused features.
+Use [Configuration](configuration.md) for `tua.toml`, [CLI](cli.md) for commands,
+and [Language Server](lsp.md) for editor features and settings. Formatting and
+lint rules have separate guides: [Formatter](formatter.md) and [Linter](linter.md).
+[Hot Reload](hot-reload.md) explains which edits can preserve running state.
+[Releases](releases.md) covers checksums and compatibility.
 
-### Configure And Use The Toolchain
-
-- [Configuration](configuration.md) documents every `tua.toml` option.
-- [CLI](cli.md) covers project initialization, checking, formatting, linting,
-  building, watching, traceback mapping, and the language server command.
-- [Language Server](lsp.md) describes editor features, settings, and custom
-  project views.
-- [Debugging](debugging.md) covers source-mapped LOVE sessions, generated Lua,
-  and debugger integration.
-- [Diagnostic Codes](luahelper-code-matrix.md) defines every Tua error,
-  warning, and hint code.
-- [Releases](releases.md) covers downloads, checksums, compatibility, and
-  migration policy.
-
-### Project Information
+## Project Information
 
 - [Architecture](architecture.md) explains crate ownership, shared analysis,
   request and build flows, and where changes belong.

@@ -12,7 +12,8 @@ Tua is still Lua: tables, functions, `if`, loops, closures, metatables, and
 `require(...)` keep their normal runtime behavior. Tua adds static information
 for diagnostics and editor tooling, then emits readable Lua.
 
-Before starting, follow the [Quickstart](quickstart.md) to initialize a project
+New to Lua? Read [Lua Basics](lua-basics.md) for tables, truthiness, and colon
+calls. Before starting, follow the [Quickstart](quickstart.md) to initialize a project
 and open `src/main.tua` in VS Code.
 
 ## 1. Type Values And Functions
@@ -238,6 +239,11 @@ The built-in LOVE catalog knows callback parameters and LOVE object methods.
 It supplies completion, hover, signatures, and callback diagnostics without a
 project-local LOVE definition file.
 
+Use `love.load` for one-time setup, `love.update(dt)` for simulation, and
+`love.draw` for rendering. `dt` is elapsed time in seconds, so multiplying speed
+by `dt` makes movement independent of the frame rate. Load reusable images,
+fonts, and sounds during setup rather than recreating them every draw call.
+
 LOVE object methods normally use Lua's colon syntax, such as
 `image:setFilter("nearest")`, because `:` passes the receiver as `self`. Tua
 warns when a known LOVE method is called with an incorrect dot form.
@@ -316,7 +322,7 @@ not receive their initial contents.
 
 Classes are closed by default. Write `open class Entity` only when another
 class needs to extend it; subclasses use `extends`, `override`, and
-`super(...)`. See [Classes](language.md#classes) for inheritance and runtime
+`super(...)`. See [Classes](classes.md) for inheritance and runtime
 `is` checks.
 
 ## 6. Check, Build, And Inspect
@@ -349,7 +355,10 @@ changes. Treat the output directory as generated code; edit files under `src/`.
 
 ## Next Steps
 
-- [Language](language.md) is the complete syntax and type reference.
+- [Language](language.md) is the syntax reference.
+- [Modules And Imports](modules.md) explains runtime APIs versus type exports.
+- [Classes](classes.md) covers imported instances, inheritance, and initialization.
+- [Comments And Documentation](comments.md) explains API documentation and annotations.
 - [Typing In Tua](typing.md) covers inference, type forms, narrowing, shared
   types, and declaration-only `.d.tua` modules in one focused guide.
 - [Lua Interop](lua-interop.md) covers `.lua` modules and LuaDoc annotations.

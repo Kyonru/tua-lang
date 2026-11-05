@@ -30,9 +30,9 @@ emit_maps = true
 This is the default for new projects.
 
 !!! important "Opt the launch configuration into Tua"
-A normal `lua-local` configuration bypasses Tua's build and source-map
-preparation. Set `tuaProject: true` as shown below, or use **Tua: Debug LOVE
-Project**, so Tua can prepare and restore the generated output correctly.
+    A normal `lua-local` configuration bypasses Tua's build and source-map
+    preparation. Set `tuaProject: true` as shown below, or use **Tua: Debug LOVE
+    Project**, so Tua can prepare and restore the generated output correctly.
 
 ## Run From The VS Code UI
 
@@ -95,10 +95,10 @@ maps currently provide line provenance, so mapped target columns begin at
 column zero.
 
 !!! warning "Rebuild after source changes"
-Tua builds whenever the command or launch configuration starts. After
-editing source, stop the current session and start the configuration again.
-Restarting only the existing Lua debug session does not invoke a new Tua
-build.
+    Tua builds whenever the command or launch configuration starts. After
+    editing source, stop the current session and start the configuration again.
+    Restarting only the existing Lua debug session does not invoke a new Tua
+    build.
 
 ## Live Runtime Inspector
 

@@ -12,66 +12,25 @@ for projects that want stronger editor feedback, static checks, and build
 tooling without leaving the normal Lua and LOVE workflow.
 
 ```lua
-local controls = input({
-  controls = {
-    left = { "key:left", "key:a" },
-    right = { "key:right", "key:d" },
-    up = { "key:up", "key:w" },
-    down = { "key:down", "key:s" },
-    collect = { "key:space", "button:a" },
-    pause = { "key:escape", "button:start" },
-  },
-  pairs = {
-    move = { "left", "right", "up", "down" },
-  },
-})
-
-local game = store({
-  score = 0,
-  player = vec2(80, 120),
-})
-
-local flow = stateMachine({
-  initial = "playing",
-  events = {
-    { name = "pause", from = "playing", to = "paused" },
-    { name = "resume", from = "paused", to = "playing" },
-  },
-})
-
-local events = signal()
-events:on("coin.collected", function(points: number)
-  game:update(function(state)
-    state.score += points
-  end)
-end)
+type Player = { x: number, speed: number }
+local player: Player = { x = 80, speed = 120 }
 
 function love.update(dt: number)
-  controls:update()
-
-  if controls:pressed("pause") then
-    if flow.current == "playing" then flow:pause() else flow:resume() end
-  end
-
-  if flow.current ~= "playing" then return end
-
-  local moveX, moveY = controls:get("move")
-  game:update(function(state)
-    state.player.x += moveX * 180 * dt
-    state.player.y += moveY * 180 * dt
-  end)
-
-  if controls:pressed("collect") then
-    events:emit("coin.collected", 10)
-  end
+  player.x += player.speed * dt
 end
 
 function love.draw()
-  local state = game:get()
-  love.graphics.circle("fill", state.player.x, state.player.y, 16)
-  love.graphics.print("Score: " .. tostring(state.score), 16, 16)
+  love.graphics.circle("fill", player.x, 120, 16)
 end
 ```
+
+Types are checked during development and erased from the Lua output. Use
+ordinary Lua modules alongside Tua, then add types where they help.
+
+Start with [Installation](docs/installation.md) and [Quickstart](docs/quickstart.md).
+New to Lua? Read [Lua Basics](docs/lua-basics.md). For everyday questions, see
+[Modules And Imports](docs/modules.md), [Classes](docs/classes.md),
+[Comments And Documentation](docs/comments.md), and [Troubleshooting](docs/troubleshooting.md).
 
 This repository contains the compiler core, CLI, language server, VS Code
 extension, documentation site, and bundled example projects.
@@ -80,8 +39,8 @@ extension, documentation site, and bundled example projects.
 
 - Erased local, function, alias, table-shape, optional-field, and union types.
 - Readable Lua 5.1-compatible output for LuaJIT and LOVE 11.x.
-- A CLI for `init`, `check`, `fmt`, `lint`, `build`, `traceback`, `watch`, and
-  `lsp`.
+- A CLI for `init`, `check`, `fmt`, `lint`, `build`, `traceback`, `watch`,
+  `dev`, `package`, and `lsp`.
 - A compiler-backed language server and VS Code extension with diagnostics,
   completion, hover, signature help, rename, references, semantic tokens,
   inlay hints, document/workspace symbols, and more.

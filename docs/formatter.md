@@ -4,15 +4,28 @@ icon: lucide/wand-sparkles
 
 # Formatter
 
-The formatter owns presentation. Its role is comparable to Prettier: given
-valid Tua source and `[format]` settings, it produces one deterministic layout.
-It does not decide whether the program is correct and it does not publish lint
-diagnostics.
+Use the formatter to keep indentation, spacing, quotes, and line endings
+consistent. It formats parseable Tua source using the project's `[format]`
+settings. Type checking and linting are separate commands.
 
-Core token spacing is deliberately not configurable. Assignments, arithmetic,
-comparisons, concatenation, and function-type arrows use one canonical spaced
-form; unary signs, scientific-notation signs, field access, and varargs remain
-compact.
+## Format In VS Code
+
+Run **Format Document**, or enable formatting on save in `.vscode/settings.json`:
+
+```json
+{
+  "[tua]": {
+    "editor.defaultFormatter": "SolenodonteLabs.tua",
+    "editor.formatOnSave": true
+  }
+}
+```
+
+The extension also supports range and on-type formatting. If formatting does
+nothing, check the file's language mode, the selected formatter, and syntax
+errors in Problems. See [Troubleshooting](troubleshooting.md#formatting-does-not-run).
+
+## Format From The Terminal
 
 ```bash
 tua fmt
@@ -24,8 +37,16 @@ CI form: it exits unsuccessfully and lists files whose formatted output differs
 from the source. The language server exposes the same formatter for document,
 range, and on-type formatting.
 
-The formatter controls indentation, line wrapping, quote preservation, final
-newlines, spacing, and blank-line normalization. Configure it independently:
+## Layout Rules
+
+Core token spacing is deliberately not configurable. Assignments, arithmetic,
+comparisons, concatenation, and function-type arrows use one canonical spaced
+form; unary signs, scientific-notation signs, field access, and varargs remain
+compact.
+
+The formatter controls indentation, wrapping, quotes, final newlines, spacing,
+and blank lines. Leading and trailing blank lines are normalized;
+`final_newline` controls the final line terminator.
 
 Spacing follows one style: binary operators and `=` are surrounded by spaces,
 unary `-` and `#` attach to their operand, one-line tables are padded as
@@ -50,6 +71,8 @@ arguments one level beyond the call, including inside callbacks and functions
 with multiline parameter lists. Continued control-flow conditions are also
 indented once, whether they use enclosing parentheses or leading `and`/`or`
 operators; the body begins one level below the completed header.
+
+## Configure The Layout
 
 ```toml title="tua.toml"
 [format]
@@ -89,8 +112,7 @@ formatter currently expands comma-separated call arguments and table fields;
 it does not yet reflow long binary expressions, method chains, comments,
 strings, or single-argument calls. It also leaves a block that opens and closes
 on one line, such as `function(a, b) return a end`, intact rather than splitting
-its header from its `end`. Syntax-aware reflow for those forms belongs in a
-future document-layout engine rather than more line-level heuristics.
+its header from its `end`. Reflowing these forms is not currently supported.
 
 Formatting requires parseable source. A leading UTF-8 byte-order mark is
 accepted, as LuaJIT accepts it, and removed from formatted output.
@@ -102,6 +124,5 @@ editor client's generic tab-size and insert-spaces preferences.
 Tua does not currently provide formatter-disable directives, configurable
 trailing commas, or path/stdin formatting modes. Type-annotation punctuation
 also remains source-preserving where changing it could be confused with Lua's
-method-call colon. These are deliberate boundaries of the current line-based
-formatter, not claims of full Prettier-style reflow.
+method-call colon. These forms currently retain their source layout.
 

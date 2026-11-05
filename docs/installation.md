@@ -66,6 +66,21 @@ checksum, and place the `tua` executable on `PATH`.
 Use the standalone CLI when you want Tua in a terminal, build script, or editor
 other than VS Code.
 
+After installation, run `tua --version` and `tua --help` to confirm the terminal
+finds the intended executable. Then create a project:
+
+```bash
+mkdir my-game
+cd my-game
+tua init
+tua check
+tua build
+```
+
+Run `love build` if LOVE is installed. The extension and CLI use the same
+project format; see [Quickstart](quickstart.md) for a first program and
+[CLI](cli.md) for the command reference.
+
 ## Build The CLI From Source
 
 Building from source requires Rust and Cargo. From the repository root:

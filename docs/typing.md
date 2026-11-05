@@ -457,7 +457,7 @@ compatible required fields can be assigned to one another.
 Native Tua classes are nominal across module boundaries. Two unrelated classes
 do not become compatible merely because their fields happen to match. Class
 fields, constructor parameters, method parameters, and returns use the same
-type forms documented above. See [Classes](language.md#classes) for inheritance,
+type forms documented above. See [Classes](classes.md) for inheritance,
 `Self`, `super`, and override rules.
 
 Tua also recognizes a conservative subset of common Lua metatable patterns.

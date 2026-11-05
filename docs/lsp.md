@@ -387,6 +387,9 @@ properties:
 
 ### Formatting
 
+For **Format Document**, format-on-save setup, and layout options, see
+[Formatter](formatter.md).
+
 The server provides full-document, range, and on-type formatting. Invalid
 documents are not reformatted. Range formatting keeps edits inside the selected
 range, while on-type formatting limits edits to stable local changes after
@@ -671,6 +674,10 @@ outside the editor protocol, use the shipped stdio JSON-RPC API or MCP adapter
 documented in [External API And MCP](external-api-bridge.md).
 
 ## Troubleshooting
+
+Start with the [Troubleshooting guide](troubleshooting.md) for missing or slow
+suggestions, formatting, module resolution, and runtime problems. The steps
+below focus on language-server setup.
 
 1. Open the folder containing `tua.toml`, then confirm the file's language mode
    is **Tua**.

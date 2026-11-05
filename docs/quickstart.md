@@ -99,22 +99,28 @@ These commands are useful immediately:
   type came from or where static information was lost.
 - **Tua: Select Inlay Hint Mode** switches between full, compact, type-only,
   parameter-only, and disabled hints.
-- **Tua: Toggle Experimental Completions** enables or disables contextual
-  sequence ranking and multi-token suggestions for the current workspace.
-- Set `tua.completion.inline.enabled` to `true` to try experimental
-  deterministic ghost text from source-only statement snippets and repeated
-  lines in the current file. It is separate from the experimental-completions
-  command and remains off by default. To test the stricter Tua-only project
-  predictor as a fallback, also enable
-  `tua.completion.inline.sources.statistical`; that source is experimental and
-  independently off by default.
+- **Tua: Open LÖVE API Reference (Offline)** opens the bundled API documentation.
 - **Tua: Focus Output** opens server, build, and runtime logs.
 
-!!! info "Experimental completions are opt-in"
-    Experimental completion features are off by default. The toggle changes
-    only their two top-level feature gates; advanced and future
-    model-integration policy settings and deterministic inline completion
-    remain untouched.
+To format when saving, add this to your workspace's `.vscode/settings.json`:
+
+```json
+{
+  "[tua]": {
+    "editor.defaultFormatter": "SolenodonteLabs.tua",
+    "editor.formatOnSave": true
+  }
+}
+```
+
+Merge this block with existing settings. Indentation and wrapping belong in
+`[format]` in `tua.toml`; see [Formatter](formatter.md). A file with syntax errors
+must be corrected before it can be formatted.
+
+Normal completion and hover work without experimental features. Optional
+[local inline suggestions](lsp.md#deterministic-local-inline-completion) and
+[Ollama suggestions](lsp.md#local-ollama-inline-completion) have separate opt-in
+settings; you can explore them after the basic editing loop works.
 
 ## 5. Know The Project Model
 
@@ -142,7 +148,8 @@ tua build
 tua watch
 ```
 
-`check` reports diagnostics without writing output, `build` emits Lua, and
+`check` reports diagnostics without emitting Lua (configured asset pipelines
+can still generate files), `build` emits Lua, and
 `watch` rebuilds when project files change. The server bundled inside the VS
 Code extension is used by extension commands but is not added to your shell
 `PATH`.

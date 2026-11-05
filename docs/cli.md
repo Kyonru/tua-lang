@@ -8,18 +8,30 @@ Every command has contextual help. For example, `tua init --help` describes
 only project initialization, while `tua --help` lists the complete command
 set.
 
-The Tua CLI is provided by the `tua-cli` crate.
+Run these commands from the project folder containing `tua.toml`. Install the
+[standalone CLI](installation.md#standalone-cli-release) to use `tua` in a shell;
+the VS Code extension's bundled server is not added to your `PATH`.
 
-During development, run commands through Cargo:
+| Task | Command | Writes files? |
+| --- | --- | --- |
+| Create the project layout | `tua init` | Creates missing project files. |
+| Check types and project diagnostics | `tua check` | No Lua output; configured asset pipelines may generate their outputs. |
+| Apply formatting | `tua fmt` | Rewrites project Tua source. |
+| Check formatting in CI | `tua fmt --check` | No. |
+| Run lint rules | `tua lint` | No. |
+| Build Lua and copy assets | `tua build` | Writes the configured output directory. |
+| Rebuild after saves | `tua watch` | Writes build output; does not launch LOVE. |
+| Play with hot reload | `tua dev` | Builds and starts LOVE. |
+| Produce a distributable game | `tua package` | Builds and writes `dist/`. |
 
-```bash
-cargo run -p tua-cli -- <command>
-```
+Repository contributors can substitute `cargo run -p tua-cli --` for `tua`.
+See [Configuration](configuration.md) for paths and [Troubleshooting](troubleshooting.md)
+for failed checks, missing commands, and runtime errors.
 
 ## `init`
 
 ```bash
-cargo run -p tua-cli -- init
+tua init
 ```
 
 Creates `tua.toml`, `src/`, and `src/main.tua` if they do not already exist. It
@@ -31,7 +43,7 @@ before creating project files.
 ## `check`
 
 ```bash
-cargo run -p tua-cli -- check
+tua check
 ```
 
 Loads project config, parses sources, runs type checking and configured project
@@ -43,8 +55,8 @@ hints. Use `tua check --deny-warnings` when CI should reject warnings too.
 ## `fmt`
 
 ```bash
-cargo run -p tua-cli -- fmt
-cargo run -p tua-cli -- fmt --check
+tua fmt
+tua fmt --check
 ```
 
 Formats project `.tua` source files in place using the built-in formatter.
@@ -55,8 +67,8 @@ Formatting does not produce lint diagnostics; see [Formatter](formatter.md).
 ## `lint`
 
 ```bash
-cargo run -p tua-cli -- lint
-cargo run -p tua-cli -- lint --strict
+tua lint
+tua lint --strict
 ```
 
 Runs syntax diagnostics and the standard lint rules, reporting success as
@@ -75,8 +87,8 @@ Set `TUA_TRACE=diagnostics` to print one stderr timing line for `check` and
 `lint` diagnostic work:
 
 ```bash
-TUA_TRACE=diagnostics cargo run -p tua-cli -- check
-TUA_TRACE=diagnostics cargo run -p tua-cli -- lint
+TUA_TRACE=diagnostics tua check
+TUA_TRACE=diagnostics tua lint
 ```
 
 The trace reports `total`, `covered`, `unaccounted`, and fixed buckets for
@@ -87,7 +99,7 @@ bucket is printed as milliseconds/count, for example `parse=2.413ms/21`.
 ## `build`
 
 ```bash
-cargo run -p tua-cli -- build
+tua build
 ```
 
 Checks the project and writes emitted Lua to the configured output directory.
@@ -142,15 +154,15 @@ emitted runtime files.
     compiler output is not valid Lua 5.1.
 
     ```bash
-    cargo run -p tua-cli -- build --emit-on-error
+    tua build --emit-on-error
     ```
 
 ## `package`
 
 ```bash
-cargo run -p tua-cli -- package
-cargo run -p tua-cli -- package --target windows --love path/to/love-11.5-win64
-cargo run -p tua-cli -- package --target macos --love /Applications/love.app
+tua package
+tua package --target windows --love path/to/love-11.5-win64
+tua package --target macos --love /Applications/love.app
 ```
 
 Builds the project, then writes `dist/<name>.love`. `--target windows` or
@@ -162,18 +174,13 @@ identifier. See [Packaging Games](packaging.md).
 ## `traceback`
 
 ```bash
-cargo run -p tua-cli -- traceback --maps build sentry-traceback.txt
-cat sentry-traceback.txt | cargo run -p tua-cli -- traceback --maps build
+tua traceback --maps build sentry-traceback.txt
+cat sentry-traceback.txt | tua traceback --maps build
 ```
 
 Remaps generated Lua traceback locations back to Tua source using
 `*.lua.map.json` sidecars from `tua build`. If `--maps` is omitted, the command
 uses the configured output directory.
-
-The regression suite builds Tua, executes the emitted Lua with a real local Lua
-runtime, captures its stderr traceback, and verifies that `tua traceback`
-returns the original Tua line. Linux CI installs Lua for this test; local runs
-skip only that runtime case when no Lua executable is available.
 
 For example, `build/main.lua:12` can become:
 
@@ -186,7 +193,7 @@ Ambiguous basename-only frames are left unchanged instead of guessed.
 ## `watch`
 
 ```bash
-cargo run -p tua-cli -- watch
+tua watch
 ```
 
 Runs an initial build, registers the platform's native filesystem watcher, and
@@ -216,9 +223,9 @@ importer before Tua rebuilds the generated module consumers.
 ## `dev`
 
 ```bash
-cargo run -p tua-cli -- dev
-cargo run -p tua-cli -- dev --love /path/to/love
-cargo run -p tua-cli -- dev --no-launch
+tua dev
+tua dev --love /path/to/love
+tua dev --no-launch
 ```
 
 Builds like `watch`, starts LOVE on the output, and hot reloads the running
@@ -235,8 +242,8 @@ build. The caller owns their lifetimes and must stop the watcher when finished.
 ## `lsp`
 
 ```bash
-cargo run -p tua-cli -- lsp
-cargo run -p tua-cli -- lsp --stdio
+tua lsp
+tua lsp --stdio
 ```
 
 Starts the language server over stdio. Editors and tests call this command
@@ -246,8 +253,8 @@ behavior as `tua lsp`.
 ## `api`
 
 ```bash
-cargo run -p tua-cli -- api --stdio
-cargo run -p tua-cli -- api --stdio --workspace /path/to/project
+tua api --stdio
+tua api --stdio --workspace /path/to/project
 ```
 
 Starts the read-only, newline-delimited JSON-RPC API. It keeps one project
@@ -257,14 +264,14 @@ analysis session alive and refreshes disk state only after
 ## `mcp`
 
 ```bash
-cargo run -p tua-cli -- mcp --stdio
-cargo run -p tua-cli -- mcp --stdio --workspace /path/to/project
+tua mcp --stdio
+tua mcp --stdio --workspace /path/to/project
 ```
 
 Starts the stdio-only MCP adapter with twelve read-only Tua tools. It pins MCP
 protocol `2025-11-25` and applies no edits.
 
-### Shader compilation checks
+## Shader Compilation Checks
 
 `tua check` uses LÖVE's `love.graphics.validateShader` for statically referenced
 shader assets. `TL2016` identifies the shader line and its loader calls. This runs
@@ -297,7 +304,9 @@ seconds per backend after startup (LÖVE startup also has a ten-second timeout).
 LÖVE validation reflects the installed engine; glslang follows the bundled 11.5
 wrapper. Neither proves support on every device.
 
-### Check shader validator installation
+<span id="check-shader-validator-installation"></span>
+
+## `shader-tools`
 
 Run `tua shader-tools` to test LÖVE and glslang with a built-in shader and
 print a JSON report (`love.canValidate`, `love.version`, and

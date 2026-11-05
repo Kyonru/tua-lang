@@ -7,6 +7,13 @@ LuaJIT and LOVE 11.x. This extension brings compiler-backed editing, LOVE-aware
 completions, asset tooling, project graphs, and build/run commands into VS
 Code without changing the normal Lua and LOVE workflow.
 
+For setup and daily use, see the [Quickstart](https://kyonru.github.io/tua-lang/quickstart/),
+[format-on-save setup](https://kyonru.github.io/tua-lang/formatter/), and
+[Troubleshooting](https://kyonru.github.io/tua-lang/troubleshooting/). Language
+questions are covered by [Modules And Imports](https://kyonru.github.io/tua-lang/modules/),
+[Classes](https://kyonru.github.io/tua-lang/classes/), and
+[Comments And Documentation](https://kyonru.github.io/tua-lang/comments/).
+
 ## Why This Extension
 
 - Compiler-backed Tua editing: completion, hover, signature help, definitions,

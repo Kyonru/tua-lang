@@ -13,6 +13,9 @@ output remains ordinary Lua.
     Tua's static `import(...)` helper only adds compile-time path rules and
     editor guarantees; it still emits a normal `require(...)` call.
 
+For a first two-file project, start with [Modules And Imports](modules.md).
+This guide focuses on mixed Lua/Tua projects, migration, and LuaDoc contracts.
+
 ## Choose A Module Form
 
 | Form | Use it for | Runtime output |
@@ -82,7 +85,7 @@ base behavior helps the model. Export an instance alias alongside its runtime
 constructor as shown in [imported class types](#share-types-without-runtime-imports).
 Call imported instance methods with `:` so their receiver is explicit in Lua.
 For fields computed in `init`, omit a field default: defaults run after `init`
-and would overwrite its assignment. See the [class initialization rules](language.md#classes).
+and would overwrite its assignment. See the [class initialization rules](classes.md).
 
 Do not translate a mixin mechanically into inheritance. Keep independent
 behaviors as explicit collaborators, or adapt unrelated objects to a small
@@ -418,34 +421,9 @@ produce an unknown-type diagnostic, missing modules use the normal project
 module diagnostic, and aliases from imported namespaces work in locals,
 parameters, returns, arrays, and nested table shapes.
 
-To let consumers annotate instances of a runtime class, export a type alias for
-the class in the same module as the class:
-
-```tua title="src/dialogue.tua"
-final class Dialogue {
-  text: string
-
-  init(text: string) {
-    self.text = text
-  }
-}
-
-export type DialogueInstance = Dialogue
-return { Dialogue = Dialogue }
-```
-
-Then import that alias alongside the ordinary runtime module:
-
-```tua title="src/main.tua"
-import type { DialogueInstance } from "./dialogue"
-
-local DialogueModule = require("dialogue")
-local dialogue: DialogueInstance = DialogueModule.Dialogue.new("Hello")
-```
-
-`DialogueModule.Dialogue` is the runtime constructor; `DialogueInstance` names
-the instance shape and keeps the class's nominal identity across the module
-boundary.
+For native classes, export a type alias for the instance and load the constructor
+through a runtime module. See the complete example in
+[Classes](classes.md#import-a-constructor-and-its-instance-type).
 
 Imported names cannot collide with runtime locals or local type aliases.
 Export visibility is consistent for type-only imports and types reached through
