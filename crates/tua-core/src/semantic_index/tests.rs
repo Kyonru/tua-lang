@@ -210,3 +210,31 @@ fn catalog_filter_covers_generated_and_bundled_type_members() {
     // because the global table namespace exists in the catalog.
     assert!(!crate::lua::could_be_builtin_member("table"));
 }
+
+#[test]
+fn precomputed_module_literals_preserve_identifier_targets() {
+    let source = r#"
+local dep = require("missing_module")
+local text = "require('not_a_module')"
+-- import("comment_only")
+local value: number = 3
+print(value)
+"#;
+    let (index, parsed) = semantic_index(source);
+    let position = crate::source_text::position_at(source, "value)");
+    let definition = index
+        .definition_at(position)
+        .expect("local reference target");
+    assert_eq!(source_text(&parsed.source, definition.span), "value");
+    assert_eq!(definition.span.start.line, 5);
+    let call = crate::source_text::position_at(source, "print(value)");
+    assert_eq!(
+        index.definition_at(call).expect("builtin target").kind,
+        DefinitionKind::Builtin
+    );
+    let module_position = crate::source_text::position_at(source, "missing_module");
+    let literal = crate::module_link::module_specifier_at_position(source, module_position)
+        .expect("module navigation keeps its shared literal scanner");
+    assert_eq!(literal.module, "missing_module");
+    assert_eq!(module_specifier_literals(source).len(), 1);
+}

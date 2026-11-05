@@ -8,7 +8,7 @@ use crate::classes::{
     class_member_target as class_member_source_target, nominal_class_identity, ClassMemberKind,
 };
 use crate::hir::{HirModule, HirSymbol, HirSymbolKind};
-use crate::module_link::module_specifier_at_position;
+use crate::module_link::module_specifier_literals;
 use crate::source_text::{
     byte_for_column, dotted_chain_at_position, function_name_table_field, line_at,
     source_identifiers,
@@ -109,15 +109,23 @@ impl SemanticIndex {
         environment: &TypeEnvironment,
     ) {
         let semantic = crate::semantic::SemanticModel::new(parsed, environment);
+        let module_literals = module_specifier_literals(&parsed.source);
         for identifier in source_identifiers(&parsed.source) {
             let span = identifier.span;
             if self.definitions.contains_key(&SpanKey::from(span)) {
                 continue;
             }
 
-            if let Some(target) =
+            let target = if let Some(specifier) = module_literals.iter().find(|literal| {
+                let position = (span.start.line, span.start.column);
+                (literal.span.start.line, literal.span.start.column) <= position
+                    && position <= (literal.span.end.line, literal.span.end.column)
+            }) {
+                module_file_target(parsed, &specifier.module, specifier.kind)
+            } else {
                 self.definition_target_at(parsed, hir, environment, &semantic, span.start)
-            {
+            };
+            if let Some(target) = target {
                 self.insert(span, target);
             }
         }
@@ -131,10 +139,6 @@ impl SemanticIndex {
         semantic: &crate::semantic::SemanticModel<'_>,
         position: SourcePosition,
     ) -> Option<DefinitionTarget> {
-        if let Some(specifier) = module_specifier_at_position(&parsed.source, position) {
-            return module_file_target(parsed, &specifier.module, specifier.kind);
-        }
-
         let chain = dotted_chain_at_position(&parsed.source, position)?;
         let current = chain.parts.get(chain.cursor_index)?;
 
