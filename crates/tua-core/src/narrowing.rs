@@ -316,13 +316,12 @@ fn collect_narrowed_type_at_position(
         }
     }
 
-    if name.contains('.') {
-        if block
+    if name.contains('.')
+        && block
             .last_stmt()
             .is_some_and(|last| member_path_effect_before(last, name, position, false))
-        {
-            *narrowed = None;
-        }
+    {
+        *narrowed = None;
     }
 
     for stmt in block.stmts() {

@@ -5217,7 +5217,7 @@ fn stable_member_guards_expire_on_effects() {
         "if state.target then return state.target.value end\nreturn 0",
         "assert(state.target)\nreturn state.target.value",
     ] {
-        check_tua_source("paths.tua", &format!("{header}{body}\nend\n")).expect(body);
+        check_tua_source("paths.tua", format!("{header}{body}\nend\n")).expect(body);
     }
     for body in [
         "if state.target then mutate() return state.target.value end return 0",
@@ -5230,13 +5230,13 @@ fn stable_member_guards_expire_on_effects() {
         "if state.target then state.target = nil return state.target.value end return 0",
         "if state.target then local alias = state alias.target = nil return state.target.value end return 0",
         "if state.target then local f = function(): number return state.target.value end return f() end return 0",
-    ] { assert!(check_tua_source("paths.tua", &format!("{header}{body}\nend\n")).is_err(), "{body}"); }
+    ] { assert!(check_tua_source("paths.tua", format!("{header}{body}\nend\n")).is_err(), "{body}"); }
 }
 
 #[test]
 fn table_sort_contextualizes_comparators_and_checks_their_contracts() {
     let header = "type Item = { score: number }\nlocal items: Item[] = {}\n";
-    check_tua_source("sort.tua", &format!("{header}table.sort(items, function(a, b) return a.score < b.score end)\ntable.sort(items)\ntable.sort(items, nil)\n")).expect("array comparator context");
+    check_tua_source("sort.tua", format!("{header}table.sort(items, function(a, b) return a.score < b.score end)\ntable.sort(items)\ntable.sort(items, nil)\n")).expect("array comparator context");
     for comparator in [
         "function(a, b) return a.score .. b.score end",
         "function(a: string, b: string) return a < b end",
@@ -5244,7 +5244,7 @@ fn table_sort_contextualizes_comparators_and_checks_their_contracts() {
         assert!(
             check_tua_source(
                 "sort.tua",
-                &format!("{header}table.sort(items, {comparator})\n")
+                format!("{header}table.sort(items, {comparator})\n")
             )
             .is_err(),
             "{comparator}"
@@ -5263,7 +5263,7 @@ fn love_image_file_and_data_contracts_match_runtime_inputs() {
     for argument in ["true", "{}"] {
         assert!(check_tua_source(
             "files.tua",
-            &format!("love.image.newImageData({argument})\n")
+            format!("love.image.newImageData({argument})\n")
         )
         .is_err());
     }
