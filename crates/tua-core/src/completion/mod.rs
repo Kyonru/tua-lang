@@ -2755,6 +2755,10 @@ fn love_conf_receiver_type(
         return None;
     }
 
+    if love_conf::parameter_name_at(parsed, position).is_some() {
+        let initial = love_conf::initial_parameter_type_at_position(parsed, receiver, position)?;
+        return field_chain_type(initial, &receiver_parts[1..]);
+    }
     field_chain_type(love_conf::completion_config_type(), &receiver_parts[1..])
 }
 

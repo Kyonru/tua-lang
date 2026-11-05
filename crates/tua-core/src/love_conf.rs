@@ -61,6 +61,47 @@ pub(crate) fn parameter_type_at_position(
     (parameter_name_at(parsed, position).as_deref() == Some(name)).then(config_type)
 }
 
+/// LOVE enters the callback with a window table. This is a read-state fact,
+/// not a narrower write contract: disabling creation with nil remains valid.
+pub(crate) fn initial_parameter_type_at_position(
+    parsed: &ParsedSource,
+    name: &str,
+    position: SourcePosition,
+) -> Option<Type> {
+    if !parsed
+        .function_annotations
+        .iter()
+        .any(|function| function.name.as_deref() == Some("love.conf"))
+    {
+        return None;
+    }
+    let position = parsed
+        .raw
+        .parser_position_for_source(position)
+        .unwrap_or(position);
+    for statement in parsed.ast.nodes().stmts() {
+        let ast::Stmt::FunctionDeclaration(function) = statement else {
+            continue;
+        };
+        if parameter_name_for_function(function).as_deref() != Some(name)
+            || !node_span(function.body()).is_some_and(|span| span_contains(span, position))
+        {
+            continue;
+        }
+        let path = format!("{name}.window");
+        if crate::narrowing::member_path_effect_before(
+            function.body().block(),
+            &path,
+            position,
+            true,
+        ) {
+            return None;
+        }
+        return Some(completion_config_type());
+    }
+    None
+}
+
 fn audio_type() -> Type {
     Type::table([
         ("mic", TableField::optional(Type::boolean())),

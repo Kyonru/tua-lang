@@ -8,6 +8,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Changed
 
+- `love.conf` distinguishes its initial window table from its nullable write
+  contract. Reads and completion retain the initial state through option writes,
+  and lose it after replacement, alias mutation, calls or capture.
+
 - Asset metadata, path completion, diagnostics and shader inspection respect
   lexical loader bindings. Custom loaders no longer create false asset usage or
   rename targets; unfinished strings retain builtin path suggestions.

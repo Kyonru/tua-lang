@@ -92,7 +92,12 @@ reproductions and relevant checks pass.
   scope exit keep builtin suggestions. Local/parameter/global helper shadows
   and custom LOVE roots have regression coverage. Core/LSP suites pass
   (1,626/375, `assets-final.log`).
-- Pending: nullable LOVE configuration flow.
+- Completed: initial LOVE window reads share the stable-path resolver while
+  retaining nullable writes. Option writes preserve the known initial table;
+  replacement, calls, alias writes and capture end the guarantee. Core/LSP
+  suites pass (`conf-core-lsp.log`); explicit guard follow-up is covered in
+  `conf-final-controls.log`. Headless LOVE confirms the initial table and nil
+  disabling (`conf-runtime.log`). Literal-false type modeling remains pending.
 
 ## 5. Migration support
 

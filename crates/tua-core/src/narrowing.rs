@@ -231,9 +231,10 @@ pub(crate) fn guarded_member_type(
     if fields.is_empty() {
         return None;
     }
-    let mut current = lookup(root)?;
+    let initial = crate::love_conf::initial_parameter_type_at_position(parsed, root, position);
+    let mut current = initial.clone().or_else(|| lookup(root))?;
     let mut path = root.clone();
-    let mut refined = false;
+    let mut refined = initial.is_some();
     for field in fields {
         let Type::Table(table) = resolve_aliases_from_map(aliases, &current, 0) else {
             return None;
@@ -315,10 +316,10 @@ fn collect_narrowed_type_at_position(
         }
     }
 
-    if let Some((root, _)) = name.split_once('.') {
+    if name.contains('.') {
         if block
             .last_stmt()
-            .is_some_and(|last| member_path_effect_before(last, root, position))
+            .is_some_and(|last| member_path_effect_before(last, name, position, false))
         {
             *narrowed = None;
         }
@@ -552,17 +553,51 @@ fn block_mutates_name_before(
     position: SourcePosition,
     fields: bool,
 ) -> bool {
-    if let Some((root, _)) = name.split_once('.') {
-        return member_path_effect_before(block, root, position);
+    if name.contains('.') {
+        return member_path_effect_before(block, name, position, false);
     }
     block
         .stmts()
         .any(|stmt| stmt_mutates_name_before(stmt, name, position, fields))
 }
 
-fn member_path_effect_before(node: &impl Visit, root: &str, position: SourcePosition) -> bool {
+fn member_assignment_invalidates(var: &Var, path: &str, known_distinct_root: bool) -> bool {
+    let root = path.split('.').next().unwrap_or(path);
+    if let Var::Name(name) = var {
+        return token_text(name) == root;
+    }
+    if !known_distinct_root {
+        return true;
+    }
+    let Some(parts) = crate::ast_utils::plain_field_chain_from_var(var) else {
+        return true;
+    };
+    if parts.first().is_none_or(|part| part != root) {
+        return true;
+    }
+    let assigned = parts.join(".");
+    if assigned == path {
+        return true;
+    }
+    // The initial LOVE config and its window are distinct plain tables.
+    // Direct sibling writes and writes inside that window preserve its identity.
+    !(parts.len() == 2
+        || assigned
+            .strip_prefix(path)
+            .is_some_and(|suffix| suffix.starts_with('.')))
+}
+
+pub(crate) fn member_path_effect_before(
+    node: &impl Visit,
+    path: &str,
+    position: SourcePosition,
+    known_distinct_root: bool,
+) -> bool {
+    let root = path.split('.').next().unwrap_or(path);
     struct Effects<'a> {
         root: &'a str,
+        path: &'a str,
+        known_distinct_root: bool,
         position: SourcePosition,
         found: bool,
     }
@@ -578,14 +613,18 @@ fn member_path_effect_before(node: &impl Visit, root: &str, position: SourcePosi
         fn visit_assignment(&mut self, assignment: &ast::Assignment) {
             if node_span(assignment).is_some_and(|span| starts_before(span.end, self.position)) {
                 self.found |= assignment.variables().iter().any(|var| {
-                    !matches!(var, Var::Name(_))
-                        || directly_assigned_name(var).as_deref() == Some(self.root)
+                    member_assignment_invalidates(var, self.path, self.known_distinct_root)
                 });
             }
         }
         fn visit_compound_assignment(&mut self, assignment: &ast::CompoundAssignment) {
-            self.found |=
-                node_span(assignment).is_some_and(|span| starts_before(span.end, self.position));
+            self.found |= node_span(assignment)
+                .is_some_and(|span| starts_before(span.end, self.position))
+                && member_assignment_invalidates(
+                    assignment.lhs(),
+                    self.path,
+                    self.known_distinct_root,
+                );
         }
         fn visit_local_assignment(&mut self, local: &ast::LocalAssignment) {
             self.found |= node_start(local)
@@ -598,6 +637,8 @@ fn member_path_effect_before(node: &impl Visit, root: &str, position: SourcePosi
     }
     let mut effects = Effects {
         root,
+        path,
+        known_distinct_root,
         position,
         found: false,
     };
@@ -615,8 +656,8 @@ fn stmt_mutates_name_before(
         return false;
     }
 
-    if let Some((root, _)) = name.split_once('.') {
-        return member_path_effect_before(stmt, root, position);
+    if name.contains('.') {
+        return member_path_effect_before(stmt, name, position, false);
     }
 
     match stmt {

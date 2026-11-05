@@ -7958,3 +7958,26 @@ fn asset_paths_survive_incomplete_strings_and_scope_exit() {
         assert!(labels.contains(&"assets/player.png".into()), "{source}: {labels:?}");
     }
 }
+
+#[test]
+fn love_conf_window_completion_tracks_initial_state_and_disable() {
+    for (statement, expected) in [
+        ("t.window.width = 320", true),
+        ("t.window = nil", false),
+        ("mutate(t)", false),
+    ] {
+        let fixture = Fixture::parse(&format!("-- file: conf.tua\nfunction love.conf(t)\n {statement}\n local width = t.window.<|complete|>width\nend\n"));
+        let mut host = AnalysisHost::new();
+        host.set_file("conf.tua", fixture.files()[0].source.clone());
+        let labels = completion_labels(
+            &host
+                .snapshot()
+                .completion("conf.tua", fixture.position("complete")),
+        );
+        assert_eq!(
+            labels.contains(&"width".into()),
+            expected,
+            "{statement}: {labels:?}"
+        );
+    }
+}

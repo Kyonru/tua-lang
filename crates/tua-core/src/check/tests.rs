@@ -5273,3 +5273,19 @@ fn love_image_file_and_data_contracts_match_runtime_inputs() {
 fn custom_asset_loader_bindings_do_not_validate_paths_or_shaders() {
     check_tua_source("custom.tua", "local image = function(path) return path end\nlocal a = image('missing.png')\nlocal love = { graphics = { newShader = function(code) return code end, newImage = function(path) return path end } }\nlocal b = love.graphics.newImage('missing.png')\nlocal c = love.graphics.newShader([[invalid; shader]])\n").expect("custom APIs are not asset loaders");
 }
+
+#[test]
+fn love_conf_initial_window_read_state_preserves_nullable_writes() {
+    check_tua_source("conf.tua", "function love.conf(t)\n local before: number = t.window.width\n t.window.width = before + 10\n local after: number = t.window.width\n t.window = nil\nend\n").expect("initial window and nullable assignment");
+    check_tua_source("conf.tua", "local mutate: any = function(value) end\nfunction love.conf(t)\n mutate(t)\n if t.window then local width: number = t.window.width end\nend\n").expect("explicit guard restores nullable window access");
+    for statement in [
+        "t.window = nil",
+        "mutate(t)",
+        "local alias = t; alias.window = nil",
+    ] {
+        let source = format!(
+            "function love.conf(t)\n {statement}\n local width: number = t.window.width\nend\n"
+        );
+        assert!(check_tua_source("conf.tua", &source).is_err(), "{source}");
+    }
+}

@@ -88,8 +88,8 @@ reproductions and current workarounds.
 
 ### Complete Typed Lua Porting Workflows
 
-- Model initial LOVE configuration state and subsequent nullable window writes;
-  evaluate literal `false` support without accepting arbitrary booleans.
+- Evaluate literal `false` support for LOVE configuration without accepting
+  arbitrary booleans; use `nil` to disable window creation meanwhile.
 - Make init-before-field-default behavior easier to discover, and consider a
   targeted diagnostic when a default overwrites an init assignment. Changing
   ordering requires a compatibility decision, not a silent fix.
