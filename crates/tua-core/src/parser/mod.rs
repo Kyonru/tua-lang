@@ -28,7 +28,7 @@ pub use model::{
     TableFieldType, TuaType, TypeAlias, TypeAliasKind, TypeImport, TypeImportBinding,
     TypedSourceModel,
 };
-pub(crate) use model::{NativeArrayTypeSyntax, ParserLineProvenance};
+pub(crate) use model::{NativeArrayTypeSyntax, ParserLineProvenance, ParserSourceFragment};
 use normalize::normalize_tua_source_for_luau_parser;
 
 pub fn parse_lua_source(
@@ -302,6 +302,7 @@ fn source_line_provenance(source: &str) -> Vec<ParserLineProvenance> {
             let line_number = index + 1;
             let text = line.trim_end_matches(['\r', '\n']);
             ParserLineProvenance {
+                source_fragment: None,
                 parser_start_column: 1,
                 source_span: SourceSpan {
                     start: SourcePosition {

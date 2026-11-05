@@ -134,6 +134,15 @@ impl AnalysisSnapshot {
         position: SourcePosition,
         degraded_facts: Option<&DegradedSemanticFacts>,
     ) -> Option<Definition> {
+        let scope = self.file(&parsed.path).and_then(|file| {
+            file.scope()
+                .or_else(|| file.degraded_semantics.as_ref().map(|facts| &facts.scope))
+        });
+        if let Some(definition) = scope.and_then(|scope| {
+            crate::definition::native_class_lexical_definition(parsed, scope, position)
+        }) {
+            return Some(definition);
+        }
         for import in parsed.type_imports.iter().filter(|import| !import.reexport) {
             for binding in &import.bindings {
                 if span_contains_position(binding.imported_span, position)

@@ -44,9 +44,16 @@ pub(crate) struct NativeArrayTypeSyntax {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct ParserLineProvenance {
+    pub source_fragment: Option<ParserSourceFragment>,
     pub source_span: SourceSpan,
     pub parser_start_column: usize,
     pub class_generated: bool,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct ParserSourceFragment {
+    pub source_span: SourceSpan,
+    pub parser_start_column: usize,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -171,6 +178,19 @@ impl RawParsedSource {
             .iter()
             .enumerate()
             .find_map(|(line, origin)| {
+                if let Some(fragment) = origin.source_fragment {
+                    let span = fragment.source_span;
+                    if span.start.line == source_position.line
+                        && span.start.column <= source_position.column
+                        && source_position.column <= span.end.column
+                    {
+                        return Some(SourcePosition {
+                            line: line + 1,
+                            column: source_position.column - span.start.column
+                                + fragment.parser_start_column,
+                        });
+                    }
+                }
                 (!origin.class_generated
                     && origin.source_span.start.line == source_position.line
                     && origin.source_span.start.column <= source_position.column
@@ -190,6 +210,21 @@ impl RawParsedSource {
         let provenance = self
             .parser_provenance
             .get(parser_position.line.saturating_sub(1))?;
+        if let Some(fragment) = provenance.source_fragment {
+            let width = fragment.source_span.end.column - fragment.source_span.start.column;
+            if parser_position.column >= fragment.parser_start_column
+                && parser_position.column <= fragment.parser_start_column + width
+            {
+                return Some(ParserPositionOrigin {
+                    source_position: SourcePosition {
+                        line: fragment.source_span.start.line,
+                        column: fragment.source_span.start.column + parser_position.column
+                            - fragment.parser_start_column,
+                    },
+                    class_generated: false,
+                });
+            }
+        }
         let source_position = if provenance.class_generated {
             provenance.source_span.start
         } else {

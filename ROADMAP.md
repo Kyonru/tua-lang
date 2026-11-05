@@ -82,9 +82,6 @@ results. Evidence: [development trials](internal/devex-trials-2026-11.md).
 - **Fluent expression navigation:** extend definition/reference provenance through
   call results. Completion, hover and signatures now use shared receiver types,
   including incomplete edits and void-call boundaries.
-- **Native class parameter navigation:** preserve header identities and source
-  provenance for definition, references, and rename, including shadowing and
-  exact original-source edits.
 - **Unclosed classes:** extend recovery and syntax guidance to wholly unclosed
   class bodies while preserving surrounding scopes and valid nested Lua blocks.
 

@@ -214,12 +214,14 @@ fn append_segment(
             if generated {
                 line.source_span = source_span;
                 line.parser_start_column = line_provenance.map_or(1, |p| p.parser_start_column);
+                line.source_fragment = line_provenance.and_then(|p| p.source_fragment);
                 line.lowering = lowering;
             }
         } else {
             output.push(LoweredLine {
                 text: piece.to_owned(),
                 parser_start_column: line_provenance.map_or(1, |p| p.parser_start_column),
+                source_fragment: line_provenance.and_then(|p| p.source_fragment),
                 source_span,
                 lowering,
             });

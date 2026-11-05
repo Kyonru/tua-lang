@@ -164,16 +164,28 @@ fn scope_references_to_definition_with_scope(
     scope: &ScopeMap,
     expected_kind: ScopeDeclarationKind,
 ) -> Option<Vec<Reference>> {
+    let parser_target = SourceSpan {
+        start: parsed
+            .raw
+            .parser_position_for_source(target.span.start)
+            .unwrap_or(target.span.start),
+        end: parsed
+            .raw
+            .parser_position_for_source(target.span.end)
+            .unwrap_or(target.span.end),
+    };
     let declaration = scope.declarations().iter().find(|declaration| {
-        declaration.name_span == target.span && declaration.kind == expected_kind
+        declaration.name_span == parser_target && declaration.kind == expected_kind
     })?;
     let mut references = scope
         .references_to_symbol(declaration.id, include_declaration)
         .into_iter()
-        .map(|reference| Reference {
-            path: parsed.path.clone(),
-            span: reference.span,
-            kind: reference_kind(target.kind),
+        .filter_map(|reference| {
+            Some(Reference {
+                path: parsed.path.clone(),
+                span: crate::definition::source_backed_span(parsed, reference.span)?,
+                kind: reference_kind(target.kind),
+            })
         })
         .collect::<Vec<_>>();
 

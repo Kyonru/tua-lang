@@ -8,6 +8,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Changed
 
+- Native class parameter definition, references and rename preserve original
+  source spans through lowering, including multiline/defaulted headers and
+  nested shadowing. Generated helper declarations remain hidden.
+
 - Falling through an `or` guard retains the non-nil local type after member
   writes, restoring captured callback completion. Reassigning the local still
   invalidates that guard; discriminant-based narrowing stays conservative.

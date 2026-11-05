@@ -39,7 +39,11 @@ reproductions and relevant checks pass.
 
 ## 2. Navigation and rename
 
-- Pending: native class parameter definition, references and rename provenance.
+- Completed: native class parameters use lexical binding IDs and source-backed
+  header fragments for definition/references/rename. Multiline/defaulted headers
+  and nested shadowing pass; the Emoji Merge rename replay succeeds
+  (`navigation-emoji.log`). All 1,607 core and 375 LSP tests pass
+  (`navigation-core-lsp.log`). Default-expression errors now point to the header.
 - Pending: side-effect import global navigation.
 
 ## 3. Callback syntax and checker support

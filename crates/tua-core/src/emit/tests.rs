@@ -2377,9 +2377,9 @@ fn generated_default_guard_errors_use_available_source_origins() {
         "final class Example {\n  init(value: number = 1) {\n  }\n}\nlocal function after(value: number = 1)\nend\n",
     ).unwrap();
     let scope = crate::scope::scope_map_parsed_source(&parsed);
-    // Generated class headers currently map to the enclosing class. A following
-    // ordinary function retains its exact source line despite class expansion.
-    for (name, source_line) in [("Example_init", 1), ("after", 5)] {
+    // User-authored class defaults retain their header line. A following
+    // ordinary function also retains its line despite class expansion.
+    for (name, source_line) in [("Example_init", 2), ("after", 5)] {
         let function = parsed
             .function_annotations
             .iter()

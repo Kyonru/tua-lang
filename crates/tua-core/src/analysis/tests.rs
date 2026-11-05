@@ -7655,3 +7655,38 @@ fn guarded_capture_keeps_non_nil_after_member_writes_but_not_reassignment() {
         );
     }
 }
+
+#[test]
+fn native_class_parameter_navigation_and_rename_preserve_original_spans() {
+    for header in [
+        "<|declaration|>amount: number = 2, label: string = 'x'",
+        "\n    <|declaration|>amount: number = 2,\n    label: string = 'x'\n  ",
+    ] {
+        let fixture = Fixture::parse(&format!("-- file: counter.tua\nfinal class Counter {{\n apply({header}): number {{\n   local function nested(amount: number): number return amount end\n   print(<|use|>amount, label)\n   return amount\n }}\n}}\n"));
+        let source = &fixture.files()[0].source;
+        let mut host = AnalysisHost::new();
+        host.set_file("counter.tua", source.clone());
+        let snapshot = host.snapshot();
+        let definition = snapshot
+            .definition("counter.tua", fixture.position("use"))
+            .expect("parameter definition");
+        assert_eq!(definition.kind, DefinitionKind::Parameter);
+        assert_eq!(definition.span.start, fixture.position("declaration"));
+        let references = snapshot.references("counter.tua", fixture.position("use"), true);
+        assert_eq!(references.len(), 3, "{references:?}");
+        let rename = snapshot
+            .rename("counter.tua", fixture.position("declaration"), "count")
+            .expect("parameter rename");
+        assert_eq!(rename.edits.len(), 3, "{rename:?}");
+        for edit in rename.edits {
+            let start = crate::source_text::byte_for_position(source, edit.span.start).unwrap();
+            let end = crate::source_text::byte_for_position(source, edit.span.end).unwrap();
+            assert_eq!(&source[start..end], "amount");
+            assert_ne!(
+                edit.span.start.line,
+                fixture.position("use").line - 1,
+                "nested shadow must remain unchanged"
+            );
+        }
+    }
+}

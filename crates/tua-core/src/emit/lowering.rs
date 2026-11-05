@@ -43,6 +43,7 @@ pub struct LuaEmission {
 struct LoweredLine {
     text: String,
     parser_start_column: usize,
+    source_fragment: Option<crate::parser::ParserSourceFragment>,
     source_span: SourceSpan,
     lowering: LoweringKind,
 }
@@ -62,6 +63,7 @@ impl LoweringDocument {
             .map(|(index, text)| LoweredLine {
                 text: text.to_owned(),
                 parser_start_column: 1,
+                source_fragment: None,
                 source_span: line_span(source, index + 1),
                 lowering: LoweringKind::Source,
             })
@@ -120,6 +122,7 @@ impl LoweringDocument {
             .map(|(index, text)| LoweredLine {
                 text: text.to_owned(),
                 parser_start_column: 1,
+                source_fragment: None,
                 source_span: line_span(&parsed.source, index + 1),
                 lowering: LoweringKind::Source,
             })
@@ -187,6 +190,7 @@ impl LoweringDocument {
                 self.lines.push(LoweredLine {
                     text: piece.to_owned(),
                     parser_start_column: 1,
+                    source_fragment: None,
                     source_span,
                     lowering,
                 });
@@ -233,6 +237,7 @@ impl LoweringDocument {
             .map(|line| ParserLineProvenance {
                 source_span: line.source_span,
                 parser_start_column: line.parser_start_column,
+                source_fragment: line.source_fragment,
                 class_generated: line.lowering == LoweringKind::Class,
             })
             .collect()

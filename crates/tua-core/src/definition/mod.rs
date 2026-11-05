@@ -69,9 +69,50 @@ pub fn definition_parsed_source_with_hir(
     hir: Option<&HirModule>,
     position: SourcePosition,
 ) -> Result<Option<Definition>, Vec<Diagnostic>> {
+    if !parsed.class_declarations.is_empty() {
+        let scope = crate::scope_map_parsed_source(parsed);
+        if let Some(definition) = native_class_lexical_definition(parsed, &scope, position) {
+            return Ok(Some(definition));
+        }
+    }
     let resolver = DefinitionResolver { parsed, hir };
 
     Ok(resolver.definition(position))
+}
+
+/// Resolve original class-body/header names through their lexical binding IDs.
+/// Generated constructor/self symbols deliberately have no source definition.
+pub(crate) fn native_class_lexical_definition(
+    parsed: &ParsedSource,
+    scope: &crate::ScopeMap,
+    position: SourcePosition,
+) -> Option<Definition> {
+    if parsed.class_declarations.is_empty() {
+        return None;
+    }
+    let position = parsed.raw.parser_position_for_source(position)?;
+    let declaration = scope.declaration(scope.symbol_at_position(position)?)?;
+    let kind = match declaration.kind {
+        crate::ScopeDeclarationKind::Parameter => DefinitionKind::Parameter,
+        crate::ScopeDeclarationKind::Local => DefinitionKind::Local,
+        crate::ScopeDeclarationKind::Function => DefinitionKind::Function,
+        _ => return None,
+    };
+    let span = source_backed_span(parsed, declaration.name_span)?;
+    Some(Definition {
+        path: parsed.path.clone(),
+        span,
+        kind,
+    })
+}
+
+pub(crate) fn source_backed_span(parsed: &ParsedSource, span: SourceSpan) -> Option<SourceSpan> {
+    let start = parsed.raw.parser_position_origin(span.start)?;
+    let end = parsed.raw.parser_position_origin(span.end)?;
+    (!start.class_generated && !end.class_generated).then_some(SourceSpan {
+        start: start.source_position,
+        end: end.source_position,
+    })
 }
 
 struct DefinitionResolver<'a> {

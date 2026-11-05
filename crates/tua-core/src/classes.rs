@@ -297,6 +297,7 @@ fn class_parser_line_provenance(
     source: &str,
 ) -> Vec<ParserLineProvenance> {
     let default = || ParserLineProvenance {
+        source_fragment: None,
         source_span: class.span,
         parser_start_column: 1,
         class_generated: true,
@@ -318,8 +319,47 @@ fn class_parser_line_provenance(
             continue;
         };
 
+        // Only the user-authored parameter slice is source-backed. Keep the
+        // synthesized function name and implicit self hidden from editor queries.
+        if !method.parameters.is_empty() {
+            if let Some(start) =
+                crate::source_text::byte_for_position(source, method.parameters_span.start)
+            {
+                let trimmed_start =
+                    start + source[start..].len() - source[start..].trim_start().len();
+                let mut offset = 0;
+                for (line, text) in method.parameters.split_inclusive('\n').enumerate() {
+                    let text_without_newline = text.trim_end_matches(['\r', '\n']);
+                    let source_start = source_position_from_byte(source, trimmed_start + offset);
+                    provenance[header_line + line].source_fragment =
+                        Some(crate::parser::ParserSourceFragment {
+                            source_span: SourceSpan {
+                                start: source_start,
+                                end: SourcePosition {
+                                    line: source_start.line,
+                                    column: source_start.column
+                                        + text_without_newline.chars().count(),
+                                },
+                            },
+                            parser_start_column: if line == 0 {
+                                generated_header.chars().count()
+                                    + format!("self: {}, ", class.name).chars().count()
+                                    + 1
+                            } else {
+                                1
+                            },
+                        });
+                    offset += text.len();
+                }
+            }
+        }
+        let header_lines = method.parameters.lines().count().max(1)
+            + method
+                .return_type
+                .as_deref()
+                .map_or(0, |ty| ty.lines().count().saturating_sub(1));
         for (body_offset, body_line) in method.body.lines().enumerate() {
-            let generated_line = header_line + body_offset + 1;
+            let generated_line = header_line + header_lines + body_offset;
             let source_line = method.body_span.start.line + body_offset;
             let Some(line) = replacement_lines.get(generated_line) else {
                 break;
@@ -348,6 +388,7 @@ fn class_parser_line_provenance(
                 column: source_indent + 1,
             };
             provenance[generated_line] = ParserLineProvenance {
+                source_fragment: None,
                 parser_start_column: 3,
                 source_span: SourceSpan {
                     start: source_start,
