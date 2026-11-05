@@ -51,7 +51,6 @@ use crate::signal::{
     bus_label, graph_call_from_mention, graph_event_id, graph_schema_summary, SignalEventIndex,
     SignalGraph, SignalGraphEvent,
 };
-use crate::signature_help::signature_help_parsed_source_with_environment_and_signal_index;
 use crate::source_text::{
     byte_for_column, dotted_chain_at_position, function_name_table_field, line_at,
     source_identifiers, SourceIdentifier,

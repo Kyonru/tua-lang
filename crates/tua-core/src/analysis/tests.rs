@@ -7409,3 +7409,118 @@ fn indexed_receiver_completion_handles_nested_indexes_and_dynamic_values() {
         }
     }
 }
+
+#[test]
+fn chained_receivers_share_completion_hover_and_signature_types() {
+    let fixture = Fixture::parse(
+        r#"-- file: chain.tua
+type Result = { value: number, run: (amount: number) -> number }
+local function make(): Result
+  return { value = 1, run = function(amount: number): number return amount end }
+end
+print(make().<|complete|>value)
+print(make().<|hover|>value)
+print(make():run(<|signature|>1))
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_file("chain.tua", fixture.files()[0].source.clone());
+    let snapshot = host.snapshot();
+    let labels = completion_labels(&snapshot.completion("chain.tua", fixture.position("complete")));
+    assert!(
+        labels.contains(&"value".into()) && labels.contains(&"run".into()),
+        "{labels:?}; {:?}",
+        snapshot.pipeline_diagnostics("chain.tua")
+    );
+    let hover = snapshot
+        .hover("chain.tua", fixture.position("hover"))
+        .unwrap();
+    assert!(hover.contents.contains("number"), "{hover:?}");
+    let signature = snapshot
+        .signature_help("chain.tua", fixture.position("signature"))
+        .unwrap();
+    assert!(
+        signature.signatures[0].label.contains("amount: number"),
+        "{signature:?}"
+    );
+}
+
+#[test]
+fn chained_love_receivers_keep_signatures_and_do_not_invent_void_results() {
+    for (call, expected) in [
+        (
+            "love.graphics.newText(love.graphics.newFont(12), 'hi'):",
+            Some("getWidth"),
+        ),
+        (
+            "love.graphics.newText(love.graphics.newFont(12), 'hi'):set('bye'):",
+            None,
+        ),
+    ] {
+        let fixture = Fixture::parse(&format!("-- file: love.tua\n{call}<|complete|>\n"));
+        let mut host = AnalysisHost::new();
+        host.set_file("love.tua", fixture.files()[0].source.clone());
+        let labels = completion_labels(
+            &host
+                .snapshot()
+                .completion("love.tua", fixture.position("complete")),
+        );
+        match expected {
+            Some(label) => assert!(labels.contains(&label.to_owned()), "{labels:?}"),
+            None => assert!(labels.is_empty(), "{labels:?}"),
+        }
+    }
+    let fixture = Fixture::parse("-- file: love.tua\nlove.graphics.newText(love.graphics.newFont(12), 'hi'):getWidth(<|signature|>\n");
+    let mut host = AnalysisHost::new();
+    host.set_file("love.tua", fixture.files()[0].source.clone());
+    let signature = host
+        .snapshot()
+        .signature_help("love.tua", fixture.position("signature"))
+        .unwrap();
+    assert!(
+        signature
+            .signatures
+            .iter()
+            .any(|s| s.label.contains("getWidth")),
+        "{signature:?}"
+    );
+}
+
+#[test]
+fn chained_imported_factory_completion_tracks_unsaved_return_types() {
+    let temp = TempProject::new("chained-factory");
+    temp.write("tua.toml", "source = 'src'\n");
+    let producer = "export type Item = { speed: number }\nlocal function make(): Item\n return { speed = 1 }\nend\nreturn { make = make }\n";
+    temp.write("src/items.tua", producer);
+    let fixture = Fixture::parse(
+        "-- file: src/main.tua\nlocal items = require('items')\nprint(items.make().<|complete|>)\n",
+    );
+    let path = temp.path.join("src/main.tua");
+    temp.write("src/main.tua", &fixture.files()[0].source);
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([temp.path.join("src")]);
+    host.set_file(&path, fixture.files()[0].source.clone());
+    host.set_file(temp.path.join("src/items.tua"), producer);
+    let old = host.snapshot();
+    assert!(
+        completion_labels(&old.completion(&path, fixture.position("complete")))
+            .contains(&"speed".into())
+    );
+    host.set_file(
+        temp.path.join("src/items.tua"),
+        producer.replace("speed", "health"),
+    );
+    let labels = completion_labels(
+        &host
+            .snapshot()
+            .completion(&path, fixture.position("complete")),
+    );
+    assert!(
+        labels.contains(&"health".into()) && !labels.contains(&"speed".into()),
+        "{labels:?}"
+    );
+    assert!(
+        completion_labels(&old.completion(&path, fixture.position("complete")))
+            .contains(&"speed".into())
+    );
+}

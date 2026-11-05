@@ -229,6 +229,7 @@ pub(super) fn line_is_recoverable_incomplete_edit(trimmed_code: &str) -> bool {
 
     trimmed_code.ends_with('.')
         || trimmed_code.ends_with(':')
+        || trimmed_code.ends_with('(')
         || is_bare_dotted_field_chain(trimmed_code)
         || is_bare_identifier_expression(trimmed_code)
 }

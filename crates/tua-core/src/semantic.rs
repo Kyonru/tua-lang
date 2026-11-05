@@ -267,6 +267,14 @@ impl<'a> SemanticModel<'a> {
     ) -> Option<Type> {
         let end = crate::source_text::byte_for_position(source, end)?;
         let receiver = crate::source_text::receiver_before(source, end)?;
+        self.type_of_receiver_expression(receiver, position)
+    }
+
+    pub(crate) fn type_of_receiver_expression(
+        &self,
+        receiver: &str,
+        position: SourcePosition,
+    ) -> Option<Type> {
         let ast = full_moon::parse(&format!("local __receiver = {receiver}")).ok()?;
         let ast::Stmt::LocalAssignment(local) = ast.nodes().stmts().next()? else {
             return None;
@@ -360,7 +368,9 @@ impl<'a> SemanticModel<'a> {
         }
 
         let Some(parts) = field_chain_before_first_call(function_call) else {
-            return Vec::new();
+            return self
+                .return_types_of_expression_call(function_call, position, depth + 1)
+                .unwrap_or_default();
         };
 
         if let Some(domain) =
@@ -481,6 +491,60 @@ impl<'a> SemanticModel<'a> {
         }
 
         self.return_types_for_call_parts(&parts, position)
+    }
+
+    fn return_types_of_expression_call(
+        &self,
+        call: &FunctionCall,
+        position: SourcePosition,
+        depth: usize,
+    ) -> Option<Vec<Type>> {
+        if depth >= MAX_SEMANTIC_INFERENCE_DEPTH {
+            return None;
+        }
+        let mut current = match call.prefix() {
+            Prefix::Name(name) => {
+                self.type_of_name_at_depth(&token_text(name), position, depth + 1)?
+            }
+            Prefix::Expression(expression) => {
+                self.type_of_expression_return_at_depth(expression, position, 0, depth + 1)?
+            }
+            _ => return None,
+        };
+        for suffix in call.suffixes() {
+            match suffix {
+                Suffix::Index(Index::Dot { name, .. }) => {
+                    let name = token_text(name);
+                    current = resolve_table_field_type(self.environment, &current, &name).or_else(
+                        || {
+                            self.lua_type_field_item(&current, &name)
+                                .and_then(typed_function_from_lua_item)
+                                .and_then(|function| function.as_type())
+                        },
+                    )?;
+                }
+                Suffix::Index(Index::Brackets { expression, .. }) => {
+                    let key = self.index_key_type(expression, position, depth + 1)?;
+                    current = resolve_index_type(self.environment, &current, &key)?;
+                }
+                Suffix::Call(Call::AnonymousCall(_)) => {
+                    return call_metamethod_return_types(self.environment, &current)
+                }
+                Suffix::Call(Call::MethodCall(method)) => {
+                    let name = token_text(method.name());
+                    if let Some(function) =
+                        resolve_table_field_type(self.environment, &current, &name)
+                    {
+                        return call_metamethod_return_types(self.environment, &function);
+                    }
+                    return self
+                        .lua_type_field_item(&current, &name)
+                        .map(|item| return_types_from_function_detail(item.detail));
+                }
+                _ => return None,
+            }
+        }
+        None
     }
 
     pub(crate) fn return_types_for_call_parts(
@@ -1712,7 +1776,9 @@ impl<'a> SemanticModel<'a> {
             _ => return None,
         };
 
+        let mut prefix_suffixes = Vec::new();
         for suffix in expression.suffixes() {
+            prefix_suffixes.push(suffix.clone());
             match suffix {
                 Suffix::Index(Index::Dot { name, .. }) => {
                     current =
@@ -1721,6 +1787,14 @@ impl<'a> SemanticModel<'a> {
                 Suffix::Index(Index::Brackets { expression, .. }) => {
                     let key = self.index_key_type(expression, position, depth + 1)?;
                     current = resolve_index_type(self.environment, &current, &key)?;
+                }
+                Suffix::Call(_) => {
+                    let call = FunctionCall::new(expression.prefix().clone())
+                        .with_suffixes(prefix_suffixes.clone());
+                    current = self
+                        .return_types_of_call_at_depth(&call, position, depth + 1)
+                        .into_iter()
+                        .next()?;
                 }
                 _ => return None,
             }

@@ -12,7 +12,11 @@ reproductions and relevant checks pass.
   receiver checks after the final scanner guard. The full Gravity Wars replay
   restores `State.allBullets[b].` members (`x`, `y`, `vx`, `vy`) and numeric hover.
   Evidence: `indexed-core-lsp.log`, `indexed-final.log`, `gravity-indexed.json`.
-- Pending: chained call receivers and void-call boundaries.
+- Completed: chained call completion, hover and signatures, including incomplete
+  LOVE calls, void boundaries and unsaved imported factory return types.
+  Core/LSP suites pass (1,602 core, one ignored; 375 LSP); the feature smoke
+  passes. Evidence: `chained-core-lsp.log`, `chained-smoke.log`.
+  Call-result navigation remains in the navigation phase.
 - Pending: recursive imported `Self`.
 - Pending: callback/event call results across modules.
 - Pending: captured narrowed locals and full-method nested receivers.

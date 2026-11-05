@@ -79,10 +79,9 @@ results. Evidence: [development trials](internal/devex-trials-2026-11.md).
 
 - **Side-effect module globals:** define a sound navigation model for functions
   introduced by `require` without an explicit returned module contract.
-- **Fluent expression receivers:** support completion, hover, signatures, and
-  navigation after calls such as `title:setValue("x"):draw(` and LOVE constructor
-  chains through one shared receiver context. Check completed and incomplete
-  expressions; void calls must not invent a receiver.
+- **Fluent expression navigation:** extend definition/reference provenance through
+  call results. Completion, hover and signatures now use shared receiver types,
+  including incomplete edits and void-call boundaries.
 - **Imported `Self`:** retain nominal identity through imported instance aliases
   and recursive project-type expansion so fluent method results do not become
   `any`. Preserve recursive LuaCATS safeguards.

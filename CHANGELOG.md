@@ -8,6 +8,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Changed
 
+- Completion, hover and signature help follow typed factory and indexed call
+  receivers, including incomplete LOVE constructor chains. Void calls do not
+  invent a receiver, and unsaved imported return types stay current.
+
 - Full file checking and linting are deferred until diagnostic queries, reducing
   cold and post-edit completion work while retaining cached diagnostic results.
 

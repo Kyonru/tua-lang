@@ -101,8 +101,23 @@ pub(crate) fn signature_help_parsed_source_with_environment_and_signal_index(
     environment: &TypeEnvironment,
     signal_index: Option<&SignalEventIndex>,
 ) -> Option<SignatureHelp> {
-    let context = call_context(&parsed.source, position)?;
+    signature_help_in_source_with_environment_and_signal_index(
+        &parsed.source,
+        parsed,
+        position,
+        environment,
+        signal_index,
+    )
+}
 
+pub(crate) fn signature_help_in_source_with_environment_and_signal_index(
+    source: &str,
+    parsed: &ParsedSource,
+    position: SourcePosition,
+    environment: &TypeEnvironment,
+    signal_index: Option<&SignalEventIndex>,
+) -> Option<SignatureHelp> {
+    let context = call_context(source, position)?;
     signature_help_parsed_source_with_context(parsed, context, environment, signal_index)
 }
 
@@ -150,10 +165,32 @@ struct SignatureResolver<'a> {
 
 impl<'a> SignatureResolver<'a> {
     fn signatures_for_context(&self, context: &CallContext) -> Option<Vec<SignatureInformation>> {
+        if let Some(expression) = &context.expression_receiver {
+            let receiver = self
+                .semantic
+                .type_of_receiver_expression(expression, context.position)?;
+            let member = context.callee_parts.last()?;
+            let label = format!(
+                "{expression}{}{member}",
+                if context.is_method_call { ':' } else { '.' }
+            );
+            if let Some(item) = self.semantic.lua_type_field_item(&receiver, member) {
+                return signatures_from_lua_item(item);
+            }
+            let ty =
+                crate::semantic::resolve_table_field_type(self.environment, &receiver, member)?;
+            return signature_from_type(&label, &ty, self.environment)
+                .map(|signature| vec![signature]);
+        }
         self.signatures_for_parts(context)
     }
 
     fn method_receiver_type(&self, context: &CallContext) -> Option<Type> {
+        if let Some(expression) = &context.expression_receiver {
+            return self
+                .semantic
+                .type_of_receiver_expression(expression, context.position);
+        }
         if !context.is_method_call || context.callee_parts.len() < 2 {
             return None;
         }
@@ -391,12 +428,20 @@ struct CallContext {
     position: SourcePosition,
     is_method_call: bool,
     first_string_argument: Option<String>,
+    expression_receiver: Option<String>,
 }
 
 fn call_context(source: &str, position: SourcePosition) -> Option<CallContext> {
     let cursor = byte_offset_for_position(source, position)?;
     let open = active_call_open(source, cursor)?;
-    let (callee_parts, is_method_call) = callee_info_before(source, open)?;
+    let (callee_parts, is_method_call, expression_receiver) = match callee_info_before(source, open)
+    {
+        Some((parts, method)) => (parts, method, None),
+        None => {
+            let (receiver, member, method) = expression_callee_before(source, open)?;
+            (vec![member], method, Some(receiver))
+        }
+    };
     let (active_parameter, argument_count) = argument_context(source, open + 1, cursor);
     let first_string_argument = first_string_argument_after_open(source, open);
 
@@ -407,6 +452,7 @@ fn call_context(source: &str, position: SourcePosition) -> Option<CallContext> {
         position,
         is_method_call,
         first_string_argument,
+        expression_receiver,
     })
 }
 
@@ -424,10 +470,26 @@ fn active_call_open(source: &str, cursor: usize) -> Option<usize> {
         }
     }
 
-    stack
-        .into_iter()
-        .rev()
-        .find(|open| callee_info_before(source, *open).is_some())
+    stack.into_iter().rev().find(|open| {
+        callee_info_before(source, *open).is_some()
+            || expression_callee_before(source, *open).is_some()
+    })
+}
+
+fn expression_callee_before(source: &str, open: usize) -> Option<(String, String, bool)> {
+    let bytes = source.as_bytes();
+    let end = trim_ascii_whitespace_before(bytes, open);
+    let start = reverse_identifier_start(bytes, end)?;
+    let separator = trim_ascii_whitespace_before(bytes, start).checked_sub(1)?;
+    if !matches!(bytes[separator], b'.' | b':') {
+        return None;
+    }
+    let receiver = crate::source_text::receiver_before(source, separator)?;
+    Some((
+        receiver.to_owned(),
+        source[start..end].to_owned(),
+        bytes[separator] == b':',
+    ))
 }
 
 fn callee_info_before(source: &str, open: usize) -> Option<(Vec<String>, bool)> {

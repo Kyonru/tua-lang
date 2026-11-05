@@ -105,11 +105,11 @@ Member completion follows typed indexed receivers such as `items[index].` and
 Nested indexes retain their element types; dynamic `any` receivers do not
 invent members.
 
-Chained expressions can infer their final return values, but editor assistance
-after a call expression such as `makeLabel():draw(...)` is still incomplete.
-For dependable member completion and signature help, assign the receiver to a
-local first. Imported class methods returning `Self` also have an unresolved
-editor type-identity limitation.
+Member completion, hover, and signature help follow typed call results such as
+`makeLabel():draw(...)` and LOVE constructor chains, including incomplete calls.
+A void method such as `Text:set(...)` ends the chain: it does not return a Text
+receiver. Navigation through call expressions and imported class methods
+returning recursive `Self` still have unresolved limitations.
 
 Exact-code inline suppressions use the same syntax as `tua check` and are
 enabled by default:

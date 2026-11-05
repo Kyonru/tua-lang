@@ -401,7 +401,8 @@ impl AnalysisSnapshot {
             Ok(parsed) => {
                 let facts = self.semantic_facts_for_parsed(parsed);
 
-                signature_help_parsed_source_with_environment_and_signal_index(
+                crate::signature_help::signature_help_in_source_with_environment_and_signal_index(
+                    &file.source,
                     parsed,
                     position,
                     &facts.environment,
@@ -411,7 +412,8 @@ impl AnalysisSnapshot {
             Err(_) => self
                 .degraded_semantic_facts(path, file)
                 .and_then(|facts| {
-                    signature_help_parsed_source_with_environment_and_signal_index(
+                    crate::signature_help::signature_help_in_source_with_environment_and_signal_index(
+                    &file.source,
                         &facts.parsed,
                         position,
                         &facts.environment,
