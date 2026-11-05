@@ -1785,3 +1785,50 @@ fn table_insert_checks_typed_array_values_and_preserves_dynamic_replacements() {
         assert!(!diagnostics.iter().any(|d| d.severity == crate::DiagnosticSeverity::Error), "{source}: {diagnostics:?}");
     }
 }
+
+#[test]
+fn unknown_local_initializers_still_shadow_unrelated_contracts() {
+    let source = r#"
+type Pose = { x: number }
+local function follow()
+  local p: Pose | nil
+end
+local function hit()
+  local p = unknown.parent
+  print(p.health)
+  p = unknown.other
+  print(p.health)
+end
+local function nested()
+  local p: number = 1
+  do
+    local p = unknown.parent
+    p = "dynamic"
+    print(p)
+  end
+  p = "invalid"
+  if p then p = "also invalid" end
+end
+---@type number
+local documented = 1
+documented = "invalid"
+"#;
+    let parsed = parse_tua_source("main.tua", source).unwrap();
+    let config = crate::DiagnosticsConfig {
+        globals: vec!["unknown".to_owned()],
+        ..Default::default()
+    };
+    let diagnostics = crate::check::check_parsed_source_with_diagnostics_config(&parsed, &config)
+        .err()
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|d| d.severity == crate::DiagnosticSeverity::Error)
+        .collect::<Vec<_>>();
+    assert_eq!(diagnostics.len(), 3, "{diagnostics:?}");
+    assert!(
+        diagnostics
+            .iter()
+            .all(|d| d.code == Some(crate::DiagnosticCode::TYPE_MISMATCH)),
+        "{diagnostics:?}"
+    );
+}

@@ -39,6 +39,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Locals with unresolved initializers still shadow outer or unrelated annotation
+  contracts. Reassignments respect the nearest binding, including LuaDoc locals.
+
 - `table.insert` checks append and indexed values against typed array elements,
   including index/count validation, while respecting custom library replacements
   and explicit dynamic values.

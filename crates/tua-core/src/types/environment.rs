@@ -195,6 +195,10 @@ impl TypeEnvironment {
         self.locals.get(name)
     }
 
+    pub(crate) fn has_local_contract_at(&self, position: crate::SourcePosition) -> bool {
+        self.local_contracts.at_declaration(position).is_some()
+    }
+
     pub(crate) fn local_at_declaration(
         &self,
         name: &str,

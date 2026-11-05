@@ -7110,3 +7110,18 @@ fn project_global_tween_suppresses_injection_but_unrelated_globals_do_not() {
         );
     }
 }
+
+#[test]
+fn returned_native_instance_preserves_colon_call_receivers() {
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    host.set_file("src/viewer.tua", "final class Viewer {\n model: boolean = false\n update(dt: number) {}\n draw() {}\n}\nexport type ViewerInstance = Viewer\nreturn Viewer.new()\n");
+    host.set_file("src/main.tua", "local viewer = require('viewer')\nfunction love.update(dt: number)\n if viewer.model then viewer:update(dt) end\nend\nfunction love.draw()\n if viewer.model then viewer:draw() end\nend\n");
+    let snapshot = host.snapshot();
+    let errors = snapshot
+        .pipeline_diagnostics("src/main.tua")
+        .into_iter()
+        .filter(|d| d.severity == DiagnosticSeverity::Error)
+        .collect::<Vec<_>>();
+    assert!(errors.is_empty(), "{errors:?}");
+}

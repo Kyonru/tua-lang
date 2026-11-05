@@ -636,7 +636,8 @@ impl<'a> Checker<'a> {
             let has_annotation = specifiers
                 .get(index)
                 .and_then(|specifier| *specifier)
-                .is_some();
+                .is_some()
+                || self.environment.has_local_contract_at(declaration_position);
             let indexed_contract_type = assignment_expression_for_local(&expressions, index)
                 .filter(|(expression, return_index)| {
                     *return_index == 0 && expression_has_bracket_index(expression)
@@ -670,21 +671,26 @@ impl<'a> Checker<'a> {
                 }
             });
 
-            if let Some(ty) = ty {
-                let preserve_literal_unions =
-                    state_machine::type_is_state_machine(self.environment, &ty)
-                        || sprite::type_is_sprite_sheet(self.environment, &ty)
-                        || sprite::type_is_sprite_player(self.environment, &ty);
-                let ty = if has_annotation || has_environment_type || preserve_literal_unions {
-                    ty
-                } else {
-                    widen_inferred_type(&ty)
-                };
-                self.insert_scoped_local(name.clone(), ty.clone());
-                if has_annotation || self.stable_inferred_locals {
-                    self.insert_scoped_local_contract(name, ty);
-                }
-            }
+            // An unresolved initializer still introduces a local binding.
+            // Record its dynamic value so a same-named outer contract cannot leak in.
+            let ty = ty.unwrap_or(Type::Any);
+            let preserve_literal_unions =
+                state_machine::type_is_state_machine(self.environment, &ty)
+                    || sprite::type_is_sprite_sheet(self.environment, &ty)
+                    || sprite::type_is_sprite_player(self.environment, &ty);
+            let ty = if has_annotation || has_environment_type || preserve_literal_unions {
+                ty
+            } else {
+                widen_inferred_type(&ty)
+            };
+            self.insert_scoped_local(name.clone(), ty.clone());
+            // Even dynamic declarations mask contracts in enclosing scopes.
+            let contract = if has_annotation || self.stable_inferred_locals {
+                ty
+            } else {
+                Type::Any
+            };
+            self.insert_scoped_local_contract(name, contract);
         }
     }
 
