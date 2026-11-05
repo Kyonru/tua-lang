@@ -16,6 +16,7 @@ the VS Code extension's bundled server is not added to your `PATH`.
 | --- | --- | --- |
 | Create the project layout | `tua init` | Creates missing project files. |
 | Check types and project diagnostics | `tua check` | No Lua output; configured asset pipelines may generate their outputs. |
+| Execute unit tests with Busted | `tua test` | Writes temporary test output; configured asset pipelines may generate files. |
 | Apply formatting | `tua fmt` | Rewrites project Tua source. |
 | Check formatting in CI | `tua fmt --check` | No. |
 | Run lint rules | `tua lint` | No. |
@@ -51,6 +52,20 @@ diagnostics, and prints them. Standard lint rules are enabled by default; set
 `diagnostics.rules = false` for a type/project-only check. The command exits
 non-zero for errors and still prints non-blocking warnings, information, and
 hints. Use `tua check --deny-warnings` when CI should reject warnings too.
+
+## `test`
+
+```bash
+tua test
+tua test spec/counter_spec.tua
+tua test --filter independent
+tua test --busted /path/to/busted --lua luajit
+```
+
+Builds fresh temporary output and runs `_spec` files under the configured source
+root with an installed Busted backend. The optional path is source-root-relative.
+Failures map back to Tua source and exit nonzero; the normal build output remains
+unchanged. See [Testing Tua](testing.md) for setup, tags, editor usage, and limits.
 
 ## `fmt`
 

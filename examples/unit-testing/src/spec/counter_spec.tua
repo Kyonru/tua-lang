@@ -1,0 +1,21 @@
+import type { CounterInstance } from "counter"
+local Counter = require("counter")
+
+local function makeCounter(start: number): CounterInstance
+  return Counter.new(start)
+end
+
+describe("Counter #unit", function()
+  it("adds a typed amount", function()
+    local counter = makeCounter(10)
+    assert.equals(13, counter:add(3))
+  end)
+
+  it("keeps instances independent", function()
+    local first = Counter.new(1)
+    local second = Counter.new(1)
+    first:add(5)
+    assert.equals(6, first.value)
+    assert.equals(1, second.value)
+  end)
+end)

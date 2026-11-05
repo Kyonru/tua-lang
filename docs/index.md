@@ -44,6 +44,7 @@ flowchart LR
 | Import classes, annotate instances, and use inheritance | [Classes](classes.md) |
 | Write API comments and understand annotations | [Comments And Documentation](comments.md) |
 | Fix missing suggestions, formatting, imports, or run failures | [Troubleshooting](troubleshooting.md) |
+| Run typed unit tests | [Testing Tua](testing.md) |
 | Ship a game to players | [Packaging Games](packaging.md) |
 | Generate typed modules from source assets | [Asset Pipelines](asset-pipelines.md) |
 | Look up syntax or a specific feature | [Language Guide](language.md) |

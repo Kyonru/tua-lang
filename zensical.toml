@@ -45,6 +45,7 @@ nav = [
   ] },
   { "Tooling" = [
     { "CLI" = "cli.md" },
+    { "Testing" = "testing.md" },
     { "Formatter" = "formatter.md" },
     { "Linter" = "linter.md" },
     { "Language Server" = "lsp.md" },

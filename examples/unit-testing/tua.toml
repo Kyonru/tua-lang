@@ -1,0 +1,6 @@
+source = "src"
+out = "build"
+main = "main.tua"
+
+[diagnostics]
+globals = ["describe", "it", "before_each", "after_each", "setup", "teardown", "pending"]

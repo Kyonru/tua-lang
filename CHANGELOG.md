@@ -8,6 +8,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Changed
 
+- Added `tua test` and **Tua: Run Unit Tests** using an installed Busted backend.
+  Typed/Lua specs run from isolated build output with source-mapped failures,
+  name/tag filtering, and explicit backend/interpreter selection.
+
 - Reorganized the documentation around setup and everyday tasks, with focused
   Lua-basics, module/type-import, class, troubleshooting, and upgrade guidance.
   Added format-on-save setup and simpler audio onboarding examples.

@@ -69,8 +69,9 @@ lua main.lua
 
 You can use `luajit main.lua` instead when LuaJIT is installed. The assertion
 passes without output. Tua compiles `.tua` files; the Lua/LOVE runtime executes
-the result. For simple tests, put assertions around your module's behavior and
-run the built test module the same way. Tua does not supply a test runner.
+the result. For a test suite, use [native unit testing](testing.md): `tua test` builds the
+project and runs `_spec` files with Busted. Plain assertion scripts remain useful
+for small checks.
 
 ## Resolve Paths From The Project
 

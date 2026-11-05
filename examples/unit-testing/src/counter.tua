@@ -1,0 +1,16 @@
+-- The same typed class can be used by a game and a headless unit test.
+final class Counter {
+  value: number
+
+  init(start: number) {
+    self.value = start
+  }
+
+  add(amount: number): number {
+    self.value += amount
+    return self.value
+  }
+}
+
+export type CounterInstance = Counter
+return Counter

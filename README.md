@@ -40,7 +40,7 @@ extension, documentation site, and bundled example projects.
 - Erased local, function, alias, table-shape, optional-field, and union types.
 - Readable Lua 5.1-compatible output for LuaJIT and LOVE 11.x.
 - A CLI for `init`, `check`, `fmt`, `lint`, `build`, `traceback`, `watch`,
-  `dev`, `package`, and `lsp`.
+  `dev`, `package`, `test`, and `lsp`.
 - A compiler-backed language server and VS Code extension with diagnostics,
   completion, hover, signature help, rename, references, semantic tokens,
   inlay hints, document/workspace symbols, and more.
@@ -52,6 +52,8 @@ extension, documentation site, and bundled example projects.
   cached audio analysis.
 - Mixed-source builds where `.tua` files compile to `.lua`, while plain `.lua`
   files and assets are copied into the build output for runnable LOVE folders.
+
+Use [`tua test`](docs/testing.md) for typed unit tests with Busted.
 
 ## What You Can Do With It
 

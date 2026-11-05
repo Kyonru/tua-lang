@@ -20,6 +20,7 @@ folder in VS Code and use **Tua: Run LOVE Project** without building the compile
 | `starfall` | A playable game with scenes, input, camera, and persistence. |
 | `love-tua` | A game combining typed systems with existing Lua libraries. |
 | `audio-system` | Audio buses, cues, music scenes, and analysis metadata. |
+| `unit-testing` | Typed class and plain Lua specs run through Busted. |
 | `linter` | Intentionally failing examples of diagnostics. |
 
 ## `examples/features`
@@ -145,3 +146,15 @@ resolution, and mixed `.tua` compilation plus `.lua` copying.
 ```bash
 make build-project-model
 ```
+
+## `examples/unit-testing`
+
+A headless unit-test project with a typed class, an exported instance alias,
+and mixed Tua/Lua specs. Install Busted, then run from the repository root:
+
+```bash
+cd examples/unit-testing
+tua test
+```
+
+See [Testing Tua](testing.md). The example needs Busted and Lua, not LOVE.
