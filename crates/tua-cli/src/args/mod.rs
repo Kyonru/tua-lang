@@ -67,7 +67,7 @@ pub struct CommandOptions {
     pub traceback_maps: Option<PathBuf>,
     pub traceback_input: Option<PathBuf>,
     pub workspace: Option<PathBuf>,
-    pub test: crate::testing::TestOptions,
+    pub test: Box<crate::testing::TestOptions>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
