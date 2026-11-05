@@ -8,6 +8,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Changed
 
+- All 18 recognized LuaDoc tags share one parser/completion/hover catalog.
+  Explanations distinguish checked contracts from metadata-only tags, with
+  a bundled **Tua: Open Annotation Guide (Offline)** command.
+
 - Unclosed native class/method bodies retain editor semantics through bounded
   brace recovery, while strict parsing reports an actionable unclosed-class
   error. Strings, comments and valid nested Lua blocks retain their meaning.

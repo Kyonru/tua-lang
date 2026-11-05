@@ -1,4 +1,5 @@
 pub mod analysis;
+mod annotation_tags;
 mod asset;
 mod ast_utils;
 mod audio;

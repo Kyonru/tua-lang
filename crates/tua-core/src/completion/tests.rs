@@ -205,7 +205,7 @@ final class Player extends Entity {
 fn completes_lua_doc_annotation_tags_after_marker() {
     let fixture = Fixture::parse(
         r#"---@p<|cursor|>
--- expect completions: param, type
+-- expect completions: param, type, deprecated
 "#,
     );
     let source = fixture.source("src/main.tua");
@@ -227,7 +227,10 @@ fn completes_lua_doc_annotation_tags_after_marker() {
     .expect("overload annotation completion should succeed");
     assert_eq!(
         labels(&overload),
-        vec!["overload".to_owned(), "version".to_owned()]
+        vec!["overload", "module", "nodiscard", "version", "diagnostic"]
+            .into_iter()
+            .map(str::to_owned)
+            .collect::<Vec<_>>()
     );
 
     let vararg = complete_tua_source(
@@ -983,7 +986,9 @@ fn annotation_completions_work_while_source_is_temporarily_invalid() {
             "vararg".to_owned(),
             "version".to_owned(),
             "overload".to_owned(),
-            "generic".to_owned()
+            "deprecated".to_owned(),
+            "generic".to_owned(),
+            "nodiscard".to_owned()
         ]
     );
 }
@@ -3241,4 +3246,22 @@ fn love_conf_window_reads_do_not_offer_fields_after_disabling_window() {
     )
     .unwrap();
     assert!(items.is_empty());
+}
+
+#[test]
+fn annotation_catalog_completions_explain_every_recognized_tag() {
+    let completions = complete_annotation_tags("");
+    assert_eq!(completions.len(), 18);
+    for tag in crate::annotation_tags::all() {
+        let item = completions
+            .iter()
+            .find(|item| item.label == tag.name)
+            .unwrap();
+        assert!(item
+            .documentation
+            .as_ref()
+            .unwrap()
+            .contains(&tag.description));
+        assert!(item.insert_text.is_none());
+    }
 }

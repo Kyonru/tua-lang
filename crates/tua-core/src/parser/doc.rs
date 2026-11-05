@@ -1201,27 +1201,7 @@ fn is_visibility(value: &str) -> bool {
 }
 
 fn is_supported_tag(tag: &str) -> bool {
-    matches!(
-        tag,
-        "class"
-            | "field"
-            | "alias"
-            | "type"
-            | "param"
-            | "return"
-            | "generic"
-            | "version"
-            | "enum"
-            | "meta"
-            | "module"
-            | "diagnostic"
-            | "cast"
-            | "as"
-            | "overload"
-            | "vararg"
-            | "deprecated"
-            | "nodiscard"
-    )
+    crate::annotation_tags::get(tag).is_some()
 }
 
 fn skip_spaces(line: &str, mut cursor: usize) -> usize {

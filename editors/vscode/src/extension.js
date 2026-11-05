@@ -14,6 +14,7 @@ const { registerEditorDevex } = require("./editor");
 const { registerEcsDevex } = require("./ecs");
 const { registerServerHealthFeature } = require("./health");
 const { registerLoveDevex } = require("./love");
+const { registerAnnotationGuide, COMMAND: ANNOTATION_GUIDE_COMMAND } = require("./annotation-guide");
 const { registerLoveApiReference } = require("./love/api-reference");
 const { registerModuleDevex } = require("./modules");
 const { registerObjectPoolDevex } = require("./object-pools");
@@ -52,6 +53,7 @@ async function activate(context) {
   context.subscriptions.push(registerBuiltinDocumentProvider(outputChannel));
   context.subscriptions.push(registerLifecycleCommands());
   context.subscriptions.push(registerLoveApiReference(context));
+  context.subscriptions.push(registerAnnotationGuide(context));
   context.subscriptions.push(registerSetup(context, { getServerCommand: () => configuredServerPath(context) }));
   context.subscriptions.push(registerWorkspaceSidebar({ getClient: () => client }));
   context.subscriptions.push(registerProjectChecks({ getClient: () => client, getServerCommand: () => currentServerInfo?.command || configuredServerPath(extensionContext) }));
@@ -305,6 +307,7 @@ async function startLanguageServer() {
   );
 
   const clientOptions = {
+    markdown: { isTrusted: { enabledCommands: [ANNOTATION_GUIDE_COMMAND] } },
     documentSelector: DOCUMENT_SELECTOR,
     initializationOptions,
     middleware: editorDevex?.middleware,

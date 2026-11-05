@@ -136,3 +136,10 @@ visual or long-session evidence.
   Cold snapshots retain class members, outer locals and valid nested Lua scopes;
   strings/comments are not repaired as code. Strict source parsing still fails.
   Verification: `class-recovery-core-lsp.log`.
+
+- Completed annotation discovery: parser recognition, tag completion and tag
+  hover share an 18-tag catalog. Generated web and offline guides explain
+  checking versus metadata semantics; the extension command opens only its
+  bundled resource. Focused parser/completion/hover tests and extension/package
+  checks pass. Partial annotation hover, signature documentation updates and
+  annotation type navigation remain in the roadmap.

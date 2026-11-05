@@ -655,3 +655,7 @@ Preview layout regression checks can run with an optional Playwright installatio
 `PLAYWRIGHT_MODULE=/path/to/playwright-core CHROMIUM_PATH=/path/to/chromium node scripts/webview-scroll-check.js`.
 This checks vertical scrolling and bottom-item reachability in wide, short, and
 narrow previews, including wrapped toolbars and sticky sprite controls.
+
+Use **Tua: Open Annotation Guide (Offline)** to browse recognized LuaDoc tags
+and distinguish checking contracts from metadata-only annotations. Tag
+completion and hover include these explanations and a link to the guide.

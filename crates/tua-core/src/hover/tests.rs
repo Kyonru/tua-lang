@@ -2092,3 +2092,22 @@ print(width, height, measure())
         assert_eq!(hover.contents, expected);
     }
 }
+
+#[test]
+fn annotation_tag_hover_explains_metadata_without_claiming_narrowing() {
+    let source = "---@cast value string\nlocal value = 1\n";
+    let hover = hover_tua_source("main.tua", source, position_at(source, "cast"))
+        .unwrap()
+        .unwrap();
+    assert_eq!(hover.contents, "---@cast value string");
+    let documentation = hover.documentation.unwrap();
+    assert!(documentation.contains("Metadata only"));
+    assert!(documentation.contains("command:tua.openAnnotationGuide"));
+    assert!(hover_tua_source(
+        "main.tua",
+        "-- cast\n",
+        SourcePosition { line: 1, column: 5 }
+    )
+    .unwrap()
+    .is_none());
+}

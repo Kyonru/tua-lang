@@ -1,0 +1,110 @@
+[
+  {
+    "name": "alias",
+    "detail": "type alias annotation",
+    "syntax": "---@alias Name Type",
+    "description": "Defines a named type alias."
+  },
+  {
+    "name": "class",
+    "detail": "class annotation",
+    "syntax": "---@class Name",
+    "description": "Describes a Lua table type; this does not create a native Tua class."
+  },
+  {
+    "name": "field",
+    "detail": "field annotation",
+    "syntax": "---@field name Type",
+    "description": "Adds a typed field to the preceding annotation class."
+  },
+  {
+    "name": "param",
+    "detail": "function parameter annotation",
+    "syntax": "---@param name Type",
+    "description": "Types a Lua function parameter. Native Tua annotations must agree with this contract."
+  },
+  {
+    "name": "return",
+    "detail": "function return annotation",
+    "syntax": "---@return Type",
+    "description": "Describes function return values."
+  },
+  {
+    "name": "type",
+    "detail": "type annotation",
+    "syntax": "---@type Type",
+    "description": "Provides a type for a Lua declaration."
+  },
+  {
+    "name": "overload",
+    "detail": "function overload annotation",
+    "syntax": "---@overload fun(value: string): number",
+    "description": "Adds a known call signature for signature help and call checking."
+  },
+  {
+    "name": "vararg",
+    "detail": "function vararg annotation",
+    "syntax": "---@vararg Type",
+    "description": "Types variadic Lua function arguments."
+  },
+  {
+    "name": "deprecated",
+    "detail": "deprecation annotation",
+    "syntax": "---@deprecated Use replacement instead",
+    "description": "Marks an API deprecated; uses report TL4056 and editor surfaces show the guidance."
+  },
+  {
+    "name": "nodiscard",
+    "detail": "discarded result annotation",
+    "syntax": "---@nodiscard",
+    "description": "Reports TL4068 for a direct call statement that discards the resolved function result."
+  },
+  {
+    "name": "generic",
+    "detail": "generic annotation",
+    "syntax": "---@generic T",
+    "description": "Metadata only. Does not provide generic type inference or generic classes."
+  },
+  {
+    "name": "version",
+    "detail": "version annotation",
+    "syntax": "---@version 5.1",
+    "description": "Metadata only. Does not select a runtime or change checking."
+  },
+  {
+    "name": "enum",
+    "detail": "enum annotation",
+    "syntax": "---@enum Name",
+    "description": "Metadata only. Does not create a checked enum type."
+  },
+  {
+    "name": "meta",
+    "detail": "declaration library annotation",
+    "syntax": "---@meta",
+    "description": "Identifies configured type_libraries declaration modules; does not execute or install a runtime library."
+  },
+  {
+    "name": "module",
+    "detail": "module annotation",
+    "syntax": "---@module \"module.name\"",
+    "description": "Metadata only. Does not import a module or resolve a runtime dependency."
+  },
+  {
+    "name": "diagnostic",
+    "detail": "diagnostic metadata annotation",
+    "syntax": "---@diagnostic disable: undefined-global",
+    "description": "Metadata only. Use Tua ignore directives to suppress Tua diagnostics."
+  },
+  {
+    "name": "cast",
+    "detail": "cast metadata annotation",
+    "syntax": "---@cast value string",
+    "description": "Metadata only. Does not narrow or cast the value in Tua."
+  },
+  {
+    "name": "as",
+    "detail": "expression type metadata annotation",
+    "syntax": "---@as string",
+    "description": "Metadata only. Does not change expression inference in Tua."
+  }
+]

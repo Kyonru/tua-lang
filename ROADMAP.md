@@ -87,10 +87,6 @@ remain distinct follow-up work.
 
 ### Improve Comment And Annotation Authoring
 
-- **Discover supported tags:** derive completion and explanations from shared
-  tag metadata, including missing `deprecated`, `nodiscard`, and declaration
-  tags. Show syntax, examples, and whether each tag affects checking or only
-  records metadata.
 - **Generate/update documentation from parsed signatures:** support native
   class methods, multiline functions, nested table/function types, defaults,
   and varargs. Preserve prose and native types; do not invent descriptions.
@@ -98,8 +94,8 @@ remain distinct follow-up work.
   tags and update matching documentation references during parameter rename.
   Reuse existing type-disagreement diagnostics.
 - **Navigate annotations:** share native type completion/navigation for type
-  names in comments. Explain tags on hover with a local guide link, including
-  the limited semantics of `@generic`, `@cast`, and `@as`.
+  names in comments. Extend tag hover to incomplete/malformed annotations;
+  complete tags already explain semantics and link to the offline guide.
 - **Verify editing states:** cover Lua/native functions, class methods, imports,
   partial tags, and inserted generated snippets in one conformance matrix.
   Check the resulting program and explicit source-coordinate mappings.

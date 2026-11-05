@@ -1082,34 +1082,23 @@ pub(crate) fn syntax_snippet_completions(prefix: &str, include_ecs: bool) -> Vec
 }
 
 fn complete_annotation_tags(prefix: &str) -> Vec<Completion> {
-    [
-        ("alias", "type alias annotation"),
-        ("class", "class annotation"),
-        ("field", "field annotation"),
-        ("generic", "generic annotation"),
-        ("overload", "function overload annotation"),
-        ("param", "function parameter annotation"),
-        ("return", "function return annotation"),
-        ("type", "type annotation"),
-        ("vararg", "function vararg annotation"),
-        ("version", "version annotation"),
-    ]
-    .into_iter()
-    .filter(|(tag, _)| completion_text_matches(tag, prefix))
-    .map(|(tag, detail)| Completion {
-        label: tag.to_owned(),
-        kind: CompletionKind::Keyword,
-        detail: Some(detail.to_owned()),
-        documentation: None,
-        deprecation: None,
-        insert_text: None,
-        filter_text: None,
-        is_snippet: false,
-        module_path: None,
-        source_module: None,
-        additional_text_edits: Vec::new(),
-    })
-    .collect()
+    crate::annotation_tags::all()
+        .iter()
+        .filter(|tag| completion_text_matches(&tag.name, prefix))
+        .map(|tag| Completion {
+            label: tag.name.clone(),
+            kind: CompletionKind::Keyword,
+            detail: Some(tag.detail.clone()),
+            documentation: Some(tag.documentation()),
+            deprecation: None,
+            insert_text: None,
+            filter_text: None,
+            is_snippet: false,
+            module_path: None,
+            source_module: None,
+            additional_text_edits: Vec::new(),
+        })
+        .collect()
 }
 
 fn complete_type_names(environment: &TypeEnvironment, prefix: &str) -> Vec<Completion> {

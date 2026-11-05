@@ -73,6 +73,30 @@ struct HoverResolver<'a> {
 
 impl<'a> HoverResolver<'a> {
     fn hover(&self, position: SourcePosition) -> Option<Hover> {
+        for annotation in &self.parsed.lua_doc_annotations {
+            let span = annotation.tag_span;
+            if position.line == span.start.line
+                && position.column >= span.start.column
+                && position.column < span.end.column
+            {
+                let name = annotation
+                    .raw
+                    .trim_start_matches('-')
+                    .split_whitespace()
+                    .next()
+                    .unwrap_or("")
+                    .trim_start_matches('@');
+                if let Some(tag) = crate::annotation_tags::get(name) {
+                    return Some(Hover {
+                        contents: tag.syntax.clone(),
+                        span: Some(span),
+                        documentation: Some(tag.documentation()),
+                        context: Vec::new(),
+                    });
+                }
+            }
+        }
+
         if let Some(hover) = self.required_module_literal_hover(position) {
             return Some(hover);
         }

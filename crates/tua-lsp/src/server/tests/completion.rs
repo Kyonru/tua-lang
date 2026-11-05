@@ -632,7 +632,7 @@ end
         completion_request(4, uri, source, "---"),
     ]);
 
-    assert_completion_labels(&output, 2, ["param", "type"]);
+    assert_completion_labels(&output, 2, ["param", "type", "deprecated"]);
     assert_completion_labels(&output, 3, ["Player", "SpritePlayer"]);
     assert_completion_labels(&output, 4, ["document function"]);
 

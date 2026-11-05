@@ -27,6 +27,7 @@ nav = [
     { "Modules And Imports" = "modules.md" },
     { "Classes" = "classes.md" },
     { "Comments And Documentation" = "comments.md" },
+    { "Annotation Guide" = "annotations.md" },
     { "Lua Interop" = "lua-interop.md" },
     { "Asset Pipelines" = "asset-pipelines.md" },
   ] },

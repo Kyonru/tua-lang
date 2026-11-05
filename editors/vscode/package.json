@@ -49,7 +49,7 @@
     "build:dev": "esbuild src/extension.js --bundle --platform=node --format=cjs --external:vscode --sourcemap --sources-content=true --outfile=dist/extension.js",
     "stage:server": "node scripts/stage-server.js",
     "clean:server": "node scripts/stage-server.js --clean",
-    "check": "node ../../scripts/sync-version.js --check && node ../../scripts/generate-config-schema.js --check && node scripts/check-js.js && node --test test/unit/*.test.js scripts/representative-diagnostics-compare.test.js scripts/inline-editor-replay.test.js scripts/lsp-editor-profile.test.js && node scripts/syntax-grammar-check.js && node scripts/manifest-check.js && node scripts/theme-check.js && node scripts/launch-config-check.js && node scripts/ollama-completion-check.js && node scripts/activation-smoke.js",
+    "check": "node ../../scripts/sync-version.js --check && node ../../scripts/generate-config-schema.js --check && node ../../scripts/generate-annotation-guide.js --check && node scripts/check-js.js && node --test test/unit/*.test.js scripts/representative-diagnostics-compare.test.js scripts/inline-editor-replay.test.js scripts/lsp-editor-profile.test.js && node scripts/syntax-grammar-check.js && node scripts/manifest-check.js && node scripts/theme-check.js && node scripts/launch-config-check.js && node scripts/ollama-completion-check.js && node scripts/activation-smoke.js",
     "test:love-debugger": "node scripts/love-debugger-e2e.js",
     "test:vscode": "npm run build && node test/run.js",
     "test:vscode-real": "npm run build && node test/real-server/run.js",
@@ -739,6 +739,11 @@
       }
     },
     "commands": [
+      {
+        "command": "tua.openAnnotationGuide",
+        "title": "Open Annotation Guide (Offline)",
+        "category": "Tua"
+      },
       {
         "command": "tua.openLoveApiReference",
         "title": "Open LÖVE API Reference (Offline)",

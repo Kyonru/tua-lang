@@ -149,3 +149,7 @@ continuously synchronized with parameter or return changes.
 To include type comments in generated Lua, set `[emit].annotation_mode =
 "luacats"`. This separate output option does not control whether the editor
 reads your source comments. See [annotation-preserving emission](lua-interop.md#preserve-types-for-lua-tools).
+
+The [annotation guide](annotations.md) lists every recognized tag and its actual
+effect. In VS Code, **Tua: Open Annotation Guide (Offline)** opens the bundled
+copy. Tag completion and hover use the same catalog.
