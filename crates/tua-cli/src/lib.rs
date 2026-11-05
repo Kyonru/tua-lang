@@ -15,6 +15,7 @@ mod package;
 mod shaders;
 mod source;
 mod source_map;
+mod testing;
 mod traceback;
 mod watch;
 
@@ -24,3 +25,4 @@ pub use args::{
 };
 pub use command::{run_command, run_lsp_command, run_watch_command};
 pub use error::CliError;
+pub use testing::TestOptions;

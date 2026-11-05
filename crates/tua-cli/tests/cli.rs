@@ -5028,3 +5028,178 @@ fn check_skips_unreadable_shaders_instead_of_aborting() {
     );
     assert!(!text.contains("invalid utf-8"), "{text}");
 }
+
+fn unit_test_project(temp: &TempDir) {
+    fs::create_dir_all(temp.path().join("src/spec")).unwrap();
+    fs::write(
+        temp.path().join("tua.toml"),
+        "source = 'src'\nout = 'build'\nemit_maps = false\n",
+    )
+    .unwrap();
+    fs::write(temp.path().join("src/mathlib.tua"), "local function double(value: number): number\n return value * 2\nend\nreturn {double = double}\n").unwrap();
+    fs::write(temp.path().join("src/spec/math_spec.tua"), "local mathlib = require('mathlib')\ndescribe('typed arithmetic', function()\n it('doubles', function()\n  assert.equals(6, mathlib.double(3))\n end)\nend)\n").unwrap();
+}
+
+#[test]
+fn unit_test_command_rejects_empty_and_escaping_selections() {
+    let temp = TempDir::new("test-selection");
+    unit_test_project(&temp);
+    for selector in ["missing", "../src/spec"] {
+        let output = tua()
+            .args(["test", selector])
+            .current_dir(temp.path())
+            .output()
+            .unwrap();
+        assert!(!output.status.success());
+    }
+    assert!(!temp.path().join(".tua").exists());
+}
+
+#[test]
+fn unit_test_command_reports_missing_backend_and_cleans_output() {
+    let temp = TempDir::new("test-missing-backend");
+    unit_test_project(&temp);
+    let output = tua()
+        .args(["test", "--busted"])
+        .arg(temp.path().join("absent-busted"))
+        .current_dir(temp.path())
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("Install Busted"),
+        "{output:?}"
+    );
+    assert_eq!(fs::read_dir(temp.path().join(".tua")).unwrap().count(), 0);
+    assert!(!temp.path().join("build").exists());
+}
+
+#[test]
+fn unit_test_command_runs_real_busted_and_maps_failures() {
+    if !Command::new("busted")
+        .arg("--version")
+        .output()
+        .is_ok_and(|o| o.status.success())
+    {
+        eprintln!("skipping real Busted test: install busted to exercise this integration");
+        return;
+    }
+    let temp = TempDir::new("test-real-busted");
+    unit_test_project(&temp);
+    let passed = tua().arg("test").current_dir(temp.path()).output().unwrap();
+    assert!(passed.status.success(), "{passed:?}");
+    assert!(String::from_utf8_lossy(&passed.stdout).contains("1 success"));
+    let spec = temp.path().join("src/spec/math_spec.tua");
+    fs::write(
+        &spec,
+        fs::read_to_string(&spec)
+            .unwrap()
+            .replace("assert.equals(6", "assert.equals(7"),
+    )
+    .unwrap();
+    let failed = tua()
+        .args(["test", "spec/math_spec.tua"])
+        .current_dir(temp.path())
+        .output()
+        .unwrap();
+    assert!(!failed.status.success());
+    assert!(
+        String::from_utf8_lossy(&failed.stderr).contains("src/spec/math_spec.tua:4"),
+        "{failed:?}"
+    );
+    assert_eq!(fs::read_dir(temp.path().join(".tua")).unwrap().count(), 0);
+}
+
+#[cfg(unix)]
+#[test]
+fn unit_test_build_errors_never_start_backend_or_modify_production_output() {
+    use std::os::unix::fs::PermissionsExt;
+    let temp = TempDir::new("test-build-errors");
+    unit_test_project(&temp);
+    fs::create_dir_all(temp.path().join("build")).unwrap();
+    fs::write(temp.path().join("build/sentinel"), "keep").unwrap();
+    let backend = temp.path().join("backend");
+    fs::write(
+        &backend,
+        format!("#!/bin/sh\ntouch '{}'\n", temp.path().join("ran").display()),
+    )
+    .unwrap();
+    fs::set_permissions(&backend, fs::Permissions::from_mode(0o700)).unwrap();
+    fs::write(
+        temp.path().join("src/mathlib.tua"),
+        "local wrong: number = 'bad'\n",
+    )
+    .unwrap();
+    let output = tua()
+        .args(["test", "--busted"])
+        .arg(backend)
+        .current_dir(temp.path())
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("TL1003"));
+    assert!(!temp.path().join("ran").exists());
+    assert_eq!(
+        fs::read_to_string(temp.path().join("build/sentinel")).unwrap(),
+        "keep"
+    );
+    assert_eq!(fs::read_dir(temp.path().join(".tua")).unwrap().count(), 0);
+}
+
+#[cfg(unix)]
+#[test]
+fn unit_test_output_rejects_symlinked_state_directory() {
+    use std::os::unix::fs::symlink;
+    let temp = TempDir::new("test-state-link");
+    let outside = TempDir::new("test-state-target");
+    unit_test_project(&temp);
+    symlink(outside.path(), temp.path().join(".tua")).unwrap();
+    let output = tua().arg("test").current_dir(temp.path()).output().unwrap();
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("symbolic link"));
+    assert_eq!(fs::read_dir(outside.path()).unwrap().count(), 0);
+}
+
+#[cfg(unix)]
+#[test]
+fn unit_test_source_root_ignores_production_and_abandoned_test_output() {
+    use std::os::unix::fs::PermissionsExt;
+    let temp = TempDir::new("test-root-source");
+    fs::write(
+        temp.path().join("tua.toml"),
+        "source = '.'\nout = 'build'\n",
+    )
+    .unwrap();
+    fs::write(
+        temp.path().join("one_spec.tua"),
+        "it('works', function() assert(true) end)\n",
+    )
+    .unwrap();
+    for dir in ["build", ".tua/abandoned"] {
+        fs::create_dir_all(temp.path().join(dir)).unwrap();
+        fs::write(
+            temp.path().join(dir).join("bad_spec.tua"),
+            "this is not valid syntax ???",
+        )
+        .unwrap();
+    }
+    let backend = temp.path().join("backend");
+    fs::write(
+        &backend,
+        "#!/bin/sh\nprintf '%s\\n' \"$@\"\ntest -f one_spec.lua\n",
+    )
+    .unwrap();
+    fs::set_permissions(&backend, fs::Permissions::from_mode(0o700)).unwrap();
+    let result = tua()
+        .args(["test", "--busted"])
+        .arg(backend)
+        .current_dir(temp.path())
+        .output()
+        .unwrap();
+    assert!(result.status.success(), "{result:?}");
+    let report = String::from_utf8_lossy(&result.stdout);
+    assert!(report.contains("one_spec.lua"));
+    assert!(!report.contains("bad_spec.lua"));
+    assert!(temp.path().join(".tua/abandoned/bad_spec.tua").exists());
+    assert_eq!(fs::read_dir(temp.path().join(".tua")).unwrap().count(), 1);
+}

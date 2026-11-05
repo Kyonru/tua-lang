@@ -21,11 +21,23 @@ pub(crate) fn discover_build_files(
     extension: &str,
     excluded_dir: Option<&Path>,
 ) -> Result<Vec<SourceFile>, Diagnostic> {
+    discover_build_files_with_exclusions(
+        source_dir,
+        extension,
+        &excluded_dir.into_iter().collect::<Vec<_>>(),
+    )
+}
+
+pub(crate) fn discover_build_files_with_exclusions(
+    source_dir: &Path,
+    extension: &str,
+    excluded_dirs: &[&Path],
+) -> Result<Vec<SourceFile>, Diagnostic> {
     let mut files = Vec::new();
 
     discover_files_into(
         source_dir,
-        excluded_dir,
+        excluded_dirs,
         &|path| {
             Some(SourceFile {
                 path: path.to_path_buf(),
@@ -76,7 +88,7 @@ pub(crate) fn discover_lua_files(root: &Path) -> Result<Vec<PathBuf>, Diagnostic
 
     discover_files_into(
         root,
-        None,
+        &[],
         &|path| has_extension(path, "lua").then(|| path.to_path_buf()),
         &mut paths,
     )?;
@@ -87,7 +99,7 @@ pub(crate) fn discover_lua_files(root: &Path) -> Result<Vec<PathBuf>, Diagnostic
 
 fn discover_files_into<T>(
     dir: &Path,
-    excluded_dir: Option<&Path>,
+    excluded_dirs: &[&Path],
     classify_file: &impl Fn(&Path) -> Option<T>,
     files: &mut Vec<T>,
 ) -> Result<(), Diagnostic> {
@@ -105,11 +117,14 @@ fn discover_files_into<T>(
                 continue;
             }
 
-            if excluded_dir.is_some_and(|excluded| paths_same_location(&path, excluded)) {
+            if excluded_dirs
+                .iter()
+                .any(|excluded| paths_same_location(&path, excluded))
+            {
                 continue;
             }
 
-            discover_files_into(&path, excluded_dir, classify_file, files)?;
+            discover_files_into(&path, excluded_dirs, classify_file, files)?;
         } else if file_type.is_file() {
             if let Some(file) = classify_file(&path) {
                 files.push(file);

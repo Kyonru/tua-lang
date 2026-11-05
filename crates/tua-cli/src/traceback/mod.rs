@@ -46,7 +46,7 @@ fn read_traceback_input(cwd: &Path, input_path: Option<&Path>) -> Result<String,
     Ok(input)
 }
 
-fn remap_traceback_text(input: &str, maps: &[TracebackSourceMap]) -> String {
+pub(crate) fn remap_traceback_text(input: &str, maps: &[TracebackSourceMap]) -> String {
     let mut output = input
         .lines()
         .map(|line| remap_traceback_line(line, maps))

@@ -271,3 +271,31 @@ fn dev_can_prepare_hot_reload_without_launching_a_game() {
     }
     assert!(parse_args(["build", "--no-launch"]).is_err());
 }
+
+#[test]
+fn test_command_accepts_selection_and_backend_options() {
+    let CliAction::Command { name, options } = parse_args([
+        "test",
+        "spec/math_spec.tua",
+        "--busted",
+        "tools/busted",
+        "--filter",
+        "adds",
+        "--tags",
+        "unit",
+        "--lua",
+        "luajit",
+    ])
+    .unwrap() else {
+        panic!("expected test command")
+    };
+    assert_eq!(name, CommandName::Test);
+    assert_eq!(options.test.path, Some(PathBuf::from("spec/math_spec.tua")));
+    assert_eq!(options.test.busted, Some(PathBuf::from("tools/busted")));
+    assert_eq!(options.test.filter.as_deref(), Some("adds"));
+    assert_eq!(options.test.tags.as_deref(), Some("unit"));
+    assert_eq!(options.test.lua, Some(PathBuf::from("luajit")));
+    assert!(parse_args(["test", "--busted"]).is_err());
+    assert!(parse_args(["test", "one", "two"]).is_err());
+    assert!(parse_args(["build", "--filter", "x"]).is_err());
+}

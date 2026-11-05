@@ -15,6 +15,7 @@ Commands:
   check     Parse and type-check the project
   fmt       Format project source files
   lint      Run standard and configured lint rules
+  test      Build and run unit tests with Busted
   build     Check and emit Lua output
   package   Build, then package the game as a .love (and optionally a fused app)
   traceback Remap generated Lua traceback lines to Tua source
@@ -66,6 +67,7 @@ pub struct CommandOptions {
     pub traceback_maps: Option<PathBuf>,
     pub traceback_input: Option<PathBuf>,
     pub workspace: Option<PathBuf>,
+    pub test: crate::testing::TestOptions,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -83,11 +85,13 @@ pub enum CommandName {
     Api,
     Mcp,
     ShaderTools,
+    Test,
 }
 
 impl CommandName {
     fn parse(raw: &str) -> Option<Self> {
         Some(match raw {
+            "test" => Self::Test,
             "init" => Self::Init,
             "check" => Self::Check,
             "fmt" => Self::Fmt,
@@ -108,6 +112,7 @@ impl CommandName {
 
 pub fn command_help(command: CommandName) -> &'static str {
     match command {
+        CommandName::Test => "tua test - build and run unit tests with Busted\n\nUsage:\n  tua test [SOURCE-PATH] [--busted PATH] [--filter PATTERN] [--tags TAGS] [--lua PATH]\n\nDiscovers *_spec.tua and *_spec.lua below the configured source root.\nSOURCE-PATH is relative to that root. Builds into temporary .tua output,\nthen runs an installed Busted executable (TUA_BUSTED or busted on PATH).\nTests run with the generated output as their working directory.\n",
         CommandName::ShaderTools => "tua shader-tools - test installed shader validators\n\nUsage:\n  tua shader-tools\n\nReports JSON using a built-in shader in an isolated directory; does not load the project.\n",
         CommandName::Init => "tua init - create a Tua project\n\nUsage:\n  tua init\n\nCreates tua.toml and src/main.tua without overwriting existing files, and adds generated folders to .gitignore.\n",
         CommandName::Check => "tua check - parse and type-check the project\n\nUsage:\n  tua check [--deny-warnings] [--love PATH]\n",
@@ -160,6 +165,28 @@ where
         let arg = &args[index];
 
         match arg.as_str() {
+            flag @ ("--busted" | "--filter" | "--tags" | "--lua")
+                if command == CommandName::Test =>
+            {
+                index += 1;
+                let value = args
+                    .get(index)
+                    .filter(|value| !value.is_empty())
+                    .ok_or_else(|| CliError::usage(format!("`{flag}` expects a value")))?;
+                match flag {
+                    "--busted" => options.test.busted = Some(PathBuf::from(value)),
+                    "--filter" => options.test.filter = Some(value.clone()),
+                    "--tags" => options.test.tags = Some(value.clone()),
+                    _ => options.test.lua = Some(PathBuf::from(value)),
+                }
+            }
+            raw if command == CommandName::Test && !raw.starts_with('-') => {
+                if options.test.path.replace(PathBuf::from(raw)).is_some() {
+                    return Err(CliError::usage(
+                        "`tua test` accepts at most one source path",
+                    ));
+                }
+            }
             "--no-launch" if command == CommandName::Dev => options.dev_no_launch = true,
             "--emit-on-error" if command == CommandName::Build => options.emit_on_error = true,
             "--love" if matches!(command, CommandName::Dev | CommandName::Check) => {

@@ -1,4 +1,5 @@
 use super::*;
+use crate::source::discover_build_files;
 
 pub(crate) struct WatchBuildSession {
     cwd: PathBuf,

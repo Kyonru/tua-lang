@@ -6,7 +6,7 @@ use crate::asset_pipeline::run_asset_pipelines;
 use crate::diagnostics::sorted_diagnostics;
 use crate::error::CliError;
 use crate::source::{
-    discover_build_files, io_diagnostic, load_type_libraries, paths_same_location,
+    discover_build_files_with_exclusions, io_diagnostic, load_type_libraries, paths_same_location,
     read_source_file, SourceFile, SourceKind,
 };
 use crate::source_map::{debugger_source_map_path_for, source_map_path_for, write_source_map};
@@ -98,7 +98,15 @@ pub(crate) fn build_project(
     loaded: LoadedConfig,
     emit_on_error: bool,
 ) -> Result<BuildOutcome, CliError> {
-    let cwd = cwd.as_ref();
+    build_project_excluding(cwd.as_ref(), loaded, emit_on_error, &[])
+}
+
+pub(crate) fn build_project_excluding(
+    cwd: &Path,
+    loaded: LoadedConfig,
+    emit_on_error: bool,
+    additional_excluded_outputs: &[&Path],
+) -> Result<BuildOutcome, CliError> {
     let workspace = ProjectWorkspace::from_loaded(cwd, loaded.clone());
     OutputGuard::new(&workspace).map_err(|diagnostic| {
         CliError::from_diagnostics("unsafe build output path", vec![diagnostic])
@@ -107,12 +115,15 @@ pub(crate) fn build_project(
     let source_dir = workspace.primary_source_root().to_path_buf();
     let out_dir = workspace.primary_output_root().to_path_buf();
     let in_place = paths_same_location(&source_dir, &out_dir);
-    let mut source_files = discover_build_files(
-        &source_dir,
-        &workspace.config().extension,
-        (!in_place).then_some(&out_dir),
-    )
-    .map_err(|error| CliError::from_diagnostics("failed to discover source files", vec![error]))?;
+    let mut excluded = additional_excluded_outputs.to_vec();
+    if !in_place {
+        excluded.push(&out_dir);
+    }
+    let mut source_files =
+        discover_build_files_with_exclusions(&source_dir, &workspace.config().extension, &excluded)
+            .map_err(|error| {
+                CliError::from_diagnostics("failed to discover source files", vec![error])
+            })?;
     source_files.retain(|source_file| !workspace.is_type_library_path(&source_file.path));
     let annotation_mode = workspace.config().emit.annotation_mode;
 
