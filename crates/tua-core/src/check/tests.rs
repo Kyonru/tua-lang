@@ -5167,3 +5167,29 @@ local s: string = second()
     )
     .expect("LuaDoc contracts also belong to declarations");
 }
+
+#[test]
+fn anonymous_optional_and_default_parameters_share_named_function_contracts() {
+    check_tua_source(
+        "callbacks.tua",
+        r#"
+local optional = function(value?: number): number return value or 0 end
+local defaulted = function(value: number = 3): number return value end
+local first: number = optional()
+local second: number = defaulted()
+print(first, second)
+"#,
+    )
+    .expect("anonymous optional/default arity");
+    let diagnostics = check_tua_source(
+        "callbacks.tua",
+        "local f = function(value: number = 3): number return value end\nf('wrong')\n",
+    )
+    .unwrap_err();
+    assert!(
+        diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == Some(crate::DiagnosticCode::TYPE_MISMATCH)),
+        "{diagnostics:?}"
+    );
+}

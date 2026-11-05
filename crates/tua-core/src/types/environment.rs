@@ -2617,7 +2617,8 @@ pub(crate) fn inferred_function_type_from_body(
     environment: &TypeEnvironment,
     body: &ast::FunctionBody,
 ) -> Type {
-    let Type::Function(mut function) = super::function_type_from_body(body) else {
+    let Type::Function(mut function) = super::function_type_from_body_with_metadata(parsed, body)
+    else {
         return Type::Any;
     };
 
@@ -3527,7 +3528,10 @@ fn infer_expression_return_type(
         | Expression::TypeAssertion { expression, .. } => {
             query.return_type(expression, return_index)
         }
-        Expression::Function(function) => Some(function_type_from_body(function.body())),
+        Expression::Function(function) => Some(super::function_type_from_body_with_metadata(
+            query.context.parsed,
+            function.body(),
+        )),
         Expression::Var(var) => infer_var_type(query, var),
         _ => None,
     }

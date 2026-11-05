@@ -1333,7 +1333,10 @@ impl<'a> Checker<'a> {
                 self.infer_expression_return(expression, return_index)
             }
             Expression::Function(function) => {
-                let ty = function_type_from_body(function.body());
+                let ty = crate::types::function_type_from_body_with_metadata(
+                    self.parsed,
+                    function.body(),
+                );
                 let Type::Function(signature) = &ty else {
                     unreachable!("function bodies always produce function types")
                 };

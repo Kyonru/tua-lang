@@ -2402,3 +2402,43 @@ fn generated_default_guard_errors_use_available_source_origins() {
                 && diagnostic.column == diagnostic.end_column));
     }
 }
+
+#[test]
+fn anonymous_defaults_lower_inside_callbacks_and_single_line_bodies() {
+    let emitted = emit_tua_source(
+        "callbacks.tua",
+        r#"
+local f = function(value: number = 3): number return value end
+local nested = function()
+  return function(value: number = 4): number return value end
+end
+local holder = { f = function(value?: string) return value or "ok" end }
+assert(f() == 3)
+assert(f(8) == 8)
+assert(nested()() == 4)
+assert(holder.f() == "ok")
+"#,
+    )
+    .expect("anonymous defaults should lower");
+    assert!(emitted.contains("value = 3"), "{emitted}");
+    assert!(emitted.contains("value = 4"), "{emitted}");
+    crate::parse_lua_source("callbacks.lua", emitted).expect("valid Lua output");
+}
+
+#[test]
+fn anonymous_nested_default_expressions_preserve_outer_helper_shadows() {
+    let emitted = emit_tua_source(
+        "callbacks.tua",
+        r#"
+local image = function(value) return value end
+local f = function(callback = function(value: number = image(7)) return value end)
+  return callback()
+end
+assert(f() == 7)
+"#,
+    )
+    .expect("nested anonymous defaults");
+    assert!(emitted.contains("value = image(7)"), "{emitted}");
+    assert!(!emitted.contains("love.graphics"), "{emitted}");
+    crate::parse_lua_source("callbacks.lua", emitted).expect("valid Lua output");
+}

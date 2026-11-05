@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 use full_moon::ast::luau::{TypeArgument, TypeDeclaration, TypeField, TypeFieldKey, TypeInfo};
 use full_moon::ast::{self, LuaVersion};
 use full_moon::node::Node;
+use full_moon::visitors::Visitor;
 
 use crate::ast_utils::plain_field_chain_from_var;
 use crate::classes;
@@ -335,6 +336,37 @@ fn collect_tua_syntax(path: &Path, source: &str, ast: &ast::Ast) -> TuaSyntax {
     let mut syntax = TuaSyntax::default();
 
     collect_block_tua_syntax(path, source, ast.nodes(), &mut syntax);
+    struct AnonymousSyntax<'a> {
+        path: &'a Path,
+        source: &'a str,
+        syntax: &'a mut TuaSyntax,
+    }
+    impl Visitor for AnonymousSyntax<'_> {
+        fn visit_anonymous_function(&mut self, function: &ast::AnonymousFunction) {
+            let annotation = function_annotation(
+                self.path,
+                self.source,
+                None,
+                None,
+                function.body(),
+                &mut self.syntax.diagnostics,
+            );
+            collect_parameter_default_references(self.source, &annotation, self.syntax);
+            self.syntax.function_annotations.push(annotation);
+            collect_block_tua_syntax(self.path, self.source, function.body().block(), self.syntax);
+        }
+    }
+    AnonymousSyntax {
+        path,
+        source,
+        syntax: &mut syntax,
+    }
+    .visit_ast(ast);
+    syntax.function_annotations.sort_by_key(|function| {
+        function
+            .span
+            .map(|span| (span.start.line, span.start.column))
+    });
     collect_type_imports(path, source, &mut syntax);
     collect_enum_declarations(path, source, &mut syntax);
 

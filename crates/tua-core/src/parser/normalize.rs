@@ -362,7 +362,7 @@ fn normalize_parser_syntax(source: &str) -> String {
             continue;
         }
 
-        if chars[index] == '[' && chars.get(index + 1) == Some(&'[') {
+        if long_bracket_end(&chars, index).is_some() {
             index = push_long_bracket(&chars, index, &mut normalized);
             continue;
         }
@@ -499,7 +499,7 @@ fn push_condition_header_with_is_checks(
             continue;
         }
 
-        if chars[index] == '[' && chars.get(index + 1) == Some(&'[') {
+        if long_bracket_end(chars, index).is_some() {
             index = push_long_bracket(chars, index, output);
             continue;
         }
@@ -693,18 +693,6 @@ fn push_function_header_with_erased_parameter_defaults(
         index += 1;
     }
 
-    let mut lookahead = index;
-    while chars
-        .get(lookahead)
-        .is_some_and(|character| character.is_whitespace())
-    {
-        lookahead += 1;
-    }
-
-    if chars.get(lookahead) == Some(&'(') {
-        return index;
-    }
-
     while index < chars.len() {
         if starts_line_comment(chars, index) {
             return push_until_line_end(chars, index, output);
@@ -715,7 +703,7 @@ fn push_function_header_with_erased_parameter_defaults(
             continue;
         }
 
-        if chars[index] == '[' && chars.get(index + 1) == Some(&'[') {
+        if long_bracket_end(chars, index).is_some() {
             index = push_long_bracket(chars, index, output);
             continue;
         }
@@ -757,7 +745,6 @@ fn push_parameter_list_with_erased_defaults(
     let mut erasing_default = false;
     let mut string_quote = None;
     let mut escaped = false;
-    let mut long_string = false;
 
     while index < chars.len() {
         let character = chars[index];
@@ -777,19 +764,6 @@ fn push_parameter_list_with_erased_defaults(
             continue;
         }
 
-        if long_string {
-            output.push(erased_unless_newline(erasing_default, character));
-
-            if character == ']' && chars.get(index + 1) == Some(&']') {
-                index += 1;
-                output.push(erased_unless_newline(erasing_default, chars[index]));
-                long_string = false;
-            }
-
-            index += 1;
-            continue;
-        }
-
         if character == '"' || character == '\'' {
             string_quote = Some(character);
             output.push(erased_unless_newline(erasing_default, character));
@@ -797,12 +771,13 @@ fn push_parameter_list_with_erased_defaults(
             continue;
         }
 
-        if character == '[' && chars.get(index + 1) == Some(&'[') {
-            long_string = true;
-            output.push(erased_unless_newline(erasing_default, character));
-            index += 1;
-            output.push(erased_unless_newline(erasing_default, chars[index]));
-            index += 1;
+        if let Some(end) = long_bracket_end(chars, index) {
+            output.extend(
+                chars[index..end]
+                    .iter()
+                    .map(|character| erased_unless_newline(erasing_default, *character)),
+            );
+            index = end;
             continue;
         }
 
@@ -866,7 +841,7 @@ fn push_parameter_type_with_trailing_optional(
             continue;
         }
 
-        if chars[index] == '[' && chars.get(index + 1) == Some(&'[') {
+        if long_bracket_end(chars, index).is_some() {
             index = push_long_bracket(chars, index, output);
             continue;
         }
@@ -932,6 +907,12 @@ fn starts_line_comment(chars: &[char], index: usize) -> bool {
 }
 
 fn push_until_line_end(chars: &[char], mut index: usize, output: &mut String) -> usize {
+    if starts_line_comment(chars, index) {
+        if let Some(end) = long_bracket_end(chars, index + 2) {
+            output.extend(chars[index..end].iter());
+            return end;
+        }
+    }
     while index < chars.len() {
         let character = chars[index];
         output.push(character);
@@ -969,24 +950,10 @@ fn push_short_string(chars: &[char], mut index: usize, output: &mut String) -> u
     index
 }
 
-fn push_long_bracket(chars: &[char], mut index: usize, output: &mut String) -> usize {
-    output.push(chars[index]);
-    output.push(chars[index + 1]);
-    index += 2;
-
-    while index < chars.len() {
-        let character = chars[index];
-        output.push(character);
-        index += 1;
-
-        if character == ']' && chars.get(index) == Some(&']') {
-            output.push(chars[index]);
-            index += 1;
-            break;
-        }
-    }
-
-    index
+fn push_long_bracket(chars: &[char], index: usize, output: &mut String) -> usize {
+    let end = long_bracket_end(chars, index).unwrap_or(chars.len());
+    output.extend(chars[index..end].iter());
+    end
 }
 
 fn push_type_with_trailing_optional(
@@ -1007,7 +974,7 @@ fn push_type_with_trailing_optional(
             continue;
         }
 
-        if chars[index] == '[' && chars.get(index + 1) == Some(&'[') {
+        if long_bracket_end(chars, index).is_some() {
             index = push_long_bracket(chars, index, output);
             continue;
         }

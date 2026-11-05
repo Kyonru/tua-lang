@@ -63,7 +63,8 @@ results. Evidence: [development trials](internal/devex-trials-2026-11.md).
 - Add an explicit LOVE runtime test mode; the Busted backend currently tests
   headless Lua logic and requires doubles for LOVE-dependent behavior.
 - Correct TL4054 usage tracking for imported aliases referenced only in nested
-  callback annotations (reproduced while writing the Busted example).
+  callback annotations (reproduced while writing the Busted example), and TL4005
+  tracking for outer names used only in nested callback default expressions.
 
 ## Next
 
@@ -87,8 +88,6 @@ reproductions and current workarounds.
 
 ### Complete Typed Lua Porting Workflows
 
-- Complete optional/default parameter support for anonymous callbacks using
-  parser-backed metadata; improve diagnostics for currently unsupported forms.
 - Add assertion-based narrowing with correct control-flow semantics.
 - Align LOVE File/FileData constructor overloads with the generated catalog;
   preserve invalid-argument diagnostics and actual LOVE runtime coverage.

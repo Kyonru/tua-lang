@@ -2284,28 +2284,67 @@ fn lower_default_parameter_operations(
     parsed: &ParsedSource,
     builtin_constructor_spans: &mut BTreeMap<String, SourceSpan>,
 ) -> Result<Vec<lowering::LoweringOperation>, Vec<Diagnostic>> {
-    let output = document.code();
-    let mut operations = Vec::new();
-    let mut search_start = 0usize;
-    let mut outer_scope = None;
+    lower_default_parameter_operations_with_ancestors(
+        document,
+        parsed,
+        builtin_constructor_spans,
+        &[],
+    )
+}
 
-    for function in parsed
+fn lower_default_parameter_operations_with_ancestors(
+    document: &lowering::LoweringDocument,
+    parsed: &ParsedSource,
+    builtin_constructor_spans: &mut BTreeMap<String, SourceSpan>,
+    ancestors: &[(&crate::scope::ScopeMap, SourcePosition)],
+) -> Result<Vec<lowering::LoweringOperation>, Vec<Diagnostic>> {
+    if !parsed
         .function_annotations
         .iter()
-        .filter(|function| !function.default_parameters.is_empty())
+        .any(|function| !function.default_parameters.is_empty())
     {
-        let Some(name) = function.name.as_deref() else {
+        return Ok(Vec::new());
+    }
+    let output = document.code();
+    // Match bodies in syntax order, including anonymous callbacks. Names are
+    // neither unique (nested scopes) nor present for anonymous functions.
+    struct BodyOffsets(Vec<(usize, usize)>);
+    impl Visitor for BodyOffsets {
+        fn visit_function_body(&mut self, body: &ast::FunctionBody) {
+            let (open, close) = body.parameters_parentheses().tokens();
+            self.0.push((
+                open.start_position().bytes(),
+                close.start_position().bytes(),
+            ));
+        }
+    }
+    let output_ast = full_moon::parse(&output).map_err(|errors| {
+        vec![Diagnostic::error(
+            &parsed.path,
+            1,
+            1,
+            format!("cannot locate function bodies for default lowering: {errors:?}"),
+        )
+        .with_code(DiagnosticCode::LOWERING_OPERATION)]
+    })?;
+    let mut bodies = BodyOffsets(Vec::new());
+    bodies.visit_ast(&output_ast);
+    bodies.0.sort_unstable();
+    if bodies.0.len() != parsed.function_annotations.len() {
+        return Err(vec![Diagnostic::error(
+            &parsed.path,
+            1,
+            1,
+            "function body provenance changed during default lowering",
+        )
+        .with_code(DiagnosticCode::LOWERING_OPERATION)]);
+    }
+    let mut operations = Vec::new();
+    let mut outer_scope = None;
+    for (function, (header_start, close)) in parsed.function_annotations.iter().zip(bodies.0) {
+        if function.default_parameters.is_empty() {
             continue;
-        };
-        let needle = format!("function {name}(");
-        let Some(relative_start) = output[search_start..].find(&needle) else {
-            continue;
-        };
-        let header_start = search_start + relative_start;
-        let open = header_start + needle.len() - 1;
-        let Some(close) = find_matching_paren(&output, open) else {
-            continue;
-        };
+        }
         let trimmed_close = output[..close].trim_end_matches([' ', '\t']).len();
 
         if trimmed_close < close {
@@ -2316,11 +2355,12 @@ fn lower_default_parameter_operations(
             ));
         }
 
-        let insert_at = output[close + 1..]
-            .find('\n')
-            .map(|offset| close + 1 + offset + 1)
-            .unwrap_or(close + 1);
+        let after_header = &output[close + 1..];
+        let whitespace = &after_header[..after_header.len() - after_header.trim_start().len()];
+        let newline = whitespace.find('\n');
+        let insert_at = newline.map_or(close + 1, |offset| close + 2 + offset);
         let body_indent = format!("{}  ", line_indent_before(&output, header_start));
+        let mut first = true;
 
         for default in &function.default_parameters {
             let source_span = default
@@ -2328,13 +2368,20 @@ fn lower_default_parameter_operations(
                 .or(function.span)
                 .unwrap_or_else(|| document.source_span_at(header_start));
             let guard = default_parameter_guard_text(std::slice::from_ref(default), &body_indent);
-            let guard = lower_generated_default_helpers(
+            let guard = lower_generated_default_helpers_with_ancestors(
                 &guard,
                 parsed,
                 outer_scope.get_or_insert_with(|| crate::scope::scope_map_parsed_source(parsed)),
                 source_span,
                 builtin_constructor_spans,
+                ancestors,
             )?;
+            let guard = if first && newline.is_none() {
+                format!("\n{guard}")
+            } else {
+                guard
+            };
+            first = false;
             operations.push(lowering::LoweringOperation::insert(
                 insert_at,
                 guard,
@@ -2342,7 +2389,6 @@ fn lower_default_parameter_operations(
                 LoweringKind::DefaultParameter,
             ));
         }
-        search_start = close + 1;
     }
 
     Ok(operations)
@@ -2351,6 +2397,7 @@ fn lower_default_parameter_operations(
 // Default expressions are absent from the normalized source AST. Parse each
 // generated guard once, then reuse lexical helper lowering with inherited outer
 // bindings. This also resolves callback-local shadows and nested helpers.
+#[cfg(test)]
 fn lower_generated_default_helpers(
     text: &str,
     parsed: &ParsedSource,
@@ -2358,6 +2405,26 @@ fn lower_generated_default_helpers(
     span: SourceSpan,
     used: &mut BTreeMap<String, SourceSpan>,
 ) -> Result<String, Vec<Diagnostic>> {
+    lower_generated_default_helpers_with_ancestors(text, parsed, outer_scope, span, used, &[])
+}
+
+fn lower_generated_default_helpers_with_ancestors(
+    text: &str,
+    parsed: &ParsedSource,
+    outer_scope: &crate::scope::ScopeMap,
+    span: SourceSpan,
+    used: &mut BTreeMap<String, SourceSpan>,
+    ancestors: &[(&crate::scope::ScopeMap, SourcePosition)],
+) -> Result<String, Vec<Diagnostic>> {
+    if ancestors.len() >= 64 {
+        return Err(vec![Diagnostic::error(
+            &parsed.path,
+            span.start.line,
+            span.start.column,
+            "nested parameter defaults exceed lowering depth limit",
+        )
+        .with_code(DiagnosticCode::LOWERING_OPERATION)]);
+    }
     let remap_diagnostics = |mut diagnostics: Vec<Diagnostic>| {
         let position = parsed
             .raw
@@ -2373,18 +2440,21 @@ fn lower_generated_default_helpers(
         diagnostics
     };
     let guard = parse_tua_source(&parsed.path, text).map_err(remap_diagnostics)?;
-    let (ast, helpers) = builtin_calls::lower_with_outer_scope(
-        guard.ast.clone(),
-        &guard,
-        Some((outer_scope, span.start)),
-    );
+    let mut scopes = vec![(outer_scope, span.start)];
+    scopes.extend_from_slice(ancestors);
+    let (ast, helpers) = builtin_calls::lower_with_outer_scopes(guard.ast.clone(), &guard, &scopes);
     for helper in helpers.into_keys() {
         used.entry(helper).or_insert(span);
     }
     let mut diagnostics = Vec::new();
     let ast = erase_ast(&parsed.path, ast, &mut diagnostics);
     if diagnostics.is_empty() {
-        Ok(ast.to_string())
+        let mut document = lowering::LoweringDocument::from_erased_ast(&ast, &guard);
+        let operations =
+            lower_default_parameter_operations_with_ancestors(&document, &guard, used, &scopes)
+                .map_err(remap_diagnostics)?;
+        apply_lowering_operations(&mut document, operations, &guard).map_err(remap_diagnostics)?;
+        Ok(document.code())
     } else {
         Err(remap_diagnostics(diagnostics))
     }

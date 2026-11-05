@@ -265,6 +265,28 @@ pub(crate) fn function_type_from_tua_signature(
     FunctionType::new_signature(parameters, required_parameter_count, vararg_type, returns)
 }
 
+/// Apply source-level optional/default arity to the syntax-backed signature.
+pub(crate) fn function_type_from_body_with_metadata(
+    parsed: &crate::ParsedSource,
+    body: &ast::FunctionBody,
+) -> Type {
+    use full_moon::node::Node;
+    let mut ty = function_type_from_body(body);
+    let span = body
+        .range()
+        .map(|(start, end)| crate::SourceSpan::from_range(start, end));
+    if let Type::Function(function) = &mut ty {
+        if let Some(annotation) = parsed
+            .function_annotations
+            .iter()
+            .find(|annotation| annotation.span == span)
+        {
+            function.required_parameter_count = annotation.required_parameter_count;
+        }
+    }
+    ty
+}
+
 pub(crate) fn function_type_from_body(body: &ast::FunctionBody) -> Type {
     let mut parameters = Vec::new();
     let mut vararg_type = None;

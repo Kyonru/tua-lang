@@ -222,6 +222,20 @@ local function heal(player: Player, amount: number = 5)
 end
 ```
 
+Anonymous functions and callbacks use the same parameter syntax:
+
+```tua
+local score = function(points: number = 10, bonus?: number): number
+  return points + (bonus or 0)
+end
+print(score()) -- 10
+```
+
+Defaults run when the argument is `nil`, including omitted arguments. They are
+applied on each call, can refer to surrounding locals, and work in nested
+callbacks and single-line bodies. Optional parameters remain nullable inside
+the body. Required parameters must precede optional/defaulted parameters.
+
 Use `...: Type` in a declaration and `...Type` in a function type for typed
 varargs:
 

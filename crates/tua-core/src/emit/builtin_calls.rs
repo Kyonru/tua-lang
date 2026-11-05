@@ -28,10 +28,18 @@ pub(super) fn lower_with_outer_scope(
     parsed: &ParsedSource,
     outer_scope: Option<(&ScopeMap, SourcePosition)>,
 ) -> (ast::Ast, BTreeMap<String, SourceSpan>) {
+    lower_with_outer_scopes(ast, parsed, &outer_scope.into_iter().collect::<Vec<_>>())
+}
+
+pub(super) fn lower_with_outer_scopes(
+    ast: ast::Ast,
+    parsed: &ParsedSource,
+    outer_scopes: &[(&ScopeMap, SourcePosition)],
+) -> (ast::Ast, BTreeMap<String, SourceSpan>) {
     let mut lowerer = Lowerer {
         parsed,
         scope: scope_map_parsed_source(parsed),
-        outer_scope,
+        outer_scopes: outer_scopes.to_vec(),
         used: BTreeMap::new(),
     };
     let ast = lowerer.visit_ast(ast);
@@ -41,7 +49,7 @@ pub(super) fn lower_with_outer_scope(
 struct Lowerer<'a> {
     parsed: &'a ParsedSource,
     scope: ScopeMap,
-    outer_scope: Option<(&'a ScopeMap, SourcePosition)>,
+    outer_scopes: Vec<(&'a ScopeMap, SourcePosition)>,
     used: BTreeMap<String, SourceSpan>,
 }
 
@@ -103,8 +111,9 @@ impl VisitorMut for Lowerer<'_> {
                 return call;
             }
             if self
-                .outer_scope
-                .is_some_and(|(scope, position)| shadowed_at(scope, &original, position))
+                .outer_scopes
+                .iter()
+                .any(|(scope, position)| shadowed_at(scope, &original, *position))
             {
                 return call;
             }

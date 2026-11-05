@@ -58,7 +58,13 @@ reproductions and relevant checks pass.
 
 ## 3. Callback syntax and checker support
 
-- Pending: anonymous optional/default parameters.
+- Completed: anonymous optional/default parameters use parsed contracts and
+  syntax-ordered lowering. Single-line/nested callbacks, helper shadowing, long
+  strings and existing formatting regressions pass. All 1,613 core and 375 LSP
+  tests pass (`callback-core-lsp.log`). Both saved optional-callback port repros
+  check; `callback-runtime` checks/builds and executes successfully with Lua.
+  Nested-default-only outer reads still cause a false TL4005 warning; retained
+  in the roadmap's usage-tracking follow-up.
 - Pending: assertion and stable member-path narrowing.
 - Pending: contextual `table.sort` comparator types.
 

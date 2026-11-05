@@ -7788,3 +7788,22 @@ love.graphics.newText(love.graphics.newFont(12), "hi"):set("bye"):<|void|>getWid
         .definition("fluent.tua", fixture.position("void"))
         .is_none());
 }
+
+#[test]
+fn anonymous_default_signature_and_body_hover_agree() {
+    let fixture = Fixture::parse("-- file: callbacks.tua\nlocal f = function(value: number = 3): number\n return <|hover|>value\nend\nf(<|signature|>)\n");
+    let mut host = AnalysisHost::new();
+    host.set_file("callbacks.tua", fixture.files()[0].source.clone());
+    let snapshot = host.snapshot();
+    let hover = snapshot
+        .hover("callbacks.tua", fixture.position("hover"))
+        .unwrap();
+    assert!(hover.contents.contains("number"), "{hover:?}");
+    let signature = snapshot
+        .signature_help("callbacks.tua", fixture.position("signature"))
+        .unwrap();
+    assert!(
+        signature.signatures[0].label.contains("value: number"),
+        "{signature:?}"
+    );
+}

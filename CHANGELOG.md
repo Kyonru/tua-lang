@@ -8,6 +8,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Changed
 
+- Anonymous callbacks accept optional and defaulted parameters with shared
+  checker/editor contracts. Default lowering follows parsed function bodies,
+  including single-line bodies and nested defaults with lexical helper shadows.
+
 - Definition, references and rename follow native class call-result receivers;
   chained LOVE methods navigate to their documented builtin definitions. Void
   calls still terminate receiver inference.
