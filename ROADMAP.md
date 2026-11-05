@@ -32,11 +32,16 @@ workflow pages under `docs/`. Completed work belongs in
 
 - Keep full SNKRX/BYTEPATH check and build timings as regression workloads;
   bound receiver inference and source rescanning, then profile remaining cost.
-- Trace cold typing/completion in the zombie project, including the reported
-  delay beside `Dialogue.init`; compare cold and warm request latency.
-- Isolate slower require analysis outside `main`, hot-reload latency, and
-  format-on-save latency. Record project size, editor action, timings, and
-  invalidation work before choosing optimizations.
+- Reduce cold project completion and post-edit dependency-surface analysis on
+  the input coordinator. The November editor replay measured about 431 ms cold,
+  92 ms median post-edit module completion, and 62 ms incomplete-code completion.
+  Preserve fresh imported types and diagnostics while moving or reusing this work.
+- Address the incomplete-edit and immediate-format regressions recorded in
+  `internal/editor-performance-audit-2026-11.md`; repeat the real project replay
+  and representative contention gate before accepting another optimization.
+- Measure actual VS Code key-to-menu latency, pull-diagnostic client behavior,
+  larger-project imports, and LOVE hot reload. Protocol replay covers dialogue,
+  main, combat, import paths and format-apply-save, but not UI/rendering latency.
 - Test the newly packaged VSIX in an installed editor and a graphical LOVE game.
   Headless tests and synthetic trials do not establish interactive usability,
   reload behavior, or large-project performance.

@@ -6,6 +6,7 @@ are not part of the public language and toolchain documentation.
 
 - [Development and verification](development.md)
 - [Completion benchmarks](completion-benchmarks.md)
+- [November 2026 editor performance audit](editor-performance-audit-2026-11.md)
 - [LLM language evaluation](llm-language-evaluation.md)
 - [November 2026 simulated development trials](devex-trials-2026-11.md)
 - [November 2026 documentation and annotation review](documentation-review-2026-11.md)
