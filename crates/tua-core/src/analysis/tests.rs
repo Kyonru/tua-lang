@@ -7198,3 +7198,31 @@ fn edits_adopt_worker_facts_and_invalidate_only_affected_dependencies() {
         .iter()
         .any(|d| d.code == Some(DiagnosticCode::TYPE_MISMATCH)));
 }
+
+#[test]
+fn unchanged_overlays_preserve_worker_analysis_and_track_disk_changes() {
+    let mut host = AnalysisHost::new();
+    let path = PathBuf::from("main.tua");
+    let original = "local function original() end\n";
+    host.set_file(&path, original);
+    host.clone().snapshot();
+    host.open_document(&path, original);
+    host.snapshot();
+    assert_eq!(host.cache_stats().parse_misses, 0);
+    assert!(host.vfs.is_open(&path));
+    host.close_document(&path);
+    host.snapshot();
+    assert_eq!(host.cache_stats().parse_misses, 0);
+    assert!(!host.vfs.is_open(&path));
+
+    host.open_document(&path, original);
+    host.set_file(&path, "local function disk_changed() end\n");
+    assert!(host
+        .document_symbols(&path)
+        .iter()
+        .any(|s| s.name == "original"));
+    host.close_document(&path);
+    let symbols = host.document_symbols(&path);
+    assert!(symbols.iter().any(|s| s.name == "disk_changed"));
+    assert!(!symbols.iter().any(|s| s.name == "original"));
+}

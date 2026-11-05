@@ -39,6 +39,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Opening or closing an unchanged indexed file preserves cached analysis, while
+  overlays still protect unsaved contents and reveal disk changes on close.
+
 - Saving queues project diagnostics on the background worker instead of blocking
   the coordinator; newer edits still discard stale diagnostic results.
 

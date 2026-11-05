@@ -388,6 +388,8 @@ These are review requirements, not future goals:
 - LSP handlers and extension code do not duplicate semantic analysis.
 - Diagnostics use the shared diagnostic model and stable Tua codes.
 - A snapshot never observes half of a newer revision.
+- Opening or closing an overlay preserves semantic facts when the effective
+  source version is unchanged; overlay ownership still updates in the VFS.
 - Invalid-source support uses shared recovery rather than one-off parsers.
 - Cross-file features use normalized project identities and indexes.
 - Dynamic project code is never executed to answer an editor query.

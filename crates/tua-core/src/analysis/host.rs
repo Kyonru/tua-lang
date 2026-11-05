@@ -508,6 +508,13 @@ impl AnalysisHost {
         }
 
         self.adopt_current_snapshot_files();
+        // Opening an indexed file changes overlay ownership, not its semantics.
+        if self.vfs.source(&path) == Some(source.as_str()) && self.vfs.kind(&path) == Some(vfs_kind)
+        {
+            self.vfs.open_file(&path, source, vfs_kind);
+            self.bump_revision();
+            return;
+        }
         let invalidated_dependents =
             self.cache
                 .borrow_mut()
@@ -531,9 +538,14 @@ impl AnalysisHost {
         let path = normalize_path(path.as_ref());
         let had_module_path = self.has_module_path(&path);
         self.adopt_current_snapshot_files();
+        let previous_version = self.vfs.source_version(&path);
+        self.vfs.close_file(&path);
+        if self.vfs.source_version(&path) == previous_version {
+            self.bump_revision();
+            return;
+        }
         self.cache.borrow_mut().invalidate_file(path.as_ref(), true);
         self.clear_query_caches();
-        self.vfs.close_file(&path);
         // Closing an overlay can reveal a different disk source. Do not let
         // request-side facts captured from the former open document survive
         // until the background warmer reaches the newly visible source.
