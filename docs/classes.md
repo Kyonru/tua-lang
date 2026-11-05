@@ -182,7 +182,11 @@ per-class `__type_id` / `__is` metadata. `Class.new(...)` constructs instances.
 Within each class, the `init` body runs before that class's field defaults; this
 ordering is preserved across inheritance and constructor optimization. A default
 therefore overwrites a value assigned to the same field by `init`. For a value
-computed in `init`, declare the field without a default and initialize it there:
+computed in `init`, declare the field without a default and initialize it there.
+`ClassDefaultAfterInit` (`TL4077`) points to defaults that follow a direct
+source-written `self.field = ...` assignment in the same initializer. It is a
+standard suppressible warning, not a change to constructor execution order:
+
 
 ```tua
 final class Spacing {

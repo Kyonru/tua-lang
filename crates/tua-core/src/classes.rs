@@ -71,6 +71,11 @@ pub(crate) struct ClassMemberTarget {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum ClassLintFact {
+    DefaultAfterInit {
+        class_name: String,
+        field_name: String,
+        span: SourceSpan,
+    },
     ParentConstructorPath {
         class_name: String,
         parent_name: String,
@@ -1360,12 +1365,28 @@ pub(crate) fn class_contract_diagnostics(
 
 pub(crate) fn class_lint_facts(
     parsed: &ParsedSource,
+    scope: &crate::ScopeMap,
     environment: &TypeEnvironment,
 ) -> Vec<ClassLintFact> {
     let mut facts = Vec::new();
     let mut initialization = ClassInitializationAnalysis::new(parsed);
 
     for class in &parsed.class_declarations {
+        if let Some(block) = initialization.init_blocks.get(&class.name) {
+            let assigned = direct_init_assignments(parsed, block, scope);
+            for field in class
+                .fields
+                .iter()
+                .filter(|field| field.default.is_some() && assigned.contains(&field.name))
+            {
+                facts.push(ClassLintFact::DefaultAfterInit {
+                    class_name: class.name.clone(),
+                    field_name: field.name.clone(),
+                    span: field.name_span,
+                });
+            }
+        }
+
         if let (Some(init), Some(parent_name)) = (&class.init, &class.parent) {
             let initialization_facts = initialization.initialization_facts(&class.name);
             if initialization_facts.has_returning_exit
@@ -1419,6 +1440,50 @@ pub(crate) fn class_lint_facts(
     }
 
     facts
+}
+
+/// A focused warning for direct writes, excluding aliases, conditional paths,
+/// nested callbacks, parent initialization and shadowed receivers.
+fn direct_init_assignments(
+    parsed: &ParsedSource,
+    block: &ast::Block,
+    scope: &crate::ScopeMap,
+) -> BTreeSet<String> {
+    block
+        .stmts()
+        .filter_map(|statement| match statement {
+            ast::Stmt::Assignment(assignment) => Some(assignment),
+            _ => None,
+        })
+        .flat_map(|assignment| assignment.variables().iter())
+        .filter_map(|variable| {
+            let parts = plain_field_chain_from_var(variable)?;
+            let [receiver, field] = parts.as_slice() else {
+                return None;
+            };
+            if receiver != "self" {
+                return None;
+            }
+            let position = variable
+                .start_position()
+                .map(SourcePosition::from_full_moon)?;
+            if parsed
+                .raw
+                .parser_position_origin(position)
+                .is_none_or(|origin| origin.class_generated)
+            {
+                return None;
+            }
+            let symbol = scope
+                .references()
+                .iter()
+                .find(|reference| reference.span.start == position)?
+                .resolution
+                .symbol_id()?;
+            (scope.declaration(symbol)?.kind == ScopeDeclarationKind::Parameter)
+                .then(|| field.clone())
+        })
+        .collect()
 }
 
 #[derive(Default)]

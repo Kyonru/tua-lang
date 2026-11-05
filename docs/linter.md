@@ -63,6 +63,7 @@ share an existing Tua code because they are the same analysis.
 | `ParentConstructorPath` | `TL4057` |
 | `VirtualCallInInit` | `TL4058` |
 | `RedundantInheritedField` | `TL4059` |
+| `ClassDefaultAfterInit` | `TL4077` |
 | `ImportUnused` | `TL4054` (runtime and type-only imports) |
 | `TypeUnused` | `TL4075` |
 | `LoveCallbackOrder` | `TL4076` (its own `love_callback_order` switch) |
@@ -413,6 +414,12 @@ class lints are suppressible standard rules and disappear when
 - `RedundantInheritedField` (`TL4059`) reports a type-only child field
   declaration that repeats an inherited field's resolved type without providing
   a new default.
+
+- `ClassDefaultAfterInit` (`TL4077`) reports a field default that executes after
+  a direct source-written assignment to that field in the same `init`. Remove
+  the default to preserve the computed value. The rule does not infer writes
+  through aliases, branches, parent initializers or deferred callbacks, and
+  respects a shadowed `self` binding.
 
 These rules analyze source class declarations, resolved inheritance, lexical
 bindings, and constructor flow. They do not inspect emitted Lua. Tua does not

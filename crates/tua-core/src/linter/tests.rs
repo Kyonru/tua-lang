@@ -5133,3 +5133,34 @@ fn implicit_class_constructor_has_no_generated_lints() {
         "{diagnostics:#?}"
     );
 }
+
+#[test]
+fn class_defaults_warn_when_they_follow_direct_init_assignments() {
+    let source = "final class Spacing {\n value: number = 0\n init(width: number) { self.value = width / 16 }\n}\n";
+    let diagnostics = check_standard_rules_source(source);
+    let warning = diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_CLASS_DEFAULT_AFTER_INIT))
+        .expect("default overwrites init value");
+    assert_eq!(warning.line, 2);
+    assert!(warning.message.contains("Spacing.value"));
+    let suppressed = check_standard_rules_source(&format!("-- tua-ignore-file TL4077\n{source}"));
+    assert!(!suppressed
+        .iter()
+        .any(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_CLASS_DEFAULT_AFTER_INIT)));
+    for body in [
+        "local self = { value = 0 }; self.value = 1",
+        "local later = function() self.value = 1 end",
+        "if true then self.value = 1 end",
+    ] {
+        let source =
+            format!("final class Spacing {{\n value: number = 0\n init() {{ {body} }}\n}}\n");
+        assert!(
+            !check_standard_rules_source(&source)
+                .iter()
+                .any(|diagnostic| diagnostic.code
+                    == Some(DiagnosticCode::LINT_CLASS_DEFAULT_AFTER_INIT)),
+            "{source}"
+        );
+    }
+}

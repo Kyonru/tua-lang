@@ -155,7 +155,13 @@ pub(crate) fn lint_parsed_source(
 
     if config.rules {
         diagnostics.extend(unused_type_diagnostics(parsed));
-        diagnostics.extend(class_rules::lint(parsed, environment));
+        diagnostics.extend(class_rules::lint(
+            parsed,
+            scope
+                .as_ref()
+                .expect("standard rules should build a scope map"),
+            environment,
+        ));
         let mut rule_diagnostics = rules::lint(
             parsed,
             scope

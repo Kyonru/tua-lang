@@ -90,9 +90,6 @@ reproductions and current workarounds.
 
 - Evaluate literal `false` support for LOVE configuration without accepting
   arbitrary booleans; use `nil` to disable window creation meanwhile.
-- Make init-before-field-default behavior easier to discover, and consider a
-  targeted diagnostic when a default overwrites an init assignment. Changing
-  ordering requires a compatibility decision, not a silent fix.
 
 Owner: shared semantics/checker and documentation. Acceptance: focused core/LSP
 regressions and replay of the [five upstream porting trials](internal/upstream-port-audit-2026-11.md),

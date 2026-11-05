@@ -3,10 +3,18 @@ use crate::{
     Diagnostic, DiagnosticCode, DiagnosticSeverity, ParsedSource, SourceSpan, TypeEnvironment,
 };
 
-pub(super) fn lint(parsed: &ParsedSource, environment: &TypeEnvironment) -> Vec<Diagnostic> {
-    class_lint_facts(parsed, environment)
+pub(super) fn lint(
+    parsed: &ParsedSource,
+    scope: &crate::ScopeMap,
+    environment: &TypeEnvironment,
+) -> Vec<Diagnostic> {
+    class_lint_facts(parsed, scope, environment)
         .into_iter()
         .map(|fact| match fact {
+            ClassLintFact::DefaultAfterInit { class_name, field_name, span } => class_lint_diagnostic(
+                parsed, span, DiagnosticCode::LINT_CLASS_DEFAULT_AFTER_INIT,
+                format!("field `{class_name}.{field_name}` has a default that runs after its assignment in `init`; remove the default to preserve the initialized value"),
+            ),
             ClassLintFact::ParentConstructorPath {
                 class_name,
                 parent_name,

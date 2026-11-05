@@ -8,6 +8,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Changed
 
+- `TL4077` warns when a class field default follows a direct source-written
+  assignment in `init`, making existing initialization order visible without
+  changing runtime behavior. The warning respects lexical receiver identity.
+
 - Timer migration includes a copyable HUMP instance declaration subset and a
   typed service adapter with cancellation closures, plus guidance for tagged
   timers, update ownership and dynamic engine services.

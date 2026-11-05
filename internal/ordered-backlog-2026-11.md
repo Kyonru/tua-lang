@@ -107,7 +107,11 @@ reproductions and relevant checks pass.
   passes (`timer-focused.log`); feature check/build and docs build pass. The
   emitted adapter passes delayed/cancelled execution against BYTEPATH's actual
   HUMP runtime (`timer-runtime.log`).
-- Pending: initialization-order discoverability without changing semantics.
+- Completed: suppressible `TL4077` identifies field defaults that follow direct
+  source-backed initializer writes, using cached lexical identities. Generated
+  assignments, shadowed receivers, branches and deferred callbacks are excluded.
+  Core/LSP suites pass (1,630/375, `init-core-lsp.log`); docs and JSON checks
+  pass (`init-docs.log`). Runtime initialization order is unchanged.
 
 ## Revisit remaining work
 

@@ -25,3 +25,11 @@ open class Child extends Base {
     self:configure()
   }
 }
+
+-- ClassDefaultAfterInit (TL4077): this default replaces the computed value.
+final class DefaultAfterInit {
+  value: number = 0
+  init(width: number) {
+    self.value = width / 16
+  }
+}

@@ -141,6 +141,7 @@ impl DiagnosticCode {
     pub const LINT_UNKNOWN_RECORD_FIELD: Self = Self(4074);
     pub const LINT_UNUSED_TYPE: Self = Self(4075);
     pub const LINT_LOVE_CALLBACK_ORDER: Self = Self(4076);
+    pub const LINT_CLASS_DEFAULT_AFTER_INIT: Self = Self(4077);
     pub const DOMAIN_ECS_COMPONENT_VALUE: Self = Self(5002);
     pub const DOMAIN_ECS_QUERY: Self = Self(5003);
     pub const DOMAIN_SPRITE: Self = Self(5004);
@@ -265,6 +266,7 @@ impl DiagnosticCode {
                 | Self::LINT_DEPRECATED_API
                 | Self::LINT_CLASS_PARENT_CONSTRUCTOR
                 | Self::LINT_CLASS_VIRTUAL_CALL_IN_INIT
+                | Self::LINT_CLASS_DEFAULT_AFTER_INIT
                 | Self::LINT_CLASS_REDUNDANT_INHERITED_FIELD
                 | Self::LINT_VECTOR_LENGTH
                 | Self::LINT_NEWLINE_CALL
