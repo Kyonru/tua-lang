@@ -50,6 +50,12 @@ reproductions and relevant checks pass.
   now reaches `globals.tua` from `loadExternalAssets()` (`globals-gravity.log`).
   All 1,608 core and 375 LSP tests pass (`globals-core-lsp.log`).
 
+- Completed: native call-result receivers support definition/references/rename;
+  chained LOVE methods navigate to builtin API definitions, and void results
+  yield no invented target. All 1,609 core and 375 LSP tests pass
+  (`fluent-nav-core-lsp.log`), followed by a passing nested-call field regression
+  after broadening the shared receiver fallback (`fluent-nav-final.log`).
+
 ## 3. Callback syntax and checker support
 
 - Pending: anonymous optional/default parameters.

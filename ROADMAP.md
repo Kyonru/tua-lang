@@ -77,9 +77,6 @@ results. Evidence: [development trials](internal/devex-trials-2026-11.md).
 
 ### Finish Semantic Editor Consistency
 
-- **Fluent expression navigation:** extend definition/reference provenance through
-  call results. Completion, hover and signatures now use shared receiver types,
-  including incomplete edits and void-call boundaries.
 - **Unclosed classes:** extend recovery and syntax guidance to wholly unclosed
   class bodies while preserving surrounding scopes and valid nested Lua blocks.
 

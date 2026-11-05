@@ -110,8 +110,9 @@ Member completion, hover, and signature help follow typed call results such as
 A void method such as `Text:set(...)` ends the chain: it does not return a Text
 receiver. Imported instance aliases preserve recursive `Self` identity through
 fields, arrays and fluent returns. Guarded class locals retain their non-nil type
-through member writes and callback capture. Navigation through call expressions
-still has unresolved limitations.
+through member writes and callback capture. Native class call-result receivers
+also support definition, references and rename; chained LOVE methods navigate
+to their builtin API definitions.
 
 Exact-code inline suppressions use the same syntax as `tua check` and are
 enabled by default:

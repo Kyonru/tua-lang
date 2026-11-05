@@ -7732,3 +7732,59 @@ fn side_effect_global_definition_follows_runtime_imports_without_guessing() {
         definition
     );
 }
+
+#[test]
+fn fluent_class_and_love_navigation_use_resolved_receivers() {
+    let fixture = Fixture::parse(
+        r#"-- file: fluent.tua
+final class Label {
+ value: string = ""
+ setValue(value: string): Self { self.value = value; return self }
+ <|declaration|>draw() { print(self.value) }
+}
+Label.new():setValue("hello"):<|call|>draw()
+local function wrapper() return { label = Label.new() } end
+wrapper().label:<|nested|>draw()
+love.graphics.newText(love.graphics.newFont(12), "hi"):<|love|>getWidth()
+love.graphics.newText(love.graphics.newFont(12), "hi"):set("bye"):<|void|>getWidth()
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_file("fluent.tua", fixture.files()[0].source.clone());
+    let snapshot = host.snapshot();
+    let definition = snapshot
+        .definition("fluent.tua", fixture.position("call"))
+        .unwrap();
+    assert_eq!(definition.span.start, fixture.position("declaration"));
+    assert_eq!(
+        snapshot.definition("fluent.tua", fixture.position("nested")),
+        Some(definition.clone())
+    );
+    let references = snapshot.references("fluent.tua", fixture.position("call"), true);
+    assert!(
+        references
+            .iter()
+            .any(|reference| reference.span.start == fixture.position("call")),
+        "{references:?}"
+    );
+    let rename = snapshot
+        .rename("fluent.tua", fixture.position("call"), "render")
+        .unwrap();
+    assert!(
+        rename
+            .edits
+            .iter()
+            .any(|edit| edit.span.start == fixture.position("call")),
+        "{rename:?}"
+    );
+    assert_eq!(
+        snapshot
+            .definition("fluent.tua", fixture.position("love"))
+            .unwrap()
+            .kind,
+        DefinitionKind::Builtin
+    );
+    assert!(snapshot
+        .definition("fluent.tua", fixture.position("void"))
+        .is_none());
+}

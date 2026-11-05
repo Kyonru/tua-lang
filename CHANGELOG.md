@@ -8,6 +8,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Changed
 
+- Definition, references and rename follow native class call-result receivers;
+  chained LOVE methods navigate to their documented builtin definitions. Void
+  calls still terminate receiver inference.
+
 - Definition navigation follows unique global functions introduced by static
   runtime imports, with cycle and ambiguity guards. Definition caches include
   the snapshot revision so unsaved dependency changes cannot reuse stale targets.

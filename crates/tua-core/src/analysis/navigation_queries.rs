@@ -281,21 +281,38 @@ impl AnalysisSnapshot {
     ) -> Option<Definition> {
         let chain = dotted_chain_at_position(&parsed.source, position)?;
 
-        if chain.cursor_index == 0 {
+        let current = chain.parts.get(chain.cursor_index)?;
+        let member = &current.text;
+        let start = crate::source_text::byte_for_position(&parsed.source, current.span.start)?;
+        let prefix = parsed.source[..start].trim_end();
+        let separator = prefix.len().checked_sub(1)?;
+        if !matches!(prefix.as_bytes()[separator], b'.' | b':') {
             return None;
         }
-
-        let member = &chain.parts.get(chain.cursor_index)?.text;
+        let environment = self.semantic_query_environment(parsed, degraded_facts);
+        let semantic = SemanticModel::new(parsed, &environment);
         let receiver = chain
             .parts
             .iter()
             .take(chain.cursor_index)
             .map(|part| part.text.clone())
             .collect::<Vec<_>>();
-        let environment = self.semantic_query_environment(parsed, degraded_facts);
-        let receiver_type = self.type_for_parts(parsed, &environment, &receiver, position)?;
-
+        let receiver_type = self
+            .type_for_parts(parsed, &environment, &receiver, position)
+            .or_else(|| {
+                let expression = crate::source_text::receiver_before(&parsed.source, separator)?;
+                semantic.type_of_receiver_expression(expression, position)
+            })?;
         self.class_member_definition_for_type(&parsed.path, &receiver_type, member, 0)
+            .or_else(|| {
+                let item = semantic.lua_type_field_item(&receiver_type, member)?;
+                let definition = crate::lua::builtin_definition_for_item(item)?;
+                Some(Definition {
+                    path: definition.path,
+                    span: definition.span,
+                    kind: DefinitionKind::Builtin,
+                })
+            })
     }
 
     pub(super) fn project_derived_helper_definition_at_position(
