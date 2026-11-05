@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 
 use crate::diagnostics::sorted_diagnostics;
 use crate::error::CliError;
-use crate::source::{discover_build_files, io_diagnostic, read_source_file, SourceKind};
+use crate::source::{discover_project_files, io_diagnostic, read_source_file, SourceKind};
 use tua_core::{
     format_tua_source, path_security::reject_symlink_path, LoadedConfig, ProjectWorkspace,
 };
@@ -15,11 +15,9 @@ pub(crate) fn run_fmt(
 ) -> Result<String, CliError> {
     let cwd = cwd.as_ref();
     let workspace = ProjectWorkspace::from_loaded(cwd, loaded);
-    let source_dir = workspace.primary_source_root().to_path_buf();
-    let source_files = discover_build_files(&source_dir, &workspace.config().extension, None)
-        .map_err(|error| {
-            CliError::from_diagnostics("failed to discover source files", vec![error])
-        })?;
+    let source_files = discover_project_files(&workspace, true, &[]).map_err(|error| {
+        CliError::from_diagnostics("failed to discover source files", vec![error])
+    })?;
     let options = workspace.config().format.options();
     let mut diagnostics = Vec::new();
     let mut changed = Vec::new();

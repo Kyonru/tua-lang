@@ -5203,3 +5203,99 @@ fn unit_test_source_root_ignores_production_and_abandoned_test_output() {
     assert!(temp.path().join(".tua/abandoned/bad_spec.tua").exists());
     assert_eq!(fs::read_dir(temp.path().join(".tua")).unwrap().count(), 1);
 }
+
+#[cfg(unix)]
+#[test]
+fn unit_test_dedicated_root_checks_builds_and_excludes_production_specs() {
+    use std::os::unix::fs::PermissionsExt;
+    let temp = TempDir::new("dedicated-test-root");
+    unit_test_project(&temp);
+    fs::rename(temp.path().join("src/spec"), temp.path().join("tests")).unwrap();
+    fs::write(
+        temp.path().join("tua.toml"),
+        "source='src'\nout='build'\n[test]\nsource='tests'\n",
+    )
+    .unwrap();
+    fs::write(
+        temp.path().join("tests/helper.tua"),
+        "return { value = 3 }\n",
+    )
+    .unwrap();
+    fs::write(temp.path().join("tests/math_spec.tua"), "local mathlib = require('mathlib')\nlocal helper = require('helper')\nassert(mathlib.double(helper.value) == 6)\n").unwrap();
+    // In-source specs are excluded by default too, even if malformed.
+    fs::write(temp.path().join("src/unused_spec.tua"), "bad syntax !!!").unwrap();
+    let production = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .unwrap();
+    assert!(production.status.success(), "{production:?}");
+    assert!(temp.path().join("build/mathlib.lua").exists());
+    assert!(!temp.path().join("build/unused_spec.lua").exists());
+    assert!(!temp.path().join("build/__tua_tests__").exists());
+    fs::remove_file(temp.path().join("src/unused_spec.tua")).unwrap();
+    let backend = temp.path().join("backend");
+    fs::write(&backend, "#!/bin/sh\nset -e\ntest -f mathlib.lua\ntest -f __tua_tests__/math_spec.lua\ntest -f __tua_tests__/helper.lua\nprintf '%s\\n' \"$@\"\n").unwrap();
+    fs::set_permissions(&backend, fs::Permissions::from_mode(0o700)).unwrap();
+    let test = tua()
+        .args(["test", "math_spec.tua", "--busted"])
+        .arg(&backend)
+        .current_dir(temp.path())
+        .output()
+        .unwrap();
+    assert!(test.status.success(), "{test:?}");
+    assert!(String::from_utf8_lossy(&test.stdout).contains("__tua_tests__/math_spec.lua"));
+    let checked = tua()
+        .arg("check")
+        .current_dir(temp.path())
+        .output()
+        .unwrap();
+    assert!(checked.status.success(), "{checked:?}");
+    assert!(String::from_utf8_lossy(&checked.stdout).contains("checked 3 file(s)"));
+    fs::write(
+        temp.path().join("tests/helper.tua"),
+        "local bad: number = 'text'\nreturn bad\n",
+    )
+    .unwrap();
+    assert!(!tua()
+        .arg("check")
+        .current_dir(temp.path())
+        .status()
+        .unwrap()
+        .success());
+    assert!(tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .status()
+        .unwrap()
+        .success());
+}
+
+#[test]
+fn unit_test_spec_exclusion_can_be_disabled_and_cleans_owned_output() {
+    let temp = TempDir::new("spec-exclusion");
+    fs::create_dir_all(temp.path().join("src")).unwrap();
+    fs::write(temp.path().join("src/main.tua"), "print('main')\n").unwrap();
+    fs::write(temp.path().join("src/demo_spec.tua"), "print('spec')\n").unwrap();
+    fs::write(
+        temp.path().join("tua.toml"),
+        "[test]\nexclude_specs=false\n",
+    )
+    .unwrap();
+    assert!(tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .status()
+        .unwrap()
+        .success());
+    assert!(temp.path().join("build/demo_spec.lua").exists());
+    fs::write(temp.path().join("tua.toml"), "[test]\nexclude_specs=true\n").unwrap();
+    assert!(tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .status()
+        .unwrap()
+        .success());
+    assert!(!temp.path().join("build/demo_spec.lua").exists());
+    assert!(!temp.path().join("build/demo_spec.lua.map").exists());
+}

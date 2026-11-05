@@ -8,6 +8,11 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Changed
 
+- `[test] source` provides a dedicated test root shared by analysis and Busted
+  builds. Production builds/packages exclude that directory and, by default,
+  `_spec` sources; `test.exclude_specs = false` preserves intentional production
+  spec filenames. Check and format include dedicated tests.
+
 - Semantic queries borrow the immutable alias catalog instead of copying it
   repeatedly, recovering completion/format latency after the inference fixes.
 

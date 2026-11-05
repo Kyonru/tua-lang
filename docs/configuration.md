@@ -106,6 +106,8 @@ the behavior and tradeoffs of each option.
 | `target` | string | `"love11-luajit"` | - |
 | `extension` | string | `"tua"` | - |
 | `emit_maps` | boolean | `true` | - |
+| `test.source` | string | `""` | - |
+| `test.exclude_specs` | boolean | `true` | - |
 | `type_libraries` | array | `[]` | - |
 | `asset_pipelines` | array | `[]` | - |
 | `emit.annotation_mode` | string | `"off"` | - |

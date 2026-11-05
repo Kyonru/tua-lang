@@ -198,6 +198,12 @@ impl ProjectWorkspace {
         let config = loaded.config;
         let mut source_roots = vec![workspace_path(&root, &config.source)];
         let output_roots = vec![workspace_path(&root, &config.out)];
+        if !config.test.source.as_os_str().is_empty() {
+            push_unique_path(
+                &mut source_roots,
+                workspace_path(&root, &config.test.source),
+            );
+        }
 
         for source_root in &options.extra_source_roots {
             push_unique_path(&mut source_roots, workspace_path(&root, source_root));
@@ -265,6 +271,29 @@ impl ProjectWorkspace {
         &self.source_roots[0]
     }
 
+    /// Explicit test root, shared by discovery, analysis and output mapping.
+    pub fn test_source_root(&self) -> Option<PathBuf> {
+        (!self.config.test.source.as_os_str().is_empty())
+            .then(|| workspace_path(&self.root, &self.config.test.source))
+    }
+
+    pub fn is_spec_path(&self, path: &Path) -> bool {
+        path.extension()
+            .and_then(|s| s.to_str())
+            .is_some_and(|ext| ext == self.config.extension || ext == "lua")
+            && path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .is_some_and(|stem| stem.ends_with("_spec"))
+    }
+
+    pub fn is_production_path(&self, path: &Path) -> bool {
+        !self
+            .test_source_root()
+            .is_some_and(|root| path.starts_with(root))
+            && !(self.config.test.exclude_specs && self.is_spec_path(path))
+    }
+
     pub fn output_roots(&self) -> &[PathBuf] {
         &self.output_roots
     }
@@ -286,6 +315,15 @@ impl ProjectWorkspace {
         source_path: impl AsRef<Path>,
     ) -> Option<PathBuf> {
         let source_path = source_path.as_ref();
+        if let Some(root) = self.test_source_root() {
+            if let Ok(relative) = source_path.strip_prefix(root) {
+                return Some(
+                    self.primary_output_root()
+                        .join("__tua_tests__")
+                        .join(relative),
+                );
+            }
+        }
         let relative_path = source_path.strip_prefix(self.primary_source_root()).ok()?;
 
         Some(normalize_path(

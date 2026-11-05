@@ -51,6 +51,44 @@ pub(crate) fn discover_build_files_with_exclusions(
     Ok(files)
 }
 
+/// Discover project inputs with the same test-root policy for check/build/watch.
+pub(crate) fn discover_project_files(
+    workspace: &ProjectWorkspace,
+    include_tests: bool,
+    excluded: &[&Path],
+) -> Result<Vec<SourceFile>, Diagnostic> {
+    let test_root = workspace.test_source_root();
+    let mut excluded = excluded.to_vec();
+    if !include_tests {
+        if let Some(root) = &test_root {
+            excluded.push(root);
+        }
+    }
+    let mut files = discover_build_files_with_exclusions(
+        workspace.primary_source_root(),
+        &workspace.config().extension,
+        &excluded,
+    )?;
+    if include_tests {
+        if let Some(root) = &test_root {
+            if !root.starts_with(workspace.primary_source_root()) {
+                files.extend(discover_build_files_with_exclusions(
+                    root,
+                    &workspace.config().extension,
+                    &excluded,
+                )?);
+            }
+        }
+    }
+    files.retain(|file| {
+        !workspace.is_type_library_path(&file.path)
+            && (include_tests || workspace.is_production_path(&file.path))
+    });
+    files.sort_by(|a, b| a.path.cmp(&b.path));
+    files.dedup_by(|a, b| a.path == b.path);
+    Ok(files)
+}
+
 pub(crate) fn read_source_file(path: &Path) -> Result<String, Diagnostic> {
     tua_core::input_limits::read_source(path).map_err(|source| io_diagnostic(path, source))
 }

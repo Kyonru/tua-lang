@@ -38,6 +38,18 @@
       "description": "Write Lua source-map sidecars during builds."
     },
     {
+      "path": "test.source",
+      "type": "string",
+      "default": "",
+      "description": "Optional project-relative test directory. An empty value discovers specs under source. Dedicated test files are omitted from production builds."
+    },
+    {
+      "path": "test.exclude_specs",
+      "type": "boolean",
+      "default": true,
+      "description": "Omit *_spec source files from production builds, including specs under the main source root."
+    },
+    {
       "path": "type_libraries",
       "type": "array",
       "default": [],
@@ -377,7 +389,7 @@
       "path": "diagnostics.love_callback_order",
       "type": "boolean",
       "default": true,
-      "description": "Report top-level love.load, love.update, and love.draw definitions that are not in the order LÖVE calls them.",
+      "description": "Report top-level love.load, love.update, and love.draw definitions that are not in the order L\u00d6VE calls them.",
       "editor": "tua.diagnostics.loveCallbackOrder"
     },
     {

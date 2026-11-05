@@ -15,7 +15,7 @@ use crate::traceback::remap_traceback_text;
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct TestOptions {
-    /// Optional file or directory relative to the configured source root.
+    /// Optional file or directory relative to the configured test discovery root.
     pub path: Option<PathBuf>,
     pub busted: Option<PathBuf>,
     pub filter: Option<String>,
@@ -31,7 +31,10 @@ pub(crate) fn run_tests(
     let cwd = fs::canonicalize(cwd)
         .map_err(|e| CliError::usage(format!("cannot open test project: {e}")))?;
     let workspace = ProjectWorkspace::from_loaded(&cwd, loaded.clone());
-    let source = workspace.primary_source_root();
+    let test_root = workspace.test_source_root();
+    let source = test_root
+        .as_deref()
+        .unwrap_or(workspace.primary_source_root());
     let production_output = workspace.primary_output_root();
     let state_dir = cwd.join(".tua");
     let mut excluded = vec![state_dir.as_path()];
@@ -55,12 +58,14 @@ pub(crate) fn run_tests(
         .filter(|f| {
             (f.path == selected || f.path.starts_with(&selected))
                 && !workspace.is_type_library_path(&f.path)
-                && is_spec(&f.path, &loaded.config.extension)
+                && workspace.is_spec_path(&f.path)
         })
         .map(|f| {
-            f.path
-                .strip_prefix(source)
-                .expect("discovered source path")
+            workspace
+                .mirrored_output_path_for_source(&f.path)
+                .expect("discovered test output")
+                .strip_prefix(production_output)
+                .expect("relative output")
                 .with_extension("lua")
         })
         .collect::<BTreeSet<_>>();
@@ -72,6 +77,16 @@ pub(crate) fn run_tests(
         )));
     }
 
+    if test_root.is_some()
+        && workspace
+            .primary_source_root()
+            .join("__tua_tests__")
+            .exists()
+    {
+        return Err(CliError::usage(
+            "__tua_tests__ is reserved for dedicated test output; rename that source directory",
+        ));
+    }
     let output = TestOutput::new(&cwd)?;
     loaded.config.out = output.0.clone();
     loaded.config.emit_maps = true;
@@ -97,7 +112,7 @@ pub(crate) fn run_tests(
             loaded.config.diagnostics.globals.push(name.to_owned());
         }
     }
-    let built = build_project_excluding(&cwd, loaded, false, &excluded)?;
+    let built = build_project_excluding(&cwd, loaded, false, &excluded, true)?;
     if built
         .diagnostics
         .iter()
@@ -123,7 +138,7 @@ pub(crate) fn run_tests(
         "plainTerminal",
         "--verbose",
         "--lpath",
-        "./?.lua;./?/init.lua",
+        "./?.lua;./?/init.lua;./__tua_tests__/?.lua;./__tua_tests__/?/init.lua",
     ]);
     for (flag, value) in [("--filter", &options.filter), ("--tags", &options.tags)] {
         if let Some(value) = value {
@@ -159,16 +174,6 @@ pub(crate) fn run_tests(
             result.status
         )))
     }
-}
-
-fn is_spec(path: &Path, extension: &str) -> bool {
-    path.extension()
-        .and_then(|s| s.to_str())
-        .is_some_and(|e| e == extension || e == "lua")
-        && path
-            .file_stem()
-            .and_then(|s| s.to_str())
-            .is_some_and(|s| s.ends_with("_spec"))
 }
 
 fn resolve_executable(cwd: &Path, path: &Path) -> PathBuf {

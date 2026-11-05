@@ -53,9 +53,16 @@ end
 return { double = double }
 ```
 
+For a dedicated test directory, configure a project-relative root:
+
+```toml
+[test]
+source = "tests"
+```
+
 Then create a spec ending in `_spec.tua`:
 
-```tua title="src/spec/math_spec.tua"
+```tua title="tests/math_spec.tua"
 local mathlib = require("mathlib")
 
 describe("mathlib #unit", function()
@@ -92,16 +99,17 @@ Use ordinary Tua types in the functions and classes under test.
 
 ## Select Tests
 
-By default, Tua discovers `_spec` files recursively under `source`. Both
+With `[test] source = "tests"`, Tua discovers specs recursively under that
+project-relative directory. Without it, discovery uses the normal `source` root. Both
 `*_spec.tua` and `*_spec.lua` work; a custom Tua extension follows `extension`
 in `tua.toml`. Declaration-only libraries and build/state directories are
 excluded from test discovery.
 
-An optional file or directory is **relative to the configured source root**:
+An optional file or directory is **relative to the test discovery root**:
 
 ```sh
-tua test spec/math_spec.tua
-tua test spec
+tua test math_spec.tua
+tua test .
 tua test --filter doubles
 tua test --tags unit
 ```
@@ -109,7 +117,7 @@ tua test --tags unit
 `--filter` uses Busted's Lua-pattern name filter; `--tags` passes the requested
 tags to Busted. Filtering happens after discovery, and Busted may report zero
 executed tests when a filter matches nothing. The project is still compiled
-as a whole when selecting one spec, so errors in another Tua source can block
+together with the entire test root when selecting one spec, so errors in another Tua source can block
 that run.
 
 Use Busted's standard hooks, assertions, spies, and mocks inside specs. See
@@ -151,8 +159,20 @@ The terminal report is collected until Busted exits. Tua maps its plain-text
 failure headers and verbose Lua traceback locations through compiler source maps,
 even if normal builds set `emit_maps = false`. Plain Lua specs retain Lua locations.
 
-Specs are regular project sources: ordinary `tua build` and `tua package` do not
-yet exclude them. Keep unit tests in a separate test project when distribution
-must omit test code. A separate test root, package exclusions, coverage UI,
-watch-mode testing, and VS Code Test Explorer discovery are not implemented by
-this command. For runtime/gameplay checks, see [Debugging](debugging.md).
+Normal `tua build`, watch builds and `tua package` omit the configured test
+directory, including its helpers and assets. They also omit `*_spec.tua` and
+`*_spec.lua` under the production source root by default. Set
+`[test] exclude_specs = false` only when those filenames are intentional
+production modules; the dedicated test directory remains test-only.
+Previously generated, compiler-owned spec output is removed on the next build.
+
+`check`, `lint`, `fmt` and editor analysis include the dedicated test root.
+During `tua test`, production modules keep their normal paths and dedicated test
+files are emitted under `__tua_tests__/`; both roots are on Busted's module search
+path, with production modules taking precedence. Keep `__tua_tests__` out of your
+production source tree. Tests can import production modules and test helpers;
+production code should not import test-only modules. Test assets are available
+under `__tua_tests__/` relative to the temporary build directory.
+
+Coverage UI, watch-mode testing, and VS Code Test Explorer discovery are still
+follow-up work. For runtime/gameplay checks, see [Debugging](debugging.md).

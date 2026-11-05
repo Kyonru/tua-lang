@@ -34,6 +34,10 @@ emit_maps = true
 type_libraries = []
 asset_pipelines = []
 
+[test]
+source = \"\"
+exclude_specs = true
+
 [emit]
 annotation_mode = \"off\"
 
@@ -111,6 +115,7 @@ pub struct ProjectConfig {
     pub target: String,
     pub extension: String,
     pub emit_maps: bool,
+    pub test: TestConfig,
     pub type_libraries: Vec<TypeLibraryConfig>,
     pub asset_pipelines: Vec<AssetPipelineConfig>,
     pub emit: EmitConfig,
@@ -130,6 +135,7 @@ impl Default for ProjectConfig {
             target: "love11-luajit".to_owned(),
             extension: "tua".to_owned(),
             emit_maps: true,
+            test: TestConfig::default(),
             type_libraries: Vec::new(),
             asset_pipelines: Vec::new(),
             emit: EmitConfig::default(),
@@ -138,6 +144,23 @@ impl Default for ProjectConfig {
             ecs: EcsConfig::default(),
             shaders: ShadersConfig::default(),
             diagnostics: DiagnosticsConfig::default(),
+        }
+    }
+}
+
+/// Unit-test source isolation. An empty root keeps legacy in-source discovery.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+#[serde(default, deny_unknown_fields)]
+pub struct TestConfig {
+    pub source: PathBuf,
+    pub exclude_specs: bool,
+}
+
+impl Default for TestConfig {
+    fn default() -> Self {
+        Self {
+            source: PathBuf::new(),
+            exclude_specs: true,
         }
     }
 }

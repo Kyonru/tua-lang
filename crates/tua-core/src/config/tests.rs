@@ -43,6 +43,7 @@ fn default_config_matches_spec() {
             target: "love11-luajit".to_owned(),
             extension: "tua".to_owned(),
             emit_maps: true,
+            test: TestConfig::default(),
             type_libraries: Vec::new(),
             asset_pipelines: Vec::new(),
             emit: EmitConfig {
@@ -269,6 +270,7 @@ severity = { TL1003 = "warning", TL4035 = "allow" }
             target: "love11-luajit".to_owned(),
             extension: "tl".to_owned(),
             emit_maps: false,
+            test: TestConfig::default(),
             type_libraries: Vec::new(),
             asset_pipelines: Vec::new(),
             emit: EmitConfig {
@@ -894,6 +896,19 @@ fn parses_shader_validation_settings() {
         assert!(
             parse_config(invalid).is_err(),
             "{invalid} should be rejected"
+        );
+    }
+}
+
+#[test]
+fn test_source_configuration_keeps_production_root_distinct() {
+    let config = parse_config("[test]\nsource = 'tests'\n").unwrap();
+    assert_eq!(config.test.source, PathBuf::from("tests"));
+    assert!(config.test.exclude_specs);
+    for root in ["src", ".", "../tests", "/tmp/tests", ".tua", "build/spec"] {
+        assert!(
+            parse_config(&format!("[test]\nsource = '{root}'\n")).is_err(),
+            "{root}"
         );
     }
 }

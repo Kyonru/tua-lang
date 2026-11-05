@@ -7,6 +7,10 @@ emit_maps = true
 type_libraries = []
 asset_pipelines = []
 
+[test]
+source = ""
+exclude_specs = true
+
 [emit]
 annotation_mode = "off"
 

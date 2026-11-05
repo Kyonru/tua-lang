@@ -67,7 +67,43 @@ fn parse_config_inner(input: &str) -> Result<ProjectConfig, ConfigParseError> {
         return Err(error);
     }
 
-    toml::from_str(input).map_err(|error| parse_error(input, error.span(), error.message()))
+    let config: ProjectConfig =
+        toml::from_str(input).map_err(|error| parse_error(input, error.span(), error.message()))?;
+    if config.test.source.components().any(|part| {
+        !matches!(
+            part,
+            std::path::Component::Normal(_) | std::path::Component::CurDir
+        )
+    }) {
+        return Err(parse_error(
+            input,
+            None,
+            "test.source must be project-relative without `..`",
+        ));
+    }
+    if !config.test.source.as_os_str().is_empty() {
+        let test_root = crate::normalize_path(&config.test.source);
+        let source_root = crate::normalize_path(&config.source);
+        let out_root = crate::normalize_path(&config.out);
+        if test_root.starts_with(".tua")
+            || test_root.starts_with(&out_root)
+            || out_root.starts_with(&test_root)
+        {
+            return Err(parse_error(
+                input,
+                None,
+                "test.source must not overlap output or .tua state directories",
+            ));
+        }
+        if test_root == std::path::Path::new(".") || source_root.starts_with(&test_root) {
+            return Err(parse_error(
+                input,
+                None,
+                "test.source must not contain the production source root",
+            ));
+        }
+    }
+    Ok(config)
 }
 
 pub fn config_settings_metadata() -> Vec<ConfigSettingMetadata> {

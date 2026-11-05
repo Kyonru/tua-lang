@@ -59,8 +59,6 @@ results. Evidence: [development trials](internal/devex-trials-2026-11.md).
 
 ### Unit testing follow-ups
 
-- Add a dedicated test source root and production/package exclusions for specs;
-  the initial `tua test` command discovers regular sources under `source`.
 - Add VS Code Test Explorer discovery, individual test execution, watch-mode
   testing, richer Busted API declarations, and coverage/report integration.
 - Add an explicit LOVE runtime test mode; the Busted backend currently tests

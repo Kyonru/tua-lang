@@ -3,7 +3,7 @@ use std::path::Path;
 use crate::asset_pipeline::run_asset_pipelines;
 use crate::diagnostics::sorted_diagnostics;
 use crate::error::CliError;
-use crate::source::{discover_build_files, load_type_libraries, read_source_file, SourceKind};
+use crate::source::{discover_project_files, load_type_libraries, read_source_file, SourceKind};
 use tua_core::{format_diagnostics_for_cli, DiagnosticCategory, DiagnosticSeverity};
 use tua_core::{profile, AnalysisHost, AnalysisSourceKind, LoadedConfig, ProjectWorkspace};
 
@@ -46,15 +46,13 @@ pub(crate) fn run_project_diagnostics(
         Default::default()
     };
     let workspace = ProjectWorkspace::from_loaded(cwd, loaded);
-    let source_dir = workspace.primary_source_root().to_path_buf();
-    let mut source_files = {
+    let source_files = {
         let _trace = profile::diagnostics_span(profile::DiagnosticsTraceCategory::DiscoverFiles);
 
-        discover_build_files(&source_dir, &workspace.config().extension, None).map_err(|error| {
+        discover_project_files(&workspace, true, &[]).map_err(|error| {
             CliError::from_diagnostics("failed to discover source files", vec![error])
         })?
     };
-    source_files.retain(|source_file| !workspace.is_type_library_path(&source_file.path));
     let checked = source_files
         .iter()
         .filter(|source_file| source_file.kind == SourceKind::Tua)

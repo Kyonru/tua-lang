@@ -378,3 +378,29 @@ fn represents_ignored_paths_and_file_associations() {
         Some(VfsSourceKind::Lua)
     );
 }
+
+#[test]
+fn dedicated_test_roots_share_resolution_and_isolated_output_mapping() {
+    for root in ["tests", "src/spec"] {
+        let project = TempProject::new("test-root");
+        project.write("tua.toml", &format!("[test]\nsource = '{root}'\n"));
+        project.write("src/runtime.tua", "return {}\n");
+        project.write(&format!("{root}/helper.tua"), "return {}\n");
+        let model = ProjectModel::load([project.path().to_path_buf()]).unwrap();
+        let workspace = model.primary_workspace().unwrap();
+        let helper = project.path().join(root).join("helper.tua");
+        assert_eq!(
+            workspace.resolve_required_module("helper"),
+            Some(helper.clone())
+        );
+        assert!(workspace
+            .source_roots()
+            .contains(&project.path().join(root)));
+        assert!(!workspace.is_production_path(&helper));
+        assert!(workspace.is_production_path(&project.path().join("src/runtime.tua")));
+        assert_eq!(
+            workspace.lua_output_paths_for_tua_source(&helper).unwrap(),
+            vec![project.path().join("build/__tua_tests__/helper.lua")]
+        );
+    }
+}

@@ -6,8 +6,8 @@ use crate::asset_pipeline::run_asset_pipelines;
 use crate::diagnostics::sorted_diagnostics;
 use crate::error::CliError;
 use crate::source::{
-    discover_build_files_with_exclusions, io_diagnostic, load_type_libraries, paths_same_location,
-    read_source_file, SourceFile, SourceKind,
+    io_diagnostic, load_type_libraries, paths_same_location, read_source_file, SourceFile,
+    SourceKind,
 };
 use crate::source_map::{debugger_source_map_path_for, source_map_path_for, write_source_map};
 use tua_core::path_security::reject_symlink_path;
@@ -98,7 +98,7 @@ pub(crate) fn build_project(
     loaded: LoadedConfig,
     emit_on_error: bool,
 ) -> Result<BuildOutcome, CliError> {
-    build_project_excluding(cwd.as_ref(), loaded, emit_on_error, &[])
+    build_project_excluding(cwd.as_ref(), loaded, emit_on_error, &[], false)
 }
 
 pub(crate) fn build_project_excluding(
@@ -106,6 +106,7 @@ pub(crate) fn build_project_excluding(
     loaded: LoadedConfig,
     emit_on_error: bool,
     additional_excluded_outputs: &[&Path],
+    include_tests: bool,
 ) -> Result<BuildOutcome, CliError> {
     let workspace = ProjectWorkspace::from_loaded(cwd, loaded.clone());
     OutputGuard::new(&workspace).map_err(|diagnostic| {
@@ -119,12 +120,10 @@ pub(crate) fn build_project_excluding(
     if !in_place {
         excluded.push(&out_dir);
     }
-    let mut source_files =
-        discover_build_files_with_exclusions(&source_dir, &workspace.config().extension, &excluded)
-            .map_err(|error| {
-                CliError::from_diagnostics("failed to discover source files", vec![error])
-            })?;
-    source_files.retain(|source_file| !workspace.is_type_library_path(&source_file.path));
+    let source_files = crate::source::discover_project_files(&workspace, include_tests, &excluded)
+        .map_err(|error| {
+            CliError::from_diagnostics("failed to discover source files", vec![error])
+        })?;
     let annotation_mode = workspace.config().emit.annotation_mode;
 
     Ok(build_project_files(

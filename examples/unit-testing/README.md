@@ -10,7 +10,7 @@ From this folder, run:
 
 ```sh
 tua test
-tua test spec/counter_spec.tua
+tua test counter_spec.tua
 tua test --filter independent
 tua test --tags unit
 ```
@@ -26,3 +26,6 @@ globals; `tua test` also supplies Busted globals to its build automatically.
 
 Use **Tua: Run Unit Tests** in VS Code, or see
 [Testing Tua](../../docs/testing.md) for setup, executable selection, and limits.
+
+The dedicated `tests/` directory is included in checking and formatting, but
+omitted from production builds and packages. Specs import `counter` from `src/`.

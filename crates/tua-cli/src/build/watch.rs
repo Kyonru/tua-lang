@@ -1,5 +1,5 @@
 use super::*;
-use crate::source::discover_build_files;
+use crate::source::discover_project_files;
 
 pub(crate) struct WatchBuildSession {
     cwd: PathBuf,
@@ -24,15 +24,18 @@ impl WatchBuildSession {
         let source_dir = workspace.primary_source_root().to_path_buf();
         let out_dir = workspace.primary_output_root().to_path_buf();
         let in_place = paths_same_location(&source_dir, &out_dir);
-        let mut source_files = discover_build_files(
-            &source_dir,
-            &workspace.config().extension,
-            (!in_place).then_some(out_dir.as_path()),
+        let source_files = discover_project_files(
+            &workspace,
+            false,
+            &if in_place {
+                vec![]
+            } else {
+                vec![out_dir.as_path()]
+            },
         )
         .map_err(|error| {
             CliError::from_diagnostics("failed to discover source files", vec![error])
         })?;
-        source_files.retain(|source_file| !workspace.is_type_library_path(&source_file.path));
         let mut host = AnalysisHost::with_config(workspace.config().clone());
 
         host.set_source_roots(workspace.source_roots().iter().cloned());
@@ -125,6 +128,9 @@ impl WatchBuildSession {
         }
 
         for path in changed {
+            if !self.workspace.is_production_path(&path) {
+                continue;
+            }
             if self.workspace.is_type_library_path(&path) {
                 match read_source_file(&path) {
                     Ok(source) => {
