@@ -29,6 +29,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Class methods and constructors retain default-argument contracts and emitted
+  default guards; named functions following a class also read their original defaults.
+
 - Exported plain-Lua functions retain untyped named parameters and `...`;
   wrappers such as SUIT callbacks no longer appear to accept zero arguments.
 

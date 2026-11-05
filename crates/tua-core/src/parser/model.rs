@@ -111,6 +111,8 @@ pub struct RawParsedSource {
     pub path: PathBuf,
     pub source: String,
     pub parser_source: String,
+    /// Class-lowered text before type/default erasure; absent when source is unchanged.
+    pub(crate) syntax_source: Option<String>,
     pub(crate) parser_provenance: Vec<ParserLineProvenance>,
     pub(crate) native_array_types: Vec<NativeArrayTypeSyntax>,
     pub ast: full_moon::ast::Ast,
@@ -122,6 +124,8 @@ pub struct RawParsedSource {
 pub struct NormalizedSource {
     pub original: String,
     pub parser_source: String,
+    /// Class-lowered text before type/default erasure; absent when source is unchanged.
+    pub(crate) syntax_source: Option<String>,
     pub(crate) parser_provenance: Vec<ParserLineProvenance>,
     pub(crate) native_array_types: Vec<NativeArrayTypeSyntax>,
 }

@@ -2107,3 +2107,27 @@ final class Enemy {
     let parsed = parse_tua_source("src/enemy.tua", source).unwrap();
     assert_eq!(parsed.class_declarations[0].methods.len(), 1);
 }
+
+#[test]
+fn class_lowering_preserves_default_parameter_source_for_typed_model() {
+    let parsed = parse_tua_source(
+        "src/defaults.tua",
+        r#"final class Example {
+  run(first: boolean = false): boolean { return first }
+}
+local function after(value: number = 7): number
+  return value
+end
+"#,
+    )
+    .unwrap();
+    for (name, required, expression) in [("Example_run", 1, "false"), ("after", 0, "7")] {
+        let function = parsed
+            .function_annotations
+            .iter()
+            .find(|f| f.name.as_deref() == Some(name))
+            .unwrap();
+        assert_eq!(function.required_parameter_count, required);
+        assert_eq!(function.default_parameters[0].expression, expression);
+    }
+}

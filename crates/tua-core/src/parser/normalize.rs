@@ -16,6 +16,7 @@ pub(super) fn normalize_tua_source_for_luau_parser(
     String,
     Vec<ParserLineProvenance>,
     Vec<NativeArrayTypeSyntax>,
+    Option<String>,
 ) {
     let (class_source, provenance) = lowering::lower_classes_for_parser(source);
     let parser_source = normalize_parser_syntax(&class_source);
@@ -26,7 +27,8 @@ pub(super) fn normalize_tua_source_for_luau_parser(
         "parser syntax normalization must preserve class-lowered line count"
     );
 
-    (parser_source, provenance, native_array_types)
+    let syntax_source = (class_source != source).then_some(class_source);
+    (parser_source, provenance, native_array_types, syntax_source)
 }
 
 /// Return whether source contains syntax that requires Tua's Luau-backed

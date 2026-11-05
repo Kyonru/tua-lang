@@ -53,12 +53,13 @@ pub fn parse_tua_source(
 
 pub fn normalize_tua_source(source: impl Into<String>) -> NormalizedSource {
     let original = source.into();
-    let (parser_source, parser_provenance, native_array_types) =
+    let (parser_source, parser_provenance, native_array_types, syntax_source) =
         normalize_tua_source_for_luau_parser(&original);
 
     NormalizedSource {
         original,
         parser_source,
+        syntax_source,
         parser_provenance,
         native_array_types,
     }
@@ -122,7 +123,7 @@ pub fn parse_raw_tua_source(
 
     let normalized = normalize_tua_source(source);
 
-    let raw = parse_raw_source(
+    let mut raw = parse_raw_source(
         path,
         normalized.original,
         normalized.parser_source,
@@ -131,6 +132,7 @@ pub fn parse_raw_tua_source(
         LuaVersion::luau(),
         ParsedLanguage::Tua,
     )?;
+    raw.syntax_source = normalized.syntax_source;
     let diagnostics = dialect::validate_tua_dialect(&raw);
 
     if diagnostics.is_empty() {
@@ -178,7 +180,11 @@ pub fn extract_tua_source_model(
     };
     let syntax = {
         let _profile = crate::profile::span("parse.tua.syntax_model");
-        collect_tua_syntax(&raw.path, &raw.source, &raw.ast)
+        collect_tua_syntax(
+            &raw.path,
+            raw.syntax_source.as_deref().unwrap_or(&raw.source),
+            &raw.ast,
+        )
     };
 
     let mut diagnostics = class_diagnostics;
@@ -260,6 +266,7 @@ fn parse_raw_source(
                 path,
                 source,
                 parser_source,
+                syntax_source: None,
                 parser_provenance,
                 native_array_types,
                 ast,

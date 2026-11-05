@@ -109,3 +109,57 @@ fn polymorphism_example_checks_and_dispatches_across_modules() {
         String::from_utf8_lossy(&output.stderr)
     );
 }
+
+#[test]
+fn class_and_following_function_defaults_check_build_and_run() {
+    let temp = TempDir::new("class-default-arguments");
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).unwrap();
+    fs::create_dir_all(temp.path().join("src")).unwrap();
+    fs::write(
+        temp.path().join("src/main.tua"),
+        r#"final class Example {
+  value: number
+  init(value: number = 3) { self.value = value }
+  run(first: boolean = false): boolean { return first }
+  call(): boolean { return self:run() }
+}
+local function after(value: number = 7): number
+  return value
+end
+local example = Example.new()
+assert(example.value == 3)
+assert(example:run() == false)
+assert(example:run(true) == true)
+assert(example:call() == false)
+assert(after() == 7)
+assert(after(0) == 0)
+"#,
+    )
+    .unwrap();
+    for operation in ["check", "build"] {
+        let output = tua()
+            .arg(operation)
+            .current_dir(temp.path())
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    let Some(lua) = support::lua_executable() else {
+        return;
+    };
+    let output = Command::new(lua)
+        .arg("main.lua")
+        .current_dir(temp.path().join("build"))
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
