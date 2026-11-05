@@ -7981,3 +7981,32 @@ fn love_conf_window_completion_tracks_initial_state_and_disable() {
         );
     }
 }
+
+#[test]
+fn bundled_hump_timer_declarations_support_typed_migration() {
+    let fixture = Fixture::parse("-- file: src/main.tua\nlocal Timer = require('libraries.hump.timer')\nlocal timer = Timer.new()\ntimer:<|complete|>after(0.5, function() end)\ntimer:during(1, function(dt, remaining)\n local elapsed = <|hover|>dt\nend)\n");
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    host.set_type_libraries([ProjectTypeLibrary::new(
+        "types/hump",
+        "hump",
+        "libraries.hump",
+    )]);
+    host.set_file_with_kind(
+        "types/hump/timer.lua",
+        include_str!("../../../../examples/type-libraries/hump/timer.lua"),
+        AnalysisSourceKind::Lua,
+    );
+    host.set_file("src/main.tua", fixture.files()[0].source.clone());
+    let snapshot = host.snapshot();
+    let labels =
+        completion_labels(&snapshot.completion("src/main.tua", fixture.position("complete")));
+    assert!(
+        labels.contains(&"after".into()) && labels.contains(&"cancel".into()),
+        "{labels:?}"
+    );
+    let hover = snapshot
+        .hover("src/main.tua", fixture.position("hover"))
+        .unwrap();
+    assert!(hover.contents.contains("number"), "{hover:?}");
+}

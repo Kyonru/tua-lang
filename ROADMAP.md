@@ -93,8 +93,6 @@ reproductions and current workarounds.
 - Make init-before-field-default behavior easier to discover, and consider a
   targeted diagnostic when a default overwrites an init assignment. Changing
   ordering requires a compatibility decision, not a silent fix.
-- Evaluate reusable declarations for existing timer libraries before adding
-  a built-in scheduler domain.
 
 Owner: shared semantics/checker and documentation. Acceptance: focused core/LSP
 regressions and replay of the [five upstream porting trials](internal/upstream-port-audit-2026-11.md),

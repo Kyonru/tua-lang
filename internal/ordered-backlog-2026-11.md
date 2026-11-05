@@ -101,7 +101,12 @@ reproductions and relevant checks pass.
 
 ## 5. Migration support
 
-- Pending: reusable timer/engine declarations and concrete mixin/service recipes.
+- Completed: HUMP instance declaration subset and a native typed timer adapter
+  document receiver binding, cancellation and single update ownership. Tagged
+  engine timers remain explicit adapter boundaries. The declaration editor test
+  passes (`timer-focused.log`); feature check/build and docs build pass. The
+  emitted adapter passes delayed/cancelled execution against BYTEPATH's actual
+  HUMP runtime (`timer-runtime.log`).
 - Pending: initialization-order discoverability without changing semantics.
 
 ## Revisit remaining work

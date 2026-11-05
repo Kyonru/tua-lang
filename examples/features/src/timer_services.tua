@@ -1,0 +1,23 @@
+-- Bind an existing timer to a small service instead of copying a timer mixin.
+-- The dynamic boundary accommodates vendor implementations without replacing them.
+export type Cancel = () -> nil
+export type Scheduler = {
+  after: (delay: number, action: () -> nil) -> Cancel,
+  update: (dt: number) -> nil,
+}
+
+local function bindTimer(timer: any): Scheduler
+  return {
+    after = function(delay: number, action: () -> nil): Cancel
+      local handle = timer:after(delay, action)
+      return function()
+        timer:cancel(handle)
+      end
+    end,
+    update = function(dt: number)
+      timer:update(dt)
+    end,
+  }
+end
+
+return { bindTimer = bindTimer }

@@ -8,6 +8,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Changed
 
+- Timer migration includes a copyable HUMP instance declaration subset and a
+  typed service adapter with cancellation closures, plus guidance for tagged
+  timers, update ownership and dynamic engine services.
+
 - `love.conf` distinguishes its initial window table from its nullable write
   contract. Reads and completion retain the initial state through option writes,
   and lose it after replacement, alias mutation, calls or capture.

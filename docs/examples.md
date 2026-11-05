@@ -45,6 +45,12 @@ Lua interoperability. `src/polymorphism.tua` demonstrates cross-module native
 inheritance and typed adapters for unrelated gameplay and UI objects; it also
 serves as a runnable companion to the [migration guidance](lua-interop.md#migrate-singleton-tables-and-mixins).
 
+`src/timer_services.tua` binds an existing handle-based timer to a typed service
+with cancellation closures. `examples/type-libraries/hump/timer.lua` is a
+copyable declaration subset, not an executable example or bundled HUMP runtime.
+See [timer migration](lua-interop.md#keep-existing-timers-and-engine-services)
+for installation, supported methods and update ownership.
+
 ## `examples/linter`
 
 An intentionally failing diagnostic fixture with one named example for every

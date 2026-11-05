@@ -103,6 +103,57 @@ modules. For loaders that require every directory entry, either filter for
 `.lua` or set `emit_maps = false` in `tua.toml` so map sidecars are not treated as
 modules. This trades source-mapped errors for compatibility with that loader.
 
+## Keep Existing Timers And Engine Services
+
+The porting trials used different timer APIs. HUMP returns handles from
+`timer:after(delay, action)`; BYTEPATH's EnhancedTimer also accepts a leading
+string tag. Anchor-style tagged timers use another argument order. Preserve the
+installed library's calling convention and update/cancellation behavior when
+adding types; renaming a file does not make those APIs interchangeable.
+
+For HUMP's instance API, copy `examples/type-libraries/hump/timer.lua` into your
+project's `types/hump` directory and configure:
+
+```toml
+[[type_libraries]]
+path = "types/hump"
+declaration_prefix = "hump"
+runtime_prefix = "libraries.hump"
+```
+
+Keep the real HUMP runtime at `src/libraries/hump/timer.lua`, including its
+license. The declaration file covers `new`, instance `update`, `after`, `every`,
+`during`, `cancel` and `clear`; it is not a runtime implementation or a complete
+contract for tweening, scripts, module-level forwarding or custom extensions.
+
+```tua
+local Timer = require("libraries.hump.timer")
+local timer = Timer.new()
+local handle = timer:after(0.5, function()
+  print("ready")
+end)
+timer:during(1, function(dt, remaining)
+  print(dt, remaining) -- both parameters infer number
+end)
+-- In your update callback: timer:update(dt)
+-- Cancel pending work with: timer:cancel(handle)
+```
+
+When game code should not depend on a vendor timer, copy the small
+`examples/features/src/timer_services.tua` adapter. It exposes typed `after` and
+`update` functions and returns a cancellation closure, keeping the vendor's
+handle inside the adapter. Inject that `Scheduler` service into gameplay code
+instead of reading a global timer. The adapter binds the receiver, so use
+`scheduler.after(...)` and `scheduler.update(dt)` with dots. Call `update` exactly
+once per frame for each timer; adding an adapter must not introduce a second
+update loop. Cancel outstanding work when its owning entity or scene exits.
+
+Use the same boundary for other dynamic engine services: define a small record
+of functions the game actually calls, bind the engine receiver in one adapter,
+and pass that record explicitly. Keep dynamic mixin installation and vendor
+runtime code on the Lua side. This gives completion and checked arguments
+without inventing inheritance relationships between unrelated objects.
+
 ## Use Tua Runtimes From Lua
 
 Plain Lua does not receive Tua's compiler-injected globals. Import the runtime
