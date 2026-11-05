@@ -190,6 +190,24 @@ pub(crate) fn field_items(receiver_parts: &[String], prefix: &str) -> Vec<LuaIte
     results
 }
 
+/// Reject impossible catalog lookups before resolving a potentially expensive
+/// user receiver. This is a superset of type members, derived from the same
+/// catalogs as navigation rather than a hand-maintained method-name list.
+pub(crate) fn could_be_builtin_member(name: &str) -> bool {
+    static NAMES: std::sync::OnceLock<std::collections::BTreeSet<&'static str>> =
+        std::sync::OnceLock::new();
+    NAMES
+        .get_or_init(|| {
+            all_builtin_items()
+                .into_iter()
+                .chain(SIGNAL_BUS_ITEMS.iter().copied())
+                .filter(|item| item.kind == LuaItemKind::Function)
+                .map(|item| item.label)
+                .collect()
+        })
+        .contains(name)
+}
+
 pub(crate) fn type_field_items(type_name: &str, prefix: &str) -> Vec<LuaItem> {
     let mut results = love_api_extra::type_field_items(type_name, prefix);
 

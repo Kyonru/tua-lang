@@ -8,6 +8,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Changed
 
+- Semantic indexing reuses its resolver and skips impossible builtin-member
+  lookups before attempting expensive receiver inference.
+
 - Added a runnable cross-module polymorphism example covering base-typed
   collections, virtual dispatch, and typed adapters for unrelated objects.
 

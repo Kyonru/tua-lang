@@ -108,13 +108,16 @@ impl SemanticIndex {
         hir: Option<&HirModule>,
         environment: &TypeEnvironment,
     ) {
+        let semantic = crate::semantic::SemanticModel::new(parsed, environment);
         for identifier in source_identifiers(&parsed.source) {
             let span = identifier.span;
             if self.definitions.contains_key(&SpanKey::from(span)) {
                 continue;
             }
 
-            if let Some(target) = self.definition_target_at(parsed, hir, environment, span.start) {
+            if let Some(target) =
+                self.definition_target_at(parsed, hir, environment, &semantic, span.start)
+            {
                 self.insert(span, target);
             }
         }
@@ -125,6 +128,7 @@ impl SemanticIndex {
         parsed: &ParsedSource,
         hir: Option<&HirModule>,
         environment: &TypeEnvironment,
+        semantic: &crate::semantic::SemanticModel<'_>,
         position: SourcePosition,
     ) -> Option<DefinitionTarget> {
         if let Some(specifier) = module_specifier_at_position(&parsed.source, position) {
@@ -150,7 +154,7 @@ impl SemanticIndex {
                 return Some(target);
             }
 
-            if let Some(target) = builtin_target(parsed, environment, &parts, position) {
+            if let Some(target) = builtin_target(semantic, &parts, position) {
                 return Some(target);
             }
         }
@@ -163,14 +167,7 @@ impl SemanticIndex {
 
         hir.and_then(|hir| hir.definition_for_value(&current.text, position))
             .and_then(|symbol| target_for_hir_symbol(&parsed.path, symbol))
-            .or_else(|| {
-                builtin_target(
-                    parsed,
-                    environment,
-                    std::slice::from_ref(&current.text),
-                    position,
-                )
-            })
+            .or_else(|| builtin_target(semantic, std::slice::from_ref(&current.text), position))
             .or_else(|| {
                 hir.and_then(|hir| hir.definition_for_type_alias(&current.text))
                     .and_then(|symbol| target_for_hir_symbol(&parsed.path, symbol))
@@ -596,16 +593,16 @@ fn setmetatable_prototype_for_receiver(
 }
 
 fn builtin_target(
-    parsed: &ParsedSource,
-    environment: &TypeEnvironment,
+    semantic: &crate::semantic::SemanticModel<'_>,
     parts: &[String],
     position: SourcePosition,
 ) -> Option<DefinitionTarget> {
+    if !lua::could_be_builtin_member(parts.last()?) && lua::hover_item(parts).is_none() {
+        return None;
+    }
     let item = if parts.first().is_some_and(|part| part == "love") {
         lua::hover_item(parts)
     } else {
-        let semantic = crate::semantic::SemanticModel::new(parsed, environment);
-
         semantic
             .lua_function_item_for_call_parts(parts, position)
             .or_else(|| lua::hover_item(parts))

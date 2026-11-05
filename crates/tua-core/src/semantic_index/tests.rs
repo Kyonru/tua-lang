@@ -150,3 +150,63 @@ fn source_text(source: &str, span: SourceSpan) -> &str {
 
     &line[start..end]
 }
+
+#[test]
+fn catalog_filter_preserves_love_and_domain_navigation() {
+    let source = r#"
+local image: Image
+local source: Source
+local pool = objectPool(function() return {active = false} end)
+local bus = signal()
+love.graphics.rectangle("fill", 0, 0, 10, 10)
+image:getWidth()
+source:play()
+pool:acquire()
+bus:emit("damage", 1)
+"#;
+    let (index, _) = semantic_index(source);
+    for needle in [
+        "rectangle(\"fill\"",
+        "getWidth()",
+        "play()",
+        "acquire()",
+        "emit(\"damage\"",
+    ] {
+        let position = crate::source_text::position_at(source, needle);
+        assert_eq!(
+            index
+                .definition_at(position)
+                .map(|definition| definition.kind),
+            Some(DefinitionKind::Builtin),
+            "{needle}"
+        );
+    }
+}
+
+#[test]
+fn catalog_filter_covers_generated_and_bundled_type_members() {
+    for type_name in crate::lua::love_type_names().iter().copied().chain([
+        crate::signal::TYPE_NAME,
+        crate::object_pool::TYPE_NAME,
+        crate::state_machine::TYPE_NAME,
+        crate::store::TYPE_NAME,
+        crate::input::TYPE_NAME,
+    ]) {
+        for item in crate::lua::type_field_items(type_name, "")
+            .into_iter()
+            .filter(|item| item.kind == crate::lua::LuaItemKind::Function)
+        {
+            assert!(
+                crate::lua::could_be_builtin_member(item.label),
+                "{type_name}.{}",
+                item.label
+            );
+        }
+    }
+    assert!(!crate::lua::could_be_builtin_member(
+        "snake_following_index"
+    ));
+    // A custom random:table() call must not resolve its receiver merely
+    // because the global table namespace exists in the catalog.
+    assert!(!crate::lua::could_be_builtin_member("table"));
+}
