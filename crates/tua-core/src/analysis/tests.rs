@@ -7898,3 +7898,25 @@ fn table_sort_context_respects_library_and_nested_parameter_shadows() {
         assert!(!labels.contains(&"score".into()), "{source}: {labels:?}");
     }
 }
+
+#[test]
+fn love_image_file_signature_and_result_completion_agree() {
+    let fixture = Fixture::parse("-- file: files.tua\nlocal function load(file: File)\n local data = love.image.newImageData(<|signature|>file)\n return data:<|complete|>getWidth()\nend\n");
+    let mut host = AnalysisHost::new();
+    host.set_file("files.tua", fixture.files()[0].source.clone());
+    let snapshot = host.snapshot();
+    let signature = snapshot
+        .signature_help("files.tua", fixture.position("signature"))
+        .unwrap();
+    assert!(
+        signature
+            .signatures
+            .iter()
+            .any(|item| item.label.contains("File | Data")),
+        "{signature:?}"
+    );
+    assert!(
+        completion_labels(&snapshot.completion("files.tua", fixture.position("complete")))
+            .contains(&"getWidth".into())
+    );
+}

@@ -88,8 +88,6 @@ reproductions and current workarounds.
 
 ### Complete Typed Lua Porting Workflows
 
-- Align LOVE File/FileData constructor overloads with the generated catalog;
-  preserve invalid-argument diagnostics and actual LOVE runtime coverage.
 - Extend helper binding awareness to asset indexing and editor metadata, with
   consistent local/parameter/global shadowing tests.
 - Model initial LOVE configuration state and subsequent nullable window writes;

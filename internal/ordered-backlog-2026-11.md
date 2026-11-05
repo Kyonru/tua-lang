@@ -82,7 +82,11 @@ reproductions and relevant checks pass.
 
 ## 4. LOVE and assets
 
-- Pending: File/FileData overload accuracy.
+- Completed: generated image decoder and file-data constructor inputs match
+  LOVE File/Data conversion rules. Core/LSP tests pass (1,623/375,
+  `love-core-lsp.log`); pinned-catalog drift check passes (`love-drift.log`).
+  Actual headless LOVE File/FileData/ByteData smoke passes (`love-runtime.log`);
+  this is API qualification, not installed-editor or visual game qualification.
 - Pending: binding-aware asset metadata and editor behavior.
 - Pending: nullable LOVE configuration flow.
 

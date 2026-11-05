@@ -60,12 +60,12 @@ local function function_detail(target, fn)
 
     if name == "..." then
       if argument.type ~= nil then
-        arguments[#arguments + 1] = "...: " .. type_label(argument.type)
+        arguments[#arguments + 1] = "...: " .. type_label(overrides.argument_type(target, argument))
       else
         arguments[#arguments + 1] = "..."
       end
     else
-      arguments[#arguments + 1] = name .. suffix .. ": " .. type_label(argument.type)
+      arguments[#arguments + 1] = name .. suffix .. ": " .. type_label(overrides.argument_type(target, argument))
     end
   end
 

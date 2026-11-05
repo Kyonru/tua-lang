@@ -8,6 +8,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Changed
 
+- Generated LOVE image decoder signatures accept `File` and `Data` (including
+  `FileData`); `love.filesystem.newFileData` accepts a `File` source. Shared
+  generator overrides keep checking and signature help aligned.
+
 - `table.sort` comparator parameters inherit array element types in checking
   and editor queries. Typed callback arguments now check their bodies against
   contextual parameter/return contracts; nested parameter shadows stay local.

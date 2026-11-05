@@ -42,14 +42,14 @@ local function argument_label(target, arg)
 
   if name == "..." then
     if arg.type ~= nil then
-      return "...: " .. type_label(arg.type)
+      return "...: " .. type_label(overrides.argument_type(target, arg))
     end
 
     return "..."
   end
 
   local suffix = overrides.argument_is_optional(target, arg) and "?" or ""
-  return name .. suffix .. ": " .. type_label(arg.type)
+  return name .. suffix .. ": " .. type_label(overrides.argument_type(target, arg))
 end
 
 local function argument_documentation(arg)

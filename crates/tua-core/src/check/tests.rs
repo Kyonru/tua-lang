@@ -5256,3 +5256,15 @@ fn table_sort_contextualizes_comparators_and_checks_their_contracts() {
     )
     .expect("custom table contract");
 }
+
+#[test]
+fn love_image_file_and_data_contracts_match_runtime_inputs() {
+    check_tua_source("files.tua", "local function load(file: File, data: FileData, bytes: ByteData)\n local a: ImageData = love.image.newImageData(file)\n local b: ImageData = love.image.newImageData(data)\n local c: ImageData = love.image.newImageData(bytes)\n local e: FileData = love.filesystem.newFileData(file)\n local f: boolean = love.image.isCompressed(file)\n local g: CompressedImageData = love.image.newCompressedData(file)\nend\n").expect("runtime-supported file/data inputs");
+    for argument in ["true", "{}"] {
+        assert!(check_tua_source(
+            "files.tua",
+            &format!("love.image.newImageData({argument})\n")
+        )
+        .is_err());
+    }
+}

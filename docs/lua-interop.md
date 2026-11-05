@@ -669,6 +669,14 @@ doc_annotations = true
 
 ## Builtins, LOVE, And External APIs
 
+LOVE image decoders accept filenames, `File` objects and `Data` subclasses
+such as `FileData` and `ByteData`. `love.filesystem.newFileData(file)` also accepts
+a `File`. The shared catalog corrections reflect LOVE 11.5's
+[image wrappers](https://github.com/love2d/love/blob/11.5/src/modules/image/wrap_Image.cpp)
+and [filesystem conversions](https://github.com/love2d/love/blob/11.5/src/modules/filesystem/wrap_Filesystem.cpp).
+The input still needs valid encoded image contents; a type check cannot validate
+the decoder's input bytes. Rewind a file before reading it again.
+
 Tua includes a curated Lua catalog and a LOVE 11.x catalog generated from a
 pinned `love2d-community/love-api` revision. These catalogs provide completion,
 hover, signature help, literal choices, callback validation, object methods,

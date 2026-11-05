@@ -15261,7 +15261,7 @@ Returns:
                 ],
             },
             LuaSignature {
-                label: r"function love.filesystem.newFileData(filepath: string): FileData, string",
+                label: r"function love.filesystem.newFileData(filepath: string | File): FileData, string",
                 documentation: r"Creates a new FileData object from a file on disk, or from a string in memory.
 
 Creates a new FileData from a file on the storage device.
@@ -15270,7 +15270,7 @@ Returns:
 - `data: FileData`: The new FileData, or nil if an error occurred.
 - `err: string`: The error string, if an error occurred.",
                 parameters: &[LuaSignatureParameter {
-                    label: r"filepath: string",
+                    label: r"filepath: string | File",
                     documentation: r"Path to the file.",
                 }],
             },
@@ -19963,13 +19963,13 @@ Returns:
                 }],
             },
             LuaSignature {
-                label: r"function love.image.isCompressed(fileData: FileData): boolean",
+                label: r"function love.image.isCompressed(fileData: File | Data): boolean",
                 documentation: r"Determines whether a file can be loaded as CompressedImageData.
 
 Returns:
 - `compressed: boolean`: Whether the FileData can be loaded as CompressedImageData or not.",
                 parameters: &[LuaSignatureParameter {
-                    label: r"fileData: FileData",
+                    label: r"fileData: File | Data",
                     documentation: r"A FileData potentially containing a compressed image.",
                 }],
             },
@@ -19987,13 +19987,13 @@ Returns:
                 }],
             },
             LuaSignature {
-                label: r"function love.image.newCompressedData(fileData: FileData): CompressedImageData",
+                label: r"function love.image.newCompressedData(fileData: File | Data): CompressedImageData",
                 documentation: r"Create a new CompressedImageData object from a compressed image file. LÖVE supports several compressed texture formats, enumerated in the CompressedImageFormat page.
 
 Returns:
 - `compressedImageData: CompressedImageData`: The new CompressedImageData object.",
                 parameters: &[LuaSignatureParameter {
-                    label: r"fileData: FileData",
+                    label: r"fileData: File | Data",
                     documentation: r"A FileData containing a compressed image.",
                 }],
             },
@@ -20078,13 +20078,13 @@ Returns:
                 }],
             },
             LuaSignature {
-                label: r"function love.image.newImageData(filedata: FileData): ImageData",
+                label: r"function love.image.newImageData(filedata: File | Data): ImageData",
                 documentation: r"Creates a new ImageData object.
 
 Returns:
 - `imageData: ImageData`: The new ImageData object.",
                 parameters: &[LuaSignatureParameter {
-                    label: r"filedata: FileData",
+                    label: r"filedata: File | Data",
                     documentation: r"The encoded file data to decode into image data.",
                 }],
             },

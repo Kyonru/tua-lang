@@ -49,7 +49,7 @@ local function function_detail(receiver, fn)
     if name == "..." then
       args[#args + 1] = "..."
     else
-      args[#args + 1] = name .. suffix .. ": " .. type_label(arg.type)
+      args[#args + 1] = name .. suffix .. ": " .. type_label(overrides.argument_type(target, arg))
     end
   end
 
