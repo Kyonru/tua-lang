@@ -74,7 +74,7 @@ jobs:
           node-version: 22
       - name: Install Lua and LOVE runtime test dependencies
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y luajit love xvfb xauth glslang-tools
+        run: sudo apt-get update && sudo apt-get install -y luajit love xvfb xauth glslang-tools lua-busted
       - name: Verify headless shader validation
         if: runner.os == 'Linux'
         run: |
@@ -109,6 +109,12 @@ jobs:
       - name: Test bundled runtimes on LuaJIT
         if: runner.os == 'Linux'
         run: make runtime-test LUA=luajit
+      - name: Test native Busted example
+        if: runner.os == 'Linux'
+        working-directory: examples/unit-testing
+        run: |
+          busted --version
+          cargo run --quiet --package tua-cli -- test
       - name: Build love-minimal
         working-directory: examples/love-minimal
         run: cargo run --quiet --package tua-cli -- build

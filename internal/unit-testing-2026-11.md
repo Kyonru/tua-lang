@@ -22,8 +22,10 @@ new test syntax or parallel compiler pipeline.
   in an untrusted workspace. Files must be saved before running the command.
 
 The integration test explicitly skips real Busted execution when it is not
-installed; the local verification used the installed backend. CI environments
-that require this integration should install Busted before running CLI tests.
+installed; the local verification used the installed backend. Linux CI now
+installs the distribution's Busted package and runs the bundled example as a
+mandatory separate step, so an unavailable backend cannot silently skip it.
+The hosted workflow itself has not been executed locally.
 
 ## Boundaries and follow-ups
 
