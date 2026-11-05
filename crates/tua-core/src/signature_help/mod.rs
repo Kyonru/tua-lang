@@ -130,8 +130,7 @@ fn signature_help_parsed_source_with_context(
             );
         }
     }
-    let active_signature =
-        active_signature_for_argument_count(&signatures, context.active_parameter);
+    let active_signature = active_signature_for_argument_count(&signatures, context.argument_count);
     let active_parameter =
         active_parameter_for_signature(context.active_parameter, &signatures[active_signature]);
 
@@ -388,6 +387,7 @@ impl<'a> SignatureResolver<'a> {
 struct CallContext {
     callee_parts: Vec<String>,
     active_parameter: usize,
+    argument_count: usize,
     position: SourcePosition,
     is_method_call: bool,
     first_string_argument: Option<String>,
@@ -397,12 +397,13 @@ fn call_context(source: &str, position: SourcePosition) -> Option<CallContext> {
     let cursor = byte_offset_for_position(source, position)?;
     let open = active_call_open(source, cursor)?;
     let (callee_parts, is_method_call) = callee_info_before(source, open)?;
-    let active_parameter = active_parameter_index(source, open + 1, cursor);
+    let (active_parameter, argument_count) = argument_context(source, open + 1, cursor);
     let first_string_argument = first_string_argument_after_open(source, open);
 
     Some(CallContext {
         callee_parts,
         active_parameter,
+        argument_count,
         position,
         is_method_call,
         first_string_argument,
@@ -456,7 +457,8 @@ fn callee_info_before(source: &str, open: usize) -> Option<(Vec<String>, bool)> 
     (!parts.is_empty()).then_some((parts, is_method_call))
 }
 
-fn active_parameter_index(source: &str, start: usize, cursor: usize) -> usize {
+fn argument_context(source: &str, start: usize, cursor: usize) -> (usize, usize) {
+    let mut has_argument = false;
     let mut active = 0;
     let mut depth = 0usize;
     let mut scanner = Scanner::new(
@@ -465,6 +467,7 @@ fn active_parameter_index(source: &str, start: usize, cursor: usize) -> usize {
     );
 
     while let Some((_, byte)) = scanner.next_code_byte() {
+        has_argument |= !byte.is_ascii_whitespace();
         match byte {
             b'(' | b'[' | b'{' => depth += 1,
             b')' | b']' | b'}' => depth = depth.saturating_sub(1),
@@ -473,7 +476,7 @@ fn active_parameter_index(source: &str, start: usize, cursor: usize) -> usize {
         }
     }
 
-    active
+    (active, if has_argument { active + 1 } else { 0 })
 }
 
 fn first_string_argument_after_open(source: &str, open: usize) -> Option<String> {
@@ -525,6 +528,27 @@ impl<'a> Scanner<'a> {
         }
     }
 
+    /// Skip a Lua long string/comment, including a partially typed closing delimiter.
+    fn skip_long_bracket(&mut self, start: usize) -> bool {
+        let bytes = self.source.as_bytes();
+        if bytes.get(start) != Some(&b'[') {
+            return false;
+        }
+        let mut open_end = start + 1;
+        while open_end < self.cursor && bytes[open_end] == b'=' {
+            open_end += 1;
+        }
+        if open_end >= self.cursor || bytes[open_end] != b'[' {
+            return false;
+        }
+        let closing = format!("]{}]", "=".repeat(open_end - start - 1));
+        self.index = self.source[open_end + 1..self.cursor]
+            .find(&closing)
+            .map(|offset| open_end + 1 + offset + closing.len())
+            .unwrap_or(self.cursor);
+        true
+    }
+
     fn next_code_byte(&mut self) -> Option<(usize, u8)> {
         let bytes = self.source.as_bytes();
 
@@ -554,13 +578,21 @@ impl<'a> Scanner<'a> {
 
             if byte == b'-' && self.index < self.cursor && bytes[self.index] == b'-' {
                 self.index += 1;
+                if self.skip_long_bracket(self.index) {
+                    continue;
+                }
                 self.line_comment = true;
                 continue;
             }
 
+            if byte == b'[' && self.skip_long_bracket(index) {
+                return Some((index, b'"'));
+            }
+
             if byte == b'"' || byte == b'\'' {
                 self.quote = Some(byte);
-                continue;
+                // The literal is an argument even when its contents are empty.
+                return Some((index, byte));
             }
 
             return Some((index, byte));
@@ -802,8 +834,7 @@ fn format_type_list(types: &[Type]) -> String {
 
 fn lua_signature_help(context: &CallContext) -> Option<SignatureHelp> {
     let signatures = lua_signatures_for_parts(&context.callee_parts)?;
-    let active_signature =
-        active_signature_for_argument_count(&signatures, context.active_parameter);
+    let active_signature = active_signature_for_argument_count(&signatures, context.argument_count);
     let active_parameter =
         active_parameter_for_signature(context.active_parameter, &signatures[active_signature]);
 
@@ -935,11 +966,17 @@ fn active_parameter_for_signature(active: usize, signature: &SignatureInformatio
 
 fn active_signature_for_argument_count(
     signatures: &[SignatureInformation],
-    active_parameter: usize,
+    argument_count: usize,
 ) -> usize {
+    if argument_count == 0 {
+        return signatures
+            .iter()
+            .position(|signature| signature.parameters.is_empty())
+            .unwrap_or(0);
+    }
     signatures
         .iter()
-        .position(|signature| active_parameter < signature.parameters.len())
+        .position(|signature| argument_count <= signature.parameters.len())
         .unwrap_or(0)
 }
 

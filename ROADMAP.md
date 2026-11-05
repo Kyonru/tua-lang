@@ -82,9 +82,6 @@ results. Evidence: [development trials](internal/devex-trials-2026-11.md).
 - **Native class parameter navigation:** preserve header identities and source
   provenance for definition, references, and rename, including shadowing and
   exact original-source edits.
-- **Empty-argument overload selection:** isolate why `Text:getWidth(` selects
-  the index overload, then distinguish an empty slot from a supplied argument
-  without hiding other valid overloads.
 - **Unclosed classes:** extend recovery and syntax guidance to wholly unclosed
   class bodies while preserving surrounding scopes and valid nested Lua blocks.
 

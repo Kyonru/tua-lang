@@ -184,7 +184,9 @@ as `spriteSheet({...})`, `stateMachine({...})`, and `objectPool({...})` use thei
 expected schema instead of collapsing to the enclosing call's result type.
 Signature help appears after `(` and `,`, re-evaluates at `)`, and supports
 overloads, optional parameters, typed varargs, multiple returns, callback aliases,
-and parameter documentation.
+and parameter documentation. Empty call slots select a zero-argument overload
+when available; typing an argument selects an overload with room for that
+argument without removing the other alternatives.
 
 Static `stateMachine({...})` calls share one derived model across completion,
 hover, signature help, checking, inlay hints, inspection, and the experimental

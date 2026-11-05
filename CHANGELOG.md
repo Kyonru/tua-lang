@@ -36,6 +36,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Signature help selects zero-argument overloads for empty call slots, including
+  `Text:getWidth(`, while retaining indexed overloads once an argument is typed.
+
 - Project-assigned `Camera` and `tween` globals prevent built-in module
   injection across files. Editor metadata follows the same ownership, including
   unsaved assignment changes; explicit local imports retain their types.

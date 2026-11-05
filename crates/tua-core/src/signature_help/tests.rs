@@ -1090,3 +1090,41 @@ impl TempProject {
         fs::write(path, contents).expect("file should be written");
     }
 }
+
+#[test]
+fn empty_argument_slot_selects_zero_argument_overload() {
+    for (argument, expected_parameters) in [
+        ("", 0),
+        ("   ", 0),
+        ("-- note\n  ", 0),
+        ("--[=[note\nignored (,]=] ", 0),
+        ("1", 1),
+    ] {
+        let source = format!("local text = love.graphics.newText(love.graphics.newFont(12), 'x')\ntext:getWidth({argument})");
+        let help = signature_at_last(&source, &format!("text:getWidth({argument}"))
+            .expect("Text:getWidth has signature help");
+        assert_eq!(
+            help.signatures[help.active_signature].parameters.len(),
+            expected_parameters,
+            "{argument:?}: {help:?}"
+        );
+        assert!(help.signatures.iter().any(|s| s.parameters.is_empty()));
+        assert!(help.signatures.iter().any(|s| s.parameters.len() == 1));
+    }
+    for (argument, expected_parameters) in [
+        ("", 0),
+        ("''", 1),
+        ("\"\"", 1),
+        ("[=[(,]=]", 1),
+        ("{a = 1}", 1),
+        ("1, ", 2),
+    ] {
+        let source = format!("---@overload fun(): number\n---@overload fun(value: any): number\n---@overload fun(value: any, other: any): number\nlocal function read(): number return 1 end\nread({argument})");
+        let help = signature_at_last(&source, &format!("read({argument}")).unwrap();
+        assert_eq!(
+            help.signatures[help.active_signature].parameters.len(),
+            expected_parameters,
+            "{argument:?}: {help:?}"
+        );
+    }
+}
