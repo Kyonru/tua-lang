@@ -1961,3 +1961,47 @@ fn reader_preserves_the_document_version_seen_by_each_request() {
     assert_eq!(take_received_request_version(&old_request, &input), Some(1));
     assert_eq!(take_received_request_version(&new_request, &input), Some(2));
 }
+
+#[test]
+fn did_save_queues_fresh_diagnostics_without_building_on_the_coordinator() {
+    let uri = "file:///tmp/save-responsive.tua";
+    let other = "file:///tmp/save-unrelated.tua";
+    let mut server = TestServer::new();
+    server.send_without_drain(did_open(uri, "local value: number = 1\n"));
+    server.send_without_drain(did_open(other, "local other = 1\n"));
+    server.send_without_drain(json!({
+        "jsonrpc": "2.0", "method": "textDocument/didSave",
+        "params": {"textDocument": {"uri": uri}, "text": "local value: number = 'wrong'\n"}
+    }));
+    server.send_without_drain(cache_stats_request(201));
+    assert_eq!(
+        response_with_id(server.output(), 201)["result"]["parse"]["misses"],
+        0
+    );
+    assert!(server.next_slow_diagnostics_due().unwrap() <= Instant::now());
+    server.drain_due_diagnostics(Instant::now());
+    assert!(diagnostics_publications(server.output(), uri)
+        .iter()
+        .any(|message| {
+            message["params"]["diagnostics"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|d| d["code"] == "TL1003")
+        }));
+}
+
+#[test]
+fn save_diagnostics_are_discarded_after_a_newer_edit() {
+    let uri = "file:///tmp/save-stale.tua";
+    let mut server = LspServer::default();
+    server.handle_message(did_open(uri, "local value: number = 1\n"));
+    server.handle_message(json!({"jsonrpc":"2.0", "method":"textDocument/didSave", "params":{"textDocument":{"uri":uri}}}));
+    let (pending_uri, pending) = server
+        .take_next_due_slow_diagnostic(Instant::now())
+        .unwrap();
+    server.handle_message(did_change(uri, "local value: string = 'fresh'\n", 2));
+    assert!(server
+        .finish_slow_diagnostics(&pending_uri, pending, vec![json!({"message":"stale"})])
+        .is_none());
+}

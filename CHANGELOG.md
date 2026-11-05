@@ -39,6 +39,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Saving queues project diagnostics on the background worker instead of blocking
+  the coordinator; newer edits still discard stale diagnostic results.
+
 - Interactive requests reuse file facts published by other analysis workers.
   Edits retain unaffected snapshot facts before dependency invalidation, avoiding
   repeated file analysis during completion and hover.

@@ -802,11 +802,20 @@ impl LspServer {
             return None;
         }
 
-        self.analysis.contains_document(&uri).then(|| {
-            let diagnostics = self.diagnostics_for(&uri);
-
-            vec![self.publish_tracked_diagnostics(&uri, diagnostics)]
-        })
+        if self.analysis.contains_document(&uri) {
+            // Saving must not run project analysis on the input coordinator.
+            // Use the existing worker lane and generation checks, without the
+            // typing debounce, so requests remain responsive during the refresh.
+            self.pending_slow_diagnostics.insert(
+                uri.clone(),
+                PendingDiagnostics {
+                    generation: *self.document_generations.get(&uri)?,
+                    version: self.document_versions.get(&uri).copied(),
+                    due_at: Instant::now(),
+                },
+            );
+        }
+        None
     }
 
     fn did_close_notification(&mut self, message: &Value) -> Option<Vec<Value>> {
