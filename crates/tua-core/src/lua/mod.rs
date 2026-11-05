@@ -3,6 +3,36 @@ use crate::{
     signal, sprite, state_machine, store, vector, Type,
 };
 
+pub(crate) fn global_name_is_assigned(parsed: &crate::ParsedSource, name: &str) -> bool {
+    use full_moon::ast::{self, Index, Prefix, Suffix, Var};
+    use full_moon::visitors::Visitor;
+    struct Writes<'a> {
+        name: &'a str,
+        found: bool,
+    }
+    impl Visitor for Writes<'_> {
+        fn visit_assignment(&mut self, assignment: &ast::Assignment) {
+            self.found |= assignment.variables().iter().any(|var| match var {
+                Var::Name(name) => crate::ast_utils::token_text(name) == self.name,
+                Var::Expression(expression) if matches!(expression.prefix(), Prefix::Name(name) if matches!(crate::ast_utils::token_text(name).as_str(), "_G" | "_ENV")) => {
+                    match expression.suffixes().next() {
+                        Some(Suffix::Index(Index::Dot { name, .. })) => crate::ast_utils::token_text(name) == self.name,
+                        Some(Suffix::Index(Index::Brackets { .. })) => true,
+                        _ => false,
+                    }
+                }
+                _ => false,
+            });
+        }
+        fn visit_function_declaration(&mut self, function: &ast::FunctionDeclaration) {
+            self.found |= function.name().to_string().trim() == self.name;
+        }
+    }
+    let mut writes = Writes { name, found: false };
+    writes.visit_ast(&parsed.ast);
+    writes.found
+}
+
 /// Writes anywhere in the source make specialization of this mutable Lua
 /// builtin unsafe. Keep this conservative across branches and nested functions;
 /// ordinary user-call inference remains responsible for the replacement.

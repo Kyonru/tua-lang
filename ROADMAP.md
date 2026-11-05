@@ -88,7 +88,6 @@ reproductions and current workarounds.
 
 ### Complete Typed Lua Porting Workflows
 
-- Add assertion-based narrowing with correct control-flow semantics.
 - Align LOVE File/FileData constructor overloads with the generated catalog;
   preserve invalid-argument diagnostics and actual LOVE runtime coverage.
 - Extend helper binding awareness to asset indexing and editor metadata, with

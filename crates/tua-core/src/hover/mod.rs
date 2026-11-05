@@ -335,7 +335,9 @@ impl<'a> HoverResolver<'a> {
             .map(|(name, ty)| (name.to_owned(), ty.clone()))
             .collect::<BTreeMap<_, _>>();
         let ty = narrowed_type_at_position(self.parsed, &aliases, name, position, |lookup_name| {
-            if lookup_name == name {
+            if lookup_name == "assert" && self.environment.assert_is_overridden() {
+                Some(Type::Any)
+            } else if lookup_name == name {
                 Some(base.clone())
             } else {
                 self.semantic.type_of_name(lookup_name, position)

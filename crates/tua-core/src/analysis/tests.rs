@@ -7807,3 +7807,44 @@ fn anonymous_default_signature_and_body_hover_agree() {
         "{signature:?}"
     );
 }
+
+#[test]
+fn assertion_narrowing_agrees_in_completion_hover_and_return_inference() {
+    let fixture = Fixture::parse("-- file: assertions.tua\ntype Item = { value: number }\nlocal function need(item: Item | nil)\n assert(item)\n print(item.<|complete|>value)\n return item\nend\nlocal <|hover|>result = need(nil)\n");
+    let mut host = AnalysisHost::new();
+    host.set_file("assertions.tua", fixture.files()[0].source.clone());
+    let snapshot = host.snapshot();
+    assert!(completion_labels(
+        &snapshot.completion("assertions.tua", fixture.position("complete"))
+    )
+    .contains(&"value".into()));
+    let hover = snapshot
+        .hover("assertions.tua", fixture.position("hover"))
+        .unwrap();
+    assert!(
+        !hover.contents.contains("nil") && !hover.contents.contains("any"),
+        "{hover:?}"
+    );
+}
+
+#[test]
+fn assertion_completion_does_not_narrow_shadowed_calls() {
+    for declaration in [
+        "local assert = function(value) return true end",
+        "assert = function(value) return true end",
+        "_G.assert = function(value) return true end",
+    ] {
+        let fixture = Fixture::parse(&format!("-- file: assertions.tua\n{declaration}\nlocal function need(item: {{ value: number }} | nil)\n assert(item)\n print(item.<|complete|>value)\nend\n"));
+        let mut host = AnalysisHost::new();
+        host.set_file("assertions.tua", fixture.files()[0].source.clone());
+        let labels = completion_labels(
+            &host
+                .snapshot()
+                .completion("assertions.tua", fixture.position("complete")),
+        );
+        assert!(
+            !labels.contains(&"value".into()),
+            "{declaration}: {labels:?}"
+        );
+    }
+}

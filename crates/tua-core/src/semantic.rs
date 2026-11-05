@@ -899,7 +899,11 @@ impl<'a> SemanticModel<'a> {
             let aliases = self.alias_map();
             if let Some(narrowed) =
                 narrowed_type_at_position(self.parsed, &aliases, name, position, |lookup_name| {
-                    self.type_of_name_without_narrowing(lookup_name, position, depth + 1)
+                    if lookup_name == "assert" && self.environment.assert_is_overridden() {
+                        Some(Type::Any)
+                    } else {
+                        self.type_of_name_without_narrowing(lookup_name, position, depth + 1)
+                    }
                 })
             {
                 return Some(narrowed);
@@ -944,7 +948,11 @@ impl<'a> SemanticModel<'a> {
         let aliases = self.alias_map();
         let guard_type =
             narrowed_type_at_position(self.parsed, &aliases, guard, position, |lookup_name| {
-                self.type_of_name_without_narrowing(lookup_name, position, depth + 1)
+                if lookup_name == "assert" && self.environment.assert_is_overridden() {
+                    Some(Type::Any)
+                } else {
+                    self.type_of_name_without_narrowing(lookup_name, position, depth + 1)
+                }
             })?;
         if type_may_be_nil(&guard_type) {
             return None;

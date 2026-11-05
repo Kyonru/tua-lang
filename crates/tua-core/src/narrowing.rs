@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use full_moon::ast::{self, Call, Expression, FunctionArgs, FunctionCall, Prefix, Suffix, Var};
 use full_moon::node::Node;
-use full_moon::visitors::Visitor;
+use full_moon::visitors::{Visit, Visitor};
 
 use crate::ast_utils::plain_field_chain_from_var_expression;
 use crate::control_flow::block_fallthrough_position;
@@ -370,12 +370,52 @@ fn collect_narrowed_type_at_position(
     }
 }
 
+/// Only the ordinary builtin assertion establishes a truthy continuation.
+pub(crate) fn assertion_condition(
+    statement: &ast::Stmt,
+    builtin: impl FnOnce() -> bool,
+) -> Option<&Expression> {
+    let ast::Stmt::FunctionCall(call) = statement else {
+        return None;
+    };
+    let Prefix::Name(name) = call.prefix() else {
+        return None;
+    };
+    if token_text(name) != "assert" || call.suffixes().count() != 1 || !builtin() {
+        return None;
+    }
+    let Suffix::Call(Call::AnonymousCall(FunctionArgs::Parentheses { arguments, .. })) =
+        call.suffixes().next()?
+    else {
+        return None;
+    };
+    // Argument evaluation can call user code that mutates the guarded value
+    // after it has been read. Keep such assertions conservative.
+    struct Calls(bool);
+    impl Visitor for Calls {
+        fn visit_function_call(&mut self, _: &FunctionCall) {
+            self.0 = true;
+        }
+    }
+    let mut calls = Calls(false);
+    for argument in arguments {
+        argument.visit(&mut calls);
+    }
+    if calls.0 {
+        return None;
+    }
+    arguments.iter().next()
+}
+
 fn narrowed_type_after_guard(
     statement: &ast::Stmt,
     aliases: &BTreeMap<String, Type>,
     name: &str,
     lookup: impl Fn(&str) -> Option<Type> + Copy,
 ) -> Option<Type> {
+    if let Some(condition) = assertion_condition(statement, || lookup("assert").is_none()) {
+        return narrowed_locals_for_condition(condition, aliases, lookup).remove(name);
+    }
     let ast::Stmt::If(statement) = statement else {
         return None;
     };

@@ -331,6 +331,12 @@ This applies to expressions in assignments as well as `if` conditions.
 A truthy value can still be `true`, so truthiness removes `nil` but keeps
 `boolean`. The `else` branch keeps the original type.
 
+A call to the builtin `assert(value)` also narrows a local for subsequent
+statements, including completion, hover and inferred returns. Nil comparisons
+such as `assert(value ~= nil)` work too. Reassigning the local ends the guard.
+Tua does not use shadowed or replaced `assert` functions as guards, or assertions
+with function calls inside their arguments, which could mutate the guarded value.
+
 An early return also narrows the remaining statements. Return inference keeps
 that information in returned records, including functions exported by modules:
 

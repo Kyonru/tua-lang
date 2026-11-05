@@ -65,7 +65,12 @@ reproductions and relevant checks pass.
   check; `callback-runtime` checks/builds and executes successfully with Lua.
   Nested-default-only outer reads still cause a false TL4005 warning; retained
   in the roadmap's usage-tracking follow-up.
-- Pending: assertion and stable member-path narrowing.
+- Completed: builtin assertions narrow locals consistently across checker and
+  editor queries. Local/global shadows, `_G.assert` replacement, reassignment
+  and argument calls have conservative regression coverage. Core/LSP suites
+  pass (1,616/375, `assert-core-lsp.log`); final argument-call controls pass
+  (`assert-final.log`).
+- Pending: stable member-path narrowing.
 - Pending: contextual `table.sort` comparator types.
 
 ## 4. LOVE and assets

@@ -8,6 +8,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Changed
 
+- Builtin `assert` narrows local values across checking, completion, hover and
+  return inference. Shadowed/replaced assertions and calls inside arguments
+  remain conservative; reassignment ends the guard.
+
 - Anonymous callbacks accept optional and defaulted parameters with shared
   checker/editor contracts. Default lowering follows parsed function bodies,
   including single-line bodies and nested defaults with lexical helper shadows.

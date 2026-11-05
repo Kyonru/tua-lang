@@ -351,6 +351,19 @@ impl<'a> Checker<'a> {
     }
 
     fn record_guard_clause_narrowing(&mut self, statement: &ast::Stmt) {
+        let position = node_position(statement);
+        if let Some(condition) = crate::narrowing::assertion_condition(statement, || {
+            !self.environment.assert_is_overridden()
+                && self
+                    .terminating_builtin_references
+                    .contains(&(position.line, position.column))
+        }) {
+            let narrowed = self.narrowed_locals_for_condition(condition);
+            if let Some(scope) = self.scoped_locals.last_mut() {
+                scope.extend(narrowed);
+            }
+            return;
+        }
         let ast::Stmt::If(statement) = statement else {
             return;
         };

@@ -5193,3 +5193,19 @@ print(first, second)
         "{diagnostics:?}"
     );
 }
+
+#[test]
+fn builtin_assert_narrows_locals_but_shadowing_and_reassignment_do_not() {
+    check_tua_source(
+        "assertions.tua",
+        "local function need(value: number | nil): number\n assert(value)\n return value\nend\n",
+    )
+    .expect("builtin assertion narrows");
+    for source in [
+        "local function need(value: number | nil, assert: any): number\n assert(value)\n return value\nend\n",
+        "local function need(value: number | nil): number\n assert(value)\n value = nil\n return value\nend\n",
+        "local function need(value: number | nil, mutate: () -> string): number\n assert(value, mutate())\n return value\nend\n",
+    ] {
+        assert!(check_tua_source("assertions.tua", source).is_err(), "{source}");
+    }
+}

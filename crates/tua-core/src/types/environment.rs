@@ -49,6 +49,7 @@ pub struct TypeEnvironment {
     must_use_accesses: BTreeSet<Vec<String>>,
     exact_module_bindings: BTreeMap<String, String>,
     table_remove_overridden: bool,
+    assert_overridden: bool,
     table_insert_overridden: bool,
     project_module_globals: BTreeSet<String>,
 }
@@ -78,6 +79,10 @@ impl LocalContracts {
 impl TypeEnvironment {
     pub fn from_parsed(parsed: &ParsedSource) -> Result<Self, Vec<Diagnostic>> {
         build_type_environment(parsed)
+    }
+
+    pub(crate) fn assert_is_overridden(&self) -> bool {
+        self.assert_overridden
     }
 
     pub(crate) fn table_remove_is_overridden(&self) -> bool {
@@ -884,6 +889,7 @@ pub(crate) fn build_type_environment_with_domain_registry(
             must_use_accesses: BTreeSet::new(),
             exact_module_bindings: BTreeMap::new(),
             table_remove_overridden: lua::table_remove_is_overridden(parsed),
+            assert_overridden: lua::global_name_is_assigned(parsed, "assert"),
             table_insert_overridden: lua::table_member_is_overridden(parsed, "insert"),
             project_module_globals: BTreeSet::new(),
         },
@@ -2510,6 +2516,7 @@ struct FunctionReturnQuery<'a> {
     parameters: &'a BTreeMap<String, Vec<TypedParameter>>,
     runtime_imports: &'a BTreeMap<String, String>,
     table_remove_overridden: bool,
+    assert_overridden: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -2522,6 +2529,7 @@ struct InferenceQueryContext<'a> {
     domains: BuiltinDomainRegistry,
     runtime_imports: &'a BTreeMap<String, String>,
     table_remove_overridden: bool,
+    assert_overridden: bool,
 }
 
 impl<'a> InferenceQueryContext<'a> {
@@ -2543,7 +2551,13 @@ impl<'a> InferenceQueryContext<'a> {
             domains: BuiltinDomainRegistry::standard(),
             runtime_imports,
             table_remove_overridden,
+            assert_overridden: false,
         }
+    }
+
+    fn with_assert_overridden(mut self, overridden: bool) -> Self {
+        self.assert_overridden = overridden;
+        self
     }
 
     fn expression<'locals>(
@@ -2588,6 +2602,7 @@ fn infer_function_return_types(
     let parameters = function_parameters_by_name(functions);
     let runtime_imports = runtime_import_bindings(parsed);
     let table_remove_overridden = lua::table_remove_is_overridden(parsed);
+    let assert_overridden = lua::global_name_is_assigned(parsed, "assert");
 
     for _ in 0..8 {
         let previous_returns = returns.clone();
@@ -2601,6 +2616,7 @@ fn infer_function_return_types(
             parameters: &parameters,
             runtime_imports: &runtime_imports,
             table_remove_overridden,
+            assert_overridden,
         };
         collect_function_return_types(parsed.ast.nodes(), query, locals, &mut returns);
 
@@ -2660,7 +2676,8 @@ pub(crate) fn inferred_function_type_from_body(
         "",
         &runtime_imports,
         environment.table_remove_is_overridden(),
-    );
+    )
+    .with_assert_overridden(environment.assert_overridden);
     if let Some(returns) = infer_block_return_types(body.block(), context, &locals) {
         *function.return_type = returns.types.first().cloned().unwrap_or(Type::Any);
         function.return_types = returns.types;
@@ -2755,7 +2772,8 @@ fn collect_function_return_types(
         "",
         query.runtime_imports,
         query.table_remove_overridden,
-    );
+    )
+    .with_assert_overridden(query.assert_overridden);
 
     for stmt in block.stmts() {
         match stmt {
@@ -2777,7 +2795,8 @@ fn collect_function_return_types(
                     &name,
                     query.runtime_imports,
                     query.table_remove_overridden,
-                );
+                )
+                .with_assert_overridden(query.assert_overridden);
 
                 if let Some(return_types) =
                     infer_block_return_types(function.body().block(), inference, &function_locals)
@@ -2805,7 +2824,8 @@ fn collect_function_return_types(
                     &name,
                     query.runtime_imports,
                     query.table_remove_overridden,
-                );
+                )
+                .with_assert_overridden(query.assert_overridden);
 
                 if let Some(return_types) =
                     infer_block_return_types(function.body().block(), inference, &function_locals)
@@ -2996,6 +3016,18 @@ fn collect_return_types_in_block(
             }
             ast::Stmt::FunctionCall(function_call) => {
                 record_setmetatable_call(function_call, context, &mut scoped_locals);
+                if let Some(condition) = crate::narrowing::assertion_condition(stmt, || {
+                    !context.assert_overridden
+                        && !scoped_locals.contains_key("assert")
+                        && !context.function_types.contains_key("assert")
+                }) {
+                    let mut narrowed =
+                        narrowed_locals_for_condition(condition, context.aliases, |name| {
+                            scoped_locals.get(name).cloned()
+                        });
+                    extend_with_return_guards(&mut narrowed, &guards);
+                    scoped_locals.extend(narrowed);
+                }
             }
             ast::Stmt::Do(block) => collect_return_types_in_block(
                 block.block(),
