@@ -467,6 +467,10 @@ the receiver would not be passed as `self`:
     player:setFilter("nearest")
     ```
 
+Assigning `t.window = nil` in `love.conf(t)` is supported for applications that
+create their window later. Window field completion remains available while
+editing the configuration.
+
 `love.conf(t)` completion includes known window and module fields plus literal
 choices such as fullscreen modes.
 

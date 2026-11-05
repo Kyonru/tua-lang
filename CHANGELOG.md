@@ -29,6 +29,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- LOVE configuration accepts `t.window = nil` to defer window creation while
+  retaining window field checks and completion.
+
 - Class methods and constructors retain default-argument contracts and emitted
   default guards; named functions following a class also read their original defaults.
 

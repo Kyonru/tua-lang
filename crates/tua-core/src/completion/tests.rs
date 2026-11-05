@@ -3230,3 +3230,16 @@ fn generated_multi_return_documentation_checks_after_insertion() {
         vec![Type::number(), Type::string()]
     );
 }
+
+#[test]
+fn love_conf_window_fields_remain_discoverable_after_disabling_window() {
+    let source = "function love.conf(t)\n  t.window = nil\n  local title = t.window.ti\nend\n";
+    let items = complete_tua_source(
+        "src/conf.tua",
+        source,
+        position_after(source, "t.window.ti"),
+    )
+    .unwrap();
+    assert_eq!(labels(&items), vec!["title".to_owned()]);
+    assert_eq!(items[0].detail.as_deref(), Some("field optional: string"));
+}

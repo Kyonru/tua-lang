@@ -6,6 +6,7 @@ fn semantic_features_survive_incomplete_field_chain_statement() {
     let source = r#"function love.conf(t)
   local bad: number = "oops"
   local title = t.window.title
+  local identity = t.identity -- Window itself can now be nil.
   t.modules.font
 end
 "#;
@@ -13,7 +14,7 @@ end
         did_open(uri, source),
         hover_request(2, uri, source, "bad: number"),
         completion_request(3, uri, source, "t.modules.font"),
-        inlay_hint_request(4, uri, 0, 0, 5, 0),
+        inlay_hint_request(4, uri, 0, 0, 6, 0),
     ]);
     let diagnostics = last_published_diagnostics(&output, uri);
     let hints = response_with_id(&output, 4)["result"]

@@ -5041,3 +5041,20 @@ fn unindented_class_error_has_exact_source_column() {
         .unwrap();
     assert_eq!((error.line, error.column), (3, 8));
 }
+
+#[test]
+fn love_conf_window_can_be_disabled_without_losing_field_checks() {
+    check_tua_source(
+        "src/conf.tua",
+        "function love.conf(t)\n  t.window.width = 640\n  t.window = nil\nend\n",
+    )
+    .expect("LOVE allows deferring window creation");
+    let diagnostics = check_tua_source(
+        "src/conf.tua",
+        "function love.conf(t)\n  t.window = 42\nend\n",
+    )
+    .expect_err("window numbers are invalid");
+    assert!(diagnostics
+        .iter()
+        .any(|d| d.code == Some(DiagnosticCode::TYPE_MISMATCH)));
+}

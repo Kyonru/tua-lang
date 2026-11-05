@@ -2686,6 +2686,7 @@ fn snapshot_recovers_semantics_when_field_chain_statement_is_incomplete() {
 function love.conf(t)
   local bad: number = "oops"
   local title = t.window.<|hover|>title
+  local identity = t.identity -- Always string; window itself can be nil.
   t.modules.font<|complete|>
 end
 "#,

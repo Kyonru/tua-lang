@@ -6,6 +6,16 @@ use crate::types::{TableField, Type};
 use crate::{ParsedSource, SourcePosition, SourceSpan};
 
 pub(crate) fn config_type() -> Type {
+    config_type_with_window(Type::union([window_type(), Type::nil()]))
+}
+
+// LOVE enters love.conf with an enabled window table. Keep its configurable
+// fields discoverable while editing even though assigning nil disables creation.
+pub(crate) fn completion_config_type() -> Type {
+    config_type_with_window(window_type())
+}
+
+fn config_type_with_window(window: Type) -> Type {
     Type::table([
         ("audio", TableField::optional(audio_type())),
         ("console", TableField::optional(Type::boolean())),
@@ -14,7 +24,7 @@ pub(crate) fn config_type() -> Type {
         ("identity", TableField::optional(Type::string())),
         ("modules", TableField::optional(modules_type())),
         ("version", TableField::optional(Type::string())),
-        ("window", TableField::optional(window_type())),
+        ("window", TableField::optional(window)),
     ])
 }
 

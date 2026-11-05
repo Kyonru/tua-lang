@@ -2748,7 +2748,7 @@ fn love_conf_receiver_type(
         return None;
     }
 
-    field_chain_type(love_conf::config_type(), &receiver_parts[1..])
+    field_chain_type(love_conf::completion_config_type(), &receiver_parts[1..])
 }
 
 fn field_chain_type(mut ty: Type, fields: &[String]) -> Option<Type> {
