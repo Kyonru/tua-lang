@@ -245,7 +245,10 @@ state = "running"      -- accepted
 ```
 
 The binding keeps that contract across branches and loops. A shadowing `local`
-creates a new binding rather than changing the outer one.
+creates a new binding rather than changing the outer one. Native annotations
+and LuaDoc local contracts belong to that declaration: reusing its name in
+another function or nested scope does not transfer the contract. This also
+applies to captured locals and imported function return inference.
 
 Lua initializes a declaration without a value to `nil`, so declare intended
 optional state explicitly:

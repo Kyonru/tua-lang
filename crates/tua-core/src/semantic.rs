@@ -906,15 +906,43 @@ impl<'a> SemanticModel<'a> {
         ty
     }
 
+    pub(crate) fn local_contract_at_source_position(
+        &self,
+        name: &str,
+        position: SourcePosition,
+    ) -> Option<&Type> {
+        let position = self
+            .parsed
+            .raw
+            .parser_position_for_source(position)
+            .unwrap_or(position);
+        self.environment.local_at_position(name, position)
+    }
+
     fn resolve_name_without_narrowing(
         &self,
         name: &str,
         position: SourcePosition,
         depth: usize,
     ) -> Option<Type> {
+        let parser_position = self
+            .parsed
+            .raw
+            .parser_position_for_source(position)
+            .unwrap_or(position);
+        if self
+            .environment
+            .annotated_name_binding(name, parser_position)
+            .is_some_and(|binding| binding.kind == crate::ScopeDeclarationKind::Parameter)
+        {
+            return self.parameter_type_at_source_position(name, position);
+        }
         let ty = self
             .class_self_type_at_position(name, position)
-            .or_else(|| self.environment.local(name).cloned())
+            .or_else(|| {
+                self.local_contract_at_source_position(name, position)
+                    .cloned()
+            })
             .or_else(|| love_conf::parameter_type_at_position(self.parsed, name, position))
             .or_else(|| {
                 self.environment

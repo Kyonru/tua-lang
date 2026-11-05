@@ -498,7 +498,7 @@ impl AnalysisSnapshot {
             .with_deprecated_accesses(self.project_module_binding_deprecations(parsed))
             .with_must_use_accesses(self.project_module_binding_must_use_accesses(parsed))
             .with_local_types(project_inference.local_types.clone())
-            .with_local_types(self.project_local_annotation_types(parsed));
+            .with_local_contract_types(self.project_local_annotation_types(parsed));
 
         if self.config.ecs.enabled {
             environment
@@ -613,7 +613,7 @@ impl AnalysisSnapshot {
     pub(super) fn project_local_annotation_types(
         &self,
         parsed: &ParsedSource,
-    ) -> Vec<(String, Type)> {
+    ) -> Vec<(String, crate::SourcePosition, Type)> {
         parsed
             .local_annotations
             .iter()
@@ -622,8 +622,9 @@ impl AnalysisSnapshot {
                     || tua_type_uses_named_import(parsed, &annotation.ty)
             })
             .filter_map(|annotation| {
+                let position = annotation.name_span?.start;
                 self.project_type_from_tua_type(parsed, &annotation.ty)
-                    .map(|ty| (annotation.name.clone(), ty))
+                    .map(|ty| (annotation.name.clone(), position, ty))
             })
             .collect()
     }

@@ -23,9 +23,6 @@ workflow pages under `docs/`. Completed work belongs in
 
 ### Resolve Correctness Defects Found In Full Ports
 
-- Prevent explicit local annotations from leaking into unrelated same-named
-  locals in other functions; store contracts by declaration identity and verify
-  shadowing, callbacks, and cross-file imports.
 - Resolve nested vendor-module re-exports without false missing-member errors
   (HUMP `Camera.smooth.damped`); make explicit dynamic interop annotations
   consistently override inferred module contracts where the language permits it.

@@ -36,6 +36,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Local native/LuaDoc contracts follow declaration identities across scopes,
+  checking, hover and return inference; same-named locals no longer borrow
+  unrelated annotations. File-local completion remains available in trailing edits.
+
 - Asset and runtime helper calls respect local bindings and parameters instead
   of rewriting engine wrappers or declarations with the same names. Nested
   default expressions and callback-local shadows use the same lexical lowering;

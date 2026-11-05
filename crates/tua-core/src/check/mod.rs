@@ -587,8 +587,13 @@ impl<'a> Checker<'a> {
                 continue;
             }
 
+            let declaration_position = node_position(name);
             let name = token_text(name);
-            let Some(target) = self.environment.local(&name).cloned() else {
+            let Some(target) = self
+                .environment
+                .local_at_declaration(&name, declaration_position)
+                .cloned()
+            else {
                 continue;
             };
 
@@ -626,6 +631,7 @@ impl<'a> Checker<'a> {
         let specifiers = local.type_specifiers().collect::<Vec<_>>();
 
         for (index, name) in local.names().iter().enumerate() {
+            let declaration_position = node_position(name);
             let name = token_text(name);
             let has_annotation = specifiers
                 .get(index)
@@ -639,8 +645,11 @@ impl<'a> Checker<'a> {
                     self.infer_expression_return(expression, return_index)
                 })
                 .filter(type_contains_string_literal);
-            let environment_type =
-                indexed_contract_type.or_else(|| self.environment.local(&name).cloned());
+            let environment_type = indexed_contract_type.or_else(|| {
+                self.environment
+                    .local_at_declaration(&name, declaration_position)
+                    .cloned()
+            });
             let has_environment_type = environment_type.is_some();
             if environment_type.is_some() && !has_annotation {
                 // The environment already typed this local, so the value is

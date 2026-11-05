@@ -43,11 +43,34 @@ pub struct TypeEnvironment {
     class_parents: BTreeMap<String, String>,
     locals: Arc<BTreeMap<String, Type>>,
     local_docs: BTreeMap<String, String>,
+    local_contracts: LocalContracts,
     functions: Vec<TypedFunction>,
     deprecated_accesses: BTreeMap<Vec<String>, Deprecation>,
     must_use_accesses: BTreeSet<Vec<String>>,
     exact_module_bindings: BTreeMap<String, String>,
     table_remove_overridden: bool,
+}
+
+/// Annotation contracts belong to declarations, not names shared across scopes.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+struct LocalContracts {
+    types: BTreeMap<(usize, usize), Type>,
+    names: BTreeSet<String>,
+    scope: Option<Arc<crate::ScopeMap>>,
+}
+
+impl LocalContracts {
+    fn at_declaration(&self, position: crate::SourcePosition) -> Option<&Type> {
+        self.types.get(&(position.line, position.column))
+    }
+
+    fn binding(
+        &self,
+        name: &str,
+        position: crate::SourcePosition,
+    ) -> Option<&crate::ScopeDeclaration> {
+        crate::semantic::binding_at(self.scope.as_deref()?, name, position)
+    }
 }
 
 impl TypeEnvironment {
@@ -166,6 +189,44 @@ impl TypeEnvironment {
         self.locals.get(name)
     }
 
+    pub(crate) fn local_at_declaration(
+        &self,
+        name: &str,
+        position: crate::SourcePosition,
+    ) -> Option<&Type> {
+        if self.local_contracts.names.contains(name) {
+            self.local_contracts.at_declaration(position)
+        } else {
+            self.local(name)
+        }
+    }
+
+    /// Position is in parser coordinates, like the shared scope map.
+    pub(crate) fn local_at_position(
+        &self,
+        name: &str,
+        position: crate::SourcePosition,
+    ) -> Option<&Type> {
+        if self.local_contracts.names.contains(name) {
+            let binding = self.local_contracts.binding(name, position)?;
+            self.local_contracts.at_declaration(binding.name_span.start)
+        } else {
+            self.local(name)
+        }
+    }
+
+    pub(crate) fn annotated_name_binding(
+        &self,
+        name: &str,
+        position: crate::SourcePosition,
+    ) -> Option<&crate::ScopeDeclaration> {
+        self.local_contracts
+            .names
+            .contains(name)
+            .then(|| self.local_contracts.binding(name, position))
+            .flatten()
+    }
+
     pub fn local_documentation(&self, name: &str) -> Option<&str> {
         self.local_docs.get(name).map(String::as_str)
     }
@@ -244,6 +305,19 @@ impl TypeEnvironment {
             }
         }
 
+        self
+    }
+
+    pub(crate) fn with_local_contract_types(
+        mut self,
+        contracts: impl IntoIterator<Item = (String, crate::SourcePosition, Type)>,
+    ) -> Self {
+        for (name, position, ty) in contracts {
+            self.local_contracts
+                .types
+                .insert((position.line, position.column), ty.clone());
+            Arc::make_mut(&mut self.locals).insert(name, ty);
+        }
         self
     }
 
@@ -623,6 +697,7 @@ pub(crate) fn build_type_environment_with_domain_registry(
 
     register_class_aliases(parsed, &alias_names, &mut aliases, &mut diagnostics);
 
+    let mut local_contracts = LocalContracts::default();
     for local in &parsed.local_annotations {
         let ty = resolve_tua_type(
             &parsed.path,
@@ -631,7 +706,22 @@ pub(crate) fn build_type_environment_with_domain_registry(
             &alias_names,
             &mut diagnostics,
         );
+        if let Some(span) = local.name_span {
+            local_contracts
+                .types
+                .insert((span.start.line, span.start.column), ty.clone());
+            local_contracts.names.insert(local.name.clone());
+        }
         locals.insert(local.name.clone(), ty);
+    }
+
+    if !local_contracts.types.is_empty()
+        || parsed
+            .lua_doc_annotations
+            .iter()
+            .any(|doc| matches!(doc.kind, LuaDocAnnotationKind::Type(_)))
+    {
+        local_contracts.scope = Some(Arc::new(crate::scope_map_parsed_source(parsed)));
     }
 
     for function in &parsed.function_annotations {
@@ -645,6 +735,7 @@ pub(crate) fn build_type_environment_with_domain_registry(
     }
 
     let mut lua_doc_state = LuaDocLoweringState {
+        local_contracts: &mut local_contracts,
         locals: &mut locals,
         local_docs: &mut local_docs,
         functions: &mut functions,
@@ -652,7 +743,18 @@ pub(crate) fn build_type_environment_with_domain_registry(
     };
     lower_lua_doc_annotations_into_environment(parsed, &alias_names, &mut lua_doc_state);
 
-    let inferred_returns = infer_function_return_types(parsed, &aliases, &locals, &functions);
+    let inference_locals = locals
+        .iter()
+        .filter(|(name, _)| !local_contracts.names.contains(*name))
+        .map(|(name, ty)| (name.clone(), ty.clone()))
+        .collect();
+    let inferred_returns = infer_function_return_types(
+        parsed,
+        &aliases,
+        &inference_locals,
+        &functions,
+        &local_contracts,
+    );
 
     for function in &mut functions {
         if !function.return_types.is_empty() || function.return_type.is_some() {
@@ -713,6 +815,7 @@ pub(crate) fn build_type_environment_with_domain_registry(
                 .collect(),
             locals,
             local_docs,
+            local_contracts,
             functions,
             deprecated_accesses: BTreeMap::new(),
             must_use_accesses: BTreeSet::new(),
@@ -1197,6 +1300,7 @@ fn flush_lua_doc_class(
 }
 
 struct LuaDocLoweringState<'a> {
+    local_contracts: &'a mut LocalContracts,
     locals: &'a mut BTreeMap<String, Type>,
     local_docs: &'a mut BTreeMap<String, String>,
     functions: &'a mut Vec<TypedFunction>,
@@ -1302,7 +1406,24 @@ fn lower_lua_doc_annotations_for_stmt(
     if let Some((name, ty, documentation)) =
         lua_doc_local_for_stmt(parsed, stmt, docs, alias_names, state.diagnostics)
     {
-        merge_doc_local(parsed, &name, ty, documentation, stmt_span, state);
+        let declaration = match stmt {
+            ast::Stmt::LocalAssignment(local) => local
+                .names()
+                .iter()
+                .find(|token| token_text(token) == name)
+                .and_then(node_span)
+                .map(|span| span.start),
+            _ => None,
+        };
+        merge_doc_local(
+            parsed,
+            &name,
+            ty,
+            documentation,
+            stmt_span,
+            declaration,
+            state,
+        );
     }
 
     if let Some(function) =
@@ -1321,7 +1442,31 @@ fn lower_line_based_lua_doc_annotations_into_environment(
         if let Some((name, ty, documentation)) =
             lua_doc_local_for_code_line(parsed, &group, alias_names, state.diagnostics)
         {
-            merge_doc_local(parsed, &name, ty, documentation, group.span, state);
+            let parser_position = parsed
+                .raw
+                .parser_position_for_source(group.code_position)
+                .unwrap_or(group.code_position);
+            let declaration = state
+                .local_contracts
+                .scope
+                .as_deref()
+                .and_then(|scope| {
+                    scope.declarations().iter().find(|binding| {
+                        binding.name == name
+                            && binding.kind == crate::ScopeDeclarationKind::Local
+                            && binding.name_span.start.line == parser_position.line
+                    })
+                })
+                .map(|binding| binding.name_span.start);
+            merge_doc_local(
+                parsed,
+                &name,
+                ty,
+                documentation,
+                group.span,
+                declaration,
+                state,
+            );
         }
 
         if let Some(function) =
@@ -1333,6 +1478,7 @@ fn lower_line_based_lua_doc_annotations_into_environment(
 }
 
 struct LuaDocGroup<'a> {
+    code_position: crate::SourcePosition,
     annotations: Vec<&'a LuaDocAnnotation>,
     code: &'a str,
     span: SourceSpan,
@@ -1372,6 +1518,10 @@ fn lua_doc_groups(parsed: &ParsedSource) -> Vec<LuaDocGroup<'_>> {
         if !pending.is_empty() {
             let leading = line.len() - trimmed.len();
             groups.push(LuaDocGroup {
+                code_position: crate::SourcePosition {
+                    line: line_number,
+                    column: leading + 1,
+                },
                 annotations: std::mem::take(&mut pending),
                 code: trimmed,
                 span: pending_span.unwrap_or(SourceSpan {
@@ -1985,9 +2135,14 @@ fn merge_doc_local(
     ty: Type,
     documentation: Option<String>,
     span: SourceSpan,
+    declaration: Option<crate::SourcePosition>,
     state: &mut LuaDocLoweringState<'_>,
 ) {
-    if let Some(existing) = state.locals.get(name) {
+    let existing = match declaration {
+        Some(position) => state.local_contracts.at_declaration(position),
+        None => state.locals.get(name),
+    };
+    if let Some(existing) = existing {
         if existing != &ty {
             push_doc_conflict(
                 state.diagnostics,
@@ -1999,6 +2154,13 @@ fn merge_doc_local(
             );
         }
     } else {
+        if let Some(position) = declaration {
+            state.local_contracts.names.insert(name.to_owned());
+            state
+                .local_contracts
+                .types
+                .insert((position.line, position.column), ty.clone());
+        }
         state.locals.insert(name.to_owned(), ty);
     }
 
@@ -2276,6 +2438,7 @@ fn push_doc_conflict(diagnostics: &mut Vec<Diagnostic>, diagnostic: Diagnostic) 
 
 #[derive(Clone, Copy)]
 struct FunctionReturnQuery<'a> {
+    local_contracts: &'a LocalContracts,
     parsed: &'a ParsedSource,
     aliases: &'a BTreeMap<String, Type>,
     function_types: &'a BTreeMap<String, Type>,
@@ -2286,6 +2449,7 @@ struct FunctionReturnQuery<'a> {
 
 #[derive(Clone, Copy)]
 struct InferenceQueryContext<'a> {
+    local_contracts: &'a LocalContracts,
     parsed: &'a ParsedSource,
     aliases: &'a BTreeMap<String, Type>,
     function_types: &'a BTreeMap<String, Type>,
@@ -2298,6 +2462,7 @@ struct InferenceQueryContext<'a> {
 impl<'a> InferenceQueryContext<'a> {
     fn new(
         parsed: &'a ParsedSource,
+        local_contracts: &'a LocalContracts,
         aliases: &'a BTreeMap<String, Type>,
         function_types: &'a BTreeMap<String, Type>,
         current_function: &'a str,
@@ -2306,6 +2471,7 @@ impl<'a> InferenceQueryContext<'a> {
     ) -> Self {
         Self {
             parsed,
+            local_contracts,
             aliases,
             function_types,
             current_function,
@@ -2351,6 +2517,7 @@ fn infer_function_return_types(
     aliases: &BTreeMap<String, Type>,
     locals: &BTreeMap<String, Type>,
     functions: &[TypedFunction],
+    local_contracts: &LocalContracts,
 ) -> BTreeMap<String, InferredReturns> {
     let mut returns = BTreeMap::new();
     let parameters = function_parameters_by_name(functions);
@@ -2363,6 +2530,7 @@ fn infer_function_return_types(
 
         let query = FunctionReturnQuery {
             parsed,
+            local_contracts,
             aliases,
             function_types: &function_types,
             parameters: &parameters,
@@ -2403,7 +2571,12 @@ pub(crate) fn inferred_function_type_from_body(
         .collect::<BTreeMap<_, _>>();
     let mut locals = environment
         .locals()
-        .map(|(name, ty)| (name.to_owned(), ty.clone()))
+        .filter_map(|(name, _)| {
+            let position = node_span(body)?.start;
+            environment
+                .local_at_position(name, position)
+                .map(|ty| (name.to_owned(), ty.clone()))
+        })
         .collect::<BTreeMap<_, _>>();
 
     for parameter in &function.parameters {
@@ -2415,6 +2588,7 @@ pub(crate) fn inferred_function_type_from_body(
     let runtime_imports = runtime_import_bindings(parsed);
     let context = InferenceQueryContext::new(
         parsed,
+        &environment.local_contracts,
         &aliases,
         &function_types,
         "",
@@ -2509,6 +2683,7 @@ fn collect_function_return_types(
     let mut scoped_locals = locals.clone();
     let root_inference = InferenceQueryContext::new(
         query.parsed,
+        query.local_contracts,
         query.aliases,
         query.function_types,
         "",
@@ -2530,6 +2705,7 @@ fn collect_function_return_types(
                     locals_with_function_parameters(&scoped_locals, query.parameters, &name);
                 let inference = InferenceQueryContext::new(
                     query.parsed,
+                    query.local_contracts,
                     query.aliases,
                     query.function_types,
                     &name,
@@ -2557,6 +2733,7 @@ fn collect_function_return_types(
                     locals_with_function_parameters(&scoped_locals, query.parameters, &name);
                 let inference = InferenceQueryContext::new(
                     query.parsed,
+                    query.local_contracts,
                     query.aliases,
                     query.function_types,
                     &name,
@@ -2980,6 +3157,11 @@ fn infer_local_assignment_types(
                 .start_position()
                 .is_some_and(|position| has_leading_lua_doc_type(context.parsed, position.line()));
         if has_native_annotation || has_lua_doc_annotation {
+            if let Some(ty) =
+                node_span(name).and_then(|span| context.local_contracts.at_declaration(span.start))
+            {
+                locals.insert(token_text(name), ty.clone());
+            }
             continue;
         }
 

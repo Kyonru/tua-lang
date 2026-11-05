@@ -226,7 +226,10 @@ impl<'a> HoverResolver<'a> {
             }
         }
 
-        if let Some(ty) = self.environment.local(&current_part.text) {
+        if let Some(ty) = self
+            .semantic
+            .local_contract_at_source_position(&current_part.text, position)
+        {
             if let Some(hover) =
                 object_pool_local_hover(self.environment, &current_part.text, ty, current_part.span)
             {

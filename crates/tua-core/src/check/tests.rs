@@ -5086,3 +5086,84 @@ image("wrong")
     .expect_err("shadowed helper arguments must still be checked");
     assert_single_mismatch(&diagnostics, "expected number, found string");
 }
+
+#[test]
+fn declaration_contracts_do_not_leak_between_locals() {
+    check_tua_source(
+        "src/main.tua",
+        r#"
+type Pose = { x: number }
+local function follow()
+  local p: Pose | nil
+  return p
+end
+local function damage(value: any)
+  local p = value
+  print(p.health)
+end
+local function count()
+  local p: number = 3
+  return p
+end
+local function text()
+  local p: string = "ok"
+  return p
+end
+local n: number = count()
+local s: string = text()
+final class Names {
+  getCount(): number { local p: number = 1; return p }
+  getText(): string { local p: string = "ok"; return p }
+}
+do
+  local p: number = 3
+  do local p: string = "inner"; print(p) end
+  p = 4
+end
+"#,
+    )
+    .expect("contracts follow their own declarations");
+
+    let diagnostics = check_tua_source(
+        "src/main.tua",
+        r#"
+local function first()
+  local value: number = "bad"
+end
+local function second()
+  local value: string = 12
+end
+"#,
+    )
+    .expect_err("both invalid initializers remain errors");
+    assert_eq!(
+        diagnostics
+            .iter()
+            .filter(|d| d.code == Some(DiagnosticCode::TYPE_MISMATCH))
+            .count(),
+        2,
+        "{diagnostics:?}"
+    );
+}
+
+#[test]
+fn declaration_contracts_keep_luadoc_locals_independent() {
+    check_tua_source(
+        "src/main.tua",
+        r#"
+local function first()
+  ---@type number
+  local item = 1
+  return item
+end
+local function second()
+  ---@type string
+  local item = "hello"
+  return item
+end
+local n: number = first()
+local s: string = second()
+"#,
+    )
+    .expect("LuaDoc contracts also belong to declarations");
+}

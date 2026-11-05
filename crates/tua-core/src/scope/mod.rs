@@ -161,7 +161,23 @@ pub fn scope_map_parsed_source_with_globals(
     let mut builder = ScopeBuilder::new(parsed, configured_globals);
 
     builder.collect_table_fields();
-    builder.analyze_block(parsed.ast.nodes(), None);
+    // File locals remain visible in trailing whitespace and recovered edits.
+    let mut lines = parsed.raw.parser_source.split('\n');
+    let first = lines.next().unwrap_or("");
+    let mut end = SourcePosition {
+        line: 1,
+        column: first.len() + 1,
+    };
+    for line in lines {
+        end.line += 1;
+        end.column = line.len() + 1;
+    }
+    builder.enter_scope(SourceSpan {
+        start: SourcePosition { line: 1, column: 1 },
+        end,
+    });
+    builder.analyze_block_contents_without_new_scope(parsed.ast.nodes(), None);
+    builder.exit_scope();
     builder.finish()
 }
 

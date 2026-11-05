@@ -6902,3 +6902,55 @@ return { layers = layers }
         "local index: number"
     );
 }
+
+#[test]
+fn declaration_contracts_keep_cross_file_returns_and_editor_members_separate() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+local api = require("values")
+local n = api.count()
+local s = api.text()
+print(<|number|>n, <|string|>s)
+-- file: src/values.tua
+type Pose = { x: number }
+local function count()
+  local p: number = 3
+  return p
+end
+local function text()
+  local p: string = "ok"
+  return p
+end
+local function pose()
+  local p: Pose = { x = 2 }
+  print(p.<|members|>x)
+  return function() return p.<|capture|>x end
+end
+local function parameter(p: string)
+  print(<|parameter|>p)
+end
+return {count = count, text = text, pose = pose}
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+    let snapshot = host.snapshot();
+    for (path, marker, expected) in [
+        ("src/main.tua", "number", "number"),
+        ("src/main.tua", "string", "string"),
+        ("src/values.tua", "capture", "number"),
+        ("src/values.tua", "parameter", "string"),
+    ] {
+        let hover = snapshot
+            .hover(path, fixture.position(marker))
+            .expect(marker);
+        assert!(hover.contents.contains(expected), "{marker}: {hover:?}");
+    }
+    assert!(snapshot
+        .completion("src/values.tua", fixture.position("members"))
+        .iter()
+        .any(|c| c.label == "x"));
+}
