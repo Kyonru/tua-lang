@@ -43,3 +43,28 @@ While writing the example, an imported alias used only in a nested callback
 annotation produced a spurious TL4054 unused-type warning. A top-level typed
 factory avoids it in the example; nested annotation usage tracking remains a
 separate semantic follow-up.
+
+## Verification
+
+- All 122 CLI integration tests passed, including real Busted execution. After
+  the final CLI option-layout fix, the six testing regressions and argument
+  parser regression passed again.
+- `cargo test --workspace -- --skip shaders::` passed. This excludes shader
+  groups in both CLI and LSP; it is not a full workspace pass.
+- `make verify` did not pass: existing shader subprocess tests hit startup or
+  execution deadlines, including on a single-threaded retry. One earlier run
+  also timed out starting the LSP process; the later workspace run passed it.
+- Clippy, version/schema/llms drift, release-tool tests, JSON and whitespace
+  checks passed. The language-evaluation corpus timed out on its first compiler
+  launch, then passed on retry.
+- Extension checks passed all 159 tests. CI YAML parses, and the docs passed a
+  clean strict build. The hosted Linux workflow and graphical editor remain
+  untested locally.
+- `make extension-package` produced the macOS arm64 candidate at
+  `target/testing-implementation/tua-0.5.1-busted-macos-arm64.vsix`.
+  Archive integrity passed and the bundled compiler matches `target/release/tua`.
+  That release binary passed example checking, formatting, all three tests and
+  a one-test name filter. Candidate SHA-256:
+  `47c025989e4bbda7e3911d0f4b9bbd23b3d1c5070bd5dd512d574b569ccde885`.
+
+Logs and the candidate checksum are under `target/testing-implementation/`.
