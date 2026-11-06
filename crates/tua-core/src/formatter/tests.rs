@@ -1686,3 +1686,49 @@ fn closes_call_and_table_indentation_after_multiline_literal_suffixes() {
         assert_eq!(format(&output), output);
     }
 }
+
+#[test]
+fn inline_middle_branches_close_their_own_conditional_indentation() {
+    for branch in [
+        "elseif side == 2 then x = 2 end",
+        "else x = 2 end",
+        "elseif side == 2 then if ready then x = 2 end end",
+        "else local callback = function() return 2 end; x = callback() end",
+    ] {
+        let expected = format!("local function choose(side: number): number\n  local x = 0\n  if side == 1 then x = 1\n  {branch}\n  return x\nend\nprint(choose(2))\n");
+        let source = expected
+            .lines()
+            .map(str::trim_start)
+            .collect::<Vec<_>>()
+            .join("\n");
+        let actual = format(&source);
+        assert_eq!(actual, expected, "branch: {branch}");
+        assert_eq!(format(&actual), actual, "idempotence: {branch}");
+    }
+}
+
+#[test]
+fn inline_nested_end_does_not_close_its_middle_branch() {
+    let expected = "if ready then\n  print(1)\nelseif fallback then local callback = function() return 2 end\n  print(callback())\nelse if other then print(3) end\n  print(4)\nend\nprint(5)\n";
+    let source = expected
+        .lines()
+        .map(str::trim_start)
+        .collect::<Vec<_>>()
+        .join("\n");
+    let actual = format(&source);
+    assert_eq!(actual, expected);
+    assert_eq!(format(&actual), actual);
+}
+
+#[test]
+fn inline_middle_branch_closes_inside_multiline_callback() {
+    let expected = "consume(function()\n  if ready then\n    print(1)\n  else print(2) end\n  print(3)\nend)\nprint(4)\n";
+    let source = expected
+        .lines()
+        .map(str::trim_start)
+        .collect::<Vec<_>>()
+        .join("\n");
+    let actual = format(&source);
+    assert_eq!(actual, expected);
+    assert_eq!(format(&actual), actual);
+}

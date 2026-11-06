@@ -127,18 +127,62 @@ pub fn format_tua_source_on_type(
 }
 
 pub fn format_parsed_source(parsed: &ParsedSource, options: &FormatOptions) -> String {
-    Formatter::new(options, table_value_start_lines(parsed)).format(&parsed.source)
+    Formatter::new(options, source_layout(parsed)).format(&parsed.source)
 }
 
 // A bare table value can start with unary minus. Its first line is not a
 // continuation, unlike a subtraction on a later line of the same field.
-fn table_value_start_lines(parsed: &ParsedSource) -> BTreeSet<usize> {
+#[derive(Default)]
+struct SourceLayout {
+    table_value_start_lines: BTreeSet<usize>,
+    closed_middle_block_lines: BTreeSet<usize>,
+}
+
+fn source_layout(parsed: &ParsedSource) -> SourceLayout {
     struct Values<'a> {
         parsed: &'a ParsedSource,
         source_lines: Vec<&'a str>,
-        lines: BTreeSet<usize>,
+        layout: SourceLayout,
     }
     impl Visitor for Values<'_> {
+        fn visit_if(&mut self, statement: &ast::If) {
+            // A middle branch may close its owning conditional on the same
+            // line. Consult that conditional's end token, not any nested end.
+            let source_position = |token: &full_moon::tokenizer::TokenReference| {
+                let position = token.token().start_position();
+                self.parsed
+                    .raw
+                    .parser_position_origin(SourcePosition {
+                        line: position.line(),
+                        column: position.character(),
+                    })
+                    .filter(|origin| !origin.class_generated)
+                    .map(|origin| origin.source_position)
+            };
+            let Some(end) = source_position(statement.end_token()) else {
+                return;
+            };
+            let branches = statement
+                .else_if()
+                .into_iter()
+                .flatten()
+                .map(|branch| branch.else_if_token())
+                .chain(statement.else_token());
+            for branch in branches {
+                let Some(start) = source_position(branch) else {
+                    continue;
+                };
+                if start.line == end.line
+                    && self
+                        .source_lines
+                        .get(start.line.saturating_sub(1))
+                        .and_then(|line| line.get(..byte_for_column(line, start.column)))
+                        .is_some_and(|prefix| prefix.trim().is_empty())
+                {
+                    self.layout.closed_middle_block_lines.insert(start.line);
+                }
+            }
+        }
         fn visit_table_constructor(&mut self, table: &ast::TableConstructor) {
             for field in table.fields() {
                 let ast::Field::NoKey(value) = field else {
@@ -160,7 +204,7 @@ fn table_value_start_lines(parsed: &ParsedSource) -> BTreeSet<usize> {
                     .and_then(|line| line.get(..source.column.saturating_sub(1)))
                     .is_some_and(|prefix| prefix.trim().is_empty());
                 if !origin.class_generated && starts_line {
-                    self.lines.insert(source.line);
+                    self.layout.table_value_start_lines.insert(source.line);
                 }
             }
         }
@@ -168,10 +212,10 @@ fn table_value_start_lines(parsed: &ParsedSource) -> BTreeSet<usize> {
     let mut values = Values {
         parsed,
         source_lines: parsed.source.lines().collect(),
-        lines: BTreeSet::new(),
+        layout: SourceLayout::default(),
     };
     values.visit_ast(&parsed.ast);
-    values.lines
+    values.layout
 }
 
 fn local_format_edits(
@@ -457,7 +501,7 @@ struct Formatter<'a> {
     open_parens: Vec<OpenParen>,
     line_number: usize,
     source_line: usize,
-    table_value_start_lines: BTreeSet<usize>,
+    layout: SourceLayout,
     pending_continuation: bool,
     suppressed_paren_blocks: Vec<SuppressedParenBlock>,
     multiline_function_header_depths: Vec<usize>,
@@ -501,7 +545,7 @@ struct SuppressedParenBlock {
 }
 
 impl<'a> Formatter<'a> {
-    fn new(options: &'a FormatOptions, table_value_start_lines: BTreeSet<usize>) -> Self {
+    fn new(options: &'a FormatOptions, layout: SourceLayout) -> Self {
         Self {
             options,
             indent_level: 0,
@@ -510,7 +554,7 @@ impl<'a> Formatter<'a> {
             open_parens: Vec::new(),
             line_number: 0,
             source_line: 0,
-            table_value_start_lines,
+            layout,
             pending_continuation: false,
             suppressed_paren_blocks: Vec::new(),
             multiline_function_header_depths: Vec::new(),
@@ -696,8 +740,14 @@ impl<'a> Formatter<'a> {
         let opens_split_header = split_control_header(code);
         let dedent = line_starts_with_dedent(code);
         let middle_block = line_is_middle_block(code);
-        let closes_suppressed_block =
-            dedent && !middle_block && !self.suppressed_paren_blocks.is_empty();
+        let closes_middle_block = middle_block
+            && self
+                .layout
+                .closed_middle_block_lines
+                .contains(&self.source_line);
+        let closes_suppressed_block = dedent
+            && (!middle_block || closes_middle_block)
+            && !self.suppressed_paren_blocks.is_empty();
         let suppressed_paren_depth = self
             .suppressed_paren_blocks
             .last()
@@ -711,7 +761,10 @@ impl<'a> Formatter<'a> {
         let closes_paren = code.trim_start().starts_with(')');
         let closes_brace = code.trim_start().starts_with('}');
         let starts_with_continuation = line_starts_with_continuation(code)
-            && !self.table_value_start_lines.contains(&self.source_line);
+            && !self
+                .layout
+                .table_value_start_lines
+                .contains(&self.source_line);
         // Parentheses around an open table are already folded into its block
         // indent through `suppressed_paren_blocks`; a call inside a table
         // still indents its own arguments.
@@ -803,7 +856,7 @@ impl<'a> Formatter<'a> {
             self.indent_level += 1;
         }
 
-        if middle_block && opens_split_header.is_none() {
+        if middle_block && opens_split_header.is_none() && !closes_middle_block {
             self.indent_level += 1;
         }
 
