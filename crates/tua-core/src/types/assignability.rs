@@ -167,6 +167,26 @@ impl TypeContext {
                         )
                     })
             }
+            (Type::Alias(name), _) if self.alias(name).is_some() => {
+                let key = (true, name.clone());
+                if !resolving.insert(key.clone()) {
+                    return Ok(());
+                }
+                let resolved = self.alias(name).expect("alias existence was checked");
+                let result = self.check_assignable_inner(resolved, target, depth + 1, resolving);
+                resolving.remove(&key);
+                result
+            }
+            (_, Type::Alias(name)) if self.alias(name).is_some() => {
+                let key = (false, name.clone());
+                if !resolving.insert(key.clone()) {
+                    return Ok(());
+                }
+                let resolved = self.alias(name).expect("alias existence was checked");
+                let result = self.check_assignable_inner(source, resolved, depth + 1, resolving);
+                resolving.remove(&key);
+                result
+            }
             (Type::Union(sources), _) => {
                 for source in sources {
                     self.check_assignable_inner(source, target, depth + 1, resolving)?;
@@ -193,26 +213,6 @@ impl TypeContext {
                     && self.is_nominal_subtype(source, target, depth + 1) =>
             {
                 Ok(())
-            }
-            (Type::Alias(name), _) if self.alias(name).is_some() => {
-                let key = (true, name.clone());
-                if !resolving.insert(key.clone()) {
-                    return Ok(());
-                }
-                let resolved = self.alias(name).expect("alias existence was checked");
-                let result = self.check_assignable_inner(resolved, target, depth + 1, resolving);
-                resolving.remove(&key);
-                result
-            }
-            (_, Type::Alias(name)) if self.alias(name).is_some() => {
-                let key = (false, name.clone());
-                if !resolving.insert(key.clone()) {
-                    return Ok(());
-                }
-                let resolved = self.alias(name).expect("alias existence was checked");
-                let result = self.check_assignable_inner(source, resolved, depth + 1, resolving);
-                resolving.remove(&key);
-                result
             }
             (Type::StringLiteral(_), Type::Primitive(super::PrimitiveType::String)) => Ok(()),
             (Type::StringLiteral(source), Type::StringLiteral(target)) if source == target => {

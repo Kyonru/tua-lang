@@ -3410,6 +3410,39 @@ export type PieceKind = "I" | "O"
 }
 
 #[test]
+fn named_imported_union_inside_record_return_preserves_all_members() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/ledger.tua
+import type { Category, Expense } from "./types"
+
+local function make(category: Category): Expense
+  return { category = category }
+end
+
+return { make = make }
+-- file: src/types.d.tua
+export type Category = "food" | "travel" | "tools"
+export type Expense = { category: Category }
+"#,
+    );
+    let mut host = AnalysisHost::new();
+
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+
+    let diagnostics = host.snapshot().diagnostics("src/ledger.tua");
+
+    assert!(
+        diagnostics
+            .iter()
+            .all(|diagnostic| diagnostic.code != Some(DiagnosticCode::TYPE_MISMATCH)),
+        "all imported literal-union members should be accepted in an imported record: {diagnostics:#?}"
+    );
+}
+
+#[test]
 fn namespace_imported_declaration_records_accept_array_literals() {
     let fixture = Fixture::parse(
         r#"-- file: src/main.tua
