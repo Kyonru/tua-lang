@@ -4866,6 +4866,79 @@ return {
 }
 
 #[test]
+fn snapshot_navigates_project_types_in_lua_doc_annotations_across_edits() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+local LuaDocTypes = require("lua_doc_types")
+
+---@param enemy LuaDocTypes.<|param_type|>Enemy
+---@return LuaDocTypes.<|return_type|>Enemy
+local function clone(enemy) return enemy end
+-- file: src/lua_doc_types.lua
+---@class Enemy
+local Enemy = {}
+---@class Boss
+local Boss = {}
+return { Enemy = Enemy, Boss = Boss }
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        let kind = if file
+            .path
+            .extension()
+            .and_then(|extension| extension.to_str())
+            == Some("lua")
+        {
+            AnalysisSourceKind::Lua
+        } else {
+            AnalysisSourceKind::Tua
+        };
+        host.set_file_with_kind(&file.path, &file.source, kind);
+    }
+
+    let snapshot = host.snapshot();
+    for marker in ["param_type", "return_type"] {
+        let definition = snapshot
+            .definition("src/main.tua", fixture.position(marker))
+            .expect("LuaDoc type reference should navigate to its project declaration");
+        assert_eq!(definition.kind, DefinitionKind::TypeAlias);
+        assert_eq!(definition.path, PathBuf::from("src/lua_doc_types.lua"));
+        assert_eq!(
+            snapshot
+                .type_definition("src/main.tua", fixture.position(marker))
+                .expect("LuaDoc type definition should use project resolution"),
+            definition
+        );
+    }
+
+    let edited = fixture
+        .source("src/main.tua")
+        .replace("LuaDocTypes.Enemy", "LuaDocTypes.Boss");
+    host.set_file_with_kind("src/main.tua", edited.clone(), AnalysisSourceKind::Tua);
+    let edited_snapshot = host.snapshot();
+    let param_line = edited.lines().nth(2).expect("parameter tag should exist");
+    let edit_position = SourcePosition {
+        line: 3,
+        column: param_line
+            .find("LuaDocTypes.Boss")
+            .expect("edited alias should be present")
+            + "LuaDocTypes.".len()
+            + 1,
+    };
+    let definition = edited_snapshot
+        .definition("src/main.tua", edit_position)
+        .expect("unsaved LuaDoc type edit should resolve the new project alias");
+    assert_eq!(definition.kind, DefinitionKind::TypeAlias);
+    assert_eq!(definition.path, PathBuf::from("src/lua_doc_types.lua"));
+    assert_eq!(
+        edited_snapshot.type_definition("src/main.tua", edit_position),
+        Some(definition)
+    );
+}
+
+#[test]
 fn snapshot_uses_project_types_for_local_hover_and_field_completion() {
     let fixture = Fixture::parse(
         r#"-- file: src/main.tua

@@ -683,6 +683,91 @@ export type <|type_def|>Player<|/type_def|> = {
 }
 
 #[test]
+fn annotation_type_navigation_and_partial_tag_hover_follow_unsaved_edits() {
+    let fixture = Fixture::parse(
+        r#"-- file: tua.toml
+source = "src"
+-- file: src/main.tua
+local LuaDocTypes = require("lua_doc_types")
+
+---@param enemy LuaDocTypes.<|param_enemy|>Enemy
+---@return LuaDocTypes.<|return_enemy|>Enemy
+local function clone(enemy) return enemy end
+-- file: src/lua_doc_types.lua
+---@class Enemy
+local Enemy = {}
+---@class Boss
+local Boss = {}
+return { Enemy = Enemy, Boss = Boss }
+"#,
+    );
+    let temp = fixture
+        .write_to_temp("annotation-type-editing-matrix")
+        .expect("fixture should write");
+    let main = fixture.source("src/main.tua");
+    let types = fixture.source("src/lua_doc_types.lua");
+    let main_uri = path_uri(&temp.join("src/main.tua"));
+    let type_uri = path_uri(&temp.join("src/lua_doc_types.lua"));
+    let mut server = TestServer::new();
+
+    server.send(initialize_with_root(1, path_uri(temp.path())));
+    server.send(did_open(&main_uri, main));
+    server.send(definition_request_at(
+        2,
+        &main_uri,
+        fixture.position("param_enemy"),
+    ));
+    server.send(definition_request_at(
+        3,
+        &main_uri,
+        fixture.position("return_enemy"),
+    ));
+    server.send(hover_request(4, &main_uri, main, "Enemy"));
+    assert_definition_text(server.output(), 2, &type_uri, &types, "Enemy");
+    assert_definition_text(server.output(), 3, &type_uri, &types, "Enemy");
+    assert_hover_contains(server.output(), 4, "LuaDocTypes.Enemy");
+
+    let edited_fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+local LuaDocTypes = require("lua_doc_types")
+
+---@param enemy LuaDocTypes.<|param_boss|>Boss
+---@return LuaDocTypes.<|return_boss|>Boss
+local function clone(enemy) return enemy end
+"#,
+    );
+    let edited = edited_fixture.source("src/main.tua");
+    server.send(did_change(&main_uri, edited, 2));
+    server.send(definition_request_at(
+        5,
+        &main_uri,
+        edited_fixture.position("param_boss"),
+    ));
+    server.send(definition_request_at(
+        6,
+        &main_uri,
+        edited_fixture.position("return_boss"),
+    ));
+    server.send(hover_request(7, &main_uri, edited, "Boss"));
+    assert_definition_text(server.output(), 5, &type_uri, &types, "Boss");
+    assert_definition_text(server.output(), 6, &type_uri, &types, "Boss");
+    assert_hover_contains(server.output(), 7, "LuaDocTypes.Boss");
+
+    let partial = edited.replace("---@param enemy LuaDocTypes.Boss", "---@param enemy");
+    server.send(did_change(&main_uri, &partial, 3));
+    server.send(hover_request(8, &main_uri, &partial, "param"));
+    assert_hover_contains(server.output(), 8, "---@param");
+
+    server.send(did_change(&main_uri, edited, 4));
+    server.send(definition_request_at(
+        9,
+        &main_uri,
+        edited_fixture.position("param_boss"),
+    ));
+    assert_definition_text(server.output(), 9, &type_uri, &types, "Boss");
+}
+
+#[test]
 fn deep_named_type_reexports_agree_across_editor_surfaces() {
     const DEPTHS: [usize; 5] = [1, 16, 64, 65, 256];
     let mut fixture_source =

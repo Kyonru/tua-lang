@@ -1025,6 +1025,10 @@ fn is_module_export_candidate(
 }
 
 fn is_type_reference_position(parsed: &ParsedSource, position: SourcePosition) -> bool {
+    if crate::source_text::doc_type_chain_at_position(parsed, position).is_some() {
+        return true;
+    }
+
     let Some(line) = line_at(&parsed.source, position.line) else {
         return false;
     };
@@ -1072,6 +1076,23 @@ fn type_alias_definition_in_parsed(
                 (alias.name == name).then_some(Definition {
                     path: parsed.path.clone(),
                     span,
+                    kind: DefinitionKind::TypeAlias,
+                })
+            })
+        })
+        .or_else(|| {
+            parsed.lua_doc_annotations.iter().find_map(|annotation| {
+                use crate::LuaDocAnnotationKind as Kind;
+
+                let (declared_name, name_span) = match &annotation.kind {
+                    Kind::Class(class) => (&class.name, class.name_span),
+                    Kind::Alias(alias) => (&alias.name, alias.name_span),
+                    _ => return None,
+                };
+
+                (declared_name == name).then_some(Definition {
+                    path: parsed.path.clone(),
+                    span: name_span,
                     kind: DefinitionKind::TypeAlias,
                 })
             })
