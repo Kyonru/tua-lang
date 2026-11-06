@@ -58,9 +58,12 @@ workflow pages under `docs/`. Completed work belongs in
   These checks do not establish long-session usability or full-port parity.
 - Keep the large-project soak measurements separate by request: the recent
   BYTEPATH run had 19.6 ms median completion, 212 ms median signature help,
-  3.2 ms median hover, a 3.4 s cold signature outlier, and about 103 MiB RSS
-  growth over ten minutes. Establish a reliable memory baseline and repeat
-  under representative contention before setting a responsiveness target.
+  3.2 ms median hover, and a 3.4 s cold signature outlier. A fresh run measured
+  231 MiB RSS after opening the file, then 3.68 GiB within five edit cycles;
+  it stayed near that level for the next 20 edits. `vmmap` reported 1.7 GiB
+  current and 3.0 GiB peak physical footprint, with 1.3 GiB malloc allocated.
+  The earlier ten-minute run began after the cold jump and added 103 MiB. Profile
+  the cold allocation and repeat on a stable host before qualifying long sessions.
 - Turn any still-unspecified reference/implementation request into an exact
   symbol, editor command, expected destination, and reproducible test before
   treating it as a confirmed defect.
@@ -77,9 +80,16 @@ results.
 - Design an explicit LOVE runtime test mode with clear discovery, launch,
   cancellation, exit-status, and result-reporting behavior. The Busted backend
   currently tests headless Lua logic and needs doubles for LOVE-dependent code.
-- Qualify Test Explorer run, cancellation, continuous runs, and line coverage
-  in the installed editor with real Busted and LuaCov; mocked controller tests
-  and CLI runs do not cover the editor UI workflow.
+- Qualify Test Explorer continuous runs and line coverage in the installed
+  editor with real Busted and LuaCov. A VS Code 1.142 extension-host replay
+  confirmed selected-spec execution and cancellation; continuous-run
+  interaction and coverage UI remain open. LuaCov installation could not
+  reach the configured LuaRocks mirrors in the audit environment.
+- Provide typed Busted declarations through the shared semantic environment
+  for configured test-source files. Cover the DSL, hooks, assertions, spies,
+  mocks, stubs, and matchers in `.lua` and `.tua` specs, with hover, completion,
+  signatures, and checking; keep ordinary files unchanged and preserve source
+  positions rather than rewriting user buffers to inject declarations.
 
 ## Next
 
