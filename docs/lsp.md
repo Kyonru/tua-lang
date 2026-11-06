@@ -140,6 +140,10 @@ existing trailing comment by inserting a next-line directive instead. The file
 action extends an existing header directive when present. These actions follow
 the project's enabled scopes and are absent when inline ignores are disabled.
 
+The LSP boundary uses UTF-16 positions, including edits and navigation after
+non-BMP characters such as emoji. Tua's graph and inspector navigation use the
+same encoding; core compiler source columns are converted at the server boundary.
+
 ### Completion, Hover, And Signature Help
 
 Completion combines syntax context with local and project semantics. It covers:
@@ -165,12 +169,20 @@ completion, see [Comments And Documentation](comments.md).
 
 Normal `require(...)` and non-relative static-import path completion use the
 same ordered workspace require roots as module resolution. Child-relative
-imports continue to complete from the current file's directory.
+imports continue to complete from the current file's directory. In a multi-root
+workspace, module resolution uses the importing file's project roots rather
+than another project's same-name module. Explicitly invoked identifier
+completion includes the same project auto-import candidates as other triggers.
 
-Function and method items can insert argument placeholders. Known literal
-choices become snippet choices, and LOVE object methods prefer colon-call
-syntax. Completion resolve adds documentation, signatures, source context, and
+Function and method items can insert argument placeholders when the client
+advertises snippet support. Clients without that capability receive plain
+callable names and no template-only snippets. Known literal choices become
+snippet choices, and LOVE object methods prefer colon-call syntax. Completion resolve adds documentation, signatures, source context, and
 LOVE wiki links when available.
+
+Optional and defaulted parameters are marked with `?` in native hover/signature
+labels; a required parameter accepting `nil` remains required. Member candidates
+that require quoted bracket access are omitted after a dot or colon.
 
 Type auto-imports are offered only in type positions. They reuse existing
 named imports and namespaces, recognize equivalent specifiers for the same

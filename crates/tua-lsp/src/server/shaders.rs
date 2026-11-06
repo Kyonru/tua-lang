@@ -90,10 +90,11 @@ impl ShaderWorker {
                         .snapshot
                         .apply_shader_policy(validation_diagnostics(&requests, &outcomes))
                     {
+                        let source = job.snapshot.source(&diagnostic.file).unwrap_or("");
                         diagnostics
                             .entry(uri_from_path(&diagnostic.file))
                             .or_default()
-                            .push(lsp_diagnostic_from_core(diagnostic));
+                            .push(lsp_diagnostic_from_core(diagnostic, source));
                     }
                     Ok(diagnostics)
                 })();

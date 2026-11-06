@@ -1112,6 +1112,10 @@ fn byte_for_column(line: &str, column: usize) -> usize {
 }
 
 impl AnalysisSnapshot {
+    pub(super) fn source(&self, path: &Path) -> Option<&str> {
+        self.core.source(path)
+    }
+
     pub(super) fn revision(&self) -> u64 {
         self.core.revision()
     }
@@ -1274,6 +1278,16 @@ impl AnalysisSnapshot {
         }
 
         let mut completions = self.core.completion(path, position);
+        self.augment_auto_import_completions(path, position, &mut completions);
+        completions
+    }
+
+    pub(super) fn augment_auto_import_completions(
+        &self,
+        path: &Path,
+        position: SourcePosition,
+        completions: &mut Vec<Completion>,
+    ) {
         let existing_labels = completions
             .iter()
             .map(|completion| completion.label.clone())
@@ -1284,7 +1298,6 @@ impl AnalysisSnapshot {
         } else {
             completions.extend(self.auto_import_completions(path, position, &existing_labels));
         }
-        completions
     }
 
     fn type_auto_import_completions(

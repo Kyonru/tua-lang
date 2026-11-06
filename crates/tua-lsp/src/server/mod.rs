@@ -529,6 +529,7 @@ struct LspServer {
     client_inlay_hint_refresh: bool,
     client_semantic_tokens_refresh: bool,
     client_completion_label_details: bool,
+    client_completion_snippets: bool,
     next_server_request_id: u64,
     trace_config: TraceConfig,
     trace_log_counts: TraceLogCounts,

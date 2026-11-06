@@ -17,8 +17,8 @@ use tua_core::{
 };
 
 use super::analysis::{
-    CallHierarchyIdentity, CallHierarchyIncomingCall, CallHierarchyItem, CallHierarchyItemKind,
-    CallHierarchyOutgoingCall,
+    AnalysisSnapshot, CallHierarchyIdentity, CallHierarchyIncomingCall, CallHierarchyItem,
+    CallHierarchyItemKind, CallHierarchyOutgoingCall,
 };
 use super::uri::uri_from_path;
 
@@ -85,11 +85,20 @@ fn workspace_refresh_request(id: u64, method: &str) -> Value {
     })
 }
 
-pub(super) fn lsp_diagnostic_from_core(diagnostic: Diagnostic) -> Value {
+pub(super) fn lsp_diagnostic_from_core(diagnostic: Diagnostic, source: &str) -> Value {
+    let source = if diagnostic
+        .file
+        .file_name()
+        .is_some_and(|name| name == tua_core::CONFIG_FILE)
+    {
+        ""
+    } else {
+        source
+    };
     let start_line = diagnostic.line.saturating_sub(1);
-    let start_character = diagnostic.column.saturating_sub(1);
+    let start_character = utf16_column(source, diagnostic.line, diagnostic.column);
     let end_line = diagnostic.end_line.saturating_sub(1);
-    let end_character = diagnostic.end_column.saturating_sub(1);
+    let end_character = utf16_column(source, diagnostic.end_line, diagnostic.end_column);
 
     json!({
         "range": {
@@ -112,13 +121,14 @@ pub(super) fn lsp_diagnostic_from_core(diagnostic: Diagnostic) -> Value {
 pub(super) fn core_diagnostic_from_lsp(
     path: &std::path::Path,
     diagnostic: &Value,
+    source: &str,
 ) -> Option<Diagnostic> {
     let start = diagnostic.get("range")?.get("start")?;
-    let position = source_position_from_lsp(start)?;
+    let position = source_position_for_source(source, start)?;
     let end = diagnostic
         .get("range")
         .and_then(|range| range.get("end"))
-        .and_then(source_position_from_lsp)
+        .and_then(|position| source_position_for_source(source, position))
         .unwrap_or(SourcePosition {
             line: position.line,
             column: position.column.saturating_add(1),
@@ -168,7 +178,7 @@ fn lsp_severity(severity: DiagnosticSeverity) -> u8 {
     }
 }
 
-pub(super) fn lsp_hover_from_core(hover: Hover) -> Value {
+pub(super) fn lsp_hover_from_core(hover: Hover, source: &str) -> Value {
     let mut markdown = format!("```tua\n{}\n```", hover.contents);
 
     if let Some(documentation) = &hover.documentation {
@@ -193,13 +203,13 @@ pub(super) fn lsp_hover_from_core(hover: Hover) -> Value {
     });
 
     if let Some(span) = hover.span {
-        result["range"] = lsp_range(span);
+        result["range"] = lsp_range_for_source(source, span);
     }
 
     result
 }
 
-pub(super) fn lsp_signal_graph_from_core(graph: SignalGraph) -> Value {
+pub(super) fn lsp_signal_graph_from_core(graph: SignalGraph, snapshot: &AnalysisSnapshot) -> Value {
     json!({
         "events": graph.events.into_iter().map(|event| {
             json!({
@@ -221,9 +231,9 @@ pub(super) fn lsp_signal_graph_from_core(graph: SignalGraph) -> Value {
                             SignalGraphCallRole::Cleanup => "cleanup",
                             SignalGraphCallRole::Query => "query",
                         },
-                        "range": lsp_range(call.span),
-                        "callRange": lsp_range(call.call_span),
-                        "insertionPosition": lsp_position(call.insertion_position),
+                        "range": lsp_range_for_source(snapshot.source(&call.path).unwrap_or(""), call.span),
+                        "callRange": lsp_range_for_source(snapshot.source(&call.path).unwrap_or(""), call.call_span),
+                        "insertionPosition": lsp_position_for_source(snapshot.source(&call.path).unwrap_or(""), call.insertion_position),
                         "indentation": call.indentation,
                         "payload": lsp_signal_graph_parameters(call.payload),
                         "inferredPayload": lsp_signal_graph_parameters(call.inferred_emit_payload),
@@ -251,7 +261,10 @@ fn lsp_signal_graph_parameters(parameters: Option<Vec<SignalGraphParameter>>) ->
         .unwrap_or(Value::Null)
 }
 
-pub(super) fn lsp_asset_inventory_from_core(inventory: AssetInventory) -> Value {
+pub(super) fn lsp_asset_inventory_from_core(
+    inventory: AssetInventory,
+    snapshot: &AnalysisSnapshot,
+) -> Value {
     json!({
         "assets": inventory.assets.into_iter().map(|asset| {
             json!({
@@ -268,7 +281,7 @@ pub(super) fn lsp_asset_inventory_from_core(inventory: AssetInventory) -> Value 
                 "references": asset.references.into_iter().map(|reference| {
                     json!({
                         "uri": uri_from_path(&reference.path),
-                        "range": lsp_range(reference.span),
+                        "range": lsp_range_for_source(snapshot.source(&reference.path).unwrap_or(""), reference.span),
                         "loaderKind": reference.loader_kind.name()
                     })
                 }).collect::<Vec<_>>()
@@ -276,16 +289,20 @@ pub(super) fn lsp_asset_inventory_from_core(inventory: AssetInventory) -> Value 
         }).collect::<Vec<_>>(),
         "diagnostics": inventory.diagnostics.into_iter().map(|diagnostic| {
             let uri = uri_from_path(&diagnostic.file);
+            let source = snapshot.source(&diagnostic.file).unwrap_or("");
 
             json!({
                 "uri": uri,
-                "diagnostic": lsp_diagnostic_from_core(diagnostic)
+                "diagnostic": lsp_diagnostic_from_core(diagnostic, source)
             })
         }).collect::<Vec<_>>()
     })
 }
 
-pub(super) fn lsp_module_dependency_graph_from_core(graph: ModuleDependencyGraph) -> Value {
+pub(super) fn lsp_module_dependency_graph_from_core(
+    graph: ModuleDependencyGraph,
+    snapshot: &AnalysisSnapshot,
+) -> Value {
     json!({
         "modules": graph.modules.into_iter().map(|module| {
             json!({
@@ -310,8 +327,8 @@ pub(super) fn lsp_module_dependency_graph_from_core(graph: ModuleDependencyGraph
                             ModuleExportOrigin::LuaDoc => "luaDoc",
                             ModuleExportOrigin::GeneratedBuiltin => "generatedBuiltin",
                         },
-                        "range": lsp_range(export.definition_span),
-                        "exportRange": lsp_range(export.export_span)
+                        "range": lsp_range_for_source(snapshot.source(&module.path).unwrap_or(""), export.definition_span),
+                        "exportRange": lsp_range_for_source(snapshot.source(&module.path).unwrap_or(""), export.export_span)
                     })
                 }).collect::<Vec<_>>(),
                 "inclusionPath": module.inclusion_path.map(|path| {
@@ -323,7 +340,7 @@ pub(super) fn lsp_module_dependency_graph_from_core(graph: ModuleDependencyGraph
                                 "targetUri": uri_from_path(&step.target),
                                 "specifier": step.specifier,
                                 "kind": module_specifier_kind_name(step.kind),
-                                "range": lsp_range(step.span)
+                                "range": lsp_range_for_source(snapshot.source(&step.source).unwrap_or(""), step.span)
                             })
                         }).collect::<Vec<_>>()
                     })
@@ -355,7 +372,7 @@ pub(super) fn lsp_module_dependency_graph_from_core(graph: ModuleDependencyGraph
                 "sourceUri": uri_from_path(&edge.source),
                 "specifier": edge.specifier,
                 "kind": module_specifier_kind_name(edge.kind),
-                "range": lsp_range(edge.span),
+                "range": lsp_range_for_source(snapshot.source(&edge.source).unwrap_or(""), edge.span),
                 "resolution": resolution,
                 "inCycle": edge.in_cycle
             })
@@ -369,7 +386,7 @@ pub(super) fn lsp_module_dependency_graph_from_core(graph: ModuleDependencyGraph
     })
 }
 
-pub(super) fn lsp_ecs_graph_from_core(graph: EcsGraph) -> Value {
+pub(super) fn lsp_ecs_graph_from_core(graph: EcsGraph, snapshot: &AnalysisSnapshot) -> Value {
     json!({
         "components": graph.components.into_iter().map(|component| {
             json!({
@@ -377,13 +394,13 @@ pub(super) fn lsp_ecs_graph_from_core(graph: EcsGraph) -> Value {
                 "uri": uri_from_path(&component.path),
                 "localName": component.local_name,
                 "runtimeName": component.runtime_name,
-                "range": lsp_range(component.span),
-                "nameRange": lsp_range(component.name_span),
+                "range": lsp_range_for_source(snapshot.source(&component.path).unwrap_or(""), component.span),
+                "nameRange": lsp_range_for_source(snapshot.source(&component.path).unwrap_or(""), component.name_span),
                 "fields": component.fields.into_iter().map(|field| {
                     json!({
                         "name": field.name,
                         "type": field.type_label,
-                        "range": lsp_range(field.span)
+                        "range": lsp_range_for_source(snapshot.source(&component.path).unwrap_or(""), field.span)
                     })
                 }).collect::<Vec<_>>()
             })
@@ -393,10 +410,10 @@ pub(super) fn lsp_ecs_graph_from_core(graph: EcsGraph) -> Value {
                 "id": system.id,
                 "uri": uri_from_path(&system.path),
                 "name": system.name,
-                "range": lsp_range(system.span),
-                "nameRange": system.name_span.map(lsp_range),
-                "callbackRange": system.callback_span.map(lsp_range),
-                "components": system.components.into_iter().map(lsp_ecs_component_use).collect::<Vec<_>>()
+                "range": lsp_range_for_source(snapshot.source(&system.path).unwrap_or(""), system.span),
+                "nameRange": system.name_span.map(|span| lsp_range_for_source(snapshot.source(&system.path).unwrap_or(""), span)),
+                "callbackRange": system.callback_span.map(|span| lsp_range_for_source(snapshot.source(&system.path).unwrap_or(""), span)),
+                "components": system.components.into_iter().map(|component| lsp_ecs_component_use(component, snapshot.source(&system.path).unwrap_or(""))).collect::<Vec<_>>()
             })
         }).collect::<Vec<_>>(),
         "queries": graph.queries.into_iter().map(|query| {
@@ -409,9 +426,9 @@ pub(super) fn lsp_ecs_graph_from_core(graph: EcsGraph) -> Value {
                     EcsQueryKind::System => "system",
                 },
                 "ownerSystemId": query.owner_system_id,
-                "range": lsp_range(query.span),
-                "nameRange": query.name_span.map(lsp_range),
-                "components": query.components.into_iter().map(lsp_ecs_component_use).collect::<Vec<_>>()
+                "range": lsp_range_for_source(snapshot.source(&query.path).unwrap_or(""), query.span),
+                "nameRange": query.name_span.map(|span| lsp_range_for_source(snapshot.source(&query.path).unwrap_or(""), span)),
+                "components": query.components.into_iter().map(|component| lsp_ecs_component_use(component, snapshot.source(&query.path).unwrap_or(""))).collect::<Vec<_>>()
             })
         }).collect::<Vec<_>>(),
         "insights": graph.insights.into_iter().map(|insight| {
@@ -425,14 +442,17 @@ pub(super) fn lsp_ecs_graph_from_core(graph: EcsGraph) -> Value {
                 "title": insight.title,
                 "message": insight.message,
                 "uri": uri_from_path(&insight.path),
-                "range": lsp_range(insight.span),
+                "range": lsp_range_for_source(snapshot.source(&insight.path).unwrap_or(""), insight.span),
                 "subjectId": insight.subject_id
             })
         }).collect::<Vec<_>>()
     })
 }
 
-pub(super) fn lsp_object_pool_graph_from_core(graph: ObjectPoolGraph) -> Value {
+pub(super) fn lsp_object_pool_graph_from_core(
+    graph: ObjectPoolGraph,
+    snapshot: &AnalysisSnapshot,
+) -> Value {
     json!({
         "pools": graph.pools.into_iter().map(|pool| {
             json!({
@@ -440,8 +460,8 @@ pub(super) fn lsp_object_pool_graph_from_core(graph: ObjectPoolGraph) -> Value {
                 "uri": uri_from_path(&pool.path),
                 "name": pool.name,
                 "itemType": pool.item_type_label,
-                "range": lsp_range(pool.span),
-                "nameRange": lsp_range(pool.name_span)
+                "range": lsp_range_for_source(snapshot.source(&pool.path).unwrap_or(""), pool.span),
+                "nameRange": lsp_range_for_source(snapshot.source(&pool.path).unwrap_or(""), pool.name_span)
             })
         }).collect::<Vec<_>>(),
         "operations": graph.operations.into_iter().map(|operation| {
@@ -457,8 +477,8 @@ pub(super) fn lsp_object_pool_graph_from_core(graph: ObjectPoolGraph) -> Value {
                     ObjectPoolOperationKind::Prewarm => "prewarm",
                 },
                 "itemName": operation.item_name,
-                "range": lsp_range(operation.span),
-                "itemRange": operation.item_span.map(lsp_range)
+                "range": lsp_range_for_source(snapshot.source(&operation.path).unwrap_or(""), operation.span),
+                "itemRange": operation.item_span.map(|span| lsp_range_for_source(snapshot.source(&operation.path).unwrap_or(""), span))
             })
         }).collect::<Vec<_>>(),
         "insights": graph.insights.into_iter().map(|insight| {
@@ -470,7 +490,7 @@ pub(super) fn lsp_object_pool_graph_from_core(graph: ObjectPoolGraph) -> Value {
                 "title": insight.title,
                 "message": insight.message,
                 "uri": uri_from_path(&insight.path),
-                "range": lsp_range(insight.span),
+                "range": lsp_range_for_source(snapshot.source(&insight.path).unwrap_or(""), insight.span),
                 "poolId": insight.pool_id,
                 "acquireOperationId": insight.acquire_operation_id,
                 "itemName": insight.item_name
@@ -479,12 +499,15 @@ pub(super) fn lsp_object_pool_graph_from_core(graph: ObjectPoolGraph) -> Value {
     })
 }
 
-pub(super) fn lsp_audio_graph_from_core(graph: tua_core::AudioGraph) -> Value {
+pub(super) fn lsp_audio_graph_from_core(
+    graph: tua_core::AudioGraph,
+    snapshot: &AnalysisSnapshot,
+) -> Value {
     json!({
         "systems": graph.systems.into_iter().map(|system| json!({
             "id": system.id,
             "uri": uri_from_path(&system.path),
-            "range": lsp_range(system.span),
+            "range": lsp_range_for_source(snapshot.source(&system.path).unwrap_or(""), system.span),
             "buses": system.buses,
             "cues": system.cues,
             "effects": system.effects,
@@ -494,7 +517,7 @@ pub(super) fn lsp_audio_graph_from_core(graph: tua_core::AudioGraph) -> Value {
     })
 }
 
-fn lsp_ecs_component_use(component: EcsComponentUse) -> Value {
+fn lsp_ecs_component_use(component: EcsComponentUse, source: &str) -> Value {
     json!({
         "reference": component.reference,
         "componentId": component.component_id,
@@ -505,7 +528,7 @@ fn lsp_ecs_component_use(component: EcsComponentUse) -> Value {
             EcsAccessKind::ReadWrite => "readWrite",
             EcsAccessKind::Unknown => "unknown",
         },
-        "range": lsp_range(component.span)
+        "range": lsp_range_for_source(source, component.span)
     })
 }
 
@@ -516,7 +539,7 @@ fn module_specifier_kind_name(kind: ModuleSpecifierKind) -> &'static str {
     }
 }
 
-pub(super) fn lsp_inspector_items_from_core(items: Vec<InspectorItem>) -> Value {
+pub(super) fn lsp_inspector_items_from_core(items: Vec<InspectorItem>, source: &str) -> Value {
     Value::Array(
         items
             .into_iter()
@@ -538,7 +561,7 @@ pub(super) fn lsp_inspector_items_from_core(items: Vec<InspectorItem>) -> Value 
                                 "width": width,
                                 "height": height
                             })),
-                            "range": lsp_range(image.span)
+                            "range": lsp_range_for_source(source, image.span)
                         })
                     });
                     let frame = sprite.frame.map(|frame| {
@@ -548,15 +571,15 @@ pub(super) fn lsp_inspector_items_from_core(items: Vec<InspectorItem>) -> Value 
                             "left": frame.left,
                             "top": frame.top,
                             "border": frame.border,
-                            "range": lsp_range(frame.span)
+                            "range": lsp_range_for_source(source, frame.span)
                         })
                     });
 
                     json!({
                         "kind": "spriteSheet",
                         "name": sprite.name,
-                        "range": lsp_range(sprite.span),
-                        "selectionRange": lsp_range(sprite.name_span),
+                        "range": lsp_range_for_source(source, sprite.span),
+                        "selectionRange": lsp_range_for_source(source, sprite.name_span),
                         "image": image,
                         "frame": frame,
                         "origin": {
@@ -581,7 +604,7 @@ pub(super) fn lsp_inspector_items_from_core(items: Vec<InspectorItem>) -> Value 
                                     "left": frame.left,
                                     "top": frame.top,
                                     "border": frame.border,
-                                    "range": lsp_range(frame.span)
+                                    "range": lsp_range_for_source(source, frame.span)
                                 })),
                                 "origin": {
                                     "x": animation.origin.x,
@@ -606,8 +629,8 @@ pub(super) fn lsp_inspector_items_from_core(items: Vec<InspectorItem>) -> Value 
                                 })).collect::<Vec<_>>(),
                                 "onLoop": animation.on_loop,
                                 "loop": animation.looping,
-                                "range": lsp_range(animation.span),
-                                "selectionRange": lsp_range(animation.name_span)
+                                "range": lsp_range_for_source(source, animation.span),
+                                "selectionRange": lsp_range_for_source(source, animation.name_span)
                             })
                         }).collect::<Vec<_>>(),
                         "children": sprite.children.into_iter().map(|child| json!({
@@ -619,11 +642,11 @@ pub(super) fn lsp_inspector_items_from_core(items: Vec<InspectorItem>) -> Value 
                             "rotation": child.rotation,
                             "scaleX": child.scale_x,
                             "scaleY": child.scale_y,
-                            "range": lsp_range(child.span),
-                            "selectionRange": lsp_range(child.name_span)
+                            "range": lsp_range_for_source(source, child.span),
+                            "selectionRange": lsp_range_for_source(source, child.name_span)
                         })).collect::<Vec<_>>(),
                         "diagnostics": sprite.diagnostics.into_iter()
-                            .map(lsp_diagnostic_from_core)
+                            .map(|diagnostic| lsp_diagnostic_from_core(diagnostic, source))
                             .collect::<Vec<_>>()
                     })
                 }
@@ -631,20 +654,20 @@ pub(super) fn lsp_inspector_items_from_core(items: Vec<InspectorItem>) -> Value 
                     "kind": "stateMachine",
                     "name": machine.name,
                     "initial": machine.initial,
-                    "range": lsp_range(machine.span),
-                    "selectionRange": lsp_range(machine.name_span),
+                    "range": lsp_range_for_source(source, machine.span),
+                    "selectionRange": lsp_range_for_source(source, machine.name_span),
                     "states": machine.states.into_iter().map(|state| json!({
                         "name": state.name,
                         "initial": state.initial,
-                        "range": lsp_range(state.span)
+                        "range": lsp_range_for_source(source, state.span)
                     })).collect::<Vec<_>>(),
                     "transitions": machine.transitions.into_iter().map(|transition| json!({
                         "event": transition.event,
                         "from": transition.from,
                         "wildcardFrom": transition.wildcard_from,
                         "to": transition.to,
-                        "range": lsp_range(transition.span),
-                        "selectionRange": lsp_range(transition.event_span)
+                        "range": lsp_range_for_source(source, transition.span),
+                        "selectionRange": lsp_range_for_source(source, transition.event_span)
                     })).collect::<Vec<_>>()
                 }),
             })
@@ -652,12 +675,16 @@ pub(super) fn lsp_inspector_items_from_core(items: Vec<InspectorItem>) -> Value 
     )
 }
 
-pub(super) fn lsp_type_explanation_from_core(explanation: TypeExplanation) -> Value {
+pub(super) fn lsp_type_explanation_from_core(
+    explanation: TypeExplanation,
+    source: &str,
+    snapshot: &AnalysisSnapshot,
+) -> Value {
     json!({
         "expression": explanation.expression,
         "type": explanation.ty.to_string(),
         "isAny": matches!(explanation.ty, tua_core::Type::Any),
-        "range": lsp_range(explanation.span),
+        "range": lsp_range_for_source(source, explanation.span),
         "steps": explanation.steps.into_iter().map(|step| {
             json!({
                 "kind": match step.kind {
@@ -674,7 +701,7 @@ pub(super) fn lsp_type_explanation_from_core(explanation: TypeExplanation) -> Va
                 "detail": step.detail,
                 "type": step.ty.map(|ty| ty.to_string()),
                 "uri": step.path.as_deref().map(uri_from_path),
-                "range": step.span.map(lsp_range),
+                "range": step.span.map(|span| lsp_range_for_source(step.path.as_deref().map(|path| snapshot.source(path).unwrap_or("")).unwrap_or(source), span)),
             })
         }).collect::<Vec<_>>()
     })
@@ -690,12 +717,29 @@ pub(super) struct CompletionResolveData {
     pub(super) source_module: Option<String>,
 }
 
+// Snippets are opt-in. Keep callable candidates usable as plain identifiers,
+// but omit template-only candidates when the client cannot expand them.
+pub(super) fn completion_for_client(
+    mut completion: Completion,
+    snippets: bool,
+) -> Option<Completion> {
+    if !snippets && completion.is_snippet {
+        if completion.kind == CompletionKind::Snippet {
+            return None;
+        }
+        completion.insert_text = Some(completion.label.clone());
+        completion.is_snippet = false;
+    }
+    Some(completion)
+}
+
 pub(super) fn lsp_completion_from_core(
     uri: &str,
     position: SourcePosition,
     completion: Completion,
     replacement_span: Option<SourceSpan>,
     label_details_support: bool,
+    source: &str,
 ) -> Value {
     let replacement_text = completion
         .insert_text
@@ -731,7 +775,7 @@ pub(super) fn lsp_completion_from_core(
 
     if let Some(replacement_span) = replacement_span {
         item["textEdit"] = json!({
-            "range": lsp_range(replacement_span),
+            "range": lsp_range_for_source(source, replacement_span),
             "newText": replacement_text
         });
     }
@@ -798,6 +842,7 @@ pub(super) fn completion_resolve_data(item: &Value) -> Option<CompletionResolveD
 pub(super) fn lsp_resolved_completion_item(
     mut item: Value,
     completion: Option<Completion>,
+    source: &str,
 ) -> Value {
     let Some(completion) = completion else {
         return item;
@@ -838,7 +883,7 @@ pub(super) fn lsp_resolved_completion_item(
         item["additionalTextEdits"] = json!(completion
             .additional_text_edits
             .into_iter()
-            .map(lsp_text_edit)
+            .map(|edit| lsp_text_edit(edit, source))
             .collect::<Vec<_>>());
     }
 
@@ -929,17 +974,24 @@ fn lsp_completion_kind(kind: CompletionKind) -> u8 {
     }
 }
 
-pub(super) fn lsp_location_from_core(definition: Definition) -> Value {
-    lsp_location(&uri_from_path(&definition.path), definition.span)
+pub(super) fn lsp_location_from_core(definition: Definition, sources: &AnalysisSnapshot) -> Value {
+    lsp_location(
+        &uri_from_path(&definition.path),
+        definition.span,
+        sources.source(&definition.path).unwrap_or(""),
+    )
 }
 
-pub(super) fn lsp_call_hierarchy_item(item: CallHierarchyItem) -> Value {
+pub(super) fn lsp_call_hierarchy_item(
+    item: CallHierarchyItem,
+    sources: &AnalysisSnapshot,
+) -> Value {
     json!({
         "name": item.name,
         "kind": lsp_call_hierarchy_kind(item.kind),
         "uri": uri_from_path(&item.path),
-        "range": lsp_range(item.range),
-        "selectionRange": lsp_range(item.selection_range),
+        "range": lsp_range_for_source(sources.source(&item.path).unwrap_or(""), item.range),
+        "selectionRange": lsp_range_for_source(sources.source(&item.path).unwrap_or(""), item.selection_range),
         "data": {
             "path": item.path.to_string_lossy().to_string(),
             "selectionRange": lsp_range(item.selection_range)
@@ -960,24 +1012,32 @@ pub(super) fn call_hierarchy_identity_from_lsp(item: &Value) -> Option<CallHiera
     })
 }
 
-pub(super) fn lsp_call_hierarchy_incoming_call(call: CallHierarchyIncomingCall) -> Value {
+pub(super) fn lsp_call_hierarchy_incoming_call(
+    call: CallHierarchyIncomingCall,
+    sources: &AnalysisSnapshot,
+) -> Value {
+    let source = sources.source(&call.from.path).unwrap_or("");
     json!({
-        "from": lsp_call_hierarchy_item(call.from),
+        "from": lsp_call_hierarchy_item(call.from, sources),
         "fromRanges": call
             .from_ranges
             .into_iter()
-            .map(lsp_range)
+            .map(|range| lsp_range_for_source(source, range))
             .collect::<Vec<_>>()
     })
 }
 
-pub(super) fn lsp_call_hierarchy_outgoing_call(call: CallHierarchyOutgoingCall) -> Value {
+pub(super) fn lsp_call_hierarchy_outgoing_call(
+    call: CallHierarchyOutgoingCall,
+    sources: &AnalysisSnapshot,
+    source: &str,
+) -> Value {
     json!({
-        "to": lsp_call_hierarchy_item(call.to),
+        "to": lsp_call_hierarchy_item(call.to, sources),
         "fromRanges": call
             .from_ranges
             .into_iter()
-            .map(lsp_range)
+            .map(|range| lsp_range_for_source(source, range))
             .collect::<Vec<_>>()
     })
 }
@@ -989,16 +1049,19 @@ fn lsp_call_hierarchy_kind(kind: CallHierarchyItemKind) -> u8 {
     }
 }
 
-pub(super) fn lsp_document_link_from_core(link: ModuleLink) -> Value {
+pub(super) fn lsp_document_link_from_core(link: ModuleLink, source: &str) -> Value {
     json!({
-        "range": lsp_range(link.span),
+        "range": lsp_range_for_source(source, link.span),
         "target": uri_from_path(&link.target)
     })
 }
 
-pub(super) fn lsp_document_highlight_from_core(highlight: DocumentHighlight) -> Value {
+pub(super) fn lsp_document_highlight_from_core(
+    highlight: DocumentHighlight,
+    source: &str,
+) -> Value {
     json!({
-        "range": lsp_range(highlight.span),
+        "range": lsp_range_for_source(source, highlight.span),
         "kind": lsp_document_highlight_kind(highlight.kind)
     })
 }
@@ -1009,8 +1072,12 @@ fn lsp_document_highlight_kind(kind: DocumentHighlightKind) -> u8 {
     }
 }
 
-pub(super) fn lsp_reference_location(reference: Reference) -> Value {
-    lsp_location(&uri_from_path(&reference.path), reference.span)
+pub(super) fn lsp_reference_location(reference: Reference, sources: &AnalysisSnapshot) -> Value {
+    lsp_location(
+        &uri_from_path(&reference.path),
+        reference.span,
+        sources.source(&reference.path).unwrap_or(""),
+    )
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -1018,10 +1085,10 @@ pub(super) struct CodeLensResolveData {
     pub(super) target: CodeLensReferenceTarget,
 }
 
-pub(super) fn lsp_code_lens_from_core(lens: CodeLens) -> Value {
+pub(super) fn lsp_code_lens_from_core(lens: CodeLens, source: &str) -> Value {
     match lens.target {
         CodeLensTarget::References(target) => json!({
-            "range": lsp_range(lens.range),
+            "range": lsp_range_for_source(source, lens.range),
             "data": {
                 "kind": "references",
                 "symbolKind": code_lens_reference_kind(target.kind),
@@ -1059,11 +1126,12 @@ pub(super) fn lsp_resolved_reference_code_lens(
     mut lens: Value,
     target: &CodeLensReferenceTarget,
     references: Vec<Reference>,
+    sources: &AnalysisSnapshot,
 ) -> Value {
     let title = reference_code_lens_title(references.len());
     let locations = references
         .into_iter()
-        .map(lsp_reference_location)
+        .map(|reference| lsp_reference_location(reference, sources))
         .collect::<Vec<_>>();
 
     lens["command"] = json!({
@@ -1072,7 +1140,7 @@ pub(super) fn lsp_resolved_reference_code_lens(
         "arguments": [
             {
                 "uri": uri_from_path(&target.path),
-                "position": lsp_position(target.position)
+                "position": lsp_position_for_source(sources.source(&target.path).unwrap_or(""), target.position)
             },
             locations
         ]
@@ -1103,18 +1171,18 @@ fn reference_code_lens_title(count: usize) -> String {
     }
 }
 
-pub(super) fn lsp_prepare_rename_from_core(target: RenameTarget) -> Value {
+pub(super) fn lsp_prepare_rename_from_core(target: RenameTarget, source: &str) -> Value {
     json!({
-        "range": lsp_range(target.span),
+        "range": lsp_range_for_source(source, target.span),
         "placeholder": target.placeholder
     })
 }
 
-pub(super) fn lsp_code_action_from_core(action: CodeAction) -> Value {
+pub(super) fn lsp_code_action_from_core(action: CodeAction, sources: &AnalysisSnapshot) -> Value {
     json!({
         "title": action.title,
         "kind": lsp_code_action_kind(action.kind),
-        "edit": lsp_code_action_edit(action.edit)
+        "edit": lsp_code_action_edit(action.edit, sources)
     })
 }
 
@@ -1129,9 +1197,9 @@ fn lsp_code_action_kind(kind: CodeActionKind) -> &'static str {
     }
 }
 
-fn lsp_code_action_edit(edit: CodeActionEdit) -> Value {
+fn lsp_code_action_edit(edit: CodeActionEdit, sources: &AnalysisSnapshot) -> Value {
     let raw_changes = edit.changes;
-    let changes = lsp_changes(raw_changes.clone());
+    let changes = lsp_changes(raw_changes.clone(), sources);
 
     if edit.create_files.is_empty() {
         return json!({
@@ -1153,7 +1221,7 @@ fn lsp_code_action_edit(edit: CodeActionEdit) -> Value {
         })
         .collect::<Vec<_>>();
 
-    for (uri, edits) in changes_for_document_changes(raw_changes) {
+    for (uri, edits) in changes_for_document_changes(raw_changes, sources) {
         document_changes.push(json!({
             "textDocument": {
                 "uri": uri,
@@ -1168,9 +1236,9 @@ fn lsp_code_action_edit(edit: CodeActionEdit) -> Value {
     })
 }
 
-pub(super) fn lsp_workspace_edit(edit: RenameEdit) -> Value {
+pub(super) fn lsp_workspace_edit(edit: RenameEdit, sources: &AnalysisSnapshot) -> Value {
     json!({
-        "changes": lsp_changes(group_text_edits(edit.edits))
+        "changes": lsp_changes(group_text_edits(edit.edits), sources)
     })
 }
 
@@ -1189,13 +1257,17 @@ fn group_text_edits(edits: Vec<TextEdit>) -> BTreeMap<std::path::PathBuf, Vec<Te
 
 fn lsp_changes(
     changes: BTreeMap<std::path::PathBuf, Vec<TextEdit>>,
+    sources: &AnalysisSnapshot,
 ) -> BTreeMap<String, Vec<Value>> {
     changes
         .into_iter()
         .map(|(path, edits)| {
             (
                 uri_from_path(&path),
-                edits.into_iter().map(lsp_text_edit).collect(),
+                edits
+                    .into_iter()
+                    .map(|edit| lsp_text_edit(edit, sources.source(&path).unwrap_or("")))
+                    .collect(),
             )
         })
         .collect()
@@ -1203,13 +1275,23 @@ fn lsp_changes(
 
 fn changes_for_document_changes(
     changes: BTreeMap<std::path::PathBuf, Vec<TextEdit>>,
+    sources: &AnalysisSnapshot,
 ) -> Vec<(String, Vec<Value>)> {
-    lsp_changes(changes).into_iter().collect()
+    lsp_changes(changes, sources).into_iter().collect()
 }
 
-pub(super) fn lsp_text_edit(edit: TextEdit) -> Value {
+pub(super) fn lsp_text_edit(edit: TextEdit, source: &str) -> Value {
+    let source = if edit
+        .path
+        .file_name()
+        .is_some_and(|name| name == tua_core::CONFIG_FILE)
+    {
+        ""
+    } else {
+        source
+    };
     json!({
-        "range": lsp_range(edit.span),
+        "range": lsp_range_for_source(source, edit.span),
         "newText": edit.new_text
     })
 }
@@ -1241,20 +1323,23 @@ fn lsp_document_end_position(source: &str) -> (usize, usize) {
             line += 1;
             character = 0;
         } else {
-            character += 1;
+            character += ch.len_utf16();
         }
     }
 
     (line, character)
 }
 
-pub(super) fn lsp_workspace_symbol_from_core(symbol: WorkspaceSymbol) -> Value {
+pub(super) fn lsp_workspace_symbol_from_core(
+    symbol: WorkspaceSymbol,
+    sources: &AnalysisSnapshot,
+) -> Value {
     let mut item = json!({
         "name": symbol.name,
         "kind": lsp_workspace_symbol_kind(symbol.kind),
         "location": {
             "uri": uri_from_path(&symbol.path),
-            "range": lsp_range(symbol.selection_range)
+            "range": lsp_range_for_source(sources.source(&symbol.path).unwrap_or(""), symbol.selection_range)
         }
     });
 
@@ -1278,8 +1363,23 @@ fn lsp_workspace_symbol_kind(kind: WorkspaceSymbolKind) -> u8 {
     }
 }
 
-pub(super) fn lsp_semantic_token_data_from_core(tokens: Vec<SemanticToken>) -> Vec<usize> {
+pub(super) fn lsp_semantic_token_data_from_core(
+    tokens: Vec<SemanticToken>,
+    source: &str,
+) -> Vec<usize> {
     let mut data = Vec::with_capacity(tokens.len() * 5);
+    let lines = source.split('\n').collect::<Vec<_>>();
+    let column = |position: SourcePosition| {
+        lines
+            .get(position.line.saturating_sub(1))
+            .map(|line| {
+                line.chars()
+                    .take(position.column.saturating_sub(1))
+                    .map(char::len_utf16)
+                    .sum::<usize>()
+            })
+            .unwrap_or_else(|| position.column.saturating_sub(1))
+    };
     let mut previous_line = 0usize;
     let mut previous_start = 0usize;
 
@@ -1289,12 +1389,8 @@ pub(super) fn lsp_semantic_token_data_from_core(tokens: Vec<SemanticToken>) -> V
         }
 
         let line = token.span.start.line.saturating_sub(1);
-        let start = token.span.start.column.saturating_sub(1);
-        let length = token
-            .span
-            .end
-            .column
-            .saturating_sub(token.span.start.column);
+        let start = column(token.span.start);
+        let length = column(token.span.end).saturating_sub(start);
         let delta_line = line.saturating_sub(previous_line);
         let delta_start = if delta_line == 0 {
             start.saturating_sub(previous_start)
@@ -1317,8 +1413,8 @@ pub(super) fn lsp_semantic_token_data_from_core(tokens: Vec<SemanticToken>) -> V
     data
 }
 
-pub(super) fn lsp_semantic_tokens_from_core(tokens: Vec<SemanticToken>) -> Value {
-    lsp_semantic_tokens(lsp_semantic_token_data_from_core(tokens), None)
+pub(super) fn lsp_semantic_tokens_from_core(tokens: Vec<SemanticToken>, source: &str) -> Value {
+    lsp_semantic_tokens(lsp_semantic_token_data_from_core(tokens, source), None)
 }
 
 pub(super) fn lsp_semantic_tokens(data: Vec<usize>, result_id: Option<&str>) -> Value {
@@ -1419,9 +1515,9 @@ fn semantic_token_modifier_bit(modifier: SemanticTokenModifier) -> usize {
     }
 }
 
-pub(super) fn lsp_inlay_hint_from_core(hint: InlayHint) -> Value {
+pub(super) fn lsp_inlay_hint_from_core(hint: InlayHint, source: &str) -> Value {
     let mut item = json!({
-        "position": lsp_position(hint.position),
+        "position": lsp_position_for_source(source, hint.position),
         "label": hint.label,
         "kind": lsp_inlay_hint_kind(hint.kind)
     });
@@ -1440,24 +1536,24 @@ fn lsp_inlay_hint_kind(kind: InlayHintKind) -> u8 {
     }
 }
 
-fn lsp_location(uri: &str, span: SourceSpan) -> Value {
+fn lsp_location(uri: &str, span: SourceSpan, source: &str) -> Value {
     json!({
         "uri": uri,
-        "range": lsp_range(span)
+        "range": lsp_range_for_source(source, span)
     })
 }
 
-pub(super) fn lsp_document_symbol_from_core(symbol: DocumentSymbol) -> Value {
+pub(super) fn lsp_document_symbol_from_core(symbol: DocumentSymbol, source: &str) -> Value {
     let children = symbol
         .children
         .into_iter()
-        .map(lsp_document_symbol_from_core)
+        .map(|child| lsp_document_symbol_from_core(child, source))
         .collect::<Vec<_>>();
     let mut item = json!({
         "name": symbol.name,
         "kind": lsp_symbol_kind(symbol.kind),
-        "range": lsp_range(symbol.range),
-        "selectionRange": lsp_range(symbol.selection_range),
+        "range": lsp_range_for_source(source, symbol.range),
+        "selectionRange": lsp_range_for_source(source, symbol.selection_range),
     });
 
     if let Some(detail) = symbol.detail {
@@ -1471,24 +1567,24 @@ pub(super) fn lsp_document_symbol_from_core(symbol: DocumentSymbol) -> Value {
     item
 }
 
-pub(super) fn lsp_selection_range_from_core(range: SelectionRange) -> Value {
+pub(super) fn lsp_selection_range_from_core(range: SelectionRange, source: &str) -> Value {
     let mut item = json!({
-        "range": lsp_range(range.range)
+        "range": lsp_range_for_source(source, range.range)
     });
 
     if let Some(parent) = range.parent {
-        item["parent"] = lsp_selection_range_from_core(*parent);
+        item["parent"] = lsp_selection_range_from_core(*parent, source);
     }
 
     item
 }
 
-pub(super) fn lsp_folding_range_from_core(range: FoldingRange) -> Value {
+pub(super) fn lsp_folding_range_from_core(range: FoldingRange, source: &str) -> Value {
     json!({
         "startLine": range.range.start.line.saturating_sub(1),
-        "startCharacter": range.range.start.column.saturating_sub(1),
+        "startCharacter": utf16_column(source, range.range.start.line, range.range.start.column),
         "endLine": range.range.end.line.saturating_sub(1),
-        "endCharacter": range.range.end.column.saturating_sub(1),
+        "endCharacter": utf16_column(source, range.range.end.line, range.range.end.column),
         "kind": lsp_folding_range_kind(range.kind)
     })
 }
@@ -1513,6 +1609,84 @@ fn lsp_symbol_kind(kind: DocumentSymbolKind) -> u8 {
         DocumentSymbolKind::ModuleExports => 19,
         DocumentSymbolKind::TypeAlias => 23,
     }
+}
+
+// Core columns count Unicode scalar values; LSP defaults to UTF-16 code units.
+// Keep the raw scalar serializers below only for server-owned resolve data.
+fn utf16_column(source: &str, line: usize, column: usize) -> usize {
+    if source.is_empty() {
+        return column.saturating_sub(1);
+    }
+    source
+        .split('\n')
+        .nth(line.saturating_sub(1))
+        .map(|text| {
+            text.chars()
+                .take(column.saturating_sub(1))
+                .map(char::len_utf16)
+                .sum()
+        })
+        .unwrap_or_else(|| column.saturating_sub(1))
+}
+
+pub(super) fn lsp_position_for_source(source: &str, position: SourcePosition) -> Value {
+    json!({ "line": position.line.saturating_sub(1),
+        "character": utf16_column(source, position.line, position.column) })
+}
+
+pub(super) fn lsp_range_for_source(source: &str, span: SourceSpan) -> Value {
+    json!({ "start": lsp_position_for_source(source, span.start),
+        "end": lsp_position_for_source(source, span.end) })
+}
+
+pub(super) fn source_position_for_source(source: &str, position: &Value) -> Option<SourcePosition> {
+    if source.is_empty() {
+        return source_position_from_lsp(position);
+    }
+    let line = usize::try_from(position.get("line")?.as_u64()?).ok()?;
+    let requested = usize::try_from(position.get("character")?.as_u64()?).ok()?;
+    let text = source.split('\n').nth(line)?.trim_end_matches('\r');
+    let mut units = 0;
+    let mut column = 1;
+    for ch in text.chars() {
+        if units >= requested {
+            break;
+        }
+        units += ch.len_utf16();
+        if units > requested {
+            return None;
+        } // A cursor cannot split a surrogate pair.
+        column += 1;
+    }
+    Some(SourcePosition {
+        line: line.checked_add(1)?,
+        column,
+    })
+}
+
+pub(super) fn source_range_for_source(source: &str, range: &Value) -> Option<SourceRange> {
+    let position = |value: &Value| {
+        let requested_line = usize::try_from(value.get("line")?.as_u64()?).ok()?;
+        let (last_line, last_text) = source.split('\n').enumerate().last()?;
+        if requested_line > last_line {
+            // Clients commonly request whole-document assists with an oversized
+            // end line. Clamp to EOF rather than silently dropping the action.
+            Some(SourcePosition {
+                line: last_line.checked_add(1)?,
+                column: last_text
+                    .trim_end_matches('\r')
+                    .chars()
+                    .count()
+                    .checked_add(1)?,
+            })
+        } else {
+            source_position_for_source(source, value)
+        }
+    };
+    Some(SourceRange {
+        start: position(range.get("start")?)?,
+        end: position(range.get("end")?)?,
+    })
 }
 
 pub(super) fn lsp_range(span: SourceSpan) -> Value {
@@ -1571,8 +1745,12 @@ pub(super) fn lsp_source_range(range: &Value) -> Option<SourceRange> {
 
 pub(super) fn source_position_from_lsp(position: &Value) -> Option<SourcePosition> {
     Some(SourcePosition {
-        line: position.get("line")?.as_u64()? as usize + 1,
-        column: position.get("character")?.as_u64()? as usize + 1,
+        line: usize::try_from(position.get("line")?.as_u64()?)
+            .ok()?
+            .checked_add(1)?,
+        column: usize::try_from(position.get("character")?.as_u64()?)
+            .ok()?
+            .checked_add(1)?,
     })
 }
 

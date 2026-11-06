@@ -1384,3 +1384,77 @@ return {}
     );
     assert_hover_contains(server.output(), 2, "type Types.Player = { hp: number }");
 }
+
+#[test]
+fn same_name_modules_stay_in_the_importing_workspace() {
+    let a = TempProject::new("module-ownership-a");
+    let b = TempProject::new("module-ownership-b");
+    for project in [&a, &b] {
+        project.write("tua.toml", "source = \"src\"\n");
+    }
+    a.write("src/shared.tua", "return { amount = 7 }\n");
+    b.write("src/shared.lua", "return { amount = 'seven' }\n");
+    let source_a =
+        "local shared = require('shared')\nlocal result: number = shared.amount\nprint(result)\n";
+    let source_b =
+        "local shared = require('shared')\nlocal result: string = shared.amount\nprint(result)\n";
+    let uri_a = a.uri_for("src/main.tua");
+    let uri_b = b.uri_for("src/main.tua");
+    for roots in [[a.uri(), b.uri()], [b.uri(), a.uri()]] {
+        let mut server = TestServer::new();
+        server.send(initialize_with_workspace_folders(1, roots));
+        server.send(did_open(&uri_a, source_a));
+        server.send(did_open(&uri_b, source_b));
+        server.send(hover_request(2, &uri_a, source_a, "amount"));
+        server.send(hover_request(3, &uri_b, source_b, "amount"));
+        assert!(hover_contents(server.output(), 2).contains("number"));
+        assert!(hover_contents(server.output(), 3).contains("string"));
+        server.send(definition_request(4, &uri_a, source_a, "shared.amount", 8));
+        server.send(definition_request(5, &uri_b, source_b, "shared.amount", 8));
+        let definitions_a = response_with_id(server.output(), 4)["result"].to_string();
+        let definitions_b = response_with_id(server.output(), 5)["result"].to_string();
+        assert!(
+            definitions_a.contains(&a.uri_for("src/shared.tua")),
+            "{definitions_a}"
+        );
+        assert!(
+            definitions_b.contains(&b.uri_for("src/shared.lua")),
+            "{definitions_b}"
+        );
+    }
+}
+
+#[test]
+fn multi_workspace_type_library_overlays_are_project_local() {
+    let first = TempProject::new("type-overlay-first");
+    let second = TempProject::new("type-overlay-second");
+    let config = "source = 'src'\n[[type_libraries]]\npath = 'types'\ndeclaration_prefix = 'api'\nruntime_prefix = 'engine'\n";
+    let number_source = "local api = require('engine')\nlocal value: number = api.value\n";
+    let string_source = "local api = require('engine')\nlocal value: string = api.value\n";
+    for project in [&first, &second] {
+        project.write("tua.toml", config);
+    }
+    first.write("types/api.lua", "---@meta api\nreturn {value = 1}\n");
+    second.write("types/api.lua", "---@meta api\nreturn {value = 'second'}\n");
+    first.write("src/main.tua", number_source);
+    second.write("src/main.tua", string_source);
+    let first_uri = first.uri_for("src/main.tua");
+    let second_uri = second.uri_for("src/main.tua");
+    let output = run_messages(vec![
+        initialize_with_workspace_folders(1, [first.uri(), second.uri()]),
+        did_open(&first_uri, number_source),
+        did_open(&second_uri, string_source),
+        hover_request(2, &first_uri, number_source, "value\n"),
+        hover_request(3, &second_uri, string_source, "value\n"),
+    ]);
+    let first_hover = response_with_id(&output, 2)["result"]["contents"]["value"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let second_hover = response_with_id(&output, 3)["result"]["contents"]["value"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    assert!(first_hover.contains("number"), "{first_hover}");
+    assert!(second_hover.contains("string"), "{second_hover}");
+}

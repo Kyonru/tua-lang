@@ -9,11 +9,11 @@ fn diagnostic_severities_round_trip_through_lsp() {
         (DiagnosticSeverity::Hint, 4),
     ] {
         let diagnostic = Diagnostic::new("src/main.tua", 3, 5, severity, "sample");
-        let lsp = protocol::lsp_diagnostic_from_core(diagnostic);
+        let lsp = protocol::lsp_diagnostic_from_core(diagnostic, "");
 
         assert_eq!(lsp["severity"], expected);
 
-        let round_tripped = protocol::core_diagnostic_from_lsp(Path::new("src/main.tua"), &lsp)
+        let round_tripped = protocol::core_diagnostic_from_lsp(Path::new("src/main.tua"), &lsp, "")
             .expect("diagnostic should round-trip");
 
         assert_eq!(round_tripped.severity, severity);
@@ -24,14 +24,14 @@ fn diagnostic_severities_round_trip_through_lsp() {
 fn diagnostic_ranges_round_trip_through_lsp() {
     let diagnostic =
         Diagnostic::error("tua.toml", 2, 3, "unknown config key").with_range(2, 3, 2, 18);
-    let lsp = protocol::lsp_diagnostic_from_core(diagnostic);
+    let lsp = protocol::lsp_diagnostic_from_core(diagnostic, "");
 
     assert_eq!(lsp["range"]["start"]["line"], 1);
     assert_eq!(lsp["range"]["start"]["character"], 2);
     assert_eq!(lsp["range"]["end"]["line"], 1);
     assert_eq!(lsp["range"]["end"]["character"], 17);
 
-    let round_tripped = protocol::core_diagnostic_from_lsp(Path::new("tua.toml"), &lsp)
+    let round_tripped = protocol::core_diagnostic_from_lsp(Path::new("tua.toml"), &lsp, "")
         .expect("diagnostic should round-trip");
 
     assert_eq!(round_tripped.line, 2);

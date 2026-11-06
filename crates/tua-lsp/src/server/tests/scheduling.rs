@@ -960,7 +960,7 @@ fn typing_and_completion_preempt_a_running_background_request() {
             Duration::from_millis(50),
             vec![
                 did_change(uri, after, 2),
-                invoked_completion_request(3, uri, after, "o"),
+                invoked_completion_request(3, uri, after, "\no"),
             ],
         ),
     ]);

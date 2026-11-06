@@ -93,6 +93,7 @@ pub(super) fn code_action_response(
     path: &Path,
     diagnostics: Vec<Diagnostic>,
     requested_kinds: &[AssistKind],
+    sources: &super::analysis::AnalysisSnapshot,
 ) -> Value {
     if !requested_kinds.is_empty() && !requested_kinds.contains(&AssistKind::QuickFix) {
         return json!([]);
@@ -136,7 +137,7 @@ pub(super) fn code_action_response(
                 },
             })
         })
-        .map(lsp_code_action_from_core)
+        .map(|action| lsp_code_action_from_core(action, sources))
         .collect::<Vec<_>>();
 
     Value::Array(actions)

@@ -43,6 +43,7 @@ pub(super) fn initialize_result(
     let completion_trigger_characters = completion_trigger_characters();
     let mut result = json!({
         "capabilities": {
+            "positionEncoding": "utf-16",
             "textDocumentSync": {
                 "openClose": true,
                 "change": 2,

@@ -13,21 +13,22 @@ use tua_core::{
 
 use super::configuration::WorkspaceSettings;
 use super::protocol::{
-    call_hierarchy_identity_from_lsp, code_lens_resolve_data, completion_resolve_data,
-    core_diagnostic_from_lsp, error_response, lsp_asset_inventory_from_core,
-    lsp_call_hierarchy_incoming_call, lsp_call_hierarchy_item, lsp_call_hierarchy_outgoing_call,
-    lsp_code_action_from_core, lsp_code_lens_from_core, lsp_completion_from_core,
-    lsp_diagnostic_from_core, lsp_document_highlight_from_core, lsp_document_link_from_core,
-    lsp_document_symbol_from_core, lsp_ecs_graph_from_core, lsp_folding_range_from_core,
-    lsp_full_document_text_edit, lsp_hover_from_core, lsp_inlay_hint_from_core,
-    lsp_inline_completion_from_core, lsp_inspector_items_from_core, lsp_location_from_core,
-    lsp_module_dependency_graph_from_core, lsp_object_pool_graph_from_core,
-    lsp_prepare_rename_from_core, lsp_range, lsp_reference_location, lsp_resolved_completion_item,
-    lsp_resolved_reference_code_lens, lsp_selection_range_from_core,
-    lsp_semantic_token_data_from_core, lsp_semantic_token_delta, lsp_semantic_tokens,
-    lsp_semantic_tokens_from_core, lsp_signal_graph_from_core, lsp_signature_help_from_core,
-    lsp_source_range, lsp_text_edit, lsp_type_explanation_from_core, lsp_workspace_edit,
-    lsp_workspace_symbol_from_core, publish_diagnostics, response, source_position_from_lsp,
+    call_hierarchy_identity_from_lsp, code_lens_resolve_data, completion_for_client,
+    completion_resolve_data, core_diagnostic_from_lsp, error_response,
+    lsp_asset_inventory_from_core, lsp_call_hierarchy_incoming_call, lsp_call_hierarchy_item,
+    lsp_call_hierarchy_outgoing_call, lsp_code_action_from_core, lsp_code_lens_from_core,
+    lsp_completion_from_core, lsp_diagnostic_from_core, lsp_document_highlight_from_core,
+    lsp_document_link_from_core, lsp_document_symbol_from_core, lsp_ecs_graph_from_core,
+    lsp_folding_range_from_core, lsp_full_document_text_edit, lsp_hover_from_core,
+    lsp_inlay_hint_from_core, lsp_inline_completion_from_core, lsp_inspector_items_from_core,
+    lsp_location_from_core, lsp_module_dependency_graph_from_core, lsp_object_pool_graph_from_core,
+    lsp_position_for_source, lsp_prepare_rename_from_core, lsp_range_for_source,
+    lsp_reference_location, lsp_resolved_completion_item, lsp_resolved_reference_code_lens,
+    lsp_selection_range_from_core, lsp_semantic_token_data_from_core, lsp_semantic_token_delta,
+    lsp_semantic_tokens, lsp_semantic_tokens_from_core, lsp_signal_graph_from_core,
+    lsp_signature_help_from_core, lsp_text_edit, lsp_type_explanation_from_core,
+    lsp_workspace_edit, lsp_workspace_symbol_from_core, publish_diagnostics, response,
+    source_position_for_source, source_position_from_lsp, source_range_for_source,
     workspace_diagnostic_refresh_request, SourceRange,
 };
 use super::request_registry::{NotificationKind, RequestKind};
@@ -45,6 +46,7 @@ const LOCAL_INLINE_COMPLETION_BUDGET: Duration = Duration::from_millis(10);
 
 struct DocumentRequest<'a> {
     params: &'a Value,
+    source: &'a str,
     uri: &'a str,
     path: PathBuf,
 }
@@ -82,9 +84,13 @@ struct FileRename {
 
 impl<'a> DocumentRequest<'a> {
     fn position(&self) -> Option<SourcePosition> {
-        self.params
-            .get("position")
-            .and_then(source_position_from_lsp)
+        let position = self.params.get("position")?;
+        if is_config_uri(self.uri) {
+            // Configuration editor helpers already use UTF-16 columns.
+            source_position_from_lsp(position)
+        } else {
+            source_position_for_source(self.source, position)
+        }
     }
 }
 
@@ -328,6 +334,10 @@ impl LspServer {
                     client_supports_workspace_refresh(&message, "inlayHint");
                 self.client_semantic_tokens_refresh =
                     client_supports_workspace_refresh(&message, "semanticTokens");
+                self.client_completion_snippets = message
+                    .pointer("/params/capabilities/textDocument/completion/completionItem/snippetSupport")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false);
                 self.client_completion_label_details =
                     client_supports_completion_label_details(&message);
 
@@ -451,12 +461,7 @@ impl LspServer {
                 response(id, self.semantic_tokens_delta_response(&message))
             }
             RequestKind::SemanticTokensRange => {
-                let range = message
-                    .get("params")
-                    .and_then(|params| params.get("range"))
-                    .and_then(lsp_source_range);
-
-                response(id, self.semantic_tokens_range_response(&message, range))
+                response(id, self.semantic_tokens_range_response(&message))
             }
             RequestKind::WorkspaceSymbol => response(id, self.workspace_symbol_response(&message)),
             RequestKind::WillRenameFiles => response(id, self.will_rename_files_response(&message)),
@@ -620,7 +625,7 @@ impl LspServer {
 
         let params = message.get("params")?;
         let uri = document_uri(params)?;
-        let position = params.get("position").and_then(source_position_from_lsp)?;
+        let position = self.document_request(message)?.position()?;
         let position_label = format!("{}:{}", position.line, position.column);
         let request_id = message
             .get("id")
@@ -681,7 +686,7 @@ impl LspServer {
 
         let params = message.get("params")?;
         let uri = document_uri(params)?;
-        let position = params.get("position").and_then(source_position_from_lsp)?;
+        let position = self.document_request(message)?.position()?;
         let position_label = format!("{}:{}", position.line, position.column);
         let request_id = message
             .get("id")
@@ -1010,7 +1015,10 @@ impl LspServer {
         snapshot
             .diagnostics_for_uri(uri)
             .into_iter()
-            .map(lsp_diagnostic_from_core)
+            .map(|diagnostic| {
+                let source = self.analysis.document_text(uri).unwrap_or("");
+                lsp_diagnostic_from_core(diagnostic, source)
+            })
             .chain(self.shader_diagnostics(uri))
             .collect()
     }
@@ -1019,7 +1027,10 @@ impl LspServer {
         self.analysis
             .fast_diagnostics_for_uri(uri)
             .into_iter()
-            .map(lsp_diagnostic_from_core)
+            .map(|diagnostic| {
+                let source = self.analysis.document_text(uri).unwrap_or("");
+                lsp_diagnostic_from_core(diagnostic, source)
+            })
             .chain(self.shader_diagnostics(uri))
             .collect()
     }
@@ -1252,7 +1263,10 @@ impl LspServer {
         snapshot
             .diagnostics_for_uri(uri)
             .into_iter()
-            .map(lsp_diagnostic_from_core)
+            .map(|diagnostic| {
+                let source = snapshot.source(&path_from_uri(uri)).unwrap_or("");
+                lsp_diagnostic_from_core(diagnostic, source)
+            })
             .chain(self.shader_diagnostics(uri))
             .collect()
     }
@@ -1367,7 +1381,7 @@ impl LspServer {
         }
 
         if let Some(hover) = self.analysis.fast_hover_for_uri(request.uri, position) {
-            return Some(lsp_hover_from_core(hover));
+            return Some(lsp_hover_from_core(hover, request.source));
         }
 
         let snapshot = {
@@ -1382,7 +1396,7 @@ impl LspServer {
             snapshot.hover(&request.path, position)?
         };
 
-        Some(lsp_hover_from_core(hover))
+        Some(lsp_hover_from_core(hover, request.source))
     }
 
     fn completion_response(&self, message: &Value) -> Value {
@@ -1409,19 +1423,25 @@ impl LspServer {
                 source,
                 completions,
                 self.client_completion_label_details,
+                self.client_completion_snippets,
             );
         }
         if completion_request_is_invoked(message) {
-            if let Some((position, completions)) = self
+            if let Some((position, mut completions)) = self
                 .analysis
                 .fast_identifier_completion_for_uri(request.uri, position)
             {
+                let snapshot = self
+                    .analysis
+                    .snapshot(&self.workspace_folders, &self.settings);
+                snapshot.augment_auto_import_completions(&request.path, position, &mut completions);
                 return lsp_completion_array(
                     request.uri,
                     position,
                     source,
                     completions,
                     self.client_completion_label_details,
+                    self.client_completion_snippets,
                 );
             }
         }
@@ -1451,6 +1471,7 @@ impl LspServer {
             source,
             completions,
             self.client_completion_label_details,
+            self.client_completion_snippets,
         )
     }
 
@@ -1482,7 +1503,13 @@ impl LspServer {
             )
         };
 
-        lsp_resolved_completion_item(item, completion)
+        lsp_resolved_completion_item(
+            item,
+            completion.and_then(|completion| {
+                completion_for_client(completion, self.client_completion_snippets)
+            }),
+            snapshot.source(&path).unwrap_or(""),
+        )
     }
 
     fn signature_help_response(&self, message: &Value) -> Option<Value> {
@@ -1520,9 +1547,15 @@ impl LspServer {
 
         match definition.len() {
             0 => None,
-            1 => Some(lsp_location_from_core(definition.into_iter().next()?)),
+            1 => Some(lsp_location_from_core(
+                definition.into_iter().next()?,
+                &snapshot,
+            )),
             _ => Some(Value::Array(
-                definition.into_iter().map(lsp_location_from_core).collect(),
+                definition
+                    .into_iter()
+                    .map(|item| lsp_location_from_core(item, &snapshot))
+                    .collect(),
             )),
         }
     }
@@ -1542,7 +1575,7 @@ impl LspServer {
             snapshot.type_definition(&request.path, position)?
         };
 
-        Some(lsp_location_from_core(definition))
+        Some(lsp_location_from_core(definition, &snapshot))
     }
 
     fn implementation_response(&self, message: &Value) -> Value {
@@ -1567,7 +1600,7 @@ impl LspServer {
         Value::Array(
             definitions
                 .into_iter()
-                .map(lsp_location_from_core)
+                .map(|item| lsp_location_from_core(item, &snapshot))
                 .collect(),
         )
     }
@@ -1889,7 +1922,7 @@ impl LspServer {
             .analysis
             .snapshot(&self.workspace_folders, &self.settings);
 
-        lsp_signal_graph_from_core(snapshot.signal_graph())
+        lsp_signal_graph_from_core(snapshot.signal_graph(), &snapshot)
     }
 
     fn asset_inventory_response(&self) -> Value {
@@ -1899,7 +1932,7 @@ impl LspServer {
 
         json!({
             "analysisRevision": snapshot.revision(),
-            "inventory": lsp_asset_inventory_from_core(snapshot.asset_inventory())
+            "inventory": lsp_asset_inventory_from_core(snapshot.asset_inventory(), &snapshot)
         })
     }
 
@@ -1910,7 +1943,7 @@ impl LspServer {
 
         json!({
             "analysisRevision": snapshot.revision(),
-            "graph": lsp_module_dependency_graph_from_core(snapshot.module_dependency_graph())
+            "graph": lsp_module_dependency_graph_from_core(snapshot.module_dependency_graph(), &snapshot)
         })
     }
 
@@ -1921,7 +1954,7 @@ impl LspServer {
 
         json!({
             "analysisRevision": snapshot.revision(),
-            "graph": lsp_ecs_graph_from_core(snapshot.ecs_graph())
+            "graph": lsp_ecs_graph_from_core(snapshot.ecs_graph(), &snapshot)
         })
     }
 
@@ -1932,7 +1965,7 @@ impl LspServer {
 
         json!({
             "analysisRevision": snapshot.revision(),
-            "graph": lsp_object_pool_graph_from_core(snapshot.object_pool_graph())
+            "graph": lsp_object_pool_graph_from_core(snapshot.object_pool_graph(), &snapshot)
         })
     }
 
@@ -1942,7 +1975,7 @@ impl LspServer {
             .snapshot(&self.workspace_folders, &self.settings);
         json!({
             "analysisRevision": snapshot.revision(),
-            "graph": crate::server::protocol::lsp_audio_graph_from_core(snapshot.audio_graph())
+            "graph": crate::server::protocol::lsp_audio_graph_from_core(snapshot.audio_graph(), &snapshot)
         })
     }
 
@@ -1962,7 +1995,7 @@ impl LspServer {
             "analysisRevision": snapshot.revision(),
             "documentVersion": self.document_versions.get(request.uri).copied(),
             "items": lsp_inspector_items_from_core(
-                snapshot.inspect(&request.path, request.position())
+                snapshot.inspect(&request.path, request.position()), request.source
             )
         })
     }
@@ -1991,7 +2024,7 @@ impl LspServer {
             "documentVersion": self.document_versions.get(request.uri).copied(),
             "explanation": snapshot
                 .explain_type(&request.path, position)
-                .map(lsp_type_explanation_from_core)
+                .map(|explanation| lsp_type_explanation_from_core(explanation, request.source, &snapshot))
         })
     }
 
@@ -2034,10 +2067,7 @@ impl LspServer {
             "contextBytes": context.context_bytes,
             "documentVersion": current_version,
             "sourceFingerprint": context.source_fingerprint,
-            "position": {
-                "line": context.position.line.saturating_sub(1),
-                "character": context.position.column.saturating_sub(1)
-            },
+            "position": lsp_position_for_source(request.source, context.position),
             "prompt": context.prompt,
             "suffix": context.suffix,
             "completionScope": context.completion_scope.as_str(),
@@ -2155,10 +2185,13 @@ impl LspServer {
         if requested_document_version(request.params) != current_version {
             return rejected_inline_completion(
                 ModelCompletionRejectionReason::Stale,
-                Some(SourceSpan {
-                    start: position,
-                    end: position,
-                }),
+                Some(lsp_range_for_source(
+                    request.source,
+                    SourceSpan {
+                        start: position,
+                        end: position,
+                    },
+                )),
             );
         }
         let Some(context_id) = request.params.get("contextId").and_then(Value::as_str) else {
@@ -2217,7 +2250,12 @@ impl LspServer {
             .snapshot(&self.workspace_folders, &self.settings);
         let items = snapshot.prepare_call_hierarchy(&request.path, position);
 
-        Value::Array(items.into_iter().map(lsp_call_hierarchy_item).collect())
+        Value::Array(
+            items
+                .into_iter()
+                .map(|item| lsp_call_hierarchy_item(item, &snapshot))
+                .collect(),
+        )
     }
 
     fn call_hierarchy_incoming_response(&self, message: &Value) -> Value {
@@ -2235,7 +2273,7 @@ impl LspServer {
         Value::Array(
             calls
                 .into_iter()
-                .map(lsp_call_hierarchy_incoming_call)
+                .map(|item| lsp_call_hierarchy_incoming_call(item, &snapshot))
                 .collect(),
         )
     }
@@ -2255,7 +2293,13 @@ impl LspServer {
         Value::Array(
             calls
                 .into_iter()
-                .map(lsp_call_hierarchy_outgoing_call)
+                .map(|call| {
+                    lsp_call_hierarchy_outgoing_call(
+                        call,
+                        &snapshot,
+                        snapshot.source(&identity.path).unwrap_or(""),
+                    )
+                })
                 .collect(),
         )
     }
@@ -2266,7 +2310,12 @@ impl LspServer {
         };
         let links = self.analysis.document_links(&request.path);
 
-        Value::Array(links.into_iter().map(lsp_document_link_from_core).collect())
+        Value::Array(
+            links
+                .into_iter()
+                .map(|item| lsp_document_link_from_core(item, request.source))
+                .collect(),
+        )
     }
 
     fn document_highlight_response(&self, message: &Value) -> Value {
@@ -2281,7 +2330,7 @@ impl LspServer {
         Value::Array(
             highlights
                 .into_iter()
-                .map(lsp_document_highlight_from_core)
+                .map(|item| lsp_document_highlight_from_core(item, request.source))
                 .collect(),
         )
     }
@@ -2295,7 +2344,7 @@ impl LspServer {
         Value::Array(
             symbols
                 .into_iter()
-                .map(lsp_document_symbol_from_core)
+                .map(|item| lsp_document_symbol_from_core(item, request.source))
                 .collect(),
         )
     }
@@ -2311,7 +2360,7 @@ impl LspServer {
             .map(|positions| {
                 positions
                     .iter()
-                    .filter_map(source_position_from_lsp)
+                    .filter_map(|position| source_position_for_source(request.source, position))
                     .collect::<Vec<_>>()
             })
             .unwrap_or_default();
@@ -2321,7 +2370,7 @@ impl LspServer {
             ranges
                 .into_iter()
                 .flatten()
-                .map(lsp_selection_range_from_core)
+                .map(|item| lsp_selection_range_from_core(item, request.source))
                 .collect(),
         )
     }
@@ -2335,7 +2384,7 @@ impl LspServer {
         Value::Array(
             ranges
                 .into_iter()
-                .map(lsp_folding_range_from_core)
+                .map(|item| lsp_folding_range_from_core(item, request.source))
                 .collect(),
         )
     }
@@ -2344,7 +2393,11 @@ impl LspServer {
         let Some(request) = self.document_request(message) else {
             return json!([]);
         };
-        let Some(range) = request.params.get("range").and_then(lsp_source_range) else {
+        let Some(range) = request
+            .params
+            .get("range")
+            .and_then(|range| source_range_for_source(request.source, range))
+        else {
             return json!([]);
         };
         let diagnostics = request
@@ -2355,7 +2408,17 @@ impl LspServer {
             .map(|diagnostics| {
                 diagnostics
                     .iter()
-                    .filter_map(|diagnostic| core_diagnostic_from_lsp(&request.path, diagnostic))
+                    .filter_map(|diagnostic| {
+                        core_diagnostic_from_lsp(
+                            &request.path,
+                            diagnostic,
+                            if is_config_uri(request.uri) {
+                                ""
+                            } else {
+                                request.source
+                            },
+                        )
+                    })
                     .collect::<Vec<_>>()
             })
             .unwrap_or_default();
@@ -2365,6 +2428,9 @@ impl LspServer {
                 &request.path,
                 diagnostics,
                 &requested_kinds,
+                &self
+                    .analysis
+                    .snapshot(&self.workspace_folders, &self.settings),
             );
         }
 
@@ -2386,7 +2452,12 @@ impl LspServer {
             &requested_kinds,
         );
 
-        Value::Array(actions.into_iter().map(lsp_code_action_from_core).collect())
+        Value::Array(
+            actions
+                .into_iter()
+                .map(|item| lsp_code_action_from_core(item, &snapshot))
+                .collect(),
+        )
     }
 
     fn formatting_response(&self, message: &Value) -> Option<Value> {
@@ -2404,7 +2475,10 @@ impl LspServer {
 
     fn range_formatting_response(&self, message: &Value) -> Option<Value> {
         let request = self.document_request(message)?;
-        let range = request.params.get("range").and_then(lsp_source_range)?;
+        let range = request
+            .params
+            .get("range")
+            .and_then(|range| source_range_for_source(request.source, range))?;
         let source = self.analysis.document_text(request.uri)?;
         let options = self.format_options_for_path(&request.path);
         let edits = tua_core::format_tua_source_range(
@@ -2418,7 +2492,12 @@ impl LspServer {
         )
         .ok()?;
 
-        Some(Value::Array(edits.into_iter().map(lsp_text_edit).collect()))
+        Some(Value::Array(
+            edits
+                .into_iter()
+                .map(|edit| lsp_text_edit(edit, source))
+                .collect(),
+        ))
     }
 
     fn on_type_formatting_response(&self, message: &Value) -> Option<Value> {
@@ -2431,7 +2510,12 @@ impl LspServer {
             tua_core::format_tua_source_on_type(&request.path, source, &options, position, trigger)
                 .ok()?;
 
-        Some(Value::Array(edits.into_iter().map(lsp_text_edit).collect()))
+        Some(Value::Array(
+            edits
+                .into_iter()
+                .map(|edit| lsp_text_edit(edit, source))
+                .collect(),
+        ))
     }
 
     fn references_response(&self, message: &Value) -> Value {
@@ -2459,7 +2543,12 @@ impl LspServer {
             snapshot.references(&request.path, position, include_declaration)
         };
 
-        Value::Array(references.into_iter().map(lsp_reference_location).collect())
+        Value::Array(
+            references
+                .into_iter()
+                .map(|item| lsp_reference_location(item, &snapshot))
+                .collect(),
+        )
     }
 
     fn code_lens_response(&self, message: &Value) -> Value {
@@ -2478,7 +2567,12 @@ impl LspServer {
             snapshot.code_lenses(&request.path)
         };
 
-        Value::Array(lenses.into_iter().map(lsp_code_lens_from_core).collect())
+        Value::Array(
+            lenses
+                .into_iter()
+                .map(|item| lsp_code_lens_from_core(item, request.source))
+                .collect(),
+        )
     }
 
     fn code_lens_resolve_response(&self, message: Value) -> Value {
@@ -2500,7 +2594,7 @@ impl LspServer {
             snapshot.references(&data.target.path, data.target.position, false)
         };
 
-        lsp_resolved_reference_code_lens(lens, &data.target, references)
+        lsp_resolved_reference_code_lens(lens, &data.target, references, &snapshot)
     }
 
     fn prepare_rename_response(&self, message: &Value) -> Option<Value> {
@@ -2518,7 +2612,7 @@ impl LspServer {
             snapshot.prepare_rename(&request.path, position)?
         };
 
-        Some(lsp_prepare_rename_from_core(target))
+        Some(lsp_prepare_rename_from_core(target, request.source))
     }
 
     fn rename_response(&self, message: &Value) -> Option<Value> {
@@ -2537,14 +2631,17 @@ impl LspServer {
             snapshot.rename(&request.path, position, new_name)?
         };
 
-        Some(lsp_workspace_edit(edit))
+        Some(lsp_workspace_edit(edit, &snapshot))
     }
 
     fn inlay_hint_response(&self, message: &Value) -> Value {
         let Some(request) = self.document_request(message) else {
             return json!([]);
         };
-        let range = request.params.get("range").and_then(lsp_source_range);
+        let range = request
+            .params
+            .get("range")
+            .and_then(|range| source_range_for_source(request.source, range));
         let core_range = range.map(|range| SourceSpan {
             start: range.start,
             end: range.end,
@@ -2589,7 +2686,7 @@ impl LspServer {
                         .map(|range| range.contains(hint.position))
                         .unwrap_or(true)
                 })
-                .map(lsp_inlay_hint_from_core)
+                .map(|item| lsp_inlay_hint_from_core(item, request.source))
                 .collect(),
         )
     }
@@ -2645,16 +2742,28 @@ impl LspServer {
         }
     }
 
-    fn semantic_tokens_range_response(&self, message: &Value, range: Option<SourceRange>) -> Value {
+    fn semantic_tokens_range_response(&self, message: &Value) -> Value {
         let Some(request) = self.document_request(message) else {
             return json!({ "data": [] });
         };
 
-        lsp_semantic_tokens_from_core(self.semantic_tokens_for_range(&request.path, range))
+        let range = request
+            .params
+            .get("range")
+            .and_then(|range| source_range_for_source(request.source, range));
+        lsp_semantic_tokens_from_core(
+            self.semantic_tokens_for_range(&request.path, range),
+            request.source,
+        )
     }
 
     fn semantic_token_data(&self, path: &Path, range: Option<SourceRange>) -> Vec<usize> {
-        lsp_semantic_token_data_from_core(self.semantic_tokens_for_range(path, range))
+        lsp_semantic_token_data_from_core(
+            self.semantic_tokens_for_range(path, range),
+            self.analysis
+                .document_text(&uri_from_path(path))
+                .unwrap_or(""),
+        )
     }
 
     fn semantic_tokens_for_range(
@@ -2742,7 +2851,7 @@ impl LspServer {
         Value::Array(
             symbols
                 .into_iter()
-                .map(lsp_workspace_symbol_from_core)
+                .map(|item| lsp_workspace_symbol_from_core(item, &snapshot))
                 .collect(),
         )
     }
@@ -2767,16 +2876,17 @@ impl LspServer {
             return Value::Null;
         }
 
-        lsp_workspace_edit(RenameEdit { edits })
+        lsp_workspace_edit(RenameEdit { edits }, &snapshot)
     }
 
     fn document_request<'a>(&'a self, message: &'a Value) -> Option<DocumentRequest<'a>> {
         let params = message.get("params")?;
         let uri = document_uri(params)?;
-        self.analysis.document_text(uri)?;
+        let source = self.analysis.document_text(uri)?;
 
         Some(DocumentRequest {
             params,
+            source,
             uri,
             path: path_from_uri(uri),
         })
@@ -2855,29 +2965,6 @@ fn standard_inline_completion_item(mut item: Value) -> Value {
     })
 }
 
-fn lsp_range_for_source(source: &str, span: SourceSpan) -> Value {
-    json!({
-        "start": lsp_position_for_source(source, span.start),
-        "end": lsp_position_for_source(source, span.end)
-    })
-}
-
-fn lsp_position_for_source(source: &str, position: SourcePosition) -> Value {
-    let line_index = position.line.saturating_sub(1);
-    let scalar_column = position.column.saturating_sub(1);
-    let line = source.lines().nth(line_index).unwrap_or("");
-    let character = line
-        .chars()
-        .take(scalar_column)
-        .map(char::len_utf16)
-        .sum::<usize>();
-
-    json!({
-        "line": line_index,
-        "character": character
-    })
-}
-
 fn model_completion_position(source: &str, lsp_position: &Value) -> Option<SourcePosition> {
     let line = lsp_position.get("line")?.as_u64()? as usize;
     let offset = byte_offset_from_lsp_position(source, lsp_position)?;
@@ -2895,13 +2982,13 @@ fn inline_request_range(params: &Value) -> Value {
 
 fn rejected_inline_completion(
     reason: ModelCompletionRejectionReason,
-    span: Option<SourceSpan>,
+    range: Option<Value>,
 ) -> Value {
     json!({
         "status": "rejected",
         "reason": reason.as_str(),
         "insertText": Value::Null,
-        "range": span.map(lsp_range),
+        "range": range,
         "documentVersion": Value::Null
     })
 }
@@ -2921,11 +3008,13 @@ fn lsp_completion_array(
     source: &str,
     completions: Vec<tua_core::Completion>,
     client_completion_label_details: bool,
+    client_completion_snippets: bool,
 ) -> Value {
     let replacement_span = tua_core::completion::completion_replacement_span(source, position);
     Value::Array(
         completions
             .into_iter()
+            .filter_map(|completion| completion_for_client(completion, client_completion_snippets))
             .enumerate()
             .map(|(index, completion)| {
                 let mut item = lsp_completion_from_core(
@@ -2934,6 +3023,7 @@ fn lsp_completion_array(
                     completion,
                     replacement_span,
                     client_completion_label_details,
+                    source,
                 );
                 let label = item
                     .get("label")

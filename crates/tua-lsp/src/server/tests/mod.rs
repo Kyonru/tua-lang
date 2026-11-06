@@ -34,6 +34,7 @@ mod server_protocol;
 mod shaders;
 mod signature_help;
 mod type_explanation;
+mod unicode;
 mod workspace;
 
 fn run_messages(messages: Vec<Value>) -> Vec<Value> {
@@ -213,7 +214,8 @@ fn initialize_with_root(id: u64, root_uri: String) -> Value {
         "id": id,
         "method": "initialize",
         "params": {
-            "rootUri": root_uri
+            "rootUri": root_uri,
+            "capabilities": completion_label_details_capabilities()
         }
     })
 }
@@ -246,7 +248,8 @@ fn completion_label_details_capabilities() -> Value {
         "textDocument": {
             "completion": {
                 "completionItem": {
-                    "labelDetailsSupport": true
+                    "labelDetailsSupport": true,
+                    "snippetSupport": true
                 }
             }
         }
@@ -1130,12 +1133,16 @@ fn workspace_symbol_request(id: u64, query: &str) -> Value {
 
 fn lsp_position_of(source: &str, needle: &str) -> Value {
     let index = source.find(needle).expect("needle should exist in source");
+    lsp_position_at_byte(source, index)
+}
+
+fn lsp_position_at_byte(source: &str, index: usize) -> Value {
     let before = &source[..index];
     let line = before.bytes().filter(|byte| *byte == b'\n').count();
     let character = before
         .rsplit_once('\n')
-        .map(|(_, line)| line.len())
-        .unwrap_or(before.len());
+        .map(|(_, line)| line.encode_utf16().count())
+        .unwrap_or_else(|| before.encode_utf16().count());
 
     json!({
         "line": line,
@@ -1156,15 +1163,8 @@ fn lsp_position_with_offset(source: &str, needle: &str, offset: usize) -> Value 
 }
 
 fn lsp_position_after(source: &str, needle: &str) -> Value {
-    let mut position = lsp_position_of(source, needle);
-    position["character"] = json!(
-        position["character"]
-            .as_u64()
-            .expect("character should be numeric")
-            + needle.chars().count() as u64
-    );
-
-    position
+    let index = source.find(needle).expect("needle should exist in source") + needle.len();
+    lsp_position_at_byte(source, index)
 }
 
 fn lsp_position(position: SourcePosition) -> Value {

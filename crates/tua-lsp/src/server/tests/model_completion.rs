@@ -126,3 +126,31 @@ fn validate_request(id: u64, uri: &str, context: &Value, candidate: &str, versio
         }
     })
 }
+
+#[test]
+fn model_context_and_stale_rejection_round_trip_utf16_positions() {
+    let uri = "file:///tmp/model-utf16.tua";
+    let source = "local label = '😀'; local value: number = ";
+    let mut server = TestServer::new();
+    server.send(did_open(uri, source));
+    server.send(inline_context_request(
+        1,
+        uri,
+        source,
+        "local value: number = ",
+        1,
+    ));
+    let context = response_with_id(server.output(), 1)["result"].clone();
+    let expected = lsp_position_after(source, "local value: number = ");
+    assert_eq!(context["position"], expected);
+    server.send(validate_request(2, uri, &context, "1", 1));
+    assert_eq!(
+        response_with_id(server.output(), 2)["result"]["status"],
+        "accepted"
+    );
+    server.send(did_change(uri, source, 2));
+    server.send(validate_request(3, uri, &context, "1", 1));
+    let stale = &response_with_id(server.output(), 3)["result"];
+    assert_eq!(stale["status"], "rejected");
+    assert_eq!(stale["range"]["start"], expected);
+}

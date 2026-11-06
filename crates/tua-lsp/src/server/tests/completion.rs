@@ -481,7 +481,7 @@ fn closing_an_unsaved_document_removes_its_module_completion() {
 }
 
 #[test]
-fn identifier_completion_uses_open_document_fast_path() {
+fn identifier_completion_reuses_current_file_and_project_facts() {
     let temp = TempProject::new("identifier-completion-fast-path");
     let uri = temp.uri_for("src/main.tua");
     let source = "local outside_function = 1\nprint(ou)\nprint(out)\n";
@@ -512,8 +512,8 @@ fn identifier_completion_uses_open_document_fast_path() {
 
     assert_eq!(
         after["parse"]["misses"].as_u64(),
-        Some(before["parse"]["misses"].as_u64().unwrap_or_default() + 1),
-        "plain identifier completion should parse only the active document once while typing"
+        Some(before["parse"]["misses"].as_u64().unwrap_or_default() + 2),
+        "identifier completion indexes project exports once and reuses both files while typing"
     );
 }
 
@@ -626,6 +626,7 @@ end
 ---@param player Pl
 "#;
     let output = run_messages(vec![
+        initialize_with_completion_label_details(100),
         did_open(uri, source),
         completion_request(2, uri, source, "---@p"),
         completion_request(3, uri, source, "---@param player Pl"),
@@ -795,6 +796,7 @@ local classNear = 2
 local value = cl
 "#;
     let output = run_messages(vec![
+        initialize_with_completion_label_details(100),
         did_open(uri, source),
         invoked_completion_request(2, uri, source, "local value = cl"),
     ]);
@@ -830,6 +832,7 @@ fn completion_returns_love_callback_snippet_and_conf_fields() {
 end
 "#;
     let mut server = TestServer::new();
+    server.send(initialize_with_completion_label_details(100));
     for message in [
         did_open(callback_uri, callback_source),
         did_open(generated_callback_uri, generated_callback_source),
@@ -1780,4 +1783,67 @@ fn completion_recovers_indexed_record_receivers_in_unsaved_buffers() {
         completion_request(2, uri, source, "items[1]."),
     ]);
     assert_completion_labels(&output, 2, ["speed"]);
+}
+
+#[test]
+fn invoked_completion_keeps_project_autoimports_and_resolve_edits() {
+    let temp = TempProject::new("invoked-auto-import-parity");
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write(
+        "src/player.tua",
+        "local function makePlayer(): number return 7 end\nreturn { makePlayer = makePlayer }\n",
+    );
+    let source = "local made = make\n";
+    let uri = temp.uri_for("src/main.tua");
+    let mut server = TestServer::new();
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&uri, source));
+    for (id, trigger) in [(2, None), (3, Some(1)), (4, Some(3))] {
+        let mut request = completion_request(id, &uri, source, "make");
+        if let Some(trigger) = trigger {
+            request["params"]["context"] = json!({ "triggerKind": trigger });
+        }
+        server.send(request);
+        let item = completion_with_label(server.output(), id, "makePlayer");
+        assert_eq!(item["insertText"], "Player.makePlayer");
+        server.send(completion_resolve_request(id + 10, item));
+        let resolved = &response_with_id(server.output(), id + 10)["result"];
+        assert!(resolved["additionalTextEdits"]
+            .as_array()
+            .is_some_and(|edits| !edits.is_empty()));
+    }
+}
+
+#[test]
+fn completion_negotiates_snippets_on_initial_and_resolved_items() {
+    let uri = "file:///tmp/snippet-capability.tua";
+    let source = "love.graphics.rec\n";
+    for support in [None, Some(false), Some(true)] {
+        let mut server = TestServer::new();
+        let mut init = initialize_with_completion_label_details(1);
+        init["params"]["capabilities"]["textDocument"]["completion"]["completionItem"]
+            .as_object_mut()
+            .unwrap()
+            .remove("snippetSupport");
+        if let Some(support) = support {
+            init["params"]["capabilities"]["textDocument"]["completion"]["completionItem"]
+                ["snippetSupport"] = json!(support);
+        }
+        server.send(init);
+        server.send(did_open(uri, source));
+        server.send(completion_request(2, uri, source, "love.graphics.rec"));
+        let item = completion_with_label(server.output(), 2, "rectangle");
+        if support == Some(true) {
+            assert_eq!(item["insertTextFormat"], 2);
+        } else {
+            assert!(item.get("insertTextFormat").is_none());
+            assert_eq!(item["textEdit"]["newText"], "rectangle");
+        }
+        server.send(completion_resolve_request(3, item));
+        let resolved = &response_with_id(server.output(), 3)["result"];
+        assert_eq!(
+            resolved.get("insertTextFormat").is_some(),
+            support == Some(true)
+        );
+    }
 }

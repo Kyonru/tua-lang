@@ -70,7 +70,7 @@ fn config_code_action_fixes_unknown_key_suggestions() {
             0,
             1,
             17,
-            vec![protocol::lsp_diagnostic_from_core(diagnostic)],
+            vec![protocol::lsp_diagnostic_from_core(diagnostic, "")],
         ),
     ]);
     let action = code_action_result(&output, 2, 0);
