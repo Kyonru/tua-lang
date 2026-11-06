@@ -6,7 +6,7 @@ impl AnalysisSnapshot {
         crate::audio::audio_graph(
             self.files
                 .values()
-                .filter_map(|file| file.parsed.as_ref().ok()),
+                .filter_map(|file| file.parsed.as_ref().ok().map(Arc::as_ref)),
         )
     }
 }

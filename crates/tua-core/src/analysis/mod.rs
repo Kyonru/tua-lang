@@ -162,7 +162,7 @@ pub struct AnalysisHost {
     asset_index: Option<asset::AssetIndex>,
     builtin_catalogs: BuiltinCatalogs,
     cache: RefCell<AnalysisQueryCache>,
-    last_good_files: RefCell<BTreeMap<PathBuf, LastGoodAnalysisFile>>,
+    last_good_files: RefCell<BTreeMap<PathBuf, AnalysisFile>>,
     completion_adaptive_stats: CompletionAdaptiveStats,
     completion_sequence_ranking: CompletionSequenceRankingConfig,
     completion_multi_token: CompletionMultiTokenConfig,
@@ -190,9 +190,9 @@ pub struct AnalysisSnapshot {
     input_errors: BTreeMap<PathBuf, Diagnostic>,
     revision: u64,
     config: ProjectConfig,
-    vfs: VfsSnapshot,
+    vfs: Arc<VfsSnapshot>,
     asset_roots: Vec<PathBuf>,
-    asset_index: Option<asset::AssetIndex>,
+    asset_index: Option<Arc<asset::AssetIndex>>,
     files: BTreeMap<PathBuf, AnalysisFile>,
     require_path_separator: ModulePathSeparator,
     module_path_index: Arc<ModulePathIndex>,
@@ -201,7 +201,7 @@ pub struct AnalysisSnapshot {
     type_database: Arc<ProjectTypeDatabase>,
     symbol_index: Arc<SymbolIndex>,
     usage_index: Arc<ProjectUsageIndex>,
-    last_good_files: BTreeMap<PathBuf, LastGoodAnalysisFile>,
+    last_good_files: BTreeMap<PathBuf, AnalysisFile>,
     completion_adaptive_stats: CompletionAdaptiveStats,
     completion_sequence_ranking: CompletionSequenceRankingConfig,
     completion_multi_token: CompletionMultiTokenConfig,
@@ -215,8 +215,8 @@ pub struct AnalysisSnapshot {
     emission_diagnostics_cache: Arc<Mutex<BTreeMap<PathBuf, Vec<Diagnostic>>>>,
     reverse_reference_index: Arc<OnceLock<ReverseReferenceIndex>>,
     project_module_globals: Arc<OnceLock<BTreeSet<String>>>,
-    call_hierarchy_symbols: BTreeMap<PathBuf, Vec<CallHierarchySymbol>>,
-    call_hierarchy_calls: BTreeMap<PathBuf, Vec<CallHierarchyCallSite>>,
+    call_hierarchy_symbols: Arc<BTreeMap<PathBuf, Vec<CallHierarchySymbol>>>,
+    call_hierarchy_calls: Arc<BTreeMap<PathBuf, Vec<CallHierarchyCallSite>>>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -240,7 +240,7 @@ impl std::ops::Deref for AnalysisFile {
 struct AnalysisFileData {
     source: String,
     kind: AnalysisSourceKind,
-    parsed: Result<ParsedSource, Vec<Diagnostic>>,
+    parsed: Result<Arc<ParsedSource>, Vec<Diagnostic>>,
     semantics: Option<AnalysisFileSemantics>,
     degraded_semantics: Option<DegradedFileSemantics>,
     diagnostics: Vec<Diagnostic>,
@@ -300,23 +300,6 @@ struct DegradedFileSemantics {
     scope: ScopeMap,
     environment: TypeEnvironment,
     environment_diagnostics: Vec<Diagnostic>,
-}
-
-#[derive(Clone, Debug)]
-struct LastGoodAnalysisFile(Arc<LastGoodAnalysisFileData>);
-
-impl std::ops::Deref for LastGoodAnalysisFile {
-    type Target = LastGoodAnalysisFileData;
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-#[derive(Debug)]
-struct LastGoodAnalysisFileData {
-    parsed: ParsedSource,
-    hir: HirModule,
-    environment: TypeEnvironment,
 }
 
 #[derive(Clone, Debug)]
@@ -436,7 +419,7 @@ struct CompletionCacheStats {
 #[derive(Clone, Debug, Default)]
 struct AnalysisQueryCache {
     files: BTreeMap<PathBuf, CachedAnalysisFile>,
-    parsed_files: BTreeMap<ParsedCacheKey, Arc<Result<ParsedSource, Vec<Diagnostic>>>>,
+    parsed_files: BTreeMap<ParsedCacheKey, Arc<Result<Arc<ParsedSource>, Vec<Diagnostic>>>>,
     dependencies: BTreeMap<PathBuf, BTreeSet<PathBuf>>,
     importers: BTreeMap<PathBuf, BTreeSet<PathBuf>>,
     type_dependency_uses: BTreeMap<(PathBuf, PathBuf), Option<BTreeSet<String>>>,
@@ -445,7 +428,6 @@ struct AnalysisQueryCache {
 
 #[derive(Clone, Debug)]
 struct CachedAnalysisFile {
-    source: String,
     kind: AnalysisSourceKind,
     file: AnalysisFile,
 }
@@ -509,7 +491,7 @@ impl DependencySurface {
         Self::from_parts(
             file.exports.clone(),
             file.environment(),
-            file.parsed.as_ref().ok(),
+            file.parsed.as_ref().ok().map(Arc::as_ref),
             file.kind,
             require_targets_for_links(&file.require_edges),
         )

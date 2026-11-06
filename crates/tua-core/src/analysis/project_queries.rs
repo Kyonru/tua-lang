@@ -2218,7 +2218,7 @@ impl AnalysisSnapshot {
                         analysis_asset_roots(self.source_roots(), &self.asset_roots),
                         &diagnostics_config,
                         &self.config.jit,
-                        self.asset_index.as_ref(),
+                        self.asset_index.as_deref(),
                     )
                     .err()
                     .unwrap_or_default();

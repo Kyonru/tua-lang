@@ -56,22 +56,21 @@ workflow pages under `docs/`. Completed work belongs in
   Candidate installation, real-server language features and five graphical
   LOVE/editor views passed.
   These checks do not establish long-session usability or full-port parity.
-- Keep the large-project soak measurements separate by request: the recent
-  BYTEPATH run had 19.6 ms median completion, 212 ms median signature help,
-  3.2 ms median hover, and a 3.4 s cold signature outlier. A fresh run measured
-  231 MiB RSS after opening the file, then 3.68 GiB within five edit cycles;
-  it stayed near that level for the next 20 edits. `vmmap` reported 1.7 GiB
-  current and 3.0 GiB peak physical footprint, with 1.3 GiB malloc allocated.
-  The earlier ten-minute run began after the cold jump and added 103 MiB. A full
-  BYTEPATH `tua check` also peaked at 2,233,729,432 bytes (~2.08 GiB), so the
-  cold memory cost is not limited to the LSP. Instruments could not attach or
-  export a trace. A separate stack-logged live call tree attributed 509 MiB to
-  `AnalysisHost::snapshot` and cached files, including 494 MiB under
-  `cached_parsed_file`; parser stacks included 269 MiB in `parse_lua_source` and
-  165 MiB in raw `full_moon` parsing. That run's 601 MiB physical footprint
-  differs from the 2.1 GiB uninstrumented snapshot, so these figures are a lead,
-  not directly comparable totals. Investigate parse/cache ownership and repeat
-  on a stable host before qualifying long sessions.
+- The BYTEPATH memory investigation traced the large cold cost to duplicated
+  parse and analysis ownership: the parse cache and analysis files separately
+  retained ASTs, last-good recovery copied AST/HIR/type environments, cached
+  files duplicated source strings, and cached snapshots cloned project-wide
+  indexes. Sharing immutable parse/file/snapshot data cut a same-host full
+  BYTEPATH `tua check` peak from 2.17 GiB to 1.08 GiB. The earlier 3.68 GiB
+  editor jump was not reproduced: the final 10-minute replay stayed around
+  1.82–2.01 GiB RSS. It still grew by roughly 185 MiB over ten minutes,
+  however, so sustained memory growth remains unexplained and long sessions are
+  not qualified. See the local-only
+  `internal/audits/devex-2026-11-06/memory-investigation-2026-11-06.md` and
+  `workflow/soak-evidence.json` for host, binary hashes, and detailed results.
+  Keep profiling the retained growth separately from the now-reduced cold peak;
+  do not infer a memory leak solely from RSS or treat a single ten-minute replay
+  as long-session qualification.
 - Turn any still-unspecified reference/implementation request into an exact
   symbol, editor command, expected destination, and reproducible test before
   treating it as a confirmed defect.

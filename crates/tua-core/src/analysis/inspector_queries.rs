@@ -21,7 +21,7 @@ impl AnalysisSnapshot {
             &parsed.sprite_declarations,
             &file.assets,
             self.effective_asset_roots(),
-            self.asset_index.as_ref(),
+            self.asset_index.as_deref(),
         );
         items.extend(
             crate::state_machine::inspections(parsed)

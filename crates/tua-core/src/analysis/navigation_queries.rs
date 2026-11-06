@@ -108,7 +108,7 @@ impl AnalysisSnapshot {
         let path = asset::resolved_asset_path(
             metadata,
             self.effective_asset_roots(),
-            self.asset_index.as_ref(),
+            self.asset_index.as_deref(),
         )?;
         let start = SourcePosition { line: 1, column: 1 };
 
@@ -969,7 +969,7 @@ impl AnalysisSnapshot {
         };
         let mut calls = Vec::new();
 
-        for (path, file_calls) in &self.call_hierarchy_calls {
+        for (path, file_calls) in self.call_hierarchy_calls.iter() {
             for call in file_calls {
                 let Some(callee) = self.resolve_call_hierarchy_target(path, call) else {
                     continue;
@@ -1117,7 +1117,7 @@ impl AnalysisSnapshot {
         let Some(target) = asset::resolved_asset_path(
             metadata,
             self.effective_asset_roots(),
-            self.asset_index.as_ref(),
+            self.asset_index.as_deref(),
         ) else {
             return Some(Vec::new());
         };
@@ -1128,7 +1128,7 @@ impl AnalysisSnapshot {
                 let Some(candidate) = asset::resolved_asset_path(
                     metadata,
                     self.effective_asset_roots(),
-                    self.asset_index.as_ref(),
+                    self.asset_index.as_deref(),
                 ) else {
                     continue;
                 };

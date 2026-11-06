@@ -13,7 +13,7 @@ impl AnalysisQueryCache {
         let path = normalize_path(path);
 
         if let Some(cached) = self.files.get(&path) {
-            if cached.source == source && cached.kind == kind {
+            if cached.file.source == source && cached.kind == kind {
                 let file = cached.file.clone();
 
                 self.record_file_hit();
@@ -30,7 +30,6 @@ impl AnalysisQueryCache {
         self.files.insert(
             path,
             CachedAnalysisFile {
-                source: source.to_owned(),
                 kind,
                 file: file.clone(),
             },
@@ -44,7 +43,7 @@ impl AnalysisQueryCache {
         path: &Path,
         source: &str,
         kind: AnalysisSourceKind,
-    ) -> (Result<ParsedSource, Vec<Diagnostic>>, bool) {
+    ) -> (Result<Arc<ParsedSource>, Vec<Diagnostic>>, bool) {
         let key = parsed_cache_key(path, source, kind);
 
         if let Some(parsed) = self.parsed_files.get(&key) {
@@ -58,7 +57,7 @@ impl AnalysisQueryCache {
             let _profile = profile::span_for_path("analysis.parse", path);
             let _trace = profile::diagnostics_span(profile::DiagnosticsTraceCategory::Parse);
 
-            parse_analysis_source(path, source.to_owned(), kind)
+            parse_analysis_source(path, source.to_owned(), kind).map(Arc::new)
         };
 
         self.parsed_files.insert(key, Arc::new(parsed.clone()));
@@ -268,6 +267,7 @@ impl AnalysisQueryCache {
             .parsed
             .as_ref()
             .ok()
+            .map(Arc::as_ref)
             .map(referenced_type_names)
             .unwrap_or_default();
         for edge in &file.require_edges {
@@ -353,7 +353,7 @@ fn build_analysis_file(
     source: String,
     kind: AnalysisSourceKind,
     context: AnalysisBuildContext<'_>,
-    parsed: Result<ParsedSource, Vec<Diagnostic>>,
+    parsed: Result<Arc<ParsedSource>, Vec<Diagnostic>>,
 ) -> AnalysisFile {
     let (semantics, semantic_diagnostics) = match &parsed {
         Ok(parsed) => {
@@ -524,6 +524,7 @@ fn build_analysis_file(
             parsed
                 .as_ref()
                 .ok()
+                .map(Arc::as_ref)
                 .or_else(|| degraded_semantics.as_ref().map(|facts| &facts.parsed)),
             semantics
                 .as_ref()
@@ -561,6 +562,7 @@ fn build_analysis_file(
     let inline_shaders = parsed
         .as_ref()
         .ok()
+        .map(Arc::as_ref)
         .or_else(|| degraded_semantics.as_ref().map(|facts| &facts.parsed))
         .map(|parsed| {
             let scope = semantics

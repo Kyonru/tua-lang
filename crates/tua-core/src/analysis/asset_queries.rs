@@ -103,7 +103,7 @@ impl AnalysisSnapshot {
                     &old_path,
                     &new_path,
                     self.effective_asset_roots(),
-                    self.asset_index.as_ref(),
+                    self.asset_index.as_deref(),
                 ) else {
                     continue;
                 };

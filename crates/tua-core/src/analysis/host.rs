@@ -542,39 +542,39 @@ impl AnalysisHost {
                 })
                 .collect::<BTreeMap<_, _>>()
         };
-        let module_graph = {
-            let _profile = profile::span("analysis.index.module_graph");
-            let _trace = profile::diagnostics_span(profile::DiagnosticsTraceCategory::ModuleGraph);
+        let module_graph =
+            {
+                let _profile = profile::span("analysis.index.module_graph");
+                let _trace =
+                    profile::diagnostics_span(profile::DiagnosticsTraceCategory::ModuleGraph);
 
-            ModuleGraph::build_with_workspaces(
-                files.iter().map(|(path, file)| ModuleGraphInput {
-                    path,
-                    parsed: file
-                        .parsed
-                        .as_ref()
-                        .ok()
-                        .or_else(|| file.degraded_semantics.as_ref().map(|facts| &facts.parsed)),
-                    hir: file
-                        .hir()
-                        .or_else(|| file.degraded_semantics.as_ref().map(|facts| &facts.hir)),
-                    exports: file.exports.as_ref(),
-                    source_kind: file.kind,
-                }),
-                ModuleGraphOptions {
-                    source_roots: vfs.source_roots().to_vec(),
-                    output_roots: vfs.options().output_roots.clone(),
-                    extension: self.config.extension.clone(),
-                    require_path_separator: self.require_path_separator,
-                    declaration_modules: crate::module_graph::declaration_modules(
-                        files.iter().filter_map(|(path, file)| {
-                            Some((path.as_path(), file.parsed.as_ref().ok()?))
+                ModuleGraph::build_with_workspaces(
+                    files.iter().map(|(path, file)| ModuleGraphInput {
+                        path,
+                        parsed: file.parsed.as_ref().ok().map(Arc::as_ref).or_else(|| {
+                            file.degraded_semantics.as_ref().map(|facts| &facts.parsed)
                         }),
-                        &self.type_libraries,
-                    ),
-                },
-                &self.module_path_workspaces,
-            )
-        };
+                        hir: file
+                            .hir()
+                            .or_else(|| file.degraded_semantics.as_ref().map(|facts| &facts.hir)),
+                        exports: file.exports.as_ref(),
+                        source_kind: file.kind,
+                    }),
+                    ModuleGraphOptions {
+                        source_roots: vfs.source_roots().to_vec(),
+                        output_roots: vfs.options().output_roots.clone(),
+                        extension: self.config.extension.clone(),
+                        require_path_separator: self.require_path_separator,
+                        declaration_modules: crate::module_graph::declaration_modules(
+                            files.iter().filter_map(|(path, file)| {
+                                Some((path.as_path(), file.parsed.as_ref().ok()?.as_ref()))
+                            }),
+                            &self.type_libraries,
+                        ),
+                    },
+                    &self.module_path_workspaces,
+                )
+            };
         let type_database =
             {
                 let _profile = profile::span("analysis.index.type_database");
@@ -593,7 +593,7 @@ impl AnalysisHost {
                         scope: file
                             .scope()
                             .or_else(|| file.degraded_semantics.as_ref().map(|facts| &facts.scope)),
-                        parsed: file.parsed.as_ref().ok().or_else(|| {
+                        parsed: file.parsed.as_ref().ok().map(Arc::as_ref).or_else(|| {
                             file.degraded_semantics.as_ref().map(|facts| &facts.parsed)
                         }),
                     }),
@@ -621,6 +621,7 @@ impl AnalysisHost {
                             .parsed
                             .as_ref()
                             .ok()
+                            .map(Arc::as_ref)
                             .zip(file.semantics())
                             .map(|(parsed, facts)| (parsed, &facts.environment, &facts.scope))
                             .or_else(|| {
@@ -681,9 +682,9 @@ impl AnalysisHost {
             input_errors: self.input_errors.clone(),
             revision: self.revision,
             config: self.config.clone(),
-            vfs,
+            vfs: Arc::new(vfs),
             asset_roots: self.asset_roots.clone(),
-            asset_index: self.asset_index.clone(),
+            asset_index: self.asset_index.clone().map(Arc::new),
             files,
             require_path_separator: self.require_path_separator,
             module_path_index,
@@ -706,8 +707,8 @@ impl AnalysisHost {
             emission_diagnostics_cache: Arc::new(Mutex::new(BTreeMap::new())),
             reverse_reference_index: Arc::new(OnceLock::new()),
             project_module_globals: Arc::new(OnceLock::new()),
-            call_hierarchy_symbols,
-            call_hierarchy_calls,
+            call_hierarchy_symbols: Arc::new(call_hierarchy_symbols),
+            call_hierarchy_calls: Arc::new(call_hierarchy_calls),
         };
 
         let mut snapshot_cache = self
@@ -771,13 +772,12 @@ impl AnalysisHost {
             if cache
                 .files
                 .get(&path)
-                .is_none_or(|cached| cached.source != file.source || cached.kind != file.kind)
+                .is_none_or(|cached| cached.file.source != file.source || cached.kind != file.kind)
             {
                 cache.update_dependencies(&path, &file);
                 cache.files.insert(
                     path.clone(),
                     CachedAnalysisFile {
-                        source: file.source.clone(),
                         kind: file.kind,
                         file: file.clone(),
                     },
@@ -824,7 +824,7 @@ impl AnalysisHost {
             (cached, parsed_files)
         };
 
-        if cached.source != source
+        if cached.file.source != source
             || vfs_source_kind(cached.kind) != kind
             || warmed.vfs.source(&path) != Some(source)
             || warmed.vfs.kind(&path) != Some(kind)
@@ -1212,7 +1212,7 @@ impl AnalysisHost {
         };
         let (parsed, base_environment) = match &file.parsed {
             Ok(parsed) => (
-                parsed,
+                parsed.as_ref(),
                 file.environment()
                     .expect("parsed file must have a type environment")
                     .clone(),
@@ -1380,7 +1380,7 @@ impl AnalysisHost {
         let cache = self.cache.borrow();
         let cached = cache.files.get(&path)?;
 
-        (cached.source == source && cached.kind == kind).then(|| cached.file.clone())
+        (cached.file.source == source && cached.kind == kind).then(|| cached.file.clone())
     }
 
     fn peek_current_parse_errors(&self, path: &Path) -> Option<Vec<Diagnostic>> {
@@ -1389,7 +1389,7 @@ impl AnalysisHost {
         let kind = self.vfs.kind(&path).map(analysis_source_kind)?;
         let cache = self.cache.borrow();
         let cached = cache.files.get(&path)?;
-        if cached.source != source || cached.kind != kind {
+        if cached.file.source != source || cached.kind != kind {
             return None;
         }
         Some(
@@ -1473,7 +1473,7 @@ impl AnalysisHost {
         let kind = self.vfs.kind(&path).map(analysis_source_kind)?;
         let cache = self.cache.borrow();
         let cached = cache.files.get(&path)?;
-        if cached.source != source || cached.kind != kind {
+        if cached.file.source != source || cached.kind != kind {
             return None;
         }
         let parsed = match &cached.file.parsed {
@@ -1917,7 +1917,6 @@ impl AnalysisHost {
             cache.files.insert(
                 path.clone(),
                 CachedAnalysisFile {
-                    source: file.source.clone(),
                     kind: file.kind,
                     file: file.clone(),
                 },
@@ -1995,21 +1994,11 @@ impl AnalysisHost {
         last_good_files.retain(|path, _| files.contains_key(path));
 
         for (path, file) in files {
-            let Ok(parsed) = &file.parsed else {
+            let Ok(_parsed) = &file.parsed else {
                 continue;
             };
 
-            last_good_files.insert(
-                path.clone(),
-                LastGoodAnalysisFile(Arc::new(LastGoodAnalysisFileData {
-                    parsed: parsed.clone(),
-                    hir: file.hir().cloned().expect("parsed file must have HIR"),
-                    environment: file
-                        .environment()
-                        .cloned()
-                        .expect("parsed file must have a type environment"),
-                })),
-            );
+            last_good_files.insert(path.clone(), file.clone());
         }
     }
 

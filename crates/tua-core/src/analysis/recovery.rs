@@ -68,18 +68,20 @@ impl AnalysisSnapshot {
 
     pub(super) fn last_good_semantic_facts(&self, path: &Path) -> Option<DegradedSemanticFacts> {
         let last_good = self.last_good_files.get(&normalize_path(path))?.clone();
-        let project_inference = self.project_local_inference(&last_good.parsed);
+        let parsed = last_good.parsed.as_ref().ok()?;
+        let semantics = last_good.semantics()?;
+        let hir = last_good.hir()?;
+        let project_inference = self.project_local_inference(parsed);
         let environment = self.project_type_environment_for_parsed(
-            &last_good.parsed,
-            last_good.environment.clone(),
+            parsed,
+            semantics.environment.clone(),
             &project_inference,
         );
-        let semantic_index =
-            SemanticIndex::build(&last_good.parsed, Some(&last_good.hir), &environment);
+        let semantic_index = SemanticIndex::build(parsed, Some(hir), &environment);
 
         Some(DegradedSemanticFacts {
-            parsed: last_good.parsed.clone(),
-            hir: last_good.hir.clone(),
+            parsed: parsed.as_ref().clone(),
+            hir: hir.clone(),
             environment,
             semantic_index,
             project_inference,

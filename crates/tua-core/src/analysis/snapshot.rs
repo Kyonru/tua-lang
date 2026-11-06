@@ -42,7 +42,7 @@ impl AnalysisSnapshot {
 
     pub fn parse(&self, path: impl AsRef<Path>) -> Option<Result<&ParsedSource, &[Diagnostic]>> {
         self.file(path.as_ref())
-            .map(|file| file.parsed.as_ref().map_err(Vec::as_slice))
+            .map(|file| file.parsed.as_ref().map(Arc::as_ref).map_err(Vec::as_slice))
     }
 
     pub fn diagnostics(&self, path: impl AsRef<Path>) -> Vec<Diagnostic> {
@@ -140,7 +140,7 @@ impl AnalysisSnapshot {
                             .as_ref()
                             .expect("parsed file must have semantic facts");
                         (
-                            parsed,
+                            parsed.as_ref(),
                             &semantics.environment,
                             &semantics.environment_diagnostics,
                             &default_ecs,
@@ -182,7 +182,7 @@ impl AnalysisSnapshot {
                     &diagnostics_config,
                     &self.config.jit,
                     ecs,
-                    self.asset_index.as_ref(),
+                    self.asset_index.as_deref(),
                 )
                 .err()
                 .unwrap_or_default()

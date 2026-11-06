@@ -4,6 +4,73 @@ use std::env;
 use std::fs;
 
 #[test]
+fn snapshots_share_parsed_and_last_good_analysis_storage() {
+    let mut host = AnalysisHost::new();
+    let path = PathBuf::from("main.tua");
+    host.set_file(&path, "local value: number = 1\nreturn value\n");
+    host.snapshot();
+
+    let cached_file = host
+        .cache
+        .borrow()
+        .files
+        .get(&path)
+        .expect("analysis file should be cached")
+        .file
+        .clone();
+    let parsed = cached_file
+        .parsed
+        .as_ref()
+        .expect("source should parse successfully");
+    let cache = host.cache.borrow();
+    let cached_parse = cache
+        .parsed_files
+        .values()
+        .next()
+        .expect("parsed source should be cached")
+        .as_ref()
+        .as_ref()
+        .expect("cached source should parse successfully");
+    assert!(Arc::ptr_eq(parsed, cached_parse));
+    drop(cache);
+
+    let last_good = host.last_good_files.borrow();
+    let last_good_file = last_good
+        .get(&path)
+        .expect("valid file should be retained for recovery");
+    assert!(Arc::ptr_eq(&cached_file.0, &last_good_file.0));
+    drop(last_good);
+
+    host.open_document(&path, "local value: number = \n");
+    host.snapshot();
+    let last_good = host.last_good_files.borrow();
+    let retained_file = last_good
+        .get(&path)
+        .expect("invalid edit should preserve the previous valid file");
+    assert!(Arc::ptr_eq(&cached_file.0, &retained_file.0));
+}
+
+#[test]
+fn cached_snapshots_share_large_immutable_project_indexes() {
+    let mut host = AnalysisHost::new();
+    host.set_file("main.tua", "return 1\n");
+    let snapshot = host.snapshot();
+    let cached_snapshot = host
+        .cached_snapshot()
+        .expect("snapshot should be cached for the current revision");
+
+    assert!(Arc::ptr_eq(&snapshot.vfs, &cached_snapshot.vfs));
+    assert!(Arc::ptr_eq(
+        &snapshot.call_hierarchy_symbols,
+        &cached_snapshot.call_hierarchy_symbols
+    ));
+    assert!(Arc::ptr_eq(
+        &snapshot.call_hierarchy_calls,
+        &cached_snapshot.call_hierarchy_calls
+    ));
+}
+
+#[test]
 fn snapshot_reports_invalid_primitive_operator() {
     let mut host = AnalysisHost::new();
     host.set_file(

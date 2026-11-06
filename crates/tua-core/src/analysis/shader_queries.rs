@@ -37,12 +37,12 @@ impl AnalysisSnapshot {
             &call.path,
             call.path_span,
             self.effective_asset_roots(),
-            self.asset_index.as_ref(),
+            self.asset_index.as_deref(),
         );
         let path = asset::resolved_asset_path(
             &metadata,
             self.effective_asset_roots(),
-            self.asset_index.as_ref(),
+            self.asset_index.as_deref(),
         )?;
         let model = self.asset_index.as_ref()?.shader(&path)?.uniforms.clone()?;
         Some((path, model))
