@@ -826,7 +826,13 @@ impl<'a> Checker<'a> {
             }
 
             if let (Some(source), Some(target)) = (&source, &target) {
-                self.check_inferred_expression_assignable_at(expression, source, target, None);
+                if !love_conf::is_window_disabled_by_literal_false(
+                    self.parsed,
+                    variable,
+                    expression,
+                ) {
+                    self.check_inferred_expression_assignable_at(expression, source, target, None);
+                }
             }
 
             self.record_assignment_type(variable, source, target, expression);

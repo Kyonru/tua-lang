@@ -502,13 +502,14 @@ the receiver would not be passed as `self`:
     player:setFilter("nearest")
     ```
 
-Assigning `t.window = nil` in `love.conf(t)` is supported for applications that
-create their window later. The initial window table supports field reads and
-completion, including after changing its options. Disabling/replacing it,
-calling unknown code or mutating through an alias ends that initial guarantee;
-guard `t.window` before subsequent reads. The writable contract stays nullable.
-Literal `false` is not currently modeled as a separate type; use `nil` to disable
-creation rather than widening the contract to arbitrary booleans.
+Assigning `t.window = nil` or the literal `t.window = false` in `love.conf(t)`
+is supported for applications that create their window later. The checker
+accepts `false` only as that literal assignment; a boolean variable is not a
+valid replacement. The initial window table supports field reads and completion,
+including after changing its options. Disabling/replacing it, calling unknown
+code or mutating through an alias ends that initial guarantee; guard `t.window`
+before subsequent reads. The writable contract stays nullable plus the explicit
+literal-false case.
 
 `love.conf(t)` completion includes known window and module fields plus literal
 choices such as fullscreen modes.

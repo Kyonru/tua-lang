@@ -5060,6 +5060,24 @@ fn love_conf_window_can_be_disabled_without_losing_field_checks() {
 }
 
 #[test]
+fn love_conf_window_accepts_only_nil_or_literal_false_disabling() {
+    check_tua_source(
+        "src/conf.tua",
+        "function love.conf(t)\n  t.window = false\nend\n",
+    )
+    .expect("LOVE uses literal false to disable automatic window creation");
+
+    let diagnostics = check_tua_source(
+        "src/conf.tua",
+        "function love.conf(t)\n  local disabled: boolean = false\n  t.window = disabled\nend\n",
+    )
+    .expect_err("an arbitrary boolean must not disable the window");
+    assert!(diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.code == Some(DiagnosticCode::TYPE_MISMATCH)));
+}
+
+#[test]
 fn locally_shadowed_asset_helpers_use_their_declared_contracts() {
     check_tua_source(
         "src/main.tua",

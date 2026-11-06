@@ -53,6 +53,32 @@ pub(crate) fn parameter_type_for_function(
     parameter_name_for_function(function).map(|name| (name, config_type()))
 }
 
+pub(crate) fn is_window_disabled_by_literal_false(
+    parsed: &ParsedSource,
+    variable: &ast::Var,
+    expression: &ast::Expression,
+) -> bool {
+    if !matches!(expression, ast::Expression::Symbol(token) if token.token().to_string() == "false")
+    {
+        return false;
+    }
+    let Some(variable_span) = node_span(variable) else {
+        return false;
+    };
+    parsed.ast.nodes().stmts().any(|statement| {
+        let ast::Stmt::FunctionDeclaration(function) = statement else {
+            return false;
+        };
+        let Some(name) = parameter_name_for_function(function) else {
+            return false;
+        };
+        node_span(function.body()).is_some_and(|body| {
+            span_contains(body, variable_span.start)
+                && variable.to_string().trim() == format!("{name}.window")
+        })
+    })
+}
+
 pub(crate) fn parameter_type_at_position(
     parsed: &ParsedSource,
     name: &str,

@@ -7964,6 +7964,7 @@ fn love_conf_window_completion_tracks_initial_state_and_disable() {
     for (statement, expected) in [
         ("t.window.width = 320", true),
         ("t.window = nil", false),
+        ("t.window = false", false),
         ("mutate(t)", false),
     ] {
         let fixture = Fixture::parse(&format!("-- file: conf.tua\nfunction love.conf(t)\n {statement}\n local width = t.window.<|complete|>width\nend\n"));
