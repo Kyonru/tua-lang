@@ -5110,6 +5110,36 @@ fn unit_test_command_runs_real_busted_and_maps_failures() {
     assert_eq!(fs::read_dir(temp.path().join(".tua")).unwrap().count(), 0);
 }
 
+#[test]
+fn unit_test_command_supports_selected_lua_with_project_module_paths() {
+    if !Command::new("busted")
+        .arg("--version")
+        .output()
+        .is_ok_and(|output| output.status.success())
+        || !Command::new("lua")
+            .arg("-v")
+            .output()
+            .is_ok_and(|output| output.status.success())
+    {
+        eprintln!("skipping selected Lua integration: install Busted and Lua to exercise it");
+        return;
+    }
+
+    let temp = TempDir::new("test-selected-lua");
+    unit_test_project(&temp);
+    let output = tua()
+        .args(["test", "--busted", "busted", "--lua", "lua"])
+        .current_dir(temp.path())
+        .output()
+        .unwrap();
+
+    assert!(output.status.success(), "{output:?}");
+    assert!(
+        String::from_utf8_lossy(&output.stdout).contains("1 success"),
+        "{output:?}"
+    );
+}
+
 #[cfg(unix)]
 #[test]
 fn unit_test_build_errors_never_start_backend_or_modify_production_output() {

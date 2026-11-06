@@ -189,11 +189,8 @@ pub(crate) fn run_tests(
                 .as_deref()
                 .unwrap_or(Path::new("plainTerminal")),
         )
-        .args([
-            "--verbose",
-            "--lpath",
-            "./?.lua;./?/init.lua;./__tua_tests__/?.lua;./__tua_tests__/?/init.lua",
-        ]);
+        .arg("--verbose")
+        .env("LUA_PATH", busted_lua_path());
     if let Some(path) = &raw_report {
         command.env("TUA_TEST_REPORT", path);
     }
@@ -263,6 +260,21 @@ pub(crate) fn run_tests(
             result.status
         )))
     }
+}
+
+fn busted_lua_path() -> std::ffi::OsString {
+    let mut path = std::ffi::OsString::from(
+        "./?.lua;./?/init.lua;./__tua_tests__/?.lua;./__tua_tests__/?/init.lua",
+    );
+    if let Some(existing) = std::env::var_os("LUA_PATH") {
+        if !existing.is_empty() {
+            path.push(";");
+            path.push(existing);
+        }
+    }
+    // Lua expands `;;` to the interpreter's built-in package path.
+    path.push(";;");
+    path
 }
 
 fn resolve_executable(cwd: &Path, path: &Path) -> PathBuf {
