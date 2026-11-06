@@ -31,8 +31,11 @@ workflow pages under `docs/`. Completed work belongs in
 ### Qualify Real-Project Responsiveness And Editor Behavior
 
 - Keep the BYTEPATH `Director.self.timer:after` full-project regression as a
-  named receiver typing fixture. The current editor replay now passes saved and
-  unsaved completion and signature requests.
+  named receiver typing fixture. Its typed legacy class contract and
+  saved/unsaved completion/signature regression are committed. A 10-minute
+  full-project replay passed 114 edit cycles without feature failures; repeat
+  the run while investigating the observed RSS growth before treating long
+  sessions as qualified.
 - Keep full SNKRX/BYTEPATH check and build timings as regression workloads;
   bound receiver inference and source rescanning, then profile remaining cost.
 - Reduce cold project completion and post-edit dependency-surface analysis on
@@ -53,6 +56,11 @@ workflow pages under `docs/`. Completed work belongs in
   Candidate installation, real-server language features and five graphical
   LOVE/editor views passed.
   These checks do not establish long-session usability or full-port parity.
+- Keep the large-project soak measurements separate by request: the recent
+  BYTEPATH run had 19.6 ms median completion, 212 ms median signature help,
+  3.2 ms median hover, a 3.4 s cold signature outlier, and about 103 MiB RSS
+  growth over ten minutes. Establish a reliable memory baseline and repeat
+  under representative contention before setting a responsiveness target.
 - Turn any still-unspecified reference/implementation request into an exact
   symbol, editor command, expected destination, and reproducible test before
   treating it as a confirmed defect.
@@ -76,14 +84,8 @@ results.
 - Expand LuaDoc/LuaCATS interoperability for common existing Lua libraries.
 - Improve safe project-wide refactors and module changes.
 - Preserve `any` and ordinary Lua as explicit dynamic escape paths.
-- Keep runtime-equivalent escaped Lua literal coverage for module paths,
-  SignalBus names, Busted case names, and multiline asset renames.
 
 ### Complete Typed Lua Porting Workflows
-
-- Keep the `love.conf` window contract covered for initial fields, `nil`, and
-  the narrowly accepted literal `false` assignment; arbitrary booleans remain
-  invalid.
 
 Owner: shared semantics/checker and documentation. Acceptance: focused core/LSP
 regressions and replay of the five upstream porting trials,
@@ -94,10 +96,6 @@ remain distinct follow-up work.
 
 ### Improve Comment And Annotation Authoring
 
-- **Verify annotation editing states:** cover Lua/native functions, class
-  methods, imports, partial type expressions, malformed tags, generated
-  snippets, navigation, and hover in one conformance matrix. Check resulting
-  source and explicit coordinate mappings.
 - For dot/colon completion, keep filtering keys that cannot be written as bare
   member names. Evaluate an explicit bracket-key completion action (including
   valid replacement ranges and suffix preservation), exact default-expression
