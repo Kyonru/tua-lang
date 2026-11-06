@@ -21,13 +21,20 @@ which tags affect checking and which are metadata only. Enable
 tags. Use \`-- tua-ignore-next-line CODE\` for Tua diagnostic suppression.
 
 ${tags.map(tag => `## @${tag.name}\n\n\`\`\`lua\n${tag.syntax}\n\`\`\`\n\n${tag.description}\n`).join("\n")}`;
-for (const relative of ["docs/annotations.md", "editors/vscode/resources/annotation-guide.md"]) {
+const docsText = `---
+icon: lucide/tags
+---
+${text}`;
+for (const [relative, contents] of [
+  ["docs/annotations.md", docsText],
+  ["editors/vscode/resources/annotation-guide.md", text],
+]) {
   const file = path.join(root, relative);
   if (process.argv.includes("--check")) {
-    if (!fs.existsSync(file) || fs.readFileSync(file, "utf8") !== text) {
+    if (!fs.existsSync(file) || fs.readFileSync(file, "utf8") !== contents) {
       throw new Error(`${relative} is stale; run node scripts/generate-annotation-guide.js`);
     }
   } else {
-    fs.writeFileSync(file, text);
+    fs.writeFileSync(file, contents);
   }
 }
