@@ -156,3 +156,21 @@ test("coverage merges selected runs and rejects incomplete data", () => {
   assert.throws(() => mergeCoverage(files, {version: 1, completed: false, files: []}), /did not complete/);
   assert.throws(() => mergeCoverage(new Map(), report(-1)), /Invalid coverage line/);
 });
+
+test("test discovery timeout terminates a child that ignores SIGTERM", { timeout: 6000, skip: process.platform === "win32" }, async () => {
+  const started = Date.now();
+  await assert.rejects(runProcess(process.execPath, ["-e",
+    "process.on('SIGTERM', () => {}); setInterval(() => {}, 1000);"],
+    { timeoutMs: 300 }), /Test discovery timed out/);
+  assert.ok(Date.now() - started < 5000, "timeout must release the testing queue");
+});
+
+test("test logs may be truncated without replacing the backend exit status", { timeout: 6000 }, async () => {
+  const result = await runProcess(process.execPath, ["-e",
+    "process.stdout.write('x'.repeat(17 * 1024 * 1024)); process.exitCode = 7;"],
+    { truncateOutput: true });
+  assert.equal(result.code, 7);
+  assert.equal(result.cancelled, false);
+  assert.ok(result.stdout.length <= 16 * 1024 * 1024 + 128);
+  assert.match(result.stdout, /Test output truncated/);
+});

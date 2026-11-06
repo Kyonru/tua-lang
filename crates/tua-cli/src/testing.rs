@@ -9,6 +9,7 @@ use tua_core::{DiagnosticSeverity, LoadedConfig, ProjectWorkspace};
 
 mod coverage;
 mod discovery;
+mod output;
 mod report;
 
 use crate::build::{build_project_excluding, OutputGuard};
@@ -221,7 +222,7 @@ pub(crate) fn run_tests(
         None
     };
     command.arg("--").args(&tests);
-    let result = command.output().map_err(|e| CliError::usage(format!(
+    let (result, truncated) = output::capture(&mut command).map_err(|e| CliError::usage(format!(
         "could not run Busted ({}): {e}. Install Busted for your Lua interpreter with `luarocks install busted`, or use --busted PATH / TUA_BUSTED", executable.display()
     )))?;
     let maps = load_traceback_maps(&output.0)?;
@@ -237,7 +238,10 @@ pub(crate) fn run_tests(
         .map(|line| line.replace(".lua @ ", ".lua:"))
         .collect::<Vec<_>>()
         .join("\n");
-    let report = format!("{diagnostics}{}", remap_traceback_text(&normalized, &maps));
+    let mut report = format!("{diagnostics}{}", remap_traceback_text(&normalized, &maps));
+    if truncated {
+        report.push_str("\nTest output truncated to 8 MiB per stream; test status and structured reports are preserved.\n");
+    }
     if let (Some(destination), Some(raw_report)) = (&options.report, &raw_report) {
         report::save(
             &workspace,

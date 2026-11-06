@@ -248,3 +248,17 @@ production code should not import test-only modules. Test assets are available
 under `__tua_tests__/` relative to the temporary build directory.
 
 A CLI watch loop is not implemented; use Test Explorer continuous runs. For runtime/gameplay checks, see [Debugging](debugging.md).
+
+## Large output and cancellation
+
+`tua test` retains up to 8 MiB from each of the backend's stdout and stderr
+streams. It continues draining larger logs and reports truncation; the backend's
+exit status and separate JSON result/coverage files remain authoritative.
+Test Explorer likewise truncates oversized terminal logs while reading test
+outcomes from the separate report. Discovery JSON must fit its output limit;
+an oversized discovery response is reported as an error rather than parsed
+as an incomplete inventory.
+
+Test Explorer cancellation first requests process termination. On Unix, a child
+that ignores that request is forcibly stopped after a one-second grace period
+so the next queued test run can proceed. Windows uses process-tree termination.

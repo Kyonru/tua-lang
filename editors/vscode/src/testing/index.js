@@ -101,7 +101,7 @@ function registerTesting({ getServerCommand, execute = runProcess }) {
           const reportPath = path.join(temporary, "results.json");
           const settings = vscode.workspace.getConfiguration("tua", job.item.uri);
           const coveragePath = withCoverage ? path.join(temporary, "coverage.json") : undefined;
-          const result = await invoke(testArguments(job, reportPath, settings, coveragePath), { cwd: job.root, token });
+          const result = await invoke(testArguments(job, reportPath, settings, coveragePath), { cwd: job.root, token, truncateOutput: true });
           run.appendOutput((result.stdout + result.stderr).replace(/\r?\n/g, "\r\n"));
           if (result.cancelled) { expected.forEach(item => run.skipped(item)); break; }
           let report;
