@@ -45,6 +45,9 @@ is a class from it, use the new functions straight away. Values already in the
 table, such as `M.score` or a cached list, are kept, so the game's state
 survives the edit. Nested exported classes retain their table identity, so
 instances constructed after a reload participate in later reloads too.
+Constructor functions may call private local helpers: function-valued upvalues
+are followed when rebinding preserved class tables, with cycles handled safely.
+This does not preserve arbitrary private local state.
 Constructors are not rerun for existing objects; changed initialization and
 field defaults apply to newly constructed objects. Captured method functions
 and compiler-inlined final method calls keep their captured implementation

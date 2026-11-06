@@ -48,7 +48,12 @@ assert(enemy.damage(2) == 5 and enemy.hp == 5,
 -- including instances constructed after a reload.
 local function class_source(speed)
   return "local Actor = {}; Actor.__index = Actor; " ..
-    "function Actor.new() return setmetatable({ hp = 3 }, Actor) end; " ..
+    -- The private, mutually recursive helper graph is not exported. Reload
+    -- must rebind its Actor upvalue without looping through function cycles.
+    "local make, delegate; " ..
+    "make = function(again) if again then return delegate() end return setmetatable({ hp = 3 }, Actor) end; " ..
+    "delegate = function() return make(false) end; " ..
+    "function Actor.new() return make(true) end; " ..
     "function Actor:speed() return " .. speed .. " end; return { Actor = Actor }"
 end
 files["game/actors.lua"] = class_source(1)

@@ -176,12 +176,21 @@ end
 local function rebind_module_upvalues(value, replacements, seen)
   local kind = type(value)
   if kind == "function" then
+    if seen[value] then return end
+    seen[value] = true
     local index = 1
     while true do
       local name, upvalue = debug.getupvalue(value, index)
       if not name then break end
       local replacement = replacements[upvalue]
-      if replacement then debug.setupvalue(value, index, replacement) end
+      if replacement then
+        debug.setupvalue(value, index, replacement)
+      elseif type(upvalue) == "function" then
+        -- Private helpers can capture a class/module table even when the
+        -- exported function only captures the helper. Do not traverse arbitrary
+        -- upvalue tables (notably _ENV and imported module state).
+        rebind_module_upvalues(upvalue, replacements, seen)
+      end
       index = index + 1
     end
     return
