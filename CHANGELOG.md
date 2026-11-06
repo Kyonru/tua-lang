@@ -8,6 +8,8 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Added
 
+- Test sources receive built-in Busted and LuaAssert types for checking and
+  editor support, including signatures, hover, completion, and common helpers.
 - `math.round` and `love.math.round` accept an optional decimal-place precision;
   the default remains integer rounding, with half values rounded away from zero.
 

@@ -163,6 +163,17 @@ impl AnalysisSnapshot {
                 }
                 let _profile = profile::span_for_path("analysis.check", path);
                 let mut diagnostics_config = self.config.diagnostics.clone();
+                if environment.has_busted_globals() {
+                    for name in crate::busted::GLOBAL_NAMES {
+                        if !diagnostics_config
+                            .globals
+                            .iter()
+                            .any(|global| global == name)
+                        {
+                            diagnostics_config.globals.push((*name).to_owned());
+                        }
+                    }
+                }
                 diagnostics_config.inline_ignores = false;
                 check_parsed_source_with_environment_and_ecs_config(
                     parsed,

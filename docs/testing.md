@@ -84,18 +84,18 @@ errors, and an unavailable backend make the command fail with a nonzero exit
 status. No discovered spec files is also an error. Tua never runs stale output
 when the current test build has errors.
 
-`describe`, `it`, hooks, and other Busted globals are supplied to the test build.
-For ordinary `tua check` and editor diagnostics, add the globals you use to your
-existing configuration:
+Configured test sources receive built-in Busted and LuaAssert types in checking
+and editor features, including DSL functions, hooks, common assertions, and
+`spy`, `stub`, `mock`, and `match` helpers. This works for both `.tua` and `.lua`
+specs. With `[test] source` configured, files under that root receive the types;
+otherwise, `_spec` files under the source root receive them. The declarations
+improve diagnostics, completion, hover, and signature help; they do not install
+Busted or add runtime functions. Plugin-specific APIs and custom matchers may
+need project declarations. Use ordinary Tua types in the functions and classes
+under test.
 
-```toml title="tua.toml"
-[diagnostics]
-globals = ["describe", "it", "before_each", "after_each", "setup", "teardown", "pending"]
-```
-
-Merge these names with any existing `globals` list. This permits the names; it
-does not add runtime functions or full Busted-specific signature inference.
-Use ordinary Tua types in the functions and classes under test.
+`diagnostics.globals` remains useful for Busted names in other files, but it
+only permits names and does not provide Busted-specific signatures.
 
 ## Select Tests
 

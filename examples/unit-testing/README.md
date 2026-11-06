@@ -27,8 +27,9 @@ globals; `tua test` also supplies Busted globals to its build automatically.
 Use **Tua: Run Unit Tests** in VS Code, or see
 [Testing Tua](../../docs/testing.md) for setup, executable selection, and limits.
 
-The dedicated `tests/` directory is included in checking and formatting, but
-omitted from production builds and packages. Specs import `counter` from `src/`.
+The dedicated `tests/` directory is included in checking and formatting, receives
+test-scoped Busted types, and is omitted from production builds and packages.
+Specs import `counter` from `src/`.
 
 With LuaCov installed for the Busted interpreter, run `tua test --coverage coverage.json`
 to export line coverage mapped to these source files. See [testing](../../docs/testing.md#measure-line-coverage)

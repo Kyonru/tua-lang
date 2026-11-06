@@ -17,6 +17,144 @@ fn snapshot_reports_invalid_primitive_operator() {
         .any(|d| d.code == Some(crate::DiagnosticCode::TYPE_MISMATCH)
             && d.message.contains("operator")));
 }
+
+#[test]
+fn busted_types_are_available_only_in_test_sources_across_editor_surfaces() {
+    let mut config = ProjectConfig::default();
+    config.test.source = PathBuf::from("tests");
+    let mut host = AnalysisHost::with_config(config);
+    host.set_source_roots([PathBuf::from("src"), PathBuf::from("tests")]);
+    let test_source = concat!(
+        "describe(1, function() end)\n",
+        "assert.is_true(\"wrong\")\n",
+        "assert.are.equal(1, 1)\n",
+    );
+    host.set_file("tests/sample_spec.tua", test_source);
+    host.set_file("tests/lua_spec.lua", "it(1, function() end)\n");
+    host.set_file("tests/completion_spec.tua", "descr");
+    host.set_file("src/main.tua", "describe(\"not a test\", function() end)\n");
+    host.set_file("src/completion.tua", "descr");
+
+    let snapshot = host.snapshot();
+    let test_path = PathBuf::from("tests/sample_spec.tua");
+    let test_environment = snapshot
+        .type_environment(&test_path)
+        .expect("test file should have a type environment");
+    assert!(test_environment.has_busted_globals());
+    assert!(!snapshot
+        .type_environment("src/main.tua")
+        .expect("production file should have a type environment")
+        .has_busted_globals());
+
+    let diagnostics = snapshot.pipeline_diagnostics(&test_path);
+    assert!(
+        diagnostics.iter().any(|diagnostic| {
+            diagnostic.code == Some(DiagnosticCode::TYPE_MISMATCH) && diagnostic.line == 1
+        }),
+        "{diagnostics:?}"
+    );
+    assert!(
+        diagnostics.iter().any(|diagnostic| {
+            diagnostic.code == Some(DiagnosticCode::TYPE_MISMATCH) && diagnostic.line == 2
+        }),
+        "{diagnostics:?}"
+    );
+    assert!(
+        !diagnostics.iter().any(|diagnostic| {
+            diagnostic.code == Some(DiagnosticCode::TYPE_UNKNOWN_NAME)
+                && diagnostic.message.contains("describe")
+        }),
+        "{diagnostics:?}"
+    );
+
+    let hover = snapshot
+        .hover(&test_path, SourcePosition { line: 1, column: 2 })
+        .expect("Busted global hover should be available");
+    assert!(
+        hover
+            .documentation
+            .as_deref()
+            .is_some_and(|documentation| documentation.contains("Busted test suite")),
+        "{hover:?}"
+    );
+
+    let signature = snapshot
+        .signature_help(
+            &test_path,
+            SourcePosition {
+                line: 1,
+                column: 10,
+            },
+        )
+        .expect("Busted signature should be available");
+    assert!(
+        signature.signatures[0].label.contains("name: string"),
+        "{signature:?}"
+    );
+
+    let assertion_signature = snapshot
+        .signature_help(
+            &test_path,
+            SourcePosition {
+                line: 3,
+                column: 18,
+            },
+        )
+        .expect("LuaAssert signature should be available");
+    assert!(
+        assertion_signature.signatures[0]
+            .label
+            .contains("expected: any"),
+        "{assertion_signature:?}"
+    );
+
+    let test_global_completions = snapshot.completion(
+        "tests/completion_spec.tua",
+        SourcePosition { line: 1, column: 6 },
+    );
+    assert!(test_global_completions
+        .iter()
+        .any(|completion| completion.label == "describe"));
+
+    let completion_source = "assert.is_";
+    host.open_document(&test_path, completion_source);
+    let completions = host.snapshot().completion(
+        &test_path,
+        SourcePosition {
+            line: 1,
+            column: 11,
+        },
+    );
+    assert!(completions
+        .iter()
+        .any(|completion| completion.label == "is_true"));
+
+    let lua_diagnostics = snapshot.pipeline_diagnostics("tests/lua_spec.lua");
+    assert!(
+        lua_diagnostics.iter().any(|diagnostic| {
+            diagnostic.code == Some(DiagnosticCode::TYPE_MISMATCH) && diagnostic.line == 1
+        }),
+        "{lua_diagnostics:?}"
+    );
+
+    let production_completions =
+        snapshot.completion("src/main.tua", SourcePosition { line: 1, column: 2 });
+    assert!(!production_completions
+        .iter()
+        .any(|completion| completion.label == "describe"));
+    let production_global_completions =
+        snapshot.completion("src/completion.tua", SourcePosition { line: 1, column: 6 });
+    assert!(!production_global_completions
+        .iter()
+        .any(|completion| completion.label == "describe"));
+    let production_diagnostics = snapshot.pipeline_diagnostics("src/main.tua");
+    assert!(
+        production_diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.message.contains("undefined variable `describe`")),
+        "{production_diagnostics:?}"
+    );
+}
 use std::path::{Path, PathBuf};
 use std::process;
 use std::sync::Arc;

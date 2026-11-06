@@ -44,7 +44,6 @@ use crate::module_link::{
 use crate::module_path_index::{ModulePathIndex, ProjectModuleWorkspace};
 use crate::profile;
 use crate::scope::{ScopeDeclarationKind, ScopeGlobalKind, ScopeResolution};
-use crate::scope_map_parsed_source;
 use crate::selection_range::selection_ranges_source;
 use crate::semantic::{resolve_aliases, SemanticModel};
 use crate::signal::{
@@ -95,6 +94,7 @@ use crate::{
     SymbolIndex, TableField, TextEdit, TuaType, Type, TypeEnvironment, TypeExplanation,
     TypeExplanationStep, TypeExplanationStepKind, TypedFunction, WorkspaceSymbol,
 };
+use crate::{scope_map_parsed_source, scope_map_parsed_source_with_globals};
 
 mod asset_queries;
 mod audio_queries;
@@ -354,6 +354,34 @@ struct AnalysisBuildContext<'a> {
     source_roots: &'a [PathBuf],
     asset_roots: &'a [PathBuf],
     asset_index: Option<&'a asset::AssetIndex>,
+}
+
+pub(super) fn is_busted_test_source(
+    path: &Path,
+    config: &ProjectConfig,
+    source_roots: &[PathBuf],
+) -> bool {
+    let path = crate::normalize_path(path);
+    let supported_extension = path
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| extension == config.extension || extension == "lua");
+    if !supported_extension {
+        return false;
+    }
+
+    if !config.test.source.as_os_str().is_empty()
+        && source_roots
+            .iter()
+            .any(|root| root.ends_with(&config.test.source) && path.starts_with(root))
+    {
+        return true;
+    }
+
+    path.file_stem()
+        .and_then(|stem| stem.to_str())
+        .is_some_and(|stem| stem.ends_with("_spec"))
+        && source_roots.iter().any(|root| path.starts_with(root))
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]

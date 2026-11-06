@@ -357,6 +357,8 @@ fn build_analysis_file(
 ) -> AnalysisFile {
     let (semantics, semantic_diagnostics) = match &parsed {
         Ok(parsed) => {
+            let busted_test_source =
+                is_busted_test_source(path, context.config, context.source_roots);
             let hir = {
                 let _profile = profile::span_for_path("analysis.lower.hir", path);
 
@@ -365,14 +367,25 @@ fn build_analysis_file(
             let scope = {
                 let _profile = profile::span_for_path("analysis.lower.scope", path);
 
-                scope_map_parsed_source(parsed)
+                if busted_test_source {
+                    scope_map_parsed_source_with_globals(
+                        parsed,
+                        crate::busted::GLOBAL_NAMES.iter().copied(),
+                    )
+                } else {
+                    scope_map_parsed_source(parsed)
+                }
             };
             let (environment, mut diagnostics) = {
                 let _profile = profile::span_for_path("analysis.types.environment", path);
                 let _trace =
                     profile::diagnostics_span(profile::DiagnosticsTraceCategory::TypeEnvironment);
 
-                build_analysis_type_environment_with_diagnostics(parsed, context.config)
+                build_analysis_type_environment_with_busted_globals(
+                    parsed,
+                    context.config,
+                    busted_test_source,
+                )
             };
             diagnostics.extend(type_import_collision_diagnostics(parsed, &scope));
 
@@ -390,7 +403,15 @@ fn build_analysis_file(
     };
     let degraded_semantics = parsed
         .is_err()
-        .then(|| build_degraded_file_semantics(path, &source, kind, context.config))
+        .then(|| {
+            build_degraded_file_semantics(
+                path,
+                &source,
+                kind,
+                context.config,
+                is_busted_test_source(path, context.config, context.source_roots),
+            )
+        })
         .flatten();
     // Full checking belongs to diagnostic queries, not snapshot construction.
     let mut diagnostics = semantic_diagnostics;
@@ -792,7 +813,15 @@ pub(super) fn build_analysis_type_environment_with_diagnostics(
     parsed: &ParsedSource,
     config: &ProjectConfig,
 ) -> (TypeEnvironment, Vec<Diagnostic>) {
-    if config.ecs.enabled {
+    build_analysis_type_environment_with_busted_globals(parsed, config, false)
+}
+
+pub(super) fn build_analysis_type_environment_with_busted_globals(
+    parsed: &ParsedSource,
+    config: &ProjectConfig,
+    busted_test_source: bool,
+) -> (TypeEnvironment, Vec<Diagnostic>) {
+    let (environment, diagnostics) = if config.ecs.enabled {
         let (environment, diagnostics) = build_type_environment_with_domain_registry(
             parsed,
             crate::semantic_domains::BuiltinDomainRegistry::with_ecs(true),
@@ -801,6 +830,11 @@ pub(super) fn build_analysis_type_environment_with_diagnostics(
         (environment, diagnostics)
     } else {
         build_type_environment_with_diagnostics(parsed)
+    };
+    if busted_test_source {
+        (environment.with_busted_globals(), diagnostics)
+    } else {
+        (environment, diagnostics)
     }
 }
 

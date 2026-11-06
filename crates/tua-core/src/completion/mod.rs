@@ -1640,7 +1640,13 @@ fn complete_identifier_items(
     let include_ecs = environment
         .local(ecs::MODULE_NAME)
         .is_some_and(|ty| ecs::is_module_type(environment, ty));
-    insert_keyword_and_builtin_identifier_items(&mut completions, &mut labels, prefix, include_ecs);
+    insert_keyword_and_builtin_identifier_items(
+        &mut completions,
+        &mut labels,
+        prefix,
+        include_ecs,
+        environment.has_busted_globals(),
+    );
     for module in crate::builtin_module::MODULES {
         if completion_text_matches(module.name, prefix)
             && crate::builtin_module::is_visible(parsed, module.name)
@@ -1842,6 +1848,7 @@ fn insert_keyword_and_builtin_identifier_items(
     labels: &mut BTreeSet<String>,
     prefix: &str,
     include_ecs: bool,
+    include_busted: bool,
 ) {
     if include_ecs && completion_text_matches(ecs::MODULE_NAME, prefix) {
         push_unique_completion(
@@ -1867,10 +1874,14 @@ fn insert_keyword_and_builtin_identifier_items(
         push_unique_completion(completions, labels, completion);
     }
 
-    for item in lua::keyword_items(prefix)
+    let mut items = lua::keyword_items(prefix)
         .into_iter()
         .chain(lua::top_level_items(prefix))
-    {
+        .collect::<Vec<_>>();
+    if include_busted {
+        items.extend(lua::busted_items(prefix));
+    }
+    for item in items {
         push_unique_completion(completions, labels, completion_from_lua_item(item));
     }
 }
@@ -1888,7 +1899,7 @@ fn insert_lossy_identifier_items(
         }
     }
 
-    insert_keyword_and_builtin_identifier_items(completions, labels, prefix, true);
+    insert_keyword_and_builtin_identifier_items(completions, labels, prefix, true, false);
 }
 
 fn push_unique_completion(

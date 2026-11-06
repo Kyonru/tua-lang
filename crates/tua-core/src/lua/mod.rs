@@ -227,6 +227,10 @@ pub(crate) fn top_level_items(prefix: &str) -> Vec<LuaItem> {
         .collect()
 }
 
+pub(crate) fn busted_items(prefix: &str) -> impl Iterator<Item = LuaItem> + '_ {
+    crate::busted::top_level_items(prefix)
+}
+
 pub(crate) fn is_protected_global(name: &str) -> bool {
     LUAJIT_LOVE_GLOBALS.contains(&name)
         || ASSET_LOADERS
@@ -565,6 +569,7 @@ fn all_builtin_items() -> Vec<LuaItem> {
 
     items.extend(love_api_extra::all_items());
     items.extend(game_math::all_items());
+    items.extend(crate::busted::all_items());
 
     items
 }

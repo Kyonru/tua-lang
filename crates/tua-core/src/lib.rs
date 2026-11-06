@@ -5,6 +5,7 @@ mod ast_utils;
 mod audio;
 mod builtin_module;
 mod bundled_runtime;
+mod busted;
 pub mod call_hierarchy;
 pub mod check;
 mod classes;

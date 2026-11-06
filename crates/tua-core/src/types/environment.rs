@@ -54,6 +54,7 @@ pub struct TypeEnvironment {
     table_insert_overridden: bool,
     table_sort_overridden: bool,
     project_module_globals: BTreeSet<String>,
+    busted_globals: Option<Arc<BTreeMap<String, Type>>>,
 }
 
 /// Annotation contracts belong to declarations, not names shared across scopes.
@@ -79,6 +80,19 @@ impl LocalContracts {
 }
 
 impl TypeEnvironment {
+    pub(crate) fn with_busted_globals(mut self) -> Self {
+        self.busted_globals = Some(crate::busted::global_types());
+        self
+    }
+
+    pub(crate) fn has_busted_globals(&self) -> bool {
+        self.busted_globals.is_some()
+    }
+
+    pub(crate) fn busted_global(&self, name: &str) -> Option<&Type> {
+        self.busted_globals.as_ref()?.get(name)
+    }
+
     pub fn from_parsed(parsed: &ParsedSource) -> Result<Self, Vec<Diagnostic>> {
         build_type_environment(parsed)
     }
@@ -937,6 +951,7 @@ pub(crate) fn build_type_environment_with_domain_registry(
             table_insert_overridden: lua::table_member_is_overridden(parsed, "insert"),
             table_sort_overridden: lua::table_member_is_overridden(parsed, "sort"),
             project_module_globals: BTreeSet::new(),
+            busted_globals: None,
         },
         diagnostics,
     )

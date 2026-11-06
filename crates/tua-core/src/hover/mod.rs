@@ -247,6 +247,12 @@ impl<'a> HoverResolver<'a> {
                 return Some(lua_item_hover(item, Some(current_part.span)));
             }
 
+            if self.environment.has_busted_globals() {
+                if let Some(item) = crate::busted::hover_item(&field_parts) {
+                    return Some(lua_item_hover(item, Some(current_part.span)));
+                }
+            }
+
             if let Some(ty) = self.semantic.type_of_field_chain(&field_parts, position) {
                 let mut result = hover(
                     format_type_with_prefix(format!("(field) {}: ", current_part.text), &ty),
@@ -399,7 +405,11 @@ impl<'a> HoverResolver<'a> {
             .function_at_source_position(&current_part.text, position)
             .map(|function| self.function_hover(function, position, current_part.span))
             .or_else(|| {
-                lua::hover_item(std::slice::from_ref(&current_part.text))
+                self.environment
+                    .has_busted_globals()
+                    .then(|| crate::busted::hover_item(std::slice::from_ref(&current_part.text)))
+                    .flatten()
+                    .or_else(|| lua::hover_item(std::slice::from_ref(&current_part.text)))
                     .map(|item| lua_item_hover(item, Some(current_part.span)))
             })
             .or_else(|| self.expression_hover(position))

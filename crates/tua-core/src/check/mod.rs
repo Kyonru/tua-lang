@@ -1791,6 +1791,7 @@ impl<'a> Checker<'a> {
                     .function(name)
                     .and_then(TypedFunction::as_type)
             })
+            .or_else(|| self.environment.busted_global(name).cloned())
     }
 
     fn check_function_call(&mut self, function_call: &FunctionCall) -> Option<Type> {
@@ -3331,13 +3332,16 @@ impl<'a> Checker<'a> {
 
     fn resolve_field_chain_type(&self, parts: &[String]) -> Option<Type> {
         let (root, fields) = parts.split_first()?;
-        let local_type = self.infer_named_value(root).and_then(|mut current| {
-            for field in fields {
-                current = resolve_table_field_type(self.environment, &current, field)?;
-            }
+        let local_type = self
+            .infer_named_value(root)
+            .or_else(|| self.environment.busted_global(root).cloned())
+            .and_then(|mut current| {
+                for field in fields {
+                    current = resolve_table_field_type(self.environment, &current, field)?;
+                }
 
-            Some(current)
-        });
+                Some(current)
+            });
 
         if local_type.is_some() {
             return local_type;

@@ -92,15 +92,25 @@ pub(super) fn build_degraded_file_semantics(
     source: &str,
     kind: AnalysisSourceKind,
     config: &ProjectConfig,
+    busted_test_source: bool,
 ) -> Option<DegradedFileSemantics> {
     let parsed = parse_degraded_analysis_source(path, source, kind).ok()?;
     let hir = lower_parsed_source(&parsed);
     let (environment, environment_diagnostics) =
-        build_analysis_type_environment_with_diagnostics(&parsed, config);
+        build_analysis_type_environment_with_busted_globals(&parsed, config, busted_test_source);
+
+    let scope = if busted_test_source {
+        crate::scope_map_parsed_source_with_globals(
+            &parsed,
+            crate::busted::GLOBAL_NAMES.iter().copied(),
+        )
+    } else {
+        scope_map_parsed_source(&parsed)
+    };
 
     Some(DegradedFileSemantics {
         environment_diagnostics,
-        scope: scope_map_parsed_source(&parsed),
+        scope,
         parsed,
         hir,
         environment,

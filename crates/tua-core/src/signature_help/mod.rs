@@ -229,6 +229,15 @@ impl<'a> SignatureResolver<'a> {
             {
                 return Some(signatures_from_typed_function(function, Some(root)));
             }
+
+            if self.environment.has_busted_globals() {
+                if let Some(item) = self
+                    .semantic
+                    .lua_function_item_for_call_parts(parts, position)
+                {
+                    return signatures_from_lua_item(item);
+                }
+            }
         }
 
         if !fields.is_empty() {

@@ -138,6 +138,14 @@ impl<'a> SemanticModel<'a> {
             return None;
         }
 
+        if self.environment.has_busted_globals() {
+            if let Some(item) =
+                crate::busted::hover_item(parts).filter(|item| item.kind == LuaItemKind::Function)
+            {
+                return Some(item);
+            }
+        }
+
         lua::hover_item(parts).filter(|item| item.kind == LuaItemKind::Function)
     }
 
@@ -946,6 +954,14 @@ impl<'a> SemanticModel<'a> {
         parts: &[String],
         position: SourcePosition,
     ) -> Option<LuaItem> {
+        if self.environment.has_busted_globals() {
+            if let Some(item) =
+                crate::busted::hover_item(parts).filter(|item| item.kind == LuaItemKind::Function)
+            {
+                return Some(item);
+            }
+        }
+
         if let Some(item) = lua::hover_item(parts).filter(|item| item.kind == LuaItemKind::Function)
         {
             return Some(item);
@@ -1161,7 +1177,8 @@ impl<'a> SemanticModel<'a> {
                 Some(ty)
             })
             .or_else(|| self.loop_variable_type_at_position(name, position, depth + 1))
-            .or_else(|| self.parameter_type_at_source_position(name, position))?;
+            .or_else(|| self.parameter_type_at_source_position(name, position))
+            .or_else(|| self.environment.busted_global(name).cloned())?;
 
         Some(self.apply_table_mutations_to_name(name, ty, position, depth + 1))
     }
@@ -2374,7 +2391,10 @@ pub(crate) fn resolve_field_chain_type(
     parts: &[String],
 ) -> Option<Type> {
     let (root, fields) = parts.split_first()?;
-    let mut current = environment.local(root)?.clone();
+    let mut current = environment
+        .local(root)
+        .or_else(|| environment.busted_global(root))?
+        .clone();
 
     for field in fields {
         current = resolve_table_field_type(environment, &current, field)?;
