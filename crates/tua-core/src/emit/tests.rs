@@ -93,6 +93,36 @@ return score
 }
 
 #[test]
+fn function_header_comments_survive_annotation_erasure() {
+    for (source, expected) in [
+        (
+            "local function f(x: number) -- hello\n return x\nend\n",
+            "local function f(x) -- hello\n return x\nend\n",
+        ),
+        (
+            "function f(x: number) -- tua-ignore-line TL5006\r\n return x\r\nend\r\n",
+            "function f(x) -- tua-ignore-line TL5006\r\n return x\r\nend\n",
+        ),
+        (
+            "local f = function(x: number) --[[hello]] return x end\n",
+            "local f = function(x) --[[hello]] return x end\n",
+        ),
+        (
+            "local function f(x: number): number -- hello\n return x\nend\n",
+            "local function f(x) -- hello\n return x\nend\n",
+        ),
+        (
+            "local function f(x: number): (number, string) --[=[hello]=]\n return x, 'ok'\nend\n",
+            "local function f(x) --[=[hello]=]\n return x, 'ok'\nend\n",
+        ),
+    ] {
+        let emitted = emit_tua_source("src/comments.tua", source).expect(source);
+        assert_eq!(emitted, expected, "{source}");
+        crate::parse_raw_lua_source("comments.lua", emitted).expect("Lua 5.1 output");
+    }
+}
+
+#[test]
 fn snapshot_erases_function_annotations() {
     let emitted = emit_tua_source(
         "src/functions.tua",

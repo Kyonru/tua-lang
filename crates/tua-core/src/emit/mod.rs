@@ -1639,31 +1639,52 @@ fn parameters_parentheses_without_return_type(body: &ast::FunctionBody) -> Conta
     let (open, close) = body.parameters_parentheses().tokens();
 
     let Some(return_type) = body.return_type() else {
-        let close_text = close.to_string();
-        let trailing = trailing_whitespace(&close_text);
-
-        return ContainedSpan::new(open.clone(), symbol_with_trailing(close, trailing));
+        return body.parameters_parentheses().clone();
     };
 
-    let return_type_text = return_type.to_string();
-    let trailing = trailing_whitespace(&return_type_text);
-
-    ContainedSpan::new(open.clone(), symbol_with_trailing(close, trailing))
+    // Trivia belongs to tokens, not their rendered symbol text. In particular,
+    // a trailing header comment must survive erasing the return annotation.
+    let mut trailing: Vec<_> = close.trailing_trivia().cloned().collect();
+    if let Some(last) = trailing_type_token(return_type.type_info()) {
+        trailing.extend(last.trailing_trivia().cloned());
+    }
+    ContainedSpan::new(
+        open.clone(),
+        TokenReference::new(
+            close.leading_trivia().cloned().collect(),
+            close.token().clone(),
+            trailing,
+        ),
+    )
 }
 
-fn symbol_with_trailing(token: &TokenReference, trailing: &str) -> TokenReference {
-    TokenReference::symbol(&format!("{}{trailing}", token.to_string().trim()))
-        .expect("existing syntax token should remain a valid symbol")
+// Full Moon's token iterator visits contained delimiters before their contents,
+// so `.tokens().last()` is not the lexical last token for records or tuples.
+fn trailing_type_token(ty: &ast::luau::TypeInfo) -> Option<&TokenReference> {
+    use ast::luau::TypeInfo;
+    match ty {
+        TypeInfo::Array { braces, .. } | TypeInfo::Table { braces, .. } => Some(braces.tokens().1),
+        TypeInfo::Tuple { parentheses, .. } | TypeInfo::Typeof { parentheses, .. } => {
+            Some(parentheses.tokens().1)
+        }
+        TypeInfo::Generic { arrows, .. } => Some(arrows.tokens().1),
+        TypeInfo::Callback { return_type, .. }
+        | TypeInfo::Variadic {
+            type_info: return_type,
+            ..
+        } => trailing_type_token(return_type),
+        TypeInfo::Union(union) => union.types().iter().last().and_then(trailing_type_token),
+        TypeInfo::Intersection(intersection) => intersection
+            .types()
+            .iter()
+            .last()
+            .and_then(trailing_type_token),
+        _ => full_moon::node::Node::tokens(ty).last(),
+    }
 }
 
 fn spaced_symbol(symbol: &str) -> TokenReference {
     TokenReference::symbol(&format!(" {symbol} ")).expect("spaced syntax token should be valid")
-}
-
-fn trailing_whitespace(text: &str) -> &str {
-    let index = text.trim_end_matches(char::is_whitespace).len();
-
-    &text[index..]
 }
 
 fn lower_compound_assignment_operations(
