@@ -14,7 +14,8 @@ use crate::module_link::{module_specifier_at_position, ModuleSpecifierKind};
 use crate::parser::{parse_lua_source, ParsedSource, SourcePosition, SourceSpan, TuaType};
 use crate::semantic::SemanticModel;
 use crate::source_text::{
-    byte_for_column, dotted_chain_at_position, function_name_table_field, line_at,
+    byte_for_column, doc_type_chain_at_position, dotted_chain_at_position,
+    function_name_table_field, line_at,
 };
 use crate::types::{build_type_environment_with_diagnostics, type_from_tua_type, Type};
 use crate::{lua, parse_tua_source, Diagnostic};
@@ -122,6 +123,13 @@ struct DefinitionResolver<'a> {
 
 impl<'a> DefinitionResolver<'a> {
     fn definition(&self, position: SourcePosition) -> Option<Definition> {
+        if let Some(chain) = doc_type_chain_at_position(self.parsed, position) {
+            let current = chain.parts.get(chain.cursor_index)?;
+            if let Some(definition) = self.alias_definition(&current.text) {
+                return Some(definition);
+            }
+        }
+
         let chain = dotted_chain_at_position(&self.parsed.source, position)?;
         let current_part = chain.parts.get(chain.cursor_index)?;
 

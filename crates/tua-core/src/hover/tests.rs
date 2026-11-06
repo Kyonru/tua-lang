@@ -30,6 +30,17 @@ fn hovers_known_type_alias() {
 }
 
 #[test]
+fn hovers_type_alias_references_inside_lua_doc_annotations() {
+    let source = "type Player = { hp: number }\n---@param player Player\nlocal function clone(player) return player end\n";
+    let mut position = position_at(source, "---@param player Player");
+    position.column += "---@param player ".len();
+    let hover = hover_tua_source("src/main.tua", source, position)
+        .expect("source should parse")
+        .expect("annotation type should hover");
+    assert_eq!(hover.contents, "type Player = { hp: number }");
+}
+
+#[test]
 fn hover_pretty_prints_long_type_aliases() {
     let source = r#"type Feedback = {
   animation: string,
@@ -2110,6 +2121,15 @@ fn annotation_tag_hover_explains_metadata_without_claiming_narrowing() {
     )
     .unwrap()
     .is_none());
+}
+
+#[test]
+fn malformed_partial_annotation_tag_still_has_tag_hover() {
+    let source = "---@param target\nlocal function hit(target) end\n";
+    let hover = hover_tua_source("main.tua", source, position_at(source, "param"))
+        .expect("partial annotation should parse")
+        .expect("recognized tag should hover while editing");
+    assert!(hover.contents.contains("---@param"));
 }
 
 #[test]

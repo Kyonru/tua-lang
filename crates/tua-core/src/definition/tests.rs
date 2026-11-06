@@ -34,6 +34,20 @@ fn resolves_type_alias_reference() {
 }
 
 #[test]
+fn resolves_type_alias_references_in_lua_doc_annotations() {
+    let source = "type Player = { hp: number }\n---@param player Player\n---@return Player\nlocal function clone(player) return player end\n";
+    for needle in ["---@param player Player", "---@return Player"] {
+        let mut position = position_at(source, needle);
+        position.column += needle.rfind("Player").unwrap();
+        let definition = definition_tua_source("src/main.tua", source, position)
+            .expect("source should parse")
+            .expect("doc type should navigate to its alias");
+        assert_eq!(definition.kind, DefinitionKind::TypeAlias);
+        assert_eq!(source_text_from(source, definition.span), "Player");
+    }
+}
+
+#[test]
 fn type_annotations_prefer_aliases_over_runtime_values() {
     let source = r#"type Player = { hp: number }
 local Player: any = nil

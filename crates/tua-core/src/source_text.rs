@@ -250,6 +250,40 @@ pub(crate) fn dotted_chain_at_position(
     None
 }
 
+pub(crate) fn doc_type_chain_at_position(
+    parsed: &crate::ParsedSource,
+    position: SourcePosition,
+) -> Option<DottedChain> {
+    let contains = |span: SourceSpan| {
+        (position.line > span.start.line
+            || (position.line == span.start.line && position.column >= span.start.column))
+            && (position.line < span.end.line
+                || (position.line == span.end.line && position.column < span.end.column))
+    };
+    let in_type = parsed.lua_doc_annotations.iter().any(|annotation| {
+        use crate::LuaDocAnnotationKind as Kind;
+        let spans: Vec<SourceSpan> = match &annotation.kind {
+            Kind::Class(class) => class.extends_span.into_iter().collect(),
+            Kind::Field(field) => vec![field.type_span],
+            Kind::Alias(alias) => vec![alias.type_span],
+            Kind::Type(value) => vec![value.type_span],
+            Kind::Param(param) => vec![param.type_span],
+            Kind::Return(value) => value.returns.iter().map(|ret| ret.type_span).collect(),
+            Kind::Generic(value) => value
+                .parameters
+                .iter()
+                .filter_map(|param| param.bound_span)
+                .collect(),
+            Kind::As(value) => vec![value.type_span],
+            Kind::Overload(value) => vec![value.type_span],
+            Kind::Vararg(value) => vec![value.type_span],
+            _ => Vec::new(),
+        };
+        spans.into_iter().any(contains)
+    });
+    in_type.then(|| dotted_chain_at_position(&parsed.source, position))?
+}
+
 pub(crate) fn function_name_table_field(name: &str) -> Option<(String, String, bool)> {
     let colon = name.rfind(':');
     let dot = name.rfind('.');

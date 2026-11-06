@@ -10,7 +10,9 @@ use crate::module_index::{
 use crate::module_link::module_specifier_at_position;
 use crate::narrowing::narrowed_type_at_position;
 use crate::semantic::{resolve_aliases, SemanticModel};
-use crate::source_text::{dotted_chain_at_position, leading_doc_comment};
+use crate::source_text::{
+    doc_type_chain_at_position, dotted_chain_at_position, leading_doc_comment, line_at,
+};
 use crate::types::{
     build_type_environment, format_named_function_pretty, format_type_with_prefix,
     FunctionParameter, FunctionType, Type, TypeEnvironment, TypedFunction, TypedFunctionOverload,
@@ -97,11 +99,43 @@ impl<'a> HoverResolver<'a> {
             }
         }
 
+        if let Some(line) = line_at(&self.parsed.source, position.line) {
+            let indent = line.len() - line.trim_start().len();
+            let trimmed = &line[indent..];
+            if let Some(tag_text) = trimmed.strip_prefix("---@") {
+                let name_len = tag_text.find(char::is_whitespace).unwrap_or(tag_text.len());
+                let start_column = indent + 5;
+                let end_column = start_column + name_len;
+                if position.column >= start_column && position.column < end_column {
+                    if let Some(tag) = crate::annotation_tags::get(&tag_text[..name_len]) {
+                        let span = SourceSpan {
+                            start: SourcePosition {
+                                line: position.line,
+                                column: start_column,
+                            },
+                            end: SourcePosition {
+                                line: position.line,
+                                column: end_column,
+                            },
+                        };
+                        return Some(Hover {
+                            contents: tag.syntax.clone(),
+                            span: Some(span),
+                            documentation: Some(tag.documentation()),
+                            context: Vec::new(),
+                        });
+                    }
+                }
+            }
+        }
+
         if let Some(hover) = self.required_module_literal_hover(position) {
             return Some(hover);
         }
 
-        let Some(chain) = dotted_chain_at_position(&self.parsed.source, position) else {
+        let Some(chain) = doc_type_chain_at_position(self.parsed, position)
+            .or_else(|| dotted_chain_at_position(&self.parsed.source, position))
+        else {
             return self.expression_hover(position);
         };
         let current_part = chain.parts.get(chain.cursor_index)?;
