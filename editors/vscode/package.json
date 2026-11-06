@@ -42,6 +42,7 @@
   "activationEvents": [
     "onCommand:tua.initProject",
     "onCommand:tua.debugLoveProject",
+    "onCommand:tua.tests.createForFunction",
     "onDebugResolve:lua-local",
     "onLanguage:tua",
     "workspaceContains:**/tua.toml",
@@ -912,6 +913,12 @@
         "icon": "$(copy)"
       },
       {
+        "command": "tua.tests.createForFunction",
+        "title": "Create Unit Test for Function",
+        "category": "Tua",
+        "icon": "$(beaker)"
+      },
+      {
         "command": "tua.showWorkspaceSymbolsByModule",
         "title": "Workspace Symbols by Module",
         "category": "Tua",
@@ -1535,6 +1542,10 @@
           "when": "editorLangId == tua"
         },
         {
+          "command": "tua.tests.createForFunction",
+          "when": "editorLangId == tua"
+        },
+        {
           "command": "tua.showWorkspaceSymbolsByModule",
           "when": "workspaceFolderCount > 0"
         },
@@ -1636,6 +1647,11 @@
         }
       ],
       "editor/context": [
+        {
+          "command": "tua.tests.createForFunction",
+          "when": "editorLangId == tua",
+          "group": "tua@1"
+        },
         {
           "command": "tua.explainType",
           "when": "editorLangId == tua",

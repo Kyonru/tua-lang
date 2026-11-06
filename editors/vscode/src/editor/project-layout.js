@@ -50,6 +50,7 @@ async function requestProjectLayout(uri, getClient) {
     return undefined;
   }
 
+  const sourceDirectory = filePath(response.sourceUri);
   return {
     configDirectory: filePath(response.projectUri),
     configPath: optionalFilePath(response.configUri),
@@ -57,7 +58,8 @@ async function requestProjectLayout(uri, getClient) {
     mainSource: response.mainSource,
     moduleName: response.moduleName,
     outputDirectory: filePath(response.outputUri),
-    sourceDirectory: filePath(response.sourceUri),
+    sourceDirectory,
+    testSourceDirectory: optionalFilePath(response.testSourceUri) || sourceDirectory,
     workspaceRoot: filePath(response.workspaceUri),
   };
 }

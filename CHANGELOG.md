@@ -10,6 +10,8 @@ language or editor behavior, and migration notes call out those changes.
 
 - Test sources receive built-in Busted and LuaAssert types for checking and
   editor support, including signatures, hover, completion, and common helpers.
+- VS Code can scaffold a pending Busted unit test for the function under the
+  cursor, in the configured test source tree, without replacing an existing spec.
 - `math.round` and `love.math.round` accept an optional decimal-place precision;
   the default remains integer rounding, with half values rounded away from zero.
 

@@ -1644,6 +1644,9 @@ impl LspServer {
                     paths.first().cloned()
                 }
             });
+        let test_source_root = project
+            .test_source_root()
+            .unwrap_or_else(|| project.primary_source_root().to_path_buf());
 
         json!({
             "workspaceUri": uri_from_path(workspace_root),
@@ -1654,6 +1657,7 @@ impl LspServer {
             "mainSource": project.configured_main().to_string_lossy(),
             "generatedUri": generated_path.as_deref().map(uri_from_path),
             "moduleName": project.module_name_for_path(&path),
+            "testSourceUri": uri_from_path(&test_source_root),
         })
     }
 

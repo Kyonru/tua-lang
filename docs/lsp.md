@@ -603,6 +603,9 @@ and launch guidance.
 
 **Tua: Run Unit Tests** runs the native Busted-backed test command in a task
 terminal. Save source first; see [Testing Tua](testing.md) for backend setup.
+Right-click inside a saved Tua function and choose **Tua: Create Unit Test for
+Function** to create or open its pending spec under the configured test source
+directory.
 
 Open the command palette and type **Tua**. The most useful commands are:
 

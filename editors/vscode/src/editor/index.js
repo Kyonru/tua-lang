@@ -7,6 +7,7 @@ const { registerInlayHintPresentation } = require("./inlay-hints");
 const { registerInlineCompletion } = require("./inline-completion");
 const { registerSymbolCommands } = require("./symbols");
 const { registerTypeExplanation } = require("./type-explanation");
+const { registerUnitTestScaffold } = require("./unit-test-scaffold");
 
 function registerEditorDevex(options) {
   const generatedLua = registerGeneratedLuaCommand(options);
@@ -16,6 +17,7 @@ function registerEditorDevex(options) {
   const inlineCompletion = registerInlineCompletion(options);
   const symbols = registerSymbolCommands(options);
   const typeExplanation = registerTypeExplanation({ ...options, onInspect: inlayHints.inspect });
+  const unitTestScaffold = registerUnitTestScaffold(options);
 
   return {
     middleware: inlayHints.middleware,
@@ -31,6 +33,7 @@ function registerEditorDevex(options) {
       inlineCompletion.dispose();
       symbols.dispose();
       typeExplanation.dispose();
+      unitTestScaffold.dispose();
     },
   };
 }

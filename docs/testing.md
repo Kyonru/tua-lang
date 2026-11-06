@@ -60,6 +60,13 @@ For a dedicated test directory, configure a project-relative root:
 source = "tests"
 ```
 
+In VS Code, right-click inside a function in a saved `.tua` file and choose
+**Tua: Create Unit Test for Function**. Tua creates a matching
+`*_spec` file under `[test].source`, preserving the source file's
+subdirectory, opens it, and adds a pending Busted example with the module import
+ready to extend. If no test source is configured, the project source directory
+is used. Existing specs are opened instead of overwritten.
+
 Then create a spec ending in `_spec.tua`:
 
 ```tua title="tests/math_spec.tua"

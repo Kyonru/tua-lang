@@ -42,6 +42,7 @@ const COMMANDS = {
   runLoveProjectWithHotReload: "tua.runLoveProjectWithHotReload",
   packageGame: "tua.packageGame",
   copyQualifiedName: "tua.copyQualifiedName",
+  createUnitTestForFunction: "tua.tests.createForFunction",
   showWorkspaceSymbolsByModule: "tua.showWorkspaceSymbolsByModule",
   showHoverReferences: "tua.hover.references",
   showHoverImplementations: "tua.hover.implementations",
