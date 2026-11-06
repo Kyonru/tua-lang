@@ -76,7 +76,7 @@ handler(1,
 }
 
 #[test]
-fn legacy_class_typed_receiver_preserves_timer_completion_and_signature_after_edits() {
+fn legacy_class_constructor_typed_receiver_preserves_timer_completion_and_signature_after_edits() {
     let uri = "file:///tmp/legacy-class-timer-contract.tua";
     let source = r#"type Timer = {
   after: (self: any, delay: number, action: () -> nil) -> any,
@@ -84,7 +84,7 @@ fn legacy_class_typed_receiver_preserves_timer_completion_and_signature_after_ed
 type Director = { timer: Timer, [string]: any }
 
 local Director: any = Object:extend()
-function Director.setEnemySpawnsForThisRound(self: Director)
+function Director.new(self: Director, stage)
   self.timer:after(1, function() end)
 end
 "#;
