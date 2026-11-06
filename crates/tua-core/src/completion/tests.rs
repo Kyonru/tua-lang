@@ -2104,7 +2104,7 @@ player.setF
 
     assert_eq!(
         completion.insert_text.as_deref(),
-        Some(r#"setFilter("${1|linear,nearest|}")$0"#)
+        Some(r#"setFilter("${1|linear,nearest|}", "${2|linear,nearest|}", ${3:anisotropy})$0"#)
     );
     assert!(completion.is_snippet);
     assert_eq!(completion.additional_text_edits.len(), 1);
