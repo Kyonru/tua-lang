@@ -326,6 +326,7 @@ pub struct FunctionAnnotation {
     pub name: Option<String>,
     pub name_span: Option<SourceSpan>,
     pub parameters: Vec<ParameterAnnotation>,
+    pub signature_parameters: Vec<FunctionSignatureParameter>,
     pub parameter_count: usize,
     pub required_parameter_count: usize,
     pub has_varargs: bool,
@@ -334,6 +335,13 @@ pub struct FunctionAnnotation {
     pub optional_parameters: Vec<ParameterOptional>,
     pub return_type: Option<TuaType>,
     pub span: Option<SourceSpan>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct FunctionSignatureParameter {
+    pub name: String,
+    pub ty: Option<TuaType>,
+    pub name_span: Option<SourceSpan>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

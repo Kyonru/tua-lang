@@ -1233,7 +1233,7 @@ fn complete_documentation_snippet(
     let Some(function) = function_after_documentation_line(parsed, position) else {
         return Vec::new();
     };
-    let Some(snippet) = documentation_snippet_for_function(parsed, function) else {
+    let Some(snippet) = documentation_snippet_for_function(function) else {
         return Vec::new();
     };
 
@@ -1303,39 +1303,56 @@ fn doc_gap_is_clear(source: &str, start_line: usize, function_line: usize) -> bo
     })
 }
 
-fn documentation_snippet_for_function(
-    parsed: &ParsedSource,
-    function: &FunctionAnnotation,
-) -> Option<String> {
-    let line = function
-        .span
-        .and_then(|span| line_at(&parsed.source, span.start.line))?;
-    let mut signature = parse_function_signature_line(line)?;
-
-    for parameter in &mut signature.parameters {
-        if parameter.ty == "any" {
-            if let Some(annotated) = function
-                .parameters
+fn documentation_snippet_for_function(function: &FunctionAnnotation) -> Option<String> {
+    let optional = function
+        .default_parameters
+        .iter()
+        .map(|parameter| parameter.name.as_str())
+        .chain(
+            function
+                .optional_parameters
                 .iter()
-                .find(|annotated| annotated.name == parameter.name)
-            {
-                parameter.ty = format_tua_type(&annotated.ty);
-            }
-        }
-    }
-
-    if let Some(ty) = &function.return_type {
-        signature.return_type = Some(match ty {
-            TuaType::Tuple(items) => items
-                .iter()
+                .map(|parameter| parameter.name.as_str()),
+        )
+        .collect::<BTreeSet<_>>();
+    let mut parameters = function
+        .signature_parameters
+        .iter()
+        .map(|parameter| DocParameter {
+            name: parameter.name.clone(),
+            ty: parameter
+                .ty
+                .as_ref()
                 .map(format_tua_type)
-                .collect::<Vec<_>>()
-                .join(", "),
-            ty => format_tua_type(ty),
+                .unwrap_or_else(|| "any".to_owned()),
+            optional: optional.contains(parameter.name.as_str()),
+        })
+        .collect::<Vec<_>>();
+    if function.has_varargs {
+        parameters.push(DocParameter {
+            name: "...".to_owned(),
+            ty: function
+                .vararg_type
+                .as_ref()
+                .map(format_tua_type)
+                .unwrap_or_else(|| "any".to_owned()),
+            optional: false,
         });
     }
 
-    documentation_snippet_from_signature(signature)
+    let return_type = function.return_type.as_ref().map(|ty| match ty {
+        TuaType::Tuple(items) => items
+            .iter()
+            .map(format_tua_type)
+            .collect::<Vec<_>>()
+            .join(", "),
+        ty => format_tua_type(ty),
+    });
+
+    documentation_snippet_from_signature(FunctionSignature {
+        parameters,
+        return_type,
+    })
 }
 
 fn lossy_documentation_snippet_after_line(source: &str, line_number: usize) -> Option<String> {
@@ -1357,8 +1374,11 @@ fn documentation_snippet_from_signature(signature: FunctionSignature) -> Option<
 
     for parameter in signature.parameters {
         lines.push(format!(
-            "@param {} {} ${{{}:description}}",
-            parameter.name, parameter.ty, placeholder
+            "@param {}{} {} ${{{}:description}}",
+            parameter.name,
+            if parameter.optional { "?" } else { "" },
+            parameter.ty,
+            placeholder
         ));
         placeholder += 1;
     }
@@ -1392,6 +1412,7 @@ struct FunctionSignature {
 struct DocParameter {
     name: String,
     ty: String,
+    optional: bool,
 }
 
 fn parse_function_signature_line(line: &str) -> Option<FunctionSignature> {
@@ -1455,6 +1476,7 @@ fn parse_doc_parameter(raw: &str) -> Option<DocParameter> {
         return Some(DocParameter {
             name: "...".to_owned(),
             ty: "any".to_owned(),
+            optional: false,
         });
     }
 
@@ -1468,8 +1490,9 @@ fn parse_doc_parameter(raw: &str) -> Option<DocParameter> {
     }
 
     Some(DocParameter {
-        name: name.to_owned(),
+        name: name.strip_suffix('?').unwrap_or(name).to_owned(),
         ty,
+        optional: name.ends_with('?'),
     })
 }
 

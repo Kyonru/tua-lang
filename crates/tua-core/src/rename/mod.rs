@@ -90,7 +90,7 @@ pub fn rename_parsed_source(
         return Ok(None);
     }
     let reference_kind = reference_kind_for_rename(target.kind);
-    let edits = references_parsed_source(parsed, position, true)?
+    let mut edits = references_parsed_source(parsed, position, true)?
         .into_iter()
         .filter(|reference| reference.kind == reference_kind)
         .map(|reference| TextEdit {
@@ -100,7 +100,61 @@ pub fn rename_parsed_source(
         })
         .collect::<Vec<_>>();
 
+    if target.kind == RenameKind::Parameter {
+        if let Some(function) = parsed.function_annotations.iter().find(|function| {
+            function.signature_parameters.iter().any(|parameter| {
+                parameter.name == target.placeholder && parameter.name_span == Some(target.span)
+            })
+        }) {
+            if let Some(function_span) = function.span {
+                let function_line = function_span.start.line;
+                let prior_function_line = parsed
+                    .function_annotations
+                    .iter()
+                    .filter_map(|candidate| candidate.span.map(|span| span.start.line))
+                    .filter(|line| *line < function_line)
+                    .max()
+                    .unwrap_or(0);
+                for annotation in &parsed.lua_doc_annotations {
+                    if annotation.span.start.line <= prior_function_line
+                        || annotation.span.start.line >= function_line
+                        || !doc_gap_is_clear(
+                            &parsed.source,
+                            annotation.span.end.line + 1,
+                            function_line,
+                        )
+                    {
+                        continue;
+                    }
+                    if let crate::LuaDocAnnotationKind::Param(parameter) = &annotation.kind {
+                        if parameter.name == target.placeholder {
+                            edits.push(TextEdit {
+                                path: parsed.path.clone(),
+                                span: parameter.name_span,
+                                new_text: new_name.clone(),
+                            });
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    edits.sort_by_key(|edit| (edit.span.start.line, edit.span.start.column));
+    edits.dedup_by(|left, right| left.span == right.span && left.path == right.path);
+
     Ok((!edits.is_empty()).then_some(RenameEdit { edits }))
+}
+
+fn doc_gap_is_clear(source: &str, start_line: usize, function_line: usize) -> bool {
+    (start_line..function_line).all(|line_number| {
+        line_at(source, line_number)
+            .map(|line| {
+                let trimmed = line.trim();
+                trimmed.is_empty() || trimmed.starts_with("---")
+            })
+            .unwrap_or(true)
+    })
 }
 
 /// Conservatively refuse an occupied name in an affected file. This includes

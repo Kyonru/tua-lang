@@ -75,6 +75,24 @@ fn renames_parameters_within_the_file() {
 }
 
 #[test]
+fn renaming_parameter_updates_only_its_attached_param_tags_and_keeps_prose() {
+    let source = "---Damage target safely.\n---@param target Player target role\n---@param amount number damage amount\nlocal function damage(target: Player, amount: number)\n  return target\nend\n";
+    let edit = rename_tua_source(
+        "src/player.tua",
+        source,
+        position_at(source, "target: Player"),
+        "victim",
+    )
+    .expect("source should parse")
+    .expect("parameter rename should include its declaration and references");
+    let renamed = apply_edit(source, &edit);
+    assert!(renamed.contains("---Damage target safely."));
+    assert!(renamed.contains("---@param victim Player target role"));
+    assert!(renamed.contains("---@param amount number damage amount"));
+    assert!(renamed.contains("local function damage(victim: Player"));
+}
+
+#[test]
 fn renames_resolved_table_fields_and_rejects_unknowns_and_invalid_names() {
     let target = prepare_at("target.hp", "target.".len()).expect("field should be renameable");
     let edit = rename_at("target.hp", "target.".len(), "health").expect("field should rename");

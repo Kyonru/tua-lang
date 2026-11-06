@@ -957,6 +957,64 @@ end
 }
 
 #[test]
+fn documents_multiline_method_parameters_defaults_and_varargs_from_parsed_signature() {
+    let source = r#"type Player = { hp: number }
+---Keep this explanation.
+---
+function Player:damage(
+  target: Player,
+  amount: number = 1,
+  ...: string
+): (boolean, number)
+end
+"#;
+    let completions = complete_tua_source(
+        "src/main.tua",
+        source,
+        position_after(source, "---\nfunction"),
+    )
+    .expect("documentation completion should parse the multiline method");
+    let snippet = completions
+        .iter()
+        .find(|item| item.label == "document function")
+        .and_then(|item| item.insert_text.as_deref())
+        .expect("function documentation should be offered");
+    assert_eq!(
+        snippet,
+        "@param target Player ${1:description}\n---@param amount? number ${2:description}\n---@param ... string ${3:description}\n---@return boolean, number ${4:description}"
+    );
+
+    let documented = source.replacen(
+        "---\nfunction",
+        &format!(
+            "---{}\nfunction",
+            snippet
+                .replace("${1:description}", "target docs")
+                .replace("${2:description}", "amount docs")
+                .replace("${3:description}", "extra docs")
+                .replace("${4:description}", "result docs")
+        ),
+        1,
+    );
+    let parsed = crate::parse_tua_source("src/main.tua", documented.clone())
+        .expect("generated method documentation should parse");
+    assert!(documented.contains("---Keep this explanation."));
+    assert_eq!(
+        parsed
+            .lua_doc_annotations
+            .iter()
+            .filter(|annotation| matches!(annotation.kind, crate::LuaDocAnnotationKind::Param(_)))
+            .count(),
+        3
+    );
+    assert!(
+        parsed.lua_doc_diagnostics.is_empty(),
+        "{:?}",
+        parsed.lua_doc_diagnostics
+    );
+}
+
+#[test]
 fn generates_function_documentation_snippet_from_lua_signature() {
     let source = r#"---
 local function play(source, ...)

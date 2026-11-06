@@ -19,15 +19,15 @@ use crate::{Diagnostic, DiagnosticCode};
 pub(crate) use doc::parse_type_text as parse_tua_type_text;
 pub use doc::{parse_lua_doc_annotations, parse_lua_doc_annotations_with_options};
 pub use model::{
-    CompoundAssignment, CompoundOperator, FunctionAnnotation, FunctionTypeParameter,
-    LocalAnnotation, LuaDocAlias, LuaDocAnnotation, LuaDocAnnotationKind, LuaDocAs, LuaDocCast,
-    LuaDocClass, LuaDocDeprecated, LuaDocDiagnostic, LuaDocEnum, LuaDocField, LuaDocGeneric,
-    LuaDocGenericParameter, LuaDocMeta, LuaDocModule, LuaDocNoDiscard, LuaDocOverload, LuaDocParam,
-    LuaDocParseOptions, LuaDocParseResult, LuaDocReturn, LuaDocReturnType, LuaDocTypeAnnotation,
-    LuaDocVararg, LuaDocVersion, NormalizedSource, ParameterAnnotation, ParameterDefault,
-    ParameterOptional, ParsedLanguage, ParsedSource, RawParsedSource, SourcePosition, SourceSpan,
-    TableFieldType, TuaType, TypeAlias, TypeAliasKind, TypeImport, TypeImportBinding,
-    TypedSourceModel,
+    CompoundAssignment, CompoundOperator, FunctionAnnotation, FunctionSignatureParameter,
+    FunctionTypeParameter, LocalAnnotation, LuaDocAlias, LuaDocAnnotation, LuaDocAnnotationKind,
+    LuaDocAs, LuaDocCast, LuaDocClass, LuaDocDeprecated, LuaDocDiagnostic, LuaDocEnum, LuaDocField,
+    LuaDocGeneric, LuaDocGenericParameter, LuaDocMeta, LuaDocModule, LuaDocNoDiscard,
+    LuaDocOverload, LuaDocParam, LuaDocParseOptions, LuaDocParseResult, LuaDocReturn,
+    LuaDocReturnType, LuaDocTypeAnnotation, LuaDocVararg, LuaDocVersion, NormalizedSource,
+    ParameterAnnotation, ParameterDefault, ParameterOptional, ParsedLanguage, ParsedSource,
+    RawParsedSource, SourcePosition, SourceSpan, TableFieldType, TuaType, TypeAlias, TypeAliasKind,
+    TypeImport, TypeImportBinding, TypedSourceModel,
 };
 pub(crate) use model::{NativeArrayTypeSyntax, ParserLineProvenance, ParserSourceFragment};
 use normalize::normalize_tua_source_for_luau_parser;
@@ -1282,11 +1282,27 @@ fn function_annotation(
             })
         })
         .collect();
+    let signature_parameters = body
+        .parameters()
+        .iter()
+        .zip(body.type_specifiers())
+        .filter_map(|(parameter, specifier)| {
+            let ast::Parameter::Name(name) = parameter else {
+                return None;
+            };
+            Some(FunctionSignatureParameter {
+                name: token_text(name),
+                ty: specifier.map(|specifier| tua_type_from_type_info(specifier.type_info())),
+                name_span: node_span(name),
+            })
+        })
+        .collect();
 
     FunctionAnnotation {
         name,
         name_span,
         parameters,
+        signature_parameters,
         parameter_count,
         required_parameter_count,
         has_varargs,
