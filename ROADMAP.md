@@ -71,9 +71,15 @@ results.
 
 ### Unit testing follow-ups
 
-- Add richer Busted API declarations.
-- Add an explicit LOVE runtime test mode; the Busted backend currently tests
-  headless Lua logic and requires doubles for LOVE-dependent behavior.
+- Add test-scoped Busted declarations for the DSL, hooks, assertions, spies,
+  mocks, stubs, and matchers. Verify that test symbols have useful signatures
+  in `.lua` and `.tua` specs without leaking into ordinary project files.
+- Design an explicit LOVE runtime test mode with clear discovery, launch,
+  cancellation, exit-status, and result-reporting behavior. The Busted backend
+  currently tests headless Lua logic and needs doubles for LOVE-dependent code.
+- Qualify Test Explorer run, cancellation, continuous runs, and line coverage
+  in the installed editor with real Busted and LuaCov; mocked controller tests
+  and CLI runs do not cover the editor UI workflow.
 
 ## Next
 
@@ -109,8 +115,6 @@ results rather than maintaining a second parser.
 
 - Add code signing when sustainable signing identities and key management are
   available.
-- Test upgrade and rollback behavior between adjacent extension/server
-  versions.
 - Publish compatibility and migration notes for every minor release.
 - Add more architectures only when CI can build and test them natively.
 - Qualify test-process cancellation and output/report bounds on native Windows,
@@ -128,6 +132,8 @@ results rather than maintaining a second parser.
   scheduler for unrelated gameplay actors and UI objects. Specify receiver
   binding, method compatibility, diagnostics, and navigation before replacing
   the explicit adapters in `examples/features/src/polymorphism.tua`.
+- Define ownership, registration, and initialization order for dynamic service
+  tables and mixins before proposing syntax or implicit lifecycle changes.
 - Reconsider generic classes when identity-preserving APIs cannot be modeled
   clearly with concrete types. Abstract classes/methods and multiple inheritance
   remain deferred design questions, not promised features; require use cases
