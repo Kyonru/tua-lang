@@ -76,6 +76,48 @@ handler(1,
 }
 
 #[test]
+fn legacy_class_typed_receiver_preserves_timer_completion_and_signature_after_edits() {
+    let uri = "file:///tmp/legacy-class-timer-contract.tua";
+    let source = r#"type Timer = {
+  after: (self: any, delay: number, action: () -> nil) -> any,
+}
+type Director = { timer: Timer, [string]: any }
+
+local Director: any = Object:extend()
+function Director.setEnemySpawnsForThisRound(self: Director)
+  self.timer:after(1, function() end)
+end
+"#;
+    let saved = run_messages(vec![
+        did_open(uri, source),
+        completion_request(2, uri, source, "self.timer:af"),
+        signature_help_request(3, uri, source, "self.timer:after(1,"),
+    ]);
+
+    assert_completion_labels(&saved, 2, ["after"]);
+    assert_signature_label(
+        &saved,
+        3,
+        "function self.timer:after(delay: number, action: () -> nil): any",
+    );
+
+    let unsaved = source.replace("after(1,", "after(2,");
+    let edited = run_messages(vec![
+        did_open(uri, source),
+        did_change(uri, &unsaved, 2),
+        completion_request(4, uri, &unsaved, "self.timer:af"),
+        signature_help_request(5, uri, &unsaved, "self.timer:after(2,"),
+    ]);
+
+    assert_completion_labels(&edited, 4, ["after"]);
+    assert_signature_label(
+        &edited,
+        5,
+        "function self.timer:after(delay: number, action: () -> nil): any",
+    );
+}
+
+#[test]
 fn signature_help_returns_signal_event_payload_signature() {
     let uri = "file:///tmp/signal-signature-help.tua";
     let source = r#"type Player = {

@@ -607,6 +607,32 @@ completion, signature help, semantic highlighting, and parameter
 documentation. Index signatures keep a class open to keyed values without
 appearing as literal field names in completion.
 
+### Typing Legacy Class Builders
+
+Dynamic class builders such as `Object:extend()` do not by themselves tell Tua
+the shape of each instance or the type of an assigned field. Declare the
+receiver and the fields used by the method explicitly. In a dot-form method
+declaration, the first parameter is the receiver; existing colon-form calls
+still pass it normally. Include the receiver in a function-valued field's type
+when that field is called with `:`:
+
+```tua
+type Timer = {
+  after: (self: any, delay: number, action: () -> nil) -> any,
+}
+type Director = { timer: Timer, [string]: any }
+
+local Director: any = Object:extend()
+function Director.scheduleWave(self: Director)
+  self.timer:after(1, function() end)
+end
+```
+
+The function type includes `self` for the runtime call contract; completion and
+signature help omit that receiver from the displayed arguments. Replace the
+open `[string]: any` index with declared fields where the legacy class shape is
+known.
+
 ### External Declaration Libraries
 
 Third-party packages can keep their runtime and declarations separate. Add a
