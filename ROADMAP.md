@@ -30,11 +30,9 @@ workflow pages under `docs/`. Completed work belongs in
 
 ### Qualify Real-Project Responsiveness And Editor Behavior
 
-- Recheck the confirmed BYTEPATH `Director.self.timer:after` completion and
-  signature failure from the November port audit against the current server.
-  Preserve the full project context and assert both editor responses; if it
-  still fails, minimize it and add a regression before changing shared receiver
-  inference. Do not close this item from the simpler timer-adapter tests alone.
+- Keep the BYTEPATH `Director.self.timer:after` full-project regression as a
+  named receiver typing fixture. The current editor replay now passes saved and
+  unsaved completion and signature requests.
 - Keep full SNKRX/BYTEPATH check and build timings as regression workloads;
   bound receiver inference and source rescanning, then profile remaining cost.
 - Reduce cold project completion and post-edit dependency-surface analysis on
@@ -78,15 +76,14 @@ results.
 - Expand LuaDoc/LuaCATS interoperability for common existing Lua libraries.
 - Improve safe project-wide refactors and module changes.
 - Preserve `any` and ordinary Lua as explicit dynamic escape paths.
-- Test other Lua string consumers with runtime-equivalent escaped module and
-  signal names before classifying raw-token path handling as a defect. Asset
-  and Sprite metadata already share the runtime string decoder; reuse it for
-  another consumer only when a focused reproduction confirms the mismatch.
+- Keep runtime-equivalent escaped Lua literal coverage for module paths,
+  SignalBus names, Busted case names, and multiline asset renames.
 
 ### Complete Typed Lua Porting Workflows
 
-- Evaluate literal `false` support for LOVE configuration without accepting
-  arbitrary booleans; use `nil` to disable window creation meanwhile.
+- Keep the `love.conf` window contract covered for initial fields, `nil`, and
+  the narrowly accepted literal `false` assignment; arbitrary booleans remain
+  invalid.
 
 Owner: shared semantics/checker and documentation. Acceptance: focused core/LSP
 regressions and replay of the five upstream porting trials,
@@ -97,25 +94,15 @@ remain distinct follow-up work.
 
 ### Improve Comment And Annotation Authoring
 
-- **Generate/update documentation from parsed signatures:** support native
-  class methods, multiline functions, nested table/function types, defaults,
-  and varargs. Preserve prose and native types; do not invent descriptions.
-- Displaying the exact default expression in hover/signature help remains a
-  separate usability gap from marking a parameter optional. Define its display
-  contract before changing shared signature metadata.
-- **Keep comments aligned:** offer targeted fixes for stale/missing parameter
-  tags and update matching documentation references during parameter rename.
-  Reuse existing type-disagreement diagnostics.
-- **Navigate annotations:** share native type completion/navigation for type
-  names in comments. Extend tag hover to incomplete/malformed annotations;
-  complete tags already explain semantics and link to the offline guide.
-- **Verify editing states:** cover Lua/native functions, class methods, imports,
-  partial tags, and inserted generated snippets in one conformance matrix.
-  Check the resulting program and explicit source-coordinate mappings.
+- **Verify annotation editing states:** cover Lua/native functions, class
+  methods, imports, partial type expressions, malformed tags, generated
+  snippets, navigation, and hover in one conformance matrix. Check resulting
+  source and explicit coordinate mappings.
 - For dot/colon completion, keep filtering keys that cannot be written as bare
   member names. Evaluate an explicit bracket-key completion action (including
-  valid replacement ranges and suffix preservation) as a follow-up capability;
-  do not emit invalid dot access to expose those keys.
+  valid replacement ranges and suffix preservation), exact default-expression
+  display, and nullable-versus-optional overload ranking as follow-up
+  capabilities; do not emit invalid dot access to expose bracket-only keys.
 
 Owner: core annotation metadata/semantics and LSP; the extension presents those
 results rather than maintaining a second parser.
