@@ -213,7 +213,7 @@ local faded = love.math.rgba(40, 80, 255, 128)
 | `inverseLerp(from, to, value)` | How far `value` is between `from` and `to`, as an unclamped amount. |
 | `remap(value, inMin, inMax, outMin, outMax)` | `value` mapped from one range to another, unclamped. |
 | `sign(value)` | `-1`, `0`, or `1`. |
-| `round(value)` | The nearest integer, with halves rounded away from zero. |
+| `round(value, places?)` | Rounds to `places` decimal digits (default `0`), with halves rounded away from zero. Negative `places` rounds to tens, hundreds, and so on. |
 | `smoothstep(edge0, edge1, value)` | A smooth 0-to-1 curve between the edges, clamped outside them. |
 | `rgb(red, green, blue)` | A `{ r, g, b }` color with 0–255 components converted to LÖVE's 0–1 range. |
 | `rgba(red, green, blue, alpha)` | The same, with alpha. |
@@ -227,6 +227,9 @@ local barWidth = math.remap(health, 0, maxHealth, 0, 120)
 
 -- Pass a color straight to LÖVE.
 love.graphics.setColor(love.math.rgb(255, 128, 0))
+
+-- Round to two decimal places; omitting places rounds to an integer.
+local price = math.round(10.946, 2) -- 10.95
 ```
 
 `rgb` and `rgba` return a new table on each call. For a color you use every

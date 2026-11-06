@@ -226,10 +226,10 @@ const HELPERS: &[GameMathHelper] = &[
     GameMathHelper {
         label: "round",
         kind: LuaItemKind::Function,
-        math_detail: "function math.round(value: number): number",
-        love_detail: "function love.math.round(value: number): number",
-        documentation: "Rounds a number to the nearest integer, with halves away from zero.",
-        initializer: "function(value) return value >= 0 and math.floor(value + 0.5) or math.ceil(value - 0.5) end",
+        math_detail: "function math.round(value: number, places?: number): number",
+        love_detail: "function love.math.round(value: number, places?: number): number",
+        documentation: "Rounds to the requested decimal places (default 0), with halves away from zero.",
+        initializer: "function(value, places) local factor = 10 ^ (places or 0); local scaled = value * factor; local rounded = scaled >= 0 and math.floor(scaled + 0.5) or math.ceil(scaled - 0.5); return rounded / factor end",
     },
     GameMathHelper {
         label: "smoothstep",

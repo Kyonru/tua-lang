@@ -6,6 +6,11 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+### Added
+
+- `math.round` and `love.math.round` accept an optional decimal-place precision;
+  the default remains integer rounding, with half values rounded away from zero.
+
 ### Fixed
 
 - Editor positions and edits use UTF-16 consistently across normal language

@@ -6,6 +6,7 @@ local progress: number = math.inverseLerp(10, 20, halfway)
 local screenX: number = math.remap(progress, 0, 1, 32, 288)
 local direction: number = math.sign(-12)
 local frame: number = math.round(4.6)
+local roundedPrice: number = math.round(10.946, 2)
 local eased: number = math.smoothstep(0, 1, progress)
 
 -- Feature: RGB/RGBA helpers accept byte components and return LOVE-ready
@@ -20,6 +21,7 @@ return {
   screenX = screenX,
   direction = direction,
   frame = frame,
+  roundedPrice = roundedPrice,
   eased = eased,
   orange = orange,
   translucentBlue = translucentBlue,
