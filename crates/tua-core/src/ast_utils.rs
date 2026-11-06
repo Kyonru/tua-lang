@@ -27,7 +27,30 @@ pub(crate) fn assignment_expression_for_local<'a>(
     expressions
         .last()
         .copied()
+        .filter(|expression| {
+            index == fixed_expression_count
+                || matches!(expression, Expression::FunctionCall(_))
+                || matches!(expression, Expression::Symbol(symbol) if token_text(symbol) == "...")
+        })
         .map(|expression| (expression, index - fixed_expression_count))
+}
+
+/// Split a value chain at its final call so all inference consumers can use
+/// their normal call resolver before resolving the remaining property/index.
+pub(crate) fn var_expression_call_prefix(
+    expression: &ast::VarExpression,
+) -> Option<(FunctionCall, Vec<&Suffix>)> {
+    let suffixes = expression.suffixes().collect::<Vec<_>>();
+    let last_call = suffixes
+        .iter()
+        .rposition(|suffix| matches!(suffix, Suffix::Call(_)))?;
+    let call = FunctionCall::new(expression.prefix().clone()).with_suffixes(
+        suffixes[..=last_call]
+            .iter()
+            .map(|suffix| (*suffix).clone())
+            .collect(),
+    );
+    Some((call, suffixes[last_call + 1..].to_vec()))
 }
 
 pub(crate) fn plain_field_chain_from_var(var: &Var) -> Option<Vec<String>> {

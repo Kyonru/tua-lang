@@ -7803,7 +7803,7 @@ fn anonymous_default_signature_and_body_hover_agree() {
         .signature_help("callbacks.tua", fixture.position("signature"))
         .unwrap();
     assert!(
-        signature.signatures[0].label.contains("value: number"),
+        signature.signatures[0].label.contains("value?: number"),
         "{signature:?}"
     );
 }

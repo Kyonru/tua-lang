@@ -329,6 +329,7 @@ pub struct FunctionAnnotation {
     pub parameter_count: usize,
     pub required_parameter_count: usize,
     pub has_varargs: bool,
+    pub vararg_type: Option<TuaType>,
     pub default_parameters: Vec<ParameterDefault>,
     pub optional_parameters: Vec<ParameterOptional>,
     pub return_type: Option<TuaType>,

@@ -1290,6 +1290,15 @@ fn function_annotation(
         parameter_count,
         required_parameter_count,
         has_varargs,
+        vararg_type: body
+            .parameters()
+            .iter()
+            .zip(body.type_specifiers())
+            .find_map(|(parameter, specifier)| {
+                matches!(parameter, ast::Parameter::Ellipsis(_))
+                    .then(|| specifier.map(|s| tua_type_from_type_info(s.type_info())))
+                    .flatten()
+            }),
         default_parameters,
         optional_parameters,
         return_type: body

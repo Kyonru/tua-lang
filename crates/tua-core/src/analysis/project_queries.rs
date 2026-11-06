@@ -433,7 +433,11 @@ impl AnalysisSnapshot {
                     )
                 }),
                 deprecation: None,
-                insert_text: Some(candidate.path),
+                insert_text: Some(crate::completion::escape_completion_string(
+                    source,
+                    position,
+                    &candidate.path,
+                )),
                 filter_text: None,
                 is_snippet: false,
                 module_path: None,

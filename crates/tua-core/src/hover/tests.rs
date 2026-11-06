@@ -2111,3 +2111,68 @@ fn annotation_tag_hover_explains_metadata_without_claiming_narrowing() {
     .unwrap()
     .is_none());
 }
+
+#[test]
+fn audit_expression_hover_after_class_uses_source_coordinates() {
+    let source = "class Counter {\n value: number = 0\n read(): number { return self.value }\n}\nlocal result=40+2\nprint(result)\n";
+    let position = position_at(source, "+");
+    let result = hover_tua_source("main.tua", source, position)
+        .unwrap()
+        .unwrap();
+    assert_eq!(result.contents, "expression: number");
+    let span = result.span.unwrap();
+    assert_eq!(span.start, position_at(source, "40"));
+    assert_eq!(span.end.line, position.line);
+}
+
+#[test]
+fn audit_call_result_hover_preserves_method_identity() {
+    for gap in ["", " ", "\n", "\n  "] {
+        let source = format!("local canvas=love.graphics.newCanvas(20,20):{gap}getWidth()\nlove.graphics.newCanvas(20,20):{gap}setFilter(\"nearest\",\"linear\")\n");
+        for method in ["getWidth", "setFilter"] {
+            let item = hover_tua_source("main.tua", &source, position_at(&source, method))
+                .unwrap()
+                .unwrap();
+            assert!(item.contents.contains(method), "gap {gap:?}: {item:?}");
+            assert!(item.documentation.is_some(), "gap {gap:?}: {item:?}");
+            assert_eq!(item.span.unwrap().start, position_at(&source, method));
+        }
+    }
+}
+
+#[test]
+fn audit_hover_distinguishes_optional_from_required_nullable_parameters() {
+    for (parameter, expected) in [
+        ("amount: number = 5", "amount?: number"),
+        ("amount?: number", "amount?: number | nil"),
+        ("amount: number | nil", "amount: number | nil"),
+    ] {
+        let source =
+            format!("local function damage({parameter}): number return 1 end\ndamage(1)\n");
+        let item = hover_tua_source("main.tua", &source, position_at(&source, "damage"))
+            .unwrap()
+            .unwrap();
+        assert!(item.contents.contains(expected), "{item:?}");
+    }
+}
+
+#[test]
+fn annotated_callback_local_parameters_use_contextual_types() {
+    for source in [
+        "local callback: (x: number) -> string = function(x) return tostring(x + 1) end",
+        "type Handler = (x: number) -> string\nlocal callback: Handler = function(x) return tostring(x + 1) end",
+        "---@type fun(x: number): string\nlocal callback = function(x) return tostring(x + 1) end",
+    ] {
+        let item = hover_tua_source("callback.tua", source, position_at(source, "x + 1"))
+            .unwrap().expect("contextual parameter should hover");
+        assert_eq!(item.contents, "parameter x: number", "{source}");
+    }
+    let source = "local callback: (x: number) -> string = function(x) local nested = function(x) return tostring(x + 1) end return nested(x) end";
+    let item = hover_tua_source("callback.tua", source, position_at(source, "x + 1"))
+        .unwrap()
+        .expect("nested parameter should hover");
+    assert_eq!(
+        item.contents, "parameter x: any",
+        "outer callback contract must not leak"
+    );
+}

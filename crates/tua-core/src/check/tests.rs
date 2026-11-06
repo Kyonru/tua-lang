@@ -5289,3 +5289,98 @@ fn love_conf_initial_window_read_state_preserves_nullable_writes() {
         assert!(check_tua_source("conf.tua", &source).is_err(), "{source}");
     }
 }
+
+#[test]
+fn native_named_vararg_contracts_check_tail_arguments() {
+    for declaration in [
+        "local function log(prefix: string, ...: string): string return prefix end",
+        "function log(prefix: string, ...: string): string return prefix end",
+    ] {
+        check_tua_source("varargs.tua", format!("{declaration}\nlog('ok', 'tail')"))
+            .expect("matching tail must pass");
+        let diagnostics = check_tua_source("varargs.tua", format!("{declaration}\nlog('ok', 123)"))
+            .expect_err("native named function must retain its tail contract");
+        assert_single_mismatch(&diagnostics, "expected string, found number");
+    }
+}
+
+#[test]
+fn contextual_callbacks_check_inferred_returns_for_named_calls_and_locals() {
+    for source in [
+        "local function use(cb: (x: number) -> string): string return cb(1) end\nlocal result = use(function(x) return x + 1 end)",
+        "local callback: (x: number) -> string = function(x) return x + 1 end",
+    ] {
+        let diagnostics = check_tua_source("callback.tua", source)
+            .expect_err("contextual callback return must satisfy its contract");
+        assert_single_mismatch(&diagnostics, "expected string, found number");
+    }
+    check_tua_source("callback.tua", "local function use(cb: (x: number) -> string): string return cb(1) end\nlocal result = use(function(x) return tostring(x + 1) end)")
+        .expect("contextual parameters and matching returns must pass");
+}
+
+#[test]
+fn terminal_call_result_fields_preserve_contracts() {
+    let diagnostics = check_tua_source("chain.tua", "local function factory() return {nested = {count = 1}} end\nlocal value = factory().nested.count\nlocal wrong: string = value")
+        .expect_err("terminal property chain must retain its number type");
+    assert_single_mismatch(&diagnostics, "expected string, found number");
+}
+
+#[test]
+fn missing_scalar_assignment_slots_are_nil() {
+    for initializer in ["1", "(pair())"] {
+        let diagnostics = check_tua_source("slots.tua", format!("local function pair(): (number, string) return 1, 'ok' end\nlocal first, second = {initializer}\nlocal wrong: string = second"))
+            .expect_err("Lua pads scalar assignment lists with nil");
+        assert_single_mismatch(&diagnostics, "expected string, found nil");
+    }
+    check_tua_source("slots.tua", "local function pair(): (number, string) return 1, 'ok' end\nlocal first, second = pair()\nlocal valid: string = second")
+        .expect("unparenthesized final calls still expand");
+}
+
+#[test]
+fn final_call_arguments_expand_multiple_returns() {
+    let declarations = "local function pair(): (number, string) return 1, 'a' end\nlocal function consume(a: number, b: string): string return b end\n";
+    for call in ["consume(pair())", "local alias = consume\nalias(pair())"] {
+        check_tua_source("args.tua", format!("{declarations}{call}"))
+            .expect("the final call supplies both parameters");
+    }
+    for call in ["consume((pair()))", "consume(pair(), 2)"] {
+        check_tua_source("args.tua", format!("{declarations}{call}"))
+            .expect_err("parenthesized or nonfinal calls supply only one value");
+    }
+    let diagnostics = check_tua_source("args.tua", "local function pair(): (number, number) return 1, 2 end\nlocal function consume(a: number, b: string): string return b end\nconsume(pair())")
+        .expect_err("expanded tail type must be checked");
+    assert_single_mismatch(&diagnostics, "expected string, found number");
+}
+
+#[test]
+fn shadowed_named_functions_use_lexical_contracts() {
+    check_tua_source("shadow.tua", "local function convert(value: number): number return value + 1 end\ndo\nlocal function convert(value: string): string return value .. '!' end\nlocal inner: string = convert('hello')\nend\nlocal outer: number = convert(1)")
+        .expect("each declaration supplies its own parameter and return contracts");
+    let diagnostics = check_tua_source("shadow.tua", "local function convert(value: number): number return value + 1 end\ndo\nlocal function convert(value: string): string return value .. '!' end\nconvert(1)\nend")
+        .expect_err("inner contract must reject the outer parameter type");
+    assert_single_mismatch(&diagnostics, "expected string, found number");
+}
+
+#[test]
+fn terminal_call_result_fields_check_call_arguments() {
+    let diagnostics = check_tua_source("chain.tua", "local function factory(count: number) return {nested = {count = count}} end\nlocal value = factory('wrong').nested.count")
+        .expect_err("inferring a terminal field must still check its preceding call");
+    assert_single_mismatch(&diagnostics, "expected number, found string");
+}
+
+#[test]
+fn shadowed_named_function_results_keep_their_call_site_type() {
+    check_tua_source("shadow.tua", "local function convert(value: number): number return value + 1 end\ndo\nlocal function convert(value: string): string return value .. '!' end\nlocal inner = convert('hello')\nlocal inner_check: string = inner\nend\nlocal outer = convert(1)\nlocal outer_check: number = outer")
+        .expect("inferred locals must use the lexical callable at their initializer");
+}
+
+#[test]
+fn shadowed_named_functions_infer_returns_from_their_own_parameters() {
+    check_tua_source("shadow.tua", "local function convert(value: number) return value + 1 end\ndo\nlocal function convert(value: string) return value .. '!' end\nlocal inner: string = convert('hello')\nend\nlocal outer: number = convert(1)")
+        .expect("inferred returns also belong to declarations");
+}
+
+#[test]
+fn audit_wrapper_return_inference_uses_lexical_function_identity() {
+    check_tua_source("shadow.tua", "local function parse(value: number) return value end\nlocal function outer() return parse(1) end\ndo\n local function parse(value: string) return value end\n local function inner() return parse('ok') end\n local text: string=inner()\nend\nlocal n: number=outer()\n").unwrap();
+}

@@ -264,6 +264,9 @@ end
 type Logger = (prefix: string, ...string) -> nil
 ```
 
+The tail annotation is checked at calls too: `logAll("items", 1)` is an
+error because each extra argument must be a string.
+
 Generics are not currently part of Tua. Use arrays, dictionaries, concrete
 aliases, and `any` at genuinely dynamic boundaries.
 
@@ -293,6 +296,20 @@ optional state explicitly:
 ```tua
 local pending: number | nil = nil
 pending = 10
+```
+
+Lua also fills missing assignment slots with `nil`. Parentheses force a call
+to produce one value; an unparenthesized final call can supply multiple values
+in an assignment or argument list:
+
+```tua
+local function point(): (number, number) return 10, 20 end
+local function draw(x: number, y: number) print(x, y) end
+
+local x, y = point()   -- both number
+local first, absent = (point()) -- absent is nil
+draw(point())          -- equivalent to draw(10, 20)
+-- draw((point()))     -- error: only one argument
 ```
 
 Use an annotation when an empty table, `nil`, or another broad initializer does

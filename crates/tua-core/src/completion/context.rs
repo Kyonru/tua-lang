@@ -390,7 +390,10 @@ fn identifier_context(
         return None;
     }
 
-    if cursor < line.len() && is_identifier_continue(line.as_bytes()[cursor]) {
+    if prefix_start == cursor
+        && cursor < line.len()
+        && is_identifier_continue(line.as_bytes()[cursor])
+    {
         return None;
     }
 

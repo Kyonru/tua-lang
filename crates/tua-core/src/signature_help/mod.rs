@@ -207,7 +207,10 @@ impl<'a> SignatureResolver<'a> {
         let (root, fields) = parts.split_first()?;
         let qualified_name = parts.join(".");
 
-        if let Some(function) = self.environment.function(&qualified_name) {
+        if let Some(function) = self
+            .semantic
+            .function_at_source_position(&qualified_name, context.position)
+        {
             return Some(signatures_from_typed_function(
                 function,
                 Some(&qualified_name),
@@ -220,7 +223,10 @@ impl<'a> SignatureResolver<'a> {
                     .map(|signature| vec![signature]);
             }
 
-            if let Some(function) = self.environment.function(root) {
+            if let Some(function) = self
+                .semantic
+                .function_at_source_position(root, context.position)
+            {
                 return Some(signatures_from_typed_function(function, Some(root)));
             }
         }
@@ -672,13 +678,23 @@ fn signature_from_typed_function(
     let mut parameter_labels = function
         .parameters
         .iter()
-        .map(typed_parameter_label)
+        .enumerate()
+        .map(|(index, parameter)| {
+            typed_parameter_label_with_optional(
+                parameter,
+                index >= function.required_parameter_count,
+            )
+        })
         .collect::<Vec<_>>();
     let mut parameters = function
         .parameters
         .iter()
-        .map(|parameter| ParameterInformation {
-            label: typed_parameter_label(parameter),
+        .enumerate()
+        .map(|(index, parameter)| ParameterInformation {
+            label: typed_parameter_label_with_optional(
+                parameter,
+                index >= function.required_parameter_count,
+            ),
             documentation: parameter.documentation.clone(),
         })
         .collect::<Vec<_>>();
@@ -767,6 +783,14 @@ fn signature_from_typed_overload(
         ),
         overload.documentation.clone(),
     )
+}
+
+fn typed_parameter_label_with_optional(parameter: &TypedParameter, optional: bool) -> String {
+    if optional && !parameter.name.is_empty() {
+        format!("{}?: {}", parameter.name, parameter.ty)
+    } else {
+        typed_parameter_label(parameter)
+    }
 }
 
 fn typed_parameter_label(parameter: &TypedParameter) -> String {

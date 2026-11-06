@@ -106,6 +106,42 @@ impl<'a> HoverResolver<'a> {
         };
         let current_part = chain.parts.get(chain.cursor_index)?;
 
+        if chain.cursor_index == 0 {
+            let member_byte = crate::source_text::byte_for_position(
+                &self.parsed.source,
+                current_part.span.start,
+            )?;
+            let prefix = self.parsed.source[..member_byte].trim_end();
+            let receiver = prefix.len().checked_sub(1).and_then(|separator| {
+                matches!(prefix.as_bytes()[separator], b'.' | b':')
+                    .then(|| crate::source_text::receiver_before(&self.parsed.source, separator))
+                    .flatten()
+            });
+            if let Some(receiver) = receiver {
+                if let Some(receiver) = self
+                    .semantic
+                    .type_of_receiver_expression(receiver, position)
+                {
+                    if let Some(item) = self
+                        .semantic
+                        .lua_type_field_item(&receiver, &current_part.text)
+                    {
+                        return Some(lua_item_hover(item, Some(current_part.span)));
+                    }
+                    if let Some(ty) = crate::semantic::resolve_table_field_type(
+                        self.environment,
+                        &receiver,
+                        &current_part.text,
+                    ) {
+                        return Some(hover(
+                            format_type_with_prefix(format!("{}: ", current_part.text), &ty),
+                            Some(current_part.span),
+                        ));
+                    }
+                }
+            }
+        }
+
         if chain.cursor_index > 0 {
             let field_parts = chain
                 .parts
@@ -325,8 +361,8 @@ impl<'a> HoverResolver<'a> {
             }
         }
 
-        self.environment
-            .function(&current_part.text)
+        self.semantic
+            .function_at_source_position(&current_part.text, position)
             .map(|function| self.function_hover(function, position, current_part.span))
             .or_else(|| {
                 lua::hover_item(std::slice::from_ref(&current_part.text))
@@ -587,8 +623,18 @@ fn format_function_signature(function: &TypedFunction) -> String {
         let parameters = function
             .parameters
             .iter()
+            .enumerate()
             .skip(parameter_start)
-            .map(|parameter| FunctionParameter::named(&parameter.name, parameter.ty.clone()))
+            .map(|(index, parameter)| {
+                FunctionParameter::named(
+                    if index >= function.required_parameter_count {
+                        format!("{}?", parameter.name)
+                    } else {
+                        parameter.name.clone()
+                    },
+                    parameter.ty.clone(),
+                )
+            })
             .collect::<Vec<_>>();
         signatures.push(format_named_function_pretty(
             name,

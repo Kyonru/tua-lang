@@ -3265,3 +3265,94 @@ fn annotation_catalog_completions_explain_every_recognized_tag() {
         assert!(item.insert_text.is_none());
     }
 }
+
+#[test]
+fn audit_native_constructor_completion_is_whitespace_independent() {
+    for binding in [
+        "local counter=Counter.new(1)",
+        "local counter = Counter.new(1)",
+        "local counter =\n Counter.new(1)",
+    ] {
+        let source = format!("class Counter {{\n value: number = 0\n init(value: number) {{ self.value = value }}\n read(): number {{ return self.value }}\n}}\n{binding}\ncounter:\n");
+        let items =
+            complete_tua_source("main.tua", &source, position_after(&source, "counter:")).unwrap();
+        assert!(
+            labels(&items).contains(&"read".to_owned()),
+            "{binding}: {items:?}"
+        );
+    }
+    let source = "class Counter {\n value: number = 0\n read(): number { return self.value }\n}\nCounter.new():\n";
+    let items =
+        complete_tua_source("main.tua", source, position_after(source, "Counter.new():")).unwrap();
+    assert!(labels(&items).contains(&"read".to_owned()), "{items:?}");
+}
+
+#[test]
+fn audit_completion_edits_preserve_existing_suffix_and_call() {
+    let source = "local playerName = 1\nlocal copy = playWrong";
+    let position = position_after(source, "local copy = play");
+    assert_eq!(
+        completion_replacement_span(source, position)
+            .unwrap()
+            .end
+            .column,
+        23
+    );
+    assert!(
+        labels(&complete_tua_source("main.tua", source, position).unwrap())
+            .contains(&"playerName".to_owned())
+    );
+    let source =
+        "local img=love.graphics.newImage(\"image.png\")\nimg.setFilter(\"nearest\", \"nearest\")";
+    let item = complete_tua_source("main.tua", source, position_after(source, "img.setF"))
+        .unwrap()
+        .into_iter()
+        .find(|item| item.label == "setFilter")
+        .unwrap();
+    assert_eq!(item.insert_text.as_deref(), Some("setFilter"));
+    assert!(!item.is_snippet);
+    assert_eq!(item.additional_text_edits[0].new_text, ":");
+    let source = "local img=image 'assets/plWRONG.png'";
+    let position = position_after(source, "assets/pl");
+    assert_eq!(
+        completion_replacement_span(source, position)
+            .unwrap()
+            .end
+            .column,
+        source.len()
+    );
+    assert_eq!(
+        escape_completion_string(source, position, "assets/quote'image.png"),
+        "assets/quote\\'image.png"
+    );
+}
+
+#[test]
+fn audit_dot_completion_excludes_keys_requiring_brackets() {
+    for key in ["foo ", " foo", "foo--comment", "foo\n", "foo\t"] {
+        assert!(
+            !is_lua_member_name(key),
+            "quoted key {key:?} requires brackets"
+        );
+    }
+
+    let source = "local t={[\"foo-bar\"]=1,[\"end\"]=2,[\"repeat\"]=4,type=\"x\",class=\"y\",normal=3}\nlocal x=t.";
+    let items = complete_tua_source("main.tua", source, position_after(source, "t.")).unwrap();
+    let names = labels(&items);
+    assert!(names.contains(&"normal".to_owned()));
+    assert!(!names.contains(&"foo-bar".to_owned()));
+    assert!(!names.contains(&"end".to_owned()));
+    assert!(!names.contains(&"repeat".to_owned()));
+    assert!(names.contains(&"type".to_owned()));
+    assert!(names.contains(&"class".to_owned()));
+}
+
+#[test]
+fn audit_constructor_resolution_respects_local_shadowing() {
+    let source = "class Counter {\n value: number = 0\n read(): number { return self.value }\n}\ndo\n local Counter = { new = function(): { other: number } return { other = 1 } end }\n local instance=Counter.new()\n print(instance.other)\nend\n";
+    let items =
+        complete_tua_source("main.tua", source, position_after(source, "instance.")).unwrap();
+    let names = labels(&items);
+    assert!(names.contains(&"other".to_owned()), "{names:?}");
+    assert!(!names.contains(&"read".to_owned()), "{names:?}");
+}

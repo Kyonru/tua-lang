@@ -287,10 +287,30 @@ impl<'a> SemanticModel<'a> {
         position: SourcePosition,
     ) -> Option<(Type, SourceSpan)> {
         let mut candidates = Vec::new();
-        self.collect_expression_types_in_block(self.parsed.ast.nodes(), position, &mut candidates);
+        let parser_position = self
+            .parsed
+            .raw
+            .parser_position_for_source(position)
+            .unwrap_or(position);
+        self.collect_expression_types_in_block(
+            self.parsed.ast.nodes(),
+            parser_position,
+            &mut candidates,
+        );
 
         candidates
             .into_iter()
+            .filter_map(|(ty, span)| {
+                let start = self.parsed.raw.parser_position_origin(span.start)?;
+                let end = self.parsed.raw.parser_position_origin(span.end)?;
+                (!start.class_generated && !end.class_generated).then_some((
+                    ty,
+                    SourceSpan {
+                        start: start.source_position,
+                        end: end.source_position,
+                    },
+                ))
+            })
             .min_by_key(|(_, span)| span_size(*span))
     }
 
@@ -573,7 +593,7 @@ impl<'a> SemanticModel<'a> {
         };
 
         if fields.is_empty() {
-            if let Some(function) = self.environment.function(root) {
+            if let Some(function) = self.function_at_source_position(root, position) {
                 return function.return_types_or_any();
             }
 
@@ -622,6 +642,12 @@ impl<'a> SemanticModel<'a> {
                 .and_then(|ty| call_metamethod_return_types(self.environment, &ty))
             {
                 return returns;
+            }
+        }
+
+        if fields == ["new"] {
+            if let Some(function) = self.class_constructor_at_source_position(root, position) {
+                return function.return_types_or_any();
             }
         }
 
@@ -702,6 +728,39 @@ impl<'a> SemanticModel<'a> {
         Some(function)
     }
 
+    fn class_constructor_at_source_position(
+        &self,
+        name: &str,
+        position: SourcePosition,
+    ) -> Option<&TypedFunction> {
+        if let Some(binding) = self.local_assignment_value(name, position) {
+            let origin = self.parsed.raw.parser_position_origin(binding.span.start)?;
+            if !origin.class_generated {
+                return None;
+            }
+        }
+        self.environment.class_constructor(name)
+    }
+
+    pub(crate) fn function_at_source_position(
+        &self,
+        name: &str,
+        position: SourcePosition,
+    ) -> Option<&TypedFunction> {
+        let parser_position = self
+            .parsed
+            .raw
+            .parser_position_for_source(position)
+            .or_else(|| {
+                self.parsed.raw.parser_position_for_source(SourcePosition {
+                    line: position.line,
+                    column: 1,
+                })
+            })
+            .unwrap_or(position);
+        self.environment.function_at(name, parser_position)
+    }
+
     pub(crate) fn typed_function_for_call_parts(
         &self,
         parts: &[String],
@@ -723,12 +782,12 @@ impl<'a> SemanticModel<'a> {
             });
         }
 
-        if let Some(function) = self.environment.function(&qualified_name) {
+        if let Some(function) = self.function_at_source_position(&qualified_name, position) {
             return Some(function.clone());
         }
 
         if fields.is_empty() {
-            if let Some(function) = self.environment.function(root) {
+            if let Some(function) = self.function_at_source_position(root, position) {
                 return Some(function.clone());
             }
 
@@ -792,7 +851,7 @@ impl<'a> SemanticModel<'a> {
         }
 
         if fields == ["new"] {
-            if let Some(function) = self.environment.class_constructor(root) {
+            if let Some(function) = self.class_constructor_at_source_position(root, position) {
                 return Some(function.clone());
             }
         }
@@ -1037,6 +1096,12 @@ impl<'a> SemanticModel<'a> {
             .parsed
             .raw
             .parser_position_for_source(position)
+            .or_else(|| {
+                self.parsed.raw.parser_position_for_source(SourcePosition {
+                    line: position.line,
+                    column: 1,
+                })
+            })
             .unwrap_or(position);
         self.environment.local_at_position(name, position)
     }
@@ -1051,6 +1116,12 @@ impl<'a> SemanticModel<'a> {
             .parsed
             .raw
             .parser_position_for_source(position)
+            .or_else(|| {
+                self.parsed.raw.parser_position_for_source(SourcePosition {
+                    line: position.line,
+                    column: 1,
+                })
+            })
             .unwrap_or(position);
         if self
             .environment
@@ -1067,15 +1138,13 @@ impl<'a> SemanticModel<'a> {
             })
             .or_else(|| love_conf::parameter_type_at_position(self.parsed, name, position))
             .or_else(|| {
-                self.environment
-                    .function(name)
+                self.function_at_source_position(name, position)
                     .and_then(TypedFunction::as_type)
             })
             .or_else(|| {
                 required_module_exports_for_receiver(self.parsed, name)
                     .map(module_exports_table_type)
             })
-            .or_else(|| self.class_instance_local_type(name, position))
             .or_else(|| {
                 let local = self.local_assignment_value(name, position)?;
 
@@ -1113,37 +1182,6 @@ impl<'a> SemanticModel<'a> {
                     .any(|method| contains_position(method.span, position))
             })
             .map(|class| Type::alias(class.name.clone()))
-    }
-
-    fn class_instance_local_type(&self, name: &str, position: SourcePosition) -> Option<Type> {
-        let prefix = format!("local {name} = ");
-        let previous_lines = self
-            .parsed
-            .source
-            .lines()
-            .take(position.line.saturating_sub(1))
-            .collect::<Vec<_>>();
-
-        for line in previous_lines.into_iter().rev() {
-            let trimmed = line.trim();
-            let Some(expression) = trimmed.strip_prefix(&prefix) else {
-                continue;
-            };
-            let expression = expression.trim();
-
-            for class in &self.parsed.class_declarations {
-                let constructor = format!("{}.new", class.name);
-                if expression.starts_with(&constructor)
-                    && expression[constructor.len()..]
-                        .trim_start()
-                        .starts_with('(')
-                {
-                    return Some(Type::alias(class.name.clone()));
-                }
-            }
-        }
-
-        None
     }
 
     fn setmetatable_return_type(
@@ -1679,7 +1717,13 @@ impl<'a> SemanticModel<'a> {
             }
         }
 
-        if let Some(ty) = self.type_of_var_at_depth(variable, position, 0) {
+        let source_position = self
+            .parsed
+            .raw
+            .parser_position_origin(position)
+            .map(|origin| origin.source_position)
+            .unwrap_or(position);
+        if let Some(ty) = self.type_of_var_at_depth(variable, source_position, 0) {
             candidates.push((ty, span));
         }
     }
@@ -1734,7 +1778,13 @@ impl<'a> SemanticModel<'a> {
             _ => {}
         }
 
-        if let Some(ty) = self.type_of_expression_return(expression, position, 0) {
+        let source_position = self
+            .parsed
+            .raw
+            .parser_position_origin(position)
+            .map(|origin| origin.source_position)
+            .unwrap_or(position);
+        if let Some(ty) = self.type_of_expression_return(expression, source_position, 0) {
             candidates.push((ty, span));
         }
     }
@@ -1886,6 +1936,12 @@ impl<'a> SemanticModel<'a> {
             self.parsed
                 .raw
                 .parser_position_for_source(position)
+                .or_else(|| {
+                    self.parsed.raw.parser_position_for_source(SourcePosition {
+                        line: position.line,
+                        column: 1,
+                    })
+                })
                 .unwrap_or(position)
         } else {
             position
@@ -1917,6 +1973,12 @@ impl<'a> SemanticModel<'a> {
             .parsed
             .raw
             .parser_position_for_source(position)
+            .or_else(|| {
+                self.parsed.raw.parser_position_for_source(SourcePosition {
+                    line: position.line,
+                    column: 1,
+                })
+            })
             .unwrap_or(position);
         self.parameter_type_at_position(name, parser_position)
     }
@@ -2043,6 +2105,61 @@ impl<'a> SemanticModel<'a> {
             })
             .min_by_key(|(size, _)| *size)
             .map(|(_, ty)| ty)
+            .or_else(|| self.contextual_local_parameter_type(name, binding_body))
+    }
+
+    fn contextual_local_parameter_type(
+        &self,
+        name: &str,
+        binding_body: SourceSpan,
+    ) -> Option<Type> {
+        struct LocalCallbackContext<'a> {
+            environment: &'a TypeEnvironment,
+            name: &'a str,
+            body: SourceSpan,
+            ty: Option<Type>,
+        }
+        impl Visitor for LocalCallbackContext<'_> {
+            fn visit_local_assignment(&mut self, local: &ast::LocalAssignment) {
+                let expressions = local.expressions().iter().collect::<Vec<_>>();
+                for (index, name) in local.names().iter().enumerate() {
+                    let Some((Expression::Function(function), 0)) =
+                        assignment_expression_for_local(&expressions, index)
+                    else {
+                        continue;
+                    };
+                    if node_span(function.body()) != Some(self.body) {
+                        continue;
+                    }
+                    let Some(parameter_index) = function.body().parameters().iter().position(|parameter| {
+                        matches!(parameter, ast::Parameter::Name(name) if token_text(name) == self.name)
+                    }) else { continue; };
+                    let Some(target) = self
+                        .environment
+                        .local_at_declaration(&token_text(name), node_start(name))
+                    else {
+                        continue;
+                    };
+                    let Some(callback) = crate::types::contextual_function_type(
+                        self.environment.resolve_aliases(target),
+                    ) else {
+                        continue;
+                    };
+                    self.ty = callback
+                        .parameters
+                        .get(parameter_index)
+                        .map(|parameter| parameter.ty.clone());
+                }
+            }
+        }
+        let mut context = LocalCallbackContext {
+            environment: self.environment,
+            name,
+            body: binding_body,
+            ty: None,
+        };
+        context.visit_ast(&self.parsed.ast);
+        context.ty
     }
 
     fn loop_variable_type_at_position(
@@ -2057,6 +2174,12 @@ impl<'a> SemanticModel<'a> {
             .parsed
             .raw
             .parser_position_for_source(position)
+            .or_else(|| {
+                self.parsed.raw.parser_position_for_source(SourcePosition {
+                    line: position.line,
+                    column: 1,
+                })
+            })
             .unwrap_or(position);
         let mut candidates = Vec::new();
 

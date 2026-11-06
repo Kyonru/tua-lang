@@ -96,14 +96,82 @@ pub fn completion_replacement_span(
     let context = completion_context(source, position)?;
     let prefix = context.filter_prefix()?;
     let prefix_length = prefix.chars().count();
-
-    (prefix_length > 0).then_some(crate::SourceSpan {
+    let line = line_at(source, position.line)?;
+    let cursor = crate::source_text::byte_for_column(line, position.column);
+    let string_context = matches!(
+        context,
+        CompletionContext::StringArgument { .. }
+            | CompletionContext::RequirePath { .. }
+            | CompletionContext::ImportPath { .. }
+    );
+    let suffix_length = if string_context {
+        let quote = completion_string_quote(source, position)?;
+        let mut escaped = false;
+        line[cursor..]
+            .chars()
+            .take_while(|&ch| {
+                if escaped {
+                    escaped = false;
+                    return true;
+                }
+                if ch == '\\' {
+                    escaped = true;
+                    return true;
+                }
+                ch != quote
+            })
+            .count()
+    } else {
+        line[cursor..]
+            .chars()
+            .take_while(|ch| crate::source_text::is_identifier_continue_char(*ch))
+            .count()
+    };
+    (prefix_length > 0 || suffix_length > 0).then_some(crate::SourceSpan {
         start: SourcePosition {
             line: position.line,
             column: position.column.saturating_sub(prefix_length).max(1),
         },
-        end: position,
+        end: SourcePosition {
+            line: position.line,
+            column: position.column + suffix_length,
+        },
     })
+}
+
+fn completion_string_quote(source: &str, position: SourcePosition) -> Option<char> {
+    let context = completion_context(source, position)?;
+    let prefix = context.filter_prefix()?;
+    let line = line_at(source, position.line)?;
+    let cursor = crate::source_text::byte_for_column(line, position.column);
+    line[..cursor.checked_sub(prefix.len())?]
+        .chars()
+        .next_back()
+        .filter(|ch| matches!(ch, '\'' | '"'))
+}
+
+pub(crate) fn escape_completion_string(
+    source: &str,
+    position: SourcePosition,
+    value: &str,
+) -> String {
+    let Some(quote) = completion_string_quote(source, position) else {
+        return value.to_owned();
+    };
+    let mut result = String::new();
+    for ch in value.chars() {
+        match ch {
+            '\\' => result.push_str("\\\\"),
+            '\n' => result.push_str("\\n"),
+            '\r' => result.push_str("\\r"),
+            ch if ch == quote => {
+                result.push('\\');
+                result.push(ch);
+            }
+            ch => result.push(ch),
+        }
+    }
+    result
 }
 
 impl CompletionKind {
@@ -1861,7 +1929,7 @@ fn complete_fields(
 
     for (name, (detail, kind)) in fields
         .into_iter()
-        .filter(|(name, _)| completion_text_matches(name, prefix))
+        .filter(|(name, _)| is_lua_member_name(name) && completion_text_matches(name, prefix))
     {
         let deprecation_path = receiver_parts
             .iter()
@@ -2440,6 +2508,18 @@ fn complete_lua_fields(
         .collect()
 }
 
+// `type` is contextual Tua syntax, but is a legal Lua member name.
+fn is_lua_member_name(name: &str) -> bool {
+    let full_moon::tokenizer::LexerResult::Ok(tokens) =
+        full_moon::tokenizer::Lexer::new(name, full_moon::LuaVersion::luau()).collect()
+    else {
+        return false;
+    };
+    matches!(tokens.as_slice(), [token, eof]
+        if matches!(token.token_type(), full_moon::tokenizer::TokenType::Identifier { identifier } if identifier.as_str() == name)
+        && matches!(eof.token_type(), full_moon::tokenizer::TokenType::Eof))
+}
+
 fn complete_required_module_fields(
     parsed: &ParsedSource,
     receiver_parts: &[String],
@@ -2458,7 +2538,7 @@ fn complete_required_module_fields(
         return exports
             .fields
             .into_iter()
-            .filter(|(name, _)| completion_text_matches(name, prefix))
+            .filter(|(name, _)| is_lua_member_name(name) && completion_text_matches(name, prefix))
             .map(|(name, field)| Completion {
                 kind: completion_kind_for_type(&field.ty),
                 detail: Some(format!("field: {}", field.ty)),
@@ -2485,7 +2565,7 @@ fn complete_required_module_fields(
 
     fields
         .into_iter()
-        .filter(|(name, _)| completion_text_matches(name, prefix))
+        .filter(|(name, _)| is_lua_member_name(name) && completion_text_matches(name, prefix))
         .map(|(name, ty)| Completion {
             kind: completion_kind_for_type(&ty),
             detail: Some(format!("field: {ty}")),
@@ -2825,6 +2905,16 @@ fn insert_love_object_item(
                     .unwrap_or_else(|| format!("{}($0)", item.label)),
             );
             completion.is_snippet = true;
+            // Preserve arguments already typed after the completed member name.
+            if let Some(line) = line_at(&parsed.source, separator_span.end.line) {
+                let start = crate::source_text::byte_for_column(line, separator_span.end.column);
+                let suffix = line[start..]
+                    .trim_start_matches(crate::source_text::is_identifier_continue_char);
+                if suffix.trim_start().starts_with('(') {
+                    completion.insert_text = Some(item.label.to_owned());
+                    completion.is_snippet = false;
+                }
+            }
 
             if separator == FieldAccessSeparator::Dot {
                 completion.additional_text_edits.push(TextEdit {

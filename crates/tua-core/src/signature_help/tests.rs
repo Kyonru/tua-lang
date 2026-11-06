@@ -1128,3 +1128,33 @@ fn empty_argument_slot_selects_zero_argument_overload() {
         );
     }
 }
+
+#[test]
+fn audit_signature_distinguishes_optional_from_required_nullable_parameters() {
+    for (parameter, expected) in [
+        ("amount: number = 5", "amount?: number"),
+        ("amount?: number", "amount?: number | nil"),
+        ("amount: number | nil", "amount: number | nil"),
+    ] {
+        let source =
+            format!("local function damage({parameter}): number return 1 end\ndamage(1)\n");
+        let signature = signature_at_last(&source, "damage(").unwrap();
+        assert!(
+            signature.signatures[0].label.contains(expected),
+            "{signature:?}"
+        );
+        assert_eq!(signature.signatures[0].parameters[0].label, expected);
+    }
+}
+
+#[test]
+fn audit_native_constructor_signature_for_direct_and_local_receivers() {
+    for expression in ["Counter.new(1):read(", "counter:read("] {
+        let source = format!("class Counter {{\n value: number = 0\n init(value: number) {{ self.value=value }}\n read(): number {{ return self.value }}\n}}\nlocal counter=Counter.new(1)\n{expression})\n");
+        let signature = signature_at_last(&source, expression).unwrap();
+        assert!(
+            signature.signatures[0].label.contains("number"),
+            "{signature:?}"
+        );
+    }
+}

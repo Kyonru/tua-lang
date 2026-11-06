@@ -427,8 +427,17 @@ impl<'a> Checker<'a> {
             ast::Stmt::GenericFor(for_stmt) => self.check_generic_for(for_stmt, current_return),
             ast::Stmt::LocalFunction(function) => {
                 let name = token_text(function.name());
-                let return_types = self.function_return_types(&name);
-                let scoped_locals = self.function_parameter_locals(&name);
+                let position = node_position(function.name());
+                let return_types = self.function_return_types(&name, position);
+                let scoped_locals = self.function_parameter_locals(&name, position);
+                if let Some(ty) = self
+                    .environment
+                    .function_at(&name, position)
+                    .filter(|function| function.overloads.is_empty())
+                    .and_then(TypedFunction::as_type)
+                {
+                    self.insert_scoped_local(name, ty);
+                }
                 self.check_function_body(
                     function.body(),
                     return_types.as_deref(),
@@ -441,7 +450,8 @@ impl<'a> Checker<'a> {
                 self.record_function_declaration_type(function);
 
                 let name = function.name().to_string();
-                let return_types = self.function_return_types(&name);
+                let return_types =
+                    self.function_return_types(&name, node_position(function.name()));
                 let scoped_locals = self.function_declaration_parameter_locals(function);
                 self.check_function_body(
                     function.body(),
@@ -625,6 +635,10 @@ impl<'a> Checker<'a> {
                 {
                     continue;
                 }
+                if return_index == 0 && matches!(expression, Expression::Function(_)) {
+                    self.check_expression_assignable_at(expression, &target, None);
+                    continue;
+                }
                 let source = self
                     .infer_expression_return(expression, return_index)
                     .unwrap_or(Type::Any);
@@ -668,8 +682,11 @@ impl<'a> Checker<'a> {
                 // The environment already typed this local, so the value is
                 // not inferred below. A call still has to have its arguments
                 // checked; do it once per expression, at its first return.
-                if let Some((expression @ Expression::FunctionCall(_), 0)) =
-                    assignment_expression_for_local(&expressions, index)
+                if let Some((
+                    expression
+                    @ (Expression::FunctionCall(_) | Expression::Var(Var::Expression(_))),
+                    0,
+                )) = assignment_expression_for_local(&expressions, index)
                 {
                     self.infer_expression(expression);
                 }
@@ -1524,13 +1541,22 @@ impl<'a> Checker<'a> {
                 return Some(ty);
             }
         }
-        let mut current = match expression.prefix() {
-            Prefix::Name(name) => self.infer_named_value(&token_text(name))?,
-            Prefix::Expression(expression) => self.infer_expression(expression)?,
-            _ => return None,
+        let call_prefix = crate::ast_utils::var_expression_call_prefix(expression);
+        let mut current = if let Some((call, _)) = &call_prefix {
+            self.check_function_call(call)?
+        } else {
+            match expression.prefix() {
+                Prefix::Name(name) => self.infer_named_value(&token_text(name))?,
+                Prefix::Expression(expression) => self.infer_expression(expression)?,
+                _ => return None,
+            }
         };
 
-        for suffix in expression.suffixes() {
+        let suffixes = call_prefix
+            .as_ref()
+            .map(|(_, rest)| rest.clone())
+            .unwrap_or_else(|| expression.suffixes().collect());
+        for suffix in suffixes {
             match suffix {
                 Suffix::Index(Index::Dot { name, .. }) => {
                     let field = token_text(name);
@@ -2543,7 +2569,10 @@ impl<'a> Checker<'a> {
                 return callable_from_type(local, self.environment);
             }
 
-            if let Some(function) = self.environment.function(root) {
+            if let Some(function) = self
+                .environment
+                .function_at(root, node_position(function_call))
+            {
                 return Some(Callable::from_typed_function(function));
             }
 
@@ -2717,6 +2746,7 @@ impl<'a> Checker<'a> {
         function: &FunctionType,
         missing_hint: Option<String>,
     ) {
+        let arguments = self.expand_final_call_argument(arguments);
         if arguments.len() < function.required_parameter_count {
             let mut diagnostic = argument_count_diagnostic(
                 &self.parsed.path,
@@ -2775,11 +2805,27 @@ impl<'a> Checker<'a> {
         function: &TypedFunction,
     ) -> Vec<Type> {
         let arguments = self.call_arguments_for_function(function_call);
-        let argument_types = self.infer_call_argument_types(&arguments);
+        let arguments = self.expand_final_call_argument(arguments);
+        // Delay anonymous body checking until overload selection supplies its
+        // contextual parameter and return contracts.
+        let argument_types = arguments
+            .iter()
+            .map(|argument| match argument {
+                CallArgument::Expression(Expression::Function(function)) => {
+                    Some(crate::types::function_type_from_body_with_metadata(
+                        self.parsed,
+                        function.body(),
+                    ))
+                }
+                CallArgument::Expression(expression) => self.infer_expression(expression),
+                CallArgument::Inferred(ty) => Some(ty.clone()),
+            })
+            .collect::<Vec<_>>();
         let candidates = typed_call_candidates(function);
 
         for candidate in &candidates {
             if typed_call_candidate_matches(self, &argument_types, candidate) {
+                self.check_contextual_callback_arguments(&arguments, candidate);
                 return candidate.return_types.clone();
             }
         }
@@ -2792,12 +2838,33 @@ impl<'a> Checker<'a> {
             .or_else(|| candidates.first());
 
         if let Some(candidate) = best_candidate {
+            self.check_contextual_callback_arguments(&arguments, candidate);
             self.report_typed_call_mismatch(function_call, &arguments, &argument_types, candidate);
 
             return candidate.return_types.clone();
         }
 
         vec![Type::Any]
+    }
+
+    fn check_contextual_callback_arguments(
+        &mut self,
+        arguments: &[CallArgument<'_>],
+        candidate: &TypedCallCandidate,
+    ) {
+        for (index, argument) in arguments.iter().enumerate() {
+            if let CallArgument::Expression(expression @ Expression::Function(_)) = argument {
+                let target = candidate
+                    .parameters
+                    .get(index)
+                    .or(candidate.vararg_type.as_ref());
+                if let Some(target) = target {
+                    self.check_expression_assignable_at(expression, target, None);
+                } else {
+                    self.infer_expression(expression);
+                }
+            }
+        }
     }
 
     fn check_signal_emit_payload_call(&mut self, function_call: &FunctionCall) {
@@ -2897,6 +2964,21 @@ impl<'a> Checker<'a> {
                 CallArgument::Inferred(argument_type) => Some(argument_type.clone()),
             })
             .collect()
+    }
+
+    /// Lua expands only an unparenthesized call in the final argument slot.
+    /// Keep other expressions intact so contextual callback checks still have
+    /// access to their syntax and source positions.
+    fn expand_final_call_argument<'b>(
+        &mut self,
+        mut arguments: Vec<CallArgument<'b>>,
+    ) -> Vec<CallArgument<'b>> {
+        if let Some(CallArgument::Expression(Expression::FunctionCall(call))) = arguments.last() {
+            let returns = self.check_function_call_returns(call);
+            arguments.pop();
+            arguments.extend(returns.into_iter().map(CallArgument::Inferred));
+        }
+        arguments
     }
 
     fn report_typed_call_mismatch(
@@ -3058,6 +3140,7 @@ impl<'a> Checker<'a> {
         arguments: Vec<CallArgument<'_>>,
         function: &ExternalFunctionType,
     ) -> Vec<Type> {
+        let arguments = self.expand_final_call_argument(arguments);
         let argument_types = self.infer_call_argument_types(&arguments);
 
         for variant in &function.variants {
@@ -3198,9 +3281,9 @@ impl<'a> Checker<'a> {
         }
     }
 
-    fn function_return_types(&self, name: &str) -> Option<Vec<Type>> {
+    fn function_return_types(&self, name: &str, position: SourcePosition) -> Option<Vec<Type>> {
         self.environment
-            .function(name.trim())
+            .function_at(name.trim(), position)
             .map(|function| function.return_types_or_any())
     }
 
@@ -3299,9 +3382,13 @@ impl<'a> Checker<'a> {
         }
     }
 
-    fn function_parameter_locals(&self, name: &str) -> BTreeMap<String, Type> {
+    fn function_parameter_locals(
+        &self,
+        name: &str,
+        position: SourcePosition,
+    ) -> BTreeMap<String, Type> {
         self.environment
-            .function(name.trim())
+            .function_at(name.trim(), position)
             .map(|function| {
                 function
                     .parameters
@@ -3317,7 +3404,7 @@ impl<'a> Checker<'a> {
         function: &ast::FunctionDeclaration,
     ) -> BTreeMap<String, Type> {
         let name = function.name().to_string();
-        let mut locals = self.function_parameter_locals(&name);
+        let mut locals = self.function_parameter_locals(&name, node_position(function.name()));
 
         if let Some((parameter, ty)) = love_conf::parameter_type_for_function(function) {
             locals.insert(parameter, ty);

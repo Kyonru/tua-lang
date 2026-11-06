@@ -45,6 +45,7 @@ pub struct TypeEnvironment {
     local_docs: BTreeMap<String, String>,
     local_contracts: LocalContracts,
     functions: Vec<TypedFunction>,
+    function_declarations: BTreeMap<(usize, usize), usize>,
     deprecated_accesses: BTreeMap<Vec<String>, Deprecation>,
     must_use_accesses: BTreeSet<Vec<String>>,
     exact_module_bindings: BTreeMap<String, String>,
@@ -297,6 +298,23 @@ impl TypeEnvironment {
         self.functions
             .iter()
             .find(|function| function.name.as_deref() == Some(name))
+    }
+
+    /// Resolve a function at a parser-coordinate use site, respecting lexical
+    /// declarations instead of selecting the first equal spelling in the file.
+    pub fn function_at(
+        &self,
+        name: &str,
+        position: crate::SourcePosition,
+    ) -> Option<&TypedFunction> {
+        if let Some(binding) = self.local_contracts.binding(name, position) {
+            let key = (binding.name_span.start.line, binding.name_span.start.column);
+            return self
+                .function_declarations
+                .get(&key)
+                .and_then(|index| self.functions.get(*index));
+        }
+        self.function(name)
     }
 
     pub(crate) fn deprecation_for_access(&self, path: &[String]) -> Option<&Deprecation> {
@@ -793,7 +811,8 @@ pub(crate) fn build_type_environment_with_domain_registry(
         locals.insert(local.name.clone(), ty);
     }
 
-    if !local_contracts.types.is_empty()
+    if !parsed.function_annotations.is_empty()
+        || !local_contracts.types.is_empty()
         || parsed
             .lua_doc_annotations
             .iter()
@@ -826,6 +845,7 @@ pub(crate) fn build_type_environment_with_domain_registry(
         .filter(|(name, _)| !local_contracts.names.contains(*name))
         .map(|(name, ty)| (name.clone(), ty.clone()))
         .collect();
+    let function_origins = function_origins(parsed, &functions);
     let inferred_returns = infer_function_return_types(
         parsed,
         &aliases,
@@ -834,7 +854,7 @@ pub(crate) fn build_type_environment_with_domain_registry(
         &local_contracts,
     );
 
-    for function in &mut functions {
+    for (index, function) in functions.iter_mut().enumerate() {
         if !function.return_types.is_empty() || function.return_type.is_some() {
             continue;
         }
@@ -843,7 +863,12 @@ pub(crate) fn build_type_environment_with_domain_registry(
             continue;
         };
 
-        if let Some(returns) = inferred_returns.get(name) {
+        if let Some(returns) = inferred_returns.get(&function_inference_key(
+            name,
+            function_origins
+                .get(index)
+                .and_then(|origin| origin.body_span),
+        )) {
             function.return_types = returns.types.clone();
             function.return_type = function.return_types.first().cloned();
             function.guarded_return_types = returns.guarded.clone();
@@ -894,6 +919,15 @@ pub(crate) fn build_type_environment_with_domain_registry(
             locals,
             local_docs,
             local_contracts,
+            function_declarations: function_origins
+                .iter()
+                .enumerate()
+                .filter_map(|(index, origin)| {
+                    origin
+                        .name_span
+                        .map(|span| ((span.start.line, span.start.column), index))
+                })
+                .collect(),
             functions,
             deprecated_accesses: BTreeMap::new(),
             must_use_accesses: BTreeSet::new(),
@@ -1211,7 +1245,16 @@ fn resolve_function_annotation(
         parameter_count,
         required_parameter_count,
         has_varargs: function.has_varargs,
-        vararg_type: None,
+        vararg_type: function.vararg_type.as_ref().map(|ty| {
+            resolve_tua_type_with_context(
+                path,
+                ty,
+                function.span,
+                alias_names,
+                diagnostics,
+                &context,
+            )
+        }),
         return_type,
         guarded_return_types: None,
         return_types,
@@ -1753,7 +1796,7 @@ fn lua_doc_function_for_code_line(
         required_parameter_count,
         parameters,
         has_varargs: vararg_type.is_some(),
-        vararg_type: None,
+        vararg_type,
         return_type,
         guarded_return_types: None,
         return_types,
@@ -2523,8 +2566,8 @@ struct FunctionReturnQuery<'a> {
     local_contracts: &'a LocalContracts,
     parsed: &'a ParsedSource,
     aliases: &'a BTreeMap<String, Type>,
-    function_types: &'a BTreeMap<String, Type>,
-    parameters: &'a BTreeMap<String, Vec<TypedParameter>>,
+    function_types: &'a FunctionInferenceTypes,
+    parameters: &'a BTreeMap<FunctionInferenceKey, Vec<TypedParameter>>,
     runtime_imports: &'a BTreeMap<String, String>,
     table_remove_overridden: bool,
     assert_overridden: bool,
@@ -2535,7 +2578,7 @@ struct InferenceQueryContext<'a> {
     local_contracts: &'a LocalContracts,
     parsed: &'a ParsedSource,
     aliases: &'a BTreeMap<String, Type>,
-    function_types: &'a BTreeMap<String, Type>,
+    function_types: &'a FunctionInferenceTypes,
     current_function: &'a str,
     domains: BuiltinDomainRegistry,
     runtime_imports: &'a BTreeMap<String, String>,
@@ -2548,7 +2591,7 @@ impl<'a> InferenceQueryContext<'a> {
         parsed: &'a ParsedSource,
         local_contracts: &'a LocalContracts,
         aliases: &'a BTreeMap<String, Type>,
-        function_types: &'a BTreeMap<String, Type>,
+        function_types: &'a FunctionInferenceTypes,
         current_function: &'a str,
         runtime_imports: &'a BTreeMap<String, String>,
         table_remove_overridden: bool,
@@ -2608,16 +2651,16 @@ fn infer_function_return_types(
     locals: &BTreeMap<String, Type>,
     functions: &[TypedFunction],
     local_contracts: &LocalContracts,
-) -> BTreeMap<String, InferredReturns> {
+) -> BTreeMap<FunctionInferenceKey, InferredReturns> {
     let mut returns = BTreeMap::new();
-    let parameters = function_parameters_by_name(functions);
+    let parameters = function_parameters_by_declaration(parsed, functions);
     let runtime_imports = runtime_import_bindings(parsed);
     let table_remove_overridden = lua::table_remove_is_overridden(parsed);
     let assert_overridden = lua::global_name_is_assigned(parsed, "assert");
 
     for _ in 0..8 {
         let previous_returns = returns.clone();
-        let function_types = function_types_by_name(functions, &returns);
+        let function_types = function_types_by_name(parsed, functions, &returns);
 
         let query = FunctionReturnQuery {
             parsed,
@@ -2657,11 +2700,7 @@ pub(crate) fn inferred_function_type_from_body(
         .aliases()
         .map(|(name, ty)| (name.to_owned(), ty.clone()))
         .collect::<BTreeMap<_, _>>();
-    let function_types = environment
-        .functions()
-        .iter()
-        .filter_map(|candidate| Some((candidate.name.clone()?, candidate.as_type()?)))
-        .collect::<BTreeMap<_, _>>();
+    let function_types = function_types_by_name(parsed, environment.functions(), &BTreeMap::new());
     let mut locals = environment
         .locals()
         .filter_map(|(name, _)| {
@@ -2698,15 +2737,90 @@ pub(crate) fn inferred_function_type_from_body(
     Type::Function(function)
 }
 
-fn function_parameters_by_name(
-    functions: &[TypedFunction],
-) -> BTreeMap<String, Vec<TypedParameter>> {
+/// Native annotations carry declaration identity directly. LuaDoc-only functions
+/// are appended during lowering, so recover their origins from the Lua AST
+/// rather than indexing them into the native annotation vector.
+#[derive(Clone, Copy, Default)]
+struct FunctionOrigin {
+    name_span: Option<SourceSpan>,
+    body_span: Option<SourceSpan>,
+}
+
+fn function_origins(parsed: &ParsedSource, functions: &[TypedFunction]) -> Vec<FunctionOrigin> {
+    use full_moon::visitors::Visitor;
+    #[derive(Default)]
+    struct Origins(BTreeMap<String, FunctionOrigin>);
+    impl Visitor for Origins {
+        fn visit_local_function(&mut self, function: &ast::LocalFunction) {
+            self.0
+                .entry(token_text(function.name()))
+                .or_insert(FunctionOrigin {
+                    name_span: node_span(function.name()),
+                    body_span: node_span(function.body()),
+                });
+        }
+        fn visit_function_declaration(&mut self, function: &ast::FunctionDeclaration) {
+            self.0
+                .entry(function.name().to_string())
+                .or_insert(FunctionOrigin {
+                    name_span: node_span(function.name()),
+                    body_span: node_span(function.body()),
+                });
+        }
+    }
+    let mut lua = Origins::default();
+    if functions.len() > parsed.function_annotations.len() {
+        lua.visit_ast(&parsed.ast);
+    }
     functions
         .iter()
-        .filter_map(|function| {
+        .enumerate()
+        .map(|(index, function)| {
+            parsed
+                .function_annotations
+                .get(index)
+                .map(|annotation| FunctionOrigin {
+                    name_span: annotation.name_span,
+                    body_span: annotation.span,
+                })
+                .or_else(|| {
+                    function
+                        .name
+                        .as_ref()
+                        .and_then(|name| lua.0.get(name).copied())
+                })
+                .unwrap_or_default()
+        })
+        .collect()
+}
+
+type FunctionInferenceKey = (String, usize, usize);
+
+fn function_inference_key(name: &str, span: Option<SourceSpan>) -> FunctionInferenceKey {
+    let position = span
+        .map(|span| span.start)
+        .unwrap_or(crate::SourcePosition { line: 0, column: 0 });
+    (name.to_owned(), position.line, position.column)
+}
+
+fn function_parameters_by_declaration(
+    parsed: &ParsedSource,
+    functions: &[TypedFunction],
+) -> BTreeMap<FunctionInferenceKey, Vec<TypedParameter>> {
+    let origins = function_origins(parsed, functions);
+    functions
+        .iter()
+        .enumerate()
+        .filter_map(|(index, function)| {
             let name = function.name.as_ref()?;
 
-            Some((name.clone(), function.parameters.clone()))
+            Some((
+                function_inference_key(
+                    name,
+                    origins.get(index).and_then(|origin| origin.body_span),
+                ),
+                function.parameters.clone(),
+            ))
         })
         .collect()
 }
@@ -2719,20 +2833,54 @@ fn runtime_import_bindings(parsed: &ParsedSource) -> BTreeMap<String, String> {
         .collect()
 }
 
+#[derive(Default)]
+struct FunctionInferenceTypes {
+    by_name: BTreeMap<String, Type>,
+    by_declaration: BTreeMap<(usize, usize), Type>,
+}
+
+impl FunctionInferenceTypes {
+    fn get(&self, name: &str) -> Option<&Type> {
+        self.by_name.get(name)
+    }
+    fn contains_key(&self, name: &str) -> bool {
+        self.by_name.contains_key(name)
+    }
+    fn at(
+        &self,
+        contracts: &LocalContracts,
+        name: &str,
+        position: crate::SourcePosition,
+    ) -> Option<&Type> {
+        if let Some(binding) = contracts.binding(name, position) {
+            return self
+                .by_declaration
+                .get(&(binding.name_span.start.line, binding.name_span.start.column));
+        }
+        self.get(name)
+    }
+}
+
 fn function_types_by_name(
+    parsed: &ParsedSource,
     functions: &[TypedFunction],
-    inferred_returns: &BTreeMap<String, InferredReturns>,
-) -> BTreeMap<String, Type> {
-    functions
+    inferred_returns: &BTreeMap<FunctionInferenceKey, InferredReturns>,
+) -> FunctionInferenceTypes {
+    let origins = function_origins(parsed, functions);
+    let entries = functions
         .iter()
-        .filter_map(|function| {
+        .enumerate()
+        .filter_map(|(index, function)| {
             let name = function.name.as_ref()?;
 
             if !function.has_fully_annotated_parameters() {
                 return None;
             }
 
-            let inferred = inferred_returns.get(name);
+            let inferred = inferred_returns.get(&function_inference_key(
+                name,
+                origins.get(index).and_then(|origin| origin.body_span),
+            ));
             let (return_types, guarded) = if !function.return_types.is_empty() {
                 (
                     function.return_types.clone(),
@@ -2752,6 +2900,7 @@ fn function_types_by_name(
 
             Some((
                 name.clone(),
+                origins.get(index).and_then(|origin| origin.name_span),
                 Type::Function(
                     FunctionType::new_signature(
                         function.parameters.iter().map(|parameter| {
@@ -2765,14 +2914,24 @@ fn function_types_by_name(
                 ),
             ))
         })
-        .collect()
+        .collect::<Vec<_>>();
+    let mut result = FunctionInferenceTypes::default();
+    for (name, span, ty) in entries {
+        result.by_name.insert(name, ty.clone());
+        if let Some(span) = span {
+            result
+                .by_declaration
+                .insert((span.start.line, span.start.column), ty);
+        }
+    }
+    result
 }
 
 fn collect_function_return_types(
     block: &ast::Block,
     query: FunctionReturnQuery<'_>,
     locals: &BTreeMap<String, Type>,
-    returns: &mut BTreeMap<String, InferredReturns>,
+    returns: &mut BTreeMap<FunctionInferenceKey, InferredReturns>,
 ) {
     let mut scoped_locals = locals.clone();
     let root_inference = InferenceQueryContext::new(
@@ -2796,8 +2955,11 @@ fn collect_function_return_types(
             }
             ast::Stmt::LocalFunction(function) => {
                 let name = token_text(function.name());
-                let function_locals =
-                    locals_with_function_parameters(&scoped_locals, query.parameters, &name);
+                let function_locals = locals_with_function_parameters(
+                    &scoped_locals,
+                    query.parameters,
+                    &function_inference_key(&name, node_span(function.body())),
+                );
                 let inference = InferenceQueryContext::new(
                     query.parsed,
                     query.local_contracts,
@@ -2812,7 +2974,10 @@ fn collect_function_return_types(
                 if let Some(return_types) =
                     infer_block_return_types(function.body().block(), inference, &function_locals)
                 {
-                    returns.insert(name, return_types);
+                    returns.insert(
+                        function_inference_key(&name, node_span(function.body())),
+                        return_types,
+                    );
                 }
                 collect_function_return_types(
                     function.body().block(),
@@ -2825,8 +2990,11 @@ fn collect_function_return_types(
                 infer_function_declaration_type(function, query.function_types, &mut scoped_locals);
 
                 let name = function.name().to_string();
-                let function_locals =
-                    locals_with_function_parameters(&scoped_locals, query.parameters, &name);
+                let function_locals = locals_with_function_parameters(
+                    &scoped_locals,
+                    query.parameters,
+                    &function_inference_key(&name, node_span(function.body())),
+                );
                 let inference = InferenceQueryContext::new(
                     query.parsed,
                     query.local_contracts,
@@ -2841,7 +3009,10 @@ fn collect_function_return_types(
                 if let Some(return_types) =
                     infer_block_return_types(function.body().block(), inference, &function_locals)
                 {
-                    returns.insert(name, return_types);
+                    returns.insert(
+                        function_inference_key(&name, node_span(function.body())),
+                        return_types,
+                    );
                 }
                 collect_function_return_types(
                     function.body().block(),
@@ -2890,8 +3061,8 @@ fn collect_function_return_types(
 
 fn locals_with_function_parameters(
     locals: &BTreeMap<String, Type>,
-    parameters: &BTreeMap<String, Vec<TypedParameter>>,
-    function_name: &str,
+    parameters: &BTreeMap<FunctionInferenceKey, Vec<TypedParameter>>,
+    function_name: &FunctionInferenceKey,
 ) -> BTreeMap<String, Type> {
     let mut scoped = locals.clone();
 
@@ -3351,7 +3522,7 @@ fn infer_assignment_types(
 
 fn infer_function_declaration_type(
     function: &ast::FunctionDeclaration,
-    function_types: &BTreeMap<String, Type>,
+    function_types: &FunctionInferenceTypes,
     locals: &mut BTreeMap<String, Type>,
 ) {
     let Some((root, field, is_method)) = function_declaration_table_field(function) else {
@@ -3486,7 +3657,11 @@ fn call_guarded_return_types(
         [name] => query
             .context
             .function_types
-            .get(name)
+            .at(
+                query.context.local_contracts,
+                name,
+                node_span(function_call)?.start,
+            )
             .or_else(|| query.locals.get(name))
             .cloned(),
         _ => infer_field_chain_type(
@@ -3597,12 +3772,18 @@ fn infer_expression_return_types(
 fn infer_var_type(query: ExpressionInferenceQuery<'_, '_>, var: &Var) -> Option<Type> {
     match var {
         Var::Name(name) => {
+            let position = node_span(name)?.start;
             let name = token_text(name);
 
             query
                 .locals
                 .get(&name)
-                .or_else(|| query.context.function_types.get(&name))
+                .or_else(|| {
+                    query
+                        .context
+                        .function_types
+                        .at(query.context.local_contracts, &name, position)
+                })
                 .map(|ty| resolve_aliases_from_map(query.context.aliases, ty, 0))
         }
         Var::Expression(expression) => {
@@ -3650,21 +3831,38 @@ fn infer_var_expression_type(
     query: ExpressionInferenceQuery<'_, '_>,
     expression: &ast::VarExpression,
 ) -> Option<Type> {
-    let mut current = match expression.prefix() {
-        Prefix::Name(name) => {
-            let name = token_text(name);
+    let call_prefix = crate::ast_utils::var_expression_call_prefix(expression);
+    let mut current = if let Some((call, _)) = &call_prefix {
+        infer_function_call_return_types(query, call)
+            .into_iter()
+            .next()?
+    } else {
+        match expression.prefix() {
+            Prefix::Name(name) => {
+                let name = token_text(name);
 
-            query
-                .locals
-                .get(&name)
-                .or_else(|| query.context.function_types.get(&name))
-                .map(|ty| resolve_aliases_from_map(query.context.aliases, ty, 0))?
+                query
+                    .locals
+                    .get(&name)
+                    .or_else(|| {
+                        query.context.function_types.at(
+                            query.context.local_contracts,
+                            &name,
+                            node_span(expression)?.start,
+                        )
+                    })
+                    .map(|ty| resolve_aliases_from_map(query.context.aliases, ty, 0))?
+            }
+            Prefix::Expression(expression) => query.type_of(expression)?,
+            _ => return None,
         }
-        Prefix::Expression(expression) => query.type_of(expression)?,
-        _ => return None,
     };
 
-    for suffix in expression.suffixes() {
+    let suffixes = call_prefix
+        .as_ref()
+        .map(|(_, rest)| rest.clone())
+        .unwrap_or_else(|| expression.suffixes().collect());
+    for suffix in suffixes {
         match suffix {
             Suffix::Index(Index::Dot { name, .. }) => {
                 current = resolve_table_field_type_from_map(
@@ -3834,7 +4032,13 @@ fn infer_first_function_call_return_types(
         let function_type = query
             .context
             .function_types
-            .get(name)
+            .at(
+                query.context.local_contracts,
+                name,
+                node_span(function_call)
+                    .map(|span| span.start)
+                    .unwrap_or(crate::SourcePosition { line: 1, column: 1 }),
+            )
             .or_else(|| query.locals.get(name))
             .map(|ty| resolve_aliases_from_map(query.context.aliases, ty, 0))
             .or_else(|| asset::loader_kind(name).map(|kind| Type::Function(kind.function_type())))
