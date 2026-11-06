@@ -170,7 +170,7 @@ fn long_string_runtime_bytes(literal: &[u8]) -> Vec<u8> {
     output
 }
 
-fn decode_short_string_runtime_bytes(literal: &[u8]) -> Option<Vec<u8>> {
+pub(crate) fn decode_short_string_runtime_bytes(literal: &[u8]) -> Option<Vec<u8>> {
     let mut output = Vec::with_capacity(literal.len());
     let mut index = 0;
 

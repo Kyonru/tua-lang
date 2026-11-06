@@ -180,8 +180,10 @@ Save your files, then open VS Code's **Testing** view. Tua discovers configured
 projects lazily using `tua test --list`; use **Tua: Refresh Unit Tests** to refresh
 manually. Run a project, spec file, or literal named case from the tree or its
 gutter icon. Dynamic registrations remain runnable through their spec file;
-executed cases also appear in the results. Tests with the same full name in one
-file run together because Busted filters by name.
+executed cases also appear in the results. Literal static names use Lua's string
+escape decoding, so the displayed case name and filter match what Busted runs.
+Tests with the same full name in one file run together because Busted filters by
+name.
 
 The **Run with Busted** profile supports **continuous run**: opt in through the
 Testing view to rerun the selected tests after saved source/config/asset changes.

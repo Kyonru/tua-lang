@@ -650,6 +650,32 @@ ui:declare("player.hit", function(message: string) end)
 }
 
 #[test]
+fn escaped_signal_event_names_match_their_lua_runtime_values() {
+    let source = r#"local events = signal()
+events:declare("player.hit", function(player: string) end)
+events:emit("player\046hit", "Ada")
+"#;
+    let mut host = AnalysisHost::new();
+    host.set_file("src/main.tua", source);
+    let snapshot = host.snapshot();
+    let usage = crate::source_text::position_at(source, "player\\046hit");
+    let hover = snapshot
+        .hover("src/main.tua", usage)
+        .expect("escaped event string should match its decoded declaration");
+    assert_eq!(
+        hover.contents,
+        "SignalBus event \"player.hit\"(player: string)"
+    );
+    assert_eq!(
+        snapshot
+            .definition("src/main.tua", usage)
+            .expect("event definition should resolve")
+            .kind,
+        DefinitionKind::SignalEvent
+    );
+}
+
+#[test]
 fn signal_hover_infers_payload_from_emit_when_no_schema_is_declared() {
     let source = r#"local events = signal()
 events:emit("player.hit", vec2(10, 20))

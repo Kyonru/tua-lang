@@ -1,7 +1,7 @@
 use full_moon::ast::luau::TypeInfo;
 use full_moon::ast::{self, Call, Expression, FunctionArgs, FunctionCall, Suffix};
 use full_moon::node::Node;
-use full_moon::tokenizer::{TokenReference, TokenType};
+use full_moon::tokenizer::TokenReference;
 use full_moon::visitors::Visitor;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
@@ -1447,10 +1447,7 @@ fn type_from_type_info(type_info: &TypeInfo) -> Option<Type> {
 }
 
 fn string_literal_value(token: &TokenReference) -> Option<String> {
-    match token.token().token_type() {
-        TokenType::StringLiteral { literal, .. } => Some(literal.to_string()),
-        _ => None,
-    }
+    String::from_utf8(crate::ast_utils::string_literal_runtime_bytes(token)?).ok()
 }
 
 fn line_distance(left: SourcePosition, right: SourcePosition) -> usize {

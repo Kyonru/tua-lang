@@ -1,7 +1,6 @@
 //! Static Busted discovery. Never executes spec files or guesses dynamic names.
 use full_moon::ast::{Call, Expression, FunctionArgs, FunctionCall, Prefix, Suffix};
 use full_moon::node::Node;
-use full_moon::tokenizer::TokenType;
 use full_moon::visitors::Visitor;
 
 use crate::{ParsedSource, SourcePosition};
@@ -59,13 +58,10 @@ pub fn discover_test_cases(parsed: &ParsedSource) -> Vec<TestCase> {
                 let Expression::String(token) = expression else {
                     return None;
                 };
-                let TokenType::StringLiteral { literal, .. } = token.token().token_type() else {
-                    return None;
-                };
-                let name = literal.to_string();
-                // Until escape/newline decoding is shared with runtime semantics,
-                // retain file-level execution rather than invent an exact filter.
-                (!name.is_empty() && !name.contains(['\\', '\r', '\n'])).then_some(name)
+                let name =
+                    String::from_utf8(crate::ast_utils::string_literal_runtime_bytes(token)?)
+                        .ok()?;
+                (!name.is_empty()).then_some(name)
             });
             let Some(origin) = self.parsed.raw.parser_position_origin(start) else {
                 return;
@@ -146,5 +142,17 @@ it('shadow', function() end)
         assert_eq!(cases[0].full_name, "math #unit positive works [1]");
         assert_eq!(cases[0].line, 3);
         assert!(cases[1].pending);
+    }
+
+    #[test]
+    fn decodes_escaped_static_busted_names_like_the_lua_runtime() {
+        let source = r#"describe("math\n", function()
+  it("works\065", function() end)
+end)
+"#;
+        let parsed = crate::parse_tua_source("spec.tua", source).unwrap();
+        let cases = super::discover_test_cases(&parsed);
+        assert_eq!(cases.len(), 1);
+        assert_eq!(cases[0].full_name, "math\n worksA");
     }
 }

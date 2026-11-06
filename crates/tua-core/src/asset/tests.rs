@@ -495,24 +495,25 @@ fn escaped_asset_literals_share_runtime_identity_diagnostics_and_hover() {
         assert!(hover.contents.contains(expected), "{}", hover.contents);
         assert!(hover.contents.contains("status: valid"));
         assert!(hover.contents.contains("dimensions: 32x16"));
-        if !literal.contains('\n') {
-            let edits = snapshot.asset_file_rename_edits(
-                temp.path.join(expected),
-                temp.path.join("assets/hero's.png"),
-            );
-            assert_eq!(edits.len(), 1, "escaped asset must retain rename identity");
-            assert_eq!(edits[0].span, asset.span);
-            let renamed = format!(
-                "{}{}{}",
-                &source[..start],
-                edits[0].new_text,
-                &source[end..]
-            );
-            let renamed =
-                parse_tua_source(&path, renamed).expect("rename preserves quoted Lua syntax");
-            let renamed_metadata = collect_asset_metadata(&renamed, roots);
-            assert_eq!(renamed_metadata[0].relative_path, "assets/hero's.png");
-        }
+        let edits = snapshot.asset_file_rename_edits(
+            temp.path.join(expected),
+            temp.path.join("assets/hero's.png"),
+        );
+        assert_eq!(
+            edits.len(),
+            1,
+            "escaped asset must retain rename identity: {literal}"
+        );
+        assert_eq!(edits[0].span, asset.span);
+        let renamed = format!(
+            "{}{}{}",
+            &source[..start],
+            edits[0].new_text,
+            &source[end..]
+        );
+        let renamed = parse_tua_source(&path, renamed).expect("asset rename output should parse");
+        let renamed_metadata = collect_asset_metadata(&renamed, roots);
+        assert_eq!(renamed_metadata[0].relative_path, "assets/hero's.png");
     }
 }
 

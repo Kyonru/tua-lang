@@ -294,8 +294,12 @@ fn module_specifier_literal_after(
     let module_start = index + 1;
     let quote_end = find_short_string_end(line, index, quote)?;
 
+    let module = String::from_utf8(crate::ast_utils::decode_short_string_runtime_bytes(
+        line[module_start..quote_end].as_bytes(),
+    )?)
+    .ok()?;
     Some(ModuleSpecifierLiteral {
-        module: line[module_start..quote_end].to_owned(),
+        module,
         kind,
         type_only: false,
         span: SourceSpan {
@@ -485,6 +489,19 @@ local Legacy = require('legacy')
     }
 
     #[test]
+    fn decodes_escaped_module_paths_like_lua_require() {
+        let source = r#"local Player = require("pkg\047player")
+"#;
+        let literals = module_specifier_literals(source);
+        assert_eq!(literals.len(), 1);
+        assert_eq!(literals[0].module, "pkg/player");
+        assert_eq!(
+            require_module_at_position(source, position_at(source, "pkg\\047player")),
+            Some("pkg/player".to_owned())
+        );
+    }
+
+    #[test]
     fn require_literals_ignore_comments_and_strings() {
         let source = r#"-- require("commented")
 local text = "require('stringed')"
@@ -541,6 +558,7 @@ local text = "import type Fake from './fake'"
         let temp = TempProject::new("module-links");
         let source = r#"local Player = require("player")
 local Legacy = require("legacy")
+local Nested = require("pkg\047nested")
 local Missing = require("missing")
 "#;
 
@@ -548,12 +566,14 @@ local Missing = require("missing")
         temp.write("src/main.tua", source);
         temp.write("src/player.tua", "return {}\n");
         temp.write("src/legacy.lua", "return {}\n");
+        temp.write("src/pkg/nested.tua", "return {}\n");
 
         let links = module_links_tua_source(temp.path.join("src/main.tua"), source);
 
-        assert_eq!(links.len(), 2);
+        assert_eq!(links.len(), 3);
         assert_eq!(links[0].target, temp.path.join("src/player.tua"));
         assert_eq!(links[1].target, temp.path.join("src/legacy.lua"));
+        assert_eq!(links[2].target, temp.path.join("src/pkg/nested.tua"));
     }
 
     #[test]

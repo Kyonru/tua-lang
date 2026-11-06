@@ -128,14 +128,9 @@ impl AnalysisSnapshot {
 }
 
 fn quoted_asset_path(source: &str, span: SourceSpan, path: &str) -> Option<String> {
-    if span.start.line != span.end.line {
-        return None;
-    }
-
-    let line = line_at(source, span.start.line)?;
-    let start = byte_for_column(line, span.start.column);
-    let end = byte_for_column(line, span.end.column);
-    let original = line.get(start..end)?;
+    let start = crate::source_text::byte_for_position(source, span.start)?;
+    let end = crate::source_text::byte_for_position(source, span.end)?;
+    let original = source.get(start..end)?;
     let quote = if original.starts_with('\'') {
         '\''
     } else {
