@@ -1,5 +1,5 @@
 //! Offline evaluator for local inline completion (Phase 0 of
-//! `internal/better-autocompletion.md`).
+//! the local inline-completion evaluation notes).
 //!
 //! ```sh
 //! cargo run -p tua-core --features test-fixture --example inline_eval -- \

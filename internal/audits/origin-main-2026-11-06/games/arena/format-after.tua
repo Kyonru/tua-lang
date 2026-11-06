@@ -1,7 +1,0 @@
-local function choose(side: number): number
-  local x = 0
-  if side == 1 then x = 1 elseif side == 2 then x = 2
-  elseif side == 3 then x = 3 else x = 4 end
-    return x
-  end
-  print(choose(2))

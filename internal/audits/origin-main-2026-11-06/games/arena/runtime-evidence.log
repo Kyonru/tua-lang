@@ -1,4 +1,0 @@
-Command: TUA_ARENA_BUILD=/Users/kyonru/Documents/projects/Experiments/tlua/target/game-arena/build /Applications/love.app/Contents/MacOS/love target/game-arena/smoke
-Sandbox: exit 134 without output.
-Approved local execution: exit 0.
-PASS: movement, pulse score, collision/loss, restart, survival/win, draw dispatch; Lua 5.1 LuaJIT 2.1.1700008891

@@ -41,6 +41,6 @@ generated project output.
   wrapper, unmodified, from `src/modules/graphics/wrap_GraphicsShader.lua`.
   It is reference material for shader checking, not a runtime file, and is
   never copied into build output. `scripts/love-shader-facts/wrap.lua` loads it
-  to reproduce LÖVE's stage code; see `internal/shader-editor-support.md`.
+  to reproduce LÖVE's stage code.
 
 Vendored files should keep their upstream license headers intact.

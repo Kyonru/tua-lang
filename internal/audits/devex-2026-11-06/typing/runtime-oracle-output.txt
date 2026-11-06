@@ -1,4 +1,0 @@
-Lua 5.4.8  Copyright (C) 1994-2025 Lua.org, PUC-Rio
-expanded final call	a1
-parenthesized second slot	nil
-scalar second slot	nil

@@ -1,7 +1,6 @@
 -- Flush each result so a driver stall still leaves usable probe evidence.
 io.stdout:setvbuf("no")
 -- Records how LOVE compiles and runs shaders, as evidence for
--- internal/shader-editor-support.md.
 --
 -- Usage: love scripts/love-shader-facts [fixtures-dir]
 --

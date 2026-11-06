@@ -18,7 +18,7 @@ separate docs request when the implementation changed.
   and workflow behavior.
 - `docs/archive/` only for dated historical snapshots; do not update archived
   ledgers as if they were current plans.
-- `internal/` for maintained contributor workflows, implementation plans,
+- Local `internal/` notes, when available, for contributor workflows, plans,
   benchmark methodology, and evaluation evidence that should not appear in the
   public site navigation.
 - `docs/` for user-facing documentation.
@@ -53,9 +53,8 @@ separate docs request when the implementation changed.
 - If an example source changes, rebuild or explain why generated output is not
   committed.
 - Keep the docs factual: label future work as future work.
-- Keep public pages task-focused. Move phase histories, tuning thresholds,
-  repository test mechanics, and maintainer-only instructions to `internal/`
-  and link them from `CONTRIBUTING.md` when they remain useful.
+- Keep public pages task-focused. Keep phase histories, tuning thresholds, repository test mechanics, and
+  maintainer-only instructions out of public product documentation.
 - Prefer one owning explanation and concise cross-links over repeating the same
   feature overview across the homepage, language guide, LSP guide, and focused
   feature page.

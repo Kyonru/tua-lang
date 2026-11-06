@@ -6,7 +6,8 @@ description: Prepare a Tua release candidate with current changelog summaries, e
 # Tua Release Preparation
 
 Work from the Tua repository root. Read `docs/releases.md` and
-`internal/release-readiness.md` for the current release process and gates.
+the local release-readiness checklist when it is available; otherwise follow
+`docs/releases.md` and report which release gates were run.
 Preserve unrelated changes; do not infer publishing authorization from a request
 to prepare artifacts.
 

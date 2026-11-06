@@ -4,7 +4,7 @@ use super::*;
 use crate::{AssetLoaderKind, DiagnosticSeverity, SourcePosition, SourceSpan};
 
 // Output recorded from LOVE 11.5 running the validator on the fixtures in
-// src/asset/fixtures/shaders (see internal/shader-editor-support.md).
+// src/asset/fixtures/shaders.
 const LOVE_OUTPUT: &str = r"READY 11.5.0
 RESULT 0 invalid Error validating pixel shader:\n\nERROR: 0:4: '=' :  cannot convert from ' const float' to ' temp 3-component vector of float'\nERROR: 0:4: '' : compilation terminated \nERROR: 2 compilation errors.  No code generated.\n\n\n
 RESULT 1 invalid Error validating pixel shader:\n\nERROR: 0:4: '=' :  cannot convert from ' const int' to ' temp mediump float'\nERROR: 0:4: '' : compilation terminated \nERROR: 2 compilation errors.  No code generated.\n\n\n

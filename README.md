@@ -115,8 +115,8 @@ service opens a network socket or starts automatically.
 ## Development
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for setup and verification, the
-[internal contributor guides](internal/README.md) for specialized test and
-benchmark workflows, and [ROADMAP.md](ROADMAP.md) for current priorities.
+Makefile for specialized test and benchmark workflows, and
+[ROADMAP.md](ROADMAP.md) for current priorities.
 
 ## Examples
 

@@ -334,7 +334,7 @@ vec4 effect(vec4 color, Image tex, vec2 uv, vec2 screen) {
 
 /// The shader fixtures and what the uniform parser finds in each. LOVE's own
 /// results for the same files are recorded in
-/// internal/shader-editor-support.md and reproduced by
+/// The shader editor findings were independently reproduced by
 /// `love scripts/love-shader-facts`.
 #[test]
 fn parses_the_shader_fixture_corpus() {

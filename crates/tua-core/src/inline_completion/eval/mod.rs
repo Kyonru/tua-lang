@@ -1,5 +1,5 @@
 //! Offline evaluation of local inline completion (Phase 0 of
-//! `internal/better-autocompletion.md`).
+//! the local inline-completion evaluation notes).
 //!
 //! The evaluator replays the source of real projects: at sampled positions it
 //! hides what the author wrote after the cursor, asks each candidate source for

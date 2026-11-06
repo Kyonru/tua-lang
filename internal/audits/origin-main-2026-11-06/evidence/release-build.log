@@ -1,4 +1,0 @@
-   Compiling tua-core v0.5.1 (/Users/kyonru/Documents/projects/Experiments/tlua/crates/tua-core)
-   Compiling tua-lsp v0.5.1 (/Users/kyonru/Documents/projects/Experiments/tlua/crates/tua-lsp)
-   Compiling tua-cli v0.5.1 (/Users/kyonru/Documents/projects/Experiments/tlua/crates/tua-cli)
-    Finished `release` profile [optimized] target(s) in 25.38s

@@ -4,6 +4,7 @@
 /examples/*/build/
 /examples/*/dist/
 /experiments/
+/internal/
 /examples/love-full/game/friends.lua
 /examples/love-full/game/main.lua
 /examples/love-full/game/obstacles.lua

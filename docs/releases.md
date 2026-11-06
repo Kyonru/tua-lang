@@ -114,7 +114,7 @@ When a guide and your installed release differ, consult the changelog and the
 
 ## Maintainer Workflow {#release-process}
 
-Release preparation, tagging, and publication are documented in the
-[internal release guide](https://github.com/Kyonru/tua-lang/blob/main/internal/releasing.md).
-See [CHANGELOG.md](https://github.com/Kyonru/tua-lang/blob/main/CHANGELOG.md)
-for release-specific additions and migration notes.
+Release preparation, tagging, and publication are maintainer operations that
+follow the trusted release workflow. See
+[CHANGELOG.md](https://github.com/Kyonru/tua-lang/blob/main/CHANGELOG.md) for
+release-specific additions and migration notes.

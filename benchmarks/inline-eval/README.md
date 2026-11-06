@@ -1,7 +1,6 @@
 # Inline-completion evaluation
 
-Phase 0 of [`better-autocompletion.md`](../../internal/better-autocompletion.md): an
-offline evaluator that measures candidate sources for local inline completion
+Phase 0 is an offline evaluator that measures candidate sources for local inline completion
 before their default or source scope expands. It lives behind the
 `test-fixture` feature in
 `tua_core::inline_completion::eval`, with a command-line front end in
@@ -176,9 +175,7 @@ On the corrected tuning set, this candidate adds no suggestions over Phase 1:
 both save `0.149` characters per eligible position, have `0.728`
 correct-prefix precision, and offer `0.395` wrong characters per character
 saved. Phase 2 therefore remains an architectural experiment without tuning
-evidence of utility; no held-out or external result has been read. It is
-parked: `internal/better-autocompletion.md` records what would unpark it and when it
-should be removed instead.
+evidence of utility; no held-out or external result has been read. It remains parked until its quality gates show useful suggestions.
 
 The last Phase 1 production-path retune lowered the recall prefix from six to
 four characters and removed whitespace contexts. Tua precision rose to

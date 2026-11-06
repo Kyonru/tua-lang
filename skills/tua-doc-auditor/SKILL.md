@@ -21,7 +21,7 @@ feature, or copy an example that no longer represents the product.
   registry, LSP capabilities, extension manifests, examples, `CHANGELOG.md`,
   `ROADMAP.md`, `docs/llms.txt`, generated root `llms.txt`, build targets, CI,
   and `zensical.toml`.
-- Treat `internal/` as the home for contributor-only implementation plans,
+- Treat local-only `internal/` notes as contributor-only implementation plans,
   benchmark methodology, evaluation evidence, and maintainer workflows. Flag
   those topics when they distract from supported user workflows in `docs/`.
 - Build or exercise a documented command or example when its accuracy is in

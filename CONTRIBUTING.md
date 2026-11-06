@@ -35,7 +35,7 @@ npm ci --prefix editors/vscode
 installs Zensical when it is not already available.
 
 Specialized benchmark, extension, generated-catalog, and evaluation workflows
-are indexed in [`internal/README.md`](internal/README.md).
+are exposed through the corresponding Makefile targets.
 
 ## Make A Change
 
@@ -133,7 +133,7 @@ Keep release credentials out of source, logs, fixtures, and pull-request
 artifacts. Release and registry publishing are maintainer operations: tagged
 releases must pass the trusted CI workflow before packaging, and extension
 publishing consumes checksum-verified assets from a completed GitHub release.
-See [internal/releasing.md](internal/releasing.md) for the release procedure.
+Maintainers follow the trusted release workflow before packaging or publishing.
 
 By contributing, you agree that your contribution is licensed under the
 repository's [MIT License](LICENSE).

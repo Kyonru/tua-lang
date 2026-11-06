@@ -1,6 +1,0 @@
-source = "src"
-out = "build"
-target = "love11-luajit"
-emit_maps = true
-[diagnostics]
-rules = false
