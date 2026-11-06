@@ -726,3 +726,47 @@ return {
         std::slice::from_ref(export)
     );
 }
+
+#[test]
+fn project_module_resolution_never_falls_back_to_another_workspace() {
+    let mut host = crate::AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("a/src"), PathBuf::from("b/src")]);
+    host.set_module_path_workspaces([
+        crate::ProjectModuleWorkspace::new("a", [PathBuf::from("a/src")]),
+        crate::ProjectModuleWorkspace::new("b", [PathBuf::from("b/src")]),
+    ]);
+    host.set_file(
+        "a/src/main.tua",
+        "local shared = require('shared')\nlocal other = import('only_b')\nreturn shared\n",
+    );
+    host.set_file(
+        "b/src/main.tua",
+        "local shared = require('shared')\nreturn shared\n",
+    );
+    host.set_file("a/src/shared.tua", "return { amount = 7 }\n");
+    host.set_file("b/src/shared.lua", "return { amount = 'seven' }\n");
+    host.set_file("b/src/only_b.tua", "return {}\n");
+    let snapshot = host.snapshot();
+    for (source, target) in [
+        ("a/src/main.tua", "a/src/shared.tua"),
+        ("b/src/main.tua", "b/src/shared.lua"),
+    ] {
+        assert!(
+            matches!(snapshot.module_graph().resolve_require(source, "shared"),
+            Some(RequireResolution::Resolved { path }) if path == &normalize_path(target))
+        );
+    }
+    assert!(matches!(
+        snapshot
+            .module_graph()
+            .resolve_require("a/src/main.tua", "only_b"),
+        Some(RequireResolution::Missing { .. })
+    ));
+    host.remove_file("a/src/shared.tua");
+    assert!(matches!(
+        host.snapshot()
+            .module_graph()
+            .resolve_require("a/src/main.tua", "shared"),
+        Some(RequireResolution::Missing { .. })
+    ));
+}

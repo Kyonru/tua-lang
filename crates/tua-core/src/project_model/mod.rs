@@ -364,6 +364,7 @@ impl ProjectWorkspace {
 
     pub fn module_path_workspace(&self) -> ProjectModuleWorkspace {
         ProjectModuleWorkspace::new(self.root.clone(), self.require_roots.iter().cloned())
+            .with_type_libraries(self.type_libraries.iter().cloned())
     }
 
     pub fn type_libraries(&self) -> &[ProjectTypeLibrary] {

@@ -1119,10 +1119,23 @@ impl AnalysisSnapshot {
                 .module(path)
                 .map(|module| module.path.as_path());
         }
-        if let Some(path) = self.module_graph.declaration_module(module) {
+        if let Some(path) = self
+            .module_graph
+            .declaration_module_for_path(&parsed.path, module)
+        {
             if let Some(module) = self.type_database.module(path) {
                 return Some(module.path.as_path());
             }
+        }
+
+        // An indexed edge is authoritative, including a missing dependency in
+        // this project. Do not search unrelated workspace roots as a fallback.
+        if self
+            .module_graph
+            .resolve_require(&parsed.path, module)
+            .is_some()
+        {
+            return None;
         }
 
         let type_only = parsed

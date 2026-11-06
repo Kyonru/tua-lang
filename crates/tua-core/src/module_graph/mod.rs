@@ -13,6 +13,68 @@ use crate::{
     AnalysisSourceKind, Diagnostic, DiagnosticCode, DiagnosticSeverity, ParsedSource, SourceSpan,
 };
 
+pub(crate) fn declaration_modules<'a>(
+    files: impl IntoIterator<Item = (&'a Path, &'a ParsedSource)>,
+    libraries: &[crate::ProjectTypeLibrary],
+) -> BTreeMap<String, PathBuf> {
+    if libraries.is_empty() {
+        return BTreeMap::new();
+    }
+    let files = files.into_iter().collect::<Vec<_>>();
+    let mut modules = BTreeMap::new();
+
+    for library in libraries {
+        for (path, parsed) in &files {
+            if !path.starts_with(library.root()) {
+                continue;
+            }
+
+            let Some(meta_name) = declaration_meta_name(parsed) else {
+                continue;
+            };
+            let prefix = library.declaration_prefix();
+            let suffix = if meta_name == prefix {
+                ""
+            } else if let Some(suffix) = meta_name.strip_prefix(prefix) {
+                if !suffix.starts_with('.') {
+                    continue;
+                }
+                suffix
+            } else {
+                continue;
+            };
+            let runtime_name = format!("{}{suffix}", library.runtime_prefix());
+
+            modules
+                .entry(runtime_name)
+                .or_insert_with(|| path.to_path_buf());
+        }
+    }
+
+    modules
+}
+
+fn declaration_meta_name(parsed: &ParsedSource) -> Option<&str> {
+    parsed.lua_doc_annotations.iter().find_map(|annotation| {
+        let crate::LuaDocAnnotationKind::Meta(meta) = &annotation.kind else {
+            return None;
+        };
+        let expression = meta.expression.as_deref()?.trim();
+
+        Some(
+            expression
+                .strip_prefix('"')
+                .and_then(|value| value.strip_suffix('"'))
+                .or_else(|| {
+                    expression
+                        .strip_prefix('\'')
+                        .and_then(|value| value.strip_suffix('\''))
+                })
+                .unwrap_or(expression),
+        )
+    })
+}
+
 mod inspection;
 
 pub use inspection::{
@@ -28,6 +90,7 @@ pub struct ModuleGraph {
     diagnostics: BTreeMap<PathBuf, Vec<Diagnostic>>,
     cycles: Vec<Vec<PathBuf>>,
     declaration_modules: BTreeMap<String, PathBuf>,
+    workspace_declaration_modules: BTreeMap<PathBuf, BTreeMap<String, PathBuf>>,
 }
 
 #[derive(Clone, Debug)]
@@ -132,9 +195,34 @@ impl ModuleGraph {
         inputs: impl IntoIterator<Item = ModuleGraphInput<'a>>,
         options: ModuleGraphOptions,
     ) -> Self {
+        Self::build_with_workspaces(inputs, options, &[])
+    }
+
+    /// Resolve module names within the importing document's owning project.
+    /// Callers without a project model retain the explicit-root behavior of `build`.
+    pub fn build_with_workspaces<'a>(
+        inputs: impl IntoIterator<Item = ModuleGraphInput<'a>>,
+        options: ModuleGraphOptions,
+        workspaces: &[crate::ProjectModuleWorkspace],
+    ) -> Self {
         let inputs = inputs.into_iter().collect::<Vec<_>>();
+        let workspace_declaration_modules = workspaces
+            .iter()
+            .map(|workspace| {
+                (
+                    workspace.root().to_path_buf(),
+                    declaration_modules(
+                        inputs
+                            .iter()
+                            .filter_map(|input| Some((input.path, input.parsed?))),
+                        workspace.type_libraries(),
+                    ),
+                )
+            })
+            .collect::<BTreeMap<_, _>>();
         let mut graph = Self {
             declaration_modules: options.declaration_modules.clone(),
+            workspace_declaration_modules,
             ..Self::default()
         };
         let indexed_paths = inputs
@@ -166,7 +254,36 @@ impl ModuleGraph {
             };
 
             if let Some(parsed) = input.parsed {
-                module.require_edges = require_edges_for_source(&path, parsed, resolution_context);
+                let workspace = workspaces
+                    .iter()
+                    .filter(|workspace| path.starts_with(workspace.root()))
+                    .max_by_key(|workspace| workspace.root().components().count());
+                let source_roots;
+                let output_roots;
+                let context = if let Some(workspace) = workspace {
+                    source_roots = options
+                        .source_roots
+                        .iter()
+                        .filter(|root| workspace.require_roots().contains(root))
+                        .cloned()
+                        .collect::<Vec<_>>();
+                    output_roots = options
+                        .output_roots
+                        .iter()
+                        .filter(|root| workspace.require_roots().contains(root))
+                        .cloned()
+                        .collect::<Vec<_>>();
+                    ModuleResolutionContext {
+                        declaration_modules: &graph.workspace_declaration_modules[workspace.root()],
+                        search_roots: workspace.require_roots(),
+                        source_roots: &source_roots,
+                        output_roots: &output_roots,
+                        ..resolution_context
+                    }
+                } else {
+                    resolution_context
+                };
+                module.require_edges = require_edges_for_source(&path, parsed, context);
             }
 
             if let Some(exports) = input.exports {
@@ -216,6 +333,19 @@ impl ModuleGraph {
 
     pub fn module(&self, path: impl AsRef<Path>) -> Option<&ModuleGraphModule> {
         self.modules.get(&normalize_path(path))
+    }
+
+    pub fn declaration_module_for_path(&self, path: &Path, module: &str) -> Option<&Path> {
+        let path = normalize_path(path);
+        if let Some((_, declarations)) = self
+            .workspace_declaration_modules
+            .iter()
+            .filter(|(root, _)| path.starts_with(root))
+            .max_by_key(|(root, _)| root.components().count())
+        {
+            return declarations.get(module).map(PathBuf::as_path);
+        }
+        self.declaration_module(module)
     }
 
     pub fn declaration_module(&self, module: &str) -> Option<&Path> {

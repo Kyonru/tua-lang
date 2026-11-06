@@ -8061,3 +8061,67 @@ fn unclosed_native_classes_recover_members_without_erasing_outer_scopes() {
     let literal = "local text = [=[final class Draft {]=] -- final class Other {\n";
     assert!(crate::classes::source_with_closed_class_bodies(literal).is_none());
 }
+
+#[test]
+fn workspace_declaration_overlays_keep_project_ownership() {
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("first/src"), PathBuf::from("second/src")]);
+    host.set_module_path_workspaces([
+        ProjectModuleWorkspace::new("first", [PathBuf::from("first/src")])
+            .with_type_libraries([ProjectTypeLibrary::new("first/types", "api", "engine")]),
+        ProjectModuleWorkspace::new("third", [PathBuf::from("third/src")]),
+        ProjectModuleWorkspace::new("second", [PathBuf::from("second/src")]).with_type_libraries([
+            ProjectTypeLibrary::new("shared/second-types", "api", "engine"),
+        ]),
+    ]);
+    host.set_type_libraries([
+        ProjectTypeLibrary::new("first/types", "api", "engine"),
+        ProjectTypeLibrary::new("shared/second-types", "api", "engine"),
+    ]);
+    host.set_file_with_kind(
+        "first/types/api.lua",
+        "---@meta api\nreturn {value = 1}\n",
+        AnalysisSourceKind::Lua,
+    );
+    host.set_file_with_kind(
+        "shared/second-types/api.lua",
+        "---@meta api\nreturn {value = 'second'}\n",
+        AnalysisSourceKind::Lua,
+    );
+    host.set_file(
+        "first/src/main.tua",
+        "local api = require('engine')\nlocal value: number = api.value\n",
+    );
+    host.set_file(
+        "second/src/main.tua",
+        "local api = require('engine')\nlocal value: string = api.value\n",
+    );
+    host.set_file(
+        "third/src/main.tua",
+        "local api = require('engine')\nreturn api\n",
+    );
+    let snapshot = host.snapshot();
+    assert!(matches!(
+        snapshot
+            .module_graph()
+            .resolve_require("third/src/main.tua", "engine"),
+        Some(RequireResolution::Missing { .. })
+    ));
+    for (project, declaration) in [
+        ("first", "first/types/api.lua"),
+        ("second", "shared/second-types/api.lua"),
+    ] {
+        assert_eq!(
+            snapshot
+                .module_graph()
+                .resolve_require(format!("{project}/src/main.tua"), "engine"),
+            Some(&RequireResolution::Resolved {
+                path: PathBuf::from(declaration)
+            })
+        );
+        assert!(snapshot
+            .diagnostics(format!("{project}/src/main.tua"))
+            .iter()
+            .all(|diagnostic| diagnostic.code != Some(DiagnosticCode::TYPE_MISMATCH)));
+    }
+}

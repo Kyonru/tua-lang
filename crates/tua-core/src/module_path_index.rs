@@ -8,6 +8,7 @@ use crate::vfs::{module_name_for_path, normalize_path, ModulePathSeparator};
 pub struct ProjectModuleWorkspace {
     root: PathBuf,
     require_roots: Vec<PathBuf>,
+    type_libraries: Vec<crate::ProjectTypeLibrary>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -36,6 +37,7 @@ impl ProjectModuleWorkspace {
         Self {
             root,
             require_roots: normalized_require_roots,
+            type_libraries: Vec::new(),
         }
     }
 
@@ -45,6 +47,18 @@ impl ProjectModuleWorkspace {
 
     pub fn require_roots(&self) -> &[PathBuf] {
         &self.require_roots
+    }
+
+    pub fn with_type_libraries(
+        mut self,
+        libraries: impl IntoIterator<Item = crate::ProjectTypeLibrary>,
+    ) -> Self {
+        self.type_libraries = libraries.into_iter().collect();
+        self
+    }
+
+    pub fn type_libraries(&self) -> &[crate::ProjectTypeLibrary] {
+        &self.type_libraries
     }
 }
 
