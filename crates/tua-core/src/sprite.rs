@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 
 use full_moon::ast::{self, Call, Expression, Field, FunctionArgs, FunctionCall, Suffix};
 use full_moon::node::Node;
-use full_moon::tokenizer::{TokenReference, TokenType};
+use full_moon::tokenizer::TokenReference;
 
 use crate::asset::{self, AssetIndex, AssetLoaderKind, AssetMetadata, AssetValidationStatus};
 use crate::ast_utils::{
@@ -2849,10 +2849,7 @@ fn lua_string_or_number(value: &str) -> String {
 }
 
 fn string_literal_value(token: &TokenReference) -> Option<String> {
-    match token.token().token_type() {
-        TokenType::StringLiteral { literal, .. } => Some(literal.to_string()),
-        _ => None,
-    }
+    String::from_utf8(crate::ast_utils::string_literal_runtime_bytes(token)?).ok()
 }
 
 fn lua_string_literal(value: &str) -> String {

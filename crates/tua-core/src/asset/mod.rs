@@ -1521,10 +1521,7 @@ fn uniform_name_variable(expression: &Expression) -> Option<String> {
 }
 
 fn string_literal_value(token: &TokenReference) -> Option<String> {
-    match token.token().token_type() {
-        full_moon::tokenizer::TokenType::StringLiteral { literal, .. } => Some(literal.to_string()),
-        _ => None,
-    }
+    String::from_utf8(crate::ast_utils::string_literal_runtime_bytes(token)?).ok()
 }
 
 fn token_text(token: &TokenReference) -> String {

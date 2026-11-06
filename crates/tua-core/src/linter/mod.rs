@@ -7,11 +7,12 @@ use full_moon::ast::{
     Suffix, TableConstructor, Var,
 };
 use full_moon::node::Node;
-use full_moon::tokenizer::{StringLiteralQuoteType, TokenReference, TokenType};
+use full_moon::tokenizer::{TokenReference, TokenType};
 use full_moon::visitors::Visitor;
 
 use crate::ast_utils::{
     field_chain_before_first_call, plain_field_chain_from_expression, plain_field_chain_from_var,
+    string_literal_runtime_bytes,
 };
 use crate::config::{DiagnosticsConfig, JitConfig};
 use crate::control_flow::block_fallthrough_position;
@@ -3043,130 +3044,6 @@ fn unbalanced_assignment_value_count<'a>(
 fn string_literal_value(token: &TokenReference) -> Option<String> {
     match token.token().token_type() {
         TokenType::StringLiteral { literal, .. } => Some(literal.to_string()),
-        _ => None,
-    }
-}
-
-fn string_literal_runtime_bytes(token: &TokenReference) -> Option<Vec<u8>> {
-    let TokenType::StringLiteral {
-        literal,
-        quote_type,
-        ..
-    } = token.token().token_type()
-    else {
-        return None;
-    };
-
-    match quote_type {
-        StringLiteralQuoteType::Brackets => Some(long_string_runtime_bytes(literal.as_bytes())),
-        StringLiteralQuoteType::Double | StringLiteralQuoteType::Single => {
-            decode_short_string_runtime_bytes(literal.as_bytes())
-        }
-        _ => None,
-    }
-}
-
-fn long_string_runtime_bytes(literal: &[u8]) -> Vec<u8> {
-    let literal = if literal.starts_with(b"\r\n") {
-        &literal[2..]
-    } else if literal.starts_with(b"\n") || literal.starts_with(b"\r") {
-        &literal[1..]
-    } else {
-        literal
-    };
-    let mut output = Vec::with_capacity(literal.len());
-    let mut index = 0;
-
-    while index < literal.len() {
-        match literal[index] {
-            b'\r' => {
-                if literal.get(index + 1) == Some(&b'\n') {
-                    index += 1;
-                }
-                output.push(b'\n');
-            }
-            byte => output.push(byte),
-        }
-
-        index += 1;
-    }
-
-    output
-}
-
-fn decode_short_string_runtime_bytes(literal: &[u8]) -> Option<Vec<u8>> {
-    let mut output = Vec::with_capacity(literal.len());
-    let mut index = 0;
-
-    while index < literal.len() {
-        if literal[index] != b'\\' {
-            output.push(literal[index]);
-            index += 1;
-            continue;
-        }
-
-        index += 1;
-        let escaped = *literal.get(index)?;
-
-        if escaped.is_ascii_digit() {
-            let start = index;
-            let end = (index + 3).min(literal.len());
-
-            while index < end && literal[index].is_ascii_digit() {
-                index += 1;
-            }
-
-            let value = std::str::from_utf8(&literal[start..index])
-                .ok()?
-                .parse::<u16>()
-                .ok()?;
-            output.push(u8::try_from(value).ok()?);
-            continue;
-        }
-
-        match escaped {
-            b'a' => output.push(0x07),
-            b'b' => output.push(0x08),
-            b'f' => output.push(0x0c),
-            b'n' => output.push(b'\n'),
-            b'r' => output.push(b'\r'),
-            b't' => output.push(b'\t'),
-            b'v' => output.push(0x0b),
-            b'\\' => output.push(b'\\'),
-            b'"' => output.push(b'"'),
-            b'\'' => output.push(b'\''),
-            b'\n' => output.push(b'\n'),
-            b'\r' => {
-                if literal.get(index + 1) == Some(&b'\n') {
-                    index += 1;
-                }
-                output.push(b'\n');
-            }
-            b'x' => {
-                let high = *literal.get(index + 1)?;
-                let low = *literal.get(index + 2)?;
-                output.push(hex_digit(high)? * 16 + hex_digit(low)?);
-                index += 2;
-            }
-            b'z' => {
-                while literal.get(index + 1).is_some_and(u8::is_ascii_whitespace) {
-                    index += 1;
-                }
-            }
-            _ => return None,
-        }
-
-        index += 1;
-    }
-
-    Some(output)
-}
-
-fn hex_digit(byte: u8) -> Option<u8> {
-    match byte {
-        b'0'..=b'9' => Some(byte - b'0'),
-        b'a'..=b'f' => Some(byte - b'a' + 10),
-        b'A'..=b'F' => Some(byte - b'A' + 10),
         _ => None,
     }
 }

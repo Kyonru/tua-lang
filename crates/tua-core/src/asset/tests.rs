@@ -446,3 +446,107 @@ fn shader_source_cache_reuses_unchanged_models_and_invalidates_changed_source() 
     assert_ne!(first.fingerprint, changed.fingerprint);
     assert!(changed.uniforms.unwrap().names.contains("tint"));
 }
+
+#[test]
+fn escaped_asset_literals_share_runtime_identity_diagnostics_and_hover() {
+    let temp = TempProject::new("escaped-literals");
+    temp.write("assets/player's.png", png_header(32, 16));
+    temp.write("assets/player\"s.png", png_header(32, 16));
+    for (literal, expected) in [
+        (r"'assets/player\'s.png'", "assets/player's.png"),
+        (r"'assets/player\039s.png'", "assets/player's.png"),
+        (r"'assets/player\x27s.png'", "assets/player's.png"),
+        (r#""assets/player\"s.png""#, "assets/player\"s.png"),
+        ("[=[\nassets/player's.png]=]", "assets/player's.png"),
+    ] {
+        let source = format!("local picture = love.graphics.newImage({literal})\nreturn picture\n");
+        let path = temp.write("src/main.tua", &source);
+        let parsed = parse_tua_source(&path, &source).expect("escaped source parses");
+        let roots = std::slice::from_ref(&temp.path);
+        let metadata = collect_asset_metadata(&parsed, roots);
+        assert_eq!(metadata.len(), 1, "{literal}");
+        let asset = &metadata[0];
+        assert_eq!(asset.relative_path, expected, "{literal}");
+        assert_eq!(asset.status, AssetValidationStatus::Valid, "{literal}");
+        assert_eq!(asset.dimensions, Some((32, 16)));
+        let start = crate::source_text::byte_for_position(&source, asset.span.start).unwrap();
+        let end = crate::source_text::byte_for_position(&source, asset.span.end).unwrap();
+        assert_eq!(
+            &source[start..end],
+            literal,
+            "source span must retain escapes"
+        );
+        crate::check_tua_source_with_asset_roots_and_diagnostics_config(
+            &path,
+            &source,
+            roots,
+            &crate::DiagnosticsConfig::default(),
+        )
+        .expect("existing escaped asset must not report TL2004");
+        let mut host = crate::AnalysisHost::new();
+        host.set_source_roots([temp.path.join("src")]);
+        host.set_asset_roots([temp.path.clone()]);
+        host.set_file(&path, source.clone());
+        host.refresh_asset_index_from_disk();
+        let snapshot = host.snapshot();
+        let hover = snapshot
+            .hover(&path, asset.span.start)
+            .expect("asset hover");
+        assert!(hover.contents.contains(expected), "{}", hover.contents);
+        assert!(hover.contents.contains("status: valid"));
+        assert!(hover.contents.contains("dimensions: 32x16"));
+        if !literal.contains('\n') {
+            let edits = snapshot.asset_file_rename_edits(
+                temp.path.join(expected),
+                temp.path.join("assets/hero's.png"),
+            );
+            assert_eq!(edits.len(), 1, "escaped asset must retain rename identity");
+            assert_eq!(edits[0].span, asset.span);
+            let renamed = format!(
+                "{}{}{}",
+                &source[..start],
+                edits[0].new_text,
+                &source[end..]
+            );
+            let renamed =
+                parse_tua_source(&path, renamed).expect("rename preserves quoted Lua syntax");
+            let renamed_metadata = collect_asset_metadata(&renamed, roots);
+            assert_eq!(renamed_metadata[0].relative_path, "assets/hero's.png");
+        }
+    }
+}
+
+#[test]
+fn escaped_sprite_image_paths_use_the_same_runtime_asset_identity() {
+    let temp = TempProject::new("escaped-sprite-image");
+    temp.write("assets/player's.png", png_header(32, 16));
+    let source = r#"local Player = spriteSheet({
+  image = 'assets/player\'s.png',
+  frame = { width = 16, height = 16 },
+  animations = { idle = { from = 0, to = 1, fps = 8 } },
+})
+return Player
+"#;
+    let path = temp.write("src/sprites.tua", source);
+    let mut host = crate::AnalysisHost::new();
+    host.set_source_roots([temp.path.join("src")]);
+    host.set_asset_roots([temp.path.clone()]);
+    host.set_file(&path, source);
+    host.refresh_asset_index_from_disk();
+    let snapshot = host.snapshot();
+    let diagnostics = snapshot.pipeline_diagnostics(&path);
+    assert!(
+        !diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.severity == crate::DiagnosticSeverity::Error),
+        "{diagnostics:#?}"
+    );
+    let inspections = snapshot.inspect(&path, None);
+    let crate::InspectorItem::SpriteSheet(sprite) = &inspections[0] else {
+        panic!("sprite inspection");
+    };
+    let image = sprite.image.as_ref().expect("sprite image metadata");
+    assert_eq!(image.path, "assets/player's.png");
+    assert_eq!(image.status, AssetValidationStatus::Valid);
+    assert_eq!(image.dimensions, Some((32, 16)));
+}
