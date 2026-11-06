@@ -1,0 +1,29 @@
+applying colon Suppress TL4018 for this file "-- tua-ignore-file TL4018\nlocal img=love.graphics.newImage(\"assets/player.png\")\nimg.setFilter(\"nearest\")\n"
+applying colon Suppress TL4018 for this line "local img=love.graphics.newImage(\"assets/player.png\")\nimg.setFilter(\"nearest\") -- tua-ignore-line TL4018\n"
+applying colon Use colon method call "local img=love.graphics.newImage(\"assets/player.png\")\nimg:setFilter(\"nearest\")\n"
+colon Suppress TL4018 for this file; Suppress TL4018 for this line; Use colon method call
+applying callback-typo Rename to `love.update` "function love.update(dt: number)\nend\n"
+applying callback-typo Suppress TL5006 for this file "-- tua-ignore-file TL5006\nfunction love.udpate(dt: number)\nend\n"
+applying callback-typo Suppress TL5006 for this line "function love.udpate(dt: number) -- tua-ignore-line TL5006\nend\n"
+callback-typo Rename to `love.update`; Suppress TL5006 for this file; Suppress TL5006 for this line
+applying unused Remove unused local "print(\"hello\")\n"
+applying unused Suppress TL4005 for this file "-- tua-ignore-file TL4005\nlocal unused = 1\nprint(\"hello\")\n"
+applying unused Suppress TL4005 for this line "local unused = 1 -- tua-ignore-line TL4005\nprint(\"hello\")\n"
+unused Remove unused local; Suppress TL4005 for this file; Suppress TL4005 for this line
+applying type-mismatch Suppress TL1003 for this file "-- tua-ignore-file TL1003\nlocal value: number = \"wrong\"\nprint(value)\n"
+applying type-mismatch Suppress TL1003 for this line "local value: number = \"wrong\" -- tua-ignore-line TL1003\nprint(value)\n"
+type-mismatch Suppress TL1003 for this file; Suppress TL1003 for this line
+applying unknown-type Import type `ExportedPlayer` from `exports` "import type { ExportedPlayer } from \"./exports\"\nlocal value: ExportedPlayer = {health=1}\nprint(value)\n"
+applying unknown-type Suppress TL1001 for this file "-- tua-ignore-file TL1001\nlocal value: ExportedPlayer = {health=1}\nprint(value)\n"
+applying unknown-type Suppress TL1001 for this line "local value: ExportedPlayer = {health=1} -- tua-ignore-line TL1001\nprint(value)\n"
+unknown-type Import type `ExportedPlayer` from `exports`; Suppress TL1001 for this file; Suppress TL1001 for this line
+applying missing-module Suppress TL4002 for this file "-- tua-ignore-file TL4002\nlocal m=require(\"absent\")\nprint(m)\n"
+applying missing-module Suppress TL4002 for this line "local m=require(\"absent\") -- tua-ignore-line TL4002\nprint(m)\n"
+missing-module Create module `absent`; Suppress TL4002 for this file; Suppress TL4002 for this line
+applying duplicate-key Rename duplicate key to `x2` "local m={x=1,x2=2}\nprint(m)\n"
+applying duplicate-key Suppress TL4001 for this file "-- tua-ignore-file TL4001\nlocal m={x=1,x=2}\nprint(m)\n"
+applying duplicate-key Suppress TL4001 for this line "local m={x=1,x=2} -- tua-ignore-line TL4001\nprint(m)\n"
+duplicate-key Rename duplicate key to `x2`; Suppress TL4001 for this file; Suppress TL4001 for this line
+applying annotation Add type annotation `: number` "local value: number=1\nprint(value)\n"
+applying annotation Inline local `value` "print(1)\n"
+annotation Add type annotation `: number`; Inline local `value`

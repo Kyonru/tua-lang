@@ -1,0 +1,211 @@
+{
+  "revision": "d7aed2e5f1297b80a948e055985375bceaff6f0c",
+  "findings": [
+    {
+      "id": "WF-01",
+      "title": "Non-BMP text corrupts LSP positions and rename edits",
+      "category": "workflow",
+      "severity": "High",
+      "confidence": "high (observed behavior); root cause inferred from source",
+      "verification_status": "confirmed",
+      "report": "workflow/REPORT.md",
+      "impact": "VS Code applies a rename that damages surrounding source; ASCII/BMP controls work.",
+      "crosscheck": "Independent protocol and actual VS Code"
+    },
+    {
+      "id": "CMP-02",
+      "title": "Typed function header comments panic analysis",
+      "category": "completion",
+      "severity": "High",
+      "confidence": "high (observed behavior); root cause inferred from source",
+      "verification_status": "confirmed",
+      "report": "completion/REPORT.md",
+      "impact": "Ordinary trailing comments panic CLI/check and an LSP diagnostic worker; a suppression action can create this source. Server recovery was observed.",
+      "crosscheck": "Independent CLI and LSP comment controls"
+    },
+    {
+      "id": "WF-02",
+      "title": "Same-name modules leak across workspace projects",
+      "category": "workflow",
+      "severity": "High",
+      "confidence": "high (observed behavior); root cause inferred from source",
+      "verification_status": "confirmed",
+      "report": "workflow/REPORT.md",
+      "impact": "Two individually valid projects resolve a foreign module, producing wrong types, definitions and false diagnostics.",
+      "crosscheck": "Independent differently named projects plus standalone controls"
+    },
+    {
+      "id": "HOV-02",
+      "title": "Shadowed local functions resolve the outer contract",
+      "category": "hover",
+      "severity": "High",
+      "confidence": "high (observed behavior); root cause inferred from source",
+      "verification_status": "confirmed",
+      "report": "hover/REPORT.md",
+      "impact": "Checker, hover and signature help can agree on the wrong declaration and reject valid inner calls.",
+      "crosscheck": "Independent same-name function fixtures"
+    },
+    {
+      "id": "TYP-01",
+      "title": "Contextual callback return contracts are skipped",
+      "category": "typing/inference",
+      "severity": "High",
+      "confidence": "high (observed behavior); root cause inferred from source",
+      "verification_status": "confirmed",
+      "report": "typing/REPORT.md",
+      "impact": "Invalid callback returns are accepted on common direct-call and typed-initializer paths while consumers are shown the declared result type.",
+      "crosscheck": "Independent fixture and emitted-Lua runtime oracle"
+    },
+    {
+      "id": "TYP-02",
+      "title": "Call-result property chains bypass type contracts",
+      "category": "typing/inference",
+      "severity": "High",
+      "confidence": "high (observed behavior); root cause inferred from source",
+      "verification_status": "confirmed",
+      "report": "typing/REPORT.md",
+      "impact": "A number property after a call accepts a string assignment even when hover knows the number type.",
+      "crosscheck": "Independent fixture and emitted-Lua runtime oracle"
+    },
+    {
+      "id": "CMP-07",
+      "title": "Native instance inference depends on assignment whitespace",
+      "category": "completion",
+      "severity": "High",
+      "confidence": "high (observed behavior); root cause inferred from source",
+      "verification_status": "confirmed",
+      "report": "completion/REPORT.md",
+      "impact": "Removing spaces around = loses the class receiver in hover, completion and signature help. Checker rejection still works.",
+      "crosscheck": "Independent Tank constructor whitespace controls"
+    },
+    {
+      "id": "CMP-01",
+      "title": "Invoked identifier completion bypasses autoimports",
+      "category": "completion",
+      "severity": "High",
+      "confidence": "high (observed behavior); root cause inferred from source",
+      "verification_status": "confirmed",
+      "report": "completion/REPORT.md",
+      "impact": "Explicitly invoked completion omits a project symbol available through other request contexts.",
+      "crosscheck": "Independent protocol and actual VS Code suggestion UI"
+    },
+    {
+      "id": "CMP-03",
+      "title": "Completion replacement ignores right-hand syntax",
+      "category": "completion",
+      "severity": "Medium",
+      "confidence": "high (observed behavior); root cause inferred from source",
+      "verification_status": "confirmed",
+      "report": "completion/REPORT.md",
+      "impact": "Accepting a candidate can retain a token suffix or duplicate an existing call.",
+      "crosscheck": "Returned edits applied and checked; independent suffix fixture"
+    },
+    {
+      "id": "CMP-04",
+      "title": "Asset paths are inserted without quote escaping",
+      "category": "completion",
+      "severity": "Medium",
+      "confidence": "high (observed behavior); root cause inferred from source",
+      "verification_status": "confirmed",
+      "report": "completion/REPORT.md",
+      "impact": "A filename containing the active string delimiter creates invalid source.",
+      "crosscheck": "Applied edits and independent opposite-quote fixture"
+    },
+    {
+      "id": "CMP-05",
+      "title": "Quoted record keys become invalid dot accesses",
+      "category": "completion",
+      "severity": "Medium",
+      "confidence": "high (observed behavior); root cause inferred from source",
+      "verification_status": "confirmed",
+      "report": "completion/REPORT.md",
+      "impact": "Reserved or non-identifier keys are inserted as bare members.",
+      "crosscheck": "Applied edits and independent reserved-key fixture"
+    },
+    {
+      "id": "CMP-06",
+      "title": "Snippet capability negotiation is ignored",
+      "category": "completion",
+      "severity": "Medium",
+      "confidence": "high (observed behavior); root cause inferred from source",
+      "verification_status": "confirmed",
+      "report": "completion/REPORT.md",
+      "impact": "Clients explicitly declining snippets still receive snippet format and placeholders; this is not a VS Code-specific defect.",
+      "crosscheck": "Actual protocol requests with snippetSupport false"
+    },
+    {
+      "id": "TYP-03",
+      "title": "Native vararg annotations lose their element type",
+      "category": "typing/inference",
+      "severity": "Medium",
+      "confidence": "high (observed behavior); root cause inferred from source",
+      "verification_status": "confirmed",
+      "report": "typing/REPORT.md",
+      "impact": "Wrong trailing arguments are accepted and useful type information disappears from editor surfaces.",
+      "crosscheck": "Native and LuaDoc controls across checker and editor"
+    },
+    {
+      "id": "TYP-04",
+      "title": "Final multi-return arguments are counted syntactically",
+      "category": "typing/inference",
+      "severity": "Medium",
+      "confidence": "high (observed behavior); root cause inferred from source",
+      "verification_status": "confirmed",
+      "report": "typing/REPORT.md",
+      "impact": "Valid Lua-style consume(pair()) calls are rejected for missing arguments.",
+      "crosscheck": "CLI/LSP plus Lua runtime oracle"
+    },
+    {
+      "id": "TYP-05",
+      "title": "Definitely absent assignment slots infer any",
+      "category": "typing/inference",
+      "severity": "Medium",
+      "confidence": "high (observed behavior); root cause inferred from source",
+      "verification_status": "confirmed",
+      "report": "typing/REPORT.md",
+      "impact": "Known nil assignment slots silently lose their useful type and permit incompatible contracts.",
+      "crosscheck": "CLI/LSP plus Lua runtime oracle"
+    },
+    {
+      "id": "HOV-01",
+      "title": "Method-token hover loses call-chain identity",
+      "category": "hover",
+      "severity": "Medium",
+      "confidence": "high (observed behavior); root cause inferred from source",
+      "verification_status": "confirmed",
+      "report": "hover/REPORT.md",
+      "impact": "LOVE method hover is absent or shows the entire expression result despite usable completion/signature/definition data.",
+      "crosscheck": "Independent Font and Canvas chain fixtures"
+    },
+    {
+      "id": "HOV-03",
+      "title": "Class normalization breaks expression hover coordinates",
+      "category": "hover",
+      "severity": "Medium",
+      "confidence": "high (observed behavior); root cause inferred from source",
+      "verification_status": "confirmed",
+      "report": "hover/REPORT.md",
+      "impact": "Expression hover can disappear, report an unrelated type, or return a range beyond the document.",
+      "crosscheck": "Independent native-class prefix and arithmetic controls"
+    },
+    {
+      "id": "HOV-04",
+      "title": "Optional parameters are displayed as required",
+      "category": "hover",
+      "severity": "Medium",
+      "confidence": "high (observed behavior); root cause inferred from source",
+      "verification_status": "confirmed",
+      "report": "hover/REPORT.md",
+      "impact": "Optional/default parameters look required; optional forms merely display nilability despite different accepted call arity.",
+      "crosscheck": "Independent optional versus required-nilable controls"
+    }
+  ],
+  "unresolved_attribution": [
+    {
+      "id": "U-01",
+      "title": "Direct native constructor-chain completion and signature loss",
+      "verification_status": "observed; attribution unresolved; possible overlap with CMP-07",
+      "report": "completion/CLASS-FOLLOWUP.md"
+    }
+  ]
+}

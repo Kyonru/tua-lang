@@ -6,6 +6,34 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+### Fixed
+
+- Editor positions and edits use UTF-16 consistently across normal language
+  features, graph/inspector navigation and model-completion round trips, including
+  non-BMP text, cross-file rename, semantic tokens and formatting.
+- Multi-root module resolution and declaration-library overlays retain project
+  ownership, including missing dependencies and explicitly shared libraries.
+- Named functions and inferred wrapper returns follow lexical declaration
+  identity instead of conflating same-name functions in different scopes.
+- Contextual callback return contracts, native typed varargs, call-result field
+  assignments and Lua final-call argument expansion are checked consistently;
+  definitely absent assignment slots retain their `nil` type.
+- Native constructor inference works across compact, spaced, multiline and
+  direct-chain expressions while respecting shadowed constructors. Expression
+  hover maps native class coordinates back to original source.
+- Invoked completion retains project autoimports; completion respects snippet
+  capabilities, replaces right-hand suffixes, escapes asset filenames and avoids
+  invalid dot-key insertions or duplicate LOVE method argument lists.
+- Chained method hover retains signatures/documentation across legal whitespace;
+  optional/default parameters are visibly distinct from required nullable ones.
+- Typed function header comments survive Lua emission without panics, and
+  hot-reloaded class constructors preserve identity through private helper closures.
+- Formatting inline `else`/`elseif` branches that close their conditional preserves
+  the indentation of subsequent statements, including nested inline blocks.
+- Test Explorer cancellation escalates for unresponsive children. CLI and editor
+  test logs are bounded without replacing backend status or structured results;
+  discovery still rejects oversized JSON output.
+
 ### Changed
 
 - Test Explorer offers a LuaCov coverage profile with mapped source-line

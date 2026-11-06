@@ -1,0 +1,58 @@
+[
+  {
+    "id": "CMP-01",
+    "title": "Invoked identifier completion bypasses project autoimports",
+    "severity": "High",
+    "status": "confirmed",
+    "crosschecked": "lead protocol and actual VSCode",
+    "category": "correctness"
+  },
+  {
+    "id": "CMP-02",
+    "title": "Typed signature trailing comments panic; suppression can insert one",
+    "severity": "High",
+    "status": "confirmed",
+    "crosschecked": "hover lane CLI and LSP control",
+    "category": "correctness/crash"
+  },
+  {
+    "id": "CMP-03",
+    "title": "Completion edit planning ignores right-hand tokens and existing calls",
+    "severity": "Medium",
+    "status": "confirmed",
+    "crosschecked": "applied edits and CLI",
+    "category": "correctness/edit construction"
+  },
+  {
+    "id": "CMP-04",
+    "title": "Asset completion fails to escape active string delimiter",
+    "severity": "Medium",
+    "status": "confirmed",
+    "crosschecked": "applied edit and CLI parse rejection",
+    "category": "correctness/escaping"
+  },
+  {
+    "id": "CMP-05",
+    "title": "Quoted record keys inserted as invalid dot access",
+    "severity": "Medium",
+    "status": "confirmed",
+    "crosschecked": "applied edit and CLI parse rejection",
+    "category": "correctness/member insertion"
+  },
+  {
+    "id": "CMP-06",
+    "title": "Snippet capability false is ignored",
+    "severity": "Medium",
+    "status": "confirmed",
+    "crosschecked": "negotiation and raw response only; no external editor",
+    "category": "protocol compatibility"
+  },
+  {
+    "id": "CMP-07",
+    "title": "Native class instance inference depends on spaces around assignment",
+    "severity": "High",
+    "status": "confirmed",
+    "crosschecked": "typing agent distinct Tank/fuel/getFuel fixture; checker negative control retained",
+    "category": "semantic correctness/class receiver"
+  }
+]

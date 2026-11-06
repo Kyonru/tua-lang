@@ -1,0 +1,917 @@
+[
+  {
+    "id": "colon",
+    "source": "local img=love.graphics.newImage(\"assets/player.png\")\nimg.setFilter(\"nearest\")\n",
+    "diagnostics": {
+      "items": [
+        {
+          "code": "TL4018",
+          "message": "LOVE method `setFilter` should be called with `:` so self is passed: use `img:setFilter(...)`",
+          "range": {
+            "end": {
+              "character": 13,
+              "line": 1
+            },
+            "start": {
+              "character": 4,
+              "line": 1
+            }
+          },
+          "severity": 2,
+          "source": "tua"
+        }
+      ],
+      "kind": "full"
+    },
+    "actions": [
+      {
+        "edit": {
+          "changes": {
+            "file:///Users/kyonru/Documents/projects/Experiments/tlua/target/devex-audit-2026-11-06/completion/project/src/action-colon.tua": [
+              {
+                "newText": "-- tua-ignore-file TL4018\n",
+                "range": {
+                  "end": {
+                    "character": 0,
+                    "line": 0
+                  },
+                  "start": {
+                    "character": 0,
+                    "line": 0
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "kind": "quickfix",
+        "title": "Suppress TL4018 for this file"
+      },
+      {
+        "edit": {
+          "changes": {
+            "file:///Users/kyonru/Documents/projects/Experiments/tlua/target/devex-audit-2026-11-06/completion/project/src/action-colon.tua": [
+              {
+                "newText": " -- tua-ignore-line TL4018",
+                "range": {
+                  "end": {
+                    "character": 24,
+                    "line": 1
+                  },
+                  "start": {
+                    "character": 24,
+                    "line": 1
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "kind": "quickfix",
+        "title": "Suppress TL4018 for this line"
+      },
+      {
+        "edit": {
+          "changes": {
+            "file:///Users/kyonru/Documents/projects/Experiments/tlua/target/devex-audit-2026-11-06/completion/project/src/action-colon.tua": [
+              {
+                "newText": ":",
+                "range": {
+                  "end": {
+                    "character": 4,
+                    "line": 1
+                  },
+                  "start": {
+                    "character": 3,
+                    "line": 1
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "kind": "quickfix",
+        "title": "Use colon method call"
+      }
+    ],
+    "outcomes": [
+      {
+        "title": "Suppress TL4018 for this file",
+        "applied": "-- tua-ignore-file TL4018\nlocal img=love.graphics.newImage(\"assets/player.png\")\nimg.setFilter(\"nearest\")\n",
+        "diagnostics": {
+          "items": [],
+          "kind": "full"
+        }
+      },
+      {
+        "title": "Suppress TL4018 for this line",
+        "applied": "local img=love.graphics.newImage(\"assets/player.png\")\nimg.setFilter(\"nearest\") -- tua-ignore-line TL4018\n",
+        "diagnostics": {
+          "items": [],
+          "kind": "full"
+        }
+      },
+      {
+        "title": "Use colon method call",
+        "applied": "local img=love.graphics.newImage(\"assets/player.png\")\nimg:setFilter(\"nearest\")\n",
+        "diagnostics": {
+          "items": [],
+          "kind": "full"
+        }
+      }
+    ]
+  },
+  {
+    "id": "callback-typo",
+    "source": "function love.udpate(dt: number)\nend\n",
+    "diagnostics": {
+      "items": [
+        {
+          "code": "TL5006",
+          "message": "unknown LOVE callback `love.udpate`; did you mean `love.update`?",
+          "range": {
+            "end": {
+              "character": 20,
+              "line": 0
+            },
+            "start": {
+              "character": 14,
+              "line": 0
+            }
+          },
+          "severity": 2,
+          "source": "tua"
+        }
+      ],
+      "kind": "full"
+    },
+    "actions": [
+      {
+        "edit": {
+          "changes": {
+            "file:///Users/kyonru/Documents/projects/Experiments/tlua/target/devex-audit-2026-11-06/completion/project/src/action-callback-typo.tua": [
+              {
+                "newText": "update",
+                "range": {
+                  "end": {
+                    "character": 20,
+                    "line": 0
+                  },
+                  "start": {
+                    "character": 14,
+                    "line": 0
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "kind": "quickfix",
+        "title": "Rename to `love.update`"
+      },
+      {
+        "edit": {
+          "changes": {
+            "file:///Users/kyonru/Documents/projects/Experiments/tlua/target/devex-audit-2026-11-06/completion/project/src/action-callback-typo.tua": [
+              {
+                "newText": "-- tua-ignore-file TL5006\n",
+                "range": {
+                  "end": {
+                    "character": 0,
+                    "line": 0
+                  },
+                  "start": {
+                    "character": 0,
+                    "line": 0
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "kind": "quickfix",
+        "title": "Suppress TL5006 for this file"
+      },
+      {
+        "edit": {
+          "changes": {
+            "file:///Users/kyonru/Documents/projects/Experiments/tlua/target/devex-audit-2026-11-06/completion/project/src/action-callback-typo.tua": [
+              {
+                "newText": " -- tua-ignore-line TL5006",
+                "range": {
+                  "end": {
+                    "character": 32,
+                    "line": 0
+                  },
+                  "start": {
+                    "character": 32,
+                    "line": 0
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "kind": "quickfix",
+        "title": "Suppress TL5006 for this line"
+      }
+    ],
+    "outcomes": [
+      {
+        "title": "Rename to `love.update`",
+        "applied": "function love.update(dt: number)\nend\n",
+        "diagnostics": {
+          "items": [],
+          "kind": "full"
+        }
+      },
+      {
+        "title": "Suppress TL5006 for this file",
+        "applied": "-- tua-ignore-file TL5006\nfunction love.udpate(dt: number)\nend\n",
+        "diagnostics": {
+          "items": [],
+          "kind": "full"
+        }
+      },
+      {
+        "title": "Suppress TL5006 for this line",
+        "applied": "function love.udpate(dt: number) -- tua-ignore-line TL5006\nend\n",
+        "diagnostics": {
+          "items": [],
+          "kind": "full"
+        }
+      }
+    ]
+  },
+  {
+    "id": "unused",
+    "source": "local unused = 1\nprint(\"hello\")\n",
+    "diagnostics": {
+      "items": [
+        {
+          "code": "TL4005",
+          "message": "unused local `unused`; prefix with `_` to silence",
+          "range": {
+            "end": {
+              "character": 12,
+              "line": 0
+            },
+            "start": {
+              "character": 6,
+              "line": 0
+            }
+          },
+          "severity": 2,
+          "source": "tua"
+        }
+      ],
+      "kind": "full"
+    },
+    "actions": [
+      {
+        "edit": {
+          "changes": {
+            "file:///Users/kyonru/Documents/projects/Experiments/tlua/target/devex-audit-2026-11-06/completion/project/src/action-unused.tua": [
+              {
+                "newText": "",
+                "range": {
+                  "end": {
+                    "character": 0,
+                    "line": 1
+                  },
+                  "start": {
+                    "character": 0,
+                    "line": 0
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "kind": "quickfix",
+        "title": "Remove unused local"
+      },
+      {
+        "edit": {
+          "changes": {
+            "file:///Users/kyonru/Documents/projects/Experiments/tlua/target/devex-audit-2026-11-06/completion/project/src/action-unused.tua": [
+              {
+                "newText": "-- tua-ignore-file TL4005\n",
+                "range": {
+                  "end": {
+                    "character": 0,
+                    "line": 0
+                  },
+                  "start": {
+                    "character": 0,
+                    "line": 0
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "kind": "quickfix",
+        "title": "Suppress TL4005 for this file"
+      },
+      {
+        "edit": {
+          "changes": {
+            "file:///Users/kyonru/Documents/projects/Experiments/tlua/target/devex-audit-2026-11-06/completion/project/src/action-unused.tua": [
+              {
+                "newText": " -- tua-ignore-line TL4005",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 0
+                  },
+                  "start": {
+                    "character": 16,
+                    "line": 0
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "kind": "quickfix",
+        "title": "Suppress TL4005 for this line"
+      }
+    ],
+    "outcomes": [
+      {
+        "title": "Remove unused local",
+        "applied": "print(\"hello\")\n",
+        "diagnostics": {
+          "items": [],
+          "kind": "full"
+        }
+      },
+      {
+        "title": "Suppress TL4005 for this file",
+        "applied": "-- tua-ignore-file TL4005\nlocal unused = 1\nprint(\"hello\")\n",
+        "diagnostics": {
+          "items": [],
+          "kind": "full"
+        }
+      },
+      {
+        "title": "Suppress TL4005 for this line",
+        "applied": "local unused = 1 -- tua-ignore-line TL4005\nprint(\"hello\")\n",
+        "diagnostics": {
+          "items": [],
+          "kind": "full"
+        }
+      }
+    ]
+  },
+  {
+    "id": "type-mismatch",
+    "source": "local value: number = \"wrong\"\nprint(value)\n",
+    "diagnostics": {
+      "items": [
+        {
+          "code": "TL1003",
+          "message": "type mismatch: expected number, found string",
+          "range": {
+            "end": {
+              "character": 29,
+              "line": 0
+            },
+            "start": {
+              "character": 22,
+              "line": 0
+            }
+          },
+          "severity": 1,
+          "source": "tua"
+        }
+      ],
+      "kind": "full"
+    },
+    "actions": [
+      {
+        "edit": {
+          "changes": {
+            "file:///Users/kyonru/Documents/projects/Experiments/tlua/target/devex-audit-2026-11-06/completion/project/src/action-type-mismatch.tua": [
+              {
+                "newText": "-- tua-ignore-file TL1003\n",
+                "range": {
+                  "end": {
+                    "character": 0,
+                    "line": 0
+                  },
+                  "start": {
+                    "character": 0,
+                    "line": 0
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "kind": "quickfix",
+        "title": "Suppress TL1003 for this file"
+      },
+      {
+        "edit": {
+          "changes": {
+            "file:///Users/kyonru/Documents/projects/Experiments/tlua/target/devex-audit-2026-11-06/completion/project/src/action-type-mismatch.tua": [
+              {
+                "newText": " -- tua-ignore-line TL1003",
+                "range": {
+                  "end": {
+                    "character": 29,
+                    "line": 0
+                  },
+                  "start": {
+                    "character": 29,
+                    "line": 0
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "kind": "quickfix",
+        "title": "Suppress TL1003 for this line"
+      }
+    ],
+    "outcomes": [
+      {
+        "title": "Suppress TL1003 for this file",
+        "applied": "-- tua-ignore-file TL1003\nlocal value: number = \"wrong\"\nprint(value)\n",
+        "diagnostics": {
+          "items": [],
+          "kind": "full"
+        }
+      },
+      {
+        "title": "Suppress TL1003 for this line",
+        "applied": "local value: number = \"wrong\" -- tua-ignore-line TL1003\nprint(value)\n",
+        "diagnostics": {
+          "items": [],
+          "kind": "full"
+        }
+      }
+    ]
+  },
+  {
+    "id": "unknown-type",
+    "source": "local value: ExportedPlayer = {health=1}\nprint(value)\n",
+    "diagnostics": {
+      "items": [
+        {
+          "code": "TL1001",
+          "message": "unknown type `ExportedPlayer`",
+          "range": {
+            "end": {
+              "character": 12,
+              "line": 0
+            },
+            "start": {
+              "character": 11,
+              "line": 0
+            }
+          },
+          "severity": 1,
+          "source": "tua"
+        }
+      ],
+      "kind": "full"
+    },
+    "actions": [
+      {
+        "edit": {
+          "changes": {
+            "file:///Users/kyonru/Documents/projects/Experiments/tlua/target/devex-audit-2026-11-06/completion/project/src/action-unknown-type.tua": [
+              {
+                "newText": "import type { ExportedPlayer } from \"./exports\"\n",
+                "range": {
+                  "end": {
+                    "character": 0,
+                    "line": 0
+                  },
+                  "start": {
+                    "character": 0,
+                    "line": 0
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "kind": "quickfix",
+        "title": "Import type `ExportedPlayer` from `exports`"
+      },
+      {
+        "edit": {
+          "changes": {
+            "file:///Users/kyonru/Documents/projects/Experiments/tlua/target/devex-audit-2026-11-06/completion/project/src/action-unknown-type.tua": [
+              {
+                "newText": "-- tua-ignore-file TL1001\n",
+                "range": {
+                  "end": {
+                    "character": 0,
+                    "line": 0
+                  },
+                  "start": {
+                    "character": 0,
+                    "line": 0
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "kind": "quickfix",
+        "title": "Suppress TL1001 for this file"
+      },
+      {
+        "edit": {
+          "changes": {
+            "file:///Users/kyonru/Documents/projects/Experiments/tlua/target/devex-audit-2026-11-06/completion/project/src/action-unknown-type.tua": [
+              {
+                "newText": " -- tua-ignore-line TL1001",
+                "range": {
+                  "end": {
+                    "character": 40,
+                    "line": 0
+                  },
+                  "start": {
+                    "character": 40,
+                    "line": 0
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "kind": "quickfix",
+        "title": "Suppress TL1001 for this line"
+      }
+    ],
+    "outcomes": [
+      {
+        "title": "Import type `ExportedPlayer` from `exports`",
+        "applied": "import type { ExportedPlayer } from \"./exports\"\nlocal value: ExportedPlayer = {health=1}\nprint(value)\n",
+        "diagnostics": {
+          "items": [],
+          "kind": "full"
+        }
+      },
+      {
+        "title": "Suppress TL1001 for this file",
+        "applied": "-- tua-ignore-file TL1001\nlocal value: ExportedPlayer = {health=1}\nprint(value)\n",
+        "diagnostics": {
+          "items": [],
+          "kind": "full"
+        }
+      },
+      {
+        "title": "Suppress TL1001 for this line",
+        "applied": "local value: ExportedPlayer = {health=1} -- tua-ignore-line TL1001\nprint(value)\n",
+        "diagnostics": {
+          "items": [],
+          "kind": "full"
+        }
+      }
+    ]
+  },
+  {
+    "id": "missing-module",
+    "source": "local m=require(\"absent\")\nprint(m)\n",
+    "diagnostics": {
+      "items": [
+        {
+          "code": "TL4002",
+          "message": "require file not found: `absent` (searched: /Users/kyonru/Documents/projects/Experiments/tlua/target/devex-audit-2026-11-06/completion/project/src, /Users/kyonru/Documents/projects/Experiments/tlua/target/devex-audit-2026-11-06/completion/project/build)",
+          "range": {
+            "end": {
+              "character": 18,
+              "line": 0
+            },
+            "start": {
+              "character": 17,
+              "line": 0
+            }
+          },
+          "severity": 2,
+          "source": "tua"
+        }
+      ],
+      "kind": "full"
+    },
+    "actions": [
+      {
+        "edit": {
+          "documentChanges": [
+            {
+              "kind": "create",
+              "options": {
+                "ignoreIfExists": true
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/target/devex-audit-2026-11-06/completion/project/src/absent.tua"
+            },
+            {
+              "edits": [
+                {
+                  "newText": "return {}\n",
+                  "range": {
+                    "end": {
+                      "character": 0,
+                      "line": 0
+                    },
+                    "start": {
+                      "character": 0,
+                      "line": 0
+                    }
+                  }
+                }
+              ],
+              "textDocument": {
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/target/devex-audit-2026-11-06/completion/project/src/absent.tua",
+                "version": null
+              }
+            }
+          ]
+        },
+        "kind": "quickfix",
+        "title": "Create module `absent`"
+      },
+      {
+        "edit": {
+          "changes": {
+            "file:///Users/kyonru/Documents/projects/Experiments/tlua/target/devex-audit-2026-11-06/completion/project/src/action-missing-module.tua": [
+              {
+                "newText": "-- tua-ignore-file TL4002\n",
+                "range": {
+                  "end": {
+                    "character": 0,
+                    "line": 0
+                  },
+                  "start": {
+                    "character": 0,
+                    "line": 0
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "kind": "quickfix",
+        "title": "Suppress TL4002 for this file"
+      },
+      {
+        "edit": {
+          "changes": {
+            "file:///Users/kyonru/Documents/projects/Experiments/tlua/target/devex-audit-2026-11-06/completion/project/src/action-missing-module.tua": [
+              {
+                "newText": " -- tua-ignore-line TL4002",
+                "range": {
+                  "end": {
+                    "character": 25,
+                    "line": 0
+                  },
+                  "start": {
+                    "character": 25,
+                    "line": 0
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "kind": "quickfix",
+        "title": "Suppress TL4002 for this line"
+      }
+    ],
+    "outcomes": [
+      {
+        "title": "Suppress TL4002 for this file",
+        "applied": "-- tua-ignore-file TL4002\nlocal m=require(\"absent\")\nprint(m)\n",
+        "diagnostics": {
+          "items": [],
+          "kind": "full"
+        }
+      },
+      {
+        "title": "Suppress TL4002 for this line",
+        "applied": "local m=require(\"absent\") -- tua-ignore-line TL4002\nprint(m)\n",
+        "diagnostics": {
+          "items": [],
+          "kind": "full"
+        }
+      }
+    ]
+  },
+  {
+    "id": "duplicate-key",
+    "source": "local m={x=1,x=2}\nprint(m)\n",
+    "diagnostics": {
+      "items": [
+        {
+          "code": "TL4001",
+          "message": "table key `x` is a duplicate; previously defined at column 10",
+          "range": {
+            "end": {
+              "character": 14,
+              "line": 0
+            },
+            "start": {
+              "character": 13,
+              "line": 0
+            }
+          },
+          "severity": 2,
+          "source": "tua"
+        }
+      ],
+      "kind": "full"
+    },
+    "actions": [
+      {
+        "edit": {
+          "changes": {
+            "file:///Users/kyonru/Documents/projects/Experiments/tlua/target/devex-audit-2026-11-06/completion/project/src/action-duplicate-key.tua": [
+              {
+                "newText": "x2",
+                "range": {
+                  "end": {
+                    "character": 14,
+                    "line": 0
+                  },
+                  "start": {
+                    "character": 13,
+                    "line": 0
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "kind": "quickfix",
+        "title": "Rename duplicate key to `x2`"
+      },
+      {
+        "edit": {
+          "changes": {
+            "file:///Users/kyonru/Documents/projects/Experiments/tlua/target/devex-audit-2026-11-06/completion/project/src/action-duplicate-key.tua": [
+              {
+                "newText": "-- tua-ignore-file TL4001\n",
+                "range": {
+                  "end": {
+                    "character": 0,
+                    "line": 0
+                  },
+                  "start": {
+                    "character": 0,
+                    "line": 0
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "kind": "quickfix",
+        "title": "Suppress TL4001 for this file"
+      },
+      {
+        "edit": {
+          "changes": {
+            "file:///Users/kyonru/Documents/projects/Experiments/tlua/target/devex-audit-2026-11-06/completion/project/src/action-duplicate-key.tua": [
+              {
+                "newText": " -- tua-ignore-line TL4001",
+                "range": {
+                  "end": {
+                    "character": 17,
+                    "line": 0
+                  },
+                  "start": {
+                    "character": 17,
+                    "line": 0
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "kind": "quickfix",
+        "title": "Suppress TL4001 for this line"
+      }
+    ],
+    "outcomes": [
+      {
+        "title": "Rename duplicate key to `x2`",
+        "applied": "local m={x=1,x2=2}\nprint(m)\n",
+        "diagnostics": {
+          "items": [],
+          "kind": "full"
+        }
+      },
+      {
+        "title": "Suppress TL4001 for this file",
+        "applied": "-- tua-ignore-file TL4001\nlocal m={x=1,x=2}\nprint(m)\n",
+        "diagnostics": {
+          "items": [],
+          "kind": "full"
+        }
+      },
+      {
+        "title": "Suppress TL4001 for this line",
+        "applied": "local m={x=1,x=2} -- tua-ignore-line TL4001\nprint(m)\n",
+        "diagnostics": {
+          "items": [],
+          "kind": "full"
+        }
+      }
+    ]
+  },
+  {
+    "id": "annotation",
+    "source": "local value=1\nprint(value)\n",
+    "diagnostics": {
+      "items": [],
+      "kind": "full"
+    },
+    "actions": [
+      {
+        "edit": {
+          "changes": {
+            "file:///Users/kyonru/Documents/projects/Experiments/tlua/target/devex-audit-2026-11-06/completion/project/src/action-annotation.tua": [
+              {
+                "newText": ": number",
+                "range": {
+                  "end": {
+                    "character": 11,
+                    "line": 0
+                  },
+                  "start": {
+                    "character": 11,
+                    "line": 0
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "kind": "quickfix",
+        "title": "Add type annotation `: number`"
+      },
+      {
+        "edit": {
+          "changes": {
+            "file:///Users/kyonru/Documents/projects/Experiments/tlua/target/devex-audit-2026-11-06/completion/project/src/action-annotation.tua": [
+              {
+                "newText": "",
+                "range": {
+                  "end": {
+                    "character": 0,
+                    "line": 1
+                  },
+                  "start": {
+                    "character": 0,
+                    "line": 0
+                  }
+                }
+              },
+              {
+                "newText": "1",
+                "range": {
+                  "end": {
+                    "character": 11,
+                    "line": 1
+                  },
+                  "start": {
+                    "character": 6,
+                    "line": 1
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "kind": "quickfix",
+        "title": "Inline local `value`"
+      }
+    ],
+    "outcomes": [
+      {
+        "title": "Add type annotation `: number`",
+        "applied": "local value: number=1\nprint(value)\n",
+        "diagnostics": {
+          "items": [],
+          "kind": "full"
+        }
+      },
+      {
+        "title": "Inline local `value`",
+        "applied": "print(1)\n",
+        "diagnostics": {
+          "items": [],
+          "kind": "full"
+        }
+      }
+    ]
+  }
+]

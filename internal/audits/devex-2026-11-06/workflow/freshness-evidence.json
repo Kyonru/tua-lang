@@ -1,0 +1,736 @@
+{
+  "burst": {
+    "version": 25,
+    "text": "local amount: number = 1\nprint(amount)\n",
+    "evidence": [
+      {
+        "label": "initialize",
+        "method": "initialize",
+        "params": {
+          "processId": 15719,
+          "rootUri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-c3Vzjj",
+          "capabilities": {},
+          "workspaceFolders": [
+            {
+              "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-c3Vzjj",
+              "name": "tua-devex-audit-c3Vzjj"
+            }
+          ]
+        },
+        "result": {
+          "capabilities": {
+            "callHierarchyProvider": true,
+            "codeActionProvider": {
+              "codeActionKinds": [
+                "quickfix",
+                "source.organizeImports",
+                "source.sortImports",
+                "source.removeUnusedImports",
+                "source.tua.createMissingLoveCallbacks",
+                "source.fixAll"
+              ]
+            },
+            "codeLensProvider": {
+              "resolveProvider": true
+            },
+            "completionProvider": {
+              "resolveProvider": true,
+              "triggerCharacters": [
+                ":",
+                ".",
+                "\"",
+                "'",
+                "@",
+                "-",
+                "_",
+                "a",
+                "b",
+                "c",
+                "d",
+                "e",
+                "f",
+                "g",
+                "h",
+                "i",
+                "j",
+                "k",
+                "l",
+                "m",
+                "n",
+                "o",
+                "p",
+                "q",
+                "r",
+                "s",
+                "t",
+                "u",
+                "v",
+                "w",
+                "x",
+                "y",
+                "z",
+                "A",
+                "B",
+                "C",
+                "D",
+                "E",
+                "F",
+                "G",
+                "H",
+                "I",
+                "J",
+                "K",
+                "L",
+                "M",
+                "N",
+                "O",
+                "P",
+                "Q",
+                "R",
+                "S",
+                "T",
+                "U",
+                "V",
+                "W",
+                "X",
+                "Y",
+                "Z",
+                "0",
+                "1",
+                "2",
+                "3",
+                "4",
+                "5",
+                "6",
+                "7",
+                "8",
+                "9"
+              ]
+            },
+            "definitionProvider": true,
+            "documentFormattingProvider": true,
+            "documentHighlightProvider": true,
+            "documentLinkProvider": {
+              "resolveProvider": false
+            },
+            "documentOnTypeFormattingProvider": {
+              "firstTriggerCharacter": "\n",
+              "moreTriggerCharacter": [
+                "}",
+                ")",
+                "]",
+                ",",
+                "d"
+              ]
+            },
+            "documentRangeFormattingProvider": true,
+            "documentSymbolProvider": true,
+            "foldingRangeProvider": true,
+            "hoverProvider": true,
+            "implementationProvider": true,
+            "inlayHintProvider": {
+              "resolveProvider": false
+            },
+            "inlineCompletionProvider": true,
+            "referencesProvider": true,
+            "renameProvider": {
+              "prepareProvider": true
+            },
+            "selectionRangeProvider": true,
+            "semanticTokensProvider": {
+              "full": {
+                "delta": true
+              },
+              "legend": {
+                "tokenModifiers": [
+                  "declaration",
+                  "readonly",
+                  "deprecated",
+                  "modification",
+                  "defaultLibrary",
+                  "propertyChain1",
+                  "propertyChain2",
+                  "propertyChain3",
+                  "propertyChain4"
+                ],
+                "tokenTypes": [
+                  "type",
+                  "function",
+                  "variable",
+                  "parameter",
+                  "property",
+                  "method",
+                  "class",
+                  "enum",
+                  "enumMember",
+                  "namespace",
+                  "event",
+                  "label",
+                  "decorator"
+                ]
+              },
+              "range": true
+            },
+            "signatureHelpProvider": {
+              "retriggerCharacters": [
+                ")"
+              ],
+              "triggerCharacters": [
+                "(",
+                ","
+              ]
+            },
+            "textDocumentSync": {
+              "change": 2,
+              "openClose": true,
+              "save": {
+                "includeText": true
+              }
+            },
+            "typeDefinitionProvider": true,
+            "workspace": {
+              "fileOperations": {
+                "willRename": {
+                  "filters": [
+                    {
+                      "pattern": {
+                        "glob": "**/*"
+                      },
+                      "scheme": "file"
+                    }
+                  ]
+                }
+              },
+              "workspaceFolders": {
+                "changeNotifications": true,
+                "supported": true
+              }
+            },
+            "workspaceSymbolProvider": true
+          },
+          "serverInfo": {
+            "name": "tua-lsp",
+            "version": "0.5.1"
+          }
+        },
+        "ms": 2.7336669999999987
+      },
+      {
+        "label": "final-hover",
+        "method": "textDocument/hover",
+        "params": {
+          "textDocument": {
+            "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-c3Vzjj/src/main.tua"
+          },
+          "position": {
+            "line": 1,
+            "character": 7
+          }
+        },
+        "result": {
+          "contents": {
+            "kind": "markdown",
+            "value": "```tua\nlocal amount: number\n```"
+          },
+          "range": {
+            "end": {
+              "character": 12,
+              "line": 1
+            },
+            "start": {
+              "character": 6,
+              "line": 1
+            }
+          }
+        },
+        "ms": 0.3107919999999922
+      },
+      {
+        "label": "final-pull",
+        "method": "textDocument/diagnostic",
+        "params": {
+          "textDocument": {
+            "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-c3Vzjj/src/main.tua"
+          }
+        },
+        "result": {
+          "items": [],
+          "kind": "full"
+        },
+        "ms": 0.10929199999998218
+      }
+    ],
+    "publishes": [
+      {
+        "jsonrpc": "2.0",
+        "method": "textDocument/publishDiagnostics",
+        "params": {
+          "diagnostics": [],
+          "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-c3Vzjj/src/main.tua"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "textDocument/publishDiagnostics",
+        "params": {
+          "diagnostics": [
+            {
+              "code": "TL1003",
+              "message": "type mismatch: expected number, found string",
+              "range": {
+                "end": {
+                  "character": 28,
+                  "line": 0
+                },
+                "start": {
+                  "character": 23,
+                  "line": 0
+                }
+              },
+              "severity": 1,
+              "source": "tua"
+            }
+          ],
+          "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-c3Vzjj/src/main.tua"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "textDocument/publishDiagnostics",
+        "params": {
+          "diagnostics": [],
+          "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-c3Vzjj/src/main.tua"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "textDocument/publishDiagnostics",
+        "params": {
+          "diagnostics": [
+            {
+              "code": "TL1003",
+              "message": "type mismatch: expected number, found string",
+              "range": {
+                "end": {
+                  "character": 28,
+                  "line": 0
+                },
+                "start": {
+                  "character": 23,
+                  "line": 0
+                }
+              },
+              "severity": 1,
+              "source": "tua"
+            }
+          ],
+          "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-c3Vzjj/src/main.tua"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "textDocument/publishDiagnostics",
+        "params": {
+          "diagnostics": [],
+          "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-c3Vzjj/src/main.tua"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "textDocument/publishDiagnostics",
+        "params": {
+          "diagnostics": [
+            {
+              "code": "TL1003",
+              "message": "type mismatch: expected number, found string",
+              "range": {
+                "end": {
+                  "character": 28,
+                  "line": 0
+                },
+                "start": {
+                  "character": 23,
+                  "line": 0
+                }
+              },
+              "severity": 1,
+              "source": "tua"
+            }
+          ],
+          "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-c3Vzjj/src/main.tua"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "textDocument/publishDiagnostics",
+        "params": {
+          "diagnostics": [],
+          "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-c3Vzjj/src/main.tua"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "textDocument/publishDiagnostics",
+        "params": {
+          "diagnostics": [
+            {
+              "code": "TL1003",
+              "message": "type mismatch: expected number, found string",
+              "range": {
+                "end": {
+                  "character": 28,
+                  "line": 0
+                },
+                "start": {
+                  "character": 23,
+                  "line": 0
+                }
+              },
+              "severity": 1,
+              "source": "tua"
+            }
+          ],
+          "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-c3Vzjj/src/main.tua"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "textDocument/publishDiagnostics",
+        "params": {
+          "diagnostics": [],
+          "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-c3Vzjj/src/main.tua"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "textDocument/publishDiagnostics",
+        "params": {
+          "diagnostics": [
+            {
+              "code": "TL1003",
+              "message": "type mismatch: expected number, found string",
+              "range": {
+                "end": {
+                  "character": 28,
+                  "line": 0
+                },
+                "start": {
+                  "character": 23,
+                  "line": 0
+                }
+              },
+              "severity": 1,
+              "source": "tua"
+            }
+          ],
+          "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-c3Vzjj/src/main.tua"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "textDocument/publishDiagnostics",
+        "params": {
+          "diagnostics": [],
+          "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-c3Vzjj/src/main.tua"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "textDocument/publishDiagnostics",
+        "params": {
+          "diagnostics": [
+            {
+              "code": "TL1003",
+              "message": "type mismatch: expected number, found string",
+              "range": {
+                "end": {
+                  "character": 28,
+                  "line": 0
+                },
+                "start": {
+                  "character": 23,
+                  "line": 0
+                }
+              },
+              "severity": 1,
+              "source": "tua"
+            }
+          ],
+          "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-c3Vzjj/src/main.tua"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "textDocument/publishDiagnostics",
+        "params": {
+          "diagnostics": [],
+          "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-c3Vzjj/src/main.tua"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "textDocument/publishDiagnostics",
+        "params": {
+          "diagnostics": [
+            {
+              "code": "TL1003",
+              "message": "type mismatch: expected number, found string",
+              "range": {
+                "end": {
+                  "character": 28,
+                  "line": 0
+                },
+                "start": {
+                  "character": 23,
+                  "line": 0
+                }
+              },
+              "severity": 1,
+              "source": "tua"
+            }
+          ],
+          "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-c3Vzjj/src/main.tua"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "textDocument/publishDiagnostics",
+        "params": {
+          "diagnostics": [],
+          "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-c3Vzjj/src/main.tua"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "textDocument/publishDiagnostics",
+        "params": {
+          "diagnostics": [
+            {
+              "code": "TL1003",
+              "message": "type mismatch: expected number, found string",
+              "range": {
+                "end": {
+                  "character": 28,
+                  "line": 0
+                },
+                "start": {
+                  "character": 23,
+                  "line": 0
+                }
+              },
+              "severity": 1,
+              "source": "tua"
+            }
+          ],
+          "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-c3Vzjj/src/main.tua"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "textDocument/publishDiagnostics",
+        "params": {
+          "diagnostics": [],
+          "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-c3Vzjj/src/main.tua"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "textDocument/publishDiagnostics",
+        "params": {
+          "diagnostics": [
+            {
+              "code": "TL1003",
+              "message": "type mismatch: expected number, found string",
+              "range": {
+                "end": {
+                  "character": 28,
+                  "line": 0
+                },
+                "start": {
+                  "character": 23,
+                  "line": 0
+                }
+              },
+              "severity": 1,
+              "source": "tua"
+            }
+          ],
+          "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-c3Vzjj/src/main.tua"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "textDocument/publishDiagnostics",
+        "params": {
+          "diagnostics": [],
+          "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-c3Vzjj/src/main.tua"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "textDocument/publishDiagnostics",
+        "params": {
+          "diagnostics": [
+            {
+              "code": "TL1003",
+              "message": "type mismatch: expected number, found string",
+              "range": {
+                "end": {
+                  "character": 28,
+                  "line": 0
+                },
+                "start": {
+                  "character": 23,
+                  "line": 0
+                }
+              },
+              "severity": 1,
+              "source": "tua"
+            }
+          ],
+          "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-c3Vzjj/src/main.tua"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "textDocument/publishDiagnostics",
+        "params": {
+          "diagnostics": [],
+          "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-c3Vzjj/src/main.tua"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "textDocument/publishDiagnostics",
+        "params": {
+          "diagnostics": [
+            {
+              "code": "TL1003",
+              "message": "type mismatch: expected number, found string",
+              "range": {
+                "end": {
+                  "character": 28,
+                  "line": 0
+                },
+                "start": {
+                  "character": 23,
+                  "line": 0
+                }
+              },
+              "severity": 1,
+              "source": "tua"
+            }
+          ],
+          "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-c3Vzjj/src/main.tua"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "textDocument/publishDiagnostics",
+        "params": {
+          "diagnostics": [],
+          "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-c3Vzjj/src/main.tua"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "textDocument/publishDiagnostics",
+        "params": {
+          "diagnostics": [
+            {
+              "code": "TL1003",
+              "message": "type mismatch: expected number, found string",
+              "range": {
+                "end": {
+                  "character": 28,
+                  "line": 0
+                },
+                "start": {
+                  "character": 23,
+                  "line": 0
+                }
+              },
+              "severity": 1,
+              "source": "tua"
+            }
+          ],
+          "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-c3Vzjj/src/main.tua"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "textDocument/publishDiagnostics",
+        "params": {
+          "diagnostics": [],
+          "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-c3Vzjj/src/main.tua"
+        }
+      }
+    ]
+  },
+  "incremental": {
+    "source": "local prefix=\"😀\"; local amount: number = 1\r\nprint(amount)\r\n",
+    "change": {
+      "range": {
+        "start": {
+          "line": 0,
+          "character": 42
+        },
+        "end": {
+          "line": 0,
+          "character": 43
+        }
+      },
+      "text": "\"bad\""
+    },
+    "expectedText": "local prefix=\"😀\"; local amount: number = \"bad\"\r\nprint(amount)\r\n",
+    "evidence": [
+      {
+        "label": "incremental-utf16-crlf-diagnostics",
+        "method": "textDocument/diagnostic",
+        "params": {
+          "textDocument": {
+            "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-c3Vzjj/src/main.tua"
+          }
+        },
+        "result": {
+          "items": [
+            {
+              "code": "TL1003",
+              "message": "type mismatch: expected number, found string",
+              "range": {
+                "end": {
+                  "character": 46,
+                  "line": 0
+                },
+                "start": {
+                  "character": 41,
+                  "line": 0
+                }
+              },
+              "severity": 1,
+              "source": "tua"
+            },
+            {
+              "code": "TL4005",
+              "message": "unused local `prefix`; prefix with `_` to silence",
+              "range": {
+                "end": {
+                  "character": 12,
+                  "line": 0
+                },
+                "start": {
+                  "character": 6,
+                  "line": 0
+                }
+              },
+              "severity": 2,
+              "source": "tua"
+            }
+          ],
+          "kind": "full"
+        },
+        "ms": 2.1785840000000007
+      }
+    ]
+  }
+}

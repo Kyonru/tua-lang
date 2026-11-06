@@ -1,0 +1,14 @@
+{
+  "typingProbePositionsChecked": 94,
+  "outOfBoundsPositions": [],
+  "workflowSessions": [
+    "lifecycle-pull",
+    "single-root-control-a",
+    "single-root-control-b",
+    "multi-root-isolation"
+  ],
+  "reviewedReports": [
+    "workflow/REPORT.md",
+    "typing/REPORT.md"
+  ]
+}

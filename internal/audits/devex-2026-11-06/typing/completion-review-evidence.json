@@ -1,0 +1,151 @@
+[
+  {
+    "id": "quote-double",
+    "source": "local picture = love.graphics.newImage(\"assets/her\")\n",
+    "position": {
+      "line": 0,
+      "character": 50
+    },
+    "wanted": "assets/hero\"portrait.png",
+    "labels": [
+      "assets/hero\"portrait.png"
+    ],
+    "item": {
+      "data": {
+        "kind": "value",
+        "label": "assets/hero\"portrait.png",
+        "position": {
+          "character": 50,
+          "line": 0
+        },
+        "symbolKind": "value",
+        "typeLabel": "image asset path -> Image",
+        "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/target/devex-audit-2026-11-06/typing/completion-review/src/main.tua"
+      },
+      "detail": "image asset path -> Image",
+      "documentation": {
+        "kind": "markdown",
+        "value": "Supported image asset with .png extension."
+      },
+      "insertText": "assets/hero\"portrait.png",
+      "kind": 12,
+      "label": "assets/hero\"portrait.png",
+      "sortText": "0000_assets/hero\"portrait.png",
+      "textEdit": {
+        "newText": "assets/hero\"portrait.png",
+        "range": {
+          "end": {
+            "character": 50,
+            "line": 0
+          },
+          "start": {
+            "character": 40,
+            "line": 0
+          }
+        }
+      }
+    },
+    "applied": "local picture = love.graphics.newImage(\"assets/hero\"portrait.png\")\n",
+    "check": {
+      "status": 1,
+      "stdout": "",
+      "stderr": "/Users/kyonru/Documents/projects/Experiments/tlua/target/devex-audit-2026-11-06/typing/completion-review/src/main.tua:1:39 error TL0001: expected `)` to close function call\n/Users/kyonru/Documents/projects/Experiments/tlua/target/devex-audit-2026-11-06/typing/completion-review/src/main.tua:1:65 error TL0001: unclosed string (1:65 to 2:1)\n"
+    }
+  },
+  {
+    "id": "keyword-key",
+    "source": "local record = {[\"repeat\"]=7,[\"dash-key\"]=8,ordinary=9}\nlocal answer = record.\n",
+    "position": {
+      "line": 1,
+      "character": 22
+    },
+    "wanted": "repeat",
+    "labels": [
+      "dash-key",
+      "ordinary",
+      "repeat"
+    ],
+    "item": {
+      "data": {
+        "kind": "field",
+        "label": "repeat",
+        "position": {
+          "character": 22,
+          "line": 1
+        },
+        "symbolKind": "field",
+        "typeLabel": "field: number",
+        "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/target/devex-audit-2026-11-06/typing/completion-review/src/main.tua"
+      },
+      "detail": "field: number",
+      "kind": 5,
+      "label": "repeat",
+      "sortText": "0002_repeat"
+    },
+    "applied": "local record = {[\"repeat\"]=7,[\"dash-key\"]=8,ordinary=9}\nlocal answer = record.repeat\n",
+    "check": {
+      "status": 1,
+      "stdout": "",
+      "stderr": "/Users/kyonru/Documents/projects/Experiments/tlua/target/devex-audit-2026-11-06/typing/completion-review/src/main.tua:2:22 error TL0001: expected identifier after `.`\n/Users/kyonru/Documents/projects/Experiments/tlua/target/devex-audit-2026-11-06/typing/completion-review/src/main.tua:3:1 error TL0001: expected `until` after block\n"
+    }
+  },
+  {
+    "id": "module-right-suffix",
+    "source": "local service = require(\"servXXX\")\n",
+    "position": {
+      "line": 0,
+      "character": 29
+    },
+    "wanted": "service",
+    "labels": [
+      "service"
+    ],
+    "item": {
+      "data": {
+        "kind": "module",
+        "label": "service",
+        "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/target/devex-audit-2026-11-06/typing/completion-review/src/service.tua",
+        "position": {
+          "character": 29,
+          "line": 0
+        },
+        "symbolKind": "module",
+        "typeLabel": "module",
+        "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/target/devex-audit-2026-11-06/typing/completion-review/src/main.tua"
+      },
+      "detail": "module",
+      "kind": 9,
+      "label": "service",
+      "sortText": "0000_service",
+      "textEdit": {
+        "newText": "service",
+        "range": {
+          "end": {
+            "character": 29,
+            "line": 0
+          },
+          "start": {
+            "character": 25,
+            "line": 0
+          }
+        }
+      }
+    },
+    "applied": "local service = require(\"serviceXXX\")\n",
+    "check": {
+      "status": 0,
+      "stdout": "/Users/kyonru/Documents/projects/Experiments/tlua/target/devex-audit-2026-11-06/typing/completion-review/src/main.tua:1:7 warning TL4054: import `service` is never used; prefix with `_` to silence\n/Users/kyonru/Documents/projects/Experiments/tlua/target/devex-audit-2026-11-06/typing/completion-review/src/main.tua:1:26 warning TL4002: require file not found: `serviceXXX` (searched: /Users/kyonru/Documents/projects/Experiments/tlua/target/devex-audit-2026-11-06/typing/completion-review/src, /Users/kyonru/Documents/projects/Experiments/tlua/target/devex-audit-2026-11-06/typing/completion-review/build)\nchecked 2 file(s)\n",
+      "stderr": ""
+    }
+  },
+  {
+    "id": "middle-local",
+    "source": "local customerName = \"a\"\nlocal name = custTypo\n",
+    "position": {
+      "line": 1,
+      "character": 17
+    },
+    "wanted": "customerName",
+    "labels": []
+  }
+]

@@ -1,0 +1,90 @@
+[
+  {
+    "id": "H01",
+    "area": "Local and parameter hover",
+    "owner": "hover",
+    "status": "tested",
+    "evidence": "hover/evidence.json basics, multi-return, narrowing, callback; focused-evidence.json shadow-signature",
+    "notes": "Typed/inferred locals, callback parameters and narrowing pass; same-name function identity HOV-02 fails."
+  },
+  {
+    "id": "H02",
+    "area": "Imported symbol and alias hover",
+    "owner": "hover",
+    "status": "tested",
+    "evidence": "hover/evidence.json imported; imports-and-docs-evidence.json",
+    "notes": "Lua module function return/docs, imported CounterInstance aliases, member types pass."
+  },
+  {
+    "id": "H03",
+    "area": "Fields, methods and chained hover",
+    "owner": "hover",
+    "status": "tested",
+    "evidence": "hover/focused-evidence.json chain-love, chain-love-value, chain-class; class-variants-evidence.json",
+    "notes": "Simple fields/direct methods pass; call-result method hover HOV-01, class provenance HOV-03 fail."
+  },
+  {
+    "id": "H04",
+    "area": "Function and multiple-return signatures",
+    "owner": "hover",
+    "status": "tested",
+    "evidence": "hover/evidence.json basics, multi-return, varargs; focused-evidence.json default, optional, typed-vararg, luadoc-vararg",
+    "notes": "Multiple return display passes. Native optional/default display HOV-04 and native vararg TYP-03 lose metadata."
+  },
+  {
+    "id": "H05",
+    "area": "Overloads and active signature",
+    "owner": "hover",
+    "status": "tested",
+    "evidence": "hover/evidence.json overload,love; focused-evidence.json overload-type",
+    "notes": "Alternatives and arity-based active selection implemented; type-aware ranking HOV-G01 is a gap matching documented limit."
+  },
+  {
+    "id": "H06",
+    "area": "Nested calls and active parameter",
+    "owner": "hover",
+    "status": "tested",
+    "evidence": "hover/evidence.json nested,table-arg,callback-arg,varargs",
+    "notes": "Correct nested/outer active parameters through comments, strings, table/function arguments; vararg index clamps."
+  },
+  {
+    "id": "H07",
+    "area": "Dot/colon and implicit self",
+    "owner": "hover",
+    "status": "tested",
+    "evidence": "hover/evidence.json methods,classes; imports-and-docs-evidence.json",
+    "notes": "Typed table colon hides self; dot retains it. Imported native colon signature matches. Chain bugs separate."
+  },
+  {
+    "id": "H08",
+    "area": "LOVE and Lua API documentation",
+    "owner": "hover",
+    "status": "tested",
+    "evidence": "hover/evidence.json love,stdlib,imported; focused-evidence.json chain-love-value",
+    "notes": "Direct LOVE/Lua hover+signature docs and return tuples pass; chained hover identity HOV-01 fails."
+  },
+  {
+    "id": "H09",
+    "area": "Hover ranges, Markdown and readability",
+    "owner": "hover",
+    "status": "tested",
+    "evidence": "hover/focused-evidence.json; expression-provenance-evidence.json; unicode-crosscheck.json; imports-and-docs-evidence.json",
+    "notes": "Protocol Markdown inspected; normal ranges good, class fallback raw-span HOV-03 wrong; independent Unicode workflow crosscheck confirmed. Actual VSCode rendering not tested in this lane."
+  },
+  {
+    "id": "H10",
+    "area": "Agreement with completion, diagnostics and hints",
+    "owner": "hover",
+    "status": "tested",
+    "evidence": "hover/evidence.json inlay hints; focused-evidence.json; crosscheck-comment.js",
+    "notes": "Compared CLI/pull diagnostics and completion on narrowed/annotated/call-chain/default/vararg cases. HOV-02 wrong consistently; HOV-01 inconsistent. Worker panic crosscheck owned completion."
+  },
+  {
+    "id": "H11",
+    "area": "Annotation tags and malformed comments",
+    "owner": "hover",
+    "status": "tested",
+    "evidence": "hover/evidence.json annotation; focused-evidence.json full-tags; imports-and-docs-evidence.json",
+    "notes": "Valid tags return semantic docs/offline link; incomplete tag hover absent (known gap HOV-G03); unknown tags conservative null."
+  }
+]

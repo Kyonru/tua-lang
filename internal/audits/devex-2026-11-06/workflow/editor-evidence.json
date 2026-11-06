@@ -1,0 +1,132 @@
+{
+  "editorVersion": "1.142.0",
+  "extensionVersion": "0.5.1",
+  "events": [
+    {
+      "id": "control-member-completion",
+      "ms": 21.878416000000016,
+      "labels": [
+        {
+          "label": "health",
+          "description": "field: number"
+        }
+      ]
+    },
+    {
+      "id": "autoimport-initial",
+      "ms": 29.600167,
+      "labels": [
+        "health",
+        "local",
+        "obj",
+        "print",
+        "result"
+      ],
+      "text": "local result = createEnt\n",
+      "position": {
+        "line": 0,
+        "character": 24
+      }
+    },
+    {
+      "id": "autoimport-after-idle",
+      "ms": 2.247874999999908,
+      "labels": [
+        "health",
+        "local",
+        "obj",
+        "print",
+        "result"
+      ],
+      "text": "local result = createEnt\n",
+      "position": {
+        "line": 0,
+        "character": 24
+      }
+    },
+    {
+      "id": "actual-suggest-widget",
+      "menu": [
+        {
+          "text": "No suggestions.",
+          "visible": false
+        }
+      ]
+    },
+    {
+      "id": "unicode-rename-applied-in-editor",
+      "before": "local prefix=\"😀\"; local score: number = 7; print(score)\n",
+      "position": {
+        "line": 0,
+        "character": 51
+      },
+      "hover": [
+        {
+          "contents": [
+            {}
+          ],
+          "range": [
+            {
+              "line": 0,
+              "character": 50
+            },
+            {
+              "line": 0,
+              "character": 55
+            }
+          ]
+        },
+        {
+          "contents": [
+            {}
+          ],
+          "range": [
+            {
+              "line": 0,
+              "character": 49
+            },
+            {
+              "line": 0,
+              "character": 54
+            }
+          ]
+        }
+      ],
+      "edits": [
+        {
+          "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-editor-8N5NQ2/project/src/unicode.tua",
+          "edits": [
+            {
+              "range": [
+                {
+                  "line": 0,
+                  "character": 24
+                },
+                {
+                  "line": 0,
+                  "character": 29
+                }
+              ],
+              "newText": "points"
+            },
+            {
+              "range": [
+                {
+                  "line": 0,
+                  "character": 49
+                },
+                {
+                  "line": 0,
+                  "character": 54
+                }
+              ],
+              "newText": "points"
+            }
+          ]
+        }
+      ],
+      "applied": true,
+      "after": "local prefix=\"😀\"; localpointse: number = 7; printpointse)\n"
+    }
+  ]
+}

@@ -1,0 +1,122 @@
+[
+  {
+    "id": "C01",
+    "area": "Globals, locals, parameters and lexical scope",
+    "owner": "completion",
+    "status": "tested",
+    "evidence": "completion/evidence.json: locals, scope, params, shadow-library",
+    "notes": "45 scenarios; lexical controls pass; middle-token limitation CMP-03."
+  },
+  {
+    "id": "C02",
+    "area": "Keywords and snippets",
+    "owner": "completion",
+    "status": "tested",
+    "evidence": "completion/evidence.json: snippet, function-prefix, return-prefix",
+    "notes": "Statement snippets and insertion payloads verified; actual fn filtering remains unverified."
+  },
+  {
+    "id": "C03",
+    "area": "Module/path completion and escaping",
+    "owner": "completion",
+    "status": "tested",
+    "evidence": "completion/evidence.json: module-prefix, module-middle, static-import; applied-evidence.json",
+    "notes": "Module candidate paths pass; suffix replacement fails CMP-03."
+  },
+  {
+    "id": "C04",
+    "area": "Dot/colon members and nested fields",
+    "owner": "completion",
+    "status": "tested",
+    "evidence": "completion/evidence.json: member, nested, union, quoted-member, colon-record",
+    "notes": "Typed fields and common union members pass; quoted keys fail CMP-05."
+  },
+  {
+    "id": "C05",
+    "area": "Index and call-result chains",
+    "owner": "completion",
+    "status": "tested",
+    "evidence": "completion/evidence.json: indexed, call-result, nested-call-index, love-chain, void-chain; class-chain-evidence.json; completion/class-init-variants-evidence.json",
+    "notes": "Broad chains pass; CMP-07 shows whitespace-sensitive local class type fallback. Direct constructor chains still fail across10 body/init controls (U-01 root unresolved); class expression hover provenance owned HOV-03."
+  },
+  {
+    "id": "C06",
+    "area": "Candidate relevance, order, filtering and duplicates",
+    "owner": "completion",
+    "status": "tested",
+    "evidence": "completion/evidence.json: all labels, locals, scope, colon-record",
+    "notes": "No duplicate labels in45 scenarios; proximity order stable; colon data-field relevance noted."
+  },
+  {
+    "id": "C07",
+    "area": "Completion documentation and resolve",
+    "owner": "completion",
+    "status": "tested",
+    "evidence": "completion/evidence.json: resolved items for module, lua-module, LOVE cases",
+    "notes": "Resolve adds docs/signatures/colon edits; variable details remain sparse but no blanket defect claimed."
+  },
+  {
+    "id": "C08",
+    "area": "Insertion text, edits and replacement ranges",
+    "owner": "completion",
+    "status": "tested",
+    "evidence": "completion/applied-evidence.json; evidence.json; no-snippet-support.json",
+    "notes": "Applied exact edits for paths/keys/calls; suffix, escaping and capability defects CMP-03 through CMP-06."
+  },
+  {
+    "id": "C09",
+    "area": "Incomplete and malformed edits",
+    "owner": "completion",
+    "status": "tested",
+    "evidence": "completion/evidence.json: malformed-stdlib, incomplete-class, callback*, middle-identifier",
+    "notes": "Class and stdlib recovery pass; same-line callback layout limitation recorded."
+  },
+  {
+    "id": "C10",
+    "area": "LOVE members and method-call correction",
+    "owner": "completion",
+    "status": "tested",
+    "evidence": "completion/evidence.json: love-global, love-colon, love-dot, love-existing*, love-chain, void-chain, enum",
+    "notes": "Docs/colon rewrite resolve pass; existing call duplication CMP-03."
+  },
+  {
+    "id": "C11",
+    "area": "Lua libraries and mixed-source modules",
+    "owner": "completion",
+    "status": "tested",
+    "evidence": "completion/evidence.json: shadow-library, malformed-stdlib, module, lua-module",
+    "notes": "Mixed-provider .tua/.lua projects tested; direct Lua editor-client registration owned by lead."
+  },
+  {
+    "id": "C12",
+    "area": "Assets and project roots",
+    "owner": "completion",
+    "status": "tested",
+    "evidence": "completion/evidence.json: asset, asset-middle, asset-apostrophe; applied-evidence.json",
+    "notes": "Default source root PNG inventory tested; custom/multiroot coverage owned by workflow lane."
+  },
+  {
+    "id": "C13",
+    "area": "Diagnostic suggestions and quick fixes",
+    "owner": "completion",
+    "status": "tested",
+    "evidence": "completion/actions-evidence.json: eight scenarios and outcomes",
+    "notes": "Suggestions observed and same-document edits applied/rechecked; signature suppression panics CMP-02."
+  },
+  {
+    "id": "C14",
+    "area": "Code actions and edit application",
+    "owner": "completion",
+    "status": "tested",
+    "evidence": "completion/actions-evidence.json; actions.js",
+    "notes": "Same-document action application verified; CreateFile missing-module operation inspected only, not applied."
+  },
+  {
+    "id": "C15",
+    "area": "Server/client completion configuration",
+    "owner": "completion",
+    "status": "inspected only",
+    "evidence": "completion/editors/vscode/package.json:72\u201382; no-snippet-support.json; lead workflow editor evidence",
+    "notes": "Server capability behavior directly tested; actual editor menu/provider tests delegated to lead. Comment quickSuggestions disabled intentionally."
+  }
+]

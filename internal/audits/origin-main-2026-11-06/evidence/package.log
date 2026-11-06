@@ -1,0 +1,61 @@
+cargo build --release --package tua-cli
+    Finished `release` profile [optimized] target(s) in 0.04s
+mkdir -p editors/vscode/bin
+cp target/release/tua editors/vscode/bin/tua
+node scripts/check-json.js
+validated 23 tracked JSON files
+cd editors/vscode && npx --no-install vsce package --out tua-0.5.1-origin-audit.vsix --baseContentUrl https://github.com/Kyonru/tua-lang/blob/v0.5.1/editors/vscode --baseImagesUrl https://github.com/Kyonru/tua-lang/raw/v0.5.1/editors/vscode
+Executing prepublish script 'npm run vscode:prepublish'...
+
+> tua@0.5.1 vscode:prepublish
+> npm run build
+
+
+> tua@0.5.1 build
+> esbuild src/extension.js --bundle --minify --platform=node --format=cjs --external:vscode --outfile=dist/extension.js
+
+
+  dist/extension.js  829.3kb
+
+⚡ Done in 18ms
+ INFO  Files included in the VSIX:
+tua-0.5.1-origin-audit.vsix
+├─ [Content_Types].xml
+├─ extension.vsixmanifest
+└─ extension/
+   ├─ LICENSE.txt [1.04 KB]
+   ├─ language-configuration.json [1.33 KB]
+   ├─ package.json [65.3 KB]
+   ├─ readme.md [31.44 KB]
+   ├─ assets/
+   │  ├─ logo.png [8.27 KB]
+   │  ├─ logo.svg [0.89 KB]
+   │  ├─ inspector/ (3 files) [12.4 KB]
+   │  ├─ setup/ (5 files) [5.17 KB]
+   │  └─ toolbar/ (6 files) [4.51 KB]
+   ├─ bin/
+   │  └─ tua [19.8 MB]
+   ├─ dist/
+   │  └─ extension.js [829.27 KB]
+   ├─ docs/
+   │  └─ screenshots/ (7 files) [723.58 KB]
+   ├─ icons/
+   │  └─ tua-icon-theme.json [0.17 KB]
+   ├─ resources/
+   │  ├─ annotation-guide.md [2.72 KB]
+   │  └─ love-api/ (2 files) [1.56 MB]
+   ├─ snippets/
+   │  └─ tua.code-snippets [3.49 KB]
+   ├─ syntaxes/
+   │  ├─ love-glsl.tmLanguage.json [0.67 KB]
+   │  └─ tua.tmLanguage.json [28.28 KB]
+   └─ themes/
+      ├─ LICENSE [1.03 KB]
+      └─ indigo-carbon.json [13.86 KB]
+
+The file extension/bin/tua is large (19.8 MB)
+
+=> Run vsce ls --tree to see all included files.
+
+ DONE  Packaged: tua-0.5.1-origin-audit.vsix (40 files, 8.06 MB)
+rm -rf editors/vscode/bin

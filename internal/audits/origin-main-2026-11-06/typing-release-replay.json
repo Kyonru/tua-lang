@@ -1,0 +1,1030 @@
+{
+  "scenarios": 64,
+  "requests": 94,
+  "diagnosticRequests": 64,
+  "harnessErrors": [],
+  "acceptanceChanges": [
+    {
+      "id": "defaults",
+      "before": 0,
+      "after": 1
+    },
+    {
+      "id": "parenthesized-return",
+      "before": 0,
+      "after": 1
+    },
+    {
+      "id": "callback-context",
+      "before": 0,
+      "after": 1
+    },
+    {
+      "id": "module-property",
+      "before": 0,
+      "after": 1
+    },
+    {
+      "id": "function-argument-expansion",
+      "before": 1,
+      "after": 0
+    },
+    {
+      "id": "vararg-named",
+      "before": 0,
+      "after": 1
+    },
+    {
+      "id": "vararg-only",
+      "before": 0,
+      "after": 1
+    },
+    {
+      "id": "callback-annotated-param",
+      "before": 0,
+      "after": 1
+    },
+    {
+      "id": "callback-function-value",
+      "before": 0,
+      "after": 1
+    },
+    {
+      "id": "local-call-chain",
+      "before": 0,
+      "after": 1
+    },
+    {
+      "id": "missing-slot-literal",
+      "before": 0,
+      "after": 1
+    },
+    {
+      "id": "shadowed-local-functions",
+      "before": 1,
+      "after": 0
+    }
+  ],
+  "selectedEvidence": [
+    {
+      "id": "defaults",
+      "expectation": "Defaulted number nonnil, optional string narrowed, typed vararg reject number",
+      "check": {
+        "status": 1,
+        "stdout": "",
+        "stderr": "/Users/kyonru/Documents/projects/Experiments/tlua/target/devex-audit-2026-11-06/typing/defaults/src/main.tua:6:11 error TL1003: type mismatch at ...: expected string, found number\n"
+      },
+      "probes": [
+        {
+          "query": {
+            "needle": "good)"
+          },
+          "position": {
+            "line": 6,
+            "character": 7
+          },
+          "result": {
+            "contents": {
+              "kind": "markdown",
+              "value": "```tua\nlocal good: number\n```"
+            },
+            "range": {
+              "end": {
+                "character": 10,
+                "line": 6
+              },
+              "start": {
+                "character": 6,
+                "line": 6
+              }
+            }
+          }
+        }
+      ],
+      "diagnostics": {
+        "items": [
+          {
+            "code": "TL1003",
+            "message": "type mismatch at ...: expected string, found number",
+            "range": {
+              "end": {
+                "character": 11,
+                "line": 5
+              },
+              "start": {
+                "character": 10,
+                "line": 5
+              }
+            },
+            "severity": 1,
+            "source": "tua"
+          }
+        ],
+        "kind": "full"
+      }
+    },
+    {
+      "id": "parenthesized-return",
+      "expectation": "Parenthesized call yields one value; second local nil, reject number assignment",
+      "check": {
+        "status": 1,
+        "stdout": "",
+        "stderr": "/Users/kyonru/Documents/projects/Experiments/tlua/target/devex-audit-2026-11-06/typing/parenthesized-return/src/main.tua:2:1 warning TL4028: assigning 1 value to 2 variables initializes extra variables with nil; add `nil` to the value list to silence\n/Users/kyonru/Documents/projects/Experiments/tlua/target/devex-audit-2026-11-06/typing/parenthesized-return/src/main.tua:3:23 warning TL4045: local `b` defined at line 2 may be read before it is initialized; initialize with `nil` to silence\n/Users/kyonru/Documents/projects/Experiments/tlua/target/devex-audit-2026-11-06/typing/parenthesized-return/src/main.tua:3:23 error TL1003: type mismatch: expected string, found nil\n"
+      },
+      "probes": [
+        {
+          "query": {
+            "needle": "b, wrong"
+          },
+          "position": {
+            "line": 3,
+            "character": 10
+          },
+          "result": {
+            "contents": {
+              "kind": "markdown",
+              "value": "```tua\nlocal b: nil\n```"
+            },
+            "range": {
+              "end": {
+                "character": 10,
+                "line": 3
+              },
+              "start": {
+                "character": 9,
+                "line": 3
+              }
+            }
+          }
+        }
+      ],
+      "diagnostics": {
+        "items": [
+          {
+            "code": "TL1003",
+            "message": "type mismatch: expected string, found nil",
+            "range": {
+              "end": {
+                "character": 23,
+                "line": 2
+              },
+              "start": {
+                "character": 22,
+                "line": 2
+              }
+            },
+            "severity": 1,
+            "source": "tua"
+          },
+          {
+            "code": "TL4028",
+            "message": "assigning 1 value to 2 variables initializes extra variables with nil; add `nil` to the value list to silence",
+            "range": {
+              "end": {
+                "character": 1,
+                "line": 1
+              },
+              "start": {
+                "character": 0,
+                "line": 1
+              }
+            },
+            "severity": 2,
+            "source": "tua"
+          },
+          {
+            "code": "TL4045",
+            "message": "local `b` defined at line 2 may be read before it is initialized; initialize with `nil` to silence",
+            "range": {
+              "end": {
+                "character": 23,
+                "line": 2
+              },
+              "start": {
+                "character": 22,
+                "line": 2
+              }
+            },
+            "severity": 2,
+            "source": "tua"
+          }
+        ],
+        "kind": "full"
+      }
+    },
+    {
+      "id": "callback-context",
+      "expectation": "Typed callback parameters contextual and wrong callback return rejected",
+      "check": {
+        "status": 1,
+        "stdout": "",
+        "stderr": "/Users/kyonru/Documents/projects/Experiments/tlua/target/devex-audit-2026-11-06/typing/callback-context/src/main.tua:2:39 error TL1003: type mismatch: expected string, found number\n"
+      },
+      "probes": [
+        {
+          "query": {
+            "needle": "x + 1"
+          },
+          "position": {
+            "line": 1,
+            "character": 39
+          },
+          "result": {
+            "contents": {
+              "kind": "markdown",
+              "value": "```tua\nparameter x: number\n```"
+            },
+            "range": {
+              "end": {
+                "character": 39,
+                "line": 1
+              },
+              "start": {
+                "character": 38,
+                "line": 1
+              }
+            }
+          }
+        },
+        {
+          "query": {
+            "needle": "result)"
+          },
+          "position": {
+            "line": 2,
+            "character": 7
+          },
+          "result": {
+            "contents": {
+              "kind": "markdown",
+              "value": "```tua\nlocal result: string\n```"
+            },
+            "range": {
+              "end": {
+                "character": 12,
+                "line": 2
+              },
+              "start": {
+                "character": 6,
+                "line": 2
+              }
+            }
+          }
+        }
+      ],
+      "diagnostics": {
+        "items": [
+          {
+            "code": "TL1003",
+            "message": "type mismatch: expected string, found number",
+            "range": {
+              "end": {
+                "character": 43,
+                "line": 1
+              },
+              "start": {
+                "character": 38,
+                "line": 1
+              }
+            },
+            "severity": 1,
+            "source": "tua"
+          }
+        ],
+        "kind": "full"
+      }
+    },
+    {
+      "id": "module-property",
+      "expectation": "Nested module property returns retain types",
+      "check": {
+        "status": 1,
+        "stdout": "",
+        "stderr": "/Users/kyonru/Documents/projects/Experiments/tlua/target/devex-audit-2026-11-06/typing/module-property/src/main.tua:3:21 error TL1003: type mismatch: expected string, found number\n"
+      },
+      "probes": [
+        {
+          "query": {
+            "needle": "value, bad"
+          },
+          "position": {
+            "line": 3,
+            "character": 7
+          },
+          "result": {
+            "contents": {
+              "kind": "markdown",
+              "value": "```tua\nlocal value: number\n```"
+            },
+            "range": {
+              "end": {
+                "character": 11,
+                "line": 3
+              },
+              "start": {
+                "character": 6,
+                "line": 3
+              }
+            }
+          }
+        }
+      ],
+      "diagnostics": {
+        "items": [
+          {
+            "code": "TL1003",
+            "message": "type mismatch: expected string, found number",
+            "range": {
+              "end": {
+                "character": 25,
+                "line": 2
+              },
+              "start": {
+                "character": 20,
+                "line": 2
+              }
+            },
+            "severity": 1,
+            "source": "tua"
+          }
+        ],
+        "kind": "full"
+      }
+    },
+    {
+      "id": "function-argument-expansion",
+      "expectation": "Final multi-return call expands into two call arguments",
+      "check": {
+        "status": 0,
+        "stdout": "checked 1 file(s)\n",
+        "stderr": ""
+      },
+      "probes": [
+        {
+          "query": {
+            "needle": "result)"
+          },
+          "position": {
+            "line": 3,
+            "character": 7
+          },
+          "result": {
+            "contents": {
+              "kind": "markdown",
+              "value": "```tua\nlocal result: string\n```"
+            },
+            "range": {
+              "end": {
+                "character": 12,
+                "line": 3
+              },
+              "start": {
+                "character": 6,
+                "line": 3
+              }
+            }
+          }
+        }
+      ],
+      "diagnostics": {
+        "items": [],
+        "kind": "full"
+      }
+    },
+    {
+      "id": "vararg-named",
+      "expectation": "Wrong native vararg must reject with fixed typed parameter",
+      "check": {
+        "status": 1,
+        "stdout": "",
+        "stderr": "/Users/kyonru/Documents/projects/Experiments/tlua/target/devex-audit-2026-11-06/typing/vararg-named/src/main.tua:2:15 error TL1003: type mismatch at ...: expected string, found number\n"
+      },
+      "probes": [
+        {
+          "query": {
+            "needle": "log(\"prefix\""
+          },
+          "position": {
+            "line": 1,
+            "character": 1
+          },
+          "result": {
+            "contents": {
+              "kind": "markdown",
+              "value": "```tua\nfunction log(prefix: string, ...: string): any\n```"
+            },
+            "range": {
+              "end": {
+                "character": 3,
+                "line": 1
+              },
+              "start": {
+                "character": 0,
+                "line": 1
+              }
+            }
+          }
+        },
+        {
+          "query": {
+            "needle": "log(\"prefix\"",
+            "method": "textDocument/signatureHelp",
+            "offset": 13
+          },
+          "position": {
+            "line": 1,
+            "character": 13
+          },
+          "result": {
+            "activeParameter": 1,
+            "activeSignature": 0,
+            "signatures": [
+              {
+                "label": "function log(prefix: string, ...: string): any",
+                "parameters": [
+                  {
+                    "label": "prefix: string"
+                  },
+                  {
+                    "label": "...: string"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "diagnostics": {
+        "items": [
+          {
+            "code": "TL1003",
+            "message": "type mismatch at ...: expected string, found number",
+            "range": {
+              "end": {
+                "character": 15,
+                "line": 1
+              },
+              "start": {
+                "character": 14,
+                "line": 1
+              }
+            },
+            "severity": 1,
+            "source": "tua"
+          }
+        ],
+        "kind": "full"
+      }
+    },
+    {
+      "id": "vararg-only",
+      "expectation": "Wrong native vararg must reject with no fixed parameters",
+      "check": {
+        "status": 1,
+        "stdout": "",
+        "stderr": "/Users/kyonru/Documents/projects/Experiments/tlua/target/devex-audit-2026-11-06/typing/vararg-only/src/main.tua:2:9 error TL1003: type mismatch at ...: expected string, found number\n"
+      },
+      "probes": [
+        {
+          "query": {
+            "needle": "collect(1)"
+          },
+          "position": {
+            "line": 1,
+            "character": 1
+          },
+          "result": {
+            "contents": {
+              "kind": "markdown",
+              "value": "```tua\nfunction collect(...: string): any\n```"
+            },
+            "range": {
+              "end": {
+                "character": 7,
+                "line": 1
+              },
+              "start": {
+                "character": 0,
+                "line": 1
+              }
+            }
+          }
+        },
+        {
+          "query": {
+            "needle": "collect(1)",
+            "method": "textDocument/signatureHelp",
+            "offset": 8
+          },
+          "position": {
+            "line": 1,
+            "character": 8
+          },
+          "result": {
+            "activeParameter": 0,
+            "activeSignature": 0,
+            "signatures": [
+              {
+                "label": "function collect(...: string): any",
+                "parameters": [
+                  {
+                    "label": "...: string"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "diagnostics": {
+        "items": [
+          {
+            "code": "TL1003",
+            "message": "type mismatch at ...: expected string, found number",
+            "range": {
+              "end": {
+                "character": 9,
+                "line": 1
+              },
+              "start": {
+                "character": 8,
+                "line": 1
+              }
+            },
+            "severity": 1,
+            "source": "tua"
+          }
+        ],
+        "kind": "full"
+      }
+    },
+    {
+      "id": "callback-annotated-param",
+      "expectation": "Annotating callback parameter must still reject numeric return expected string",
+      "check": {
+        "status": 1,
+        "stdout": "",
+        "stderr": "/Users/kyonru/Documents/projects/Experiments/tlua/target/devex-audit-2026-11-06/typing/callback-annotated-param/src/main.tua:2:47 error TL1003: type mismatch: expected string, found number\n"
+      },
+      "probes": [
+        {
+          "query": {
+            "needle": "x + 1"
+          },
+          "position": {
+            "line": 1,
+            "character": 47
+          },
+          "result": {
+            "contents": {
+              "kind": "markdown",
+              "value": "```tua\nparameter x: number\n```"
+            },
+            "range": {
+              "end": {
+                "character": 47,
+                "line": 1
+              },
+              "start": {
+                "character": 46,
+                "line": 1
+              }
+            }
+          }
+        }
+      ],
+      "diagnostics": {
+        "items": [
+          {
+            "code": "TL1003",
+            "message": "type mismatch: expected string, found number",
+            "range": {
+              "end": {
+                "character": 51,
+                "line": 1
+              },
+              "start": {
+                "character": 46,
+                "line": 1
+              }
+            },
+            "severity": 1,
+            "source": "tua"
+          }
+        ],
+        "kind": "full"
+      }
+    },
+    {
+      "id": "callback-function-value",
+      "expectation": "Callback stored in typed variable rejects wrong inferred body",
+      "check": {
+        "status": 1,
+        "stdout": "",
+        "stderr": "/Users/kyonru/Documents/projects/Experiments/tlua/target/devex-audit-2026-11-06/typing/callback-function-value/src/main.tua:1:60 error TL1003: type mismatch: expected string, found number\n"
+      },
+      "probes": [
+        {
+          "query": {
+            "needle": "x+1"
+          },
+          "position": {
+            "line": 0,
+            "character": 60
+          },
+          "result": {
+            "contents": {
+              "kind": "markdown",
+              "value": "```tua\nparameter x: any\n```"
+            },
+            "range": {
+              "end": {
+                "character": 60,
+                "line": 0
+              },
+              "start": {
+                "character": 59,
+                "line": 0
+              }
+            }
+          }
+        }
+      ],
+      "diagnostics": {
+        "items": [
+          {
+            "code": "TL1003",
+            "message": "type mismatch: expected string, found number",
+            "range": {
+              "end": {
+                "character": 62,
+                "line": 0
+              },
+              "start": {
+                "character": 59,
+                "line": 0
+              }
+            },
+            "severity": 1,
+            "source": "tua"
+          }
+        ],
+        "kind": "full"
+      }
+    },
+    {
+      "id": "local-call-chain",
+      "expectation": "Local call-result property chain must be checked like split form",
+      "check": {
+        "status": 1,
+        "stdout": "",
+        "stderr": "/Users/kyonru/Documents/projects/Experiments/tlua/target/devex-audit-2026-11-06/typing/local-call-chain/src/main.tua:3:18 error TL1003: type mismatch: expected string, found number\n"
+      },
+      "probes": [
+        {
+          "query": {
+            "needle": "value,bad"
+          },
+          "position": {
+            "line": 3,
+            "character": 7
+          },
+          "result": {
+            "contents": {
+              "kind": "markdown",
+              "value": "```tua\nlocal value: number\n```"
+            },
+            "range": {
+              "end": {
+                "character": 11,
+                "line": 3
+              },
+              "start": {
+                "character": 6,
+                "line": 3
+              }
+            }
+          }
+        }
+      ],
+      "diagnostics": {
+        "items": [
+          {
+            "code": "TL1003",
+            "message": "type mismatch: expected string, found number",
+            "range": {
+              "end": {
+                "character": 22,
+                "line": 2
+              },
+              "start": {
+                "character": 17,
+                "line": 2
+              }
+            },
+            "severity": 1,
+            "source": "tua"
+          }
+        ],
+        "kind": "full"
+      }
+    },
+    {
+      "id": "missing-slot-literal",
+      "expectation": "Known absent second assignment value should be nil",
+      "check": {
+        "status": 1,
+        "stdout": "",
+        "stderr": "/Users/kyonru/Documents/projects/Experiments/tlua/target/devex-audit-2026-11-06/typing/missing-slot-literal/src/main.tua:1:1 warning TL4028: assigning 1 value to 2 variables initializes extra variables with nil; add `nil` to the value list to silence\n/Users/kyonru/Documents/projects/Experiments/tlua/target/devex-audit-2026-11-06/typing/missing-slot-literal/src/main.tua:2:23 warning TL4045: local `b` defined at line 1 may be read before it is initialized; initialize with `nil` to silence\n/Users/kyonru/Documents/projects/Experiments/tlua/target/devex-audit-2026-11-06/typing/missing-slot-literal/src/main.tua:2:23 error TL1003: type mismatch: expected string, found nil\n"
+      },
+      "probes": [
+        {
+          "query": {
+            "needle": "b,wrong"
+          },
+          "position": {
+            "line": 2,
+            "character": 9
+          },
+          "result": {
+            "contents": {
+              "kind": "markdown",
+              "value": "```tua\nlocal b: nil\n```"
+            },
+            "range": {
+              "end": {
+                "character": 9,
+                "line": 2
+              },
+              "start": {
+                "character": 8,
+                "line": 2
+              }
+            }
+          }
+        }
+      ],
+      "diagnostics": {
+        "items": [
+          {
+            "code": "TL1003",
+            "message": "type mismatch: expected string, found nil",
+            "range": {
+              "end": {
+                "character": 23,
+                "line": 1
+              },
+              "start": {
+                "character": 22,
+                "line": 1
+              }
+            },
+            "severity": 1,
+            "source": "tua"
+          },
+          {
+            "code": "TL4028",
+            "message": "assigning 1 value to 2 variables initializes extra variables with nil; add `nil` to the value list to silence",
+            "range": {
+              "end": {
+                "character": 1,
+                "line": 0
+              },
+              "start": {
+                "character": 0,
+                "line": 0
+              }
+            },
+            "severity": 2,
+            "source": "tua"
+          },
+          {
+            "code": "TL4045",
+            "message": "local `b` defined at line 1 may be read before it is initialized; initialize with `nil` to silence",
+            "range": {
+              "end": {
+                "character": 23,
+                "line": 1
+              },
+              "start": {
+                "character": 22,
+                "line": 1
+              }
+            },
+            "severity": 2,
+            "source": "tua"
+          }
+        ],
+        "kind": "full"
+      }
+    },
+    {
+      "id": "shadowed-local-functions",
+      "expectation": "Each lexical function keeps its own parameter/return contract; both calls valid",
+      "check": {
+        "status": 0,
+        "stdout": "checked 1 file(s)\n",
+        "stderr": ""
+      },
+      "probes": [
+        {
+          "query": {
+            "needle": "convert(\"hello\")"
+          },
+          "position": {
+            "line": 3,
+            "character": 16
+          },
+          "result": {
+            "contents": {
+              "kind": "markdown",
+              "value": "```tua\nfunction convert(value: string): string\n```"
+            },
+            "range": {
+              "end": {
+                "character": 22,
+                "line": 3
+              },
+              "start": {
+                "character": 15,
+                "line": 3
+              }
+            }
+          }
+        },
+        {
+          "query": {
+            "needle": "inner)"
+          },
+          "position": {
+            "line": 4,
+            "character": 8
+          },
+          "result": {
+            "contents": {
+              "kind": "markdown",
+              "value": "```tua\nlocal inner: string\n```"
+            },
+            "range": {
+              "end": {
+                "character": 12,
+                "line": 4
+              },
+              "start": {
+                "character": 7,
+                "line": 4
+              }
+            }
+          }
+        },
+        {
+          "query": {
+            "needle": "convert(\"hello\")",
+            "method": "textDocument/signatureHelp",
+            "offset": 9
+          },
+          "position": {
+            "line": 3,
+            "character": 24
+          },
+          "result": {
+            "activeParameter": 0,
+            "activeSignature": 0,
+            "signatures": [
+              {
+                "label": "function convert(value: string): string",
+                "parameters": [
+                  {
+                    "label": "value: string"
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "query": {
+            "needle": "outer)"
+          },
+          "position": {
+            "line": 7,
+            "character": 7
+          },
+          "result": {
+            "contents": {
+              "kind": "markdown",
+              "value": "```tua\nlocal outer: number\n```"
+            },
+            "range": {
+              "end": {
+                "character": 11,
+                "line": 7
+              },
+              "start": {
+                "character": 6,
+                "line": 7
+              }
+            }
+          }
+        }
+      ],
+      "diagnostics": {
+        "items": [],
+        "kind": "full"
+      }
+    },
+    {
+      "id": "provenance-crosscheck-class",
+      "expectation": "Arithmetic and numeric literal hover should be unchanged by preceding declaration; independent hover lane crosscheck",
+      "check": {
+        "status": 0,
+        "stdout": "checked 1 file(s)\n",
+        "stderr": ""
+      },
+      "probes": [
+        {
+          "query": {
+            "needle": "6 * 7",
+            "offset": 2
+          },
+          "position": {
+            "line": 4,
+            "character": 17
+          },
+          "result": {
+            "contents": {
+              "kind": "markdown",
+              "value": "```tua\nexpression: number\n```"
+            },
+            "range": {
+              "end": {
+                "character": 20,
+                "line": 4
+              },
+              "start": {
+                "character": 15,
+                "line": 4
+              }
+            }
+          }
+        },
+        {
+          "query": {
+            "needle": "6 * 7",
+            "offset": 0
+          },
+          "position": {
+            "line": 4,
+            "character": 15
+          },
+          "result": {
+            "contents": {
+              "kind": "markdown",
+              "value": "```tua\nexpression: number\n```"
+            },
+            "range": {
+              "end": {
+                "character": 16,
+                "line": 4
+              },
+              "start": {
+                "character": 15,
+                "line": 4
+              }
+            }
+          }
+        },
+        {
+          "query": {
+            "needle": "answer)",
+            "offset": 2
+          },
+          "position": {
+            "line": 5,
+            "character": 8
+          },
+          "result": {
+            "contents": {
+              "kind": "markdown",
+              "value": "```tua\nlocal answer: number\n```"
+            },
+            "range": {
+              "end": {
+                "character": 12,
+                "line": 5
+              },
+              "start": {
+                "character": 6,
+                "line": 5
+              }
+            }
+          }
+        }
+      ],
+      "diagnostics": {
+        "items": [],
+        "kind": "full"
+      }
+    }
+  ]
+}

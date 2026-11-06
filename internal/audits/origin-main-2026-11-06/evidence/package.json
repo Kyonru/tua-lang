@@ -1,0 +1,10 @@
+{
+  "path": "/Users/kyonru/Documents/projects/Experiments/tlua/editors/vscode/tua-0.5.1-origin-audit.vsix",
+  "bytes": 8447981,
+  "sha256": "462343ee5f025e8f2dad7d5f5f11c7adb66320b373327ecdca8d09ef70d45a27",
+  "bundled_server_sha256": "1874c3b464b33e51c85f7be225b461b6071abffd82110df602f3475a25643f59",
+  "manifest_version": "0.5.1",
+  "archive_integrity": "pass",
+  "bundled_binary_matches_final_replay": true,
+  "host_target": "macOS arm64"
+}

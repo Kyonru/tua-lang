@@ -1,0 +1,110 @@
+import type { Body } from "./entities"
+local entities = require("entities")
+local player: Body = entities.create(400, 300, 13, 240)
+local enemies: Body[] = {}
+local elapsed = 0
+local spawnClock = 0
+local pulseClock = 0
+local score = 0
+local status = "playing"
+
+local function reset()
+  player.x = 400
+  player.y = 300
+  enemies = {}
+  elapsed = 0
+  spawnClock = 0
+  pulseClock = 0
+  score = 0
+  status = "playing"
+end
+
+local function spawnEnemy()
+  local side = math.random(1, 4)
+  local x = math.random(30, 770)
+  local y = math.random(30, 570)
+  if side == 1 then x = 0 elseif side == 2 then x = 800
+  elseif side == 3 then y = 0 else y = 600 end
+  table.insert(enemies, entities.create(x, y, 11, 65 + elapsed * 1.5))
+end
+
+function love.load()
+  love.window.setMode(800, 600)
+  love.window.setTitle("Pulse Arena — Tua trial")
+  reset()
+end
+
+function love.keypressed(key: string)
+  if key == "r" then reset() end
+  if key == "escape" then love.event.quit() end
+  if key == "space" and status == "playing" and pulseClock <= 0 then
+    pulseClock = 2
+    for i = #enemies, 1, -1 do
+      local dx = enemies[i].x - player.x
+      local dy = enemies[i].y - player.y
+      if dx * dx + dy * dy <= 130 * 130 then
+        table.remove(enemies, i)
+        score += 1
+      end
+    end
+  end
+end
+
+function love.update(dt: number)
+  if status ~= "playing" then return end
+  dt = math.min(dt, 0.05)
+  elapsed += dt
+  spawnClock -= dt
+  pulseClock = math.max(0, pulseClock - dt)
+  local dx = 0
+  local dy = 0
+  if love.keyboard.isDown("a", "left") then dx -= 1 end
+  if love.keyboard.isDown("d", "right") then dx += 1 end
+  if love.keyboard.isDown("w", "up") then dy -= 1 end
+  if love.keyboard.isDown("s", "down") then dy += 1 end
+  local length = math.sqrt(dx * dx + dy * dy)
+  if length > 0 then
+    player.x = math.max(15, math.min(785, player.x + dx / length * player.speed * dt))
+    player.y = math.max(15, math.min(585, player.y + dy / length * player.speed * dt))
+  end
+  if spawnClock <= 0 then
+    spawnEnemy()
+    spawnClock = math.max(0.22, 0.9 - elapsed * 0.012)
+  end
+  for _, enemy in ipairs(enemies) do
+    entities.moveToward(enemy, player, dt)
+    if entities.touches(enemy, player) then status = "lost" end
+  end
+  if elapsed >= 45 and status == "playing" then status = "won" end
+end
+
+function love.draw()
+  love.graphics.clear(0.035, 0.045, 0.08)
+  love.graphics.setColor(0.12, 0.18, 0.26)
+  for x = 0, 800, 40 do love.graphics.line(x, 0, x, 600) end
+  for y = 0, 600, 40 do love.graphics.line(0, y, 800, y) end
+  if pulseClock <= 0 then
+    love.graphics.setColor(0.15, 0.38, 0.43)
+    love.graphics.circle("line", player.x, player.y, 130)
+  end
+  love.graphics.setColor(0.2, 0.95, 0.8)
+  love.graphics.circle("fill", player.x, player.y, player.radius)
+  love.graphics.setColor(1, 0.32, 0.42)
+  for _, enemy in ipairs(enemies) do
+    love.graphics.circle("fill", enemy.x, enemy.y, enemy.radius)
+  end
+  love.graphics.setColor(1, 1, 1)
+  love.graphics.print("PULSE ARENA | Survive 45 seconds", 20, 15)
+  love.graphics.print("WASD / arrows: move   SPACE: pulse   R: restart", 20, 38)
+  love.graphics.print("Time: " .. math.floor(elapsed) .. "  Score: " .. score .. "  Pulse: " .. string.format("%.1f", pulseClock), 20, 61)
+  if status ~= "playing" then
+    love.graphics.printf(status == "won" and "SURVIVED! Press R" or "CAUGHT! Press R", 0, 280, 800, "center")
+  end
+end
+
+-- Small inspection seam for the deterministic trial runner; LOVE ignores this return.
+return {
+  snapshot = function()
+    return { player = player, enemies = enemies, elapsed = elapsed, score = score, status = status }
+  end,
+}

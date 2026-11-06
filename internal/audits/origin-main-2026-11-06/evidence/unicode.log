@@ -1,0 +1,34 @@
+[
+  {
+    prefix: 'abc',
+    hover: { contents: [Object], range: [Object] },
+    definition: {
+      range: [Object],
+      uri: 'file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-AjlGcv/src/main.tua'
+    }
+  },
+  {
+    prefix: '漢字',
+    hover: { contents: [Object], range: [Object] },
+    definition: {
+      range: [Object],
+      uri: 'file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-XSEeZ0/src/main.tua'
+    }
+  },
+  {
+    prefix: '😀',
+    hover: { contents: [Object], range: [Object] },
+    definition: {
+      range: [Object],
+      uri: 'file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-62C5ry/src/main.tua'
+    }
+  },
+  {
+    prefix: '😀😀😀😀😀😀😀😀',
+    hover: { contents: [Object], range: [Object] },
+    definition: {
+      range: [Object],
+      uri: 'file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-aTRqRi/src/main.tua'
+    }
+  }
+]

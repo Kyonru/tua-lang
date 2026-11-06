@@ -1,0 +1,466 @@
+[
+  {
+    "id": "T01",
+    "area": "Explicit annotations and inferred locals",
+    "owner": "typing",
+    "status": "tested",
+    "evidence": "typing/results.json cases: annotations, lua-doc-local",
+    "notes": "Explicit invalid assignments rejected; inferred scalar hover correct."
+  },
+  {
+    "id": "T02",
+    "area": "Assignments, reassignment and widening",
+    "owner": "typing",
+    "status": "tested",
+    "evidence": "typing/results.json cases: reassignment, scope-shadow",
+    "notes": "Stable inferred number contract rejects string; ordinary local shadowing works."
+  },
+  {
+    "id": "T03",
+    "area": "Parameters, defaults and varargs",
+    "owner": "typing",
+    "status": "tested",
+    "evidence": "typing/results.json cases: defaults, vararg-named, vararg-only, vararg-doc",
+    "notes": "Defaults/optionals exercised; TYP-03 native vararg metadata defect, LuaDoc control passes."
+  },
+  {
+    "id": "T04",
+    "area": "Returns and multiple returns",
+    "owner": "typing",
+    "status": "tested",
+    "evidence": "typing/results.json cases: implicit-return, annotated-fallthrough, multiple-returns, parenthesized-return, function-argument-expansion, multiple-return-forward",
+    "notes": "Fallthrough/ordinary tuple assignment good; TYP-04/05 value-list holes."
+  },
+  {
+    "id": "T05",
+    "area": "Contextual callbacks and closures",
+    "owner": "typing",
+    "status": "tested",
+    "evidence": "typing/results.json cases: callback-context, callback-function-value, callback-overload, closure-narrow, closure-mutation",
+    "notes": "TYP-01 contextual return checking differs by call path; indirect mutation is documented limitation."
+  },
+  {
+    "id": "T06",
+    "area": "Tables, nested records and mutation",
+    "owner": "typing",
+    "status": "tested",
+    "evidence": "typing/results.json cases: record-assignment, record-row-union, path-narrow",
+    "notes": "Nested writes rejected; optional row field inference and alias-mutation guard invalidation exercised."
+  },
+  {
+    "id": "T07",
+    "area": "Indexing, arrays, dictionaries and length",
+    "owner": "typing",
+    "status": "tested",
+    "evidence": "typing/results.json cases: array-reads, dictionary, grouped-union-array",
+    "notes": "Dense arrays, nilable rawget/remove/dictionaries, typed insert and grouped arrays exercised."
+  },
+  {
+    "id": "T08",
+    "area": "Optional values, unions and narrowing",
+    "owner": "typing",
+    "status": "tested",
+    "evidence": "typing/results.json cases: assert-narrow, union-is-positive, union-is, negative-is, correlated-return-mutation",
+    "notes": "Nil and true-is narrowing tested; negative-is capability gap, correlated guard mutation rejected."
+  },
+  {
+    "id": "T09",
+    "area": "Aliases, recursive Self and supported generics",
+    "owner": "typing",
+    "status": "tested",
+    "evidence": "typing/results.json cases: alias-self, imported-self, generic-unsupported",
+    "notes": "Recursive Self and imported aliases tested; generics explicitly not applicable to current contract, rejected TL0004."
+  },
+  {
+    "id": "T10",
+    "area": "Scope, shadowing and forward references",
+    "owner": "typing",
+    "status": "tested",
+    "evidence": "typing/results.json cases: scope-shadow, shadowed-local-functions, forward-local-alias",
+    "notes": "Ordinary scopes/typed forward locals work; independently confirmed hover-lane local-function shadowing defect."
+  },
+  {
+    "id": "T11",
+    "area": "Recursion and inferred function returns",
+    "owner": "typing",
+    "status": "tested",
+    "evidence": "typing/results.json cases: recursive-return, mutual-recursion-alias",
+    "notes": "Recursive inferred number and explicit forward callable mutual recursion tested."
+  },
+  {
+    "id": "T12",
+    "area": "Imports, require and module exports",
+    "owner": "typing",
+    "status": "tested",
+    "evidence": "typing/results.json cases: module-property, module-simple, module-return-simple, module-chain-split",
+    "notes": "TYP-02 terminal property chain checker divergence; direct/split module controls work."
+  },
+  {
+    "id": "T13",
+    "area": "Cross-file propagation and re-exports",
+    "owner": "typing",
+    "status": "tested",
+    "evidence": "typing/results.json cases: type-reexport, early-return-narrow, imported-self, imported-class",
+    "notes": "Re-exported declarations, nullable inferred records, Self and class instance type propagation tested."
+  },
+  {
+    "id": "T14",
+    "area": "Lua annotations and mixed Lua/Tua strictness",
+    "owner": "typing",
+    "status": "tested",
+    "evidence": "typing/results.json cases: lua-annotation, lua-gradual, lua-doc-local",
+    "notes": "LuaDoc arguments and native local contract reject bad values; ordinary Lua remains gradual."
+  },
+  {
+    "id": "T15",
+    "area": "Standard library typing",
+    "owner": "typing",
+    "status": "tested",
+    "evidence": "typing/results.json cases: stdlib-sort, stdlib-shadow, array-reads, assert-narrow",
+    "notes": "Sort contextual return checking, replaced table.remove binding, array builtins and assert guards exercised."
+  },
+  {
+    "id": "T16",
+    "area": "LOVE constructors and object returns",
+    "owner": "typing",
+    "status": "tested",
+    "evidence": "typing/results.json cases: love-returns, love-wrapper",
+    "notes": "Font constructor and object method returns, mouse tuple results, wrapper-module propagation tested."
+  },
+  {
+    "id": "T17",
+    "area": "Incorrect acceptance versus rejection",
+    "owner": "typing",
+    "status": "tested",
+    "evidence": "typing/results.json cases: TYP-01 through TYP-05; nominal-class-rejection, polymorphic-array",
+    "notes": "Both false acceptance and rejection covered; nominal/inherited class controls exercised."
+  },
+  {
+    "id": "T18",
+    "area": "Checker/editor type consistency",
+    "owner": "typing",
+    "status": "tested",
+    "evidence": "typing/results.json cases: results.json; multi-root-crosscheck.json; provenance-crosscheck variants",
+    "notes": "Actual LSP and CLI compared throughout; independent critical cross-surface symptoms confirmed."
+  },
+  {
+    "id": "C01",
+    "area": "Globals, locals, parameters and lexical scope",
+    "owner": "completion",
+    "status": "tested",
+    "evidence": "completion/evidence.json: locals, scope, params, shadow-library",
+    "notes": "45 scenarios; lexical controls pass; middle-token limitation CMP-03."
+  },
+  {
+    "id": "C02",
+    "area": "Keywords and snippets",
+    "owner": "completion",
+    "status": "tested",
+    "evidence": "completion/evidence.json: snippet, function-prefix, return-prefix",
+    "notes": "Statement snippets and insertion payloads verified; actual fn filtering remains unverified."
+  },
+  {
+    "id": "C03",
+    "area": "Module/path completion and escaping",
+    "owner": "completion",
+    "status": "tested",
+    "evidence": "completion/evidence.json: module-prefix, module-middle, static-import; applied-evidence.json",
+    "notes": "Module candidate paths pass; suffix replacement fails CMP-03."
+  },
+  {
+    "id": "C04",
+    "area": "Dot/colon members and nested fields",
+    "owner": "completion",
+    "status": "tested",
+    "evidence": "completion/evidence.json: member, nested, union, quoted-member, colon-record",
+    "notes": "Typed fields and common union members pass; quoted keys fail CMP-05."
+  },
+  {
+    "id": "C05",
+    "area": "Index and call-result chains",
+    "owner": "completion",
+    "status": "tested",
+    "evidence": "completion/evidence.json: indexed, call-result, nested-call-index, love-chain, void-chain; class-chain-evidence.json; completion/class-init-variants-evidence.json",
+    "notes": "Broad chains pass; CMP-07 shows whitespace-sensitive local class type fallback. Direct constructor chains still fail across10 body/init controls (U-01 root unresolved); class expression hover provenance owned HOV-03."
+  },
+  {
+    "id": "C06",
+    "area": "Candidate relevance, order, filtering and duplicates",
+    "owner": "completion",
+    "status": "tested",
+    "evidence": "completion/evidence.json: all labels, locals, scope, colon-record",
+    "notes": "No duplicate labels in45 scenarios; proximity order stable; colon data-field relevance noted."
+  },
+  {
+    "id": "C07",
+    "area": "Completion documentation and resolve",
+    "owner": "completion",
+    "status": "tested",
+    "evidence": "completion/evidence.json: resolved items for module, lua-module, LOVE cases",
+    "notes": "Resolve adds docs/signatures/colon edits; variable details remain sparse but no blanket defect claimed."
+  },
+  {
+    "id": "C08",
+    "area": "Insertion text, edits and replacement ranges",
+    "owner": "completion",
+    "status": "tested",
+    "evidence": "completion/applied-evidence.json; evidence.json; no-snippet-support.json",
+    "notes": "Applied exact edits for paths/keys/calls; suffix, escaping and capability defects CMP-03 through CMP-06."
+  },
+  {
+    "id": "C09",
+    "area": "Incomplete and malformed edits",
+    "owner": "completion",
+    "status": "tested",
+    "evidence": "completion/evidence.json: malformed-stdlib, incomplete-class, callback*, middle-identifier",
+    "notes": "Class and stdlib recovery pass; same-line callback layout limitation recorded."
+  },
+  {
+    "id": "C10",
+    "area": "LOVE members and method-call correction",
+    "owner": "completion",
+    "status": "tested",
+    "evidence": "completion/evidence.json: love-global, love-colon, love-dot, love-existing*, love-chain, void-chain, enum",
+    "notes": "Docs/colon rewrite resolve pass; existing call duplication CMP-03."
+  },
+  {
+    "id": "C11",
+    "area": "Lua libraries and mixed-source modules",
+    "owner": "completion",
+    "status": "tested",
+    "evidence": "completion/evidence.json: shadow-library, malformed-stdlib, module, lua-module",
+    "notes": "Mixed-provider .tua/.lua projects tested; direct Lua editor-client registration owned by lead."
+  },
+  {
+    "id": "C12",
+    "area": "Assets and project roots",
+    "owner": "completion",
+    "status": "tested",
+    "evidence": "completion/evidence.json: asset, asset-middle, asset-apostrophe; applied-evidence.json",
+    "notes": "Default source root PNG inventory tested; custom/multiroot coverage owned by workflow lane."
+  },
+  {
+    "id": "C13",
+    "area": "Diagnostic suggestions and quick fixes",
+    "owner": "completion",
+    "status": "tested",
+    "evidence": "completion/actions-evidence.json: eight scenarios and outcomes",
+    "notes": "Suggestions observed and same-document edits applied/rechecked; signature suppression panics CMP-02."
+  },
+  {
+    "id": "C14",
+    "area": "Code actions and edit application",
+    "owner": "completion",
+    "status": "tested",
+    "evidence": "completion/actions-evidence.json; actions.js",
+    "notes": "Same-document action application verified; CreateFile missing-module operation inspected only, not applied."
+  },
+  {
+    "id": "C15",
+    "area": "Server/client completion configuration",
+    "owner": "completion",
+    "status": "tested",
+    "evidence": "completion/no-snippet-support.json; workflow/editor-evidence.json; editors/vscode/package.json:72",
+    "notes": "Server capability matrix plus actual VS Code invoked completion and popup; non-VS Code clients protocol-only."
+  },
+  {
+    "id": "H01",
+    "area": "Local and parameter hover",
+    "owner": "hover",
+    "status": "tested",
+    "evidence": "hover/evidence.json basics, multi-return, narrowing, callback; focused-evidence.json shadow-signature",
+    "notes": "Typed/inferred locals, callback parameters and narrowing pass; same-name function identity HOV-02 fails."
+  },
+  {
+    "id": "H02",
+    "area": "Imported symbol and alias hover",
+    "owner": "hover",
+    "status": "tested",
+    "evidence": "hover/evidence.json imported; imports-and-docs-evidence.json",
+    "notes": "Lua module function return/docs, imported CounterInstance aliases, member types pass."
+  },
+  {
+    "id": "H03",
+    "area": "Fields, methods and chained hover",
+    "owner": "hover",
+    "status": "tested",
+    "evidence": "hover/focused-evidence.json chain-love, chain-love-value, chain-class; class-variants-evidence.json",
+    "notes": "Simple fields/direct methods pass; call-result method hover HOV-01, class provenance HOV-03 fail."
+  },
+  {
+    "id": "H04",
+    "area": "Function and multiple-return signatures",
+    "owner": "hover",
+    "status": "tested",
+    "evidence": "hover/evidence.json basics, multi-return, varargs; focused-evidence.json default, optional, typed-vararg, luadoc-vararg",
+    "notes": "Multiple return display passes. Native optional/default display HOV-04 and native vararg TYP-03 lose metadata."
+  },
+  {
+    "id": "H05",
+    "area": "Overloads and active signature",
+    "owner": "hover",
+    "status": "tested",
+    "evidence": "hover/evidence.json overload,love; focused-evidence.json overload-type",
+    "notes": "Alternatives and arity-based active selection implemented; type-aware ranking HOV-G01 is a gap matching documented limit."
+  },
+  {
+    "id": "H06",
+    "area": "Nested calls and active parameter",
+    "owner": "hover",
+    "status": "tested",
+    "evidence": "hover/evidence.json nested,table-arg,callback-arg,varargs",
+    "notes": "Correct nested/outer active parameters through comments, strings, table/function arguments; vararg index clamps."
+  },
+  {
+    "id": "H07",
+    "area": "Dot/colon and implicit self",
+    "owner": "hover",
+    "status": "tested",
+    "evidence": "hover/evidence.json methods,classes; imports-and-docs-evidence.json",
+    "notes": "Typed table colon hides self; dot retains it. Imported native colon signature matches. Chain bugs separate."
+  },
+  {
+    "id": "H08",
+    "area": "LOVE and Lua API documentation",
+    "owner": "hover",
+    "status": "tested",
+    "evidence": "hover/evidence.json love,stdlib,imported; focused-evidence.json chain-love-value",
+    "notes": "Direct LOVE/Lua hover+signature docs and return tuples pass; chained hover identity HOV-01 fails."
+  },
+  {
+    "id": "H09",
+    "area": "Hover ranges, Markdown and readability",
+    "owner": "hover",
+    "status": "tested",
+    "evidence": "hover/focused-evidence.json; expression-provenance-evidence.json; unicode-crosscheck.json; imports-and-docs-evidence.json",
+    "notes": "Protocol Markdown inspected; normal ranges good, class fallback raw-span HOV-03 wrong; independent Unicode workflow crosscheck confirmed. Actual VSCode rendering not tested in this lane."
+  },
+  {
+    "id": "H10",
+    "area": "Agreement with completion, diagnostics and hints",
+    "owner": "hover",
+    "status": "tested",
+    "evidence": "hover/evidence.json inlay hints; focused-evidence.json; crosscheck-comment.js",
+    "notes": "Compared CLI/pull diagnostics and completion on narrowed/annotated/call-chain/default/vararg cases. HOV-02 wrong consistently; HOV-01 inconsistent. Worker panic crosscheck owned completion."
+  },
+  {
+    "id": "H11",
+    "area": "Annotation tags and malformed comments",
+    "owner": "hover",
+    "status": "tested",
+    "evidence": "hover/evidence.json annotation; focused-evidence.json full-tags; imports-and-docs-evidence.json",
+    "notes": "Valid tags return semantic docs/offline link; incomplete tag hover absent (known gap HOV-G03); unknown tags conservative null."
+  },
+  {
+    "id": "W01",
+    "area": "Cold project open and file switching",
+    "owner": "lead",
+    "status": "tested",
+    "evidence": "workflow/performance-evidence.json; workflow/editor-evidence.json",
+    "notes": "Three bundled projects, fresh opens and real editor document switching."
+  },
+  {
+    "id": "W02",
+    "area": "Unsaved buffers and semantic invalidation",
+    "owner": "lead",
+    "status": "tested",
+    "evidence": "workflow/lifecycle-evidence.json; workflow/freshness-evidence.json",
+    "notes": "Full unsaved overlays, close-to-disk restoration and incremental UTF-16/CRLF edits."
+  },
+  {
+    "id": "W03",
+    "area": "Imported dependency edits",
+    "owner": "lead",
+    "status": "tested",
+    "evidence": "workflow/lifecycle-evidence.json",
+    "notes": "Unsaved and watched provider type changes reach importer hover/diagnostics."
+  },
+  {
+    "id": "W04",
+    "area": "Dependency rename and deletion",
+    "owner": "lead",
+    "status": "tested",
+    "evidence": "workflow/lifecycle-evidence.json",
+    "notes": "Watched rename/delete/recreate tested; willRenameFiles import-edit behavior relies on existing suite, not a new applied-resource fixture."
+  },
+  {
+    "id": "W05",
+    "area": "Workspace configuration and roots",
+    "owner": "lead",
+    "status": "tested",
+    "evidence": "workflow/lifecycle-evidence.json; ARCHITECTURE.md",
+    "notes": "Configured roots and diagnostic globals reload tested; custom extensions/declaration roots not exhaustively permuted."
+  },
+  {
+    "id": "W06",
+    "area": "Multi-project isolation",
+    "owner": "lead",
+    "status": "tested",
+    "evidence": "workflow/lifecycle-evidence.json; typing/multi-root-crosscheck.json; hover/review-single-roots-evidence.json",
+    "notes": "WF-02 confirmed; matching standalone project controls pass."
+  },
+  {
+    "id": "W07",
+    "area": "Unicode/UTF-16 and LSP ranges",
+    "owner": "lead",
+    "status": "tested",
+    "evidence": "workflow/unicode-evidence.json; workflow/editor-evidence.json; workflow/freshness-evidence.json",
+    "notes": "ASCII/BMP/non-BMP, actual rename application, CRLF incremental sync; WF-01 confirmed. Combining sequences not separately enumerated."
+  },
+  {
+    "id": "W08",
+    "area": "Diagnostic freshness and pull behavior",
+    "owner": "lead",
+    "status": "tested",
+    "evidence": "workflow/lifecycle-evidence.json; workflow/freshness-evidence.json; evidence/baseline-summary.txt",
+    "notes": "Pull fast/full staging and rapid push edits tested; final state fresh. No claim every scheduling interleaving is covered."
+  },
+  {
+    "id": "W09",
+    "area": "Completion/hover/signature latency",
+    "owner": "lead",
+    "status": "tested",
+    "evidence": "workflow/performance-evidence.json; workflow/editor-evidence.json",
+    "notes": "Local protocol timings plus selected real editor provider timings; not key-to-menu/long-session certification."
+  },
+  {
+    "id": "W10",
+    "area": "Invalid syntax recovery, hangs and crashes",
+    "owner": "lead",
+    "status": "tested",
+    "evidence": "workflow/lifecycle-evidence.json; completion/actions-evidence.json; hover/comment-crosscheck.json",
+    "notes": "Trailing-dot recovery works; valid signature comment causes caught request-worker panic (CMP-02), process recovers. No unbounded fuzz claim."
+  },
+  {
+    "id": "W11",
+    "area": "VS Code client integration and suggestions",
+    "owner": "lead",
+    "status": "tested",
+    "evidence": "workflow/editor-evidence.json; workflow/editor-suggest.png",
+    "notes": "Actual VS Code completion provider/UI and rename edits; no third-party editor UI."
+  },
+  {
+    "id": "W12",
+    "area": "Representative bundled projects",
+    "owner": "lead",
+    "status": "tested",
+    "evidence": "workflow/performance-evidence.json; VERIFICATION.md",
+    "notes": "Features, Starfall, LOVE-full checked with CLI and queried through LSP; no full-game behavioral parity claim."
+  },
+  {
+    "id": "W13",
+    "area": "Shared semantic paths and architectural risk",
+    "owner": "lead",
+    "status": "inspected only",
+    "evidence": "ARCHITECTURE.md; lane source references",
+    "notes": "Shared paths/caches/provenance/routing inspected and reconciled with reproductions; no architecture change or exhaustive path proof."
+  },
+  {
+    "id": "W14",
+    "area": "Tests and trusted CI gate mapping",
+    "owner": "lead",
+    "status": "tested",
+    "evidence": "ARCHITECTURE.md; evidence/baseline-summary.txt; VERIFICATION.md",
+    "notes": "Existing workspace suite executed; tests and trusted CI/release wiring inspected. Remote CI not run."
+  }
+]

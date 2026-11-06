@@ -1,0 +1,273 @@
+[
+  {
+    "layout": "spaced",
+    "source": "final class Tank {\n fuel: number\n init(capacity: number) { self.fuel = capacity }\n getFuel(cost: number): number { return self.fuel - cost }\n}\nlocal tank = Tank.new(12)\nlocal remaining = tank:getFuel(1)\nlocal wrong: string = tank.fuel\nprint(remaining, wrong)\n",
+    "check": {
+      "status": 1,
+      "stdout": "",
+      "stderr": "/Users/kyonru/Documents/projects/Experiments/tlua/target/devex-audit-2026-11-06/typing/class-whitespace/spaced/src/main.tua:8:23 error TL1003: type mismatch: expected string, found number\n"
+    },
+    "queries": [
+      {
+        "label": "completion",
+        "method": "textDocument/completion",
+        "position": {
+          "line": 6,
+          "character": 23
+        },
+        "result": [
+          {
+            "data": {
+              "kind": "field",
+              "label": "fuel",
+              "position": {
+                "character": 23,
+                "line": 6
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/target/devex-audit-2026-11-06/typing/class-whitespace/spaced/src/main.tua"
+            },
+            "kind": 5,
+            "label": "fuel",
+            "sortText": "0000_fuel"
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "getFuel",
+              "position": {
+                "character": 23,
+                "line": 6
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/target/devex-audit-2026-11-06/typing/class-whitespace/spaced/src/main.tua"
+            },
+            "kind": 3,
+            "label": "getFuel",
+            "sortText": "0001_getFuel"
+          }
+        ]
+      },
+      {
+        "label": "receiver",
+        "method": "textDocument/hover",
+        "position": {
+          "line": 6,
+          "character": 19
+        },
+        "result": {
+          "contents": {
+            "kind": "markdown",
+            "value": "```tua\nlocal tank: Tank\n```"
+          },
+          "range": {
+            "end": {
+              "character": 22,
+              "line": 6
+            },
+            "start": {
+              "character": 18,
+              "line": 6
+            }
+          }
+        }
+      },
+      {
+        "label": "signature",
+        "method": "textDocument/signatureHelp",
+        "position": {
+          "line": 6,
+          "character": 31
+        },
+        "result": {
+          "activeParameter": 0,
+          "activeSignature": 0,
+          "signatures": [
+            {
+              "label": "function tank:getFuel(cost: number): number",
+              "parameters": [
+                {
+                  "label": "cost: number"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "label": "field",
+        "method": "textDocument/hover",
+        "position": {
+          "line": 7,
+          "character": 28
+        },
+        "result": {
+          "contents": {
+            "kind": "markdown",
+            "value": "```tua\n(field) fuel: number\n```"
+          },
+          "range": {
+            "end": {
+              "character": 31,
+              "line": 7
+            },
+            "start": {
+              "character": 27,
+              "line": 7
+            }
+          }
+        }
+      },
+      {
+        "label": "result",
+        "method": "textDocument/hover",
+        "position": {
+          "line": 8,
+          "character": 8
+        },
+        "result": {
+          "contents": {
+            "kind": "markdown",
+            "value": "```tua\nlocal remaining: number\n```"
+          },
+          "range": {
+            "end": {
+              "character": 15,
+              "line": 8
+            },
+            "start": {
+              "character": 6,
+              "line": 8
+            }
+          }
+        }
+      }
+    ],
+    "diagnostics": {
+      "items": [
+        {
+          "code": "TL1003",
+          "message": "type mismatch: expected string, found number",
+          "range": {
+            "end": {
+              "character": 31,
+              "line": 7
+            },
+            "start": {
+              "character": 22,
+              "line": 7
+            }
+          },
+          "severity": 1,
+          "source": "tua"
+        }
+      ],
+      "kind": "full"
+    }
+  },
+  {
+    "layout": "compact",
+    "source": "final class Tank {\n fuel: number\n init(capacity: number) { self.fuel = capacity }\n getFuel(cost: number): number { return self.fuel - cost }\n}\nlocal tank=Tank.new(12)\nlocal remaining = tank:getFuel(1)\nlocal wrong: string = tank.fuel\nprint(remaining, wrong)\n",
+    "check": {
+      "status": 1,
+      "stdout": "",
+      "stderr": "/Users/kyonru/Documents/projects/Experiments/tlua/target/devex-audit-2026-11-06/typing/class-whitespace/compact/src/main.tua:8:23 error TL1003: type mismatch: expected string, found number\n"
+    },
+    "queries": [
+      {
+        "label": "completion",
+        "method": "textDocument/completion",
+        "position": {
+          "line": 6,
+          "character": 23
+        },
+        "result": []
+      },
+      {
+        "label": "receiver",
+        "method": "textDocument/hover",
+        "position": {
+          "line": 6,
+          "character": 19
+        },
+        "result": {
+          "contents": {
+            "kind": "markdown",
+            "value": "```tua\nlocal tank: any\n```"
+          },
+          "range": {
+            "end": {
+              "character": 22,
+              "line": 6
+            },
+            "start": {
+              "character": 18,
+              "line": 6
+            }
+          }
+        }
+      },
+      {
+        "label": "signature",
+        "method": "textDocument/signatureHelp",
+        "position": {
+          "line": 6,
+          "character": 31
+        },
+        "result": null
+      },
+      {
+        "label": "field",
+        "method": "textDocument/hover",
+        "position": {
+          "line": 7,
+          "character": 28
+        },
+        "result": null
+      },
+      {
+        "label": "result",
+        "method": "textDocument/hover",
+        "position": {
+          "line": 8,
+          "character": 8
+        },
+        "result": {
+          "contents": {
+            "kind": "markdown",
+            "value": "```tua\nlocal remaining: any\n```"
+          },
+          "range": {
+            "end": {
+              "character": 15,
+              "line": 8
+            },
+            "start": {
+              "character": 6,
+              "line": 8
+            }
+          }
+        }
+      }
+    ],
+    "diagnostics": {
+      "items": [
+        {
+          "code": "TL1003",
+          "message": "type mismatch: expected string, found number",
+          "range": {
+            "end": {
+              "character": 31,
+              "line": 7
+            },
+            "start": {
+              "character": 22,
+              "line": 7
+            }
+          },
+          "severity": 1,
+          "source": "tua"
+        }
+      ],
+      "kind": "full"
+    }
+  }
+]

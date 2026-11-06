@@ -1,0 +1,1772 @@
+{
+  "binary": "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+  "sessions": [
+    {
+      "name": "lifecycle-pull",
+      "files": {
+        "main": "local dep = require(\"dep\")\nlocal total: number = dep.value\nprint(dep.value, total)\n",
+        "dep": "return {value=1}"
+      },
+      "evidence": [
+        {
+          "label": "initialize",
+          "method": "initialize",
+          "params": {
+            "processId": 14110,
+            "rootUri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-CTbWuh",
+            "capabilities": {
+              "textDocument": {
+                "diagnostic": {
+                  "dynamicRegistration": false
+                }
+              },
+              "workspace": {
+                "diagnostics": {
+                  "refreshSupport": true
+                }
+              }
+            },
+            "workspaceFolders": [
+              {
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-CTbWuh",
+                "name": "tua-devex-audit-CTbWuh"
+              }
+            ]
+          },
+          "result": {
+            "capabilities": {
+              "callHierarchyProvider": true,
+              "codeActionProvider": {
+                "codeActionKinds": [
+                  "quickfix",
+                  "source.organizeImports",
+                  "source.sortImports",
+                  "source.removeUnusedImports",
+                  "source.tua.createMissingLoveCallbacks",
+                  "source.fixAll"
+                ]
+              },
+              "codeLensProvider": {
+                "resolveProvider": true
+              },
+              "completionProvider": {
+                "resolveProvider": true,
+                "triggerCharacters": [
+                  ":",
+                  ".",
+                  "\"",
+                  "'",
+                  "@",
+                  "-",
+                  "_",
+                  "a",
+                  "b",
+                  "c",
+                  "d",
+                  "e",
+                  "f",
+                  "g",
+                  "h",
+                  "i",
+                  "j",
+                  "k",
+                  "l",
+                  "m",
+                  "n",
+                  "o",
+                  "p",
+                  "q",
+                  "r",
+                  "s",
+                  "t",
+                  "u",
+                  "v",
+                  "w",
+                  "x",
+                  "y",
+                  "z",
+                  "A",
+                  "B",
+                  "C",
+                  "D",
+                  "E",
+                  "F",
+                  "G",
+                  "H",
+                  "I",
+                  "J",
+                  "K",
+                  "L",
+                  "M",
+                  "N",
+                  "O",
+                  "P",
+                  "Q",
+                  "R",
+                  "S",
+                  "T",
+                  "U",
+                  "V",
+                  "W",
+                  "X",
+                  "Y",
+                  "Z",
+                  "0",
+                  "1",
+                  "2",
+                  "3",
+                  "4",
+                  "5",
+                  "6",
+                  "7",
+                  "8",
+                  "9"
+                ]
+              },
+              "definitionProvider": true,
+              "diagnosticProvider": {
+                "interFileDependencies": true,
+                "workspaceDiagnostics": false
+              },
+              "documentFormattingProvider": true,
+              "documentHighlightProvider": true,
+              "documentLinkProvider": {
+                "resolveProvider": false
+              },
+              "documentOnTypeFormattingProvider": {
+                "firstTriggerCharacter": "\n",
+                "moreTriggerCharacter": [
+                  "}",
+                  ")",
+                  "]",
+                  ",",
+                  "d"
+                ]
+              },
+              "documentRangeFormattingProvider": true,
+              "documentSymbolProvider": true,
+              "foldingRangeProvider": true,
+              "hoverProvider": true,
+              "implementationProvider": true,
+              "inlayHintProvider": {
+                "resolveProvider": false
+              },
+              "inlineCompletionProvider": true,
+              "referencesProvider": true,
+              "renameProvider": {
+                "prepareProvider": true
+              },
+              "selectionRangeProvider": true,
+              "semanticTokensProvider": {
+                "full": {
+                  "delta": true
+                },
+                "legend": {
+                  "tokenModifiers": [
+                    "declaration",
+                    "readonly",
+                    "deprecated",
+                    "modification",
+                    "defaultLibrary",
+                    "propertyChain1",
+                    "propertyChain2",
+                    "propertyChain3",
+                    "propertyChain4"
+                  ],
+                  "tokenTypes": [
+                    "type",
+                    "function",
+                    "variable",
+                    "parameter",
+                    "property",
+                    "method",
+                    "class",
+                    "enum",
+                    "enumMember",
+                    "namespace",
+                    "event",
+                    "label",
+                    "decorator"
+                  ]
+                },
+                "range": true
+              },
+              "signatureHelpProvider": {
+                "retriggerCharacters": [
+                  ")"
+                ],
+                "triggerCharacters": [
+                  "(",
+                  ","
+                ]
+              },
+              "textDocumentSync": {
+                "change": 2,
+                "openClose": true,
+                "save": {
+                  "includeText": true
+                }
+              },
+              "typeDefinitionProvider": true,
+              "workspace": {
+                "fileOperations": {
+                  "willRename": {
+                    "filters": [
+                      {
+                        "pattern": {
+                          "glob": "**/*"
+                        },
+                        "scheme": "file"
+                      }
+                    ]
+                  }
+                },
+                "workspaceFolders": {
+                  "changeNotifications": true,
+                  "supported": true
+                }
+              },
+              "workspaceSymbolProvider": true
+            },
+            "serverInfo": {
+              "name": "tua-lsp",
+              "version": "0.5.1"
+            }
+          },
+          "ms": 2.8452920000000006
+        },
+        {
+          "label": "initial-hover",
+          "method": "textDocument/hover",
+          "params": {
+            "textDocument": {
+              "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-CTbWuh/src/main.tua"
+            },
+            "position": {
+              "line": 2,
+              "character": 11
+            }
+          },
+          "result": {
+            "contents": {
+              "kind": "markdown",
+              "value": "```tua\n(field) dep.value: number\n```\n\n---\n\n- kind: field\n- module: /var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-CTbWuh/src/dep.tua"
+            },
+            "range": {
+              "end": {
+                "character": 15,
+                "line": 2
+              },
+              "start": {
+                "character": 10,
+                "line": 2
+              }
+            }
+          },
+          "ms": 15.378250000000001
+        },
+        {
+          "label": "initial-diagnostics",
+          "method": "textDocument/diagnostic",
+          "params": {
+            "textDocument": {
+              "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-CTbWuh/src/main.tua"
+            }
+          },
+          "result": {
+            "items": [],
+            "kind": "full"
+          },
+          "ms": 1.3242919999999998
+        },
+        {
+          "label": "unsaved-dependency-hover",
+          "method": "textDocument/hover",
+          "params": {
+            "textDocument": {
+              "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-CTbWuh/src/main.tua"
+            },
+            "position": {
+              "line": 2,
+              "character": 11
+            }
+          },
+          "result": {
+            "contents": {
+              "kind": "markdown",
+              "value": "```tua\n(field) dep.value: string\n```\n\n---\n\n- kind: field\n- module: /var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-CTbWuh/src/dep.tua"
+            },
+            "range": {
+              "end": {
+                "character": 15,
+                "line": 2
+              },
+              "start": {
+                "character": 10,
+                "line": 2
+              }
+            }
+          },
+          "ms": 1.8900000000000006
+        },
+        {
+          "label": "unsaved-dependency-diagnostics",
+          "method": "textDocument/diagnostic",
+          "params": {
+            "textDocument": {
+              "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-CTbWuh/src/main.tua"
+            }
+          },
+          "result": {
+            "items": [
+              {
+                "code": "TL1003",
+                "message": "type mismatch: expected number, found string",
+                "range": {
+                  "end": {
+                    "character": 31,
+                    "line": 1
+                  },
+                  "start": {
+                    "character": 22,
+                    "line": 1
+                  }
+                },
+                "severity": 1,
+                "source": "tua"
+              }
+            ],
+            "kind": "full"
+          },
+          "ms": 1.0023750000000007
+        },
+        {
+          "label": "closed-dependency-hover",
+          "method": "textDocument/hover",
+          "params": {
+            "textDocument": {
+              "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-CTbWuh/src/main.tua"
+            },
+            "position": {
+              "line": 2,
+              "character": 11
+            }
+          },
+          "result": {
+            "contents": {
+              "kind": "markdown",
+              "value": "```tua\n(field) dep.value: number\n```\n\n---\n\n- kind: field\n- module: /var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-CTbWuh/src/dep.tua"
+            },
+            "range": {
+              "end": {
+                "character": 15,
+                "line": 2
+              },
+              "start": {
+                "character": 10,
+                "line": 2
+              }
+            }
+          },
+          "ms": 1.5402920000000009
+        },
+        {
+          "label": "closed-dependency-diagnostics",
+          "method": "textDocument/diagnostic",
+          "params": {
+            "textDocument": {
+              "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-CTbWuh/src/main.tua"
+            }
+          },
+          "result": {
+            "items": [],
+            "kind": "full"
+          },
+          "ms": 1.099333999999999
+        },
+        {
+          "label": "watched-dependency-hover",
+          "method": "textDocument/hover",
+          "params": {
+            "textDocument": {
+              "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-CTbWuh/src/main.tua"
+            },
+            "position": {
+              "line": 2,
+              "character": 11
+            }
+          },
+          "result": {
+            "contents": {
+              "kind": "markdown",
+              "value": "```tua\n(field) dep.value: boolean\n```\n\n---\n\n- kind: field\n- module: /var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-CTbWuh/src/dep.tua"
+            },
+            "range": {
+              "end": {
+                "character": 15,
+                "line": 2
+              },
+              "start": {
+                "character": 10,
+                "line": 2
+              }
+            }
+          },
+          "ms": 2.1998330000000053
+        },
+        {
+          "label": "watched-dependency-diagnostics",
+          "method": "textDocument/diagnostic",
+          "params": {
+            "textDocument": {
+              "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-CTbWuh/src/main.tua"
+            }
+          },
+          "result": {
+            "items": [
+              {
+                "code": "TL1003",
+                "message": "type mismatch: expected number, found boolean",
+                "range": {
+                  "end": {
+                    "character": 31,
+                    "line": 1
+                  },
+                  "start": {
+                    "character": 22,
+                    "line": 1
+                  }
+                },
+                "severity": 1,
+                "source": "tua"
+              }
+            ],
+            "kind": "full"
+          },
+          "ms": 1.2680420000000012
+        },
+        {
+          "label": "renamed-missing-import-hover",
+          "method": "textDocument/hover",
+          "params": {
+            "textDocument": {
+              "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-CTbWuh/src/main.tua"
+            },
+            "position": {
+              "line": 2,
+              "character": 11
+            }
+          },
+          "result": null,
+          "ms": 1.1876250000000041
+        },
+        {
+          "label": "renamed-missing-import-diagnostics",
+          "method": "textDocument/diagnostic",
+          "params": {
+            "textDocument": {
+              "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-CTbWuh/src/main.tua"
+            }
+          },
+          "result": {
+            "items": [
+              {
+                "code": "TL4002",
+                "message": "require file not found: `dep` (searched: /var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-CTbWuh/src, /var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-CTbWuh/build)",
+                "range": {
+                  "end": {
+                    "character": 22,
+                    "line": 0
+                  },
+                  "start": {
+                    "character": 21,
+                    "line": 0
+                  }
+                },
+                "severity": 2,
+                "source": "tua"
+              }
+            ],
+            "kind": "full"
+          },
+          "ms": 1.3122499999999988
+        },
+        {
+          "label": "renamed-import-updated-hover",
+          "method": "textDocument/hover",
+          "params": {
+            "textDocument": {
+              "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-CTbWuh/src/main.tua"
+            },
+            "position": {
+              "line": 2,
+              "character": 11
+            }
+          },
+          "result": {
+            "contents": {
+              "kind": "markdown",
+              "value": "```tua\n(field) dep.value: boolean\n```\n\n---\n\n- kind: field\n- module: /var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-CTbWuh/src/renamed.tua"
+            },
+            "range": {
+              "end": {
+                "character": 15,
+                "line": 2
+              },
+              "start": {
+                "character": 10,
+                "line": 2
+              }
+            }
+          },
+          "ms": 1.127958999999997
+        },
+        {
+          "label": "renamed-import-updated-diagnostics",
+          "method": "textDocument/diagnostic",
+          "params": {
+            "textDocument": {
+              "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-CTbWuh/src/main.tua"
+            }
+          },
+          "result": {
+            "items": [],
+            "kind": "full"
+          },
+          "ms": 0.8975420000000014
+        },
+        {
+          "label": "renamed-import-updated-idle-hover",
+          "method": "textDocument/hover",
+          "params": {
+            "textDocument": {
+              "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-CTbWuh/src/main.tua"
+            },
+            "position": {
+              "line": 2,
+              "character": 11
+            }
+          },
+          "result": {
+            "contents": {
+              "kind": "markdown",
+              "value": "```tua\n(field) dep.value: boolean\n```\n\n---\n\n- kind: field\n- module: /var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-CTbWuh/src/renamed.tua"
+            },
+            "range": {
+              "end": {
+                "character": 15,
+                "line": 2
+              },
+              "start": {
+                "character": 10,
+                "line": 2
+              }
+            }
+          },
+          "ms": 1.0472920000000272
+        },
+        {
+          "label": "renamed-import-updated-idle-diagnostics",
+          "method": "textDocument/diagnostic",
+          "params": {
+            "textDocument": {
+              "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-CTbWuh/src/main.tua"
+            }
+          },
+          "result": {
+            "items": [
+              {
+                "code": "TL1003",
+                "message": "type mismatch: expected number, found boolean",
+                "range": {
+                  "end": {
+                    "character": 31,
+                    "line": 1
+                  },
+                  "start": {
+                    "character": 22,
+                    "line": 1
+                  }
+                },
+                "severity": 1,
+                "source": "tua"
+              }
+            ],
+            "kind": "full"
+          },
+          "ms": 3.461832999999956
+        },
+        {
+          "label": "deleted-dependency-hover",
+          "method": "textDocument/hover",
+          "params": {
+            "textDocument": {
+              "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-CTbWuh/src/main.tua"
+            },
+            "position": {
+              "line": 2,
+              "character": 11
+            }
+          },
+          "result": null,
+          "ms": 2.356166999999971
+        },
+        {
+          "label": "deleted-dependency-diagnostics",
+          "method": "textDocument/diagnostic",
+          "params": {
+            "textDocument": {
+              "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-CTbWuh/src/main.tua"
+            }
+          },
+          "result": {
+            "items": [
+              {
+                "code": "TL4002",
+                "message": "require file not found: `renamed` (searched: /var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-CTbWuh/src, /var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-CTbWuh/build)",
+                "range": {
+                  "end": {
+                    "character": 22,
+                    "line": 0
+                  },
+                  "start": {
+                    "character": 21,
+                    "line": 0
+                  }
+                },
+                "severity": 2,
+                "source": "tua"
+              }
+            ],
+            "kind": "full"
+          },
+          "ms": 2.8172500000000014
+        },
+        {
+          "label": "recreated-dependency-hover",
+          "method": "textDocument/hover",
+          "params": {
+            "textDocument": {
+              "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-CTbWuh/src/main.tua"
+            },
+            "position": {
+              "line": 2,
+              "character": 11
+            }
+          },
+          "result": {
+            "contents": {
+              "kind": "markdown",
+              "value": "```tua\n(field) dep.value: number\n```\n\n---\n\n- kind: field\n- module: /var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-CTbWuh/src/renamed.tua"
+            },
+            "range": {
+              "end": {
+                "character": 15,
+                "line": 2
+              },
+              "start": {
+                "character": 10,
+                "line": 2
+              }
+            }
+          },
+          "ms": 2.784750000000031
+        },
+        {
+          "label": "recreated-dependency-diagnostics",
+          "method": "textDocument/diagnostic",
+          "params": {
+            "textDocument": {
+              "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-CTbWuh/src/main.tua"
+            }
+          },
+          "result": {
+            "items": [],
+            "kind": "full"
+          },
+          "ms": 1.8690839999999866
+        },
+        {
+          "label": "incomplete-completion",
+          "method": "textDocument/completion",
+          "params": {
+            "textDocument": {
+              "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-CTbWuh/src/main.tua"
+            },
+            "position": {
+              "line": 1,
+              "character": 4
+            }
+          },
+          "result": [
+            {
+              "data": {
+                "kind": "field",
+                "label": "value",
+                "modulePath": "/var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-CTbWuh/src/renamed.tua",
+                "position": {
+                  "character": 4,
+                  "line": 1
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-CTbWuh/src/main.tua"
+              },
+              "kind": 5,
+              "label": "value",
+              "sortText": "0000_value"
+            }
+          ],
+          "ms": 1.566332999999986
+        },
+        {
+          "label": "recovered-valid-edit-hover",
+          "method": "textDocument/hover",
+          "params": {
+            "textDocument": {
+              "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-CTbWuh/src/main.tua"
+            },
+            "position": {
+              "line": 2,
+              "character": 11
+            }
+          },
+          "result": {
+            "contents": {
+              "kind": "markdown",
+              "value": "```tua\n(field) dep.value: number\n```\n\n---\n\n- kind: field\n- module: /var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-CTbWuh/src/renamed.tua"
+            },
+            "range": {
+              "end": {
+                "character": 15,
+                "line": 2
+              },
+              "start": {
+                "character": 10,
+                "line": 2
+              }
+            }
+          },
+          "ms": 1.4742090000000303
+        },
+        {
+          "label": "recovered-valid-edit-diagnostics",
+          "method": "textDocument/diagnostic",
+          "params": {
+            "textDocument": {
+              "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-CTbWuh/src/main.tua"
+            }
+          },
+          "result": {
+            "items": [],
+            "kind": "full"
+          },
+          "ms": 1.2441249999999968
+        },
+        {
+          "label": "before-config",
+          "method": "textDocument/diagnostic",
+          "params": {
+            "textDocument": {
+              "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-CTbWuh/src/main.tua"
+            }
+          },
+          "result": {
+            "items": [
+              {
+                "code": "TL4004",
+                "message": "undefined variable `allowed_global`",
+                "range": {
+                  "end": {
+                    "character": 20,
+                    "line": 0
+                  },
+                  "start": {
+                    "character": 6,
+                    "line": 0
+                  }
+                },
+                "severity": 1,
+                "source": "tua"
+              }
+            ],
+            "kind": "full"
+          },
+          "ms": 0.9065830000000119
+        },
+        {
+          "label": "after-config",
+          "method": "textDocument/diagnostic",
+          "params": {
+            "textDocument": {
+              "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-CTbWuh/src/main.tua"
+            }
+          },
+          "result": {
+            "items": [],
+            "kind": "full"
+          },
+          "ms": 2.395750000000021
+        },
+        {
+          "label": "after-config-idle",
+          "method": "textDocument/diagnostic",
+          "params": {
+            "textDocument": {
+              "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-CTbWuh/src/main.tua"
+            }
+          },
+          "result": {
+            "items": [],
+            "kind": "full"
+          },
+          "ms": 0.3278329999999414
+        }
+      ],
+      "notifications": [
+        {
+          "id": 1,
+          "jsonrpc": "2.0",
+          "method": "workspace/diagnostic/refresh",
+          "params": null
+        },
+        {
+          "id": 2,
+          "jsonrpc": "2.0",
+          "method": "workspace/diagnostic/refresh",
+          "params": null
+        },
+        {
+          "id": 3,
+          "jsonrpc": "2.0",
+          "method": "workspace/diagnostic/refresh",
+          "params": null
+        },
+        {
+          "id": 4,
+          "jsonrpc": "2.0",
+          "method": "workspace/diagnostic/refresh",
+          "params": null
+        },
+        {
+          "id": 5,
+          "jsonrpc": "2.0",
+          "method": "workspace/diagnostic/refresh",
+          "params": null
+        },
+        {
+          "id": 6,
+          "jsonrpc": "2.0",
+          "method": "workspace/diagnostic/refresh",
+          "params": null
+        }
+      ]
+    },
+    {
+      "name": "single-root-control-a",
+      "evidence": [
+        {
+          "label": "initialize",
+          "method": "initialize",
+          "params": {
+            "processId": 14110,
+            "rootUri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-UE1oB1",
+            "capabilities": {},
+            "workspaceFolders": [
+              {
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-UE1oB1",
+                "name": "tua-devex-audit-UE1oB1"
+              }
+            ]
+          },
+          "result": {
+            "capabilities": {
+              "callHierarchyProvider": true,
+              "codeActionProvider": {
+                "codeActionKinds": [
+                  "quickfix",
+                  "source.organizeImports",
+                  "source.sortImports",
+                  "source.removeUnusedImports",
+                  "source.tua.createMissingLoveCallbacks",
+                  "source.fixAll"
+                ]
+              },
+              "codeLensProvider": {
+                "resolveProvider": true
+              },
+              "completionProvider": {
+                "resolveProvider": true,
+                "triggerCharacters": [
+                  ":",
+                  ".",
+                  "\"",
+                  "'",
+                  "@",
+                  "-",
+                  "_",
+                  "a",
+                  "b",
+                  "c",
+                  "d",
+                  "e",
+                  "f",
+                  "g",
+                  "h",
+                  "i",
+                  "j",
+                  "k",
+                  "l",
+                  "m",
+                  "n",
+                  "o",
+                  "p",
+                  "q",
+                  "r",
+                  "s",
+                  "t",
+                  "u",
+                  "v",
+                  "w",
+                  "x",
+                  "y",
+                  "z",
+                  "A",
+                  "B",
+                  "C",
+                  "D",
+                  "E",
+                  "F",
+                  "G",
+                  "H",
+                  "I",
+                  "J",
+                  "K",
+                  "L",
+                  "M",
+                  "N",
+                  "O",
+                  "P",
+                  "Q",
+                  "R",
+                  "S",
+                  "T",
+                  "U",
+                  "V",
+                  "W",
+                  "X",
+                  "Y",
+                  "Z",
+                  "0",
+                  "1",
+                  "2",
+                  "3",
+                  "4",
+                  "5",
+                  "6",
+                  "7",
+                  "8",
+                  "9"
+                ]
+              },
+              "definitionProvider": true,
+              "documentFormattingProvider": true,
+              "documentHighlightProvider": true,
+              "documentLinkProvider": {
+                "resolveProvider": false
+              },
+              "documentOnTypeFormattingProvider": {
+                "firstTriggerCharacter": "\n",
+                "moreTriggerCharacter": [
+                  "}",
+                  ")",
+                  "]",
+                  ",",
+                  "d"
+                ]
+              },
+              "documentRangeFormattingProvider": true,
+              "documentSymbolProvider": true,
+              "foldingRangeProvider": true,
+              "hoverProvider": true,
+              "implementationProvider": true,
+              "inlayHintProvider": {
+                "resolveProvider": false
+              },
+              "inlineCompletionProvider": true,
+              "referencesProvider": true,
+              "renameProvider": {
+                "prepareProvider": true
+              },
+              "selectionRangeProvider": true,
+              "semanticTokensProvider": {
+                "full": {
+                  "delta": true
+                },
+                "legend": {
+                  "tokenModifiers": [
+                    "declaration",
+                    "readonly",
+                    "deprecated",
+                    "modification",
+                    "defaultLibrary",
+                    "propertyChain1",
+                    "propertyChain2",
+                    "propertyChain3",
+                    "propertyChain4"
+                  ],
+                  "tokenTypes": [
+                    "type",
+                    "function",
+                    "variable",
+                    "parameter",
+                    "property",
+                    "method",
+                    "class",
+                    "enum",
+                    "enumMember",
+                    "namespace",
+                    "event",
+                    "label",
+                    "decorator"
+                  ]
+                },
+                "range": true
+              },
+              "signatureHelpProvider": {
+                "retriggerCharacters": [
+                  ")"
+                ],
+                "triggerCharacters": [
+                  "(",
+                  ","
+                ]
+              },
+              "textDocumentSync": {
+                "change": 2,
+                "openClose": true,
+                "save": {
+                  "includeText": true
+                }
+              },
+              "typeDefinitionProvider": true,
+              "workspace": {
+                "fileOperations": {
+                  "willRename": {
+                    "filters": [
+                      {
+                        "pattern": {
+                          "glob": "**/*"
+                        },
+                        "scheme": "file"
+                      }
+                    ]
+                  }
+                },
+                "workspaceFolders": {
+                  "changeNotifications": true,
+                  "supported": true
+                }
+              },
+              "workspaceSymbolProvider": true
+            },
+            "serverInfo": {
+              "name": "tua-lsp",
+              "version": "0.5.1"
+            }
+          },
+          "ms": 6.971290999999951
+        },
+        {
+          "label": "single-root-a-hover",
+          "method": "textDocument/hover",
+          "params": {
+            "textDocument": {
+              "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-UE1oB1/src/main.tua"
+            },
+            "position": {
+              "line": 2,
+              "character": 11
+            }
+          },
+          "result": {
+            "contents": {
+              "kind": "markdown",
+              "value": "```tua\n(field) dep.value: number\n```\n\n---\n\n- kind: field\n- module: /var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-UE1oB1/src/dep.lua"
+            },
+            "range": {
+              "end": {
+                "character": 15,
+                "line": 2
+              },
+              "start": {
+                "character": 10,
+                "line": 2
+              }
+            }
+          },
+          "ms": 25.038917000000083
+        },
+        {
+          "label": "single-root-a-diagnostics",
+          "method": "textDocument/diagnostic",
+          "params": {
+            "textDocument": {
+              "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-UE1oB1/src/main.tua"
+            }
+          },
+          "result": {
+            "items": [],
+            "kind": "full"
+          },
+          "ms": 1.9756660000000466
+        }
+      ]
+    },
+    {
+      "name": "single-root-control-b",
+      "evidence": [
+        {
+          "label": "initialize",
+          "method": "initialize",
+          "params": {
+            "processId": 14110,
+            "rootUri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-vSGxRh",
+            "capabilities": {},
+            "workspaceFolders": [
+              {
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-vSGxRh",
+                "name": "tua-devex-audit-vSGxRh"
+              }
+            ]
+          },
+          "result": {
+            "capabilities": {
+              "callHierarchyProvider": true,
+              "codeActionProvider": {
+                "codeActionKinds": [
+                  "quickfix",
+                  "source.organizeImports",
+                  "source.sortImports",
+                  "source.removeUnusedImports",
+                  "source.tua.createMissingLoveCallbacks",
+                  "source.fixAll"
+                ]
+              },
+              "codeLensProvider": {
+                "resolveProvider": true
+              },
+              "completionProvider": {
+                "resolveProvider": true,
+                "triggerCharacters": [
+                  ":",
+                  ".",
+                  "\"",
+                  "'",
+                  "@",
+                  "-",
+                  "_",
+                  "a",
+                  "b",
+                  "c",
+                  "d",
+                  "e",
+                  "f",
+                  "g",
+                  "h",
+                  "i",
+                  "j",
+                  "k",
+                  "l",
+                  "m",
+                  "n",
+                  "o",
+                  "p",
+                  "q",
+                  "r",
+                  "s",
+                  "t",
+                  "u",
+                  "v",
+                  "w",
+                  "x",
+                  "y",
+                  "z",
+                  "A",
+                  "B",
+                  "C",
+                  "D",
+                  "E",
+                  "F",
+                  "G",
+                  "H",
+                  "I",
+                  "J",
+                  "K",
+                  "L",
+                  "M",
+                  "N",
+                  "O",
+                  "P",
+                  "Q",
+                  "R",
+                  "S",
+                  "T",
+                  "U",
+                  "V",
+                  "W",
+                  "X",
+                  "Y",
+                  "Z",
+                  "0",
+                  "1",
+                  "2",
+                  "3",
+                  "4",
+                  "5",
+                  "6",
+                  "7",
+                  "8",
+                  "9"
+                ]
+              },
+              "definitionProvider": true,
+              "documentFormattingProvider": true,
+              "documentHighlightProvider": true,
+              "documentLinkProvider": {
+                "resolveProvider": false
+              },
+              "documentOnTypeFormattingProvider": {
+                "firstTriggerCharacter": "\n",
+                "moreTriggerCharacter": [
+                  "}",
+                  ")",
+                  "]",
+                  ",",
+                  "d"
+                ]
+              },
+              "documentRangeFormattingProvider": true,
+              "documentSymbolProvider": true,
+              "foldingRangeProvider": true,
+              "hoverProvider": true,
+              "implementationProvider": true,
+              "inlayHintProvider": {
+                "resolveProvider": false
+              },
+              "inlineCompletionProvider": true,
+              "referencesProvider": true,
+              "renameProvider": {
+                "prepareProvider": true
+              },
+              "selectionRangeProvider": true,
+              "semanticTokensProvider": {
+                "full": {
+                  "delta": true
+                },
+                "legend": {
+                  "tokenModifiers": [
+                    "declaration",
+                    "readonly",
+                    "deprecated",
+                    "modification",
+                    "defaultLibrary",
+                    "propertyChain1",
+                    "propertyChain2",
+                    "propertyChain3",
+                    "propertyChain4"
+                  ],
+                  "tokenTypes": [
+                    "type",
+                    "function",
+                    "variable",
+                    "parameter",
+                    "property",
+                    "method",
+                    "class",
+                    "enum",
+                    "enumMember",
+                    "namespace",
+                    "event",
+                    "label",
+                    "decorator"
+                  ]
+                },
+                "range": true
+              },
+              "signatureHelpProvider": {
+                "retriggerCharacters": [
+                  ")"
+                ],
+                "triggerCharacters": [
+                  "(",
+                  ","
+                ]
+              },
+              "textDocumentSync": {
+                "change": 2,
+                "openClose": true,
+                "save": {
+                  "includeText": true
+                }
+              },
+              "typeDefinitionProvider": true,
+              "workspace": {
+                "fileOperations": {
+                  "willRename": {
+                    "filters": [
+                      {
+                        "pattern": {
+                          "glob": "**/*"
+                        },
+                        "scheme": "file"
+                      }
+                    ]
+                  }
+                },
+                "workspaceFolders": {
+                  "changeNotifications": true,
+                  "supported": true
+                }
+              },
+              "workspaceSymbolProvider": true
+            },
+            "serverInfo": {
+              "name": "tua-lsp",
+              "version": "0.5.1"
+            }
+          },
+          "ms": 4.692125000000033
+        },
+        {
+          "label": "single-root-b-hover",
+          "method": "textDocument/hover",
+          "params": {
+            "textDocument": {
+              "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-vSGxRh/src/main.tua"
+            },
+            "position": {
+              "line": 2,
+              "character": 11
+            }
+          },
+          "result": {
+            "contents": {
+              "kind": "markdown",
+              "value": "```tua\n(field) dep.value: string\n```\n\n---\n\n- kind: field\n- module: /var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-vSGxRh/src/dep.lua"
+            },
+            "range": {
+              "end": {
+                "character": 15,
+                "line": 2
+              },
+              "start": {
+                "character": 10,
+                "line": 2
+              }
+            }
+          },
+          "ms": 19.24116700000002
+        },
+        {
+          "label": "single-root-b-diagnostics",
+          "method": "textDocument/diagnostic",
+          "params": {
+            "textDocument": {
+              "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-vSGxRh/src/main.tua"
+            }
+          },
+          "result": {
+            "items": [],
+            "kind": "full"
+          },
+          "ms": 1.4121249999999463
+        }
+      ]
+    },
+    {
+      "name": "multi-root-isolation",
+      "evidence": [
+        {
+          "label": "initialize",
+          "method": "initialize",
+          "params": {
+            "processId": 14110,
+            "rootUri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-UE1oB1",
+            "capabilities": {},
+            "workspaceFolders": [
+              {
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-UE1oB1",
+                "name": "tua-devex-audit-UE1oB1"
+              },
+              {
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-vSGxRh",
+                "name": "tua-devex-audit-vSGxRh"
+              }
+            ]
+          },
+          "result": {
+            "capabilities": {
+              "callHierarchyProvider": true,
+              "codeActionProvider": {
+                "codeActionKinds": [
+                  "quickfix",
+                  "source.organizeImports",
+                  "source.sortImports",
+                  "source.removeUnusedImports",
+                  "source.tua.createMissingLoveCallbacks",
+                  "source.fixAll"
+                ]
+              },
+              "codeLensProvider": {
+                "resolveProvider": true
+              },
+              "completionProvider": {
+                "resolveProvider": true,
+                "triggerCharacters": [
+                  ":",
+                  ".",
+                  "\"",
+                  "'",
+                  "@",
+                  "-",
+                  "_",
+                  "a",
+                  "b",
+                  "c",
+                  "d",
+                  "e",
+                  "f",
+                  "g",
+                  "h",
+                  "i",
+                  "j",
+                  "k",
+                  "l",
+                  "m",
+                  "n",
+                  "o",
+                  "p",
+                  "q",
+                  "r",
+                  "s",
+                  "t",
+                  "u",
+                  "v",
+                  "w",
+                  "x",
+                  "y",
+                  "z",
+                  "A",
+                  "B",
+                  "C",
+                  "D",
+                  "E",
+                  "F",
+                  "G",
+                  "H",
+                  "I",
+                  "J",
+                  "K",
+                  "L",
+                  "M",
+                  "N",
+                  "O",
+                  "P",
+                  "Q",
+                  "R",
+                  "S",
+                  "T",
+                  "U",
+                  "V",
+                  "W",
+                  "X",
+                  "Y",
+                  "Z",
+                  "0",
+                  "1",
+                  "2",
+                  "3",
+                  "4",
+                  "5",
+                  "6",
+                  "7",
+                  "8",
+                  "9"
+                ]
+              },
+              "definitionProvider": true,
+              "documentFormattingProvider": true,
+              "documentHighlightProvider": true,
+              "documentLinkProvider": {
+                "resolveProvider": false
+              },
+              "documentOnTypeFormattingProvider": {
+                "firstTriggerCharacter": "\n",
+                "moreTriggerCharacter": [
+                  "}",
+                  ")",
+                  "]",
+                  ",",
+                  "d"
+                ]
+              },
+              "documentRangeFormattingProvider": true,
+              "documentSymbolProvider": true,
+              "foldingRangeProvider": true,
+              "hoverProvider": true,
+              "implementationProvider": true,
+              "inlayHintProvider": {
+                "resolveProvider": false
+              },
+              "inlineCompletionProvider": true,
+              "referencesProvider": true,
+              "renameProvider": {
+                "prepareProvider": true
+              },
+              "selectionRangeProvider": true,
+              "semanticTokensProvider": {
+                "full": {
+                  "delta": true
+                },
+                "legend": {
+                  "tokenModifiers": [
+                    "declaration",
+                    "readonly",
+                    "deprecated",
+                    "modification",
+                    "defaultLibrary",
+                    "propertyChain1",
+                    "propertyChain2",
+                    "propertyChain3",
+                    "propertyChain4"
+                  ],
+                  "tokenTypes": [
+                    "type",
+                    "function",
+                    "variable",
+                    "parameter",
+                    "property",
+                    "method",
+                    "class",
+                    "enum",
+                    "enumMember",
+                    "namespace",
+                    "event",
+                    "label",
+                    "decorator"
+                  ]
+                },
+                "range": true
+              },
+              "signatureHelpProvider": {
+                "retriggerCharacters": [
+                  ")"
+                ],
+                "triggerCharacters": [
+                  "(",
+                  ","
+                ]
+              },
+              "textDocumentSync": {
+                "change": 2,
+                "openClose": true,
+                "save": {
+                  "includeText": true
+                }
+              },
+              "typeDefinitionProvider": true,
+              "workspace": {
+                "fileOperations": {
+                  "willRename": {
+                    "filters": [
+                      {
+                        "pattern": {
+                          "glob": "**/*"
+                        },
+                        "scheme": "file"
+                      }
+                    ]
+                  }
+                },
+                "workspaceFolders": {
+                  "changeNotifications": true,
+                  "supported": true
+                }
+              },
+              "workspaceSymbolProvider": true
+            },
+            "serverInfo": {
+              "name": "tua-lsp",
+              "version": "0.5.1"
+            }
+          },
+          "ms": 4.315083000000072
+        },
+        {
+          "label": "project-a-hover",
+          "method": "textDocument/hover",
+          "params": {
+            "textDocument": {
+              "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-UE1oB1/src/main.tua"
+            },
+            "position": {
+              "line": 2,
+              "character": 11
+            }
+          },
+          "result": {
+            "contents": {
+              "kind": "markdown",
+              "value": "```tua\n(field) dep.value: number\n```\n\n---\n\n- kind: field\n- module: /var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-UE1oB1/src/dep.lua"
+            },
+            "range": {
+              "end": {
+                "character": 15,
+                "line": 2
+              },
+              "start": {
+                "character": 10,
+                "line": 2
+              }
+            }
+          },
+          "ms": 20.236167000000023
+        },
+        {
+          "label": "project-b-hover",
+          "method": "textDocument/hover",
+          "params": {
+            "textDocument": {
+              "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-vSGxRh/src/main.tua"
+            },
+            "position": {
+              "line": 2,
+              "character": 11
+            }
+          },
+          "result": {
+            "contents": {
+              "kind": "markdown",
+              "value": "```tua\n(field) dep.value: number\n```\n\n---\n\n- kind: field\n- module: /var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-UE1oB1/src/dep.lua"
+            },
+            "range": {
+              "end": {
+                "character": 15,
+                "line": 2
+              },
+              "start": {
+                "character": 10,
+                "line": 2
+              }
+            }
+          },
+          "ms": 0.5342499999999291
+        },
+        {
+          "label": "project-a-diagnostics",
+          "method": "textDocument/diagnostic",
+          "params": {
+            "textDocument": {
+              "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-UE1oB1/src/main.tua"
+            }
+          },
+          "result": {
+            "items": [],
+            "kind": "full"
+          },
+          "ms": 1.3507499999999482
+        },
+        {
+          "label": "project-b-diagnostics",
+          "method": "textDocument/diagnostic",
+          "params": {
+            "textDocument": {
+              "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-vSGxRh/src/main.tua"
+            }
+          },
+          "result": {
+            "items": [
+              {
+                "code": "TL1003",
+                "message": "type mismatch: expected string, found number",
+                "range": {
+                  "end": {
+                    "character": 31,
+                    "line": 1
+                  },
+                  "start": {
+                    "character": 22,
+                    "line": 1
+                  }
+                },
+                "severity": 1,
+                "source": "tua"
+              }
+            ],
+            "kind": "full"
+          },
+          "ms": 1.1497499999999263
+        },
+        {
+          "label": "project-a-changed-hover",
+          "method": "textDocument/hover",
+          "params": {
+            "textDocument": {
+              "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-UE1oB1/src/main.tua"
+            },
+            "position": {
+              "line": 2,
+              "character": 11
+            }
+          },
+          "result": {
+            "contents": {
+              "kind": "markdown",
+              "value": "```tua\n(field) dep.value: boolean\n```\n\n---\n\n- kind: field\n- module: /var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-UE1oB1/src/dep.lua"
+            },
+            "range": {
+              "end": {
+                "character": 15,
+                "line": 2
+              },
+              "start": {
+                "character": 10,
+                "line": 2
+              }
+            }
+          },
+          "ms": 3.283916999999974
+        },
+        {
+          "label": "project-b-after-a-change-hover",
+          "method": "textDocument/hover",
+          "params": {
+            "textDocument": {
+              "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-vSGxRh/src/main.tua"
+            },
+            "position": {
+              "line": 2,
+              "character": 11
+            }
+          },
+          "result": {
+            "contents": {
+              "kind": "markdown",
+              "value": "```tua\n(field) dep.value: boolean\n```\n\n---\n\n- kind: field\n- module: /var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-UE1oB1/src/dep.lua"
+            },
+            "range": {
+              "end": {
+                "character": 15,
+                "line": 2
+              },
+              "start": {
+                "character": 10,
+                "line": 2
+              }
+            }
+          },
+          "ms": 0.3938339999999698
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,4 @@
+
+thread 'tua-lsp-background-0' (492699) panicked at crates/tua-core/src/emit/mod.rs:1656:10:
+existing syntax token should remain a valid symbol: UnexpectedToken('-')
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace

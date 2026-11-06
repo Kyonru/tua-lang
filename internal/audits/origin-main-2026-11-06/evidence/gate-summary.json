@@ -1,0 +1,11 @@
+{
+  "gate": "RUST_MIN_STACK=16777216 RUST_TEST_THREADS=1 make -o extension-check verify",
+  "exit": 0,
+  "extension_gate": "make extension-check (local loopback permission)",
+  "extension_exit": 0,
+  "rust_passed": 2276,
+  "rust_ignored": 3,
+  "core_passed": 1668,
+  "lsp_passed": 387,
+  "extension_passed": 166
+}

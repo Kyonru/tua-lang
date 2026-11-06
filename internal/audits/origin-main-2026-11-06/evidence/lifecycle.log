@@ -1,0 +1,34 @@
+initial-hover {"contents":{"kind":"markdown","value":"```tua\n(field) dep.value: number\n```\n\n---\n\n- kind: field\n- module: /var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-UXkvbd/src/dep.tua"},"range":{"end":{"character":15,"line":2},"start":{"character":10,"line":2}}}
+initial-diagnostics {"items":[],"kind":"full"}
+unsaved-dependency-hover {"contents":{"kind":"markdown","value":"```tua\n(field) dep.value: string\n```\n\n---\n\n- kind: field\n- module: /var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-UXkvbd/src/dep.tua"},"range":{"end":{"character":15,"line":2},"start":{"character":10,"line":2}}}
+unsaved-dependency-diagnostics {"items":[{"code":"TL1003","message":"type mismatch: expected number, found string","range":{"end":{"character":31,"line":1},"start":{"character":22,"line":1}},"severity":1,"source":"tua"}],"kind":"full"}
+closed-dependency-hover {"contents":{"kind":"markdown","value":"```tua\n(field) dep.value: number\n```\n\n---\n\n- kind: field\n- module: /var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-UXkvbd/src/dep.tua"},"range":{"end":{"character":15,"line":2},"start":{"character":10,"line":2}}}
+closed-dependency-diagnostics {"items":[],"kind":"full"}
+watched-dependency-hover {"contents":{"kind":"markdown","value":"```tua\n(field) dep.value: boolean\n```\n\n---\n\n- kind: field\n- module: /var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-UXkvbd/src/dep.tua"},"range":{"end":{"character":15,"line":2},"start":{"character":10,"line":2}}}
+watched-dependency-diagnostics {"items":[{"code":"TL1003","message":"type mismatch: expected number, found boolean","range":{"end":{"character":31,"line":1},"start":{"character":22,"line":1}},"severity":1,"source":"tua"}],"kind":"full"}
+renamed-missing-import-hover null
+renamed-missing-import-diagnostics {"items":[{"code":"TL4002","message":"require file not found: `dep` (searched: /var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-UXkvbd/src, /var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-UXkvbd/build)","range":{"end":{"character":22,"line":0},"start":{"character":21,"line":0}},"severity":2,"source":"tua"}],"kind":"full"}
+renamed-import-updated-hover {"contents":{"kind":"markdown","value":"```tua\n(field) dep.value: boolean\n```\n\n---\n\n- kind: field\n- module: /var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-UXkvbd/src/renamed.tua"},"range":{"end":{"character":15,"line":2},"start":{"character":10,"line":2}}}
+renamed-import-updated-diagnostics {"items":[],"kind":"full"}
+renamed-import-updated-idle-hover {"contents":{"kind":"markdown","value":"```tua\n(field) dep.value: boolean\n```\n\n---\n\n- kind: field\n- module: /var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-UXkvbd/src/renamed.tua"},"range":{"end":{"character":15,"line":2},"start":{"character":10,"line":2}}}
+renamed-import-updated-idle-diagnostics {"items":[{"code":"TL1003","message":"type mismatch: expected number, found boolean","range":{"end":{"character":31,"line":1},"start":{"character":22,"line":1}},"severity":1,"source":"tua"}],"kind":"full"}
+deleted-dependency-hover null
+deleted-dependency-diagnostics {"items":[{"code":"TL4002","message":"require file not found: `renamed` (searched: /var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-UXkvbd/src, /var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-UXkvbd/build)","range":{"end":{"character":22,"line":0},"start":{"character":21,"line":0}},"severity":2,"source":"tua"}],"kind":"full"}
+recreated-dependency-hover {"contents":{"kind":"markdown","value":"```tua\n(field) dep.value: number\n```\n\n---\n\n- kind: field\n- module: /var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-UXkvbd/src/renamed.tua"},"range":{"end":{"character":15,"line":2},"start":{"character":10,"line":2}}}
+recreated-dependency-diagnostics {"items":[],"kind":"full"}
+incomplete-completion [{"data":{"kind":"field","label":"value","modulePath":"/var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-UXkvbd/src/renamed.tua","position":{"character":4,"line":1},"uri":"file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-UXkvbd/src/main.tua"},"kind":5,"label":"value","sortText":"0000_value"}]
+recovered-valid-edit-hover {"contents":{"kind":"markdown","value":"```tua\n(field) dep.value: number\n```\n\n---\n\n- kind: field\n- module: /var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-UXkvbd/src/renamed.tua"},"range":{"end":{"character":15,"line":2},"start":{"character":10,"line":2}}}
+recovered-valid-edit-diagnostics {"items":[],"kind":"full"}
+before-config {"items":[{"code":"TL4004","message":"undefined variable `allowed_global`","range":{"end":{"character":20,"line":0},"start":{"character":6,"line":0}},"severity":1,"source":"tua"}],"kind":"full"}
+after-config {"items":[],"kind":"full"}
+after-config-idle {"items":[],"kind":"full"}
+single-root-a-hover {"contents":{"kind":"markdown","value":"```tua\n(field) dep.value: number\n```\n\n---\n\n- kind: field\n- module: /var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-R9DAK4/src/dep.lua"},"range":{"end":{"character":15,"line":2},"start":{"character":10,"line":2}}}
+single-root-a-diagnostics {"items":[],"kind":"full"}
+single-root-b-hover {"contents":{"kind":"markdown","value":"```tua\n(field) dep.value: string\n```\n\n---\n\n- kind: field\n- module: /var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-Ojy548/src/dep.lua"},"range":{"end":{"character":15,"line":2},"start":{"character":10,"line":2}}}
+single-root-b-diagnostics {"items":[],"kind":"full"}
+project-a-hover {"contents":{"kind":"markdown","value":"```tua\n(field) dep.value: number\n```\n\n---\n\n- kind: field\n- module: /var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-R9DAK4/src/dep.lua"},"range":{"end":{"character":15,"line":2},"start":{"character":10,"line":2}}}
+project-b-hover {"contents":{"kind":"markdown","value":"```tua\n(field) dep.value: string\n```\n\n---\n\n- kind: field\n- module: /var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-Ojy548/src/dep.lua"},"range":{"end":{"character":15,"line":2},"start":{"character":10,"line":2}}}
+project-a-diagnostics {"items":[],"kind":"full"}
+project-b-diagnostics {"items":[],"kind":"full"}
+project-a-changed-hover {"contents":{"kind":"markdown","value":"```tua\n(field) dep.value: boolean\n```\n\n---\n\n- kind: field\n- module: /var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-R9DAK4/src/dep.lua"},"range":{"end":{"character":15,"line":2},"start":{"character":10,"line":2}}}
+project-b-after-a-change-hover {"contents":{"kind":"markdown","value":"```tua\n(field) dep.value: string\n```\n\n---\n\n- kind: field\n- module: /var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-Ojy548/src/dep.lua"},"range":{"end":{"character":15,"line":2},"start":{"character":10,"line":2}}}

@@ -1,0 +1,120 @@
+[
+  {
+    "prefix": "ascii",
+    "source": "local label = \"ascii\"; local score: number = 7; print(score)\n",
+    "expectedPosition": {
+      "line": 0,
+      "character": 55
+    },
+    "hover": {
+      "contents": {
+        "kind": "markdown",
+        "value": "```tua\nlocal score: number\n```"
+      },
+      "range": {
+        "end": {
+          "character": 59,
+          "line": 0
+        },
+        "start": {
+          "character": 54,
+          "line": 0
+        }
+      }
+    },
+    "rename": {
+      "changes": {
+        "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-4iMyuJ/src/main.tua": [
+          {
+            "newText": "points",
+            "range": {
+              "end": {
+                "character": 34,
+                "line": 0
+              },
+              "start": {
+                "character": 29,
+                "line": 0
+              }
+            }
+          },
+          {
+            "newText": "points",
+            "range": {
+              "end": {
+                "character": 59,
+                "line": 0
+              },
+              "start": {
+                "character": 54,
+                "line": 0
+              }
+            }
+          }
+        ]
+      }
+    },
+    "applied": "local label = \"ascii\"; local points: number = 7; print(points)\n",
+    "expected": "local label = \"ascii\"; local points: number = 7; print(points)\n",
+    "matchesExpected": true
+  },
+  {
+    "prefix": "😀",
+    "source": "local label = \"😀\"; local score: number = 7; print(score)\n",
+    "expectedPosition": {
+      "line": 0,
+      "character": 52
+    },
+    "hover": {
+      "contents": {
+        "kind": "markdown",
+        "value": "```tua\nlocal score: number\n```"
+      },
+      "range": {
+        "end": {
+          "character": 55,
+          "line": 0
+        },
+        "start": {
+          "character": 50,
+          "line": 0
+        }
+      }
+    },
+    "rename": {
+      "changes": {
+        "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-Pj9Sqw/src/main.tua": [
+          {
+            "newText": "points",
+            "range": {
+              "end": {
+                "character": 30,
+                "line": 0
+              },
+              "start": {
+                "character": 25,
+                "line": 0
+              }
+            }
+          },
+          {
+            "newText": "points",
+            "range": {
+              "end": {
+                "character": 55,
+                "line": 0
+              },
+              "start": {
+                "character": 50,
+                "line": 0
+              }
+            }
+          }
+        ]
+      }
+    },
+    "applied": "local label = \"😀\"; localpointse: number = 7; printpointse)\n",
+    "expected": "local label = \"😀\"; local points: number = 7; print(points)\n",
+    "matchesExpected": false
+  }
+]

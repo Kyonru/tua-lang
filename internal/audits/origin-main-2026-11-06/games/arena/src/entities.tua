@@ -1,0 +1,25 @@
+export type Body = { x: number, y: number, radius: number, speed: number }
+
+local function create(x: number, y: number, radius: number, speed: number): Body
+  return { x = x, y = y, radius = radius, speed = speed }
+end
+
+local function distance(a: Body, b: Body): number
+  local dx = a.x - b.x
+  local dy = a.y - b.y
+  return math.sqrt(dx * dx + dy * dy)
+end
+
+local function moveToward(body: Body, target: Body, dt: number)
+  local length = distance(body, target)
+  if length > 0 then
+    body.x += (target.x - body.x) / length * body.speed * dt
+    body.y += (target.y - body.y) / length * body.speed * dt
+  end
+end
+
+local function touches(a: Body, b: Body): boolean
+  return distance(a, b) <= a.radius + b.radius
+end
+
+return { create = create, moveToward = moveToward, touches = touches }

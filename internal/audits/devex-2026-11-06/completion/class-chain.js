@@ -1,0 +1,5 @@
+'use strict';
+const fs=require('node:fs'),path=require('node:path');
+const {makeProject,connect,save}=require('../harness');
+const base='class Counter {\n value: number = 0\n init(value: number) { self.value = value }\n read(): number { return self.value }\n}\n';
+(async()=>{const evidence=[];for(const [name,tail] of [['direct','Counter.new(1):read()\n'],['variable','local counter=Counter.new(1)\ncounter:read()\n']]){const root=makeProject({'src/main.tua':base+tail});const s=await connect(root);try{const doc=s.open('src/main.tua');await s.query('completion','textDocument/completion',doc,':read',1,{context:{triggerKind:1}});await s.query('hover','textDocument/hover',doc,':read',2);await s.query('signature','textDocument/signatureHelp',doc,':read(',6);await s.query('diagnostics','textDocument/diagnostic',doc);evidence.push({name,source:doc.text,requests:s.inbound});}finally{await s.close();fs.rmSync(root,{recursive:true,force:true});}}save(path.join(__dirname,'class-chain-evidence.json'),evidence);})().catch(e=>{console.error(e);process.exitCode=1});

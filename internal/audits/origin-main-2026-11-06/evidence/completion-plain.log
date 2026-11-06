@@ -1,0 +1,45 @@
+locals 2 playerScore,playerName
+scope 72 visibleValue,print
+params 1 player
+shadow-library 1 special
+snippet 71
+middle-identifier 0
+function-prefix 0
+quoted-member 1 normal
+colon-record 2 health,run
+callback-multiline 1 health
+member 2 health,nested
+nested 1 speed
+indexed 1 health
+call-result 1 health
+union 1 common
+unknown 0
+malformed-stdlib 13 sub,upper
+callback 0
+callback-valid 1 health
+callback-function 1 health
+expected-table 1 width
+expected-table-fields 1 height
+nested-call-index 1 speed
+love-existing-open 1 setFilter
+module 3 config,make,title
+lua-module 2 greet,value
+module-prefix 3 library,library_more
+module-middle 3 library
+static-import 2 ./library
+love-global 100 newImage,rectangle
+love-colon 27 getWidth,setFilter
+love-dot 27 getWidth,setFilter
+love-existing-call 1 setFilter
+love-chain 27 getWidth,setFilter
+void-chain 0
+enum 1 fill
+asset 1 assets/player.png
+asset-middle 1 assets/player.png
+asset-apostrophe 1 assets/quote'image.png
+annotation 1 param
+type-position 3 Player
+autoimport-type 1 ExportedPlayer
+autoimport-value 1 makeExported
+return-prefix 1 return
+incomplete-class 2 health,update

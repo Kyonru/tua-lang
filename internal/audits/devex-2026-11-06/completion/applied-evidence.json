@@ -1,0 +1,326 @@
+[
+  {
+    "id": "module-middle",
+    "source": "local m = require(\"libraryZZZ\")",
+    "request": {
+      "line": 0,
+      "character": 22
+    },
+    "item": {
+      "data": {
+        "kind": "module",
+        "label": "library",
+        "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/target/devex-audit-2026-11-06/completion/project/src/library.tua",
+        "position": {
+          "character": 22,
+          "line": 0
+        },
+        "symbolKind": "module",
+        "typeLabel": "module",
+        "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/target/devex-audit-2026-11-06/completion/project/src/module-middle.tua"
+      },
+      "detail": "module",
+      "kind": 9,
+      "label": "library",
+      "sortText": "0000_library",
+      "textEdit": {
+        "newText": "library",
+        "range": {
+          "end": {
+            "character": 22,
+            "line": 0
+          },
+          "start": {
+            "character": 19,
+            "line": 0
+          }
+        }
+      }
+    },
+    "check": {
+      "status": 0,
+      "signal": null,
+      "stdout": "/Users/kyonru/Documents/projects/Experiments/tlua/target/devex-audit-2026-11-06/completion/applied/src/main.tua:1:7 warning TL4054: import `m` is never used; prefix with `_` to silence\n/Users/kyonru/Documents/projects/Experiments/tlua/target/devex-audit-2026-11-06/completion/applied/src/main.tua:1:20 warning TL4002: require file not found: `libraryZZZ` (searched: /Users/kyonru/Documents/projects/Experiments/tlua/target/devex-audit-2026-11-06/completion/applied/src, /Users/kyonru/Documents/projects/Experiments/tlua/target/devex-audit-2026-11-06/completion/applied/build)\nchecked 2 file(s)\n",
+      "stderr": ""
+    }
+  },
+  {
+    "id": "asset-middle",
+    "source": "local img=love.graphics.newImage(\"assets/player.pngZZZ.png\")",
+    "request": {
+      "line": 0,
+      "character": 43
+    },
+    "item": {
+      "data": {
+        "kind": "value",
+        "label": "assets/player.png",
+        "position": {
+          "character": 43,
+          "line": 0
+        },
+        "symbolKind": "value",
+        "typeLabel": "image asset path -> Image",
+        "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/target/devex-audit-2026-11-06/completion/project/src/asset-middle.tua"
+      },
+      "detail": "image asset path -> Image",
+      "documentation": {
+        "kind": "markdown",
+        "value": "Supported image asset with .png extension."
+      },
+      "insertText": "assets/player.png",
+      "kind": 12,
+      "label": "assets/player.png",
+      "sortText": "0000_assets/player.png",
+      "textEdit": {
+        "newText": "assets/player.png",
+        "range": {
+          "end": {
+            "character": 43,
+            "line": 0
+          },
+          "start": {
+            "character": 34,
+            "line": 0
+          }
+        }
+      }
+    },
+    "check": {
+      "status": 1,
+      "signal": null,
+      "stdout": "",
+      "stderr": "/Users/kyonru/Documents/projects/Experiments/tlua/target/devex-audit-2026-11-06/completion/applied/src/main.tua:1:7 warning TL4005: unused local `img`; prefix with `_` to silence\n/Users/kyonru/Documents/projects/Experiments/tlua/target/devex-audit-2026-11-06/completion/applied/src/main.tua:1:34 error TL2004: image asset not found: assets/player.pngZZZ.png\n"
+    }
+  },
+  {
+    "id": "asset-apostrophe",
+    "source": "local img=love.graphics.newImage('assets/quote'image.png')",
+    "request": {
+      "line": 0,
+      "character": 44
+    },
+    "item": {
+      "data": {
+        "kind": "value",
+        "label": "assets/quote'image.png",
+        "position": {
+          "character": 44,
+          "line": 0
+        },
+        "symbolKind": "value",
+        "typeLabel": "image asset path -> Image",
+        "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/target/devex-audit-2026-11-06/completion/project/src/asset-apostrophe.tua"
+      },
+      "detail": "image asset path -> Image",
+      "documentation": {
+        "kind": "markdown",
+        "value": "Supported image asset with .png extension."
+      },
+      "insertText": "assets/quote'image.png",
+      "kind": 12,
+      "label": "assets/quote'image.png",
+      "sortText": "0000_assets/quote'image.png",
+      "textEdit": {
+        "newText": "assets/quote'image.png",
+        "range": {
+          "end": {
+            "character": 44,
+            "line": 0
+          },
+          "start": {
+            "character": 34,
+            "line": 0
+          }
+        }
+      }
+    },
+    "check": {
+      "status": 1,
+      "signal": null,
+      "stdout": "",
+      "stderr": "/Users/kyonru/Documents/projects/Experiments/tlua/target/devex-audit-2026-11-06/completion/applied/src/main.tua:1:33 error TL0001: expected `)` to close function call\n/Users/kyonru/Documents/projects/Experiments/tlua/target/devex-audit-2026-11-06/completion/applied/src/main.tua:1:57 error TL0001: unclosed string (1:57 to 1:59)\n"
+    }
+  },
+  {
+    "id": "love-existing-call",
+    "source": "local img=love.graphics.newImage(\"assets/player.png\")\nimg:setFilter(\"linear\")ilter(\"nearest\", \"nearest\")",
+    "request": {
+      "line": 1,
+      "character": 8
+    },
+    "item": {
+      "additionalTextEdits": [
+        {
+          "newText": ":",
+          "range": {
+            "end": {
+              "character": 4,
+              "line": 1
+            },
+            "start": {
+              "character": 3,
+              "line": 1
+            }
+          }
+        }
+      ],
+      "data": {
+        "kind": "function",
+        "label": "setFilter",
+        "position": {
+          "character": 8,
+          "line": 1
+        },
+        "symbolKind": "function",
+        "typeLabel": "function Image:setFilter(min: FilterMode, mag?: FilterMode, anisotropy?: number)",
+        "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/target/devex-audit-2026-11-06/completion/project/src/love-existing-call.tua"
+      },
+      "detail": "function Image:setFilter(min: FilterMode, mag?: FilterMode, anisotropy?: number)",
+      "documentation": {
+        "kind": "markdown",
+        "value": "Sets the filter mode of the Texture.\n\n[Open LOVE wiki](https://love2d.org/wiki/Image:setFilter)"
+      },
+      "insertText": "setFilter(\"${1|linear,nearest|}\")$0",
+      "insertTextFormat": 2,
+      "kind": 3,
+      "label": "setFilter",
+      "sortText": "0000_setFilter",
+      "textEdit": {
+        "newText": "setFilter(\"${1|linear,nearest|}\")$0",
+        "range": {
+          "end": {
+            "character": 8,
+            "line": 1
+          },
+          "start": {
+            "character": 4,
+            "line": 1
+          }
+        }
+      }
+    },
+    "check": {
+      "status": 1,
+      "signal": null,
+      "stdout": "",
+      "stderr": "/Users/kyonru/Documents/projects/Experiments/tlua/target/devex-audit-2026-11-06/completion/applied/src/main.tua:2:24 warning TL4036: multiple statements on one line should be separated by a semicolon or newline\n/Users/kyonru/Documents/projects/Experiments/tlua/target/devex-audit-2026-11-06/completion/applied/src/main.tua:2:24 error TL4004: undefined variable `ilter`\n"
+    }
+  },
+  {
+    "id": "love-existing-open",
+    "source": "local img=love.graphics.newImage(\"assets/player.png\")\nimg:setFilter(\"linear\")(\"nearest\", \"nearest\")",
+    "request": {
+      "line": 1,
+      "character": 13
+    },
+    "item": {
+      "additionalTextEdits": [
+        {
+          "newText": ":",
+          "range": {
+            "end": {
+              "character": 4,
+              "line": 1
+            },
+            "start": {
+              "character": 3,
+              "line": 1
+            }
+          }
+        }
+      ],
+      "data": {
+        "kind": "function",
+        "label": "setFilter",
+        "position": {
+          "character": 13,
+          "line": 1
+        },
+        "symbolKind": "function",
+        "typeLabel": "function Image:setFilter(min: FilterMode, mag?: FilterMode, anisotropy?: number)",
+        "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/target/devex-audit-2026-11-06/completion/project/src/love-existing-open.tua"
+      },
+      "detail": "function Image:setFilter(min: FilterMode, mag?: FilterMode, anisotropy?: number)",
+      "documentation": {
+        "kind": "markdown",
+        "value": "Sets the filter mode of the Texture.\n\n[Open LOVE wiki](https://love2d.org/wiki/Image:setFilter)"
+      },
+      "insertText": "setFilter(\"${1|linear,nearest|}\")$0",
+      "insertTextFormat": 2,
+      "kind": 3,
+      "label": "setFilter",
+      "sortText": "0000_setFilter",
+      "textEdit": {
+        "newText": "setFilter(\"${1|linear,nearest|}\")$0",
+        "range": {
+          "end": {
+            "character": 13,
+            "line": 1
+          },
+          "start": {
+            "character": 4,
+            "line": 1
+          }
+        }
+      }
+    },
+    "check": {
+      "status": 0,
+      "signal": null,
+      "stdout": "checked 2 file(s)\n",
+      "stderr": ""
+    }
+  },
+  {
+    "id": "quoted-member",
+    "source": "local t={[\"foo-bar\"]=1,[\"end\"]=2,normal=3}\nlocal v=t.end",
+    "request": {
+      "line": 1,
+      "character": 10
+    },
+    "item": {
+      "data": {
+        "kind": "field",
+        "label": "end",
+        "position": {
+          "character": 10,
+          "line": 1
+        },
+        "symbolKind": "field",
+        "typeLabel": "field: number",
+        "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/target/devex-audit-2026-11-06/completion/project/src/quoted-member.tua"
+      },
+      "detail": "field: number",
+      "kind": 5,
+      "label": "end",
+      "sortText": "0000_end"
+    },
+    "check": {
+      "status": 1,
+      "signal": null,
+      "stdout": "",
+      "stderr": "/Users/kyonru/Documents/projects/Experiments/tlua/target/devex-audit-2026-11-06/completion/applied/src/main.tua:2:10 error TL0001: expected identifier after `.`\n/Users/kyonru/Documents/projects/Experiments/tlua/target/devex-audit-2026-11-06/completion/applied/src/main.tua:2:11 error TL0001: unexpected token, this needs to be a statement\n"
+    }
+  },
+  {
+    "id": "trailing-comment",
+    "source": "local function f(x: number) -- hello\n return x\nend\nprint(f(1))\n",
+    "check": {
+      "status": 1,
+      "signal": null,
+      "stdout": "",
+      "stderr": "\nthread 'tua-main' (534019) panicked at crates/tua-core/src/emit/mod.rs:1656:10:\nexisting syntax token should remain a valid symbol: UnexpectedToken('-')\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n"
+    }
+  },
+  {
+    "id": "suppression-comment",
+    "source": "function love.udpate(dt: number) -- tua-ignore-line TL5006\nend\n",
+    "check": {
+      "status": 1,
+      "signal": null,
+      "stdout": "",
+      "stderr": "\nthread 'tua-main' (534022) panicked at crates/tua-core/src/emit/mod.rs:1656:10:\nexisting syntax token should remain a valid symbol: UnexpectedToken('-')\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n"
+    }
+  }
+]

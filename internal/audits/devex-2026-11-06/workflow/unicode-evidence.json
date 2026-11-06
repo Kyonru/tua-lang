@@ -1,0 +1,3273 @@
+{
+  "binary": "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+  "cases": [
+    {
+      "prefix": "abc",
+      "text": "local prefix = \"abc\"; local value: number = 42; print(value)\n",
+      "expectedUse": {
+        "line": 0,
+        "character": 54
+      },
+      "expectedDeclaration": {
+        "line": 0,
+        "character": 28
+      },
+      "evidence": [
+        {
+          "label": "initialize",
+          "method": "initialize",
+          "params": {
+            "processId": 51960,
+            "rootUri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-PV4f2N",
+            "capabilities": {},
+            "workspaceFolders": [
+              {
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-PV4f2N",
+                "name": "tua-devex-audit-PV4f2N"
+              }
+            ]
+          },
+          "result": {
+            "capabilities": {
+              "callHierarchyProvider": true,
+              "codeActionProvider": {
+                "codeActionKinds": [
+                  "quickfix",
+                  "source.organizeImports",
+                  "source.sortImports",
+                  "source.removeUnusedImports",
+                  "source.tua.createMissingLoveCallbacks",
+                  "source.fixAll"
+                ]
+              },
+              "codeLensProvider": {
+                "resolveProvider": true
+              },
+              "completionProvider": {
+                "resolveProvider": true,
+                "triggerCharacters": [
+                  ":",
+                  ".",
+                  "\"",
+                  "'",
+                  "@",
+                  "-",
+                  "_",
+                  "a",
+                  "b",
+                  "c",
+                  "d",
+                  "e",
+                  "f",
+                  "g",
+                  "h",
+                  "i",
+                  "j",
+                  "k",
+                  "l",
+                  "m",
+                  "n",
+                  "o",
+                  "p",
+                  "q",
+                  "r",
+                  "s",
+                  "t",
+                  "u",
+                  "v",
+                  "w",
+                  "x",
+                  "y",
+                  "z",
+                  "A",
+                  "B",
+                  "C",
+                  "D",
+                  "E",
+                  "F",
+                  "G",
+                  "H",
+                  "I",
+                  "J",
+                  "K",
+                  "L",
+                  "M",
+                  "N",
+                  "O",
+                  "P",
+                  "Q",
+                  "R",
+                  "S",
+                  "T",
+                  "U",
+                  "V",
+                  "W",
+                  "X",
+                  "Y",
+                  "Z",
+                  "0",
+                  "1",
+                  "2",
+                  "3",
+                  "4",
+                  "5",
+                  "6",
+                  "7",
+                  "8",
+                  "9"
+                ]
+              },
+              "definitionProvider": true,
+              "documentFormattingProvider": true,
+              "documentHighlightProvider": true,
+              "documentLinkProvider": {
+                "resolveProvider": false
+              },
+              "documentOnTypeFormattingProvider": {
+                "firstTriggerCharacter": "\n",
+                "moreTriggerCharacter": [
+                  "}",
+                  ")",
+                  "]",
+                  ",",
+                  "d"
+                ]
+              },
+              "documentRangeFormattingProvider": true,
+              "documentSymbolProvider": true,
+              "foldingRangeProvider": true,
+              "hoverProvider": true,
+              "implementationProvider": true,
+              "inlayHintProvider": {
+                "resolveProvider": false
+              },
+              "inlineCompletionProvider": true,
+              "referencesProvider": true,
+              "renameProvider": {
+                "prepareProvider": true
+              },
+              "selectionRangeProvider": true,
+              "semanticTokensProvider": {
+                "full": {
+                  "delta": true
+                },
+                "legend": {
+                  "tokenModifiers": [
+                    "declaration",
+                    "readonly",
+                    "deprecated",
+                    "modification",
+                    "defaultLibrary",
+                    "propertyChain1",
+                    "propertyChain2",
+                    "propertyChain3",
+                    "propertyChain4"
+                  ],
+                  "tokenTypes": [
+                    "type",
+                    "function",
+                    "variable",
+                    "parameter",
+                    "property",
+                    "method",
+                    "class",
+                    "enum",
+                    "enumMember",
+                    "namespace",
+                    "event",
+                    "label",
+                    "decorator"
+                  ]
+                },
+                "range": true
+              },
+              "signatureHelpProvider": {
+                "retriggerCharacters": [
+                  ")"
+                ],
+                "triggerCharacters": [
+                  "(",
+                  ","
+                ]
+              },
+              "textDocumentSync": {
+                "change": 2,
+                "openClose": true,
+                "save": {
+                  "includeText": true
+                }
+              },
+              "typeDefinitionProvider": true,
+              "workspace": {
+                "fileOperations": {
+                  "willRename": {
+                    "filters": [
+                      {
+                        "pattern": {
+                          "glob": "**/*"
+                        },
+                        "scheme": "file"
+                      }
+                    ]
+                  }
+                },
+                "workspaceFolders": {
+                  "changeNotifications": true,
+                  "supported": true
+                }
+              },
+              "workspaceSymbolProvider": true
+            },
+            "serverInfo": {
+              "name": "tua-lsp",
+              "version": "0.5.1"
+            }
+          },
+          "ms": 2.947999999999997
+        },
+        {
+          "label": "hover-use",
+          "method": "textDocument/hover",
+          "params": {
+            "textDocument": {
+              "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-PV4f2N/src/main.tua"
+            },
+            "position": {
+              "line": 0,
+              "character": 55
+            }
+          },
+          "result": {
+            "contents": {
+              "kind": "markdown",
+              "value": "```tua\nlocal value: number\n```"
+            },
+            "range": {
+              "end": {
+                "character": 59,
+                "line": 0
+              },
+              "start": {
+                "character": 54,
+                "line": 0
+              }
+            }
+          },
+          "ms": 16.312541000000003
+        },
+        {
+          "label": "definition-use",
+          "method": "textDocument/definition",
+          "params": {
+            "textDocument": {
+              "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-PV4f2N/src/main.tua"
+            },
+            "position": {
+              "line": 0,
+              "character": 55
+            }
+          },
+          "result": {
+            "range": {
+              "end": {
+                "character": 33,
+                "line": 0
+              },
+              "start": {
+                "character": 28,
+                "line": 0
+              }
+            },
+            "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-PV4f2N/src/main.tua"
+          },
+          "ms": 0.8540419999999997
+        },
+        {
+          "label": "references-use",
+          "method": "textDocument/references",
+          "params": {
+            "textDocument": {
+              "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-PV4f2N/src/main.tua"
+            },
+            "context": {
+              "includeDeclaration": true
+            },
+            "position": {
+              "line": 0,
+              "character": 55
+            }
+          },
+          "result": [
+            {
+              "range": {
+                "end": {
+                  "character": 33,
+                  "line": 0
+                },
+                "start": {
+                  "character": 28,
+                  "line": 0
+                }
+              },
+              "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-PV4f2N/src/main.tua"
+            },
+            {
+              "range": {
+                "end": {
+                  "character": 59,
+                  "line": 0
+                },
+                "start": {
+                  "character": 54,
+                  "line": 0
+                }
+              },
+              "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-PV4f2N/src/main.tua"
+            }
+          ],
+          "ms": 0.23229099999999647
+        },
+        {
+          "label": "rename-use",
+          "method": "textDocument/rename",
+          "params": {
+            "textDocument": {
+              "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-PV4f2N/src/main.tua"
+            },
+            "newName": "renamed",
+            "position": {
+              "line": 0,
+              "character": 55
+            }
+          },
+          "result": {
+            "changes": {
+              "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-PV4f2N/src/main.tua": [
+                {
+                  "newText": "renamed",
+                  "range": {
+                    "end": {
+                      "character": 33,
+                      "line": 0
+                    },
+                    "start": {
+                      "character": 28,
+                      "line": 0
+                    }
+                  }
+                },
+                {
+                  "newText": "renamed",
+                  "range": {
+                    "end": {
+                      "character": 59,
+                      "line": 0
+                    },
+                    "start": {
+                      "character": 54,
+                      "line": 0
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "ms": 0.12162500000000165
+        },
+        {
+          "label": "symbols",
+          "method": "textDocument/documentSymbol",
+          "params": {
+            "textDocument": {
+              "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-PV4f2N/src/main.tua"
+            }
+          },
+          "result": [
+            {
+              "detail": "number",
+              "kind": 13,
+              "name": "value",
+              "range": {
+                "end": {
+                  "character": 46,
+                  "line": 0
+                },
+                "start": {
+                  "character": 22,
+                  "line": 0
+                }
+              },
+              "selectionRange": {
+                "end": {
+                  "character": 33,
+                  "line": 0
+                },
+                "start": {
+                  "character": 28,
+                  "line": 0
+                }
+              }
+            }
+          ],
+          "ms": 0.14266700000000299
+        },
+        {
+          "label": "diagnostics",
+          "method": "textDocument/diagnostic",
+          "params": {
+            "textDocument": {
+              "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-PV4f2N/src/main.tua"
+            }
+          },
+          "result": {
+            "items": [
+              {
+                "code": "TL1003",
+                "message": "type mismatch: expected number, found string",
+                "range": {
+                  "end": {
+                    "character": 49,
+                    "line": 0
+                  },
+                  "start": {
+                    "character": 44,
+                    "line": 0
+                  }
+                },
+                "severity": 1,
+                "source": "tua"
+              },
+              {
+                "code": "TL4005",
+                "message": "unused local `prefix`; prefix with `_` to silence",
+                "range": {
+                  "end": {
+                    "character": 12,
+                    "line": 0
+                  },
+                  "start": {
+                    "character": 6,
+                    "line": 0
+                  }
+                },
+                "severity": 2,
+                "source": "tua"
+              }
+            ],
+            "kind": "full"
+          },
+          "ms": 1.813875000000003
+        },
+        {
+          "label": "member-completion",
+          "method": "textDocument/completion",
+          "params": {
+            "textDocument": {
+              "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-PV4f2N/src/main.tua"
+            },
+            "position": {
+              "line": 0,
+              "character": 55
+            }
+          },
+          "result": [
+            {
+              "data": {
+                "kind": "field",
+                "label": "field",
+                "position": {
+                  "character": 55,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-PV4f2N/src/main.tua"
+              },
+              "kind": 5,
+              "label": "field",
+              "sortText": "0000_field"
+            }
+          ],
+          "ms": 1.0045000000000002
+        }
+      ]
+    },
+    {
+      "prefix": "漢字",
+      "text": "local prefix = \"漢字\"; local value: number = 42; print(value)\n",
+      "expectedUse": {
+        "line": 0,
+        "character": 53
+      },
+      "expectedDeclaration": {
+        "line": 0,
+        "character": 27
+      },
+      "evidence": [
+        {
+          "label": "initialize",
+          "method": "initialize",
+          "params": {
+            "processId": 51960,
+            "rootUri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-tAjOxJ",
+            "capabilities": {},
+            "workspaceFolders": [
+              {
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-tAjOxJ",
+                "name": "tua-devex-audit-tAjOxJ"
+              }
+            ]
+          },
+          "result": {
+            "capabilities": {
+              "callHierarchyProvider": true,
+              "codeActionProvider": {
+                "codeActionKinds": [
+                  "quickfix",
+                  "source.organizeImports",
+                  "source.sortImports",
+                  "source.removeUnusedImports",
+                  "source.tua.createMissingLoveCallbacks",
+                  "source.fixAll"
+                ]
+              },
+              "codeLensProvider": {
+                "resolveProvider": true
+              },
+              "completionProvider": {
+                "resolveProvider": true,
+                "triggerCharacters": [
+                  ":",
+                  ".",
+                  "\"",
+                  "'",
+                  "@",
+                  "-",
+                  "_",
+                  "a",
+                  "b",
+                  "c",
+                  "d",
+                  "e",
+                  "f",
+                  "g",
+                  "h",
+                  "i",
+                  "j",
+                  "k",
+                  "l",
+                  "m",
+                  "n",
+                  "o",
+                  "p",
+                  "q",
+                  "r",
+                  "s",
+                  "t",
+                  "u",
+                  "v",
+                  "w",
+                  "x",
+                  "y",
+                  "z",
+                  "A",
+                  "B",
+                  "C",
+                  "D",
+                  "E",
+                  "F",
+                  "G",
+                  "H",
+                  "I",
+                  "J",
+                  "K",
+                  "L",
+                  "M",
+                  "N",
+                  "O",
+                  "P",
+                  "Q",
+                  "R",
+                  "S",
+                  "T",
+                  "U",
+                  "V",
+                  "W",
+                  "X",
+                  "Y",
+                  "Z",
+                  "0",
+                  "1",
+                  "2",
+                  "3",
+                  "4",
+                  "5",
+                  "6",
+                  "7",
+                  "8",
+                  "9"
+                ]
+              },
+              "definitionProvider": true,
+              "documentFormattingProvider": true,
+              "documentHighlightProvider": true,
+              "documentLinkProvider": {
+                "resolveProvider": false
+              },
+              "documentOnTypeFormattingProvider": {
+                "firstTriggerCharacter": "\n",
+                "moreTriggerCharacter": [
+                  "}",
+                  ")",
+                  "]",
+                  ",",
+                  "d"
+                ]
+              },
+              "documentRangeFormattingProvider": true,
+              "documentSymbolProvider": true,
+              "foldingRangeProvider": true,
+              "hoverProvider": true,
+              "implementationProvider": true,
+              "inlayHintProvider": {
+                "resolveProvider": false
+              },
+              "inlineCompletionProvider": true,
+              "referencesProvider": true,
+              "renameProvider": {
+                "prepareProvider": true
+              },
+              "selectionRangeProvider": true,
+              "semanticTokensProvider": {
+                "full": {
+                  "delta": true
+                },
+                "legend": {
+                  "tokenModifiers": [
+                    "declaration",
+                    "readonly",
+                    "deprecated",
+                    "modification",
+                    "defaultLibrary",
+                    "propertyChain1",
+                    "propertyChain2",
+                    "propertyChain3",
+                    "propertyChain4"
+                  ],
+                  "tokenTypes": [
+                    "type",
+                    "function",
+                    "variable",
+                    "parameter",
+                    "property",
+                    "method",
+                    "class",
+                    "enum",
+                    "enumMember",
+                    "namespace",
+                    "event",
+                    "label",
+                    "decorator"
+                  ]
+                },
+                "range": true
+              },
+              "signatureHelpProvider": {
+                "retriggerCharacters": [
+                  ")"
+                ],
+                "triggerCharacters": [
+                  "(",
+                  ","
+                ]
+              },
+              "textDocumentSync": {
+                "change": 2,
+                "openClose": true,
+                "save": {
+                  "includeText": true
+                }
+              },
+              "typeDefinitionProvider": true,
+              "workspace": {
+                "fileOperations": {
+                  "willRename": {
+                    "filters": [
+                      {
+                        "pattern": {
+                          "glob": "**/*"
+                        },
+                        "scheme": "file"
+                      }
+                    ]
+                  }
+                },
+                "workspaceFolders": {
+                  "changeNotifications": true,
+                  "supported": true
+                }
+              },
+              "workspaceSymbolProvider": true
+            },
+            "serverInfo": {
+              "name": "tua-lsp",
+              "version": "0.5.1"
+            }
+          },
+          "ms": 3.845208999999997
+        },
+        {
+          "label": "hover-use",
+          "method": "textDocument/hover",
+          "params": {
+            "textDocument": {
+              "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-tAjOxJ/src/main.tua"
+            },
+            "position": {
+              "line": 0,
+              "character": 54
+            }
+          },
+          "result": {
+            "contents": {
+              "kind": "markdown",
+              "value": "```tua\nlocal value: number\n```"
+            },
+            "range": {
+              "end": {
+                "character": 58,
+                "line": 0
+              },
+              "start": {
+                "character": 53,
+                "line": 0
+              }
+            }
+          },
+          "ms": 17.164749999999998
+        },
+        {
+          "label": "definition-use",
+          "method": "textDocument/definition",
+          "params": {
+            "textDocument": {
+              "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-tAjOxJ/src/main.tua"
+            },
+            "position": {
+              "line": 0,
+              "character": 54
+            }
+          },
+          "result": {
+            "range": {
+              "end": {
+                "character": 32,
+                "line": 0
+              },
+              "start": {
+                "character": 27,
+                "line": 0
+              }
+            },
+            "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-tAjOxJ/src/main.tua"
+          },
+          "ms": 0.9443749999999937
+        },
+        {
+          "label": "references-use",
+          "method": "textDocument/references",
+          "params": {
+            "textDocument": {
+              "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-tAjOxJ/src/main.tua"
+            },
+            "context": {
+              "includeDeclaration": true
+            },
+            "position": {
+              "line": 0,
+              "character": 54
+            }
+          },
+          "result": [
+            {
+              "range": {
+                "end": {
+                  "character": 32,
+                  "line": 0
+                },
+                "start": {
+                  "character": 27,
+                  "line": 0
+                }
+              },
+              "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-tAjOxJ/src/main.tua"
+            },
+            {
+              "range": {
+                "end": {
+                  "character": 58,
+                  "line": 0
+                },
+                "start": {
+                  "character": 53,
+                  "line": 0
+                }
+              },
+              "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-tAjOxJ/src/main.tua"
+            }
+          ],
+          "ms": 0.22504200000000196
+        },
+        {
+          "label": "rename-use",
+          "method": "textDocument/rename",
+          "params": {
+            "textDocument": {
+              "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-tAjOxJ/src/main.tua"
+            },
+            "newName": "renamed",
+            "position": {
+              "line": 0,
+              "character": 54
+            }
+          },
+          "result": {
+            "changes": {
+              "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-tAjOxJ/src/main.tua": [
+                {
+                  "newText": "renamed",
+                  "range": {
+                    "end": {
+                      "character": 32,
+                      "line": 0
+                    },
+                    "start": {
+                      "character": 27,
+                      "line": 0
+                    }
+                  }
+                },
+                {
+                  "newText": "renamed",
+                  "range": {
+                    "end": {
+                      "character": 58,
+                      "line": 0
+                    },
+                    "start": {
+                      "character": 53,
+                      "line": 0
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "ms": 0.15012500000000273
+        },
+        {
+          "label": "symbols",
+          "method": "textDocument/documentSymbol",
+          "params": {
+            "textDocument": {
+              "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-tAjOxJ/src/main.tua"
+            }
+          },
+          "result": [
+            {
+              "detail": "number",
+              "kind": 13,
+              "name": "value",
+              "range": {
+                "end": {
+                  "character": 45,
+                  "line": 0
+                },
+                "start": {
+                  "character": 21,
+                  "line": 0
+                }
+              },
+              "selectionRange": {
+                "end": {
+                  "character": 32,
+                  "line": 0
+                },
+                "start": {
+                  "character": 27,
+                  "line": 0
+                }
+              }
+            }
+          ],
+          "ms": 0.13070900000001018
+        },
+        {
+          "label": "diagnostics",
+          "method": "textDocument/diagnostic",
+          "params": {
+            "textDocument": {
+              "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-tAjOxJ/src/main.tua"
+            }
+          },
+          "result": {
+            "items": [
+              {
+                "code": "TL1003",
+                "message": "type mismatch: expected number, found string",
+                "range": {
+                  "end": {
+                    "character": 48,
+                    "line": 0
+                  },
+                  "start": {
+                    "character": 43,
+                    "line": 0
+                  }
+                },
+                "severity": 1,
+                "source": "tua"
+              },
+              {
+                "code": "TL4005",
+                "message": "unused local `prefix`; prefix with `_` to silence",
+                "range": {
+                  "end": {
+                    "character": 12,
+                    "line": 0
+                  },
+                  "start": {
+                    "character": 6,
+                    "line": 0
+                  }
+                },
+                "severity": 2,
+                "source": "tua"
+              }
+            ],
+            "kind": "full"
+          },
+          "ms": 1.8567500000000052
+        },
+        {
+          "label": "member-completion",
+          "method": "textDocument/completion",
+          "params": {
+            "textDocument": {
+              "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-tAjOxJ/src/main.tua"
+            },
+            "position": {
+              "line": 0,
+              "character": 54
+            }
+          },
+          "result": [
+            {
+              "data": {
+                "kind": "field",
+                "label": "field",
+                "position": {
+                  "character": 54,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-tAjOxJ/src/main.tua"
+              },
+              "kind": 5,
+              "label": "field",
+              "sortText": "0000_field"
+            }
+          ],
+          "ms": 1.0045420000000007
+        }
+      ]
+    },
+    {
+      "prefix": "😀",
+      "text": "local prefix = \"😀\"; local value: number = 42; print(value)\n",
+      "expectedUse": {
+        "line": 0,
+        "character": 53
+      },
+      "expectedDeclaration": {
+        "line": 0,
+        "character": 27
+      },
+      "evidence": [
+        {
+          "label": "initialize",
+          "method": "initialize",
+          "params": {
+            "processId": 51960,
+            "rootUri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-t1kXQV",
+            "capabilities": {},
+            "workspaceFolders": [
+              {
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-t1kXQV",
+                "name": "tua-devex-audit-t1kXQV"
+              }
+            ]
+          },
+          "result": {
+            "capabilities": {
+              "callHierarchyProvider": true,
+              "codeActionProvider": {
+                "codeActionKinds": [
+                  "quickfix",
+                  "source.organizeImports",
+                  "source.sortImports",
+                  "source.removeUnusedImports",
+                  "source.tua.createMissingLoveCallbacks",
+                  "source.fixAll"
+                ]
+              },
+              "codeLensProvider": {
+                "resolveProvider": true
+              },
+              "completionProvider": {
+                "resolveProvider": true,
+                "triggerCharacters": [
+                  ":",
+                  ".",
+                  "\"",
+                  "'",
+                  "@",
+                  "-",
+                  "_",
+                  "a",
+                  "b",
+                  "c",
+                  "d",
+                  "e",
+                  "f",
+                  "g",
+                  "h",
+                  "i",
+                  "j",
+                  "k",
+                  "l",
+                  "m",
+                  "n",
+                  "o",
+                  "p",
+                  "q",
+                  "r",
+                  "s",
+                  "t",
+                  "u",
+                  "v",
+                  "w",
+                  "x",
+                  "y",
+                  "z",
+                  "A",
+                  "B",
+                  "C",
+                  "D",
+                  "E",
+                  "F",
+                  "G",
+                  "H",
+                  "I",
+                  "J",
+                  "K",
+                  "L",
+                  "M",
+                  "N",
+                  "O",
+                  "P",
+                  "Q",
+                  "R",
+                  "S",
+                  "T",
+                  "U",
+                  "V",
+                  "W",
+                  "X",
+                  "Y",
+                  "Z",
+                  "0",
+                  "1",
+                  "2",
+                  "3",
+                  "4",
+                  "5",
+                  "6",
+                  "7",
+                  "8",
+                  "9"
+                ]
+              },
+              "definitionProvider": true,
+              "documentFormattingProvider": true,
+              "documentHighlightProvider": true,
+              "documentLinkProvider": {
+                "resolveProvider": false
+              },
+              "documentOnTypeFormattingProvider": {
+                "firstTriggerCharacter": "\n",
+                "moreTriggerCharacter": [
+                  "}",
+                  ")",
+                  "]",
+                  ",",
+                  "d"
+                ]
+              },
+              "documentRangeFormattingProvider": true,
+              "documentSymbolProvider": true,
+              "foldingRangeProvider": true,
+              "hoverProvider": true,
+              "implementationProvider": true,
+              "inlayHintProvider": {
+                "resolveProvider": false
+              },
+              "inlineCompletionProvider": true,
+              "referencesProvider": true,
+              "renameProvider": {
+                "prepareProvider": true
+              },
+              "selectionRangeProvider": true,
+              "semanticTokensProvider": {
+                "full": {
+                  "delta": true
+                },
+                "legend": {
+                  "tokenModifiers": [
+                    "declaration",
+                    "readonly",
+                    "deprecated",
+                    "modification",
+                    "defaultLibrary",
+                    "propertyChain1",
+                    "propertyChain2",
+                    "propertyChain3",
+                    "propertyChain4"
+                  ],
+                  "tokenTypes": [
+                    "type",
+                    "function",
+                    "variable",
+                    "parameter",
+                    "property",
+                    "method",
+                    "class",
+                    "enum",
+                    "enumMember",
+                    "namespace",
+                    "event",
+                    "label",
+                    "decorator"
+                  ]
+                },
+                "range": true
+              },
+              "signatureHelpProvider": {
+                "retriggerCharacters": [
+                  ")"
+                ],
+                "triggerCharacters": [
+                  "(",
+                  ","
+                ]
+              },
+              "textDocumentSync": {
+                "change": 2,
+                "openClose": true,
+                "save": {
+                  "includeText": true
+                }
+              },
+              "typeDefinitionProvider": true,
+              "workspace": {
+                "fileOperations": {
+                  "willRename": {
+                    "filters": [
+                      {
+                        "pattern": {
+                          "glob": "**/*"
+                        },
+                        "scheme": "file"
+                      }
+                    ]
+                  }
+                },
+                "workspaceFolders": {
+                  "changeNotifications": true,
+                  "supported": true
+                }
+              },
+              "workspaceSymbolProvider": true
+            },
+            "serverInfo": {
+              "name": "tua-lsp",
+              "version": "0.5.1"
+            }
+          },
+          "ms": 3.5790000000000077
+        },
+        {
+          "label": "hover-use",
+          "method": "textDocument/hover",
+          "params": {
+            "textDocument": {
+              "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-t1kXQV/src/main.tua"
+            },
+            "position": {
+              "line": 0,
+              "character": 54
+            }
+          },
+          "result": {
+            "contents": {
+              "kind": "markdown",
+              "value": "```tua\nlocal value: number\n```"
+            },
+            "range": {
+              "end": {
+                "character": 57,
+                "line": 0
+              },
+              "start": {
+                "character": 52,
+                "line": 0
+              }
+            }
+          },
+          "ms": 16.666832999999997
+        },
+        {
+          "label": "definition-use",
+          "method": "textDocument/definition",
+          "params": {
+            "textDocument": {
+              "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-t1kXQV/src/main.tua"
+            },
+            "position": {
+              "line": 0,
+              "character": 54
+            }
+          },
+          "result": {
+            "range": {
+              "end": {
+                "character": 31,
+                "line": 0
+              },
+              "start": {
+                "character": 26,
+                "line": 0
+              }
+            },
+            "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-t1kXQV/src/main.tua"
+          },
+          "ms": 0.9226660000000066
+        },
+        {
+          "label": "references-use",
+          "method": "textDocument/references",
+          "params": {
+            "textDocument": {
+              "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-t1kXQV/src/main.tua"
+            },
+            "context": {
+              "includeDeclaration": true
+            },
+            "position": {
+              "line": 0,
+              "character": 54
+            }
+          },
+          "result": [
+            {
+              "range": {
+                "end": {
+                  "character": 31,
+                  "line": 0
+                },
+                "start": {
+                  "character": 26,
+                  "line": 0
+                }
+              },
+              "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-t1kXQV/src/main.tua"
+            },
+            {
+              "range": {
+                "end": {
+                  "character": 57,
+                  "line": 0
+                },
+                "start": {
+                  "character": 52,
+                  "line": 0
+                }
+              },
+              "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-t1kXQV/src/main.tua"
+            }
+          ],
+          "ms": 0.23587499999999295
+        },
+        {
+          "label": "rename-use",
+          "method": "textDocument/rename",
+          "params": {
+            "textDocument": {
+              "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-t1kXQV/src/main.tua"
+            },
+            "newName": "renamed",
+            "position": {
+              "line": 0,
+              "character": 54
+            }
+          },
+          "result": {
+            "changes": {
+              "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-t1kXQV/src/main.tua": [
+                {
+                  "newText": "renamed",
+                  "range": {
+                    "end": {
+                      "character": 31,
+                      "line": 0
+                    },
+                    "start": {
+                      "character": 26,
+                      "line": 0
+                    }
+                  }
+                },
+                {
+                  "newText": "renamed",
+                  "range": {
+                    "end": {
+                      "character": 57,
+                      "line": 0
+                    },
+                    "start": {
+                      "character": 52,
+                      "line": 0
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "ms": 0.11079200000000355
+        },
+        {
+          "label": "symbols",
+          "method": "textDocument/documentSymbol",
+          "params": {
+            "textDocument": {
+              "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-t1kXQV/src/main.tua"
+            }
+          },
+          "result": [
+            {
+              "detail": "number",
+              "kind": 13,
+              "name": "value",
+              "range": {
+                "end": {
+                  "character": 44,
+                  "line": 0
+                },
+                "start": {
+                  "character": 20,
+                  "line": 0
+                }
+              },
+              "selectionRange": {
+                "end": {
+                  "character": 31,
+                  "line": 0
+                },
+                "start": {
+                  "character": 26,
+                  "line": 0
+                }
+              }
+            }
+          ],
+          "ms": 0.08754199999999912
+        },
+        {
+          "label": "diagnostics",
+          "method": "textDocument/diagnostic",
+          "params": {
+            "textDocument": {
+              "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-t1kXQV/src/main.tua"
+            }
+          },
+          "result": {
+            "items": [
+              {
+                "code": "TL1003",
+                "message": "type mismatch: expected number, found string",
+                "range": {
+                  "end": {
+                    "character": 47,
+                    "line": 0
+                  },
+                  "start": {
+                    "character": 42,
+                    "line": 0
+                  }
+                },
+                "severity": 1,
+                "source": "tua"
+              },
+              {
+                "code": "TL4005",
+                "message": "unused local `prefix`; prefix with `_` to silence",
+                "range": {
+                  "end": {
+                    "character": 12,
+                    "line": 0
+                  },
+                  "start": {
+                    "character": 6,
+                    "line": 0
+                  }
+                },
+                "severity": 2,
+                "source": "tua"
+              }
+            ],
+            "kind": "full"
+          },
+          "ms": 2.2084159999999997
+        },
+        {
+          "label": "member-completion",
+          "method": "textDocument/completion",
+          "params": {
+            "textDocument": {
+              "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-t1kXQV/src/main.tua"
+            },
+            "position": {
+              "line": 0,
+              "character": 54
+            }
+          },
+          "result": [
+            {
+              "data": {
+                "kind": "field",
+                "label": "field",
+                "position": {
+                  "character": 54,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-t1kXQV/src/main.tua"
+              },
+              "kind": 5,
+              "label": "field",
+              "sortText": "0000_field",
+              "textEdit": {
+                "newText": "field",
+                "range": {
+                  "end": {
+                    "character": 54,
+                    "line": 0
+                  },
+                  "start": {
+                    "character": 53,
+                    "line": 0
+                  }
+                }
+              }
+            }
+          ],
+          "ms": 1.1415839999999946
+        }
+      ]
+    },
+    {
+      "prefix": "😀😀😀😀😀😀😀😀",
+      "text": "local prefix = \"😀😀😀😀😀😀😀😀\"; local value: number = 42; print(value)\n",
+      "expectedUse": {
+        "line": 0,
+        "character": 67
+      },
+      "expectedDeclaration": {
+        "line": 0,
+        "character": 41
+      },
+      "evidence": [
+        {
+          "label": "initialize",
+          "method": "initialize",
+          "params": {
+            "processId": 51960,
+            "rootUri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR",
+            "capabilities": {},
+            "workspaceFolders": [
+              {
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR",
+                "name": "tua-devex-audit-EHzvhR"
+              }
+            ]
+          },
+          "result": {
+            "capabilities": {
+              "callHierarchyProvider": true,
+              "codeActionProvider": {
+                "codeActionKinds": [
+                  "quickfix",
+                  "source.organizeImports",
+                  "source.sortImports",
+                  "source.removeUnusedImports",
+                  "source.tua.createMissingLoveCallbacks",
+                  "source.fixAll"
+                ]
+              },
+              "codeLensProvider": {
+                "resolveProvider": true
+              },
+              "completionProvider": {
+                "resolveProvider": true,
+                "triggerCharacters": [
+                  ":",
+                  ".",
+                  "\"",
+                  "'",
+                  "@",
+                  "-",
+                  "_",
+                  "a",
+                  "b",
+                  "c",
+                  "d",
+                  "e",
+                  "f",
+                  "g",
+                  "h",
+                  "i",
+                  "j",
+                  "k",
+                  "l",
+                  "m",
+                  "n",
+                  "o",
+                  "p",
+                  "q",
+                  "r",
+                  "s",
+                  "t",
+                  "u",
+                  "v",
+                  "w",
+                  "x",
+                  "y",
+                  "z",
+                  "A",
+                  "B",
+                  "C",
+                  "D",
+                  "E",
+                  "F",
+                  "G",
+                  "H",
+                  "I",
+                  "J",
+                  "K",
+                  "L",
+                  "M",
+                  "N",
+                  "O",
+                  "P",
+                  "Q",
+                  "R",
+                  "S",
+                  "T",
+                  "U",
+                  "V",
+                  "W",
+                  "X",
+                  "Y",
+                  "Z",
+                  "0",
+                  "1",
+                  "2",
+                  "3",
+                  "4",
+                  "5",
+                  "6",
+                  "7",
+                  "8",
+                  "9"
+                ]
+              },
+              "definitionProvider": true,
+              "documentFormattingProvider": true,
+              "documentHighlightProvider": true,
+              "documentLinkProvider": {
+                "resolveProvider": false
+              },
+              "documentOnTypeFormattingProvider": {
+                "firstTriggerCharacter": "\n",
+                "moreTriggerCharacter": [
+                  "}",
+                  ")",
+                  "]",
+                  ",",
+                  "d"
+                ]
+              },
+              "documentRangeFormattingProvider": true,
+              "documentSymbolProvider": true,
+              "foldingRangeProvider": true,
+              "hoverProvider": true,
+              "implementationProvider": true,
+              "inlayHintProvider": {
+                "resolveProvider": false
+              },
+              "inlineCompletionProvider": true,
+              "referencesProvider": true,
+              "renameProvider": {
+                "prepareProvider": true
+              },
+              "selectionRangeProvider": true,
+              "semanticTokensProvider": {
+                "full": {
+                  "delta": true
+                },
+                "legend": {
+                  "tokenModifiers": [
+                    "declaration",
+                    "readonly",
+                    "deprecated",
+                    "modification",
+                    "defaultLibrary",
+                    "propertyChain1",
+                    "propertyChain2",
+                    "propertyChain3",
+                    "propertyChain4"
+                  ],
+                  "tokenTypes": [
+                    "type",
+                    "function",
+                    "variable",
+                    "parameter",
+                    "property",
+                    "method",
+                    "class",
+                    "enum",
+                    "enumMember",
+                    "namespace",
+                    "event",
+                    "label",
+                    "decorator"
+                  ]
+                },
+                "range": true
+              },
+              "signatureHelpProvider": {
+                "retriggerCharacters": [
+                  ")"
+                ],
+                "triggerCharacters": [
+                  "(",
+                  ","
+                ]
+              },
+              "textDocumentSync": {
+                "change": 2,
+                "openClose": true,
+                "save": {
+                  "includeText": true
+                }
+              },
+              "typeDefinitionProvider": true,
+              "workspace": {
+                "fileOperations": {
+                  "willRename": {
+                    "filters": [
+                      {
+                        "pattern": {
+                          "glob": "**/*"
+                        },
+                        "scheme": "file"
+                      }
+                    ]
+                  }
+                },
+                "workspaceFolders": {
+                  "changeNotifications": true,
+                  "supported": true
+                }
+              },
+              "workspaceSymbolProvider": true
+            },
+            "serverInfo": {
+              "name": "tua-lsp",
+              "version": "0.5.1"
+            }
+          },
+          "ms": 3.713458000000003
+        },
+        {
+          "label": "hover-use",
+          "method": "textDocument/hover",
+          "params": {
+            "textDocument": {
+              "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+            },
+            "position": {
+              "line": 0,
+              "character": 68
+            }
+          },
+          "result": null,
+          "ms": 17.320541000000006
+        },
+        {
+          "label": "definition-use",
+          "method": "textDocument/definition",
+          "params": {
+            "textDocument": {
+              "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+            },
+            "position": {
+              "line": 0,
+              "character": 68
+            }
+          },
+          "result": null,
+          "ms": 0.11916700000000446
+        },
+        {
+          "label": "references-use",
+          "method": "textDocument/references",
+          "params": {
+            "textDocument": {
+              "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+            },
+            "context": {
+              "includeDeclaration": true
+            },
+            "position": {
+              "line": 0,
+              "character": 68
+            }
+          },
+          "result": [],
+          "ms": 0.08275000000000432
+        },
+        {
+          "label": "rename-use",
+          "method": "textDocument/rename",
+          "params": {
+            "textDocument": {
+              "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+            },
+            "newName": "renamed",
+            "position": {
+              "line": 0,
+              "character": 68
+            }
+          },
+          "result": null,
+          "ms": 0.06683400000000006
+        },
+        {
+          "label": "symbols",
+          "method": "textDocument/documentSymbol",
+          "params": {
+            "textDocument": {
+              "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+            }
+          },
+          "result": [
+            {
+              "detail": "number",
+              "kind": 13,
+              "name": "value",
+              "range": {
+                "end": {
+                  "character": 51,
+                  "line": 0
+                },
+                "start": {
+                  "character": 27,
+                  "line": 0
+                }
+              },
+              "selectionRange": {
+                "end": {
+                  "character": 38,
+                  "line": 0
+                },
+                "start": {
+                  "character": 33,
+                  "line": 0
+                }
+              }
+            }
+          ],
+          "ms": 0.06679100000000915
+        },
+        {
+          "label": "diagnostics",
+          "method": "textDocument/diagnostic",
+          "params": {
+            "textDocument": {
+              "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+            }
+          },
+          "result": {
+            "items": [
+              {
+                "code": "TL1003",
+                "message": "type mismatch: expected number, found string",
+                "range": {
+                  "end": {
+                    "character": 54,
+                    "line": 0
+                  },
+                  "start": {
+                    "character": 49,
+                    "line": 0
+                  }
+                },
+                "severity": 1,
+                "source": "tua"
+              },
+              {
+                "code": "TL4005",
+                "message": "unused local `prefix`; prefix with `_` to silence",
+                "range": {
+                  "end": {
+                    "character": 12,
+                    "line": 0
+                  },
+                  "start": {
+                    "character": 6,
+                    "line": 0
+                  }
+                },
+                "severity": 2,
+                "source": "tua"
+              }
+            ],
+            "kind": "full"
+          },
+          "ms": 1.771499999999989
+        },
+        {
+          "label": "member-completion",
+          "method": "textDocument/completion",
+          "params": {
+            "textDocument": {
+              "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+            },
+            "position": {
+              "line": 0,
+              "character": 68
+            }
+          },
+          "result": [
+            {
+              "data": {
+                "kind": "variable",
+                "label": "obj",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "kind": 6,
+              "label": "obj",
+              "sortText": "0000_obj"
+            },
+            {
+              "data": {
+                "kind": "variable",
+                "label": "prefix",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "kind": 6,
+              "label": "prefix",
+              "sortText": "0001_prefix"
+            },
+            {
+              "data": {
+                "kind": "module",
+                "label": "ecs",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "kind": 9,
+              "label": "ecs",
+              "sortText": "0002_ecs"
+            },
+            {
+              "data": {
+                "kind": "snippet",
+                "label": "local",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "insertText": "local ${1:name} = ${0:nil}",
+              "insertTextFormat": 2,
+              "kind": 15,
+              "label": "local",
+              "sortText": "0003_local"
+            },
+            {
+              "data": {
+                "kind": "snippet",
+                "label": "local function",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "filterText": "lfn",
+              "insertText": "local function ${1:name}(${2})\n  ${0}\nend",
+              "insertTextFormat": 2,
+              "kind": 15,
+              "label": "local function",
+              "sortText": "0004_local function"
+            },
+            {
+              "data": {
+                "kind": "snippet",
+                "label": "function",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "filterText": "fn",
+              "insertText": "function ${1:name}(${2})\n  ${0}\nend",
+              "insertTextFormat": 2,
+              "kind": 15,
+              "label": "function",
+              "sortText": "0005_function"
+            },
+            {
+              "data": {
+                "kind": "snippet",
+                "label": "type",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "insertText": "type ${1:Name} = {\n  ${0}\n}",
+              "insertTextFormat": 2,
+              "kind": 15,
+              "label": "type",
+              "sortText": "0006_type"
+            },
+            {
+              "data": {
+                "kind": "snippet",
+                "label": "class",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "insertText": "class ${1:Name} {\n  ${0}\n}",
+              "insertTextFormat": 2,
+              "kind": 15,
+              "label": "class",
+              "sortText": "0007_class"
+            },
+            {
+              "data": {
+                "kind": "snippet",
+                "label": "open class",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "filterText": "openclass",
+              "insertText": "open class ${1:Name} {\n  ${0}\n}",
+              "insertTextFormat": 2,
+              "kind": 15,
+              "label": "open class",
+              "sortText": "0008_open class"
+            },
+            {
+              "data": {
+                "kind": "snippet",
+                "label": "final class",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "filterText": "finalclass",
+              "insertText": "final class ${1:Name} {\n  ${0}\n}",
+              "insertTextFormat": 2,
+              "kind": 15,
+              "label": "final class",
+              "sortText": "0009_final class"
+            },
+            {
+              "data": {
+                "kind": "snippet",
+                "label": "if",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "insertText": "if ${1:condition} then\n  ${0}\nend",
+              "insertTextFormat": 2,
+              "kind": 15,
+              "label": "if",
+              "sortText": "0010_if"
+            },
+            {
+              "data": {
+                "kind": "snippet",
+                "label": "if else",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "filterText": "ifelse",
+              "insertText": "if ${1:condition} then\n  ${2}\nelse\n  ${0}\nend",
+              "insertTextFormat": 2,
+              "kind": 15,
+              "label": "if else",
+              "sortText": "0011_if else"
+            },
+            {
+              "data": {
+                "kind": "snippet",
+                "label": "for",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "filterText": "fori",
+              "insertText": "for ${1:i} = ${2:1}, ${3:n} do\n  ${0}\nend",
+              "insertTextFormat": 2,
+              "kind": 15,
+              "label": "for",
+              "sortText": "0012_for"
+            },
+            {
+              "data": {
+                "kind": "snippet",
+                "label": "for pairs",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "filterText": "forp",
+              "insertText": "for ${1:key}, ${2:value} in pairs(${3:table}) do\n  ${0}\nend",
+              "insertTextFormat": 2,
+              "kind": 15,
+              "label": "for pairs",
+              "sortText": "0013_for pairs"
+            },
+            {
+              "data": {
+                "kind": "snippet",
+                "label": "for ipairs",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "filterText": "forip",
+              "insertText": "for ${1:index}, ${2:value} in ipairs(${3:table}) do\n  ${0}\nend",
+              "insertTextFormat": 2,
+              "kind": 15,
+              "label": "for ipairs",
+              "sortText": "0014_for ipairs"
+            },
+            {
+              "data": {
+                "kind": "snippet",
+                "label": "while",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "insertText": "while ${1:condition} do\n  ${0}\nend",
+              "insertTextFormat": 2,
+              "kind": 15,
+              "label": "while",
+              "sortText": "0015_while"
+            },
+            {
+              "data": {
+                "kind": "snippet",
+                "label": "repeat",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "insertText": "repeat\n  ${1}\nuntil ${0:condition}",
+              "insertTextFormat": 2,
+              "kind": 15,
+              "label": "repeat",
+              "sortText": "0016_repeat"
+            },
+            {
+              "data": {
+                "kind": "snippet",
+                "label": "do",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "insertText": "do\n  ${0}\nend",
+              "insertTextFormat": 2,
+              "kind": 15,
+              "label": "do",
+              "sortText": "0017_do"
+            },
+            {
+              "data": {
+                "kind": "snippet",
+                "label": "spriteSheet",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "insertText": "local ${1:Player} = spriteSheet({\n  image = \"${2:assets/player.png}\",\n  frame = { width = ${3:16}, height = ${4:16}, left = ${5:0}, top = ${6:0}, border = ${7:0} },\n  animations = {\n    ${8:idle} = { from = ${9:0}, to = ${10:3}, row = ${11:0}, fps = ${12:8} },\n  },\n})",
+              "insertTextFormat": 2,
+              "kind": 15,
+              "label": "spriteSheet",
+              "sortText": "0018_spriteSheet"
+            },
+            {
+              "data": {
+                "kind": "snippet",
+                "label": "signal",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "insertText": "local ${1:signals} = signal()\n${1:signals}:on(\"${2:event}\", function(${3})\n  ${0}\nend)",
+              "insertTextFormat": 2,
+              "kind": 15,
+              "label": "signal",
+              "sortText": "0019_signal"
+            },
+            {
+              "data": {
+                "kind": "snippet",
+                "label": "objectPool",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "insertText": "type ${1:Bullet} = { x: number, y: number, active: boolean }\n\nlocal ${2:bulletPool} = objectPool({\n  create = function(): ${1:Bullet}\n    return { x = ${3:0}, y = ${4:0}, active = false }\n  end,\n  reset = function(object: ${1:Bullet})\n    object.active = false\n  end,\n  initial = ${5:64},\n})\n\nlocal ${6:bullet} = ${2:bulletPool}:acquire()\n${0}",
+              "insertTextFormat": 2,
+              "kind": 15,
+              "label": "objectPool",
+              "sortText": "0020_objectPool"
+            },
+            {
+              "data": {
+                "kind": "snippet",
+                "label": "stateMachine",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "insertText": "local ${1:machine} = stateMachine({\n  initial = \"${2:idle}\",\n  events = {\n    { name = \"${3:start}\", from = \"${2:idle}\", to = \"${4:running}\" },\n    { name = \"${5:stop}\", from = \"${4:running}\", to = \"${2:idle}\" },\n  },\n  callbacks = {\n    onenter${4:running} = function(self, event, from, to)\n      ${0}\n    end,\n  },\n})",
+              "insertTextFormat": 2,
+              "kind": 15,
+              "label": "stateMachine",
+              "sortText": "0021_stateMachine"
+            },
+            {
+              "data": {
+                "kind": "snippet",
+                "label": "store",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "insertText": "local ${1:game} = store({\n  ${2:score} = ${3:0},\n  ${4:paused} = false,\n})\n\n${1:game}:update(function(state)\n  state.${2:score} += ${5:1}\nend)\n${0}",
+              "insertTextFormat": 2,
+              "kind": 15,
+              "label": "store",
+              "sortText": "0022_store"
+            },
+            {
+              "data": {
+                "kind": "snippet",
+                "label": "input",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "insertText": "local ${1:controls} = input({\n  controls = {\n    left = { \"key:left\", \"key:a\", \"axis:leftx-\" },\n    right = { \"key:right\", \"key:d\", \"axis:leftx+\" },\n    up = { \"key:up\", \"key:w\", \"axis:lefty-\" },\n    down = { \"key:down\", \"key:s\", \"axis:lefty+\" },\n    confirm = { \"key:return\", \"button:a\" },\n  },\n  pairs = {\n    move = { \"left\", \"right\", \"up\", \"down\" },\n  },\n  deadzone = ${2:0.25},\n})\n\nfunction love.update(dt: number)\n  ${1:controls}:update()\n  local x, y = ${1:controls}:get(\"move\")\n  ${0}\nend",
+              "insertTextFormat": 2,
+              "kind": 15,
+              "label": "input",
+              "sortText": "0023_input"
+            },
+            {
+              "data": {
+                "kind": "snippet",
+                "label": "audioSystem",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "insertText": "local ${1:audio} = audioSystem({\n  buses = {\n    master = { volume = 1 },\n    music = { parent = \"master\" },\n    sfx = { parent = \"master\" },\n  },\n  cues = {\n    ${2:jump} = { source = sound(\"${3:assets/audio/jump.ogg}\"), bus = \"sfx\" },\n  },\n  music = {},\n})\n\nfunction love.update(dt: number)\n  ${1:audio}:update(dt)\nend\n${0}",
+              "insertTextFormat": 2,
+              "kind": 15,
+              "label": "audioSystem",
+              "sortText": "0024_audioSystem"
+            },
+            {
+              "data": {
+                "kind": "snippet",
+                "label": "ecs component",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "insertText": "local ${1:Position} = ecs.component(\"${1:Position}\", { ${2:x} = \"${3:number}\" })\nlocal ${4:world} = ecs.world()\nlocal ${5:entity} = ${4:world}:create()\n${4:world}:add(${5:entity}, ${1:Position}, { ${2:x} = ${6:0} })\n${0}",
+              "insertTextFormat": 2,
+              "kind": 15,
+              "label": "ecs component",
+              "sortText": "0025_ecs component"
+            },
+            {
+              "data": {
+                "kind": "keyword",
+                "label": "and",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "kind": 14,
+              "label": "and",
+              "sortText": "0026_and"
+            },
+            {
+              "data": {
+                "kind": "keyword",
+                "label": "break",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "kind": 14,
+              "label": "break",
+              "sortText": "0027_break"
+            },
+            {
+              "data": {
+                "kind": "keyword",
+                "label": "else",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "kind": 14,
+              "label": "else",
+              "sortText": "0028_else"
+            },
+            {
+              "data": {
+                "kind": "keyword",
+                "label": "elseif",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "kind": 14,
+              "label": "elseif",
+              "sortText": "0029_elseif"
+            },
+            {
+              "data": {
+                "kind": "keyword",
+                "label": "end",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "kind": 14,
+              "label": "end",
+              "sortText": "0030_end"
+            },
+            {
+              "data": {
+                "kind": "keyword",
+                "label": "false",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "kind": 14,
+              "label": "false",
+              "sortText": "0031_false"
+            },
+            {
+              "data": {
+                "kind": "keyword",
+                "label": "in",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "kind": 14,
+              "label": "in",
+              "sortText": "0032_in"
+            },
+            {
+              "data": {
+                "kind": "keyword",
+                "label": "nil",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "kind": 14,
+              "label": "nil",
+              "sortText": "0033_nil"
+            },
+            {
+              "data": {
+                "kind": "keyword",
+                "label": "not",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "kind": 14,
+              "label": "not",
+              "sortText": "0034_not"
+            },
+            {
+              "data": {
+                "kind": "keyword",
+                "label": "or",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "kind": 14,
+              "label": "or",
+              "sortText": "0035_or"
+            },
+            {
+              "data": {
+                "kind": "keyword",
+                "label": "return",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "kind": 14,
+              "label": "return",
+              "sortText": "0036_return"
+            },
+            {
+              "data": {
+                "kind": "keyword",
+                "label": "then",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "kind": 14,
+              "label": "then",
+              "sortText": "0037_then"
+            },
+            {
+              "data": {
+                "kind": "keyword",
+                "label": "true",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "kind": 14,
+              "label": "true",
+              "sortText": "0038_true"
+            },
+            {
+              "data": {
+                "kind": "keyword",
+                "label": "until",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "kind": 14,
+              "label": "until",
+              "sortText": "0039_until"
+            },
+            {
+              "data": {
+                "kind": "value",
+                "label": "_ENV",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "kind": 12,
+              "label": "_ENV",
+              "sortText": "0040__ENV"
+            },
+            {
+              "data": {
+                "kind": "value",
+                "label": "_G",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "kind": 12,
+              "label": "_G",
+              "sortText": "0041__G"
+            },
+            {
+              "data": {
+                "kind": "value",
+                "label": "_VERSION",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "kind": 12,
+              "label": "_VERSION",
+              "sortText": "0042__VERSION"
+            },
+            {
+              "data": {
+                "kind": "value",
+                "label": "arg",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "kind": 12,
+              "label": "arg",
+              "sortText": "0043_arg"
+            },
+            {
+              "data": {
+                "kind": "module",
+                "label": "bit",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "kind": 9,
+              "label": "bit",
+              "sortText": "0044_bit"
+            },
+            {
+              "data": {
+                "kind": "function",
+                "label": "assert",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "kind": 3,
+              "label": "assert",
+              "sortText": "0045_assert"
+            },
+            {
+              "data": {
+                "kind": "function",
+                "label": "collectgarbage",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "kind": 3,
+              "label": "collectgarbage",
+              "sortText": "0046_collectgarbage"
+            },
+            {
+              "data": {
+                "kind": "module",
+                "label": "coroutine",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "kind": 9,
+              "label": "coroutine",
+              "sortText": "0047_coroutine"
+            },
+            {
+              "data": {
+                "kind": "module",
+                "label": "debug",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "kind": 9,
+              "label": "debug",
+              "sortText": "0048_debug"
+            },
+            {
+              "data": {
+                "kind": "function",
+                "label": "dofile",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "kind": 3,
+              "label": "dofile",
+              "sortText": "0049_dofile"
+            },
+            {
+              "data": {
+                "kind": "function",
+                "label": "error",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "kind": 3,
+              "label": "error",
+              "sortText": "0050_error"
+            },
+            {
+              "data": {
+                "kind": "function",
+                "label": "getfenv",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "kind": 3,
+              "label": "getfenv",
+              "sortText": "0051_getfenv"
+            },
+            {
+              "data": {
+                "kind": "function",
+                "label": "getmetatable",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "kind": 3,
+              "label": "getmetatable",
+              "sortText": "0052_getmetatable"
+            },
+            {
+              "data": {
+                "kind": "module",
+                "label": "io",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "kind": 9,
+              "label": "io",
+              "sortText": "0053_io"
+            },
+            {
+              "data": {
+                "kind": "function",
+                "label": "ipairs",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "kind": 3,
+              "label": "ipairs",
+              "sortText": "0054_ipairs"
+            },
+            {
+              "data": {
+                "kind": "module",
+                "label": "jit",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "kind": 9,
+              "label": "jit",
+              "sortText": "0055_jit"
+            },
+            {
+              "data": {
+                "kind": "function",
+                "label": "load",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "kind": 3,
+              "label": "load",
+              "sortText": "0056_load"
+            },
+            {
+              "data": {
+                "kind": "function",
+                "label": "loadfile",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "kind": 3,
+              "label": "loadfile",
+              "sortText": "0057_loadfile"
+            },
+            {
+              "data": {
+                "kind": "function",
+                "label": "loadstring",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "kind": 3,
+              "label": "loadstring",
+              "sortText": "0058_loadstring"
+            },
+            {
+              "data": {
+                "kind": "module",
+                "label": "love",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "kind": 9,
+              "label": "love",
+              "sortText": "0059_love"
+            },
+            {
+              "data": {
+                "kind": "module",
+                "label": "math",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "kind": 9,
+              "label": "math",
+              "sortText": "0060_math"
+            },
+            {
+              "data": {
+                "kind": "function",
+                "label": "module",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "kind": 3,
+              "label": "module",
+              "sortText": "0061_module"
+            },
+            {
+              "data": {
+                "kind": "function",
+                "label": "next",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "kind": 3,
+              "label": "next",
+              "sortText": "0062_next"
+            },
+            {
+              "data": {
+                "kind": "module",
+                "label": "os",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "kind": 9,
+              "label": "os",
+              "sortText": "0063_os"
+            },
+            {
+              "data": {
+                "kind": "module",
+                "label": "package",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "kind": 9,
+              "label": "package",
+              "sortText": "0064_package"
+            },
+            {
+              "data": {
+                "kind": "function",
+                "label": "pairs",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "kind": 3,
+              "label": "pairs",
+              "sortText": "0065_pairs"
+            },
+            {
+              "data": {
+                "kind": "function",
+                "label": "pcall",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "kind": 3,
+              "label": "pcall",
+              "sortText": "0066_pcall"
+            },
+            {
+              "data": {
+                "kind": "function",
+                "label": "print",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "kind": 3,
+              "label": "print",
+              "sortText": "0067_print"
+            },
+            {
+              "data": {
+                "kind": "function",
+                "label": "rawequal",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "kind": 3,
+              "label": "rawequal",
+              "sortText": "0068_rawequal"
+            },
+            {
+              "data": {
+                "kind": "function",
+                "label": "rawget",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "kind": 3,
+              "label": "rawget",
+              "sortText": "0069_rawget"
+            },
+            {
+              "data": {
+                "kind": "function",
+                "label": "rawlen",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "kind": 3,
+              "label": "rawlen",
+              "sortText": "0070_rawlen"
+            },
+            {
+              "data": {
+                "kind": "function",
+                "label": "rawset",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "kind": 3,
+              "label": "rawset",
+              "sortText": "0071_rawset"
+            },
+            {
+              "data": {
+                "kind": "function",
+                "label": "require",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "kind": 3,
+              "label": "require",
+              "sortText": "0072_require"
+            },
+            {
+              "data": {
+                "kind": "function",
+                "label": "select",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "kind": 3,
+              "label": "select",
+              "sortText": "0073_select"
+            },
+            {
+              "data": {
+                "kind": "function",
+                "label": "setfenv",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "kind": 3,
+              "label": "setfenv",
+              "sortText": "0074_setfenv"
+            },
+            {
+              "data": {
+                "kind": "function",
+                "label": "setmetatable",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "kind": 3,
+              "label": "setmetatable",
+              "sortText": "0075_setmetatable"
+            },
+            {
+              "data": {
+                "kind": "module",
+                "label": "string",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "kind": 9,
+              "label": "string",
+              "sortText": "0076_string"
+            },
+            {
+              "data": {
+                "kind": "module",
+                "label": "table",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "kind": 9,
+              "label": "table",
+              "sortText": "0077_table"
+            },
+            {
+              "data": {
+                "kind": "function",
+                "label": "tonumber",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "kind": 3,
+              "label": "tonumber",
+              "sortText": "0078_tonumber"
+            },
+            {
+              "data": {
+                "kind": "function",
+                "label": "tostring",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "kind": 3,
+              "label": "tostring",
+              "sortText": "0079_tostring"
+            },
+            {
+              "data": {
+                "kind": "function",
+                "label": "unpack",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "kind": 3,
+              "label": "unpack",
+              "sortText": "0080_unpack"
+            },
+            {
+              "data": {
+                "kind": "function",
+                "label": "warn",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "kind": 3,
+              "label": "warn",
+              "sortText": "0081_warn"
+            },
+            {
+              "data": {
+                "kind": "function",
+                "label": "xpcall",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "kind": 3,
+              "label": "xpcall",
+              "sortText": "0082_xpcall"
+            },
+            {
+              "data": {
+                "kind": "function",
+                "label": "image",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "kind": 3,
+              "label": "image",
+              "sortText": "0083_image"
+            },
+            {
+              "data": {
+                "kind": "function",
+                "label": "sound",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "kind": 3,
+              "label": "sound",
+              "sortText": "0084_sound"
+            },
+            {
+              "data": {
+                "kind": "function",
+                "label": "music",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "kind": 3,
+              "label": "music",
+              "sortText": "0085_music"
+            },
+            {
+              "data": {
+                "kind": "function",
+                "label": "font",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "kind": 3,
+              "label": "font",
+              "sortText": "0086_font"
+            },
+            {
+              "data": {
+                "kind": "function",
+                "label": "shader",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "kind": 3,
+              "label": "shader",
+              "sortText": "0087_shader"
+            },
+            {
+              "data": {
+                "kind": "function",
+                "label": "imageData",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "kind": 3,
+              "label": "imageData",
+              "sortText": "0088_imageData"
+            },
+            {
+              "data": {
+                "kind": "function",
+                "label": "canvas",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "kind": 3,
+              "label": "canvas",
+              "sortText": "0089_canvas"
+            },
+            {
+              "data": {
+                "kind": "function",
+                "label": "quad",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "kind": 3,
+              "label": "quad",
+              "sortText": "0090_quad"
+            },
+            {
+              "data": {
+                "kind": "function",
+                "label": "spriteBatch",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "kind": 3,
+              "label": "spriteBatch",
+              "sortText": "0091_spriteBatch"
+            },
+            {
+              "data": {
+                "kind": "function",
+                "label": "particles",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "kind": 3,
+              "label": "particles",
+              "sortText": "0092_particles"
+            },
+            {
+              "data": {
+                "kind": "function",
+                "label": "vec2",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "kind": 3,
+              "label": "vec2",
+              "sortText": "0093_vec2"
+            },
+            {
+              "data": {
+                "kind": "module",
+                "label": "tween",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "kind": 9,
+              "label": "tween",
+              "sortText": "0094_tween"
+            },
+            {
+              "data": {
+                "kind": "module",
+                "label": "Camera",
+                "position": {
+                  "character": 68,
+                  "line": 0
+                },
+                "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-devex-audit-EHzvhR/src/main.tua"
+              },
+              "kind": 9,
+              "label": "Camera",
+              "sortText": "0095_Camera"
+            }
+          ],
+          "ms": 1.8940410000000014
+        }
+      ]
+    }
+  ]
+}

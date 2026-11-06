@@ -1,0 +1,4554 @@
+{
+  "binary": "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+  "methodology": "Three fresh server processes per bundled project; first import-member completion follows initialize+didOpen. 10 warm and 10 full-buffer post-edit queries per process. End-to-end stdio request latency, not key-to-menu latency; no runtime source files changed.",
+  "projects": [
+    {
+      "project": "features",
+      "groups": {
+        "cold-import-completion": [
+          129.358375,
+          127.35954099999998,
+          130.71683399999995
+        ],
+        "warm-import-completion": [
+          0.3828330000000051,
+          0.2852919999999983,
+          0.24270799999999326,
+          0.23454100000000722,
+          0.20387499999998226,
+          0.20004199999999628,
+          0.2084159999999997,
+          0.19291599999999676,
+          0.19487500000002456,
+          0.19412500000001387,
+          0.2865419999999972,
+          0.2749160000000188,
+          0.22674999999998136,
+          0.19604100000003655,
+          0.20249999999998636,
+          0.1918749999999818,
+          0.224125000000015,
+          0.18370800000002419,
+          0.19008300000001555,
+          0.19204200000001492,
+          0.28379100000006474,
+          0.23762499999998,
+          0.21995800000001964,
+          0.2897500000000264,
+          0.24687500000004547,
+          0.19116699999995035,
+          0.20033300000000054,
+          0.27374999999995,
+          0.21120800000005602,
+          0.197791000000052
+        ],
+        "warm-hover": [
+          1.277417000000014,
+          0.35258300000000986,
+          0.24354099999999335,
+          0.19249999999999545,
+          0.2372090000000071,
+          0.16895799999997507,
+          0.15637499999999704,
+          0.1676249999999868,
+          0.15000000000000568,
+          0.1530830000000094,
+          0.8507079999999974,
+          0.21670800000003965,
+          0.18795799999998053,
+          0.17641700000001492,
+          0.15529199999997445,
+          0.15699999999998226,
+          0.17354199999999764,
+          0.14883400000002212,
+          0.15741700000000947,
+          0.14829199999996945,
+          0.7875000000000227,
+          0.19129199999997581,
+          0.16629100000000108,
+          0.26262499999995725,
+          0.1588329999999587,
+          0.162166999999954,
+          0.2083340000000362,
+          0.219916000000012,
+          0.15791699999999764,
+          0.15170899999998255
+        ],
+        "warm-signature": [
+          0.43587500000001,
+          0.27249999999997954,
+          0.2705410000000086,
+          0.21295799999998621,
+          0.22820799999999508,
+          0.21504200000001106,
+          0.19083399999999529,
+          0.1994579999999928,
+          0.19299999999998363,
+          0.20729199999999537,
+          0.40300000000002,
+          0.22833300000002055,
+          0.2033749999999941,
+          0.19787499999995362,
+          0.19241599999998016,
+          0.18975000000000364,
+          0.19120900000001484,
+          0.19404199999996763,
+          0.19308300000000145,
+          0.19345899999996163,
+          0.3833750000000009,
+          0.20412499999997635,
+          0.1914160000000038,
+          0.2062909999999647,
+          0.19716599999992468,
+          0.19679099999996197,
+          0.23558399999990343,
+          0.2504999999999882,
+          0.19558300000005602,
+          0.19762500000001637
+        ],
+        "post-edit-import-completion": [
+          19.671290999999997,
+          17.029957999999993,
+          15.023957999999993,
+          15.944832999999988,
+          17.12104199999999,
+          16.02283299999999,
+          17.566625000000045,
+          16.177665999999988,
+          17.08725000000004,
+          15.518207999999959,
+          18.54525000000001,
+          17.445334000000003,
+          15.36895800000002,
+          14.907916,
+          15.25145800000007,
+          14.791082999999958,
+          15.393083000000047,
+          16.438333000000057,
+          15.117124999999987,
+          15.814292000000023,
+          18.251125000000002,
+          16.759665999999925,
+          17.83508299999994,
+          15.922916999999984,
+          17.575042000000053,
+          16.25070800000003,
+          14.96916699999997,
+          15.311958000000004,
+          16.572458000000097,
+          15.275291999999922
+        ],
+        "incomplete-completion": [
+          16.094167000000027,
+          16.724417000000017,
+          15.875208000000043
+        ]
+      },
+      "runs": [
+        {
+          "initializeMs": 9.369583000000002,
+          "requestCount": 43,
+          "stderr": ""
+        },
+        {
+          "initializeMs": 7.002250000000004,
+          "requestCount": 43,
+          "stderr": ""
+        },
+        {
+          "initializeMs": 7.358082999999965,
+          "requestCount": 43,
+          "stderr": ""
+        }
+      ],
+      "samples": {
+        "cold-import-completion": {
+          "params": {
+            "textDocument": {
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/features/src/__audit_overlay__.tua"
+            },
+            "context": {
+              "triggerKind": 1
+            },
+            "position": {
+              "line": 2,
+              "character": 15
+            }
+          },
+          "result": [
+            {
+              "data": {
+                "kind": "field",
+                "label": "direction",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/features/src/game_math.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/features/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "direction",
+              "sortText": "0000_direction",
+              "textEdit": {
+                "newText": "direction",
+                "range": {
+                  "end": {
+                    "character": 21,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "eased",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/features/src/game_math.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/features/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "eased",
+              "sortText": "0001_eased",
+              "textEdit": {
+                "newText": "eased",
+                "range": {
+                  "end": {
+                    "character": 21,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "frame",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/features/src/game_math.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/features/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "frame",
+              "sortText": "0002_frame",
+              "textEdit": {
+                "newText": "frame",
+                "range": {
+                  "end": {
+                    "character": 21,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "fullTurn",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/features/src/game_math.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/features/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "fullTurn",
+              "sortText": "0003_fullTurn",
+              "textEdit": {
+                "newText": "fullTurn",
+                "range": {
+                  "end": {
+                    "character": 21,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "health",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/features/src/game_math.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/features/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "health",
+              "sortText": "0004_health",
+              "textEdit": {
+                "newText": "health",
+                "range": {
+                  "end": {
+                    "character": 21,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "orange",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/features/src/game_math.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/features/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "orange",
+              "sortText": "0005_orange",
+              "textEdit": {
+                "newText": "orange",
+                "range": {
+                  "end": {
+                    "character": 21,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "screenX",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/features/src/game_math.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/features/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "screenX",
+              "sortText": "0006_screenX",
+              "textEdit": {
+                "newText": "screenX",
+                "range": {
+                  "end": {
+                    "character": 21,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "translucentBlue",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/features/src/game_math.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/features/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "translucentBlue",
+              "sortText": "0007_translucentBlue",
+              "textEdit": {
+                "newText": "translucentBlue",
+                "range": {
+                  "end": {
+                    "character": 21,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "warm-import-completion": {
+          "params": {
+            "textDocument": {
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/features/src/__audit_overlay__.tua"
+            },
+            "context": {
+              "triggerKind": 1
+            },
+            "position": {
+              "line": 2,
+              "character": 15
+            }
+          },
+          "result": [
+            {
+              "data": {
+                "kind": "field",
+                "label": "direction",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/features/src/game_math.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/features/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "direction",
+              "sortText": "0000_direction",
+              "textEdit": {
+                "newText": "direction",
+                "range": {
+                  "end": {
+                    "character": 21,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "eased",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/features/src/game_math.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/features/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "eased",
+              "sortText": "0001_eased",
+              "textEdit": {
+                "newText": "eased",
+                "range": {
+                  "end": {
+                    "character": 21,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "frame",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/features/src/game_math.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/features/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "frame",
+              "sortText": "0002_frame",
+              "textEdit": {
+                "newText": "frame",
+                "range": {
+                  "end": {
+                    "character": 21,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "fullTurn",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/features/src/game_math.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/features/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "fullTurn",
+              "sortText": "0003_fullTurn",
+              "textEdit": {
+                "newText": "fullTurn",
+                "range": {
+                  "end": {
+                    "character": 21,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "health",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/features/src/game_math.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/features/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "health",
+              "sortText": "0004_health",
+              "textEdit": {
+                "newText": "health",
+                "range": {
+                  "end": {
+                    "character": 21,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "orange",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/features/src/game_math.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/features/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "orange",
+              "sortText": "0005_orange",
+              "textEdit": {
+                "newText": "orange",
+                "range": {
+                  "end": {
+                    "character": 21,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "screenX",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/features/src/game_math.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/features/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "screenX",
+              "sortText": "0006_screenX",
+              "textEdit": {
+                "newText": "screenX",
+                "range": {
+                  "end": {
+                    "character": 21,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "translucentBlue",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/features/src/game_math.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/features/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "translucentBlue",
+              "sortText": "0007_translucentBlue",
+              "textEdit": {
+                "newText": "translucentBlue",
+                "range": {
+                  "end": {
+                    "character": 21,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "warm-hover": {
+          "params": {
+            "textDocument": {
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/features/src/__audit_overlay__.tua"
+            },
+            "context": {
+              "triggerKind": 1
+            },
+            "position": {
+              "line": 2,
+              "character": 16
+            }
+          },
+          "result": {
+            "contents": {
+              "kind": "markdown",
+              "value": "```tua\n(field) imported.health: number\n```\n\n---\n\n- kind: field\n- module: /Users/kyonru/Documents/projects/Experiments/tlua/examples/features/src/game_math.tua"
+            },
+            "range": {
+              "end": {
+                "character": 21,
+                "line": 2
+              },
+              "start": {
+                "character": 15,
+                "line": 2
+              }
+            }
+          }
+        },
+        "warm-signature": {
+          "params": {
+            "textDocument": {
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/features/src/__audit_overlay__.tua"
+            },
+            "context": {
+              "triggerKind": 1
+            },
+            "position": {
+              "line": 3,
+              "character": 16
+            }
+          },
+          "result": {
+            "activeParameter": 0,
+            "activeSignature": 0,
+            "signatures": [
+              {
+                "documentation": {
+                  "kind": "markdown",
+                  "value": "Gets the width of the Texture.\n\nReturns:\n- `width: number`: The width of the Texture."
+                },
+                "label": "function Canvas:getWidth(): number",
+                "parameters": []
+              }
+            ]
+          }
+        },
+        "post-edit-import-completion": {
+          "params": {
+            "textDocument": {
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/features/src/__audit_overlay__.tua"
+            },
+            "context": {
+              "triggerKind": 1
+            },
+            "position": {
+              "line": 2,
+              "character": 15
+            }
+          },
+          "result": [
+            {
+              "data": {
+                "kind": "field",
+                "label": "direction",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/features/src/game_math.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/features/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "direction",
+              "sortText": "0000_direction",
+              "textEdit": {
+                "newText": "direction",
+                "range": {
+                  "end": {
+                    "character": 21,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "eased",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/features/src/game_math.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/features/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "eased",
+              "sortText": "0001_eased",
+              "textEdit": {
+                "newText": "eased",
+                "range": {
+                  "end": {
+                    "character": 21,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "frame",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/features/src/game_math.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/features/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "frame",
+              "sortText": "0002_frame",
+              "textEdit": {
+                "newText": "frame",
+                "range": {
+                  "end": {
+                    "character": 21,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "fullTurn",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/features/src/game_math.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/features/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "fullTurn",
+              "sortText": "0003_fullTurn",
+              "textEdit": {
+                "newText": "fullTurn",
+                "range": {
+                  "end": {
+                    "character": 21,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "health",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/features/src/game_math.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/features/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "health",
+              "sortText": "0004_health",
+              "textEdit": {
+                "newText": "health",
+                "range": {
+                  "end": {
+                    "character": 21,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "orange",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/features/src/game_math.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/features/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "orange",
+              "sortText": "0005_orange",
+              "textEdit": {
+                "newText": "orange",
+                "range": {
+                  "end": {
+                    "character": 21,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "screenX",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/features/src/game_math.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/features/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "screenX",
+              "sortText": "0006_screenX",
+              "textEdit": {
+                "newText": "screenX",
+                "range": {
+                  "end": {
+                    "character": 21,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "translucentBlue",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/features/src/game_math.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/features/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "translucentBlue",
+              "sortText": "0007_translucentBlue",
+              "textEdit": {
+                "newText": "translucentBlue",
+                "range": {
+                  "end": {
+                    "character": 21,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "incomplete-completion": {
+          "params": {
+            "textDocument": {
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/features/src/__audit_overlay__.tua"
+            },
+            "context": {
+              "triggerKind": 1
+            },
+            "position": {
+              "line": 2,
+              "character": 15
+            }
+          },
+          "result": [
+            {
+              "data": {
+                "kind": "field",
+                "label": "direction",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/features/src/game_math.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/features/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "direction",
+              "sortText": "0000_direction"
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "eased",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/features/src/game_math.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/features/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "eased",
+              "sortText": "0001_eased"
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "frame",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/features/src/game_math.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/features/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "frame",
+              "sortText": "0002_frame"
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "fullTurn",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/features/src/game_math.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/features/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "fullTurn",
+              "sortText": "0003_fullTurn"
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "health",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/features/src/game_math.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/features/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "health",
+              "sortText": "0004_health"
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "orange",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/features/src/game_math.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/features/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "orange",
+              "sortText": "0005_orange"
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "screenX",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/features/src/game_math.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/features/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "screenX",
+              "sortText": "0006_screenX"
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "translucentBlue",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/features/src/game_math.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/features/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "translucentBlue",
+              "sortText": "0007_translucentBlue"
+            }
+          ]
+        }
+      },
+      "summary": {
+        "cold-import-completion": {
+          "n": 3,
+          "min": 127.35954099999998,
+          "median": 129.358375,
+          "p95": 130.71683399999995,
+          "max": 130.71683399999995
+        },
+        "warm-import-completion": {
+          "n": 30,
+          "min": 0.18370800000002419,
+          "median": 0.21120800000005602,
+          "p95": 0.2897500000000264,
+          "max": 0.3828330000000051
+        },
+        "warm-hover": {
+          "n": 30,
+          "min": 0.14829199999996945,
+          "median": 0.17354199999999764,
+          "p95": 0.8507079999999974,
+          "max": 1.277417000000014
+        },
+        "warm-signature": {
+          "n": 30,
+          "min": 0.18975000000000364,
+          "median": 0.2033749999999941,
+          "p95": 0.40300000000002,
+          "max": 0.43587500000001
+        },
+        "post-edit-import-completion": {
+          "n": 30,
+          "min": 14.791082999999958,
+          "median": 16.177665999999988,
+          "p95": 18.54525000000001,
+          "max": 19.671290999999997
+        },
+        "incomplete-completion": {
+          "n": 3,
+          "min": 15.875208000000043,
+          "median": 16.094167000000027,
+          "p95": 16.724417000000017,
+          "max": 16.724417000000017
+        }
+      }
+    },
+    {
+      "project": "starfall",
+      "groups": {
+        "cold-import-completion": [
+          40.98691599999995,
+          42.74195800000007,
+          42.632666999999856
+        ],
+        "warm-import-completion": [
+          0.29816699999992125,
+          0.17045899999993708,
+          0.14274999999997817,
+          0.14020800000002964,
+          0.1325000000001637,
+          0.16745900000000802,
+          0.13783300000000054,
+          0.15666699999997036,
+          0.12683400000014444,
+          0.1242090000000644,
+          0.2828749999998763,
+          0.19754200000011224,
+          0.1532919999999649,
+          0.14162499999997635,
+          0.14154200000007222,
+          0.13033299999983683,
+          0.1464579999999387,
+          0.16529100000002472,
+          0.13724999999999454,
+          0.1592080000000351,
+          0.48387499999989814,
+          0.18954199999984667,
+          0.1425419999998212,
+          0.15729099999998652,
+          0.1378340000001117,
+          0.13175000000001091,
+          0.14370899999994435,
+          0.14020899999991343,
+          0.1329169999999067,
+          0.13641600000005383
+        ],
+        "warm-hover": [
+          0.8415419999998903,
+          0.1392080000000533,
+          0.1534999999998945,
+          0.13199999999983447,
+          0.13937499999997272,
+          0.13245900000015354,
+          0.112041999999974,
+          0.10354200000006131,
+          0.10029200000008132,
+          0.12304200000016863,
+          0.849666999999954,
+          0.130333999999948,
+          0.17345799999998235,
+          0.1122499999999036,
+          0.11770799999999326,
+          0.1069159999999556,
+          0.10087500000008731,
+          0.1296669999999267,
+          0.12175000000002001,
+          0.13837499999999636,
+          0.9590840000000753,
+          0.18191699999988487,
+          0.1342090000000553,
+          0.11091600000008839,
+          0.140625,
+          0.1326249999999618,
+          0.118125000000191,
+          0.11383300000011332,
+          0.10637500000007094,
+          0.10229200000003402
+        ],
+        "warm-signature": [
+          0.19204199999990124,
+          0.14662499999985812,
+          0.1435830000000351,
+          0.14095800000018244,
+          0.1486250000000382,
+          0.14437500000008185,
+          0.146541999999954,
+          0.13712499999996908,
+          0.14141600000016297,
+          0.1576669999999467,
+          0.2295419999998103,
+          0.19287499999995816,
+          0.1810840000000553,
+          0.1585410000000138,
+          0.15141600000015387,
+          0.13916700000004312,
+          0.1380420000000413,
+          0.14633399999979702,
+          0.15049999999996544,
+          0.17079100000000835,
+          0.24004200000013043,
+          0.20125000000007276,
+          0.16520799999989322,
+          0.14154200000007222,
+          0.15666600000008657,
+          0.1426249999999527,
+          0.15037500000016735,
+          0.1397500000000491,
+          0.13629200000013952,
+          0.14429100000006656
+        ],
+        "post-edit-import-completion": [
+          4.86808300000007,
+          4.015625,
+          3.691874999999982,
+          3.6527500000001965,
+          4.082625000000007,
+          4.35670899999991,
+          4.20049999999992,
+          5.529583000000002,
+          5.620832999999948,
+          4.696749999999838,
+          4.897959000000128,
+          4.443583000000217,
+          3.943416999999954,
+          4.944874999999911,
+          4.440040999999837,
+          4.169000000000096,
+          4.292249999999967,
+          4.240291999999954,
+          3.674374999999827,
+          4.242917000000034,
+          5.123041999999941,
+          4.258125000000064,
+          5.042291000000205,
+          4.020083000000113,
+          4.700792000000092,
+          3.9765830000001188,
+          4.610374999999976,
+          4.052374999999984,
+          4.452624999999898,
+          4.500833000000057
+        ],
+        "incomplete-completion": [
+          3.751125000000002,
+          3.482874999999922,
+          4.71291599999995
+        ]
+      },
+      "runs": [
+        {
+          "initializeMs": 13.278749999999945,
+          "requestCount": 43,
+          "stderr": ""
+        },
+        {
+          "initializeMs": 10.19987500000002,
+          "requestCount": 43,
+          "stderr": ""
+        },
+        {
+          "initializeMs": 8.928833999999824,
+          "requestCount": 43,
+          "stderr": ""
+        }
+      ],
+      "samples": {
+        "cold-import-completion": {
+          "params": {
+            "textDocument": {
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/starfall/src/__audit_overlay__.tua"
+            },
+            "context": {
+              "triggerKind": 1
+            },
+            "position": {
+              "line": 2,
+              "character": 15
+            }
+          },
+          "result": [
+            {
+              "data": {
+                "kind": "function",
+                "label": "draw",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/starfall/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/starfall/src/__audit_overlay__.tua"
+              },
+              "kind": 3,
+              "label": "draw",
+              "sortText": "0000_draw",
+              "textEdit": {
+                "newText": "draw",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "function",
+                "label": "reset",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/starfall/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/starfall/src/__audit_overlay__.tua"
+              },
+              "kind": 3,
+              "label": "reset",
+              "sortText": "0001_reset",
+              "textEdit": {
+                "newText": "reset",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "function",
+                "label": "setAutopilot",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/starfall/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/starfall/src/__audit_overlay__.tua"
+              },
+              "kind": 3,
+              "label": "setAutopilot",
+              "sortText": "0002_setAutopilot",
+              "textEdit": {
+                "newText": "setAutopilot",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "function",
+                "label": "startPressed",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/starfall/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/starfall/src/__audit_overlay__.tua"
+              },
+              "kind": 3,
+              "label": "startPressed",
+              "sortText": "0003_startPressed",
+              "textEdit": {
+                "newText": "startPressed",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "function",
+                "label": "update",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/starfall/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/starfall/src/__audit_overlay__.tua"
+              },
+              "kind": 3,
+              "label": "update",
+              "sortText": "0004_update",
+              "textEdit": {
+                "newText": "update",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "x",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/starfall/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/starfall/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "x",
+              "sortText": "0005_x",
+              "textEdit": {
+                "newText": "x",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "y",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/starfall/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/starfall/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "y",
+              "sortText": "0006_y",
+              "textEdit": {
+                "newText": "y",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "warm-import-completion": {
+          "params": {
+            "textDocument": {
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/starfall/src/__audit_overlay__.tua"
+            },
+            "context": {
+              "triggerKind": 1
+            },
+            "position": {
+              "line": 2,
+              "character": 15
+            }
+          },
+          "result": [
+            {
+              "data": {
+                "kind": "function",
+                "label": "draw",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/starfall/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/starfall/src/__audit_overlay__.tua"
+              },
+              "kind": 3,
+              "label": "draw",
+              "sortText": "0000_draw",
+              "textEdit": {
+                "newText": "draw",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "function",
+                "label": "reset",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/starfall/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/starfall/src/__audit_overlay__.tua"
+              },
+              "kind": 3,
+              "label": "reset",
+              "sortText": "0001_reset",
+              "textEdit": {
+                "newText": "reset",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "function",
+                "label": "setAutopilot",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/starfall/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/starfall/src/__audit_overlay__.tua"
+              },
+              "kind": 3,
+              "label": "setAutopilot",
+              "sortText": "0002_setAutopilot",
+              "textEdit": {
+                "newText": "setAutopilot",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "function",
+                "label": "startPressed",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/starfall/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/starfall/src/__audit_overlay__.tua"
+              },
+              "kind": 3,
+              "label": "startPressed",
+              "sortText": "0003_startPressed",
+              "textEdit": {
+                "newText": "startPressed",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "function",
+                "label": "update",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/starfall/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/starfall/src/__audit_overlay__.tua"
+              },
+              "kind": 3,
+              "label": "update",
+              "sortText": "0004_update",
+              "textEdit": {
+                "newText": "update",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "x",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/starfall/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/starfall/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "x",
+              "sortText": "0005_x",
+              "textEdit": {
+                "newText": "x",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "y",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/starfall/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/starfall/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "y",
+              "sortText": "0006_y",
+              "textEdit": {
+                "newText": "y",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "warm-hover": {
+          "params": {
+            "textDocument": {
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/starfall/src/__audit_overlay__.tua"
+            },
+            "context": {
+              "triggerKind": 1
+            },
+            "position": {
+              "line": 2,
+              "character": 16
+            }
+          },
+          "result": {
+            "contents": {
+              "kind": "markdown",
+              "value": "```tua\n(field) imported.x: number\n```\n\n---\n\n- kind: field\n- module: /Users/kyonru/Documents/projects/Experiments/tlua/examples/starfall/src/player.tua"
+            },
+            "range": {
+              "end": {
+                "character": 16,
+                "line": 2
+              },
+              "start": {
+                "character": 15,
+                "line": 2
+              }
+            }
+          }
+        },
+        "warm-signature": {
+          "params": {
+            "textDocument": {
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/starfall/src/__audit_overlay__.tua"
+            },
+            "context": {
+              "triggerKind": 1
+            },
+            "position": {
+              "line": 3,
+              "character": 16
+            }
+          },
+          "result": {
+            "activeParameter": 0,
+            "activeSignature": 0,
+            "signatures": [
+              {
+                "documentation": {
+                  "kind": "markdown",
+                  "value": "Gets the width of the Texture.\n\nReturns:\n- `width: number`: The width of the Texture."
+                },
+                "label": "function Canvas:getWidth(): number",
+                "parameters": []
+              }
+            ]
+          }
+        },
+        "post-edit-import-completion": {
+          "params": {
+            "textDocument": {
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/starfall/src/__audit_overlay__.tua"
+            },
+            "context": {
+              "triggerKind": 1
+            },
+            "position": {
+              "line": 2,
+              "character": 15
+            }
+          },
+          "result": [
+            {
+              "data": {
+                "kind": "function",
+                "label": "draw",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/starfall/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/starfall/src/__audit_overlay__.tua"
+              },
+              "kind": 3,
+              "label": "draw",
+              "sortText": "0000_draw",
+              "textEdit": {
+                "newText": "draw",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "function",
+                "label": "reset",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/starfall/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/starfall/src/__audit_overlay__.tua"
+              },
+              "kind": 3,
+              "label": "reset",
+              "sortText": "0001_reset",
+              "textEdit": {
+                "newText": "reset",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "function",
+                "label": "setAutopilot",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/starfall/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/starfall/src/__audit_overlay__.tua"
+              },
+              "kind": 3,
+              "label": "setAutopilot",
+              "sortText": "0002_setAutopilot",
+              "textEdit": {
+                "newText": "setAutopilot",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "function",
+                "label": "startPressed",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/starfall/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/starfall/src/__audit_overlay__.tua"
+              },
+              "kind": 3,
+              "label": "startPressed",
+              "sortText": "0003_startPressed",
+              "textEdit": {
+                "newText": "startPressed",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "function",
+                "label": "update",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/starfall/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/starfall/src/__audit_overlay__.tua"
+              },
+              "kind": 3,
+              "label": "update",
+              "sortText": "0004_update",
+              "textEdit": {
+                "newText": "update",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "x",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/starfall/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/starfall/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "x",
+              "sortText": "0005_x",
+              "textEdit": {
+                "newText": "x",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "y",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/starfall/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/starfall/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "y",
+              "sortText": "0006_y",
+              "textEdit": {
+                "newText": "y",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "incomplete-completion": {
+          "params": {
+            "textDocument": {
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/starfall/src/__audit_overlay__.tua"
+            },
+            "context": {
+              "triggerKind": 1
+            },
+            "position": {
+              "line": 2,
+              "character": 15
+            }
+          },
+          "result": [
+            {
+              "data": {
+                "kind": "function",
+                "label": "draw",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/starfall/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/starfall/src/__audit_overlay__.tua"
+              },
+              "kind": 3,
+              "label": "draw",
+              "sortText": "0000_draw"
+            },
+            {
+              "data": {
+                "kind": "function",
+                "label": "reset",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/starfall/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/starfall/src/__audit_overlay__.tua"
+              },
+              "kind": 3,
+              "label": "reset",
+              "sortText": "0001_reset"
+            },
+            {
+              "data": {
+                "kind": "function",
+                "label": "setAutopilot",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/starfall/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/starfall/src/__audit_overlay__.tua"
+              },
+              "kind": 3,
+              "label": "setAutopilot",
+              "sortText": "0002_setAutopilot"
+            },
+            {
+              "data": {
+                "kind": "function",
+                "label": "startPressed",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/starfall/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/starfall/src/__audit_overlay__.tua"
+              },
+              "kind": 3,
+              "label": "startPressed",
+              "sortText": "0003_startPressed"
+            },
+            {
+              "data": {
+                "kind": "function",
+                "label": "update",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/starfall/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/starfall/src/__audit_overlay__.tua"
+              },
+              "kind": 3,
+              "label": "update",
+              "sortText": "0004_update"
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "x",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/starfall/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/starfall/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "x",
+              "sortText": "0005_x"
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "y",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/starfall/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/starfall/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "y",
+              "sortText": "0006_y"
+            }
+          ]
+        }
+      },
+      "summary": {
+        "cold-import-completion": {
+          "n": 3,
+          "min": 40.98691599999995,
+          "median": 42.632666999999856,
+          "p95": 42.74195800000007,
+          "max": 42.74195800000007
+        },
+        "warm-import-completion": {
+          "n": 30,
+          "min": 0.1242090000000644,
+          "median": 0.14274999999997817,
+          "p95": 0.29816699999992125,
+          "max": 0.48387499999989814
+        },
+        "warm-hover": {
+          "n": 30,
+          "min": 0.10029200000008132,
+          "median": 0.130333999999948,
+          "p95": 0.849666999999954,
+          "max": 0.9590840000000753
+        },
+        "warm-signature": {
+          "n": 30,
+          "min": 0.13629200000013952,
+          "median": 0.1486250000000382,
+          "p95": 0.2295419999998103,
+          "max": 0.24004200000013043
+        },
+        "post-edit-import-completion": {
+          "n": 30,
+          "min": 3.6527500000001965,
+          "median": 4.35670899999991,
+          "p95": 5.529583000000002,
+          "max": 5.620832999999948
+        },
+        "incomplete-completion": {
+          "n": 3,
+          "min": 3.482874999999922,
+          "median": 3.751125000000002,
+          "p95": 4.71291599999995,
+          "max": 4.71291599999995
+        }
+      }
+    },
+    {
+      "project": "love-full",
+      "groups": {
+        "cold-import-completion": [
+          83.07070899999985,
+          82.31112500000017,
+          85.30445800000007
+        ],
+        "warm-import-completion": [
+          0.40949999999998,
+          0.2992500000000291,
+          0.2659160000000611,
+          0.2562500000001364,
+          0.27074999999990723,
+          0.27987499999994725,
+          0.2627910000001066,
+          0.2622920000001159,
+          0.2525830000001861,
+          0.2751659999998992,
+          0.5152499999999236,
+          0.29654200000004494,
+          0.25662499999998545,
+          0.25025000000005093,
+          0.24158299999999144,
+          0.24816699999996672,
+          0.23662500000000364,
+          0.23354199999994307,
+          0.253832999999986,
+          0.2611660000000029,
+          0.43954199999984667,
+          0.33854199999996126,
+          0.2868750000000091,
+          0.2685830000000351,
+          0.26612500000010186,
+          0.26312499999994543,
+          0.2482079999999769,
+          0.24804100000005747,
+          0.26995899999997164,
+          0.24570900000003348
+        ],
+        "warm-hover": [
+          0.8519999999998618,
+          0.16754100000002836,
+          0.1641669999999067,
+          0.15487500000017462,
+          0.19141700000000128,
+          0.16420900000002803,
+          0.14395899999999529,
+          0.22591600000009748,
+          0.16808400000013535,
+          0.13637499999981628,
+          1.1052080000001752,
+          0.18950000000018008,
+          0.17466699999999946,
+          0.13620799999989686,
+          0.13887500000009823,
+          0.13545799999997143,
+          0.12924999999995634,
+          0.14091700000017227,
+          0.15574999999989814,
+          0.12875000000008185,
+          1.021125000000211,
+          0.20662500000003092,
+          0.20070799999984956,
+          0.19741700000008677,
+          0.16145800000003874,
+          0.14187500000002728,
+          0.15333399999985886,
+          0.1420419999999467,
+          0.14124999999989996,
+          0.18062499999996362
+        ],
+        "warm-signature": [
+          0.23145799999997507,
+          0.20466699999997218,
+          0.1872080000000551,
+          0.1902500000001055,
+          0.20733300000006238,
+          0.18441699999993943,
+          0.16699999999991633,
+          0.19666699999993398,
+          0.17037500000014916,
+          0.16699999999991633,
+          0.26274999999986903,
+          0.19325000000003456,
+          0.1951249999999618,
+          0.1662499999999909,
+          0.1738749999999527,
+          0.16720799999984592,
+          0.17345799999998235,
+          0.23383300000000418,
+          0.17337499999985084,
+          0.19020799999998417,
+          0.33445800000004056,
+          0.20212500000002365,
+          0.20458299999995688,
+          0.19275000000016007,
+          0.19658299999991868,
+          0.17229100000008657,
+          0.20487500000012915,
+          0.1677079999999478,
+          0.1634999999998854,
+          0.1850000000001728
+        ],
+        "post-edit-import-completion": [
+          5.700125000000071,
+          5.478875000000016,
+          5.445208000000093,
+          6.2197909999999865,
+          5.150082999999995,
+          5.70533300000011,
+          5.213042000000087,
+          6.227124999999887,
+          5.480000000000018,
+          4.582000000000107,
+          6.521208999999999,
+          5.210916999999881,
+          4.954582999999957,
+          5.679125000000113,
+          5.714750000000095,
+          4.752958000000035,
+          4.8933750000001055,
+          4.663874999999962,
+          4.70900000000006,
+          5.124250000000075,
+          5.724500000000035,
+          5.066500000000133,
+          6.5775000000001,
+          5.371916999999939,
+          5.350167000000056,
+          6.082249999999931,
+          5.706292000000076,
+          5.442542000000003,
+          5.45941700000003,
+          5.5010409999999865
+        ],
+        "incomplete-completion": [
+          3.993791999999985,
+          5.200250000000096,
+          5.2908330000000205
+        ]
+      },
+      "runs": [
+        {
+          "initializeMs": 6.615624999999909,
+          "requestCount": 43,
+          "stderr": ""
+        },
+        {
+          "initializeMs": 5.34479199999987,
+          "requestCount": 43,
+          "stderr": ""
+        },
+        {
+          "initializeMs": 5.418709000000035,
+          "requestCount": 43,
+          "stderr": ""
+        }
+      ],
+      "samples": {
+        "cold-import-completion": {
+          "params": {
+            "textDocument": {
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+            },
+            "context": {
+              "triggerKind": 1
+            },
+            "position": {
+              "line": 2,
+              "character": 15
+            }
+          },
+          "result": [
+            {
+              "data": {
+                "kind": "field",
+                "label": "bounce_force",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "bounce_force",
+              "sortText": "0000_bounce_force",
+              "textEdit": {
+                "newText": "bounce_force",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "function",
+                "label": "damage",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 3,
+              "label": "damage",
+              "sortText": "0001_damage",
+              "textEdit": {
+                "newText": "damage",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "drag",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "drag",
+              "sortText": "0002_drag",
+              "textEdit": {
+                "newText": "drag",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "drag_start_at",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "drag_start_at",
+              "sortText": "0003_drag_start_at",
+              "textEdit": {
+                "newText": "drag_start_at",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "function",
+                "label": "draw",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 3,
+              "label": "draw",
+              "sortText": "0004_draw",
+              "textEdit": {
+                "newText": "draw",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "height",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "height",
+              "sortText": "0005_height",
+              "textEdit": {
+                "newText": "height",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "jetpack",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "jetpack",
+              "sortText": "0006_jetpack",
+              "textEdit": {
+                "newText": "jetpack",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "last_input",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "last_input",
+              "sortText": "0007_last_input",
+              "textEdit": {
+                "newText": "last_input",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "lives",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "lives",
+              "sortText": "0008_lives",
+              "textEdit": {
+                "newText": "lives",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "function",
+                "label": "load",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 3,
+              "label": "load",
+              "sortText": "0009_load",
+              "textEdit": {
+                "newText": "load",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "max_lives",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "max_lives",
+              "sortText": "0010_max_lives",
+              "textEdit": {
+                "newText": "max_lives",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "speed",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "speed",
+              "sortText": "0011_speed",
+              "textEdit": {
+                "newText": "speed",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "sprite",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "sprite",
+              "sortText": "0012_sprite",
+              "textEdit": {
+                "newText": "sprite",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "stop_timer",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "stop_timer",
+              "sortText": "0013_stop_timer",
+              "textEdit": {
+                "newText": "stop_timer",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "time",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "time",
+              "sortText": "0014_time",
+              "textEdit": {
+                "newText": "time",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "function",
+                "label": "update",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 3,
+              "label": "update",
+              "sortText": "0015_update",
+              "textEdit": {
+                "newText": "update",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "velocity",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "velocity",
+              "sortText": "0016_velocity",
+              "textEdit": {
+                "newText": "velocity",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "width",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "width",
+              "sortText": "0017_width",
+              "textEdit": {
+                "newText": "width",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "wind_force",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "wind_force",
+              "sortText": "0018_wind_force",
+              "textEdit": {
+                "newText": "wind_force",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "x",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "x",
+              "sortText": "0019_x",
+              "textEdit": {
+                "newText": "x",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "y",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "y",
+              "sortText": "0020_y",
+              "textEdit": {
+                "newText": "y",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "warm-import-completion": {
+          "params": {
+            "textDocument": {
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+            },
+            "context": {
+              "triggerKind": 1
+            },
+            "position": {
+              "line": 2,
+              "character": 15
+            }
+          },
+          "result": [
+            {
+              "data": {
+                "kind": "field",
+                "label": "bounce_force",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "bounce_force",
+              "sortText": "0000_bounce_force",
+              "textEdit": {
+                "newText": "bounce_force",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "function",
+                "label": "damage",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 3,
+              "label": "damage",
+              "sortText": "0001_damage",
+              "textEdit": {
+                "newText": "damage",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "drag",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "drag",
+              "sortText": "0002_drag",
+              "textEdit": {
+                "newText": "drag",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "drag_start_at",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "drag_start_at",
+              "sortText": "0003_drag_start_at",
+              "textEdit": {
+                "newText": "drag_start_at",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "function",
+                "label": "draw",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 3,
+              "label": "draw",
+              "sortText": "0004_draw",
+              "textEdit": {
+                "newText": "draw",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "height",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "height",
+              "sortText": "0005_height",
+              "textEdit": {
+                "newText": "height",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "jetpack",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "jetpack",
+              "sortText": "0006_jetpack",
+              "textEdit": {
+                "newText": "jetpack",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "last_input",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "last_input",
+              "sortText": "0007_last_input",
+              "textEdit": {
+                "newText": "last_input",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "lives",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "lives",
+              "sortText": "0008_lives",
+              "textEdit": {
+                "newText": "lives",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "function",
+                "label": "load",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 3,
+              "label": "load",
+              "sortText": "0009_load",
+              "textEdit": {
+                "newText": "load",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "max_lives",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "max_lives",
+              "sortText": "0010_max_lives",
+              "textEdit": {
+                "newText": "max_lives",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "speed",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "speed",
+              "sortText": "0011_speed",
+              "textEdit": {
+                "newText": "speed",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "sprite",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "sprite",
+              "sortText": "0012_sprite",
+              "textEdit": {
+                "newText": "sprite",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "stop_timer",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "stop_timer",
+              "sortText": "0013_stop_timer",
+              "textEdit": {
+                "newText": "stop_timer",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "time",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "time",
+              "sortText": "0014_time",
+              "textEdit": {
+                "newText": "time",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "function",
+                "label": "update",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 3,
+              "label": "update",
+              "sortText": "0015_update",
+              "textEdit": {
+                "newText": "update",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "velocity",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "velocity",
+              "sortText": "0016_velocity",
+              "textEdit": {
+                "newText": "velocity",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "width",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "width",
+              "sortText": "0017_width",
+              "textEdit": {
+                "newText": "width",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "wind_force",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "wind_force",
+              "sortText": "0018_wind_force",
+              "textEdit": {
+                "newText": "wind_force",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "x",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "x",
+              "sortText": "0019_x",
+              "textEdit": {
+                "newText": "x",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "y",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "y",
+              "sortText": "0020_y",
+              "textEdit": {
+                "newText": "y",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "warm-hover": {
+          "params": {
+            "textDocument": {
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+            },
+            "context": {
+              "triggerKind": 1
+            },
+            "position": {
+              "line": 2,
+              "character": 16
+            }
+          },
+          "result": {
+            "contents": {
+              "kind": "markdown",
+              "value": "```tua\n(field) imported.x: number\n```\n\n---\n\n- kind: field\n- module: /Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua"
+            },
+            "range": {
+              "end": {
+                "character": 16,
+                "line": 2
+              },
+              "start": {
+                "character": 15,
+                "line": 2
+              }
+            }
+          }
+        },
+        "warm-signature": {
+          "params": {
+            "textDocument": {
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+            },
+            "context": {
+              "triggerKind": 1
+            },
+            "position": {
+              "line": 3,
+              "character": 16
+            }
+          },
+          "result": {
+            "activeParameter": 0,
+            "activeSignature": 0,
+            "signatures": [
+              {
+                "documentation": {
+                  "kind": "markdown",
+                  "value": "Gets the width of the Texture.\n\nReturns:\n- `width: number`: The width of the Texture."
+                },
+                "label": "function Canvas:getWidth(): number",
+                "parameters": []
+              }
+            ]
+          }
+        },
+        "post-edit-import-completion": {
+          "params": {
+            "textDocument": {
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+            },
+            "context": {
+              "triggerKind": 1
+            },
+            "position": {
+              "line": 2,
+              "character": 15
+            }
+          },
+          "result": [
+            {
+              "data": {
+                "kind": "field",
+                "label": "bounce_force",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "bounce_force",
+              "sortText": "0000_bounce_force",
+              "textEdit": {
+                "newText": "bounce_force",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "function",
+                "label": "damage",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 3,
+              "label": "damage",
+              "sortText": "0001_damage",
+              "textEdit": {
+                "newText": "damage",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "drag",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "drag",
+              "sortText": "0002_drag",
+              "textEdit": {
+                "newText": "drag",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "drag_start_at",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "drag_start_at",
+              "sortText": "0003_drag_start_at",
+              "textEdit": {
+                "newText": "drag_start_at",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "function",
+                "label": "draw",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 3,
+              "label": "draw",
+              "sortText": "0004_draw",
+              "textEdit": {
+                "newText": "draw",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "height",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "height",
+              "sortText": "0005_height",
+              "textEdit": {
+                "newText": "height",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "jetpack",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "jetpack",
+              "sortText": "0006_jetpack",
+              "textEdit": {
+                "newText": "jetpack",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "last_input",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "last_input",
+              "sortText": "0007_last_input",
+              "textEdit": {
+                "newText": "last_input",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "lives",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "lives",
+              "sortText": "0008_lives",
+              "textEdit": {
+                "newText": "lives",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "function",
+                "label": "load",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 3,
+              "label": "load",
+              "sortText": "0009_load",
+              "textEdit": {
+                "newText": "load",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "max_lives",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "max_lives",
+              "sortText": "0010_max_lives",
+              "textEdit": {
+                "newText": "max_lives",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "speed",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "speed",
+              "sortText": "0011_speed",
+              "textEdit": {
+                "newText": "speed",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "sprite",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "sprite",
+              "sortText": "0012_sprite",
+              "textEdit": {
+                "newText": "sprite",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "stop_timer",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "stop_timer",
+              "sortText": "0013_stop_timer",
+              "textEdit": {
+                "newText": "stop_timer",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "time",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "time",
+              "sortText": "0014_time",
+              "textEdit": {
+                "newText": "time",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "function",
+                "label": "update",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 3,
+              "label": "update",
+              "sortText": "0015_update",
+              "textEdit": {
+                "newText": "update",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "velocity",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "velocity",
+              "sortText": "0016_velocity",
+              "textEdit": {
+                "newText": "velocity",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "width",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "width",
+              "sortText": "0017_width",
+              "textEdit": {
+                "newText": "width",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "wind_force",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "wind_force",
+              "sortText": "0018_wind_force",
+              "textEdit": {
+                "newText": "wind_force",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "x",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "x",
+              "sortText": "0019_x",
+              "textEdit": {
+                "newText": "x",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "y",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "y",
+              "sortText": "0020_y",
+              "textEdit": {
+                "newText": "y",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 15,
+                    "line": 2
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "incomplete-completion": {
+          "params": {
+            "textDocument": {
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+            },
+            "context": {
+              "triggerKind": 1
+            },
+            "position": {
+              "line": 2,
+              "character": 15
+            }
+          },
+          "result": [
+            {
+              "data": {
+                "kind": "field",
+                "label": "bounce_force",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "bounce_force",
+              "sortText": "0000_bounce_force"
+            },
+            {
+              "data": {
+                "kind": "function",
+                "label": "damage",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 3,
+              "label": "damage",
+              "sortText": "0001_damage"
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "drag",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "drag",
+              "sortText": "0002_drag"
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "drag_start_at",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "drag_start_at",
+              "sortText": "0003_drag_start_at"
+            },
+            {
+              "data": {
+                "kind": "function",
+                "label": "draw",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 3,
+              "label": "draw",
+              "sortText": "0004_draw"
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "height",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "height",
+              "sortText": "0005_height"
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "jetpack",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "jetpack",
+              "sortText": "0006_jetpack"
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "last_input",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "last_input",
+              "sortText": "0007_last_input"
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "lives",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "lives",
+              "sortText": "0008_lives"
+            },
+            {
+              "data": {
+                "kind": "function",
+                "label": "load",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 3,
+              "label": "load",
+              "sortText": "0009_load"
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "max_lives",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "max_lives",
+              "sortText": "0010_max_lives"
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "speed",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "speed",
+              "sortText": "0011_speed"
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "sprite",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "sprite",
+              "sortText": "0012_sprite"
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "stop_timer",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "stop_timer",
+              "sortText": "0013_stop_timer"
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "time",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "time",
+              "sortText": "0014_time"
+            },
+            {
+              "data": {
+                "kind": "function",
+                "label": "update",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 3,
+              "label": "update",
+              "sortText": "0015_update"
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "velocity",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "velocity",
+              "sortText": "0016_velocity"
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "width",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "width",
+              "sortText": "0017_width"
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "wind_force",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "wind_force",
+              "sortText": "0018_wind_force"
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "x",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "x",
+              "sortText": "0019_x"
+            },
+            {
+              "data": {
+                "kind": "field",
+                "label": "y",
+                "modulePath": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/player.tua",
+                "position": {
+                  "character": 15,
+                  "line": 2
+                },
+                "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/examples/love-full/src/__audit_overlay__.tua"
+              },
+              "kind": 5,
+              "label": "y",
+              "sortText": "0020_y"
+            }
+          ]
+        }
+      },
+      "summary": {
+        "cold-import-completion": {
+          "n": 3,
+          "min": 82.31112500000017,
+          "median": 83.07070899999985,
+          "p95": 85.30445800000007,
+          "max": 85.30445800000007
+        },
+        "warm-import-completion": {
+          "n": 30,
+          "min": 0.23354199999994307,
+          "median": 0.26312499999994543,
+          "p95": 0.43954199999984667,
+          "max": 0.5152499999999236
+        },
+        "warm-hover": {
+          "n": 30,
+          "min": 0.12875000000008185,
+          "median": 0.1641669999999067,
+          "p95": 1.021125000000211,
+          "max": 1.1052080000001752
+        },
+        "warm-signature": {
+          "n": 30,
+          "min": 0.1634999999998854,
+          "median": 0.1902500000001055,
+          "p95": 0.26274999999986903,
+          "max": 0.33445800000004056
+        },
+        "post-edit-import-completion": {
+          "n": 30,
+          "min": 4.582000000000107,
+          "median": 5.45941700000003,
+          "p95": 6.521208999999999,
+          "max": 6.5775000000001
+        },
+        "incomplete-completion": {
+          "n": 3,
+          "min": 3.993791999999985,
+          "median": 5.200250000000096,
+          "p95": 5.2908330000000205,
+          "max": 5.2908330000000205
+        }
+      }
+    }
+  ]
+}
