@@ -64,10 +64,14 @@ workflow pages under `docs/`. Completed work belongs in
   current and 3.0 GiB peak physical footprint, with 1.3 GiB malloc allocated.
   The earlier ten-minute run began after the cold jump and added 103 MiB. A full
   BYTEPATH `tua check` also peaked at 2,233,729,432 bytes (~2.08 GiB), so the
-  cold memory cost is not limited to the LSP. Instruments could not attach to
-  the checker and its trace could not be exported; allocator attribution remains
-  open. Profile the cold allocation and repeat on a stable host before qualifying
-  long sessions.
+  cold memory cost is not limited to the LSP. Instruments could not attach or
+  export a trace. A separate stack-logged live call tree attributed 509 MiB to
+  `AnalysisHost::snapshot` and cached files, including 494 MiB under
+  `cached_parsed_file`; parser stacks included 269 MiB in `parse_lua_source` and
+  165 MiB in raw `full_moon` parsing. That run's 601 MiB physical footprint
+  differs from the 2.1 GiB uninstrumented snapshot, so these figures are a lead,
+  not directly comparable totals. Investigate parse/cache ownership and repeat
+  on a stable host before qualifying long sessions.
 - Turn any still-unspecified reference/implementation request into an exact
   symbol, editor command, expected destination, and reproducible test before
   treating it as a confirmed defect.
