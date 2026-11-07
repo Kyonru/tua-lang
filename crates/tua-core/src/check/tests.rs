@@ -5450,3 +5450,16 @@ fn return_expressions_validate_calls_without_result_contracts() {
     }
     check_tua_source("returns.tua", format!("{function}return takes(2)")).unwrap();
 }
+
+#[test]
+fn defaults_are_checked_in_parameter_scope() {
+    for source in [
+        "local function f(x: number = 'bad'): number return x end\nprint(f())",
+        "local f = function(x: number = 'bad'): number return x end\nprint(f())",
+        "local function text(): string return 'bad' end\nlocal function f(x: number = text()): number return x end\nprint(f())",
+    ] {
+        let errors = check_tua_source("defaults.tua", source).unwrap_err();
+        assert!(errors.iter().any(|d| d.code == Some(DiagnosticCode::TYPE_MISMATCH)), "{errors:?}");
+    }
+    check_tua_source("defaults.tua", "local function f(x: number, y: number = x): number return y end\nprint(f(2))").unwrap();
+}

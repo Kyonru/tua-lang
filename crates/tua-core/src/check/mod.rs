@@ -1283,6 +1283,7 @@ impl<'a> Checker<'a> {
         let contracts = scoped_locals.clone();
         self.scoped_locals.push(scoped_locals);
         self.scoped_local_contracts.push(contracts);
+        self.check_parameter_defaults(span);
         self.check_block(body.block(), return_types);
         self.scoped_locals.pop();
         self.scoped_local_contracts.pop();
@@ -1301,6 +1302,34 @@ impl<'a> Checker<'a> {
 
         for target in targets {
             self.check_type_assignable_at_position(position, &Type::nil(), target);
+        }
+    }
+
+    fn check_parameter_defaults(&mut self, body_span: SourceSpan) {
+        let defaults = self.parsed.function_annotations.iter()
+            .find(|function| function.span == Some(body_span))
+            .map(|function| function.default_parameters.clone()).unwrap_or_default();
+        for default in defaults {
+            let Some(target) = self.infer_named_value(&default.name) else { continue; };
+            let position = default.span.map_or(body_span.start, |span| span.start);
+            let source = format!("{}{}return {}", "\n".repeat(position.line.saturating_sub(1)), " ".repeat(position.column.saturating_sub(1)), default.expression);
+            let Ok(parsed) = crate::parse_tua_source(&self.parsed.path, source) else { continue; };
+            let Some(ast::LastStmt::Return(statement)) = parsed.ast.nodes().last_stmt() else { continue; };
+            let Some(expression) = statement.returns().iter().next() else { continue; };
+            let start = self.diagnostics.len();
+            if let Some(source) = self.infer_expression(expression) {
+                self.check_type_assignable_at_position(position, &source, &target);
+            }
+            // The expression is parsed separately because defaults are erased from
+            // the Lua AST. Attribute its errors to the original parameter default.
+            for diagnostic in &mut self.diagnostics[start..] {
+                diagnostic.line = position.line;
+                diagnostic.column = position.column;
+                if let Some(span) = default.span {
+                    diagnostic.end_line = span.end.line;
+                    diagnostic.end_column = span.end.column;
+                }
+            }
         }
     }
 
