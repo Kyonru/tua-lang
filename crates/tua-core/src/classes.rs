@@ -1210,7 +1210,9 @@ fn flatten_class_constructor_with_substitutions(
 }
 
 fn is_flattenable_constructor_value(value: &str) -> bool {
-    !value.trim_start().starts_with('{')
+    // Flattened table literals have no receiver binding yet. Keep receiver
+    // references on the allocation-and-init path, including substituted super args.
+    value.trim() != "self" && !value.trim_start().starts_with('{')
 }
 
 fn self_assignments(body: &str, allow_leading_super: bool) -> Option<Vec<(String, String)>> {

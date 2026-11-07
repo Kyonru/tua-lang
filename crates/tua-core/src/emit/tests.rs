@@ -2472,3 +2472,30 @@ assert(f() == 7)
     assert!(!emitted.contains("love.graphics"), "{emitted}");
     crate::parse_lua_source("callbacks.lua", emitted).expect("valid Lua output");
 }
+
+#[test]
+fn class_constructor_self_references_require_allocated_receiver() {
+    let emitted = emit_tua_source(
+        "self.tua",
+        r#"
+open class Node {
+  next: Self
+  init() {
+    self.next = self
+  }
+}
+final class Child extends Node {}
+"#,
+    )
+    .expect("self-referencing constructors emit");
+    assert!(!emitted.contains("next = self,"), "{emitted}");
+    assert!(emitted.contains("self.next = self"), "{emitted}");
+    assert!(
+        emitted.contains("local self = setmetatable({}, Node)"),
+        "{emitted}"
+    );
+    assert!(
+        emitted.contains("local self = setmetatable({}, Child)"),
+        "{emitted}"
+    );
+}
