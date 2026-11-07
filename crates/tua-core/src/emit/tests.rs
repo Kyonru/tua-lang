@@ -2508,3 +2508,14 @@ fn lowers_constructor_prefixes_of_property_reads() {
     assert!(lua.contains("__tua_vec2(1, 2).x"), "{lua}");
     assert!(lua.contains("require(\"brinevector\")"), "{lua}");
 }
+
+#[test]
+fn builtin_modules_are_injected_when_used_as_values() {
+    for source in ["local C = Camera\nlocal cam = C.new()\n", "return Camera\n", "consume(tween)\n"] {
+        let emitted = emit_tua_source("src/main.tua", source).unwrap();
+        let runtime = if source.contains("Camera") { "tuacamera" } else { "tuatween" };
+        assert!(emitted.contains(&format!("require(\"{runtime}\")")), "{emitted}");
+    }
+    let shadowed = emit_tua_source("src/main.tua", "local Camera = {}\nreturn Camera\n").unwrap();
+    assert!(!shadowed.contains("require("), "{shadowed}");
+}

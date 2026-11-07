@@ -1837,11 +1837,16 @@ fn lower_builtin_call_operations(
     let mut tuaecs_span = None;
     let game_math_helpers = game_math::used_helpers(parsed);
     let explicit_ecs_binding = explicit_binding_position(parsed, ecs::MODULE_NAME);
-    let explicit_builtin_module_bindings = crate::builtin_module::MODULES
-        .iter()
-        .map(|module| explicit_binding_position(parsed, module.name))
-        .collect::<Vec<_>>();
-    let mut builtin_module_spans = vec![None; crate::builtin_module::MODULES.len()];
+    let scope = crate::scope::scope_map_parsed_source(parsed);
+    let builtin_module_spans = crate::builtin_module::MODULES.iter().map(|module| {
+        if environment.project_owns_module(module.name) { return None; }
+        scope.references().iter().find_map(|reference| {
+            (reference.name == module.name && matches!(&reference.resolution,
+                crate::scope::ScopeResolution::Global(global)
+                    if global.kind == crate::scope::ScopeGlobalKind::LuaBuiltin))
+                .then_some(reference.span)
+        })
+    }).collect::<Vec<_>>();
     while index < output.len() {
         let rest = &output[index..];
 
@@ -1857,30 +1862,6 @@ fn lower_builtin_call_operations(
 
         if let Some(identifier_end) = consume_identifier(rest) {
             let name = &output[index..index + identifier_end];
-
-            if let Some(module_index) = crate::builtin_module::MODULES
-                .iter()
-                .position(|module| module.name == name)
-            {
-                let field_start = skip_whitespace(&output, index + identifier_end);
-                let is_member = output[..index].trim_end().ends_with(['.', ':']);
-
-                if !is_member
-                    && (output[field_start..].starts_with('.')
-                        || output[field_start..].starts_with(':'))
-                {
-                    let source_span = document.source_span_at(index);
-                    let binding_is_active = explicit_builtin_module_bindings[module_index]
-                        .is_some_and(|position| {
-                            (position.line, position.column)
-                                <= (source_span.start.line, source_span.start.column)
-                        });
-
-                    if !binding_is_active && !environment.project_owns_module(name) {
-                        builtin_module_spans[module_index].get_or_insert(source_span);
-                    }
-                }
-            }
 
             if ecs_enabled && name == ecs::MODULE_NAME {
                 let field_start = skip_whitespace(&output, index + identifier_end);
