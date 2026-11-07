@@ -1655,14 +1655,23 @@ return {
         main.replace("if velocity then", "if false then\nelseif velocity then"),
         main.replace("if velocity then", "while velocity do"),
     ] {
-        let output = run_messages(vec![
+        let mut server = LspServer::default();
+        let output: Vec<_> = vec![
             initialize_with_root(1, path_uri(temp.path())),
-            did_open(&uri, &guarded),
+            did_open(&uri, main),
+            did_change(&uri, &guarded, 2),
             completion_request(2, &uri, &guarded, "velocity."),
             hover_request(3, &uri, &guarded, "velocity ="),
-        ]);
+            did_change(&uri, &guarded.replace("velocity.", "velocity.x"), 3),
+            did_change(&uri, &guarded, 4),
+            completion_request(4, &uri, &guarded, "velocity."),
+        ]
+        .into_iter()
+        .flat_map(|message| server.handle_message(message).unwrap_or_default())
+        .collect();
         assert_completion_labels(&output, 2, ["x", "y"]);
         assert_hover_contains(&output, 3, "nil");
+        assert_completion_labels(&output, 4, ["x", "y"]);
     }
     let unguarded = main.replace("if velocity then", "if velocity then\nelse");
     let output = run_messages(vec![
