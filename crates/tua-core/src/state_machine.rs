@@ -50,6 +50,7 @@ pub(crate) struct StateMachineTransition {
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub(crate) struct StateMachineSpec {
+    has_dynamic_initial: bool,
     pub(crate) states: Vec<String>,
     pub(crate) events: Vec<String>,
     pub(crate) transitions: Vec<StateMachineTransition>,
@@ -399,7 +400,7 @@ fn base_machine_type() -> Type {
 }
 
 fn machine_type(spec: &StateMachineSpec) -> Type {
-    let state_type = literal_union_or_string(&spec.states);
+    let state_type = if spec.has_dynamic_initial { Type::string() } else { literal_union_or_string(&spec.states) };
     let event_type = literal_union_or_string(&spec.events);
     // The receiver is hidden at colon call sites. Keeping it permissive avoids
     // recursively comparing a specialized machine against its generic alias.
@@ -903,7 +904,7 @@ fn inspection_from_local_assignment(
     let initial_expression = named_field(config, "initial");
     let initial = initial_expression
         .and_then(string_expression)
-        .unwrap_or_else(|| "none".to_owned());
+        .unwrap_or_else(|| if initial_expression.is_some() { "<dynamic>".to_owned() } else { "none".to_owned() });
     let mut state_spans = BTreeMap::new();
 
     state_spans.insert(
@@ -1071,9 +1072,11 @@ fn spec_from_config(config: &TableConstructor) -> StateMachineSpec {
     let mut events = BTreeSet::new();
     let mut transitions = Vec::new();
 
-    if let Some(initial) = named_field(config, "initial").and_then(string_expression) {
+    let initial = named_field(config, "initial");
+    let has_dynamic_initial = initial.is_some_and(|expression| string_expression(expression).is_none());
+    if let Some(initial) = initial.and_then(string_expression) {
         states.insert(initial);
-    } else {
+    } else if initial.is_none() {
         states.insert("none".to_owned());
     }
 
@@ -1107,6 +1110,7 @@ fn spec_from_config(config: &TableConstructor) -> StateMachineSpec {
     }
 
     StateMachineSpec {
+        has_dynamic_initial,
         states: states.into_iter().collect(),
         events: events.into_iter().collect(),
         transitions,
@@ -1315,6 +1319,17 @@ mod tests {
             let parsed = parse_tua_source("machine.tua", source).unwrap();
             assert_eq!(config_diagnostics(&parsed).len(), 1, "{name}");
         }
+    }
+
+    #[test]
+    fn dynamic_initial_state_does_not_invent_none() {
+        let parsed = parse_tua_source("machine.tua", "local initial = 'idle'\nlocal machine = stateMachine({initial=initial,events={}})").unwrap();
+        let inspections = inspections(&parsed);
+        assert_eq!(inspections[0].initial, "<dynamic>");
+        assert!(inspections[0].states.is_empty());
+        let spec = StateMachineSpec { has_dynamic_initial: true, ..StateMachineSpec::default() };
+        let Type::Table(table) = machine_type(&spec) else { panic!("machine"); };
+        assert_eq!(table.field("current").unwrap().ty, Type::string());
     }
 
 }
