@@ -818,14 +818,25 @@ pub(crate) fn build_type_environment_with_domain_registry(
         }
 
         let context = TypeResolutionContext::with_self_type(Type::alias(alias.name.clone()));
-        let ty = resolve_tua_type_with_context(
-            &parsed.path,
-            &alias.ty,
-            Some(alias.span),
-            &alias_names,
-            &mut diagnostics,
-            &context,
-        );
+        let ty = if let TuaType::Table(fields) = &alias.ty {
+            let mut resolved = BTreeMap::<String, TableField>::new();
+            for field in fields {
+                let ty = resolve_table_field_type(&parsed.path, field, &alias_names, &mut diagnostics, &context);
+                if let (Some(existing), Type::Function(overload)) = (resolved.get_mut(&field.name), &ty) {
+                    if let Type::Function(function) = &mut existing.ty {
+                        function.overloads.push(overload.clone());
+                        existing.optional &= field.optional;
+                        continue;
+                    }
+                }
+                resolved.insert(field.name.clone(), TableField { ty, optional: field.optional });
+            }
+            Type::table(resolved)
+        } else {
+            resolve_tua_type_with_context(
+                &parsed.path, &alias.ty, Some(alias.span), &alias_names, &mut diagnostics, &context,
+            )
+        };
 
         aliases.insert(alias.name.clone(), ty);
 

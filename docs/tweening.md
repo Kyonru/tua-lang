@@ -64,7 +64,7 @@ tween.to(door, 0.4, { y = 0 })
 | `:onstart(fn)` | Call `fn` on the first update after the delay. |
 | `:onupdate(fn)` | Call `fn` after every update. |
 | `:oncomplete(fn)` | Call `fn` when the tween finishes. Calling it again adds another callback. |
-| `:after(target, seconds, values)` | Start another tween when this one finishes, and return it. `:after(seconds, values)` reuses the same target. |
+| `:after(target, seconds, values)` | Start another tween when this one finishes, and return it. `:after(seconds, values)` reuses the same target. Each form requires a numeric duration and a table of numeric values. |
 | `:stop()` | Remove the tween without completing it. |
 
 Easing names are `linear` plus `quad`, `cubic`, `quart`, `quint`, `expo`,

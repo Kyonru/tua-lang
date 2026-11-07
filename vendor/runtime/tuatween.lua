@@ -2,8 +2,8 @@
 -- tuatween: the runtime behind Tua's built-in `tween` module.
 --
 -- This is flux 0.1.5 by rxi (https://github.com/rxi/flux, commit
--- bb330231b87eabf84fbd68322f13a6320db30a41), unchanged apart from the LuaDoc
--- annotations and the typed export table at the end. Tua types the `tween`
+-- bb330231b87eabf84fbd68322f13a6320db30a41), with callback cancellation fixes,
+-- LuaDoc annotations and the typed export table at the end. Tua types the `tween`
 -- global from these annotations and copies this file into the build when a
 -- project uses it. A project that provides its own tuatween.lua replaces it.
 --
@@ -49,7 +49,8 @@
 ---@field onstart fun(self: Tween, callback: fun()): Tween
 ---@field onupdate fun(self: Tween, callback: fun()): Tween
 ---@field oncomplete fun(self: Tween, callback: fun()): Tween
----@field after fun(self: Tween, target: any, seconds: number | { [string]: number }, values?: { [string]: number }): Tween
+---@field after fun(self: Tween, seconds: number, values: { [string]: number }): Tween
+---@field after fun(self: Tween, target: any, seconds: number, values: { [string]: number }): Tween
 ---@field stop fun(self: Tween)
 
 ---An independent set of tweens, for example one per scene or for UI that

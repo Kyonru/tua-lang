@@ -39,7 +39,7 @@ Describes a Lua table type; this does not create a native Tua class.
 ---@field name Type
 ```
 
-Adds a typed field to the preceding annotation class.
+Adds a typed field to the preceding annotation class. Repeating a callable field declares overloads, with each complete parameter list checked separately. For example, `---@field after fun(seconds: number, callback: fun())` and `---@field after fun(label: string, seconds: number, callback: fun())` describe two valid call forms. Ordinary field declarations keep their existing meaning.
 
 ## @param
 
