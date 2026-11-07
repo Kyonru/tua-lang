@@ -1331,11 +1331,15 @@ impl<'a> Checker<'a> {
     }
 
     fn check_return(&mut self, return_stmt: &Return, target: Option<&[Type]>) {
+        let expressions = return_stmt.returns().iter().collect::<Vec<_>>();
+        // Every expression executes, including surplus results and module returns.
+        // The result-contract loop checks the remaining expressions below.
+        for expression in expressions.iter().skip(target.map_or(0, <[Type]>::len)) {
+            self.infer_expression(expression);
+        }
         let Some(target) = target else {
             return;
         };
-
-        let expressions = return_stmt.returns().iter().collect::<Vec<_>>();
 
         if expressions.is_empty() {
             for target in target {

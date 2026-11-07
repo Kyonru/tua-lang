@@ -5440,3 +5440,13 @@ fn optional_record_fields_accept_nil_but_reject_wrong_values() {
     }
     assert!(check_tua_source("optional.tua", "local row: {value: number} = {value=1}\nrow.value=nil").is_err());
 }
+
+#[test]
+fn return_expressions_validate_calls_without_result_contracts() {
+    let function = "local function takes(n: number): number return n end\n";
+    for body in ["return takes('bad')", "local function f(): number return 1, takes('bad') end"] {
+        let diagnostics = check_tua_source("returns.tua", format!("{function}{body}")).unwrap_err();
+        assert_eq!(diagnostics.iter().filter(|d| d.code == Some(DiagnosticCode::TYPE_MISMATCH)).count(), 1, "{diagnostics:?}");
+    }
+    check_tua_source("returns.tua", format!("{function}return takes(2)")).unwrap();
+}
