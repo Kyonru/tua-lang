@@ -1853,3 +1853,78 @@ fn shortened_callbacks_can_ignore_trailing_arguments() {
         ));
     }
 }
+
+#[test]
+fn unresolved_return_expression_preserves_other_return_slots() {
+    for returned in [
+        "runtimeValue, 2, 3",
+        "1, runtimeValue, 3",
+        "1, 2, runtimeValue",
+    ] {
+        let source = format!("local function values()\n return {returned}\nend\nlocal x, y, z = 0, 0, 0\nx, y, z = values()\n");
+        crate::check_tua_source("src/returns.tua", &source).unwrap_or_else(|diagnostics| {
+            assert!(
+                !diagnostics
+                    .iter()
+                    .any(|d| d.code == Some(DiagnosticCode::TYPE_MISMATCH)),
+                "{diagnostics:#?}"
+            );
+        });
+        let parsed = parse_tua_source("src/returns.tua", &source).unwrap();
+        let environment = build_type_environment(&parsed).unwrap();
+        let returns = environment
+            .function("values")
+            .unwrap()
+            .return_types_or_any();
+        assert_eq!(returns.len(), 3, "{returned}: {returns:?}");
+        let hover = crate::hover_tua_source(
+            "src/returns.tua",
+            &source,
+            crate::SourcePosition {
+                line: 5,
+                column: 11,
+            },
+        )
+        .unwrap()
+        .expect("call hover");
+        let expected = returned
+            .split(", ")
+            .map(|value| {
+                if value == "runtimeValue" {
+                    "any"
+                } else {
+                    "number"
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+        assert!(
+            hover.contents == format!("function values(): {expected}"),
+            "{}",
+            hover.contents
+        );
+
+        for (index, expression) in returned.split(", ").enumerate() {
+            assert_eq!(
+                returns[index],
+                if expression == "runtimeValue" {
+                    Type::Any
+                } else {
+                    Type::number()
+                }
+            );
+        }
+    }
+}
+
+#[test]
+fn unresolved_return_slot_does_not_hide_known_mismatch() {
+    let diagnostics = crate::check_tua_source("src/returns.tua", "local function values() return runtimeValue, 'wrong' end\nlocal x, y = 0, 0\nx, y = values()\n").unwrap_err();
+    assert!(
+        diagnostics
+            .iter()
+            .any(|d| d.code == Some(DiagnosticCode::TYPE_MISMATCH)
+                && d.message.contains("expected number, found string")),
+        "{diagnostics:#?}"
+    );
+}

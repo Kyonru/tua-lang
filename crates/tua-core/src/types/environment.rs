@@ -3531,15 +3531,21 @@ fn infer_return_statement_types(
     let mut return_types = Vec::new();
 
     for (index, expression) in expressions.iter().enumerate() {
+        // An unresolved expression still occupies a return slot. Keep its type
+        // dynamic rather than discarding the entire return list and its arity.
         if index < fixed_expression_count {
-            return_types.push(query.return_type(expression, 0)?);
+            return_types.push(query.return_type(expression, 0).unwrap_or(Type::Any));
             continue;
         }
 
         let expression_returns = query.return_types(expression);
 
         if expression_returns.is_empty() {
-            return_types.push(query.return_type(expression, 0)?);
+            return_types.push(query.return_type(expression, 0).or_else(|| {
+                // A lone unresolved call may have unknown arity; preserve the
+                // existing deferred inference for that case.
+                (expressions.len() > 1).then_some(Type::Any)
+            })?);
         } else {
             return_types.extend(expression_returns);
         }

@@ -312,6 +312,10 @@ draw(point())          -- equivalent to draw(10, 20)
 -- draw((point()))     -- error: only one argument
 ```
 
+When Tua cannot infer one expression in an explicit multi-value return list,
+that slot remains dynamic. It does not erase the types or positions of the
+other returned values.
+
 Use an annotation when an empty table, `nil`, or another broad initializer does
 not contain enough information to express the intended contract.
 

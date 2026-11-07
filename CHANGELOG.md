@@ -11,6 +11,9 @@ language or editor behavior, and migration notes call out those changes.
 - Assignment type errors identify the destination and call return position,
   with separate highlights for failing multi-return destinations and explicit
   context for missing assignment values.
+- Preserve known types and return positions when another expression in an
+  explicit multi-value return list cannot be inferred, avoiding false nil
+  assignment errors.
 
 ## [0.6.0] - 2026-11-07
 
