@@ -98,6 +98,31 @@ fn run_json_lines(
     Ok(())
 }
 
+fn dispatch_envelope(
+    message: Value,
+    handle: impl FnOnce(Value) -> ProtocolOutcome,
+) -> ProtocolOutcome {
+    let valid_id = message
+        .get("id")
+        .is_none_or(|id| id.is_null() || id.is_string() || id.is_number());
+    if !message.is_object()
+        || message.get("jsonrpc").and_then(Value::as_str) != Some("2.0")
+        || !message.get("method").is_some_and(Value::is_string)
+        || !valid_id
+        || message
+            .get("params")
+            .is_some_and(|params| !params.is_object() && !params.is_array())
+    {
+        return ProtocolOutcome::response(json_rpc_error(Value::Null, -32600, "invalid request"));
+    }
+    let notification = message.get("id").is_none();
+    let mut outcome = handle(message);
+    if notification {
+        outcome.response = None;
+    }
+    outcome
+}
+
 struct ProtocolOutcome {
     response: Option<Value>,
     shutdown: bool,
@@ -171,6 +196,10 @@ impl ApiSession {
     }
 
     fn handle_api(&mut self, message: Value) -> ProtocolOutcome {
+        dispatch_envelope(message, |message| self.handle_api_request(message))
+    }
+
+    fn handle_api_request(&mut self, message: Value) -> ProtocolOutcome {
         let id = message.get("id").cloned();
         let Some(method) = message.get("method").and_then(Value::as_str) else {
             return ProtocolOutcome::response(json_rpc_error(
@@ -549,6 +578,10 @@ impl ApiSession {
     }
 
     fn handle_mcp(&mut self, message: Value) -> ProtocolOutcome {
+        dispatch_envelope(message, |message| self.handle_mcp_request(message))
+    }
+
+    fn handle_mcp_request(&mut self, message: Value) -> ProtocolOutcome {
         let id = message.get("id").cloned();
         let method = message.get("method").and_then(Value::as_str).unwrap_or("");
         let params = message.get("params").cloned().unwrap_or(Value::Null);
@@ -1012,6 +1045,40 @@ mod tests {
         .unwrap();
 
         assert_eq!(response_lines(&output), vec![json!({"ok": true})]);
+    }
+
+    #[test]
+    fn protocol_envelopes_and_notifications_are_consistent() {
+        let project = TempProject::new();
+        project.write("src/main.tua", "return 1");
+        for mcp in [false, true] {
+            let mut session = ApiSession::load(&project.root).unwrap();
+            let mut handle = |message| {
+                if mcp {
+                    session.handle_mcp(message)
+                } else {
+                    session.handle_api(message)
+                }
+            };
+            for invalid in [
+                json!(3),
+                json!({"method":"initialize"}),
+                json!({"jsonrpc":"1.0","method":"initialize"}),
+                json!({"jsonrpc":"2.0","method":"initialize","id":{}}),
+            ] {
+                assert_eq!(handle(invalid).response.unwrap()["error"]["code"], -32600);
+            }
+            for method in ["initialize", "ping", "shutdown"] {
+                assert!(handle(json!({"jsonrpc":"2.0","method":method}))
+                    .response
+                    .is_none());
+            }
+            assert!(
+                handle(json!({"jsonrpc":"2.0","method":"initialize","id":"ok"}))
+                    .response
+                    .is_some()
+            );
+        }
     }
 
     #[test]
