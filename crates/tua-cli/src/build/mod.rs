@@ -52,17 +52,29 @@ enum SourceUnit {
 #[derive(Clone, Debug)]
 pub(crate) struct OutputGuard {
     root: PathBuf,
+    cleanup_root: Option<PathBuf>,
 }
 
 impl OutputGuard {
     pub(crate) fn new(workspace: &ProjectWorkspace) -> Result<Self, Diagnostic> {
-        let guard = Self::for_root(workspace.root());
+        let mut guard = Self::for_root(workspace.root());
+        let output = workspace.primary_output_root();
+        if !workspace
+            .source_roots()
+            .iter()
+            .any(|source| output.starts_with(source) || source.starts_with(output))
+        {
+            guard.cleanup_root = Some(output.to_path_buf());
+        }
         guard.check(workspace.primary_output_root())?;
         Ok(guard)
     }
 
     pub(crate) fn for_root(root: impl Into<PathBuf>) -> Self {
-        Self { root: root.into() }
+        Self {
+            root: root.into(),
+            cleanup_root: None,
+        }
     }
 
     pub(crate) fn check(&self, path: &Path) -> Result<(), Diagnostic> {
@@ -734,11 +746,10 @@ fn remove_output_if_exists(guard: &OutputGuard, path: &Path, diagnostics: &mut V
         diagnostics.push(diagnostic);
         return;
     }
-    if !path.exists() {
+    let Some(root) = &guard.cleanup_root else {
         return;
-    }
-
-    if let Err(source) = fs::remove_file(path) {
+    };
+    if let Err(source) = ownership::remove_owned(root, path) {
         diagnostics.push(io_diagnostic(path, source));
     }
 }

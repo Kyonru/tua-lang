@@ -1350,8 +1350,14 @@ emit_maps = false
 
     assert!(output.status.success());
     assert!(temp.path().join("build/main.lua").is_file());
-    assert!(!temp.path().join("build/main.lua.map.json").exists());
-    assert!(!temp.path().join("build/main.lua.map").exists());
+    assert_eq!(
+        fs::read_to_string(temp.path().join("build/main.lua.map.json")).unwrap(),
+        "{}\n"
+    );
+    assert_eq!(
+        fs::read_to_string(temp.path().join("build/main.lua.map")).unwrap(),
+        "{}\n"
+    );
 }
 
 #[test]
@@ -1393,7 +1399,10 @@ extension = "tua"
         String::from_utf8_lossy(&output.stderr)
     );
     assert!(temp.path().join("build/main.lua").is_file());
-    assert!(!temp.path().join("build/types.d.lua").exists());
+    assert_eq!(
+        fs::read_to_string(temp.path().join("build/types.d.lua")).unwrap(),
+        "stale\n"
+    );
 }
 
 #[test]
@@ -5513,4 +5522,39 @@ fn unit_test_coverage_maps_native_lines_and_includes_unloaded_lua() {
         serde_json::from_slice(&fs::read(temp.path().join("coverage.json")).unwrap()).unwrap();
     assert_eq!(report["completed"], false);
     assert_eq!(report["files"], serde_json::json!([]));
+}
+
+#[test]
+fn in_place_declarations_preserve_handwritten_lua() {
+    let temp = TempDir::new("in-place-declaration-owner");
+    fs::write(
+        temp.path().join(CONFIG_FILE),
+        "source = \"src\"\nout = \"src\"\n",
+    )
+    .unwrap();
+    fs::create_dir_all(temp.path().join("src")).unwrap();
+    fs::write(
+        temp.path().join("src/types.d.tua"),
+        "export type Point = {x: number}\n",
+    )
+    .unwrap();
+    fs::write(
+        temp.path().join("src/types.d.lua"),
+        "return { handwritten = true }\n",
+    )
+    .unwrap();
+    let output = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        fs::read_to_string(temp.path().join("src/types.d.lua")).unwrap(),
+        "return { handwritten = true }\n"
+    );
 }

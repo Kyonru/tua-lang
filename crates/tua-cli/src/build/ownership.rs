@@ -62,6 +62,28 @@ fn fingerprint(path: &Path) -> io::Result<u64> {
     }
 }
 
+/// Remove only unchanged output whose ownership was recorded by a build.
+pub(super) fn remove_owned(root: &Path, path: &Path) -> io::Result<()> {
+    let Some(name) = path
+        .strip_prefix(root)
+        .ok()
+        .map(|p| p.to_string_lossy().replace('\\', "/"))
+    else {
+        return Ok(());
+    };
+    let manifest = load(root)?;
+    let Some(Some(expected)) = manifest.get(&name) else {
+        return Ok(());
+    };
+    let path = owned_path(root, &name)?;
+    match fingerprint(&path) {
+        Ok(actual) if actual == *expected => fs::remove_file(path),
+        Ok(_) => Ok(()),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error),
+    }
+}
+
 pub(super) fn reconcile(
     root: &Path,
     outputs: &BTreeSet<PathBuf>,
@@ -111,6 +133,39 @@ pub(super) fn reconcile(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn special_cleanup_requires_unchanged_recorded_ownership() {
+        let root = std::env::temp_dir().join(format!(
+            "tua-owned-removal-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir_all(&root).unwrap();
+        let owned = root.join("main.lua.map");
+        let edited = root.join("edited.lua.map");
+        let user = root.join("types.d.lua");
+        fs::write(&owned, "generated").unwrap();
+        fs::write(&edited, "generated").unwrap();
+        fs::write(&user, "user").unwrap();
+        reconcile(
+            &root,
+            &BTreeSet::from([owned.clone(), edited.clone()]),
+            &BTreeSet::new(),
+        )
+        .unwrap();
+        fs::write(&edited, "user edit").unwrap();
+        for path in [&owned, &edited, &user] {
+            remove_owned(&root, path).unwrap();
+        }
+        assert!(!owned.exists());
+        assert_eq!(fs::read_to_string(&edited).unwrap(), "user edit");
+        assert_eq!(fs::read_to_string(&user).unwrap(), "user");
+        fs::remove_dir_all(root).unwrap();
+    }
 
     #[test]
     fn custom_runtime_is_packaged_but_never_deleted_as_owned_output() {
