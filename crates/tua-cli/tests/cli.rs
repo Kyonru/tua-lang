@@ -5558,3 +5558,37 @@ fn in_place_declarations_preserve_handwritten_lua() {
         "return { handwritten = true }\n"
     );
 }
+
+#[cfg(unix)]
+#[test]
+fn test_report_preserves_backend_startup_error() {
+    use std::os::unix::fs::PermissionsExt;
+    let temp = TempDir::new("test-report-backend-error");
+    fs::write(temp.path().join(CONFIG_FILE), "source = \"src\"\n").unwrap();
+    fs::create_dir_all(temp.path().join("src")).unwrap();
+    fs::write(
+        temp.path().join("src/main_spec.tua"),
+        "describe(\"suite\", function() end)\n",
+    )
+    .unwrap();
+    let backend = temp.path().join("broken-busted");
+    fs::write(
+        &backend,
+        "#!/bin/sh\necho 'missing Lua backend dependency' >&2\nexit 2\n",
+    )
+    .unwrap();
+    fs::set_permissions(&backend, fs::Permissions::from_mode(0o755)).unwrap();
+    let output = tua()
+        .args(["test", "--busted"])
+        .arg(&backend)
+        .args(["--report", "results.json"])
+        .current_dir(temp.path())
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("missing Lua backend dependency"),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}

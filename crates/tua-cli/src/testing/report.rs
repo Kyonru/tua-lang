@@ -14,10 +14,12 @@ pub(super) fn save(
 ) -> Result<(), CliError> {
     let cwd = workspace.root();
     let raw = fs::read(raw_report).map_err(|error| {
-        CliError::usage(format!("Busted did not produce a test report: {error}"))
+        CliError::usage(format!(
+            "Busted did not produce a test report: {error}\n{log}"
+        ))
     })?;
     let mut report: serde_json::Value = serde_json::from_slice(&raw)
-        .map_err(|error| CliError::usage(format!("invalid Busted report: {error}")))?;
+        .map_err(|error| CliError::usage(format!("invalid Busted report: {error}\n{log}")))?;
     let maps = load_traceback_maps(output)?;
     if let Some(tests) = report["tests"].as_array_mut() {
         for test in tests {
