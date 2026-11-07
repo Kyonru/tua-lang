@@ -171,6 +171,12 @@ pub(crate) fn shader_uniforms(source: &str) -> Option<ShaderUniformSet> {
     }) {
         return None;
     }
+    let macros = code.lines().filter_map(|line| {
+        let directive = line.trim_start().strip_prefix('#')?.trim_start();
+        let definition = directive.strip_prefix("define")?;
+        if !definition.starts_with(char::is_whitespace) { return None; }
+        definition.trim_start().split(|c: char| !c.is_ascii_alphanumeric() && c != '_').next()
+    }).collect::<std::collections::BTreeSet<_>>();
     let tokens = tokens(&code);
     let mut result = ShaderUniformSet::default();
     for window in tokens.windows(3) {
@@ -196,6 +202,9 @@ pub(crate) fn shader_uniforms(source: &str) -> Option<ShaderUniformSet> {
             index += 1;
         }
         let glsl_type = tokens.get(index)?.text;
+        if macros.contains(glsl_type) {
+            return None;
+        }
         let header = tokens[declaration_start..=index]
             .iter()
             .map(|token| token.text)
@@ -204,6 +213,11 @@ pub(crate) fn shader_uniforms(source: &str) -> Option<ShaderUniformSet> {
         index += 1;
         loop {
             let name = tokens.get(index)?;
+            // Metadata is conservative: do not advertise an unexpanded macro
+            // name or diagnose its expanded identifier as absent.
+            if macros.contains(name.text) {
+                return None;
+            }
             if name.text == "{" {
                 return None;
             }

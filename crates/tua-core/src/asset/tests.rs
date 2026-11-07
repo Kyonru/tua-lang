@@ -551,3 +551,15 @@ return Player
     assert_eq!(image.status, AssetValidationStatus::Valid);
     assert_eq!(image.dimensions, Some((32, 16)));
 }
+
+#[test]
+fn macro_uniform_names_and_types_defer_metadata() {
+    for source in [
+        "#define NAME alpha\nextern number NAME;\n",
+        "# define KIND number\nextern KIND alpha;\n",
+        "#define NAME(x) x\nextern number NAME(alpha);\n",
+    ] {
+        assert_eq!(shader_uniforms(source), None, "{source}");
+    }
+    assert!(shader_uniforms("#define SCALE 2.0\nextern number alpha;\n").is_some());
+}
