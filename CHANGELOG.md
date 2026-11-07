@@ -6,6 +6,43 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-07
+
+### Release summary
+
+Tua 0.6.0 focuses on everyday editing, stronger cross-file type information, and
+unit testing for Lua and LOVE projects. The CLI, language server, and VS Code
+extension ship together, with fixes to source positions, module isolation,
+completion, and generated Lua. Documentation now includes focused guides for
+annotations, class imports, migration, testing, and upgrades.
+
+#### Highlights
+
+- Run typed and Lua specs with `tua test` using Busted. Dedicated test roots,
+  structured results, source-mapped failures, and optional LuaCov coverage support
+  local development and CI.
+- Run individual tests or nested suites from native editor gutter buttons. The
+  Testing view adds cancellation, opt-in continuous runs, and coverage results;
+  opening a saved source file discovers tests without executing them.
+- Get more consistent assistance for indexed and chained expressions, imported
+  class instances, callbacks, nullable values, and cross-file event payloads.
+  Shared inference and deferred checking reduce repeated editor work.
+- Preserve Unicode edits and lexical symbol identity across navigation and rename,
+  isolate multi-root module resolution, and retain typed-header comments during
+  Lua emission.
+- Browse bundled LOVE API and annotation documentation offline. Updated extension
+  dependencies address security advisories while preserving language-client filters.
+
+#### Upgrade notes
+
+Update the extension and any custom CLI/server together. Busted must be installed
+in the selected Lua environment; coverage additionally requires LuaCov. Production
+builds exclude dedicated test roots and `_spec` files by default; use
+`test.exclude_specs = false` for intentional production spec filenames. More
+precise checking can expose previously missed errors. `TL4077` warns about class
+field defaults following direct assignments in `init`; initialization order itself
+has not changed. Review project diagnostics before applying automated edits.
+
 ### Added
 
 - Native editor gutter run buttons for discovered Busted suites and cases, with
@@ -1872,7 +1909,8 @@ from 0.3.0:
 - Project source and `tua.toml` files require no migration for this coordinated
   release.
 
-[Unreleased]: https://github.com/Kyonru/tua-lang/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/Kyonru/tua-lang/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/Kyonru/tua-lang/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/Kyonru/tua-lang/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/Kyonru/tua-lang/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/Kyonru/tua-lang/compare/v0.4.0...v0.4.1
