@@ -1,0 +1,7 @@
+local Camera = require("tuacamera")
+local cam = Camera.new({style="platformer", smoothing=8, zoom=2})
+cam:follow(250, 40)
+cam:update(0.1)
+local sx, sy = cam:toScreen(23, 45)
+local wx, wy = cam:toWorld(sx, sy)
+print(cam.x, cam.y, wx, wy)

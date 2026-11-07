@@ -1,0 +1,2 @@
+local function f(x: number = "bad"): number return x end
+print(f() + 1)

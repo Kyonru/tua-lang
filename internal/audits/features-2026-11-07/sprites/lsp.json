@@ -1,0 +1,283 @@
+{
+  "source": "local Sheet = spriteSheet({\n  image = \"assets/player.png\",\n  frame = { width = 32, height = 32 },\n  origin = { x = 16, y = 32 },\n  animations = {\n    run = { from = 0, to = 3, fps = 4, markers = { { frame = 0, name = \"start\" }, { frame = 1, name = \"step\" } } },\n    stopStart = { from = 0, to = 3, fps = 4, onLoop = \"pauseAtStart\" },\n    stopEnd = { from = 0, to = 3, fps = 4, onLoop = \"pauseAtEnd\" },\n    loopFn = { from = 0, to = 3, fps = 4, onLoop = function(animation, loops)\n      print(\"LOOP_CALLBACK\", loops)\n      if loops > 1 then animation:pause() end\n    end },\n    single = { column = 0, fps = 1 },\n    multi = { frames = { { from = 0, to = 1, row = 0 }, { column = 1, row = 1 } }, durations = { 0.1, 0.2, 0.3 } },\n  },\n})\nlocal Parent = spriteSheet({\n  image = \"assets/player.png\",\n  frame = { width = 32, height = 32 },\n  animations = { idle = { column = 0, fps = 1 } },\n  children = { hat = { sheet = Sheet, initial = \"run\", x = 4, y = -8 } },\n})\nlocal player = Sheet:player(\"run\")\nplayer:play(\"absent\")\nplayer:play(\"run\")\nplayer:on(\"step\", function() end)\n",
+  "diagnostics": [
+    {
+      "jsonrpc": "2.0",
+      "method": "textDocument/publishDiagnostics",
+      "params": {
+        "diagnostics": [
+          {
+            "code": "TL1003",
+            "message": "type mismatch at name: expected \"run\" | \"stopStart\" | \"stopEnd\" | \"loopFn\" | \"single\" | \"multi\", found \"absent\"",
+            "range": {
+              "end": {
+                "character": 20,
+                "line": 23
+              },
+              "start": {
+                "character": 12,
+                "line": 23
+              }
+            },
+            "severity": 1,
+            "source": "tua"
+          },
+          {
+            "code": "TL1003",
+            "message": "type mismatch: callback requires 0 parameters, but it may be called with only 4",
+            "range": {
+              "end": {
+                "character": 32,
+                "line": 25
+              },
+              "start": {
+                "character": 18,
+                "line": 25
+              }
+            },
+            "severity": 1,
+            "source": "tua"
+          }
+        ],
+        "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/sprites/project/src/sheets.tua"
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "textDocument/publishDiagnostics",
+      "params": {
+        "diagnostics": [
+          {
+            "code": "TL1003",
+            "message": "type mismatch at name: expected \"run\" | \"stopStart\" | \"stopEnd\" | \"loopFn\" | \"single\" | \"multi\", found \"absent\"",
+            "range": {
+              "end": {
+                "character": 20,
+                "line": 23
+              },
+              "start": {
+                "character": 12,
+                "line": 23
+              }
+            },
+            "severity": 1,
+            "source": "tua"
+          },
+          {
+            "code": "TL1003",
+            "message": "type mismatch: callback requires 0 parameters, but it may be called with only 4",
+            "range": {
+              "end": {
+                "character": 32,
+                "line": 25
+              },
+              "start": {
+                "character": 18,
+                "line": 25
+              }
+            },
+            "severity": 1,
+            "source": "tua"
+          },
+          {
+            "code": "TL4005",
+            "message": "unused local `Parent`; prefix with `_` to silence",
+            "range": {
+              "end": {
+                "character": 12,
+                "line": 16
+              },
+              "start": {
+                "character": 6,
+                "line": 16
+              }
+            },
+            "severity": 2,
+            "source": "tua"
+          }
+        ],
+        "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/sprites/project/src/sheets.tua"
+      }
+    }
+  ],
+  "completion": [
+    {
+      "data": {
+        "kind": "value",
+        "label": "run",
+        "position": {
+          "character": 13,
+          "line": 24
+        },
+        "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/sprites/project/src/sheets.tua"
+      },
+      "kind": 12,
+      "label": "run",
+      "sortText": "0000_run",
+      "textEdit": {
+        "newText": "run",
+        "range": {
+          "end": {
+            "character": 16,
+            "line": 24
+          },
+          "start": {
+            "character": 13,
+            "line": 24
+          }
+        }
+      }
+    },
+    {
+      "data": {
+        "kind": "value",
+        "label": "stopStart",
+        "position": {
+          "character": 13,
+          "line": 24
+        },
+        "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/sprites/project/src/sheets.tua"
+      },
+      "kind": 12,
+      "label": "stopStart",
+      "sortText": "0001_stopStart",
+      "textEdit": {
+        "newText": "stopStart",
+        "range": {
+          "end": {
+            "character": 16,
+            "line": 24
+          },
+          "start": {
+            "character": 13,
+            "line": 24
+          }
+        }
+      }
+    },
+    {
+      "data": {
+        "kind": "value",
+        "label": "stopEnd",
+        "position": {
+          "character": 13,
+          "line": 24
+        },
+        "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/sprites/project/src/sheets.tua"
+      },
+      "kind": 12,
+      "label": "stopEnd",
+      "sortText": "0002_stopEnd",
+      "textEdit": {
+        "newText": "stopEnd",
+        "range": {
+          "end": {
+            "character": 16,
+            "line": 24
+          },
+          "start": {
+            "character": 13,
+            "line": 24
+          }
+        }
+      }
+    },
+    {
+      "data": {
+        "kind": "value",
+        "label": "loopFn",
+        "position": {
+          "character": 13,
+          "line": 24
+        },
+        "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/sprites/project/src/sheets.tua"
+      },
+      "kind": 12,
+      "label": "loopFn",
+      "sortText": "0003_loopFn",
+      "textEdit": {
+        "newText": "loopFn",
+        "range": {
+          "end": {
+            "character": 16,
+            "line": 24
+          },
+          "start": {
+            "character": 13,
+            "line": 24
+          }
+        }
+      }
+    },
+    {
+      "data": {
+        "kind": "value",
+        "label": "single",
+        "position": {
+          "character": 13,
+          "line": 24
+        },
+        "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/sprites/project/src/sheets.tua"
+      },
+      "kind": 12,
+      "label": "single",
+      "sortText": "0004_single",
+      "textEdit": {
+        "newText": "single",
+        "range": {
+          "end": {
+            "character": 16,
+            "line": 24
+          },
+          "start": {
+            "character": 13,
+            "line": 24
+          }
+        }
+      }
+    },
+    {
+      "data": {
+        "kind": "value",
+        "label": "multi",
+        "position": {
+          "character": 13,
+          "line": 24
+        },
+        "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/sprites/project/src/sheets.tua"
+      },
+      "kind": 12,
+      "label": "multi",
+      "sortText": "0005_multi",
+      "textEdit": {
+        "newText": "multi",
+        "range": {
+          "end": {
+            "character": 16,
+            "line": 24
+          },
+          "start": {
+            "character": 13,
+            "line": 24
+          }
+        }
+      }
+    }
+  ],
+  "hover": {
+    "contents": {
+      "kind": "markdown",
+      "value": "```tua\n(field) play: (\n  self: any,\n  name: \"run\" | \"stopStart\" | \"stopEnd\" | \"loopFn\" | \"single\" | \"multi\",\n  restart: boolean\n) -> nil\n```"
+    },
+    "range": {
+      "end": {
+        "character": 11,
+        "line": 24
+      },
+      "start": {
+        "character": 7,
+        "line": 24
+      }
+    }
+  }
+}

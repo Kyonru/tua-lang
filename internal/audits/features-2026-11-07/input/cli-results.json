@@ -1,0 +1,156 @@
+{
+  "positive": [
+    {
+      "action": "check",
+      "exit": 0,
+      "stdout": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/input/positive/src/main.tua:3:7 warning TL4005: unused local `nx`; prefix with `_` to silence\n/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/input/positive/src/main.tua:4:7 warning TL4005: unused local `ny`; prefix with `_` to silence\n/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/input/positive/src/main.tua:5:7 warning TL4005: unused local `fire`; prefix with `_` to silence\n/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/input/positive/src/main.tua:6:7 warning TL4005: unused local `mx`; prefix with `_` to silence\n/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/input/positive/src/main.tua:6:10 warning TL4005: unused local `my`; prefix with `_` to silence\nchecked 1 file(s)\n",
+      "stderr": ""
+    },
+    {
+      "action": "build",
+      "exit": 0,
+      "stdout": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/input/positive/src/main.tua:3:7 warning TL4005: unused local `nx`; prefix with `_` to silence\n/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/input/positive/src/main.tua:4:7 warning TL4005: unused local `ny`; prefix with `_` to silence\n/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/input/positive/src/main.tua:5:7 warning TL4005: unused local `fire`; prefix with `_` to silence\n/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/input/positive/src/main.tua:6:7 warning TL4005: unused local `mx`; prefix with `_` to silence\n/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/input/positive/src/main.tua:6:10 warning TL4005: unused local `my`; prefix with `_` to silence\nbuilt 1 file(s)\n",
+      "stderr": ""
+    }
+  ],
+  "negative_deadzone": [
+    {
+      "action": "check",
+      "exit": 0,
+      "stdout": "checked 1 file(s)\n",
+      "stderr": ""
+    },
+    {
+      "action": "build",
+      "exit": 0,
+      "stdout": "built 1 file(s)\n",
+      "stderr": ""
+    }
+  ],
+  "large_deadzone": [
+    {
+      "action": "check",
+      "exit": 1,
+      "stdout": "",
+      "stderr": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/input/large_deadzone/src/main.tua:1:51 error TL5008: input `deadzone` must be between 0 and 1\n"
+    },
+    {
+      "action": "build",
+      "exit": 1,
+      "stdout": "",
+      "stderr": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/input/large_deadzone/src/main.tua:1:51 error TL5008: input `deadzone` must be between 0 and 1\n"
+    }
+  ],
+  "empty_unknown": [
+    {
+      "action": "check",
+      "exit": 0,
+      "stdout": "checked 1 file(s)\n",
+      "stderr": ""
+    },
+    {
+      "action": "build",
+      "exit": 0,
+      "stdout": "built 1 file(s)\n",
+      "stderr": ""
+    }
+  ],
+  "known_unknown": [
+    {
+      "action": "check",
+      "exit": 1,
+      "stdout": "",
+      "stderr": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/input/known_unknown/src/main.tua:2:13 error TL1003: type mismatch at name: expected \"go\", found \"missing\"\n"
+    },
+    {
+      "action": "build",
+      "exit": 1,
+      "stdout": "",
+      "stderr": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/input/known_unknown/src/main.tua:2:13 error TL1003: type mismatch at name: expected \"go\", found \"missing\"\n"
+    }
+  ],
+  "unknown_pair": [
+    {
+      "action": "check",
+      "exit": 1,
+      "stdout": "",
+      "stderr": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/input/unknown_pair/src/main.tua:1:7 warning TL4005: unused local `c`; prefix with `_` to silence\n/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/input/unknown_pair/src/main.tua:1:70 error TL5008: input pair `move` references unknown control `missing`\n"
+    },
+    {
+      "action": "build",
+      "exit": 1,
+      "stdout": "",
+      "stderr": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/input/unknown_pair/src/main.tua:1:7 warning TL4005: unused local `c`; prefix with `_` to silence\n/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/input/unknown_pair/src/main.tua:1:70 error TL5008: input pair `move` references unknown control `missing`\n"
+    }
+  ],
+  "invalid_source": [
+    {
+      "action": "check",
+      "exit": 1,
+      "stdout": "",
+      "stderr": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/input/invalid_source/src/main.tua:1:7 warning TL4005: unused local `c`; prefix with `_` to silence\n/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/input/invalid_source/src/main.tua:1:32 error TL5008: invalid Baton source `key:not-a-key`\n"
+    },
+    {
+      "action": "build",
+      "exit": 1,
+      "stdout": "",
+      "stderr": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/input/invalid_source/src/main.tua:1:7 warning TL4005: unused local `c`; prefix with `_` to silence\n/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/input/invalid_source/src/main.tua:1:32 error TL5008: invalid Baton source `key:not-a-key`\n"
+    }
+  ],
+  "bad_pointer": [
+    {
+      "action": "check",
+      "exit": 1,
+      "stdout": "",
+      "stderr": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/input/bad_pointer/src/main.tua:1:7 warning TL4005: unused local `c`; prefix with `_` to silence\n/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/input/bad_pointer/src/main.tua:1:38 error TL1003: type mismatch at config.pointer: expected boolean, found number\n"
+    },
+    {
+      "action": "build",
+      "exit": 1,
+      "stdout": "",
+      "stderr": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/input/bad_pointer/src/main.tua:1:7 warning TL4005: unused local `c`; prefix with `_` to silence\n/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/input/bad_pointer/src/main.tua:1:38 error TL1003: type mismatch at config.pointer: expected boolean, found number\n"
+    }
+  ],
+  "hat10": [
+    {
+      "action": "check",
+      "exit": 1,
+      "stdout": "",
+      "stderr": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/input/hat10/src/main.tua:1:7 warning TL4005: unused local `c`; prefix with `_` to silence\n/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/input/hat10/src/main.tua:1:32 error TL5008: invalid Baton source `hat:10u`\n"
+    },
+    {
+      "action": "build",
+      "exit": 1,
+      "stdout": "",
+      "stderr": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/input/hat10/src/main.tua:1:7 warning TL4005: unused local `c`; prefix with `_` to silence\n/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/input/hat10/src/main.tua:1:32 error TL5008: invalid Baton source `hat:10u`\n"
+    }
+  ],
+  "negative_hex": [
+    {
+      "action": "check",
+      "exit": 0,
+      "stdout": "checked 1 file(s)\n",
+      "stderr": ""
+    },
+    {
+      "action": "build",
+      "exit": 0,
+      "stdout": "built 1 file(s)\n",
+      "stderr": ""
+    }
+  ],
+  "dynamic": [
+    {
+      "action": "check",
+      "exit": 0,
+      "stdout": "checked 1 file(s)\n",
+      "stderr": ""
+    },
+    {
+      "action": "build",
+      "exit": 0,
+      "stdout": "built 1 file(s)\n",
+      "stderr": ""
+    }
+  ]
+}

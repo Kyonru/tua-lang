@@ -1,0 +1,2 @@
+local Flag = ecs.component("Flag")
+print(Flag)

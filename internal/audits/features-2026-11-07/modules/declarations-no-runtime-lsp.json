@@ -1,0 +1,84 @@
+{
+  "root": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/modules/declarations",
+  "source": "local F = require(\"lib.feel\")\nlocal result = F.echo(\"hello\")\nassert(result==\"hello\")\nprint(result)\n",
+  "initial": [
+    {
+      "name": "F",
+      "hover": {
+        "contents": {
+          "kind": "markdown",
+          "value": "```tua\n(module) F = require(\"lib.feel\") -> /Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/modules/declarations/src/vendor-types/feel.lua\n```"
+        },
+        "range": {
+          "end": {
+            "character": 7,
+            "line": 0
+          },
+          "start": {
+            "character": 6,
+            "line": 0
+          }
+        }
+      }
+    },
+    {
+      "name": "result",
+      "hover": {
+        "contents": {
+          "kind": "markdown",
+          "value": "```tua\nlocal result: any\n```"
+        },
+        "range": {
+          "end": {
+            "character": 12,
+            "line": 1
+          },
+          "start": {
+            "character": 6,
+            "line": 1
+          }
+        }
+      }
+    }
+  ],
+  "diagnostics": [
+    {
+      "jsonrpc": "2.0",
+      "method": "textDocument/publishDiagnostics",
+      "params": {
+        "diagnostics": [],
+        "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/modules/declarations/src/main.tua"
+      }
+    }
+  ],
+  "member": {
+    "contents": {
+      "kind": "markdown",
+      "value": "```tua\nfunction F.echo(value: string): string\n```\n\n---\n\n- kind: function\n- module: /Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/modules/declarations/src/vendor-types/feel.lua"
+    },
+    "range": {
+      "end": {
+        "character": 21,
+        "line": 1
+      },
+      "start": {
+        "character": 17,
+        "line": 1
+      }
+    }
+  },
+  "sig": {
+    "activeParameter": 0,
+    "activeSignature": 0,
+    "signatures": [
+      {
+        "label": "function F.echo(value: string): string",
+        "parameters": [
+          {
+            "label": "value: string"
+          }
+        ]
+      }
+    ]
+  }
+}

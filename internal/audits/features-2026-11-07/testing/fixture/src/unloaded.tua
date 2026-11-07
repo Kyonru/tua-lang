@@ -1,0 +1,4 @@
+local function unused(): number
+  return 42
+end
+return unused

@@ -1,0 +1,46 @@
+[
+  {
+    "fixture": "missing_get",
+    "command": [
+      "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+      "check"
+    ],
+    "cwd": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/ecs/missing_get",
+    "code": 0,
+    "stdout": "checked 1 file(s)\n",
+    "stderr": ""
+  },
+  {
+    "fixture": "missing_get",
+    "command": [
+      "lua",
+      "main.lua"
+    ],
+    "cwd": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/ecs/missing_get/build",
+    "code": 1,
+    "stdout": "",
+    "stderr": "lua: main.lua:6: attempt to index a nil value (local 'position')\nstack traceback:\n\tmain.lua:6: in main chunk\n\t[C]: in ?\n"
+  },
+  {
+    "fixture": "missing_remove",
+    "command": [
+      "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+      "check"
+    ],
+    "cwd": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/ecs/missing_remove",
+    "code": 0,
+    "stdout": "checked 1 file(s)\n",
+    "stderr": ""
+  },
+  {
+    "fixture": "missing_remove",
+    "command": [
+      "lua",
+      "main.lua"
+    ],
+    "cwd": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/ecs/missing_remove/build",
+    "code": 1,
+    "stdout": "",
+    "stderr": "lua: main.lua:6: attempt to index a nil value (local 'position')\nstack traceback:\n\tmain.lua:6: in main chunk\n\t[C]: in ?\n"
+  }
+]

@@ -1,0 +1,559 @@
+{
+  "generated": "build/main.lua",
+  "lineMappings": [
+    {
+      "generatedLine": 1,
+      "sourceLine": 15
+    },
+    {
+      "generatedLine": 2,
+      "sourceLine": 1
+    },
+    {
+      "generatedLine": 3,
+      "sourceLine": 2
+    },
+    {
+      "generatedLine": 4,
+      "sourceLine": 3
+    },
+    {
+      "generatedLine": 5,
+      "sourceLine": 4
+    },
+    {
+      "generatedLine": 6,
+      "sourceLine": 5
+    },
+    {
+      "generatedLine": 7,
+      "sourceLine": 6
+    },
+    {
+      "generatedLine": 8,
+      "sourceLine": 7
+    },
+    {
+      "generatedLine": 9,
+      "sourceLine": 8
+    },
+    {
+      "generatedLine": 10,
+      "sourceLine": 9
+    },
+    {
+      "generatedLine": 11,
+      "sourceLine": 10
+    },
+    {
+      "generatedLine": 12,
+      "sourceLine": 11
+    },
+    {
+      "generatedLine": 13,
+      "sourceLine": 11
+    },
+    {
+      "generatedLine": 14,
+      "sourceLine": 13
+    },
+    {
+      "generatedLine": 15,
+      "sourceLine": 13
+    },
+    {
+      "generatedLine": 16,
+      "sourceLine": 15
+    },
+    {
+      "generatedLine": 17,
+      "sourceLine": 16
+    },
+    {
+      "generatedLine": 18,
+      "sourceLine": 17
+    },
+    {
+      "generatedLine": 19,
+      "sourceLine": 18
+    },
+    {
+      "generatedLine": 20,
+      "sourceLine": 19
+    },
+    {
+      "generatedLine": 21,
+      "sourceLine": 20
+    },
+    {
+      "generatedLine": 22,
+      "sourceLine": 21
+    },
+    {
+      "generatedLine": 23,
+      "sourceLine": 22
+    },
+    {
+      "generatedLine": 24,
+      "sourceLine": 23
+    },
+    {
+      "generatedLine": 25,
+      "sourceLine": 24
+    },
+    {
+      "generatedLine": 26,
+      "sourceLine": 25
+    },
+    {
+      "generatedLine": 27,
+      "sourceLine": 26
+    },
+    {
+      "generatedLine": 28,
+      "sourceLine": 27
+    },
+    {
+      "generatedLine": 29,
+      "sourceLine": 28
+    },
+    {
+      "generatedLine": 30,
+      "sourceLine": 29
+    },
+    {
+      "generatedLine": 31,
+      "sourceLine": 30
+    },
+    {
+      "generatedLine": 32,
+      "sourceLine": 31
+    },
+    {
+      "generatedLine": 33,
+      "sourceLine": 32
+    },
+    {
+      "generatedLine": 34,
+      "sourceLine": 33
+    },
+    {
+      "generatedLine": 35,
+      "sourceLine": 34
+    },
+    {
+      "generatedLine": 36,
+      "sourceLine": 35
+    },
+    {
+      "generatedLine": 37,
+      "sourceLine": 36
+    },
+    {
+      "generatedLine": 38,
+      "sourceLine": 37
+    },
+    {
+      "generatedLine": 39,
+      "sourceLine": 38
+    },
+    {
+      "generatedLine": 40,
+      "sourceLine": 39
+    },
+    {
+      "generatedLine": 41,
+      "sourceLine": 40
+    },
+    {
+      "generatedLine": 42,
+      "sourceLine": 41
+    },
+    {
+      "generatedLine": 43,
+      "sourceLine": 42
+    },
+    {
+      "generatedLine": 44,
+      "sourceLine": 43
+    },
+    {
+      "generatedLine": 45,
+      "sourceLine": 44
+    },
+    {
+      "generatedLine": 46,
+      "sourceLine": 45
+    },
+    {
+      "generatedLine": 47,
+      "sourceLine": 46
+    },
+    {
+      "generatedLine": 48,
+      "sourceLine": 46
+    },
+    {
+      "generatedLine": 49,
+      "sourceLine": 48
+    },
+    {
+      "generatedLine": 50,
+      "sourceLine": 49
+    },
+    {
+      "generatedLine": 51,
+      "sourceLine": 50
+    },
+    {
+      "generatedLine": 52,
+      "sourceLine": 51
+    },
+    {
+      "generatedLine": 53,
+      "sourceLine": 51
+    },
+    {
+      "generatedLine": 54,
+      "sourceLine": 53
+    },
+    {
+      "generatedLine": 55,
+      "sourceLine": 54
+    },
+    {
+      "generatedLine": 56,
+      "sourceLine": 55
+    },
+    {
+      "generatedLine": 57,
+      "sourceLine": 55
+    },
+    {
+      "generatedLine": 58,
+      "sourceLine": 57
+    },
+    {
+      "generatedLine": 59,
+      "sourceLine": 58
+    },
+    {
+      "generatedLine": 60,
+      "sourceLine": 59
+    },
+    {
+      "generatedLine": 61,
+      "sourceLine": 59
+    },
+    {
+      "generatedLine": 62,
+      "sourceLine": 61
+    },
+    {
+      "generatedLine": 63,
+      "sourceLine": 62
+    },
+    {
+      "generatedLine": 64,
+      "sourceLine": 63
+    },
+    {
+      "generatedLine": 65,
+      "sourceLine": 63
+    },
+    {
+      "generatedLine": 66,
+      "sourceLine": 65
+    },
+    {
+      "generatedLine": 67,
+      "sourceLine": 66
+    },
+    {
+      "generatedLine": 68,
+      "sourceLine": 67
+    },
+    {
+      "generatedLine": 69,
+      "sourceLine": 68
+    },
+    {
+      "generatedLine": 70,
+      "sourceLine": 69
+    },
+    {
+      "generatedLine": 71,
+      "sourceLine": 70
+    },
+    {
+      "generatedLine": 72,
+      "sourceLine": 71
+    },
+    {
+      "generatedLine": 73,
+      "sourceLine": 72
+    },
+    {
+      "generatedLine": 74,
+      "sourceLine": 73
+    },
+    {
+      "generatedLine": 75,
+      "sourceLine": 74
+    },
+    {
+      "generatedLine": 76,
+      "sourceLine": 75
+    },
+    {
+      "generatedLine": 77,
+      "sourceLine": 76
+    },
+    {
+      "generatedLine": 78,
+      "sourceLine": 77
+    },
+    {
+      "generatedLine": 79,
+      "sourceLine": 78
+    },
+    {
+      "generatedLine": 80,
+      "sourceLine": 79
+    },
+    {
+      "generatedLine": 81,
+      "sourceLine": 80
+    },
+    {
+      "generatedLine": 82,
+      "sourceLine": 81
+    },
+    {
+      "generatedLine": 83,
+      "sourceLine": 82
+    },
+    {
+      "generatedLine": 84,
+      "sourceLine": 82
+    },
+    {
+      "generatedLine": 85,
+      "sourceLine": 84
+    },
+    {
+      "generatedLine": 86,
+      "sourceLine": 85
+    },
+    {
+      "generatedLine": 87,
+      "sourceLine": 86
+    },
+    {
+      "generatedLine": 88,
+      "sourceLine": 86
+    },
+    {
+      "generatedLine": 89,
+      "sourceLine": 88
+    },
+    {
+      "generatedLine": 90,
+      "sourceLine": 89
+    },
+    {
+      "generatedLine": 91,
+      "sourceLine": 90
+    },
+    {
+      "generatedLine": 92,
+      "sourceLine": 91
+    },
+    {
+      "generatedLine": 93,
+      "sourceLine": 92
+    },
+    {
+      "generatedLine": 94,
+      "sourceLine": 93
+    },
+    {
+      "generatedLine": 95,
+      "sourceLine": 94
+    },
+    {
+      "generatedLine": 96,
+      "sourceLine": 95
+    },
+    {
+      "generatedLine": 97,
+      "sourceLine": 96
+    },
+    {
+      "generatedLine": 98,
+      "sourceLine": 97
+    },
+    {
+      "generatedLine": 99,
+      "sourceLine": 98
+    },
+    {
+      "generatedLine": 100,
+      "sourceLine": 99
+    },
+    {
+      "generatedLine": 101,
+      "sourceLine": 100
+    },
+    {
+      "generatedLine": 102,
+      "sourceLine": 101
+    },
+    {
+      "generatedLine": 103,
+      "sourceLine": 102
+    },
+    {
+      "generatedLine": 104,
+      "sourceLine": 103
+    },
+    {
+      "generatedLine": 105,
+      "sourceLine": 104
+    },
+    {
+      "generatedLine": 106,
+      "sourceLine": 105
+    },
+    {
+      "generatedLine": 107,
+      "sourceLine": 106
+    },
+    {
+      "generatedLine": 108,
+      "sourceLine": 107
+    },
+    {
+      "generatedLine": 109,
+      "sourceLine": 108
+    },
+    {
+      "generatedLine": 110,
+      "sourceLine": 109
+    },
+    {
+      "generatedLine": 111,
+      "sourceLine": 110
+    },
+    {
+      "generatedLine": 112,
+      "sourceLine": 111
+    },
+    {
+      "generatedLine": 113,
+      "sourceLine": 112
+    },
+    {
+      "generatedLine": 114,
+      "sourceLine": 113
+    },
+    {
+      "generatedLine": 115,
+      "sourceLine": 114
+    },
+    {
+      "generatedLine": 116,
+      "sourceLine": 115
+    },
+    {
+      "generatedLine": 117,
+      "sourceLine": 116
+    },
+    {
+      "generatedLine": 118,
+      "sourceLine": 117
+    },
+    {
+      "generatedLine": 119,
+      "sourceLine": 118
+    },
+    {
+      "generatedLine": 120,
+      "sourceLine": 119
+    },
+    {
+      "generatedLine": 121,
+      "sourceLine": 120
+    },
+    {
+      "generatedLine": 122,
+      "sourceLine": 121
+    },
+    {
+      "generatedLine": 123,
+      "sourceLine": 122
+    },
+    {
+      "generatedLine": 124,
+      "sourceLine": 123
+    },
+    {
+      "generatedLine": 125,
+      "sourceLine": 124
+    },
+    {
+      "generatedLine": 126,
+      "sourceLine": 125
+    },
+    {
+      "generatedLine": 127,
+      "sourceLine": 126
+    },
+    {
+      "generatedLine": 128,
+      "sourceLine": 127
+    },
+    {
+      "generatedLine": 129,
+      "sourceLine": 128
+    },
+    {
+      "generatedLine": 130,
+      "sourceLine": 129
+    },
+    {
+      "generatedLine": 131,
+      "sourceLine": 130
+    },
+    {
+      "generatedLine": 132,
+      "sourceLine": 131
+    },
+    {
+      "generatedLine": 133,
+      "sourceLine": 132
+    },
+    {
+      "generatedLine": 134,
+      "sourceLine": 133
+    },
+    {
+      "generatedLine": 135,
+      "sourceLine": 134
+    },
+    {
+      "generatedLine": 136,
+      "sourceLine": 135
+    },
+    {
+      "generatedLine": 137,
+      "sourceLine": 136
+    },
+    {
+      "generatedLine": 138,
+      "sourceLine": 137
+    }
+  ],
+  "source": "src/main.tua",
+  "version": 1
+}

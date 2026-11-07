@@ -1,0 +1,152 @@
+[
+  {
+    "probe": "native",
+    "check": "initial output",
+    "passed": true
+  },
+  {
+    "probe": "native",
+    "check": "saved edit",
+    "passed": false
+  },
+  {
+    "probe": "native",
+    "check": "error preserves output",
+    "passed": true
+  },
+  {
+    "probe": "native",
+    "check": "error recovery",
+    "passed": false
+  },
+  {
+    "probe": "native",
+    "check": "create",
+    "passed": true
+  },
+  {
+    "probe": "native",
+    "check": "delete",
+    "passed": false
+  },
+  {
+    "probe": "native",
+    "check": "output excluded",
+    "passed": true
+  },
+  {
+    "probe": "native",
+    "check": "invalid config retains old layout",
+    "passed": true
+  },
+  {
+    "probe": "native",
+    "check": "new output after config",
+    "passed": false
+  },
+  {
+    "probe": "poll",
+    "check": "initial output",
+    "passed": true
+  },
+  {
+    "probe": "poll",
+    "check": "saved edit",
+    "passed": true
+  },
+  {
+    "probe": "poll",
+    "check": "error preserves output",
+    "passed": true
+  },
+  {
+    "probe": "poll",
+    "check": "error recovery",
+    "passed": true
+  },
+  {
+    "probe": "poll",
+    "check": "create",
+    "passed": true
+  },
+  {
+    "probe": "poll",
+    "check": "delete",
+    "passed": true
+  },
+  {
+    "probe": "poll",
+    "check": "output excluded",
+    "passed": true
+  },
+  {
+    "probe": "poll",
+    "check": "invalid config retains old layout",
+    "passed": true
+  },
+  {
+    "probe": "poll",
+    "check": "new output after config",
+    "passed": true
+  },
+  {
+    "probe": "dev",
+    "check": "initial output",
+    "passed": true
+  },
+  {
+    "probe": "dev",
+    "check": "saved edit",
+    "passed": true
+  },
+  {
+    "probe": "dev",
+    "check": "error preserves output",
+    "passed": true
+  },
+  {
+    "probe": "dev",
+    "check": "error recovery",
+    "passed": true
+  },
+  {
+    "probe": "dev",
+    "check": "create",
+    "passed": true
+  },
+  {
+    "probe": "dev",
+    "check": "delete",
+    "passed": true
+  },
+  {
+    "probe": "dev",
+    "check": "output excluded",
+    "passed": true
+  },
+  {
+    "probe": "dev",
+    "check": "invalid config retains old layout",
+    "passed": true
+  },
+  {
+    "probe": "dev",
+    "check": "new output after config",
+    "passed": true
+  },
+  {
+    "probe": "dev",
+    "check": "new output instrumented",
+    "passed": false
+  },
+  {
+    "probe": "dev",
+    "check": "new output signalled",
+    "passed": false
+  },
+  {
+    "probe": "dev",
+    "old_signal": "9\n",
+    "new_signal_exists": false
+  }
+]

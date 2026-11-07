@@ -1,0 +1,13 @@
+MARKERS	run	2	0.3	true
+HITS	run:2,run:1,run:2,run:1,run:2
+PASS independent players, markers, same-name play, seeking, pause/resume, reverse
+LOOP_RESULT	stopStart	4	1	false
+LOOP_RESULT	stopEnd	4	1	false
+LOOP_CALLBACK	1
+LOOP_CALLBACK	1
+LOOP_RESULT	loopFn	1	0.2	true
+PASS nested update/draw, leaf batch and parent batch rejection
+PASS multi-row frames and durations
+SWITCH_CALLBACK	true	nil
+SWITCH_STATE	single	1	0	true
+PROBE_COMPLETE	true	nil

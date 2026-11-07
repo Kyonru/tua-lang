@@ -1,0 +1,3 @@
+local pool = objectPool({create=function(): {x:number} return {x=0} end,reset=function() print("reset") end})
+local b=pool:acquire()
+pool:release(b)

@@ -1,0 +1,2 @@
+/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/functions/bad_varargs/src/main.tua:2:7 warning TL4005: unused local `n`; prefix with `_` to silence
+/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/functions/bad_varargs/src/main.tua:2:16 error TL1003: type mismatch at ...: expected number, found string

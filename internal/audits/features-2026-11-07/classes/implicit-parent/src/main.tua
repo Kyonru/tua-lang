@@ -1,0 +1,8 @@
+open class Base {
+ x: number
+ init(x: number) { self.x = x }
+}
+class Child extends Base {
+}
+local c = Child.new()
+assert(type(c.x) == "number", "uninitialized inherited field")

@@ -1,0 +1,8 @@
+local ecs = require("tuaecs")
+local schema = nil
+local Flag = ecs.component("Flag", schema)
+local world = ecs.world()
+local e = world:create()
+world:add(e, Flag, false)
+print("has", world:has(e,Flag), "get", world:get(e,Flag), "count", world:query({Flag}):count())
+assert(world:get(e,Flag) == false, "false is a valid stored component value")

@@ -1,0 +1,8 @@
+type Row = {value?: {n: number}}
+local function use(row: Row): number
+ if row.value == nil then
+  return 0
+ end
+ return row.value.n
+end
+print(use({value={n=3}}))

@@ -1,0 +1,33 @@
+✔ disabled inline completion does not contact the language server (1.476458ms)
+✔ local completion runs before Ollama and creates snippet items (67.273417ms)
+✔ deterministic completion status names the configured backend mode (0.375ms)
+✔ local toggle changes only deterministic completion for the workspace (0.22525ms)
+✔ local counters record every deterministic source without storing completion text (269.667792ms)
+✔ local counter persistence batches many returned items into one update (0.254375ms)
+✔ acceptance followed by reset cannot replay a stale delayed snapshot (0.162333ms)
+✔ dispose flushes a pending local counter batch (0.096209ms)
+✔ legacy Ollama shown counts migrate to returned counts without leaking the old name (0.094625ms)
+✔ stored local counters migrate from v1 to v2 and allowlist numeric fields (0.16375ms)
+✔ a filtered local candidate is not counted as returned (67.788458ms)
+✔ developer replay capture observes the real menu state before the local request (66.824875ms)
+✔ Ollama context is requested only after the local backend returns empty (67.827ms)
+✔ an older server without the local method can still fall back to Ollama (66.273708ms)
+✔ selected menu completion is sent to the server and equivalent text is hidden (66.4435ms)
+✔ a local completion can extend the selected menu item over its replacement range (67.408792ms)
+✔ a response for a stale document version is ignored (67.334625ms)
+✔ capacity, content-modified, and cancellation errors stay silent (267.024541ms)
+✔ transient local failures abstain instead of falling through to Ollama (201.628625ms)
+✔ cancelling during debounce prevents a request (0.172625ms)
+✔ late cancellation of a superseded provider cannot cancel the newer request (66.4605ms)
+✔ local request timeout cancels linked work and returns a transient abstention (0.267583ms)
+✔ successful local request clears timeout and disposes its linked token (0.097167ms)
+✔ provider cancellation propagates to the linked local request (0.070041ms)
+✔ timed-out local request never falls through to Ollama (0.086167ms)
+ℹ tests 25
+ℹ suites 0
+ℹ pass 25
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1385.512375

@@ -1,0 +1,5053 @@
+[
+  {
+    "name": "objects",
+    "text": "local canvas = love.graphics.newCanvas(32, 24)\nlocal font = love.graphics.newFont(12)\nlocal text = love.graphics.newText(font, \"hello\")\nlocal source = love.audio.newSource(love.sound.newSoundData(100, 44100, 16, 1))\nlocal w, h = canvas:getDimensions()\nprint(canvas, w, h, source)\ncanvas:setFilter(\"nearest\", \"linear\")\ncanvas:getWidth()\ncanvas.setFilter(\"nearest\")\ntext:set(\"x\"):getWidth()\nlove.graphics.newCanvas(32,24):getWidth()\nlove.graphics.draw(canvas, 0, 0)\nlove.graphics.draw(text, 0, 0)\nlove.graphics.setColor({1,0,0})\nsource:play()\n",
+    "cli": {
+      "status": 0,
+      "stdout": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua:9:8 warning TL4018: LOVE method `setFilter` should be called with `:` so self is passed: use `canvas:setFilter(...)`\nchecked 1 file(s)\n",
+      "stderr": ""
+    },
+    "responses": [
+      {
+        "kind": "h",
+        "id": "canvas",
+        "position": {
+          "line": 5,
+          "character": 8
+        },
+        "value": {
+          "contents": {
+            "kind": "markdown",
+            "value": "```tua\nlocal canvas: Canvas\n```"
+          },
+          "range": {
+            "end": {
+              "character": 12,
+              "line": 5
+            },
+            "start": {
+              "character": 6,
+              "line": 5
+            }
+          }
+        }
+      },
+      {
+        "kind": "h",
+        "id": "width",
+        "position": {
+          "line": 5,
+          "character": 14
+        },
+        "value": {
+          "contents": {
+            "kind": "markdown",
+            "value": "```tua\nlocal w: number\n```"
+          },
+          "range": {
+            "end": {
+              "character": 15,
+              "line": 5
+            },
+            "start": {
+              "character": 14,
+              "line": 5
+            }
+          }
+        }
+      },
+      {
+        "kind": "h",
+        "id": "height",
+        "position": {
+          "line": 5,
+          "character": 17
+        },
+        "value": {
+          "contents": {
+            "kind": "markdown",
+            "value": "```tua\nlocal h: number\n```"
+          },
+          "range": {
+            "end": {
+              "character": 18,
+              "line": 5
+            },
+            "start": {
+              "character": 17,
+              "line": 5
+            }
+          }
+        }
+      },
+      {
+        "kind": "h",
+        "id": "source",
+        "position": {
+          "line": 5,
+          "character": 22
+        },
+        "value": {
+          "contents": {
+            "kind": "markdown",
+            "value": "```tua\nlocal source: Source\n```"
+          },
+          "range": {
+            "end": {
+              "character": 26,
+              "line": 5
+            },
+            "start": {
+              "character": 20,
+              "line": 5
+            }
+          }
+        }
+      },
+      {
+        "kind": "h",
+        "id": "inherited",
+        "position": {
+          "line": 6,
+          "character": 13
+        },
+        "value": {
+          "contents": {
+            "kind": "markdown",
+            "value": "```tua\nfunction Canvas:setFilter(min: FilterMode, mag?: FilterMode, anisotropy?: number)\n```\n\nSets the filter mode of the Texture.\n\n[Open LOVE wiki](https://love2d.org/wiki/Canvas:setFilter)"
+          },
+          "range": {
+            "end": {
+              "character": 16,
+              "line": 6
+            },
+            "start": {
+              "character": 7,
+              "line": 6
+            }
+          }
+        }
+      },
+      {
+        "kind": "s",
+        "id": "filter",
+        "position": {
+          "line": 6,
+          "character": 28
+        },
+        "value": {
+          "activeParameter": 1,
+          "activeSignature": 0,
+          "signatures": [
+            {
+              "documentation": {
+                "kind": "markdown",
+                "value": "Sets the filter mode of the Texture."
+              },
+              "label": "function Canvas:setFilter(min: FilterMode, mag?: FilterMode, anisotropy?: number)",
+              "parameters": [
+                {
+                  "documentation": {
+                    "kind": "markdown",
+                    "value": "Filter mode to use when minifying the texture (rendering it at a smaller size on-screen than its size in pixels)."
+                  },
+                  "label": "min: FilterMode"
+                },
+                {
+                  "documentation": {
+                    "kind": "markdown",
+                    "value": "Filter mode to use when magnifying the texture (rendering it at a larger size on-screen than its size in pixels).\n\nDefault: `min`."
+                  },
+                  "label": "mag?: FilterMode"
+                },
+                {
+                  "documentation": {
+                    "kind": "markdown",
+                    "value": "Maximum amount of anisotropic filtering to use.\n\nDefault: `1`."
+                  },
+                  "label": "anisotropy?: number"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "kind": "c",
+        "id": "canvas-members",
+        "position": {
+          "line": 7,
+          "character": 7
+        },
+        "value": [
+          {
+            "data": {
+              "kind": "function",
+              "label": "setFilter",
+              "position": {
+                "character": 7,
+                "line": 7
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "setFilter",
+            "kind": 3,
+            "label": "setFilter",
+            "sortText": "0000_setFilter",
+            "textEdit": {
+              "newText": "setFilter",
+              "range": {
+                "end": {
+                  "character": 15,
+                  "line": 7
+                },
+                "start": {
+                  "character": 7,
+                  "line": 7
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "getWidth",
+              "position": {
+                "character": 7,
+                "line": 7
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "getWidth",
+            "kind": 3,
+            "label": "getWidth",
+            "sortText": "0001_getWidth",
+            "textEdit": {
+              "newText": "getWidth",
+              "range": {
+                "end": {
+                  "character": 15,
+                  "line": 7
+                },
+                "start": {
+                  "character": 7,
+                  "line": 7
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "getDimensions",
+              "position": {
+                "character": 7,
+                "line": 7
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "getDimensions",
+            "kind": 3,
+            "label": "getDimensions",
+            "sortText": "0002_getDimensions",
+            "textEdit": {
+              "newText": "getDimensions",
+              "range": {
+                "end": {
+                  "character": 15,
+                  "line": 7
+                },
+                "start": {
+                  "character": 7,
+                  "line": 7
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "type",
+              "position": {
+                "character": 7,
+                "line": 7
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "type",
+            "kind": 3,
+            "label": "type",
+            "sortText": "0003_type",
+            "textEdit": {
+              "newText": "type",
+              "range": {
+                "end": {
+                  "character": 15,
+                  "line": 7
+                },
+                "start": {
+                  "character": 7,
+                  "line": 7
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "clear",
+              "position": {
+                "character": 7,
+                "line": 7
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "clear",
+            "kind": 3,
+            "label": "clear",
+            "sortText": "0004_clear",
+            "textEdit": {
+              "newText": "clear",
+              "range": {
+                "end": {
+                  "character": 15,
+                  "line": 7
+                },
+                "start": {
+                  "character": 7,
+                  "line": 7
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "typeOf",
+              "position": {
+                "character": 7,
+                "line": 7
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "typeOf",
+            "kind": 3,
+            "label": "typeOf",
+            "sortText": "0005_typeOf",
+            "textEdit": {
+              "newText": "typeOf",
+              "range": {
+                "end": {
+                  "character": 15,
+                  "line": 7
+                },
+                "start": {
+                  "character": 7,
+                  "line": 7
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "getMSAA",
+              "position": {
+                "character": 7,
+                "line": 7
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "getMSAA",
+            "kind": 3,
+            "label": "getMSAA",
+            "sortText": "0006_getMSAA",
+            "textEdit": {
+              "newText": "getMSAA",
+              "range": {
+                "end": {
+                  "character": 15,
+                  "line": 7
+                },
+                "start": {
+                  "character": 7,
+                  "line": 7
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "getWrap",
+              "position": {
+                "character": 7,
+                "line": 7
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "getWrap",
+            "kind": 3,
+            "label": "getWrap",
+            "sortText": "0007_getWrap",
+            "textEdit": {
+              "newText": "getWrap",
+              "range": {
+                "end": {
+                  "character": 15,
+                  "line": 7
+                },
+                "start": {
+                  "character": 7,
+                  "line": 7
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "release",
+              "position": {
+                "character": 7,
+                "line": 7
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "release",
+            "kind": 3,
+            "label": "release",
+            "sortText": "0008_release",
+            "textEdit": {
+              "newText": "release",
+              "range": {
+                "end": {
+                  "character": 15,
+                  "line": 7
+                },
+                "start": {
+                  "character": 7,
+                  "line": 7
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "setWrap",
+              "position": {
+                "character": 7,
+                "line": 7
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "setWrap",
+            "kind": 3,
+            "label": "setWrap",
+            "sortText": "0009_setWrap",
+            "textEdit": {
+              "newText": "setWrap",
+              "range": {
+                "end": {
+                  "character": 15,
+                  "line": 7
+                },
+                "start": {
+                  "character": 7,
+                  "line": 7
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "getDepth",
+              "position": {
+                "character": 7,
+                "line": 7
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "getDepth",
+            "kind": 3,
+            "label": "getDepth",
+            "sortText": "0010_getDepth",
+            "textEdit": {
+              "newText": "getDepth",
+              "range": {
+                "end": {
+                  "character": 15,
+                  "line": 7
+                },
+                "start": {
+                  "character": 7,
+                  "line": 7
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "renderTo",
+              "position": {
+                "character": 7,
+                "line": 7
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "renderTo",
+            "kind": 3,
+            "label": "renderTo",
+            "sortText": "0011_renderTo",
+            "textEdit": {
+              "newText": "renderTo",
+              "range": {
+                "end": {
+                  "character": 15,
+                  "line": 7
+                },
+                "start": {
+                  "character": 7,
+                  "line": 7
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "getFilter",
+              "position": {
+                "character": 7,
+                "line": 7
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "getFilter",
+            "kind": 3,
+            "label": "getFilter",
+            "sortText": "0012_getFilter",
+            "textEdit": {
+              "newText": "getFilter",
+              "range": {
+                "end": {
+                  "character": 15,
+                  "line": 7
+                },
+                "start": {
+                  "character": 7,
+                  "line": 7
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "getFormat",
+              "position": {
+                "character": 7,
+                "line": 7
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "getFormat",
+            "kind": 3,
+            "label": "getFormat",
+            "sortText": "0013_getFormat",
+            "textEdit": {
+              "newText": "getFormat",
+              "range": {
+                "end": {
+                  "character": 15,
+                  "line": 7
+                },
+                "start": {
+                  "character": 7,
+                  "line": 7
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "getHeight",
+              "position": {
+                "character": 7,
+                "line": 7
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "getHeight",
+            "kind": 3,
+            "label": "getHeight",
+            "sortText": "0014_getHeight",
+            "textEdit": {
+              "newText": "getHeight",
+              "range": {
+                "end": {
+                  "character": 15,
+                  "line": 7
+                },
+                "start": {
+                  "character": 7,
+                  "line": 7
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "isReadable",
+              "position": {
+                "character": 7,
+                "line": 7
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "isReadable",
+            "kind": 3,
+            "label": "isReadable",
+            "sortText": "0015_isReadable",
+            "textEdit": {
+              "newText": "isReadable",
+              "range": {
+                "end": {
+                  "character": 15,
+                  "line": 7
+                },
+                "start": {
+                  "character": 7,
+                  "line": 7
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "getDPIScale",
+              "position": {
+                "character": 7,
+                "line": 7
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "getDPIScale",
+            "kind": 3,
+            "label": "getDPIScale",
+            "sortText": "0016_getDPIScale",
+            "textEdit": {
+              "newText": "getDPIScale",
+              "range": {
+                "end": {
+                  "character": 15,
+                  "line": 7
+                },
+                "start": {
+                  "character": 7,
+                  "line": 7
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "newImageData",
+              "position": {
+                "character": 7,
+                "line": 7
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "newImageData",
+            "kind": 3,
+            "label": "newImageData",
+            "sortText": "0017_newImageData",
+            "textEdit": {
+              "newText": "newImageData",
+              "range": {
+                "end": {
+                  "character": 15,
+                  "line": 7
+                },
+                "start": {
+                  "character": 7,
+                  "line": 7
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "getLayerCount",
+              "position": {
+                "character": 7,
+                "line": 7
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "getLayerCount",
+            "kind": 3,
+            "label": "getLayerCount",
+            "sortText": "0018_getLayerCount",
+            "textEdit": {
+              "newText": "getLayerCount",
+              "range": {
+                "end": {
+                  "character": 15,
+                  "line": 7
+                },
+                "start": {
+                  "character": 7,
+                  "line": 7
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "getMipmapMode",
+              "position": {
+                "character": 7,
+                "line": 7
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "getMipmapMode",
+            "kind": 3,
+            "label": "getMipmapMode",
+            "sortText": "0019_getMipmapMode",
+            "textEdit": {
+              "newText": "getMipmapMode",
+              "range": {
+                "end": {
+                  "character": 15,
+                  "line": 7
+                },
+                "start": {
+                  "character": 7,
+                  "line": 7
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "getPixelWidth",
+              "position": {
+                "character": 7,
+                "line": 7
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "getPixelWidth",
+            "kind": 3,
+            "label": "getPixelWidth",
+            "sortText": "0020_getPixelWidth",
+            "textEdit": {
+              "newText": "getPixelWidth",
+              "range": {
+                "end": {
+                  "character": 15,
+                  "line": 7
+                },
+                "start": {
+                  "character": 7,
+                  "line": 7
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "getMipmapCount",
+              "position": {
+                "character": 7,
+                "line": 7
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "getMipmapCount",
+            "kind": 3,
+            "label": "getMipmapCount",
+            "sortText": "0021_getMipmapCount",
+            "textEdit": {
+              "newText": "getMipmapCount",
+              "range": {
+                "end": {
+                  "character": 15,
+                  "line": 7
+                },
+                "start": {
+                  "character": 7,
+                  "line": 7
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "getPixelHeight",
+              "position": {
+                "character": 7,
+                "line": 7
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "getPixelHeight",
+            "kind": 3,
+            "label": "getPixelHeight",
+            "sortText": "0022_getPixelHeight",
+            "textEdit": {
+              "newText": "getPixelHeight",
+              "range": {
+                "end": {
+                  "character": 15,
+                  "line": 7
+                },
+                "start": {
+                  "character": 7,
+                  "line": 7
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "getTextureType",
+              "position": {
+                "character": 7,
+                "line": 7
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "getTextureType",
+            "kind": 3,
+            "label": "getTextureType",
+            "sortText": "0023_getTextureType",
+            "textEdit": {
+              "newText": "getTextureType",
+              "range": {
+                "end": {
+                  "character": 15,
+                  "line": 7
+                },
+                "start": {
+                  "character": 7,
+                  "line": 7
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "generateMipmaps",
+              "position": {
+                "character": 7,
+                "line": 7
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "generateMipmaps",
+            "kind": 3,
+            "label": "generateMipmaps",
+            "sortText": "0024_generateMipmaps",
+            "textEdit": {
+              "newText": "generateMipmaps",
+              "range": {
+                "end": {
+                  "character": 15,
+                  "line": 7
+                },
+                "start": {
+                  "character": 7,
+                  "line": 7
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "getMipmapFilter",
+              "position": {
+                "character": 7,
+                "line": 7
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "getMipmapFilter",
+            "kind": 3,
+            "label": "getMipmapFilter",
+            "sortText": "0025_getMipmapFilter",
+            "textEdit": {
+              "newText": "getMipmapFilter",
+              "range": {
+                "end": {
+                  "character": 15,
+                  "line": 7
+                },
+                "start": {
+                  "character": 7,
+                  "line": 7
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "setMipmapFilter",
+              "position": {
+                "character": 7,
+                "line": 7
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "setMipmapFilter",
+            "kind": 3,
+            "label": "setMipmapFilter",
+            "sortText": "0026_setMipmapFilter",
+            "textEdit": {
+              "newText": "setMipmapFilter",
+              "range": {
+                "end": {
+                  "character": 15,
+                  "line": 7
+                },
+                "start": {
+                  "character": 7,
+                  "line": 7
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "getDepthSampleMode",
+              "position": {
+                "character": 7,
+                "line": 7
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "getDepthSampleMode",
+            "kind": 3,
+            "label": "getDepthSampleMode",
+            "sortText": "0027_getDepthSampleMode",
+            "textEdit": {
+              "newText": "getDepthSampleMode",
+              "range": {
+                "end": {
+                  "character": 15,
+                  "line": 7
+                },
+                "start": {
+                  "character": 7,
+                  "line": 7
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "getPixelDimensions",
+              "position": {
+                "character": 7,
+                "line": 7
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "getPixelDimensions",
+            "kind": 3,
+            "label": "getPixelDimensions",
+            "sortText": "0028_getPixelDimensions",
+            "textEdit": {
+              "newText": "getPixelDimensions",
+              "range": {
+                "end": {
+                  "character": 15,
+                  "line": 7
+                },
+                "start": {
+                  "character": 7,
+                  "line": 7
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "setDepthSampleMode",
+              "position": {
+                "character": 7,
+                "line": 7
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "setDepthSampleMode",
+            "kind": 3,
+            "label": "setDepthSampleMode",
+            "sortText": "0029_setDepthSampleMode",
+            "textEdit": {
+              "newText": "setDepthSampleMode",
+              "range": {
+                "end": {
+                  "character": 15,
+                  "line": 7
+                },
+                "start": {
+                  "character": 7,
+                  "line": 7
+                }
+              }
+            }
+          }
+        ]
+      },
+      {
+        "id": "canvas-members-resolved",
+        "value": {
+          "data": {
+            "kind": "function",
+            "label": "setFilter",
+            "position": {
+              "character": 7,
+              "line": 7
+            },
+            "symbolKind": "function",
+            "typeLabel": "function Canvas:setFilter(min: FilterMode, mag?: FilterMode, anisotropy?: number)",
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+          },
+          "detail": "function Canvas:setFilter(min: FilterMode, mag?: FilterMode, anisotropy?: number)",
+          "documentation": {
+            "kind": "markdown",
+            "value": "Sets the filter mode of the Texture.\n\n[Open LOVE wiki](https://love2d.org/wiki/Canvas:setFilter)"
+          },
+          "insertText": "setFilter",
+          "kind": 3,
+          "label": "setFilter",
+          "sortText": "0000_setFilter",
+          "textEdit": {
+            "newText": "setFilter",
+            "range": {
+              "end": {
+                "character": 15,
+                "line": 7
+              },
+              "start": {
+                "character": 7,
+                "line": 7
+              }
+            }
+          }
+        }
+      },
+      {
+        "kind": "c",
+        "id": "dot-rewrite",
+        "position": {
+          "line": 8,
+          "character": 7
+        },
+        "value": [
+          {
+            "data": {
+              "kind": "function",
+              "label": "setFilter",
+              "position": {
+                "character": 7,
+                "line": 8
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "setFilter",
+            "kind": 3,
+            "label": "setFilter",
+            "sortText": "0000_setFilter",
+            "textEdit": {
+              "newText": "setFilter",
+              "range": {
+                "end": {
+                  "character": 16,
+                  "line": 8
+                },
+                "start": {
+                  "character": 7,
+                  "line": 8
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "getWidth",
+              "position": {
+                "character": 7,
+                "line": 8
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "getWidth",
+            "kind": 3,
+            "label": "getWidth",
+            "sortText": "0001_getWidth",
+            "textEdit": {
+              "newText": "getWidth",
+              "range": {
+                "end": {
+                  "character": 16,
+                  "line": 8
+                },
+                "start": {
+                  "character": 7,
+                  "line": 8
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "getDimensions",
+              "position": {
+                "character": 7,
+                "line": 8
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "getDimensions",
+            "kind": 3,
+            "label": "getDimensions",
+            "sortText": "0002_getDimensions",
+            "textEdit": {
+              "newText": "getDimensions",
+              "range": {
+                "end": {
+                  "character": 16,
+                  "line": 8
+                },
+                "start": {
+                  "character": 7,
+                  "line": 8
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "type",
+              "position": {
+                "character": 7,
+                "line": 8
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "type",
+            "kind": 3,
+            "label": "type",
+            "sortText": "0003_type",
+            "textEdit": {
+              "newText": "type",
+              "range": {
+                "end": {
+                  "character": 16,
+                  "line": 8
+                },
+                "start": {
+                  "character": 7,
+                  "line": 8
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "clear",
+              "position": {
+                "character": 7,
+                "line": 8
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "clear",
+            "kind": 3,
+            "label": "clear",
+            "sortText": "0004_clear",
+            "textEdit": {
+              "newText": "clear",
+              "range": {
+                "end": {
+                  "character": 16,
+                  "line": 8
+                },
+                "start": {
+                  "character": 7,
+                  "line": 8
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "typeOf",
+              "position": {
+                "character": 7,
+                "line": 8
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "typeOf",
+            "kind": 3,
+            "label": "typeOf",
+            "sortText": "0005_typeOf",
+            "textEdit": {
+              "newText": "typeOf",
+              "range": {
+                "end": {
+                  "character": 16,
+                  "line": 8
+                },
+                "start": {
+                  "character": 7,
+                  "line": 8
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "getMSAA",
+              "position": {
+                "character": 7,
+                "line": 8
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "getMSAA",
+            "kind": 3,
+            "label": "getMSAA",
+            "sortText": "0006_getMSAA",
+            "textEdit": {
+              "newText": "getMSAA",
+              "range": {
+                "end": {
+                  "character": 16,
+                  "line": 8
+                },
+                "start": {
+                  "character": 7,
+                  "line": 8
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "getWrap",
+              "position": {
+                "character": 7,
+                "line": 8
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "getWrap",
+            "kind": 3,
+            "label": "getWrap",
+            "sortText": "0007_getWrap",
+            "textEdit": {
+              "newText": "getWrap",
+              "range": {
+                "end": {
+                  "character": 16,
+                  "line": 8
+                },
+                "start": {
+                  "character": 7,
+                  "line": 8
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "release",
+              "position": {
+                "character": 7,
+                "line": 8
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "release",
+            "kind": 3,
+            "label": "release",
+            "sortText": "0008_release",
+            "textEdit": {
+              "newText": "release",
+              "range": {
+                "end": {
+                  "character": 16,
+                  "line": 8
+                },
+                "start": {
+                  "character": 7,
+                  "line": 8
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "setWrap",
+              "position": {
+                "character": 7,
+                "line": 8
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "setWrap",
+            "kind": 3,
+            "label": "setWrap",
+            "sortText": "0009_setWrap",
+            "textEdit": {
+              "newText": "setWrap",
+              "range": {
+                "end": {
+                  "character": 16,
+                  "line": 8
+                },
+                "start": {
+                  "character": 7,
+                  "line": 8
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "getDepth",
+              "position": {
+                "character": 7,
+                "line": 8
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "getDepth",
+            "kind": 3,
+            "label": "getDepth",
+            "sortText": "0010_getDepth",
+            "textEdit": {
+              "newText": "getDepth",
+              "range": {
+                "end": {
+                  "character": 16,
+                  "line": 8
+                },
+                "start": {
+                  "character": 7,
+                  "line": 8
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "renderTo",
+              "position": {
+                "character": 7,
+                "line": 8
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "renderTo",
+            "kind": 3,
+            "label": "renderTo",
+            "sortText": "0011_renderTo",
+            "textEdit": {
+              "newText": "renderTo",
+              "range": {
+                "end": {
+                  "character": 16,
+                  "line": 8
+                },
+                "start": {
+                  "character": 7,
+                  "line": 8
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "getFilter",
+              "position": {
+                "character": 7,
+                "line": 8
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "getFilter",
+            "kind": 3,
+            "label": "getFilter",
+            "sortText": "0012_getFilter",
+            "textEdit": {
+              "newText": "getFilter",
+              "range": {
+                "end": {
+                  "character": 16,
+                  "line": 8
+                },
+                "start": {
+                  "character": 7,
+                  "line": 8
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "getFormat",
+              "position": {
+                "character": 7,
+                "line": 8
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "getFormat",
+            "kind": 3,
+            "label": "getFormat",
+            "sortText": "0013_getFormat",
+            "textEdit": {
+              "newText": "getFormat",
+              "range": {
+                "end": {
+                  "character": 16,
+                  "line": 8
+                },
+                "start": {
+                  "character": 7,
+                  "line": 8
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "getHeight",
+              "position": {
+                "character": 7,
+                "line": 8
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "getHeight",
+            "kind": 3,
+            "label": "getHeight",
+            "sortText": "0014_getHeight",
+            "textEdit": {
+              "newText": "getHeight",
+              "range": {
+                "end": {
+                  "character": 16,
+                  "line": 8
+                },
+                "start": {
+                  "character": 7,
+                  "line": 8
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "isReadable",
+              "position": {
+                "character": 7,
+                "line": 8
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "isReadable",
+            "kind": 3,
+            "label": "isReadable",
+            "sortText": "0015_isReadable",
+            "textEdit": {
+              "newText": "isReadable",
+              "range": {
+                "end": {
+                  "character": 16,
+                  "line": 8
+                },
+                "start": {
+                  "character": 7,
+                  "line": 8
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "getDPIScale",
+              "position": {
+                "character": 7,
+                "line": 8
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "getDPIScale",
+            "kind": 3,
+            "label": "getDPIScale",
+            "sortText": "0016_getDPIScale",
+            "textEdit": {
+              "newText": "getDPIScale",
+              "range": {
+                "end": {
+                  "character": 16,
+                  "line": 8
+                },
+                "start": {
+                  "character": 7,
+                  "line": 8
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "newImageData",
+              "position": {
+                "character": 7,
+                "line": 8
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "newImageData",
+            "kind": 3,
+            "label": "newImageData",
+            "sortText": "0017_newImageData",
+            "textEdit": {
+              "newText": "newImageData",
+              "range": {
+                "end": {
+                  "character": 16,
+                  "line": 8
+                },
+                "start": {
+                  "character": 7,
+                  "line": 8
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "getLayerCount",
+              "position": {
+                "character": 7,
+                "line": 8
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "getLayerCount",
+            "kind": 3,
+            "label": "getLayerCount",
+            "sortText": "0018_getLayerCount",
+            "textEdit": {
+              "newText": "getLayerCount",
+              "range": {
+                "end": {
+                  "character": 16,
+                  "line": 8
+                },
+                "start": {
+                  "character": 7,
+                  "line": 8
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "getMipmapMode",
+              "position": {
+                "character": 7,
+                "line": 8
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "getMipmapMode",
+            "kind": 3,
+            "label": "getMipmapMode",
+            "sortText": "0019_getMipmapMode",
+            "textEdit": {
+              "newText": "getMipmapMode",
+              "range": {
+                "end": {
+                  "character": 16,
+                  "line": 8
+                },
+                "start": {
+                  "character": 7,
+                  "line": 8
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "getPixelWidth",
+              "position": {
+                "character": 7,
+                "line": 8
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "getPixelWidth",
+            "kind": 3,
+            "label": "getPixelWidth",
+            "sortText": "0020_getPixelWidth",
+            "textEdit": {
+              "newText": "getPixelWidth",
+              "range": {
+                "end": {
+                  "character": 16,
+                  "line": 8
+                },
+                "start": {
+                  "character": 7,
+                  "line": 8
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "getMipmapCount",
+              "position": {
+                "character": 7,
+                "line": 8
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "getMipmapCount",
+            "kind": 3,
+            "label": "getMipmapCount",
+            "sortText": "0021_getMipmapCount",
+            "textEdit": {
+              "newText": "getMipmapCount",
+              "range": {
+                "end": {
+                  "character": 16,
+                  "line": 8
+                },
+                "start": {
+                  "character": 7,
+                  "line": 8
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "getPixelHeight",
+              "position": {
+                "character": 7,
+                "line": 8
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "getPixelHeight",
+            "kind": 3,
+            "label": "getPixelHeight",
+            "sortText": "0022_getPixelHeight",
+            "textEdit": {
+              "newText": "getPixelHeight",
+              "range": {
+                "end": {
+                  "character": 16,
+                  "line": 8
+                },
+                "start": {
+                  "character": 7,
+                  "line": 8
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "getTextureType",
+              "position": {
+                "character": 7,
+                "line": 8
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "getTextureType",
+            "kind": 3,
+            "label": "getTextureType",
+            "sortText": "0023_getTextureType",
+            "textEdit": {
+              "newText": "getTextureType",
+              "range": {
+                "end": {
+                  "character": 16,
+                  "line": 8
+                },
+                "start": {
+                  "character": 7,
+                  "line": 8
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "generateMipmaps",
+              "position": {
+                "character": 7,
+                "line": 8
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "generateMipmaps",
+            "kind": 3,
+            "label": "generateMipmaps",
+            "sortText": "0024_generateMipmaps",
+            "textEdit": {
+              "newText": "generateMipmaps",
+              "range": {
+                "end": {
+                  "character": 16,
+                  "line": 8
+                },
+                "start": {
+                  "character": 7,
+                  "line": 8
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "getMipmapFilter",
+              "position": {
+                "character": 7,
+                "line": 8
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "getMipmapFilter",
+            "kind": 3,
+            "label": "getMipmapFilter",
+            "sortText": "0025_getMipmapFilter",
+            "textEdit": {
+              "newText": "getMipmapFilter",
+              "range": {
+                "end": {
+                  "character": 16,
+                  "line": 8
+                },
+                "start": {
+                  "character": 7,
+                  "line": 8
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "setMipmapFilter",
+              "position": {
+                "character": 7,
+                "line": 8
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "setMipmapFilter",
+            "kind": 3,
+            "label": "setMipmapFilter",
+            "sortText": "0026_setMipmapFilter",
+            "textEdit": {
+              "newText": "setMipmapFilter",
+              "range": {
+                "end": {
+                  "character": 16,
+                  "line": 8
+                },
+                "start": {
+                  "character": 7,
+                  "line": 8
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "getDepthSampleMode",
+              "position": {
+                "character": 7,
+                "line": 8
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "getDepthSampleMode",
+            "kind": 3,
+            "label": "getDepthSampleMode",
+            "sortText": "0027_getDepthSampleMode",
+            "textEdit": {
+              "newText": "getDepthSampleMode",
+              "range": {
+                "end": {
+                  "character": 16,
+                  "line": 8
+                },
+                "start": {
+                  "character": 7,
+                  "line": 8
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "getPixelDimensions",
+              "position": {
+                "character": 7,
+                "line": 8
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "getPixelDimensions",
+            "kind": 3,
+            "label": "getPixelDimensions",
+            "sortText": "0028_getPixelDimensions",
+            "textEdit": {
+              "newText": "getPixelDimensions",
+              "range": {
+                "end": {
+                  "character": 16,
+                  "line": 8
+                },
+                "start": {
+                  "character": 7,
+                  "line": 8
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "setDepthSampleMode",
+              "position": {
+                "character": 7,
+                "line": 8
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "setDepthSampleMode",
+            "kind": 3,
+            "label": "setDepthSampleMode",
+            "sortText": "0029_setDepthSampleMode",
+            "textEdit": {
+              "newText": "setDepthSampleMode",
+              "range": {
+                "end": {
+                  "character": 16,
+                  "line": 8
+                },
+                "start": {
+                  "character": 7,
+                  "line": 8
+                }
+              }
+            }
+          }
+        ]
+      },
+      {
+        "id": "dot-rewrite-resolved",
+        "value": {
+          "additionalTextEdits": [
+            {
+              "newText": ":",
+              "range": {
+                "end": {
+                  "character": 7,
+                  "line": 8
+                },
+                "start": {
+                  "character": 6,
+                  "line": 8
+                }
+              }
+            }
+          ],
+          "data": {
+            "kind": "function",
+            "label": "setFilter",
+            "position": {
+              "character": 7,
+              "line": 8
+            },
+            "symbolKind": "function",
+            "typeLabel": "function Canvas:setFilter(min: FilterMode, mag?: FilterMode, anisotropy?: number)",
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+          },
+          "detail": "function Canvas:setFilter(min: FilterMode, mag?: FilterMode, anisotropy?: number)",
+          "documentation": {
+            "kind": "markdown",
+            "value": "Sets the filter mode of the Texture.\n\n[Open LOVE wiki](https://love2d.org/wiki/Canvas:setFilter)"
+          },
+          "insertText": "setFilter",
+          "kind": 3,
+          "label": "setFilter",
+          "sortText": "0000_setFilter",
+          "textEdit": {
+            "newText": "setFilter",
+            "range": {
+              "end": {
+                "character": 16,
+                "line": 8
+              },
+              "start": {
+                "character": 7,
+                "line": 8
+              }
+            }
+          }
+        }
+      },
+      {
+        "kind": "c",
+        "id": "void-members",
+        "position": {
+          "line": 9,
+          "character": 14
+        },
+        "value": []
+      },
+      {
+        "kind": "s",
+        "id": "void-signature",
+        "position": {
+          "line": 9,
+          "character": 23
+        },
+        "value": null
+      },
+      {
+        "kind": "d",
+        "id": "chain-definition",
+        "position": {
+          "line": 10,
+          "character": 36
+        },
+        "value": {
+          "range": {
+            "end": {
+              "character": 54,
+              "line": 4
+            },
+            "start": {
+              "character": 46,
+              "line": 4
+            }
+          },
+          "uri": "tua:/builtins/Canvas.getWidth.tua"
+        }
+      },
+      {
+        "kind": "h",
+        "id": "draw-doc",
+        "position": {
+          "line": 11,
+          "character": 16
+        },
+        "value": {
+          "contents": {
+            "kind": "markdown",
+            "value": "```tua\nfunction love.graphics.draw(drawable: Drawable, x?: number, y?: number, r?: number, sx?: number, sy?: number, ox?: number, oy?: number, kx?: number, ky?: number)\n```\n\nDraws a Drawable object (an Image, Canvas, SpriteBatch, ParticleSystem, Mesh, Text object, or Video) on the screen with optional rotation, scaling and shearing.\n\nObjects are drawn relative to their local coordinate system. The origin is by default located at the top left corner of Image and Canvas. All scaling, shearing, and rotation arguments transform the object relative to that point. Also, the position of the origin can be specified on the screen coordinate system.\n\nIt's possible to rotate an object about its center by offsetting the origin to the center. Angles must be given in radians for rotation. One can also use a negative scaling factor to flip about its centerline. \n\nNote that the offsets are applied before rotation, scaling, or shearing; scaling and shearing are applied before rotation.\n\nThe right and bottom edges of the object are shifted at an angle defined by the shearing factors.\n\nWhen using the default shader anything drawn with this function will be tinted according to the currently selected color.  Set it to pure white to preserve the object's original colors.\n\n[Open LOVE wiki](https://love2d.org/wiki/love.graphics.draw)"
+          },
+          "range": {
+            "end": {
+              "character": 18,
+              "line": 11
+            },
+            "start": {
+              "character": 14,
+              "line": 11
+            }
+          }
+        }
+      },
+      {
+        "kind": "s",
+        "id": "draw-canvas",
+        "position": {
+          "line": 11,
+          "character": 27
+        },
+        "value": {
+          "activeParameter": 1,
+          "activeSignature": 0,
+          "signatures": [
+            {
+              "documentation": {
+                "kind": "markdown",
+                "value": "Draws a Drawable object (an Image, Canvas, SpriteBatch, ParticleSystem, Mesh, Text object, or Video) on the screen with optional rotation, scaling and shearing.\n\nObjects are drawn relative to their local coordinate system. The origin is by default located at the top left corner of Image and Canvas. All scaling, shearing, and rotation arguments transform the object relative to that point. Also, the position of the origin can be specified on the screen coordinate system.\n\nIt's possible to rotate an object about its center by offsetting the origin to the center. Angles must be given in radians for rotation. One can also use a negative scaling factor to flip about its centerline. \n\nNote that the offsets are applied before rotation, scaling, or shearing; scaling and shearing are applied before rotation.\n\nThe right and bottom edges of the object are shifted at an angle defined by the shearing factors.\n\nWhen using the default shader anything drawn with this function will be tinted according to the currently selected color.  Set it to pure white to preserve the object's original colors."
+              },
+              "label": "function love.graphics.draw(drawable: Drawable, x?: number, y?: number, r?: number, sx?: number, sy?: number, ox?: number, oy?: number, kx?: number, ky?: number)",
+              "parameters": [
+                {
+                  "documentation": {
+                    "kind": "markdown",
+                    "value": "A drawable object."
+                  },
+                  "label": "drawable: Drawable"
+                },
+                {
+                  "documentation": {
+                    "kind": "markdown",
+                    "value": "The position to draw the object (x-axis).\n\nDefault: `0`."
+                  },
+                  "label": "x?: number"
+                },
+                {
+                  "documentation": {
+                    "kind": "markdown",
+                    "value": "The position to draw the object (y-axis).\n\nDefault: `0`."
+                  },
+                  "label": "y?: number"
+                },
+                {
+                  "documentation": {
+                    "kind": "markdown",
+                    "value": "Orientation (radians).\n\nDefault: `0`."
+                  },
+                  "label": "r?: number"
+                },
+                {
+                  "documentation": {
+                    "kind": "markdown",
+                    "value": "Scale factor (x-axis).\n\nDefault: `1`."
+                  },
+                  "label": "sx?: number"
+                },
+                {
+                  "documentation": {
+                    "kind": "markdown",
+                    "value": "Scale factor (y-axis).\n\nDefault: `sx`."
+                  },
+                  "label": "sy?: number"
+                },
+                {
+                  "documentation": {
+                    "kind": "markdown",
+                    "value": "Origin offset (x-axis).\n\nDefault: `0`."
+                  },
+                  "label": "ox?: number"
+                },
+                {
+                  "documentation": {
+                    "kind": "markdown",
+                    "value": "Origin offset (y-axis).\n\nDefault: `0`."
+                  },
+                  "label": "oy?: number"
+                },
+                {
+                  "documentation": {
+                    "kind": "markdown",
+                    "value": "Shearing factor (x-axis).\n\nDefault: `0`."
+                  },
+                  "label": "kx?: number"
+                },
+                {
+                  "documentation": {
+                    "kind": "markdown",
+                    "value": "Shearing factor (y-axis).\n\nDefault: `0`."
+                  },
+                  "label": "ky?: number"
+                }
+              ]
+            },
+            {
+              "documentation": {
+                "kind": "markdown",
+                "value": "Draws a Drawable object (an Image, Canvas, SpriteBatch, ParticleSystem, Mesh, Text object, or Video) on the screen with optional rotation, scaling and shearing.\n\nObjects are drawn relative to their local coordinate system. The origin is by default located at the top left corner of Image and Canvas. All scaling, shearing, and rotation arguments transform the object relative to that point. Also, the position of the origin can be specified on the screen coordinate system.\n\nIt's possible to rotate an object about its center by offsetting the origin to the center. Angles must be given in radians for rotation. One can also use a negative scaling factor to flip about its centerline. \n\nNote that the offsets are applied before rotation, scaling, or shearing; scaling and shearing are applied before rotation.\n\nThe right and bottom edges of the object are shifted at an angle defined by the shearing factors.\n\nWhen using the default shader anything drawn with this function will be tinted according to the currently selected color.  Set it to pure white to preserve the object's original colors."
+              },
+              "label": "function love.graphics.draw(texture: Texture, quad: Quad, x: number, y: number, r?: number, sx?: number, sy?: number, ox?: number, oy?: number, kx?: number, ky?: number)",
+              "parameters": [
+                {
+                  "documentation": {
+                    "kind": "markdown",
+                    "value": "A Texture (Image or Canvas) to texture the Quad with."
+                  },
+                  "label": "texture: Texture"
+                },
+                {
+                  "documentation": {
+                    "kind": "markdown",
+                    "value": "The Quad to draw on screen."
+                  },
+                  "label": "quad: Quad"
+                },
+                {
+                  "documentation": {
+                    "kind": "markdown",
+                    "value": "The position to draw the object (x-axis)."
+                  },
+                  "label": "x: number"
+                },
+                {
+                  "documentation": {
+                    "kind": "markdown",
+                    "value": "The position to draw the object (y-axis)."
+                  },
+                  "label": "y: number"
+                },
+                {
+                  "documentation": {
+                    "kind": "markdown",
+                    "value": "Orientation (radians).\n\nDefault: `0`."
+                  },
+                  "label": "r?: number"
+                },
+                {
+                  "documentation": {
+                    "kind": "markdown",
+                    "value": "Scale factor (x-axis).\n\nDefault: `1`."
+                  },
+                  "label": "sx?: number"
+                },
+                {
+                  "documentation": {
+                    "kind": "markdown",
+                    "value": "Scale factor (y-axis).\n\nDefault: `sx`."
+                  },
+                  "label": "sy?: number"
+                },
+                {
+                  "documentation": {
+                    "kind": "markdown",
+                    "value": "Origin offset (x-axis).\n\nDefault: `0`."
+                  },
+                  "label": "ox?: number"
+                },
+                {
+                  "documentation": {
+                    "kind": "markdown",
+                    "value": "Origin offset (y-axis).\n\nDefault: `0`."
+                  },
+                  "label": "oy?: number"
+                },
+                {
+                  "documentation": {
+                    "kind": "markdown",
+                    "value": "Shearing factor (x-axis).\n\nDefault: `0`."
+                  },
+                  "label": "kx?: number"
+                },
+                {
+                  "documentation": {
+                    "kind": "markdown",
+                    "value": "Shearing factor (y-axis).\n\nDefault: `0`."
+                  },
+                  "label": "ky?: number"
+                }
+              ]
+            },
+            {
+              "documentation": {
+                "kind": "markdown",
+                "value": "Draws a Drawable object (an Image, Canvas, SpriteBatch, ParticleSystem, Mesh, Text object, or Video) on the screen with optional rotation, scaling and shearing.\n\nObjects are drawn relative to their local coordinate system. The origin is by default located at the top left corner of Image and Canvas. All scaling, shearing, and rotation arguments transform the object relative to that point. Also, the position of the origin can be specified on the screen coordinate system.\n\nIt's possible to rotate an object about its center by offsetting the origin to the center. Angles must be given in radians for rotation. One can also use a negative scaling factor to flip about its centerline. \n\nNote that the offsets are applied before rotation, scaling, or shearing; scaling and shearing are applied before rotation.\n\nThe right and bottom edges of the object are shifted at an angle defined by the shearing factors.\n\nWhen using the default shader anything drawn with this function will be tinted according to the currently selected color.  Set it to pure white to preserve the object's original colors."
+              },
+              "label": "function love.graphics.draw(drawable: Drawable, transform: Transform)",
+              "parameters": [
+                {
+                  "documentation": {
+                    "kind": "markdown",
+                    "value": "A drawable object."
+                  },
+                  "label": "drawable: Drawable"
+                },
+                {
+                  "documentation": {
+                    "kind": "markdown",
+                    "value": "Transformation object."
+                  },
+                  "label": "transform: Transform"
+                }
+              ]
+            },
+            {
+              "documentation": {
+                "kind": "markdown",
+                "value": "Draws a Drawable object (an Image, Canvas, SpriteBatch, ParticleSystem, Mesh, Text object, or Video) on the screen with optional rotation, scaling and shearing.\n\nObjects are drawn relative to their local coordinate system. The origin is by default located at the top left corner of Image and Canvas. All scaling, shearing, and rotation arguments transform the object relative to that point. Also, the position of the origin can be specified on the screen coordinate system.\n\nIt's possible to rotate an object about its center by offsetting the origin to the center. Angles must be given in radians for rotation. One can also use a negative scaling factor to flip about its centerline. \n\nNote that the offsets are applied before rotation, scaling, or shearing; scaling and shearing are applied before rotation.\n\nThe right and bottom edges of the object are shifted at an angle defined by the shearing factors.\n\nWhen using the default shader anything drawn with this function will be tinted according to the currently selected color.  Set it to pure white to preserve the object's original colors."
+              },
+              "label": "function love.graphics.draw(texture: Texture, quad: Quad, transform: Transform)",
+              "parameters": [
+                {
+                  "documentation": {
+                    "kind": "markdown",
+                    "value": "A Texture (Image or Canvas) to texture the Quad with."
+                  },
+                  "label": "texture: Texture"
+                },
+                {
+                  "documentation": {
+                    "kind": "markdown",
+                    "value": "The Quad to draw on screen."
+                  },
+                  "label": "quad: Quad"
+                },
+                {
+                  "documentation": {
+                    "kind": "markdown",
+                    "value": "Transformation object."
+                  },
+                  "label": "transform: Transform"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "kind": "s",
+        "id": "draw-text",
+        "position": {
+          "line": 12,
+          "character": 25
+        },
+        "value": {
+          "activeParameter": 1,
+          "activeSignature": 0,
+          "signatures": [
+            {
+              "documentation": {
+                "kind": "markdown",
+                "value": "Draws a Drawable object (an Image, Canvas, SpriteBatch, ParticleSystem, Mesh, Text object, or Video) on the screen with optional rotation, scaling and shearing.\n\nObjects are drawn relative to their local coordinate system. The origin is by default located at the top left corner of Image and Canvas. All scaling, shearing, and rotation arguments transform the object relative to that point. Also, the position of the origin can be specified on the screen coordinate system.\n\nIt's possible to rotate an object about its center by offsetting the origin to the center. Angles must be given in radians for rotation. One can also use a negative scaling factor to flip about its centerline. \n\nNote that the offsets are applied before rotation, scaling, or shearing; scaling and shearing are applied before rotation.\n\nThe right and bottom edges of the object are shifted at an angle defined by the shearing factors.\n\nWhen using the default shader anything drawn with this function will be tinted according to the currently selected color.  Set it to pure white to preserve the object's original colors."
+              },
+              "label": "function love.graphics.draw(drawable: Drawable, x?: number, y?: number, r?: number, sx?: number, sy?: number, ox?: number, oy?: number, kx?: number, ky?: number)",
+              "parameters": [
+                {
+                  "documentation": {
+                    "kind": "markdown",
+                    "value": "A drawable object."
+                  },
+                  "label": "drawable: Drawable"
+                },
+                {
+                  "documentation": {
+                    "kind": "markdown",
+                    "value": "The position to draw the object (x-axis).\n\nDefault: `0`."
+                  },
+                  "label": "x?: number"
+                },
+                {
+                  "documentation": {
+                    "kind": "markdown",
+                    "value": "The position to draw the object (y-axis).\n\nDefault: `0`."
+                  },
+                  "label": "y?: number"
+                },
+                {
+                  "documentation": {
+                    "kind": "markdown",
+                    "value": "Orientation (radians).\n\nDefault: `0`."
+                  },
+                  "label": "r?: number"
+                },
+                {
+                  "documentation": {
+                    "kind": "markdown",
+                    "value": "Scale factor (x-axis).\n\nDefault: `1`."
+                  },
+                  "label": "sx?: number"
+                },
+                {
+                  "documentation": {
+                    "kind": "markdown",
+                    "value": "Scale factor (y-axis).\n\nDefault: `sx`."
+                  },
+                  "label": "sy?: number"
+                },
+                {
+                  "documentation": {
+                    "kind": "markdown",
+                    "value": "Origin offset (x-axis).\n\nDefault: `0`."
+                  },
+                  "label": "ox?: number"
+                },
+                {
+                  "documentation": {
+                    "kind": "markdown",
+                    "value": "Origin offset (y-axis).\n\nDefault: `0`."
+                  },
+                  "label": "oy?: number"
+                },
+                {
+                  "documentation": {
+                    "kind": "markdown",
+                    "value": "Shearing factor (x-axis).\n\nDefault: `0`."
+                  },
+                  "label": "kx?: number"
+                },
+                {
+                  "documentation": {
+                    "kind": "markdown",
+                    "value": "Shearing factor (y-axis).\n\nDefault: `0`."
+                  },
+                  "label": "ky?: number"
+                }
+              ]
+            },
+            {
+              "documentation": {
+                "kind": "markdown",
+                "value": "Draws a Drawable object (an Image, Canvas, SpriteBatch, ParticleSystem, Mesh, Text object, or Video) on the screen with optional rotation, scaling and shearing.\n\nObjects are drawn relative to their local coordinate system. The origin is by default located at the top left corner of Image and Canvas. All scaling, shearing, and rotation arguments transform the object relative to that point. Also, the position of the origin can be specified on the screen coordinate system.\n\nIt's possible to rotate an object about its center by offsetting the origin to the center. Angles must be given in radians for rotation. One can also use a negative scaling factor to flip about its centerline. \n\nNote that the offsets are applied before rotation, scaling, or shearing; scaling and shearing are applied before rotation.\n\nThe right and bottom edges of the object are shifted at an angle defined by the shearing factors.\n\nWhen using the default shader anything drawn with this function will be tinted according to the currently selected color.  Set it to pure white to preserve the object's original colors."
+              },
+              "label": "function love.graphics.draw(texture: Texture, quad: Quad, x: number, y: number, r?: number, sx?: number, sy?: number, ox?: number, oy?: number, kx?: number, ky?: number)",
+              "parameters": [
+                {
+                  "documentation": {
+                    "kind": "markdown",
+                    "value": "A Texture (Image or Canvas) to texture the Quad with."
+                  },
+                  "label": "texture: Texture"
+                },
+                {
+                  "documentation": {
+                    "kind": "markdown",
+                    "value": "The Quad to draw on screen."
+                  },
+                  "label": "quad: Quad"
+                },
+                {
+                  "documentation": {
+                    "kind": "markdown",
+                    "value": "The position to draw the object (x-axis)."
+                  },
+                  "label": "x: number"
+                },
+                {
+                  "documentation": {
+                    "kind": "markdown",
+                    "value": "The position to draw the object (y-axis)."
+                  },
+                  "label": "y: number"
+                },
+                {
+                  "documentation": {
+                    "kind": "markdown",
+                    "value": "Orientation (radians).\n\nDefault: `0`."
+                  },
+                  "label": "r?: number"
+                },
+                {
+                  "documentation": {
+                    "kind": "markdown",
+                    "value": "Scale factor (x-axis).\n\nDefault: `1`."
+                  },
+                  "label": "sx?: number"
+                },
+                {
+                  "documentation": {
+                    "kind": "markdown",
+                    "value": "Scale factor (y-axis).\n\nDefault: `sx`."
+                  },
+                  "label": "sy?: number"
+                },
+                {
+                  "documentation": {
+                    "kind": "markdown",
+                    "value": "Origin offset (x-axis).\n\nDefault: `0`."
+                  },
+                  "label": "ox?: number"
+                },
+                {
+                  "documentation": {
+                    "kind": "markdown",
+                    "value": "Origin offset (y-axis).\n\nDefault: `0`."
+                  },
+                  "label": "oy?: number"
+                },
+                {
+                  "documentation": {
+                    "kind": "markdown",
+                    "value": "Shearing factor (x-axis).\n\nDefault: `0`."
+                  },
+                  "label": "kx?: number"
+                },
+                {
+                  "documentation": {
+                    "kind": "markdown",
+                    "value": "Shearing factor (y-axis).\n\nDefault: `0`."
+                  },
+                  "label": "ky?: number"
+                }
+              ]
+            },
+            {
+              "documentation": {
+                "kind": "markdown",
+                "value": "Draws a Drawable object (an Image, Canvas, SpriteBatch, ParticleSystem, Mesh, Text object, or Video) on the screen with optional rotation, scaling and shearing.\n\nObjects are drawn relative to their local coordinate system. The origin is by default located at the top left corner of Image and Canvas. All scaling, shearing, and rotation arguments transform the object relative to that point. Also, the position of the origin can be specified on the screen coordinate system.\n\nIt's possible to rotate an object about its center by offsetting the origin to the center. Angles must be given in radians for rotation. One can also use a negative scaling factor to flip about its centerline. \n\nNote that the offsets are applied before rotation, scaling, or shearing; scaling and shearing are applied before rotation.\n\nThe right and bottom edges of the object are shifted at an angle defined by the shearing factors.\n\nWhen using the default shader anything drawn with this function will be tinted according to the currently selected color.  Set it to pure white to preserve the object's original colors."
+              },
+              "label": "function love.graphics.draw(drawable: Drawable, transform: Transform)",
+              "parameters": [
+                {
+                  "documentation": {
+                    "kind": "markdown",
+                    "value": "A drawable object."
+                  },
+                  "label": "drawable: Drawable"
+                },
+                {
+                  "documentation": {
+                    "kind": "markdown",
+                    "value": "Transformation object."
+                  },
+                  "label": "transform: Transform"
+                }
+              ]
+            },
+            {
+              "documentation": {
+                "kind": "markdown",
+                "value": "Draws a Drawable object (an Image, Canvas, SpriteBatch, ParticleSystem, Mesh, Text object, or Video) on the screen with optional rotation, scaling and shearing.\n\nObjects are drawn relative to their local coordinate system. The origin is by default located at the top left corner of Image and Canvas. All scaling, shearing, and rotation arguments transform the object relative to that point. Also, the position of the origin can be specified on the screen coordinate system.\n\nIt's possible to rotate an object about its center by offsetting the origin to the center. Angles must be given in radians for rotation. One can also use a negative scaling factor to flip about its centerline. \n\nNote that the offsets are applied before rotation, scaling, or shearing; scaling and shearing are applied before rotation.\n\nThe right and bottom edges of the object are shifted at an angle defined by the shearing factors.\n\nWhen using the default shader anything drawn with this function will be tinted according to the currently selected color.  Set it to pure white to preserve the object's original colors."
+              },
+              "label": "function love.graphics.draw(texture: Texture, quad: Quad, transform: Transform)",
+              "parameters": [
+                {
+                  "documentation": {
+                    "kind": "markdown",
+                    "value": "A Texture (Image or Canvas) to texture the Quad with."
+                  },
+                  "label": "texture: Texture"
+                },
+                {
+                  "documentation": {
+                    "kind": "markdown",
+                    "value": "The Quad to draw on screen."
+                  },
+                  "label": "quad: Quad"
+                },
+                {
+                  "documentation": {
+                    "kind": "markdown",
+                    "value": "Transformation object."
+                  },
+                  "label": "transform: Transform"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "kind": "s",
+        "id": "color-table",
+        "position": {
+          "line": 13,
+          "character": 23
+        },
+        "value": {
+          "activeParameter": 0,
+          "activeSignature": 0,
+          "signatures": [
+            {
+              "documentation": {
+                "kind": "markdown",
+                "value": "Sets the color used for drawing.\n\nIn versions prior to 11.0, color component values were within the range of 0 to 255 instead of 0 to 1."
+              },
+              "label": "function love.graphics.setColor(red: number, green: number, blue: number, alpha?: number)",
+              "parameters": [
+                {
+                  "documentation": {
+                    "kind": "markdown",
+                    "value": "The amount of red."
+                  },
+                  "label": "red: number"
+                },
+                {
+                  "documentation": {
+                    "kind": "markdown",
+                    "value": "The amount of green."
+                  },
+                  "label": "green: number"
+                },
+                {
+                  "documentation": {
+                    "kind": "markdown",
+                    "value": "The amount of blue."
+                  },
+                  "label": "blue: number"
+                },
+                {
+                  "documentation": {
+                    "kind": "markdown",
+                    "value": "The amount of alpha.  The alpha value will be applied to all subsequent draw operations, even the drawing of an image.\n\nDefault: `1`."
+                  },
+                  "label": "alpha?: number"
+                }
+              ]
+            },
+            {
+              "documentation": {
+                "kind": "markdown",
+                "value": "Sets the color used for drawing.\n\nIn versions prior to 11.0, color component values were within the range of 0 to 255 instead of 0 to 1."
+              },
+              "label": "function love.graphics.setColor(rgba: table)",
+              "parameters": [
+                {
+                  "documentation": {
+                    "kind": "markdown",
+                    "value": "A numerical indexed table with the red, green, blue and alpha values as numbers. The alpha is optional and defaults to 1 if it is left out."
+                  },
+                  "label": "rgba: table"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "kind": "c",
+        "id": "source-members",
+        "position": {
+          "line": 14,
+          "character": 7
+        },
+        "value": [
+          {
+            "data": {
+              "kind": "function",
+              "label": "play",
+              "position": {
+                "character": 7,
+                "line": 14
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "play",
+            "kind": 3,
+            "label": "play",
+            "sortText": "0000_play",
+            "textEdit": {
+              "newText": "play",
+              "range": {
+                "end": {
+                  "character": 11,
+                  "line": 14
+                },
+                "start": {
+                  "character": 7,
+                  "line": 14
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "setFilter",
+              "position": {
+                "character": 7,
+                "line": 14
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "setFilter",
+            "kind": 3,
+            "label": "setFilter",
+            "sortText": "0001_setFilter",
+            "textEdit": {
+              "newText": "setFilter",
+              "range": {
+                "end": {
+                  "character": 11,
+                  "line": 14
+                },
+                "start": {
+                  "character": 7,
+                  "line": 14
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "seek",
+              "position": {
+                "character": 7,
+                "line": 14
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "seek",
+            "kind": 3,
+            "label": "seek",
+            "sortText": "0002_seek",
+            "textEdit": {
+              "newText": "seek",
+              "range": {
+                "end": {
+                  "character": 11,
+                  "line": 14
+                },
+                "start": {
+                  "character": 7,
+                  "line": 14
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "stop",
+              "position": {
+                "character": 7,
+                "line": 14
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "stop",
+            "kind": 3,
+            "label": "stop",
+            "sortText": "0003_stop",
+            "textEdit": {
+              "newText": "stop",
+              "range": {
+                "end": {
+                  "character": 11,
+                  "line": 14
+                },
+                "start": {
+                  "character": 7,
+                  "line": 14
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "tell",
+              "position": {
+                "character": 7,
+                "line": 14
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "tell",
+            "kind": 3,
+            "label": "tell",
+            "sortText": "0004_tell",
+            "textEdit": {
+              "newText": "tell",
+              "range": {
+                "end": {
+                  "character": 11,
+                  "line": 14
+                },
+                "start": {
+                  "character": 7,
+                  "line": 14
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "type",
+              "position": {
+                "character": 7,
+                "line": 14
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "type",
+            "kind": 3,
+            "label": "type",
+            "sortText": "0005_type",
+            "textEdit": {
+              "newText": "type",
+              "range": {
+                "end": {
+                  "character": 11,
+                  "line": 14
+                },
+                "start": {
+                  "character": 7,
+                  "line": 14
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "clone",
+              "position": {
+                "character": 7,
+                "line": 14
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "clone",
+            "kind": 3,
+            "label": "clone",
+            "sortText": "0006_clone",
+            "textEdit": {
+              "newText": "clone",
+              "range": {
+                "end": {
+                  "character": 11,
+                  "line": 14
+                },
+                "start": {
+                  "character": 7,
+                  "line": 14
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "pause",
+              "position": {
+                "character": 7,
+                "line": 14
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "pause",
+            "kind": 3,
+            "label": "pause",
+            "sortText": "0007_pause",
+            "textEdit": {
+              "newText": "pause",
+              "range": {
+                "end": {
+                  "character": 11,
+                  "line": 14
+                },
+                "start": {
+                  "character": 7,
+                  "line": 14
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "queue",
+              "position": {
+                "character": 7,
+                "line": 14
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "queue",
+            "kind": 3,
+            "label": "queue",
+            "sortText": "0008_queue",
+            "textEdit": {
+              "newText": "queue",
+              "range": {
+                "end": {
+                  "character": 11,
+                  "line": 14
+                },
+                "start": {
+                  "character": 7,
+                  "line": 14
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "typeOf",
+              "position": {
+                "character": 7,
+                "line": 14
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "typeOf",
+            "kind": 3,
+            "label": "typeOf",
+            "sortText": "0009_typeOf",
+            "textEdit": {
+              "newText": "typeOf",
+              "range": {
+                "end": {
+                  "character": 11,
+                  "line": 14
+                },
+                "start": {
+                  "character": 7,
+                  "line": 14
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "getCone",
+              "position": {
+                "character": 7,
+                "line": 14
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "getCone",
+            "kind": 3,
+            "label": "getCone",
+            "sortText": "0010_getCone",
+            "textEdit": {
+              "newText": "getCone",
+              "range": {
+                "end": {
+                  "character": 11,
+                  "line": 14
+                },
+                "start": {
+                  "character": 7,
+                  "line": 14
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "getType",
+              "position": {
+                "character": 7,
+                "line": 14
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "getType",
+            "kind": 3,
+            "label": "getType",
+            "sortText": "0011_getType",
+            "textEdit": {
+              "newText": "getType",
+              "range": {
+                "end": {
+                  "character": 11,
+                  "line": 14
+                },
+                "start": {
+                  "character": 7,
+                  "line": 14
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "release",
+              "position": {
+                "character": 7,
+                "line": 14
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "release",
+            "kind": 3,
+            "label": "release",
+            "sortText": "0012_release",
+            "textEdit": {
+              "newText": "release",
+              "range": {
+                "end": {
+                  "character": 11,
+                  "line": 14
+                },
+                "start": {
+                  "character": 7,
+                  "line": 14
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "setCone",
+              "position": {
+                "character": 7,
+                "line": 14
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "setCone",
+            "kind": 3,
+            "label": "setCone",
+            "sortText": "0013_setCone",
+            "textEdit": {
+              "newText": "setCone",
+              "range": {
+                "end": {
+                  "character": 11,
+                  "line": 14
+                },
+                "start": {
+                  "character": 7,
+                  "line": 14
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "getPitch",
+              "position": {
+                "character": 7,
+                "line": 14
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "getPitch",
+            "kind": 3,
+            "label": "getPitch",
+            "sortText": "0014_getPitch",
+            "textEdit": {
+              "newText": "getPitch",
+              "range": {
+                "end": {
+                  "character": 11,
+                  "line": 14
+                },
+                "start": {
+                  "character": 7,
+                  "line": 14
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "isPaused",
+              "position": {
+                "character": 7,
+                "line": 14
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "isPaused",
+            "kind": 3,
+            "label": "isPaused",
+            "sortText": "0015_isPaused",
+            "textEdit": {
+              "newText": "isPaused",
+              "range": {
+                "end": {
+                  "character": 11,
+                  "line": 14
+                },
+                "start": {
+                  "character": 7,
+                  "line": 14
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "setPitch",
+              "position": {
+                "character": 7,
+                "line": 14
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "setPitch",
+            "kind": 3,
+            "label": "setPitch",
+            "sortText": "0016_setPitch",
+            "textEdit": {
+              "newText": "setPitch",
+              "range": {
+                "end": {
+                  "character": 11,
+                  "line": 14
+                },
+                "start": {
+                  "character": 7,
+                  "line": 14
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "getEffect",
+              "position": {
+                "character": 7,
+                "line": 14
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "getEffect",
+            "kind": 3,
+            "label": "getEffect",
+            "sortText": "0017_getEffect",
+            "textEdit": {
+              "newText": "getEffect",
+              "range": {
+                "end": {
+                  "character": 11,
+                  "line": 14
+                },
+                "start": {
+                  "character": 7,
+                  "line": 14
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "getFilter",
+              "position": {
+                "character": 7,
+                "line": 14
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "getFilter",
+            "kind": 3,
+            "label": "getFilter",
+            "sortText": "0018_getFilter",
+            "textEdit": {
+              "newText": "getFilter",
+              "range": {
+                "end": {
+                  "character": 11,
+                  "line": 14
+                },
+                "start": {
+                  "character": 7,
+                  "line": 14
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "getVolume",
+              "position": {
+                "character": 7,
+                "line": 14
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "getVolume",
+            "kind": 3,
+            "label": "getVolume",
+            "sortText": "0019_getVolume",
+            "textEdit": {
+              "newText": "getVolume",
+              "range": {
+                "end": {
+                  "character": 11,
+                  "line": 14
+                },
+                "start": {
+                  "character": 7,
+                  "line": 14
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "isLooping",
+              "position": {
+                "character": 7,
+                "line": 14
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "isLooping",
+            "kind": 3,
+            "label": "isLooping",
+            "sortText": "0020_isLooping",
+            "textEdit": {
+              "newText": "isLooping",
+              "range": {
+                "end": {
+                  "character": 11,
+                  "line": 14
+                },
+                "start": {
+                  "character": 7,
+                  "line": 14
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "isPlaying",
+              "position": {
+                "character": 7,
+                "line": 14
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "isPlaying",
+            "kind": 3,
+            "label": "isPlaying",
+            "sortText": "0021_isPlaying",
+            "textEdit": {
+              "newText": "isPlaying",
+              "range": {
+                "end": {
+                  "character": 11,
+                  "line": 14
+                },
+                "start": {
+                  "character": 7,
+                  "line": 14
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "setEffect",
+              "position": {
+                "character": 7,
+                "line": 14
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "setEffect",
+            "kind": 3,
+            "label": "setEffect",
+            "sortText": "0022_setEffect",
+            "textEdit": {
+              "newText": "setEffect",
+              "range": {
+                "end": {
+                  "character": 11,
+                  "line": 14
+                },
+                "start": {
+                  "character": 7,
+                  "line": 14
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "setVolume",
+              "position": {
+                "character": 7,
+                "line": 14
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "setVolume",
+            "kind": 3,
+            "label": "setVolume",
+            "sortText": "0023_setVolume",
+            "textEdit": {
+              "newText": "setVolume",
+              "range": {
+                "end": {
+                  "character": 11,
+                  "line": 14
+                },
+                "start": {
+                  "character": 7,
+                  "line": 14
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "getLooping",
+              "position": {
+                "character": 7,
+                "line": 14
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "getLooping",
+            "kind": 3,
+            "label": "getLooping",
+            "sortText": "0024_getLooping",
+            "textEdit": {
+              "newText": "getLooping",
+              "range": {
+                "end": {
+                  "character": 11,
+                  "line": 14
+                },
+                "start": {
+                  "character": 7,
+                  "line": 14
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "getRolloff",
+              "position": {
+                "character": 7,
+                "line": 14
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "getRolloff",
+            "kind": 3,
+            "label": "getRolloff",
+            "sortText": "0025_getRolloff",
+            "textEdit": {
+              "newText": "getRolloff",
+              "range": {
+                "end": {
+                  "character": 11,
+                  "line": 14
+                },
+                "start": {
+                  "character": 7,
+                  "line": 14
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "isRelative",
+              "position": {
+                "character": 7,
+                "line": 14
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "isRelative",
+            "kind": 3,
+            "label": "isRelative",
+            "sortText": "0026_isRelative",
+            "textEdit": {
+              "newText": "isRelative",
+              "range": {
+                "end": {
+                  "character": 11,
+                  "line": 14
+                },
+                "start": {
+                  "character": 7,
+                  "line": 14
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "setLooping",
+              "position": {
+                "character": 7,
+                "line": 14
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "setLooping",
+            "kind": 3,
+            "label": "setLooping",
+            "sortText": "0027_setLooping",
+            "textEdit": {
+              "newText": "setLooping",
+              "range": {
+                "end": {
+                  "character": 11,
+                  "line": 14
+                },
+                "start": {
+                  "character": 7,
+                  "line": 14
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "setRolloff",
+              "position": {
+                "character": 7,
+                "line": 14
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "setRolloff",
+            "kind": 3,
+            "label": "setRolloff",
+            "sortText": "0028_setRolloff",
+            "textEdit": {
+              "newText": "setRolloff",
+              "range": {
+                "end": {
+                  "character": 11,
+                  "line": 14
+                },
+                "start": {
+                  "character": 7,
+                  "line": 14
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "getDuration",
+              "position": {
+                "character": 7,
+                "line": 14
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "getDuration",
+            "kind": 3,
+            "label": "getDuration",
+            "sortText": "0029_getDuration",
+            "textEdit": {
+              "newText": "getDuration",
+              "range": {
+                "end": {
+                  "character": 11,
+                  "line": 14
+                },
+                "start": {
+                  "character": 7,
+                  "line": 14
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "getPosition",
+              "position": {
+                "character": 7,
+                "line": 14
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "getPosition",
+            "kind": 3,
+            "label": "getPosition",
+            "sortText": "0030_getPosition",
+            "textEdit": {
+              "newText": "getPosition",
+              "range": {
+                "end": {
+                  "character": 11,
+                  "line": 14
+                },
+                "start": {
+                  "character": 7,
+                  "line": 14
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "getVelocity",
+              "position": {
+                "character": 7,
+                "line": 14
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "getVelocity",
+            "kind": 3,
+            "label": "getVelocity",
+            "sortText": "0031_getVelocity",
+            "textEdit": {
+              "newText": "getVelocity",
+              "range": {
+                "end": {
+                  "character": 11,
+                  "line": 14
+                },
+                "start": {
+                  "character": 7,
+                  "line": 14
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "setPosition",
+              "position": {
+                "character": 7,
+                "line": 14
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "setPosition",
+            "kind": 3,
+            "label": "setPosition",
+            "sortText": "0032_setPosition",
+            "textEdit": {
+              "newText": "setPosition",
+              "range": {
+                "end": {
+                  "character": 11,
+                  "line": 14
+                },
+                "start": {
+                  "character": 7,
+                  "line": 14
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "setRelative",
+              "position": {
+                "character": 7,
+                "line": 14
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "setRelative",
+            "kind": 3,
+            "label": "setRelative",
+            "sortText": "0033_setRelative",
+            "textEdit": {
+              "newText": "setRelative",
+              "range": {
+                "end": {
+                  "character": 11,
+                  "line": 14
+                },
+                "start": {
+                  "character": 7,
+                  "line": 14
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "setVelocity",
+              "position": {
+                "character": 7,
+                "line": 14
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "setVelocity",
+            "kind": 3,
+            "label": "setVelocity",
+            "sortText": "0034_setVelocity",
+            "textEdit": {
+              "newText": "setVelocity",
+              "range": {
+                "end": {
+                  "character": 11,
+                  "line": 14
+                },
+                "start": {
+                  "character": 7,
+                  "line": 14
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "getDirection",
+              "position": {
+                "character": 7,
+                "line": 14
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "getDirection",
+            "kind": 3,
+            "label": "getDirection",
+            "sortText": "0035_getDirection",
+            "textEdit": {
+              "newText": "getDirection",
+              "range": {
+                "end": {
+                  "character": 11,
+                  "line": 14
+                },
+                "start": {
+                  "character": 7,
+                  "line": 14
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "setDirection",
+              "position": {
+                "character": 7,
+                "line": 14
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "setDirection",
+            "kind": 3,
+            "label": "setDirection",
+            "sortText": "0036_setDirection",
+            "textEdit": {
+              "newText": "setDirection",
+              "range": {
+                "end": {
+                  "character": 11,
+                  "line": 14
+                },
+                "start": {
+                  "character": 7,
+                  "line": 14
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "getChannelCount",
+              "position": {
+                "character": 7,
+                "line": 14
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "getChannelCount",
+            "kind": 3,
+            "label": "getChannelCount",
+            "sortText": "0037_getChannelCount",
+            "textEdit": {
+              "newText": "getChannelCount",
+              "range": {
+                "end": {
+                  "character": 11,
+                  "line": 14
+                },
+                "start": {
+                  "character": 7,
+                  "line": 14
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "getVolumeLimits",
+              "position": {
+                "character": 7,
+                "line": 14
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "getVolumeLimits",
+            "kind": 3,
+            "label": "getVolumeLimits",
+            "sortText": "0038_getVolumeLimits",
+            "textEdit": {
+              "newText": "getVolumeLimits",
+              "range": {
+                "end": {
+                  "character": 11,
+                  "line": 14
+                },
+                "start": {
+                  "character": 7,
+                  "line": 14
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "setVolumeLimits",
+              "position": {
+                "character": 7,
+                "line": 14
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "setVolumeLimits",
+            "kind": 3,
+            "label": "setVolumeLimits",
+            "sortText": "0039_setVolumeLimits",
+            "textEdit": {
+              "newText": "setVolumeLimits",
+              "range": {
+                "end": {
+                  "character": 11,
+                  "line": 14
+                },
+                "start": {
+                  "character": 7,
+                  "line": 14
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "getActiveEffects",
+              "position": {
+                "character": 7,
+                "line": 14
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "getActiveEffects",
+            "kind": 3,
+            "label": "getActiveEffects",
+            "sortText": "0040_getActiveEffects",
+            "textEdit": {
+              "newText": "getActiveEffects",
+              "range": {
+                "end": {
+                  "character": 11,
+                  "line": 14
+                },
+                "start": {
+                  "character": 7,
+                  "line": 14
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "getAirAbsorption",
+              "position": {
+                "character": 7,
+                "line": 14
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "getAirAbsorption",
+            "kind": 3,
+            "label": "getAirAbsorption",
+            "sortText": "0041_getAirAbsorption",
+            "textEdit": {
+              "newText": "getAirAbsorption",
+              "range": {
+                "end": {
+                  "character": 11,
+                  "line": 14
+                },
+                "start": {
+                  "character": 7,
+                  "line": 14
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "setAirAbsorption",
+              "position": {
+                "character": 7,
+                "line": 14
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "setAirAbsorption",
+            "kind": 3,
+            "label": "setAirAbsorption",
+            "sortText": "0042_setAirAbsorption",
+            "textEdit": {
+              "newText": "setAirAbsorption",
+              "range": {
+                "end": {
+                  "character": 11,
+                  "line": 14
+                },
+                "start": {
+                  "character": 7,
+                  "line": 14
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "getFreeBufferCount",
+              "position": {
+                "character": 7,
+                "line": 14
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "getFreeBufferCount",
+            "kind": 3,
+            "label": "getFreeBufferCount",
+            "sortText": "0043_getFreeBufferCount",
+            "textEdit": {
+              "newText": "getFreeBufferCount",
+              "range": {
+                "end": {
+                  "character": 11,
+                  "line": 14
+                },
+                "start": {
+                  "character": 7,
+                  "line": 14
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "getAttenuationDistances",
+              "position": {
+                "character": 7,
+                "line": 14
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "getAttenuationDistances",
+            "kind": 3,
+            "label": "getAttenuationDistances",
+            "sortText": "0044_getAttenuationDistances",
+            "textEdit": {
+              "newText": "getAttenuationDistances",
+              "range": {
+                "end": {
+                  "character": 11,
+                  "line": 14
+                },
+                "start": {
+                  "character": 7,
+                  "line": 14
+                }
+              }
+            }
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "setAttenuationDistances",
+              "position": {
+                "character": 7,
+                "line": 14
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+            },
+            "insertText": "setAttenuationDistances",
+            "kind": 3,
+            "label": "setAttenuationDistances",
+            "sortText": "0045_setAttenuationDistances",
+            "textEdit": {
+              "newText": "setAttenuationDistances",
+              "range": {
+                "end": {
+                  "character": 11,
+                  "line": 14
+                },
+                "start": {
+                  "character": 7,
+                  "line": 14
+                }
+              }
+            }
+          }
+        ]
+      },
+      {
+        "id": "source-members-resolved",
+        "value": {
+          "data": {
+            "kind": "function",
+            "label": "setFilter",
+            "position": {
+              "character": 7,
+              "line": 14
+            },
+            "symbolKind": "function",
+            "typeLabel": "function Source:setFilter(settings: table): boolean",
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/objects/src/main.tua"
+          },
+          "detail": "function Source:setFilter(settings: table): boolean",
+          "documentation": {
+            "kind": "markdown",
+            "value": "Sets a low-pass, high-pass, or band-pass filter to apply when playing the Source.\n\n[Open LOVE wiki](https://love2d.org/wiki/Source:setFilter)"
+          },
+          "insertText": "setFilter",
+          "kind": 3,
+          "label": "setFilter",
+          "sortText": "0001_setFilter",
+          "textEdit": {
+            "newText": "setFilter",
+            "range": {
+              "end": {
+                "character": 11,
+                "line": 14
+              },
+              "start": {
+                "character": 7,
+                "line": 14
+              }
+            }
+          }
+        }
+      }
+    ],
+    "builtin": "-- Tua builtin stub\n-- This virtual document is generated from Tua's builtin Lua/LOVE catalog.\n\n--- Gets the width of the Canvas.\n--- LOVE wiki: https://love2d.org/wiki/Canvas:getWidth\nfunction Canvas:getWidth(): number end\n",
+    "diagnostics": {
+      "items": [
+        {
+          "code": "TL4018",
+          "message": "LOVE method `setFilter` should be called with `:` so self is passed: use `canvas:setFilter(...)`",
+          "range": {
+            "end": {
+              "character": 16,
+              "line": 8
+            },
+            "start": {
+              "character": 7,
+              "line": 8
+            }
+          },
+          "severity": 2,
+          "source": "tua"
+        }
+      ],
+      "kind": "full"
+    }
+  },
+  {
+    "name": "callbacks",
+    "text": "function love.load() end\nfunction love.update(dt)\n print(dt)\nend\nfunction love.keypressed(key, scancode, isrepeat)\n print(key, isrepeat)\nend\nfunction love.mousepressed(x: string) end\nfunction love.udpate(dt: number) end\nfunction love.draw(unused: number) end\n",
+    "cli": {
+      "status": 1,
+      "stdout": "",
+      "stderr": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/callbacks/src/main.tua:8:15 error TL5006: LOVE callback `love.mousepressed` has an incompatible parameter type; expected `function love.mousepressed(x: number, y: number, button: number, istouch: boolean, presses: number)`\n/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/callbacks/src/main.tua:9:15 warning TL5006: unknown LOVE callback `love.udpate`; did you mean `love.update`?\n/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/callbacks/src/main.tua:10:15 error TL5006: LOVE callback `love.draw` receives at most 0 parameters, but this declaration requires 1\n"
+    },
+    "responses": [
+      {
+        "kind": "h",
+        "id": "callback-dt",
+        "position": {
+          "line": 2,
+          "character": 7
+        },
+        "value": {
+          "contents": {
+            "kind": "markdown",
+            "value": "```tua\nparameter dt: any\n```"
+          },
+          "range": {
+            "end": {
+              "character": 9,
+              "line": 2
+            },
+            "start": {
+              "character": 7,
+              "line": 2
+            }
+          }
+        }
+      },
+      {
+        "kind": "h",
+        "id": "callback-key",
+        "position": {
+          "line": 5,
+          "character": 7
+        },
+        "value": {
+          "contents": {
+            "kind": "markdown",
+            "value": "```tua\nparameter key: any\n```"
+          },
+          "range": {
+            "end": {
+              "character": 10,
+              "line": 5
+            },
+            "start": {
+              "character": 7,
+              "line": 5
+            }
+          }
+        }
+      },
+      {
+        "kind": "h",
+        "id": "callback-repeat",
+        "position": {
+          "line": 5,
+          "character": 12
+        },
+        "value": {
+          "contents": {
+            "kind": "markdown",
+            "value": "```tua\nparameter isrepeat: any\n```"
+          },
+          "range": {
+            "end": {
+              "character": 20,
+              "line": 5
+            },
+            "start": {
+              "character": 12,
+              "line": 5
+            }
+          }
+        }
+      }
+    ],
+    "diagnostics": {
+      "items": [
+        {
+          "code": "TL5006",
+          "message": "LOVE callback `love.mousepressed` has an incompatible parameter type; expected `function love.mousepressed(x: number, y: number, button: number, istouch: boolean, presses: number)`",
+          "range": {
+            "end": {
+              "character": 26,
+              "line": 7
+            },
+            "start": {
+              "character": 14,
+              "line": 7
+            }
+          },
+          "severity": 1,
+          "source": "tua"
+        },
+        {
+          "code": "TL5006",
+          "message": "unknown LOVE callback `love.udpate`; did you mean `love.update`?",
+          "range": {
+            "end": {
+              "character": 20,
+              "line": 8
+            },
+            "start": {
+              "character": 14,
+              "line": 8
+            }
+          },
+          "severity": 2,
+          "source": "tua"
+        },
+        {
+          "code": "TL5006",
+          "message": "LOVE callback `love.draw` receives at most 0 parameters, but this declaration requires 1",
+          "range": {
+            "end": {
+              "character": 18,
+              "line": 9
+            },
+            "start": {
+              "character": 14,
+              "line": 9
+            }
+          },
+          "severity": 1,
+          "source": "tua"
+        }
+      ],
+      "kind": "full"
+    }
+  },
+  {
+    "name": "colors",
+    "text": "local background: LoveColor = {0.1,0.2,0.3}\nlocal bad: LoveColor = {\"red\",0,0}\nlove.graphics.setColor(background)\nlocal permissive: LoveColor = {3}\n",
+    "cli": {
+      "status": 1,
+      "stdout": "",
+      "stderr": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/colors/src/main.tua:2:25 error TL1003: type mismatch: expected number, found string\n"
+    },
+    "responses": [],
+    "diagnostics": {
+      "items": [
+        {
+          "code": "TL1003",
+          "message": "type mismatch: expected number, found string",
+          "range": {
+            "end": {
+              "character": 29,
+              "line": 1
+            },
+            "start": {
+              "character": 24,
+              "line": 1
+            }
+          },
+          "severity": 1,
+          "source": "tua"
+        }
+      ],
+      "kind": "full"
+    }
+  },
+  {
+    "name": "callbackcompletion",
+    "text": "function love.\n",
+    "cli": {
+      "status": 1,
+      "stdout": "",
+      "stderr": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/callbackcompletion/src/main.tua:2:1 error TL0001: expected name after `.`\n"
+    },
+    "responses": [
+      {
+        "kind": "c",
+        "id": "callback-snippets",
+        "position": {
+          "line": 0,
+          "character": 14
+        },
+        "value": [
+          {
+            "data": {
+              "kind": "module",
+              "label": "audio",
+              "position": {
+                "character": 14,
+                "line": 0
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/callbackcompletion/src/main.tua"
+            },
+            "kind": 9,
+            "label": "audio",
+            "sortText": "0000_audio"
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "conf",
+              "position": {
+                "character": 14,
+                "line": 0
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/callbackcompletion/src/main.tua"
+            },
+            "insertText": "conf(t)\n  $0\nend",
+            "insertTextFormat": 2,
+            "kind": 3,
+            "label": "conf",
+            "sortText": "0001_conf"
+          },
+          {
+            "data": {
+              "kind": "module",
+              "label": "data",
+              "position": {
+                "character": 14,
+                "line": 0
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/callbackcompletion/src/main.tua"
+            },
+            "kind": 9,
+            "label": "data",
+            "sortText": "0002_data"
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "directorydropped",
+              "position": {
+                "character": 14,
+                "line": 0
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/callbackcompletion/src/main.tua"
+            },
+            "insertText": "directorydropped(path)\n  $0\nend",
+            "insertTextFormat": 2,
+            "kind": 3,
+            "label": "directorydropped",
+            "sortText": "0003_directorydropped"
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "displayrotated",
+              "position": {
+                "character": 14,
+                "line": 0
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/callbackcompletion/src/main.tua"
+            },
+            "insertText": "displayrotated(index, orientation)\n  $0\nend",
+            "insertTextFormat": 2,
+            "kind": 3,
+            "label": "displayrotated",
+            "sortText": "0004_displayrotated"
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "draw",
+              "position": {
+                "character": 14,
+                "line": 0
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/callbackcompletion/src/main.tua"
+            },
+            "insertText": "draw()\n  $0\nend",
+            "insertTextFormat": 2,
+            "kind": 3,
+            "label": "draw",
+            "sortText": "0005_draw"
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "errorhandler",
+              "position": {
+                "character": 14,
+                "line": 0
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/callbackcompletion/src/main.tua"
+            },
+            "insertText": "errorhandler(msg)\n  $0\nend",
+            "insertTextFormat": 2,
+            "kind": 3,
+            "label": "errorhandler",
+            "sortText": "0006_errorhandler"
+          },
+          {
+            "data": {
+              "kind": "module",
+              "label": "event",
+              "position": {
+                "character": 14,
+                "line": 0
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/callbackcompletion/src/main.tua"
+            },
+            "kind": 9,
+            "label": "event",
+            "sortText": "0007_event"
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "filedropped",
+              "position": {
+                "character": 14,
+                "line": 0
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/callbackcompletion/src/main.tua"
+            },
+            "insertText": "filedropped(file)\n  $0\nend",
+            "insertTextFormat": 2,
+            "kind": 3,
+            "label": "filedropped",
+            "sortText": "0008_filedropped"
+          },
+          {
+            "data": {
+              "kind": "module",
+              "label": "filesystem",
+              "position": {
+                "character": 14,
+                "line": 0
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/callbackcompletion/src/main.tua"
+            },
+            "kind": 9,
+            "label": "filesystem",
+            "sortText": "0009_filesystem"
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "focus",
+              "position": {
+                "character": 14,
+                "line": 0
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/callbackcompletion/src/main.tua"
+            },
+            "insertText": "focus(focus)\n  $0\nend",
+            "insertTextFormat": 2,
+            "kind": 3,
+            "label": "focus",
+            "sortText": "0010_focus"
+          },
+          {
+            "data": {
+              "kind": "module",
+              "label": "font",
+              "position": {
+                "character": 14,
+                "line": 0
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/callbackcompletion/src/main.tua"
+            },
+            "kind": 9,
+            "label": "font",
+            "sortText": "0011_font"
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "gamepadaxis",
+              "position": {
+                "character": 14,
+                "line": 0
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/callbackcompletion/src/main.tua"
+            },
+            "insertText": "gamepadaxis(joystick, axis, value)\n  $0\nend",
+            "insertTextFormat": 2,
+            "kind": 3,
+            "label": "gamepadaxis",
+            "sortText": "0012_gamepadaxis"
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "gamepadpressed",
+              "position": {
+                "character": 14,
+                "line": 0
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/callbackcompletion/src/main.tua"
+            },
+            "insertText": "gamepadpressed(joystick, button)\n  $0\nend",
+            "insertTextFormat": 2,
+            "kind": 3,
+            "label": "gamepadpressed",
+            "sortText": "0013_gamepadpressed"
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "gamepadreleased",
+              "position": {
+                "character": 14,
+                "line": 0
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/callbackcompletion/src/main.tua"
+            },
+            "insertText": "gamepadreleased(joystick, button)\n  $0\nend",
+            "insertTextFormat": 2,
+            "kind": 3,
+            "label": "gamepadreleased",
+            "sortText": "0014_gamepadreleased"
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "getVersion",
+              "position": {
+                "character": 14,
+                "line": 0
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/callbackcompletion/src/main.tua"
+            },
+            "kind": 3,
+            "label": "getVersion",
+            "sortText": "0015_getVersion"
+          },
+          {
+            "data": {
+              "kind": "module",
+              "label": "graphics",
+              "position": {
+                "character": 14,
+                "line": 0
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/callbackcompletion/src/main.tua"
+            },
+            "kind": 9,
+            "label": "graphics",
+            "sortText": "0016_graphics"
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "hasDeprecationOutput",
+              "position": {
+                "character": 14,
+                "line": 0
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/callbackcompletion/src/main.tua"
+            },
+            "kind": 3,
+            "label": "hasDeprecationOutput",
+            "sortText": "0017_hasDeprecationOutput"
+          },
+          {
+            "data": {
+              "kind": "module",
+              "label": "image",
+              "position": {
+                "character": 14,
+                "line": 0
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/callbackcompletion/src/main.tua"
+            },
+            "kind": 9,
+            "label": "image",
+            "sortText": "0018_image"
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "isVersionCompatible",
+              "position": {
+                "character": 14,
+                "line": 0
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/callbackcompletion/src/main.tua"
+            },
+            "kind": 3,
+            "label": "isVersionCompatible",
+            "sortText": "0019_isVersionCompatible"
+          },
+          {
+            "data": {
+              "kind": "module",
+              "label": "joystick",
+              "position": {
+                "character": 14,
+                "line": 0
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/callbackcompletion/src/main.tua"
+            },
+            "kind": 9,
+            "label": "joystick",
+            "sortText": "0020_joystick"
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "joystickadded",
+              "position": {
+                "character": 14,
+                "line": 0
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/callbackcompletion/src/main.tua"
+            },
+            "insertText": "joystickadded(joystick)\n  $0\nend",
+            "insertTextFormat": 2,
+            "kind": 3,
+            "label": "joystickadded",
+            "sortText": "0021_joystickadded"
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "joystickaxis",
+              "position": {
+                "character": 14,
+                "line": 0
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/callbackcompletion/src/main.tua"
+            },
+            "insertText": "joystickaxis(joystick, axis, value)\n  $0\nend",
+            "insertTextFormat": 2,
+            "kind": 3,
+            "label": "joystickaxis",
+            "sortText": "0022_joystickaxis"
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "joystickhat",
+              "position": {
+                "character": 14,
+                "line": 0
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/callbackcompletion/src/main.tua"
+            },
+            "insertText": "joystickhat(joystick, hat, direction)\n  $0\nend",
+            "insertTextFormat": 2,
+            "kind": 3,
+            "label": "joystickhat",
+            "sortText": "0023_joystickhat"
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "joystickpressed",
+              "position": {
+                "character": 14,
+                "line": 0
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/callbackcompletion/src/main.tua"
+            },
+            "insertText": "joystickpressed(joystick, button)\n  $0\nend",
+            "insertTextFormat": 2,
+            "kind": 3,
+            "label": "joystickpressed",
+            "sortText": "0024_joystickpressed"
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "joystickreleased",
+              "position": {
+                "character": 14,
+                "line": 0
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/callbackcompletion/src/main.tua"
+            },
+            "insertText": "joystickreleased(joystick, button)\n  $0\nend",
+            "insertTextFormat": 2,
+            "kind": 3,
+            "label": "joystickreleased",
+            "sortText": "0025_joystickreleased"
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "joystickremoved",
+              "position": {
+                "character": 14,
+                "line": 0
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/callbackcompletion/src/main.tua"
+            },
+            "insertText": "joystickremoved(joystick)\n  $0\nend",
+            "insertTextFormat": 2,
+            "kind": 3,
+            "label": "joystickremoved",
+            "sortText": "0026_joystickremoved"
+          },
+          {
+            "data": {
+              "kind": "module",
+              "label": "keyboard",
+              "position": {
+                "character": 14,
+                "line": 0
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/callbackcompletion/src/main.tua"
+            },
+            "kind": 9,
+            "label": "keyboard",
+            "sortText": "0027_keyboard"
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "keypressed",
+              "position": {
+                "character": 14,
+                "line": 0
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/callbackcompletion/src/main.tua"
+            },
+            "insertText": "keypressed(key, scancode, isrepeat)\n  $0\nend",
+            "insertTextFormat": 2,
+            "kind": 3,
+            "label": "keypressed",
+            "sortText": "0028_keypressed"
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "keyreleased",
+              "position": {
+                "character": 14,
+                "line": 0
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/callbackcompletion/src/main.tua"
+            },
+            "insertText": "keyreleased(key, scancode)\n  $0\nend",
+            "insertTextFormat": 2,
+            "kind": 3,
+            "label": "keyreleased",
+            "sortText": "0029_keyreleased"
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "load",
+              "position": {
+                "character": 14,
+                "line": 0
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/callbackcompletion/src/main.tua"
+            },
+            "insertText": "load(arg, unfilteredArg)\n  $0\nend",
+            "insertTextFormat": 2,
+            "kind": 3,
+            "label": "load",
+            "sortText": "0030_load"
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "lowmemory",
+              "position": {
+                "character": 14,
+                "line": 0
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/callbackcompletion/src/main.tua"
+            },
+            "insertText": "lowmemory()\n  $0\nend",
+            "insertTextFormat": 2,
+            "kind": 3,
+            "label": "lowmemory",
+            "sortText": "0031_lowmemory"
+          },
+          {
+            "data": {
+              "kind": "module",
+              "label": "math",
+              "position": {
+                "character": 14,
+                "line": 0
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/callbackcompletion/src/main.tua"
+            },
+            "kind": 9,
+            "label": "math",
+            "sortText": "0032_math"
+          },
+          {
+            "data": {
+              "kind": "module",
+              "label": "mouse",
+              "position": {
+                "character": 14,
+                "line": 0
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/callbackcompletion/src/main.tua"
+            },
+            "kind": 9,
+            "label": "mouse",
+            "sortText": "0033_mouse"
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "mousefocus",
+              "position": {
+                "character": 14,
+                "line": 0
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/callbackcompletion/src/main.tua"
+            },
+            "insertText": "mousefocus(focus)\n  $0\nend",
+            "insertTextFormat": 2,
+            "kind": 3,
+            "label": "mousefocus",
+            "sortText": "0034_mousefocus"
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "mousemoved",
+              "position": {
+                "character": 14,
+                "line": 0
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/callbackcompletion/src/main.tua"
+            },
+            "insertText": "mousemoved(x, y, dx, dy, istouch)\n  $0\nend",
+            "insertTextFormat": 2,
+            "kind": 3,
+            "label": "mousemoved",
+            "sortText": "0035_mousemoved"
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "mousepressed",
+              "position": {
+                "character": 14,
+                "line": 0
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/callbackcompletion/src/main.tua"
+            },
+            "insertText": "mousepressed(x, y, button, istouch, presses)\n  $0\nend",
+            "insertTextFormat": 2,
+            "kind": 3,
+            "label": "mousepressed",
+            "sortText": "0036_mousepressed"
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "mousereleased",
+              "position": {
+                "character": 14,
+                "line": 0
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/callbackcompletion/src/main.tua"
+            },
+            "insertText": "mousereleased(x, y, button, istouch, presses)\n  $0\nend",
+            "insertTextFormat": 2,
+            "kind": 3,
+            "label": "mousereleased",
+            "sortText": "0037_mousereleased"
+          },
+          {
+            "data": {
+              "kind": "module",
+              "label": "physics",
+              "position": {
+                "character": 14,
+                "line": 0
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/callbackcompletion/src/main.tua"
+            },
+            "kind": 9,
+            "label": "physics",
+            "sortText": "0038_physics"
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "quit",
+              "position": {
+                "character": 14,
+                "line": 0
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/callbackcompletion/src/main.tua"
+            },
+            "insertText": "quit()\n  $0\nend",
+            "insertTextFormat": 2,
+            "kind": 3,
+            "label": "quit",
+            "sortText": "0039_quit"
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "resize",
+              "position": {
+                "character": 14,
+                "line": 0
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/callbackcompletion/src/main.tua"
+            },
+            "insertText": "resize(w, h)\n  $0\nend",
+            "insertTextFormat": 2,
+            "kind": 3,
+            "label": "resize",
+            "sortText": "0040_resize"
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "run",
+              "position": {
+                "character": 14,
+                "line": 0
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/callbackcompletion/src/main.tua"
+            },
+            "insertText": "run()\n  $0\nend",
+            "insertTextFormat": 2,
+            "kind": 3,
+            "label": "run",
+            "sortText": "0041_run"
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "setDeprecationOutput",
+              "position": {
+                "character": 14,
+                "line": 0
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/callbackcompletion/src/main.tua"
+            },
+            "kind": 3,
+            "label": "setDeprecationOutput",
+            "sortText": "0042_setDeprecationOutput"
+          },
+          {
+            "data": {
+              "kind": "module",
+              "label": "sound",
+              "position": {
+                "character": 14,
+                "line": 0
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/callbackcompletion/src/main.tua"
+            },
+            "kind": 9,
+            "label": "sound",
+            "sortText": "0043_sound"
+          },
+          {
+            "data": {
+              "kind": "module",
+              "label": "system",
+              "position": {
+                "character": 14,
+                "line": 0
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/callbackcompletion/src/main.tua"
+            },
+            "kind": 9,
+            "label": "system",
+            "sortText": "0044_system"
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "textedited",
+              "position": {
+                "character": 14,
+                "line": 0
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/callbackcompletion/src/main.tua"
+            },
+            "insertText": "textedited(text, start, length)\n  $0\nend",
+            "insertTextFormat": 2,
+            "kind": 3,
+            "label": "textedited",
+            "sortText": "0045_textedited"
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "textinput",
+              "position": {
+                "character": 14,
+                "line": 0
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/callbackcompletion/src/main.tua"
+            },
+            "insertText": "textinput(text)\n  $0\nend",
+            "insertTextFormat": 2,
+            "kind": 3,
+            "label": "textinput",
+            "sortText": "0046_textinput"
+          },
+          {
+            "data": {
+              "kind": "module",
+              "label": "thread",
+              "position": {
+                "character": 14,
+                "line": 0
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/callbackcompletion/src/main.tua"
+            },
+            "kind": 9,
+            "label": "thread",
+            "sortText": "0047_thread"
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "threaderror",
+              "position": {
+                "character": 14,
+                "line": 0
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/callbackcompletion/src/main.tua"
+            },
+            "insertText": "threaderror(thread, errorstr)\n  $0\nend",
+            "insertTextFormat": 2,
+            "kind": 3,
+            "label": "threaderror",
+            "sortText": "0048_threaderror"
+          },
+          {
+            "data": {
+              "kind": "module",
+              "label": "timer",
+              "position": {
+                "character": 14,
+                "line": 0
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/callbackcompletion/src/main.tua"
+            },
+            "kind": 9,
+            "label": "timer",
+            "sortText": "0049_timer"
+          },
+          {
+            "data": {
+              "kind": "module",
+              "label": "touch",
+              "position": {
+                "character": 14,
+                "line": 0
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/callbackcompletion/src/main.tua"
+            },
+            "kind": 9,
+            "label": "touch",
+            "sortText": "0050_touch"
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "touchmoved",
+              "position": {
+                "character": 14,
+                "line": 0
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/callbackcompletion/src/main.tua"
+            },
+            "insertText": "touchmoved(id, x, y, dx, dy, pressure)\n  $0\nend",
+            "insertTextFormat": 2,
+            "kind": 3,
+            "label": "touchmoved",
+            "sortText": "0051_touchmoved"
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "touchpressed",
+              "position": {
+                "character": 14,
+                "line": 0
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/callbackcompletion/src/main.tua"
+            },
+            "insertText": "touchpressed(id, x, y, dx, dy, pressure)\n  $0\nend",
+            "insertTextFormat": 2,
+            "kind": 3,
+            "label": "touchpressed",
+            "sortText": "0052_touchpressed"
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "touchreleased",
+              "position": {
+                "character": 14,
+                "line": 0
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/callbackcompletion/src/main.tua"
+            },
+            "insertText": "touchreleased(id, x, y, dx, dy, pressure)\n  $0\nend",
+            "insertTextFormat": 2,
+            "kind": 3,
+            "label": "touchreleased",
+            "sortText": "0053_touchreleased"
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "update",
+              "position": {
+                "character": 14,
+                "line": 0
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/callbackcompletion/src/main.tua"
+            },
+            "insertText": "update(dt)\n  $0\nend",
+            "insertTextFormat": 2,
+            "kind": 3,
+            "label": "update",
+            "sortText": "0054_update"
+          },
+          {
+            "data": {
+              "kind": "module",
+              "label": "video",
+              "position": {
+                "character": 14,
+                "line": 0
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/callbackcompletion/src/main.tua"
+            },
+            "kind": 9,
+            "label": "video",
+            "sortText": "0055_video"
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "visible",
+              "position": {
+                "character": 14,
+                "line": 0
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/callbackcompletion/src/main.tua"
+            },
+            "insertText": "visible(visible)\n  $0\nend",
+            "insertTextFormat": 2,
+            "kind": 3,
+            "label": "visible",
+            "sortText": "0056_visible"
+          },
+          {
+            "data": {
+              "kind": "function",
+              "label": "wheelmoved",
+              "position": {
+                "character": 14,
+                "line": 0
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/callbackcompletion/src/main.tua"
+            },
+            "insertText": "wheelmoved(x, y)\n  $0\nend",
+            "insertTextFormat": 2,
+            "kind": 3,
+            "label": "wheelmoved",
+            "sortText": "0057_wheelmoved"
+          },
+          {
+            "data": {
+              "kind": "module",
+              "label": "window",
+              "position": {
+                "character": 14,
+                "line": 0
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/callbackcompletion/src/main.tua"
+            },
+            "kind": 9,
+            "label": "window",
+            "sortText": "0058_window"
+          }
+        ]
+      },
+      {
+        "id": "callback-snippets-resolved",
+        "value": {
+          "data": {
+            "kind": "function",
+            "label": "update",
+            "position": {
+              "character": 14,
+              "line": 0
+            },
+            "symbolKind": "function",
+            "typeLabel": "function love.update(dt: number)",
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/love/callbackcompletion/src/main.tua"
+          },
+          "detail": "function love.update(dt: number)",
+          "documentation": {
+            "kind": "markdown",
+            "value": "Callback function used to update the state of the game every frame.\n\n[Open LOVE wiki](https://love2d.org/wiki/love.update)\n\n**Callback parameters**\n\n- `dt: number`: Time since the last update in seconds."
+          },
+          "insertText": "update(dt)\n  $0\nend",
+          "insertTextFormat": 2,
+          "kind": 3,
+          "label": "update",
+          "sortText": "0054_update"
+        }
+      }
+    ],
+    "diagnostics": {
+      "items": [
+        {
+          "code": "TL0001",
+          "message": "expected name after `.`",
+          "range": {
+            "end": {
+              "character": 0,
+              "line": 1
+            },
+            "start": {
+              "character": 0,
+              "line": 1
+            }
+          },
+          "severity": 1,
+          "source": "tua"
+        }
+      ],
+      "kind": "full"
+    }
+  }
+]

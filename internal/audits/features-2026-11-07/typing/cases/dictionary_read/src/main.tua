@@ -1,0 +1,2 @@
+local scores: {[string]: number} = {}
+local n: number = scores.missing

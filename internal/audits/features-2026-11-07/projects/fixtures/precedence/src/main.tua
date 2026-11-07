@@ -1,0 +1,3 @@
+local m = require("mod")
+local n: number = m.value
+print(n)

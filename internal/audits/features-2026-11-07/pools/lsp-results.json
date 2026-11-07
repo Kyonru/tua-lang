@@ -1,0 +1,247 @@
+{
+  "acquired": {
+    "contents": {
+      "kind": "markdown",
+      "value": "```tua\nlocal b: Bullet\n```"
+    },
+    "range": {
+      "end": {
+        "character": 7,
+        "line": 3
+      },
+      "start": {
+        "character": 6,
+        "line": 3
+      }
+    }
+  },
+  "resetParameter": {
+    "contents": {
+      "kind": "markdown",
+      "value": "```tua\nparameter b: any\n```\n\n---\n\n- context: expected callback type"
+    },
+    "range": {
+      "end": {
+        "character": 91,
+        "line": 1
+      },
+      "start": {
+        "character": 90,
+        "line": 1
+      }
+    }
+  },
+  "importedAcquired": {
+    "contents": {
+      "kind": "markdown",
+      "value": "```tua\nlocal other: Bullet\n```"
+    },
+    "range": {
+      "end": {
+        "character": 11,
+        "line": 7
+      },
+      "start": {
+        "character": 6,
+        "line": 7
+      }
+    }
+  },
+  "completion": [
+    {
+      "data": {
+        "kind": "field",
+        "label": "x",
+        "position": {
+          "character": 8,
+          "line": 3
+        },
+        "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/pools/editor/src/main.tua"
+      },
+      "kind": 5,
+      "label": "x",
+      "sortText": "0000_x",
+      "textEdit": {
+        "newText": "x",
+        "range": {
+          "end": {
+            "character": 9,
+            "line": 3
+          },
+          "start": {
+            "character": 8,
+            "line": 3
+          }
+        }
+      }
+    }
+  ],
+  "signature": {
+    "activeParameter": 0,
+    "activeSignature": 0,
+    "signatures": [
+      {
+        "documentation": {
+          "kind": "markdown",
+          "value": "Reset and return an active object. Returns false for foreign or duplicate releases."
+        },
+        "label": "function pool:release(object: Bullet): boolean",
+        "parameters": [
+          {
+            "label": "object: Bullet"
+          }
+        ]
+      }
+    ]
+  },
+  "graph": {
+    "analysisRevision": 10,
+    "graph": {
+      "insights": [],
+      "operations": [
+        {
+          "id": "acquire:/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/pools/editor/src/main.tua:3:9",
+          "itemName": "b",
+          "itemRange": {
+            "end": {
+              "character": 7,
+              "line": 2
+            },
+            "start": {
+              "character": 6,
+              "line": 2
+            }
+          },
+          "kind": "acquire",
+          "poolId": "pool:/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/pools/editor/src/main.tua:2:7",
+          "poolName": "pool",
+          "range": {
+            "end": {
+              "character": 22,
+              "line": 2
+            },
+            "start": {
+              "character": 8,
+              "line": 2
+            }
+          },
+          "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/pools/editor/src/main.tua"
+        },
+        {
+          "id": "release:/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/pools/editor/src/main.tua:5:1",
+          "itemName": "b",
+          "itemRange": {
+            "end": {
+              "character": 14,
+              "line": 4
+            },
+            "start": {
+              "character": 13,
+              "line": 4
+            }
+          },
+          "kind": "release",
+          "poolId": "pool:/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/pools/editor/src/main.tua:2:7",
+          "poolName": "pool",
+          "range": {
+            "end": {
+              "character": 15,
+              "line": 4
+            },
+            "start": {
+              "character": 0,
+              "line": 4
+            }
+          },
+          "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/pools/editor/src/main.tua"
+        },
+        {
+          "id": "acquire:/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/pools/editor/src/main.tua:7:13",
+          "itemName": "other",
+          "itemRange": {
+            "end": {
+              "character": 11,
+              "line": 6
+            },
+            "start": {
+              "character": 6,
+              "line": 6
+            }
+          },
+          "kind": "acquire",
+          "poolId": null,
+          "poolName": "imported.pool",
+          "range": {
+            "end": {
+              "character": 35,
+              "line": 6
+            },
+            "start": {
+              "character": 12,
+              "line": 6
+            }
+          },
+          "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/pools/editor/src/main.tua"
+        }
+      ],
+      "pools": [
+        {
+          "id": "pool:/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/pools/editor/src/library.tua:2:7",
+          "itemType": "Bullet",
+          "name": "pool",
+          "nameRange": {
+            "end": {
+              "character": 10,
+              "line": 1
+            },
+            "start": {
+              "character": 6,
+              "line": 1
+            }
+          },
+          "range": {
+            "end": {
+              "character": 67,
+              "line": 1
+            },
+            "start": {
+              "character": 11,
+              "line": 1
+            }
+          },
+          "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/pools/editor/src/library.tua"
+        },
+        {
+          "id": "pool:/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/pools/editor/src/main.tua:2:7",
+          "itemType": "Bullet",
+          "name": "pool",
+          "nameRange": {
+            "end": {
+              "character": 10,
+              "line": 1
+            },
+            "start": {
+              "character": 6,
+              "line": 1
+            }
+          },
+          "range": {
+            "end": {
+              "character": 100,
+              "line": 1
+            },
+            "start": {
+              "character": 11,
+              "line": 1
+            }
+          },
+          "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/pools/editor/src/main.tua"
+        }
+      ]
+    }
+  },
+  "diagnostics": {
+    "items": [],
+    "kind": "full"
+  }
+}

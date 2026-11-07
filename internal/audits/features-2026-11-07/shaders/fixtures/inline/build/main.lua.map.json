@@ -1,0 +1,39 @@
+{
+  "generated": "build/main.lua",
+  "lineMappings": [
+    {
+      "generatedLine": 1,
+      "sourceLine": 1
+    },
+    {
+      "generatedLine": 2,
+      "sourceLine": 1
+    },
+    {
+      "generatedLine": 3,
+      "sourceLine": 1
+    },
+    {
+      "generatedLine": 4,
+      "sourceLine": 1
+    },
+    {
+      "generatedLine": 5,
+      "sourceLine": 1
+    },
+    {
+      "generatedLine": 6,
+      "sourceLine": 6
+    },
+    {
+      "generatedLine": 7,
+      "sourceLine": 7
+    },
+    {
+      "generatedLine": 8,
+      "sourceLine": 8
+    }
+  ],
+  "source": "src/main.tua",
+  "version": 1
+}

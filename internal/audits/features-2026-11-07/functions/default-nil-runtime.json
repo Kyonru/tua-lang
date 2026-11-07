@@ -1,0 +1,8 @@
+{
+  "build_exit": 1,
+  "build_stdout": "",
+  "build_stderr": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/functions/default_nil/src/main.tua:2:14 error TL1003: type mismatch at x: expected number, found nil\n",
+  "runtime_exit": 0,
+  "runtime_stdout": "7\t7\t0\n",
+  "runtime_stderr": ""
+}

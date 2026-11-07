@@ -1,0 +1,157 @@
+[
+  [
+    "stores",
+    "State stores",
+    "stores.md"
+  ],
+  [
+    "signals",
+    "Signals and events",
+    "signals.md"
+  ],
+  [
+    "state_machines",
+    "State machines",
+    "state-machines.md"
+  ],
+  [
+    "ecs",
+    "Entity component systems",
+    "ecs.md"
+  ],
+  [
+    "pools",
+    "Object pools",
+    "object-pooling.md"
+  ],
+  [
+    "input",
+    "Input and bindings",
+    "input.md"
+  ],
+  [
+    "audio",
+    "Audio systems and analysis",
+    "audio.md"
+  ],
+  [
+    "sprites",
+    "Sprites and animation",
+    "sprites.md"
+  ],
+  [
+    "vectors",
+    "Vectors and game math",
+    "vectors.md"
+  ],
+  [
+    "camera",
+    "Camera",
+    "camera.md"
+  ],
+  [
+    "tween",
+    "Tweening",
+    "tweening.md"
+  ],
+  [
+    "classes",
+    "Classes and polymorphism",
+    "classes.md"
+  ],
+  [
+    "typing",
+    "Types, inference and narrowing",
+    "typing.md"
+  ],
+  [
+    "functions",
+    "Functions, defaults, multi-returns and syntax lowering",
+    "language.md"
+  ],
+  [
+    "modules",
+    "Modules, imports and declaration libraries",
+    "modules.md"
+  ],
+  [
+    "lua_interop",
+    "Lua interop and annotations",
+    "lua-interop.md"
+  ],
+  [
+    "love",
+    "LOVE catalog and callbacks",
+    "language.md"
+  ],
+  [
+    "assets",
+    "Assets and pipelines",
+    "asset-pipelines.md"
+  ],
+  [
+    "shaders",
+    "Shader authoring and validation",
+    "lsp.md"
+  ],
+  [
+    "formatter",
+    "Formatter",
+    "formatter.md"
+  ],
+  [
+    "linter",
+    "Linter, diagnostics and quick fixes",
+    "linter.md"
+  ],
+  [
+    "testing",
+    "Busted testing, coverage and Test Explorer",
+    "testing.md"
+  ],
+  [
+    "projects",
+    "Project configuration, init and builds",
+    "configuration.md"
+  ],
+  [
+    "watch_reload",
+    "Watch, dev and hot reload",
+    "hot-reload.md"
+  ],
+  [
+    "debugging",
+    "Debugger, source maps and runtime inspector",
+    "debugging.md"
+  ],
+  [
+    "editor",
+    "Completion, hover, signatures and navigation",
+    "lsp.md"
+  ],
+  [
+    "explorers",
+    "Project graphs and explorers",
+    "lsp.md"
+  ],
+  [
+    "inline",
+    "Deterministic inline completion and Ollama",
+    "lsp.md"
+  ],
+  [
+    "api_mcp",
+    "External API and MCP",
+    "external-api-bridge.md"
+  ],
+  [
+    "packaging",
+    "Game packaging and toolchain distribution",
+    "packaging.md"
+  ],
+  [
+    "setup_docs",
+    "Installation, setup, theme and documentation",
+    "installation.md"
+  ]
+]

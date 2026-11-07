@@ -1,0 +1,230 @@
+[
+  {
+    "name": "positive",
+    "position": {
+      "line": 1,
+      "character": 11
+    },
+    "completion": [
+      {
+        "data": {
+          "kind": "value",
+          "label": "alpha",
+          "position": {
+            "character": 11,
+            "line": 1
+          },
+          "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/shaders/fixtures/positive/src/main.tua"
+        },
+        "insertText": "alpha",
+        "kind": 12,
+        "label": "alpha",
+        "sortText": "0000_alpha",
+        "textEdit": {
+          "newText": "alpha",
+          "range": {
+            "end": {
+              "character": 14,
+              "line": 1
+            },
+            "start": {
+              "character": 9,
+              "line": 1
+            }
+          }
+        }
+      }
+    ],
+    "hover": {
+      "contents": {
+        "kind": "markdown",
+        "value": "```tua\n```glsl\nextern number alpha;\n```\n/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/shaders/fixtures/positive/effect.glsl:1\n\nExpected Lua value: number.\n```"
+      },
+      "range": {
+        "end": {
+          "character": 15,
+          "line": 1
+        },
+        "start": {
+          "character": 8,
+          "line": 1
+        }
+      }
+    },
+    "definition": {
+      "range": {
+        "end": {
+          "character": 19,
+          "line": 0
+        },
+        "start": {
+          "character": 14,
+          "line": 0
+        }
+      },
+      "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/shaders/fixtures/positive/effect.glsl"
+    },
+    "overlay": [
+      {
+        "data": {
+          "kind": "value",
+          "label": "altitude",
+          "position": {
+            "character": 11,
+            "line": 1
+          },
+          "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/shaders/fixtures/positive/src/main.tua"
+        },
+        "insertText": "altitude",
+        "kind": 12,
+        "label": "altitude",
+        "sortText": "0000_altitude",
+        "textEdit": {
+          "newText": "altitude",
+          "range": {
+            "end": {
+              "character": 14,
+              "line": 1
+            },
+            "start": {
+              "character": 9,
+              "line": 1
+            }
+          }
+        }
+      }
+    ],
+    "closed": [
+      {
+        "data": {
+          "kind": "value",
+          "label": "alpha",
+          "position": {
+            "character": 11,
+            "line": 1
+          },
+          "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/shaders/fixtures/positive/src/main.tua"
+        },
+        "insertText": "alpha",
+        "kind": 12,
+        "label": "alpha",
+        "sortText": "0000_alpha",
+        "textEdit": {
+          "newText": "alpha",
+          "range": {
+            "end": {
+              "character": 14,
+              "line": 1
+            },
+            "start": {
+              "character": 9,
+              "line": 1
+            }
+          }
+        }
+      }
+    ],
+    "diagnostics": [
+      {
+        "jsonrpc": "2.0",
+        "method": "textDocument/publishDiagnostics",
+        "params": {
+          "diagnostics": [],
+          "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/shaders/fixtures/positive/src/main.tua"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "textDocument/publishDiagnostics",
+        "params": {
+          "diagnostics": [],
+          "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/shaders/fixtures/positive/effect.glsl"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "textDocument/publishDiagnostics",
+        "params": {
+          "diagnostics": [],
+          "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/shaders/fixtures/positive/effect.glsl"
+        }
+      }
+    ]
+  },
+  {
+    "name": "inline",
+    "position": {
+      "line": 6,
+      "character": 11
+    },
+    "completion": [
+      {
+        "data": {
+          "kind": "value",
+          "label": "alpha",
+          "position": {
+            "character": 11,
+            "line": 6
+          },
+          "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/shaders/fixtures/inline/src/main.tua"
+        },
+        "insertText": "alpha",
+        "kind": 12,
+        "label": "alpha",
+        "sortText": "0000_alpha",
+        "textEdit": {
+          "newText": "alpha",
+          "range": {
+            "end": {
+              "character": 14,
+              "line": 6
+            },
+            "start": {
+              "character": 9,
+              "line": 6
+            }
+          }
+        }
+      }
+    ],
+    "hover": {
+      "contents": {
+        "kind": "markdown",
+        "value": "```tua\n```glsl\nextern number alpha;\n```\n/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/shaders/fixtures/inline/src/main.tua:2\n\nExpected Lua value: number.\n```"
+      },
+      "range": {
+        "end": {
+          "character": 15,
+          "line": 6
+        },
+        "start": {
+          "character": 8,
+          "line": 6
+        }
+      }
+    },
+    "definition": {
+      "range": {
+        "end": {
+          "character": 19,
+          "line": 1
+        },
+        "start": {
+          "character": 14,
+          "line": 1
+        }
+      },
+      "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/shaders/fixtures/inline/src/main.tua"
+    },
+    "diagnostics": [
+      {
+        "jsonrpc": "2.0",
+        "method": "textDocument/publishDiagnostics",
+        "params": {
+          "diagnostics": [],
+          "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/shaders/fixtures/inline/src/main.tua"
+        }
+      }
+    ]
+  }
+]

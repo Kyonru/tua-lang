@@ -1,0 +1,30 @@
+{
+  "completed": true,
+  "duration": 0.0028639999945881,
+  "output": "++.\n2 successes / 0 failures / 0 errors / 1 pending : 0.002864 seconds\n\nPending -> tests/math_spec.tua:10 (generated __tua_tests__/math_spec.lua:10)\nmath #unit nested later",
+  "success": true,
+  "tests": [
+    {
+      "file": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/testing/fixture/tests/math_spec.tua",
+      "line": 4,
+      "message": "",
+      "name": "math #unit typed doubles",
+      "status": "passed"
+    },
+    {
+      "file": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/testing/fixture/tests/math_spec.tua",
+      "line": 9,
+      "message": "",
+      "name": "math #unit nested escaped A name",
+      "status": "passed"
+    },
+    {
+      "file": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/testing/fixture/tests/math_spec.tua",
+      "line": 10,
+      "message": "",
+      "name": "math #unit nested later",
+      "status": "skipped"
+    }
+  ],
+  "version": 1
+}

@@ -1,0 +1,2 @@
+/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/audio/project/src/sample2.wav:1:1 warning TL2012: asset pipeline `audio`: tempo confidence is low (ambiguity 0.97; candidates 60.0, 119.7, 71.5, 177.0, 91.2 BPM); author BPM and beat offset before using quantized transitions
+built 9 file(s)

@@ -1,0 +1,46 @@
+[
+  {
+    "fixture": "happy",
+    "command": [
+      "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+      "check"
+    ],
+    "cwd": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/happy",
+    "code": 0,
+    "stdout": "checked 1 file(s)\n",
+    "stderr": ""
+  },
+  {
+    "fixture": "happy",
+    "command": [
+      "lua",
+      "main.lua"
+    ],
+    "cwd": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/happy/build",
+    "code": 0,
+    "stdout": "PASS transitions, wildcard, payload, async cancellation/resume\n",
+    "stderr": ""
+  },
+  {
+    "fixture": "reserved",
+    "command": [
+      "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+      "check"
+    ],
+    "cwd": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/reserved",
+    "code": 0,
+    "stdout": "checked 1 file(s)\n",
+    "stderr": ""
+  },
+  {
+    "fixture": "reserved",
+    "command": [
+      "lua",
+      "main.lua"
+    ],
+    "cwd": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/reserved/build",
+    "code": 1,
+    "stdout": "",
+    "stderr": "lua: main.lua:6: attempt to call a string value (method 'current')\nstack traceback:\n\tmain.lua:6: in main chunk\n\t[C]: in ?\n"
+  }
+]

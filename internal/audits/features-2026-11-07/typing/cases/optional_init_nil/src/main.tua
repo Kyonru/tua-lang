@@ -1,0 +1,2 @@
+type Row = {value?: number}
+local row: Row = {value=nil}

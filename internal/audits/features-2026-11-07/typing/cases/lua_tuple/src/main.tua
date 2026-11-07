@@ -1,0 +1,6 @@
+---@alias Pair [number, string]
+---@type Pair
+local pair = {1, "a"}
+local n: number = pair[1]
+local s: string = pair[2]
+print(n,s)

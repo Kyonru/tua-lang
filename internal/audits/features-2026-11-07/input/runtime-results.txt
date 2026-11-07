@@ -1,0 +1,5 @@
+positive controls/pairs/press/release/pointer PASS
+negative_deadzone active device	kbm
+hex deadzone key held	false	value	0
+empty unknown accepted build then runtime	false	No control with name "missing" defined
+radial joystick and deadzone PASS

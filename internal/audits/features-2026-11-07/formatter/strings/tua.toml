@@ -1,0 +1,6 @@
+source="src"
+out="build"
+[diagnostics]
+rules=false
+[format]
+quote_style="single"

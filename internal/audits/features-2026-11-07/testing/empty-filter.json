@@ -1,0 +1,14 @@
+{
+  "argv": [
+    "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+    "test",
+    "--filter",
+    "NO-SUCH-NAME",
+    "--report",
+    "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/testing/empty-results.json"
+  ],
+  "cwd": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/testing/fixture",
+  "returncode": 0,
+  "stdout": "\n0 successes / 0 failures / 0 errors / 0 pending : 0.003739 seconds\n",
+  "stderr": ""
+}

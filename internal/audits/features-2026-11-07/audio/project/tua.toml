@@ -1,0 +1,19 @@
+source = "src"
+out = "build"
+main = "main.tua"
+target = "love11-luajit"
+extension = "tua"
+emit_maps = true
+
+[[asset_pipelines]]
+name = "audio"
+builtin = "audio-analysis"
+inputs = ["src/sample*.wav"]
+output = "src/generated/audio"
+version = "1"
+
+[asset_pipelines.options]
+envelope_hz = 20
+tempo_min = 60
+tempo_max = 200
+confidence_warning = 0.35

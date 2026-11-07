@@ -1,0 +1,144 @@
+[
+  {
+    "name": "self-control",
+    "check": {
+      "code": 0,
+      "stdout": "checked 1 file(s)\n",
+      "stderr": ""
+    },
+    "build": {
+      "code": 0,
+      "stdout": "built 1 file(s)\n",
+      "stderr": ""
+    },
+    "lua": {
+      "code": 0,
+      "stdout": "control ok\n",
+      "stderr": ""
+    }
+  },
+  {
+    "name": "uninitialized",
+    "check": {
+      "code": 1,
+      "stdout": "",
+      "stderr": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/classes/uninitialized/src/main.tua:2:2 error TL1008: class `Item` does not initialize required field `value`\n"
+    },
+    "build": {
+      "code": 1,
+      "stdout": "",
+      "stderr": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/classes/uninitialized/src/main.tua:2:2 error TL1008: class `Item` does not initialize required field `value`\n"
+    }
+  },
+  {
+    "name": "override-drift",
+    "check": {
+      "code": 1,
+      "stdout": "",
+      "stderr": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/classes/override-drift/src/main.tua:5:11 error TL1008: method `read` has a signature incompatible with its parent method\n"
+    },
+    "build": {
+      "code": 1,
+      "stdout": "",
+      "stderr": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/classes/override-drift/src/main.tua:5:11 error TL1008: method `read` has a signature incompatible with its parent method\n"
+    }
+  },
+  {
+    "name": "self-reference",
+    "check": {
+      "code": 0,
+      "stdout": "checked 1 file(s)\n",
+      "stderr": ""
+    },
+    "build": {
+      "code": 0,
+      "stdout": "built 1 file(s)\n",
+      "stderr": ""
+    },
+    "lua": {
+      "code": 1,
+      "stdout": "",
+      "stderr": "/opt/homebrew/bin/lua: build/main.lua:23: self reference lost\nstack traceback:\n\t[C]: in function 'assert'\n\tbuild/main.lua:23: in main chunk\n\t[C]: in ?\n"
+    }
+  },
+  {
+    "name": "positive",
+    "check": {
+      "code": 0,
+      "stdout": "checked 1 file(s)\n",
+      "stderr": ""
+    },
+    "build": {
+      "code": 0,
+      "stdout": "built 1 file(s)\n",
+      "stderr": ""
+    },
+    "lua": {
+      "code": 0,
+      "stdout": "positive ok\n",
+      "stderr": ""
+    }
+  },
+  {
+    "name": "default-order",
+    "check": {
+      "code": 0,
+      "stdout": "checked 1 file(s)\n",
+      "stderr": ""
+    },
+    "build": {
+      "code": 0,
+      "stdout": "built 1 file(s)\n",
+      "stderr": ""
+    },
+    "lua": {
+      "code": 0,
+      "stdout": "defaults ok\n",
+      "stderr": ""
+    }
+  },
+  {
+    "name": "negative",
+    "check": {
+      "code": 1,
+      "stdout": "",
+      "stderr": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/classes/negative/src/main.tua:8:7 error TL1008: class `Child` extends final class `Base`\n/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/classes/negative/src/main.tua:9:11 error TL1008: method `update` overrides final parent method\n"
+    },
+    "build": {
+      "code": 1,
+      "stdout": "",
+      "stderr": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/classes/negative/src/main.tua:8:7 error TL1008: class `Child` extends final class `Base`\n/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/classes/negative/src/main.tua:9:11 error TL1008: method `update` overrides final parent method\n"
+    }
+  },
+  {
+    "name": "forward",
+    "check": {
+      "code": 0,
+      "stdout": "checked 1 file(s)\n",
+      "stderr": ""
+    },
+    "build": {
+      "code": 0,
+      "stdout": "built 1 file(s)\n",
+      "stderr": ""
+    },
+    "lua": {
+      "code": 0,
+      "stdout": "forward ok\n",
+      "stderr": ""
+    }
+  },
+  {
+    "name": "implicit-parent",
+    "check": {
+      "code": 1,
+      "stdout": "",
+      "stderr": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/classes/implicit-parent/src/main.tua:5:1 error TL1004: argument count mismatch: expected 2, found 1\n"
+    },
+    "build": {
+      "code": 1,
+      "stdout": "",
+      "stderr": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/classes/implicit-parent/src/main.tua:5:1 error TL1004: argument count mismatch: expected 2, found 1\n"
+    }
+  }
+]

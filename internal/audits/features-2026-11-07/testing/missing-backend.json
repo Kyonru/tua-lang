@@ -1,0 +1,14 @@
+{
+  "argv": [
+    "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+    "test",
+    "--busted",
+    "./no-such-busted",
+    "--report",
+    "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/testing/missing-results.json"
+  ],
+  "cwd": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/testing/fixture",
+  "returncode": 1,
+  "stdout": "",
+  "stderr": "error: could not run Busted (./no-such-busted): No such file or directory (os error 2). Install Busted for your Lua interpreter with `luarocks install busted`, or use --busted PATH / TUA_BUSTED\n"
+}

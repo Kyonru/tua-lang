@@ -1,0 +1,2 @@
+local game = store({score=0,paused=false})
+return {game=game}

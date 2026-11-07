@@ -1,0 +1,6 @@
+source = "src"
+out = "custom output"
+target = "love11-luajit"
+emit_maps = true
+[test]
+source = "tests"

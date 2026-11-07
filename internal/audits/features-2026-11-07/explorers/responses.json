@@ -1,0 +1,2491 @@
+{
+  "initialize": {
+    "capabilities": {
+      "callHierarchyProvider": true,
+      "codeActionProvider": {
+        "codeActionKinds": [
+          "quickfix",
+          "source.organizeImports",
+          "source.sortImports",
+          "source.removeUnusedImports",
+          "source.tua.createMissingLoveCallbacks",
+          "source.fixAll"
+        ]
+      },
+      "codeLensProvider": {
+        "resolveProvider": true
+      },
+      "completionProvider": {
+        "resolveProvider": true,
+        "triggerCharacters": [
+          ":",
+          ".",
+          "\"",
+          "'",
+          "@",
+          "-",
+          "_",
+          "a",
+          "b",
+          "c",
+          "d",
+          "e",
+          "f",
+          "g",
+          "h",
+          "i",
+          "j",
+          "k",
+          "l",
+          "m",
+          "n",
+          "o",
+          "p",
+          "q",
+          "r",
+          "s",
+          "t",
+          "u",
+          "v",
+          "w",
+          "x",
+          "y",
+          "z",
+          "A",
+          "B",
+          "C",
+          "D",
+          "E",
+          "F",
+          "G",
+          "H",
+          "I",
+          "J",
+          "K",
+          "L",
+          "M",
+          "N",
+          "O",
+          "P",
+          "Q",
+          "R",
+          "S",
+          "T",
+          "U",
+          "V",
+          "W",
+          "X",
+          "Y",
+          "Z",
+          "0",
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9"
+        ]
+      },
+      "definitionProvider": true,
+      "documentFormattingProvider": true,
+      "documentHighlightProvider": true,
+      "documentLinkProvider": {
+        "resolveProvider": false
+      },
+      "documentOnTypeFormattingProvider": {
+        "firstTriggerCharacter": "\n",
+        "moreTriggerCharacter": [
+          "}",
+          ")",
+          "]",
+          ",",
+          "d"
+        ]
+      },
+      "documentRangeFormattingProvider": true,
+      "documentSymbolProvider": true,
+      "foldingRangeProvider": true,
+      "hoverProvider": true,
+      "implementationProvider": true,
+      "inlayHintProvider": {
+        "resolveProvider": false
+      },
+      "inlineCompletionProvider": true,
+      "positionEncoding": "utf-16",
+      "referencesProvider": true,
+      "renameProvider": {
+        "prepareProvider": true
+      },
+      "selectionRangeProvider": true,
+      "semanticTokensProvider": {
+        "full": {
+          "delta": true
+        },
+        "legend": {
+          "tokenModifiers": [
+            "declaration",
+            "readonly",
+            "deprecated",
+            "modification",
+            "defaultLibrary",
+            "propertyChain1",
+            "propertyChain2",
+            "propertyChain3",
+            "propertyChain4"
+          ],
+          "tokenTypes": [
+            "type",
+            "function",
+            "variable",
+            "parameter",
+            "property",
+            "method",
+            "class",
+            "enum",
+            "enumMember",
+            "namespace",
+            "event",
+            "label",
+            "decorator"
+          ]
+        },
+        "range": true
+      },
+      "signatureHelpProvider": {
+        "retriggerCharacters": [
+          ")"
+        ],
+        "triggerCharacters": [
+          "(",
+          ","
+        ]
+      },
+      "textDocumentSync": {
+        "change": 2,
+        "openClose": true,
+        "save": {
+          "includeText": true
+        }
+      },
+      "typeDefinitionProvider": true,
+      "workspace": {
+        "fileOperations": {
+          "willRename": {
+            "filters": [
+              {
+                "pattern": {
+                  "glob": "**/*"
+                },
+                "scheme": "file"
+              }
+            ]
+          }
+        },
+        "workspaceFolders": {
+          "changeNotifications": true,
+          "supported": true
+        }
+      },
+      "workspaceSymbolProvider": true
+    },
+    "serverInfo": {
+      "name": "tua-lsp",
+      "version": "0.6.0"
+    }
+  },
+  "initial": {
+    "moduleGraph": {
+      "analysisRevision": 12,
+      "graph": {
+        "cycles": [
+          {
+            "id": "cycle:0",
+            "moduleUris": [
+              "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua",
+              "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/other.tua"
+            ]
+          }
+        ],
+        "edges": [
+          {
+            "inCycle": true,
+            "kind": "require",
+            "range": {
+              "end": {
+                "character": 28,
+                "line": 0
+              },
+              "start": {
+                "character": 23,
+                "line": 0
+              }
+            },
+            "resolution": {
+              "status": "resolved",
+              "targetUri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/other.tua"
+            },
+            "sourceUri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua",
+            "specifier": "other"
+          },
+          {
+            "inCycle": true,
+            "kind": "require",
+            "range": {
+              "end": {
+                "character": 26,
+                "line": 0
+              },
+              "start": {
+                "character": 22,
+                "line": 0
+              }
+            },
+            "resolution": {
+              "status": "resolved",
+              "targetUri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua"
+            },
+            "sourceUri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/other.tua",
+            "specifier": "main"
+          }
+        ],
+        "modules": [
+          {
+            "dependencyCount": 0,
+            "exports": [
+              {
+                "documentation": null,
+                "exportRange": {
+                  "end": {
+                    "character": 14,
+                    "line": 0
+                  },
+                  "start": {
+                    "character": 9,
+                    "line": 0
+                  }
+                },
+                "name": "plain",
+                "origin": "lua",
+                "range": {
+                  "end": {
+                    "character": 14,
+                    "line": 0
+                  },
+                  "start": {
+                    "character": 9,
+                    "line": 0
+                  }
+                },
+                "type": "boolean"
+              }
+            ],
+            "inCycle": false,
+            "inclusionPath": {
+              "rootUri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/interop.lua",
+              "steps": []
+            },
+            "reverseDependencyCount": 0,
+            "root": true,
+            "sourceKind": "lua",
+            "unresolvedDependencyCount": 0,
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/interop.lua"
+          },
+          {
+            "dependencyCount": 1,
+            "exports": [
+              {
+                "documentation": null,
+                "exportRange": {
+                  "end": {
+                    "character": 17,
+                    "line": 14
+                  },
+                  "start": {
+                    "character": 9,
+                    "line": 14
+                  }
+                },
+                "name": "Position",
+                "origin": "tua",
+                "range": {
+                  "end": {
+                    "character": 14,
+                    "line": 5
+                  },
+                  "start": {
+                    "character": 6,
+                    "line": 5
+                  }
+                },
+                "type": "EcsComponent"
+              }
+            ],
+            "inCycle": true,
+            "inclusionPath": null,
+            "reverseDependencyCount": 1,
+            "root": false,
+            "sourceKind": "tua",
+            "unresolvedDependencyCount": 0,
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua"
+          },
+          {
+            "dependencyCount": 1,
+            "exports": [
+              {
+                "documentation": null,
+                "exportRange": {
+                  "end": {
+                    "character": 14,
+                    "line": 1
+                  },
+                  "start": {
+                    "character": 9,
+                    "line": 1
+                  }
+                },
+                "name": "value",
+                "origin": "tua",
+                "range": {
+                  "end": {
+                    "character": 14,
+                    "line": 1
+                  },
+                  "start": {
+                    "character": 9,
+                    "line": 1
+                  }
+                },
+                "type": "number"
+              }
+            ],
+            "inCycle": true,
+            "inclusionPath": null,
+            "reverseDependencyCount": 1,
+            "root": false,
+            "sourceKind": "tua",
+            "unresolvedDependencyCount": 0,
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/other.tua"
+          }
+        ]
+      }
+    },
+    "signalGraph": {
+      "events": [
+        {
+          "bus": "events",
+          "busUri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua",
+          "calls": [
+            {
+              "callRange": {
+                "end": {
+                  "character": 58,
+                  "line": 2
+                },
+                "start": {
+                  "character": 0,
+                  "line": 2
+                }
+              },
+              "indentation": "",
+              "inferredPayload": null,
+              "insertionPosition": {
+                "character": 0,
+                "line": 2
+              },
+              "method": "declare",
+              "payload": [
+                {
+                  "name": "player",
+                  "type": "string"
+                }
+              ],
+              "range": {
+                "end": {
+                  "character": 27,
+                  "line": 2
+                },
+                "start": {
+                  "character": 15,
+                  "line": 2
+                }
+              },
+              "receiver": "events",
+              "role": "declaration",
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua"
+            },
+            {
+              "callRange": {
+                "end": {
+                  "character": 53,
+                  "line": 3
+                },
+                "start": {
+                  "character": 0,
+                  "line": 3
+                }
+              },
+              "indentation": "",
+              "inferredPayload": null,
+              "insertionPosition": {
+                "character": 0,
+                "line": 3
+              },
+              "method": "on",
+              "payload": [
+                {
+                  "name": "player",
+                  "type": "string"
+                }
+              ],
+              "range": {
+                "end": {
+                  "character": 22,
+                  "line": 3
+                },
+                "start": {
+                  "character": 10,
+                  "line": 3
+                }
+              },
+              "receiver": "events",
+              "role": "listener",
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua"
+            },
+            {
+              "callRange": {
+                "end": {
+                  "character": 32,
+                  "line": 4
+                },
+                "start": {
+                  "character": 0,
+                  "line": 4
+                }
+              },
+              "indentation": "",
+              "inferredPayload": [
+                {
+                  "name": "value1",
+                  "type": "string"
+                }
+              ],
+              "insertionPosition": {
+                "character": 0,
+                "line": 4
+              },
+              "method": "emit",
+              "payload": null,
+              "range": {
+                "end": {
+                  "character": 24,
+                  "line": 4
+                },
+                "start": {
+                  "character": 12,
+                  "line": 4
+                }
+              },
+              "receiver": "events",
+              "role": "emit",
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua"
+            }
+          ],
+          "id": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua#2:7##player.hit",
+          "name": "player.hit",
+          "resolvedPayload": [
+            {
+              "name": "player",
+              "type": "string"
+            }
+          ],
+          "schemaConflict": false
+        }
+      ]
+    },
+    "ecsGraph": {
+      "analysisRevision": 12,
+      "graph": {
+        "components": [
+          {
+            "fields": [
+              {
+                "name": "x",
+                "range": {
+                  "end": {
+                    "character": 57,
+                    "line": 5
+                  },
+                  "start": {
+                    "character": 49,
+                    "line": 5
+                  }
+                },
+                "type": "number"
+              }
+            ],
+            "id": "component:/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua:6:7",
+            "localName": "Position",
+            "nameRange": {
+              "end": {
+                "character": 14,
+                "line": 5
+              },
+              "start": {
+                "character": 6,
+                "line": 5
+              }
+            },
+            "range": {
+              "end": {
+                "character": 60,
+                "line": 5
+              },
+              "start": {
+                "character": 17,
+                "line": 5
+              }
+            },
+            "runtimeName": "Position",
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua"
+          }
+        ],
+        "insights": [],
+        "queries": [
+          {
+            "components": [
+              {
+                "access": "readWrite",
+                "componentId": "component:/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua:6:7",
+                "range": {
+                  "end": {
+                    "character": 45,
+                    "line": 7
+                  },
+                  "start": {
+                    "character": 37,
+                    "line": 7
+                  }
+                },
+                "reference": "Position"
+              }
+            ],
+            "id": "system:/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua:8:18:query",
+            "kind": "system",
+            "name": "movement",
+            "nameRange": {
+              "end": {
+                "character": 14,
+                "line": 7
+              },
+              "start": {
+                "character": 6,
+                "line": 7
+              }
+            },
+            "ownerSystemId": "system:/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua:8:18",
+            "range": {
+              "end": {
+                "character": 96,
+                "line": 7
+              },
+              "start": {
+                "character": 17,
+                "line": 7
+              }
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua"
+          },
+          {
+            "components": [
+              {
+                "access": "filter",
+                "componentId": "component:/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua:6:7",
+                "range": {
+                  "end": {
+                    "character": 36,
+                    "line": 8
+                  },
+                  "start": {
+                    "character": 28,
+                    "line": 8
+                  }
+                },
+                "reference": "Position"
+              }
+            ],
+            "id": "query:/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua:9:15",
+            "kind": "standalone",
+            "name": "found",
+            "nameRange": {
+              "end": {
+                "character": 11,
+                "line": 8
+              },
+              "start": {
+                "character": 6,
+                "line": 8
+              }
+            },
+            "ownerSystemId": null,
+            "range": {
+              "end": {
+                "character": 39,
+                "line": 8
+              },
+              "start": {
+                "character": 14,
+                "line": 8
+              }
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua"
+          }
+        ],
+        "systems": [
+          {
+            "callbackRange": {
+              "end": {
+                "character": 95,
+                "line": 7
+              },
+              "start": {
+                "character": 49,
+                "line": 7
+              }
+            },
+            "components": [
+              {
+                "access": "readWrite",
+                "componentId": "component:/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua:6:7",
+                "range": {
+                  "end": {
+                    "character": 45,
+                    "line": 7
+                  },
+                  "start": {
+                    "character": 37,
+                    "line": 7
+                  }
+                },
+                "reference": "Position"
+              }
+            ],
+            "id": "system:/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua:8:18",
+            "name": "movement",
+            "nameRange": {
+              "end": {
+                "character": 14,
+                "line": 7
+              },
+              "start": {
+                "character": 6,
+                "line": 7
+              }
+            },
+            "range": {
+              "end": {
+                "character": 96,
+                "line": 7
+              },
+              "start": {
+                "character": 17,
+                "line": 7
+              }
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua"
+          }
+        ]
+      }
+    },
+    "objectPoolGraph": {
+      "analysisRevision": 12,
+      "graph": {
+        "insights": [],
+        "operations": [
+          {
+            "id": "acquire:/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua:11:16",
+            "itemName": "bullet",
+            "itemRange": {
+              "end": {
+                "character": 12,
+                "line": 10
+              },
+              "start": {
+                "character": 6,
+                "line": 10
+              }
+            },
+            "kind": "acquire",
+            "poolId": "pool:/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua:10:7",
+            "poolName": "bullets",
+            "range": {
+              "end": {
+                "character": 32,
+                "line": 10
+              },
+              "start": {
+                "character": 15,
+                "line": 10
+              }
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua"
+          },
+          {
+            "id": "release:/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua:12:1",
+            "itemName": "bullet",
+            "itemRange": {
+              "end": {
+                "character": 22,
+                "line": 11
+              },
+              "start": {
+                "character": 16,
+                "line": 11
+              }
+            },
+            "kind": "release",
+            "poolId": "pool:/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua:10:7",
+            "poolName": "bullets",
+            "range": {
+              "end": {
+                "character": 23,
+                "line": 11
+              },
+              "start": {
+                "character": 0,
+                "line": 11
+              }
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua"
+          }
+        ],
+        "pools": [
+          {
+            "id": "pool:/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua:10:7",
+            "itemType": "any",
+            "name": "bullets",
+            "nameRange": {
+              "end": {
+                "character": 13,
+                "line": 9
+              },
+              "start": {
+                "character": 6,
+                "line": 9
+              }
+            },
+            "range": {
+              "end": {
+                "character": 81,
+                "line": 9
+              },
+              "start": {
+                "character": 16,
+                "line": 9
+              }
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua"
+          }
+        ]
+      }
+    },
+    "audioGraph": {
+      "analysisRevision": 12,
+      "graph": {
+        "systems": [
+          {
+            "buses": [
+              "master",
+              "sfx"
+            ],
+            "cues": [],
+            "effects": [],
+            "id": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua:14:15",
+            "layers": [],
+            "musicStates": [],
+            "range": {
+              "end": {
+                "character": 106,
+                "line": 13
+              },
+              "start": {
+                "character": 14,
+                "line": 13
+              }
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua"
+          }
+        ]
+      }
+    },
+    "assetInventory": {
+      "analysisRevision": 12,
+      "inventory": {
+        "assets": [],
+        "diagnostics": []
+      }
+    },
+    "inspect": {
+      "analysisRevision": 12,
+      "documentVersion": 1,
+      "items": [
+        {
+          "initial": "idle",
+          "kind": "stateMachine",
+          "name": "machine",
+          "range": {
+            "end": {
+              "character": 151,
+              "line": 12
+            },
+            "start": {
+              "character": 0,
+              "line": 12
+            }
+          },
+          "selectionRange": {
+            "end": {
+              "character": 13,
+              "line": 12
+            },
+            "start": {
+              "character": 6,
+              "line": 12
+            }
+          },
+          "states": [
+            {
+              "initial": true,
+              "name": "idle",
+              "range": {
+                "end": {
+                  "character": 47,
+                  "line": 12
+                },
+                "start": {
+                  "character": 41,
+                  "line": 12
+                }
+              }
+            },
+            {
+              "initial": false,
+              "name": "run",
+              "range": {
+                "end": {
+                  "character": 100,
+                  "line": 12
+                },
+                "start": {
+                  "character": 95,
+                  "line": 12
+                }
+              }
+            }
+          ],
+          "transitions": [
+            {
+              "event": "go",
+              "from": [
+                "idle"
+              ],
+              "range": {
+                "end": {
+                  "character": 102,
+                  "line": 12
+                },
+                "start": {
+                  "character": 60,
+                  "line": 12
+                }
+              },
+              "selectionRange": {
+                "end": {
+                  "character": 73,
+                  "line": 12
+                },
+                "start": {
+                  "character": 69,
+                  "line": 12
+                }
+              },
+              "to": "run",
+              "wildcardFrom": false
+            },
+            {
+              "event": "stop",
+              "from": [],
+              "range": {
+                "end": {
+                  "character": 146,
+                  "line": 12
+                },
+                "start": {
+                  "character": 104,
+                  "line": 12
+                }
+              },
+              "selectionRange": {
+                "end": {
+                  "character": 119,
+                  "line": 12
+                },
+                "start": {
+                  "character": 113,
+                  "line": 12
+                }
+              },
+              "to": "idle",
+              "wildcardFrom": true
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "unsaved": {
+    "moduleGraph": {
+      "analysisRevision": 13,
+      "graph": {
+        "cycles": [
+          {
+            "id": "cycle:0",
+            "moduleUris": [
+              "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua",
+              "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/other.tua"
+            ]
+          }
+        ],
+        "edges": [
+          {
+            "inCycle": true,
+            "kind": "require",
+            "range": {
+              "end": {
+                "character": 28,
+                "line": 0
+              },
+              "start": {
+                "character": 23,
+                "line": 0
+              }
+            },
+            "resolution": {
+              "status": "resolved",
+              "targetUri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/other.tua"
+            },
+            "sourceUri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua",
+            "specifier": "other"
+          },
+          {
+            "inCycle": true,
+            "kind": "require",
+            "range": {
+              "end": {
+                "character": 26,
+                "line": 0
+              },
+              "start": {
+                "character": 22,
+                "line": 0
+              }
+            },
+            "resolution": {
+              "status": "resolved",
+              "targetUri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua"
+            },
+            "sourceUri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/other.tua",
+            "specifier": "main"
+          }
+        ],
+        "modules": [
+          {
+            "dependencyCount": 0,
+            "exports": [
+              {
+                "documentation": null,
+                "exportRange": {
+                  "end": {
+                    "character": 14,
+                    "line": 0
+                  },
+                  "start": {
+                    "character": 9,
+                    "line": 0
+                  }
+                },
+                "name": "plain",
+                "origin": "lua",
+                "range": {
+                  "end": {
+                    "character": 14,
+                    "line": 0
+                  },
+                  "start": {
+                    "character": 9,
+                    "line": 0
+                  }
+                },
+                "type": "boolean"
+              }
+            ],
+            "inCycle": false,
+            "inclusionPath": {
+              "rootUri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/interop.lua",
+              "steps": []
+            },
+            "reverseDependencyCount": 0,
+            "root": true,
+            "sourceKind": "lua",
+            "unresolvedDependencyCount": 0,
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/interop.lua"
+          },
+          {
+            "dependencyCount": 1,
+            "exports": [
+              {
+                "documentation": null,
+                "exportRange": {
+                  "end": {
+                    "character": 17,
+                    "line": 14
+                  },
+                  "start": {
+                    "character": 9,
+                    "line": 14
+                  }
+                },
+                "name": "Location",
+                "origin": "tua",
+                "range": {
+                  "end": {
+                    "character": 14,
+                    "line": 5
+                  },
+                  "start": {
+                    "character": 6,
+                    "line": 5
+                  }
+                },
+                "type": "EcsComponent"
+              }
+            ],
+            "inCycle": true,
+            "inclusionPath": null,
+            "reverseDependencyCount": 1,
+            "root": false,
+            "sourceKind": "tua",
+            "unresolvedDependencyCount": 0,
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua"
+          },
+          {
+            "dependencyCount": 1,
+            "exports": [
+              {
+                "documentation": null,
+                "exportRange": {
+                  "end": {
+                    "character": 14,
+                    "line": 1
+                  },
+                  "start": {
+                    "character": 9,
+                    "line": 1
+                  }
+                },
+                "name": "value",
+                "origin": "tua",
+                "range": {
+                  "end": {
+                    "character": 14,
+                    "line": 1
+                  },
+                  "start": {
+                    "character": 9,
+                    "line": 1
+                  }
+                },
+                "type": "number"
+              }
+            ],
+            "inCycle": true,
+            "inclusionPath": null,
+            "reverseDependencyCount": 1,
+            "root": false,
+            "sourceKind": "tua",
+            "unresolvedDependencyCount": 0,
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/other.tua"
+          }
+        ]
+      }
+    },
+    "signalGraph": {
+      "events": [
+        {
+          "bus": "events",
+          "busUri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua",
+          "calls": [
+            {
+              "callRange": {
+                "end": {
+                  "character": 62,
+                  "line": 2
+                },
+                "start": {
+                  "character": 0,
+                  "line": 2
+                }
+              },
+              "indentation": "",
+              "inferredPayload": null,
+              "insertionPosition": {
+                "character": 0,
+                "line": 2
+              },
+              "method": "declare",
+              "payload": [
+                {
+                  "name": "player",
+                  "type": "string"
+                }
+              ],
+              "range": {
+                "end": {
+                  "character": 31,
+                  "line": 2
+                },
+                "start": {
+                  "character": 15,
+                  "line": 2
+                }
+              },
+              "receiver": "events",
+              "role": "declaration",
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua"
+            },
+            {
+              "callRange": {
+                "end": {
+                  "character": 57,
+                  "line": 3
+                },
+                "start": {
+                  "character": 0,
+                  "line": 3
+                }
+              },
+              "indentation": "",
+              "inferredPayload": null,
+              "insertionPosition": {
+                "character": 0,
+                "line": 3
+              },
+              "method": "on",
+              "payload": [
+                {
+                  "name": "player",
+                  "type": "string"
+                }
+              ],
+              "range": {
+                "end": {
+                  "character": 26,
+                  "line": 3
+                },
+                "start": {
+                  "character": 10,
+                  "line": 3
+                }
+              },
+              "receiver": "events",
+              "role": "listener",
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua"
+            },
+            {
+              "callRange": {
+                "end": {
+                  "character": 36,
+                  "line": 4
+                },
+                "start": {
+                  "character": 0,
+                  "line": 4
+                }
+              },
+              "indentation": "",
+              "inferredPayload": [
+                {
+                  "name": "value1",
+                  "type": "string"
+                }
+              ],
+              "insertionPosition": {
+                "character": 0,
+                "line": 4
+              },
+              "method": "emit",
+              "payload": null,
+              "range": {
+                "end": {
+                  "character": 28,
+                  "line": 4
+                },
+                "start": {
+                  "character": 12,
+                  "line": 4
+                }
+              },
+              "receiver": "events",
+              "role": "emit",
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua"
+            }
+          ],
+          "id": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua#2:7##player.changed",
+          "name": "player.changed",
+          "resolvedPayload": [
+            {
+              "name": "player",
+              "type": "string"
+            }
+          ],
+          "schemaConflict": false
+        }
+      ]
+    },
+    "ecsGraph": {
+      "analysisRevision": 13,
+      "graph": {
+        "components": [
+          {
+            "fields": [
+              {
+                "name": "x",
+                "range": {
+                  "end": {
+                    "character": 57,
+                    "line": 5
+                  },
+                  "start": {
+                    "character": 49,
+                    "line": 5
+                  }
+                },
+                "type": "number"
+              }
+            ],
+            "id": "component:/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua:6:7",
+            "localName": "Location",
+            "nameRange": {
+              "end": {
+                "character": 14,
+                "line": 5
+              },
+              "start": {
+                "character": 6,
+                "line": 5
+              }
+            },
+            "range": {
+              "end": {
+                "character": 60,
+                "line": 5
+              },
+              "start": {
+                "character": 17,
+                "line": 5
+              }
+            },
+            "runtimeName": "Location",
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua"
+          }
+        ],
+        "insights": [],
+        "queries": [
+          {
+            "components": [
+              {
+                "access": "readWrite",
+                "componentId": "component:/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua:6:7",
+                "range": {
+                  "end": {
+                    "character": 45,
+                    "line": 7
+                  },
+                  "start": {
+                    "character": 37,
+                    "line": 7
+                  }
+                },
+                "reference": "Location"
+              }
+            ],
+            "id": "system:/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua:8:18:query",
+            "kind": "system",
+            "name": "movement",
+            "nameRange": {
+              "end": {
+                "character": 14,
+                "line": 7
+              },
+              "start": {
+                "character": 6,
+                "line": 7
+              }
+            },
+            "ownerSystemId": "system:/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua:8:18",
+            "range": {
+              "end": {
+                "character": 96,
+                "line": 7
+              },
+              "start": {
+                "character": 17,
+                "line": 7
+              }
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua"
+          },
+          {
+            "components": [
+              {
+                "access": "filter",
+                "componentId": "component:/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua:6:7",
+                "range": {
+                  "end": {
+                    "character": 36,
+                    "line": 8
+                  },
+                  "start": {
+                    "character": 28,
+                    "line": 8
+                  }
+                },
+                "reference": "Location"
+              }
+            ],
+            "id": "query:/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua:9:15",
+            "kind": "standalone",
+            "name": "found",
+            "nameRange": {
+              "end": {
+                "character": 11,
+                "line": 8
+              },
+              "start": {
+                "character": 6,
+                "line": 8
+              }
+            },
+            "ownerSystemId": null,
+            "range": {
+              "end": {
+                "character": 39,
+                "line": 8
+              },
+              "start": {
+                "character": 14,
+                "line": 8
+              }
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua"
+          }
+        ],
+        "systems": [
+          {
+            "callbackRange": {
+              "end": {
+                "character": 95,
+                "line": 7
+              },
+              "start": {
+                "character": 49,
+                "line": 7
+              }
+            },
+            "components": [
+              {
+                "access": "readWrite",
+                "componentId": "component:/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua:6:7",
+                "range": {
+                  "end": {
+                    "character": 45,
+                    "line": 7
+                  },
+                  "start": {
+                    "character": 37,
+                    "line": 7
+                  }
+                },
+                "reference": "Location"
+              }
+            ],
+            "id": "system:/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua:8:18",
+            "name": "movement",
+            "nameRange": {
+              "end": {
+                "character": 14,
+                "line": 7
+              },
+              "start": {
+                "character": 6,
+                "line": 7
+              }
+            },
+            "range": {
+              "end": {
+                "character": 96,
+                "line": 7
+              },
+              "start": {
+                "character": 17,
+                "line": 7
+              }
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua"
+          }
+        ]
+      }
+    },
+    "objectPoolGraph": {
+      "analysisRevision": 13,
+      "graph": {
+        "insights": [],
+        "operations": [
+          {
+            "id": "acquire:/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua:11:16",
+            "itemName": "bullet",
+            "itemRange": {
+              "end": {
+                "character": 12,
+                "line": 10
+              },
+              "start": {
+                "character": 6,
+                "line": 10
+              }
+            },
+            "kind": "acquire",
+            "poolId": "pool:/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua:10:7",
+            "poolName": "bullets",
+            "range": {
+              "end": {
+                "character": 32,
+                "line": 10
+              },
+              "start": {
+                "character": 15,
+                "line": 10
+              }
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua"
+          },
+          {
+            "id": "release:/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua:12:1",
+            "itemName": "bullet",
+            "itemRange": {
+              "end": {
+                "character": 22,
+                "line": 11
+              },
+              "start": {
+                "character": 16,
+                "line": 11
+              }
+            },
+            "kind": "release",
+            "poolId": "pool:/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua:10:7",
+            "poolName": "bullets",
+            "range": {
+              "end": {
+                "character": 23,
+                "line": 11
+              },
+              "start": {
+                "character": 0,
+                "line": 11
+              }
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua"
+          }
+        ],
+        "pools": [
+          {
+            "id": "pool:/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua:10:7",
+            "itemType": "any",
+            "name": "bullets",
+            "nameRange": {
+              "end": {
+                "character": 13,
+                "line": 9
+              },
+              "start": {
+                "character": 6,
+                "line": 9
+              }
+            },
+            "range": {
+              "end": {
+                "character": 81,
+                "line": 9
+              },
+              "start": {
+                "character": 16,
+                "line": 9
+              }
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua"
+          }
+        ]
+      }
+    },
+    "audioGraph": {
+      "analysisRevision": 13,
+      "graph": {
+        "systems": [
+          {
+            "buses": [
+              "master",
+              "effects"
+            ],
+            "cues": [],
+            "effects": [],
+            "id": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua:14:15",
+            "layers": [],
+            "musicStates": [],
+            "range": {
+              "end": {
+                "character": 110,
+                "line": 13
+              },
+              "start": {
+                "character": 14,
+                "line": 13
+              }
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua"
+          }
+        ]
+      }
+    },
+    "assetInventory": {
+      "analysisRevision": 13,
+      "inventory": {
+        "assets": [],
+        "diagnostics": []
+      }
+    },
+    "inspect": {
+      "analysisRevision": 13,
+      "documentVersion": 2,
+      "items": [
+        {
+          "initial": "rest",
+          "kind": "stateMachine",
+          "name": "machine",
+          "range": {
+            "end": {
+              "character": 151,
+              "line": 12
+            },
+            "start": {
+              "character": 0,
+              "line": 12
+            }
+          },
+          "selectionRange": {
+            "end": {
+              "character": 13,
+              "line": 12
+            },
+            "start": {
+              "character": 6,
+              "line": 12
+            }
+          },
+          "states": [
+            {
+              "initial": true,
+              "name": "rest",
+              "range": {
+                "end": {
+                  "character": 47,
+                  "line": 12
+                },
+                "start": {
+                  "character": 41,
+                  "line": 12
+                }
+              }
+            },
+            {
+              "initial": false,
+              "name": "run",
+              "range": {
+                "end": {
+                  "character": 100,
+                  "line": 12
+                },
+                "start": {
+                  "character": 95,
+                  "line": 12
+                }
+              }
+            }
+          ],
+          "transitions": [
+            {
+              "event": "go",
+              "from": [
+                "rest"
+              ],
+              "range": {
+                "end": {
+                  "character": 102,
+                  "line": 12
+                },
+                "start": {
+                  "character": 60,
+                  "line": 12
+                }
+              },
+              "selectionRange": {
+                "end": {
+                  "character": 73,
+                  "line": 12
+                },
+                "start": {
+                  "character": 69,
+                  "line": 12
+                }
+              },
+              "to": "run",
+              "wildcardFrom": false
+            },
+            {
+              "event": "stop",
+              "from": [],
+              "range": {
+                "end": {
+                  "character": 146,
+                  "line": 12
+                },
+                "start": {
+                  "character": 104,
+                  "line": 12
+                }
+              },
+              "selectionRange": {
+                "end": {
+                  "character": 119,
+                  "line": 12
+                },
+                "start": {
+                  "character": 113,
+                  "line": 12
+                }
+              },
+              "to": "rest",
+              "wildcardFrom": true
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "dynamic": {
+    "moduleGraph": {
+      "analysisRevision": 14,
+      "graph": {
+        "cycles": [
+          {
+            "id": "cycle:0",
+            "moduleUris": [
+              "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua",
+              "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/other.tua"
+            ]
+          }
+        ],
+        "edges": [
+          {
+            "inCycle": true,
+            "kind": "require",
+            "range": {
+              "end": {
+                "character": 29,
+                "line": 0
+              },
+              "start": {
+                "character": 24,
+                "line": 0
+              }
+            },
+            "resolution": {
+              "status": "resolved",
+              "targetUri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/other.tua"
+            },
+            "sourceUri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua",
+            "specifier": "other"
+          },
+          {
+            "inCycle": true,
+            "kind": "require",
+            "range": {
+              "end": {
+                "character": 26,
+                "line": 0
+              },
+              "start": {
+                "character": 22,
+                "line": 0
+              }
+            },
+            "resolution": {
+              "status": "resolved",
+              "targetUri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua"
+            },
+            "sourceUri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/other.tua",
+            "specifier": "main"
+          }
+        ],
+        "modules": [
+          {
+            "dependencyCount": 0,
+            "exports": [
+              {
+                "documentation": null,
+                "exportRange": {
+                  "end": {
+                    "character": 14,
+                    "line": 0
+                  },
+                  "start": {
+                    "character": 9,
+                    "line": 0
+                  }
+                },
+                "name": "plain",
+                "origin": "lua",
+                "range": {
+                  "end": {
+                    "character": 14,
+                    "line": 0
+                  },
+                  "start": {
+                    "character": 9,
+                    "line": 0
+                  }
+                },
+                "type": "boolean"
+              }
+            ],
+            "inCycle": false,
+            "inclusionPath": {
+              "rootUri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/interop.lua",
+              "steps": []
+            },
+            "reverseDependencyCount": 0,
+            "root": true,
+            "sourceKind": "lua",
+            "unresolvedDependencyCount": 0,
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/interop.lua"
+          },
+          {
+            "dependencyCount": 1,
+            "exports": [],
+            "inCycle": true,
+            "inclusionPath": null,
+            "reverseDependencyCount": 1,
+            "root": false,
+            "sourceKind": "tua",
+            "unresolvedDependencyCount": 0,
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua"
+          },
+          {
+            "dependencyCount": 1,
+            "exports": [
+              {
+                "documentation": null,
+                "exportRange": {
+                  "end": {
+                    "character": 14,
+                    "line": 1
+                  },
+                  "start": {
+                    "character": 9,
+                    "line": 1
+                  }
+                },
+                "name": "value",
+                "origin": "tua",
+                "range": {
+                  "end": {
+                    "character": 14,
+                    "line": 1
+                  },
+                  "start": {
+                    "character": 9,
+                    "line": 1
+                  }
+                },
+                "type": "number"
+              }
+            ],
+            "inCycle": true,
+            "inclusionPath": null,
+            "reverseDependencyCount": 1,
+            "root": false,
+            "sourceKind": "tua",
+            "unresolvedDependencyCount": 0,
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/other.tua"
+          }
+        ]
+      }
+    },
+    "signalGraph": {
+      "events": []
+    },
+    "ecsGraph": {
+      "analysisRevision": 14,
+      "graph": {
+        "components": [],
+        "insights": [],
+        "queries": [],
+        "systems": []
+      }
+    },
+    "objectPoolGraph": {
+      "analysisRevision": 14,
+      "graph": {
+        "insights": [],
+        "operations": [],
+        "pools": []
+      }
+    },
+    "audioGraph": {
+      "analysisRevision": 14,
+      "graph": {
+        "systems": []
+      }
+    },
+    "assetInventory": {
+      "analysisRevision": 14,
+      "inventory": {
+        "assets": [],
+        "diagnostics": []
+      }
+    },
+    "inspect": {
+      "analysisRevision": 14,
+      "documentVersion": 3,
+      "items": []
+    }
+  },
+  "empty": {
+    "moduleGraph": {
+      "analysisRevision": 15,
+      "graph": {
+        "cycles": [],
+        "edges": [
+          {
+            "inCycle": false,
+            "kind": "require",
+            "range": {
+              "end": {
+                "character": 26,
+                "line": 0
+              },
+              "start": {
+                "character": 22,
+                "line": 0
+              }
+            },
+            "resolution": {
+              "status": "resolved",
+              "targetUri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua"
+            },
+            "sourceUri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/other.tua",
+            "specifier": "main"
+          }
+        ],
+        "modules": [
+          {
+            "dependencyCount": 0,
+            "exports": [
+              {
+                "documentation": null,
+                "exportRange": {
+                  "end": {
+                    "character": 14,
+                    "line": 0
+                  },
+                  "start": {
+                    "character": 9,
+                    "line": 0
+                  }
+                },
+                "name": "plain",
+                "origin": "lua",
+                "range": {
+                  "end": {
+                    "character": 14,
+                    "line": 0
+                  },
+                  "start": {
+                    "character": 9,
+                    "line": 0
+                  }
+                },
+                "type": "boolean"
+              }
+            ],
+            "inCycle": false,
+            "inclusionPath": {
+              "rootUri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/interop.lua",
+              "steps": []
+            },
+            "reverseDependencyCount": 0,
+            "root": true,
+            "sourceKind": "lua",
+            "unresolvedDependencyCount": 0,
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/interop.lua"
+          },
+          {
+            "dependencyCount": 0,
+            "exports": [],
+            "inCycle": false,
+            "inclusionPath": {
+              "rootUri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/other.tua",
+              "steps": [
+                {
+                  "kind": "require",
+                  "range": {
+                    "end": {
+                      "character": 26,
+                      "line": 0
+                    },
+                    "start": {
+                      "character": 22,
+                      "line": 0
+                    }
+                  },
+                  "sourceUri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/other.tua",
+                  "specifier": "main",
+                  "targetUri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua"
+                }
+              ]
+            },
+            "reverseDependencyCount": 1,
+            "root": false,
+            "sourceKind": "tua",
+            "unresolvedDependencyCount": 0,
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua"
+          },
+          {
+            "dependencyCount": 1,
+            "exports": [
+              {
+                "documentation": null,
+                "exportRange": {
+                  "end": {
+                    "character": 14,
+                    "line": 1
+                  },
+                  "start": {
+                    "character": 9,
+                    "line": 1
+                  }
+                },
+                "name": "value",
+                "origin": "tua",
+                "range": {
+                  "end": {
+                    "character": 14,
+                    "line": 1
+                  },
+                  "start": {
+                    "character": 9,
+                    "line": 1
+                  }
+                },
+                "type": "number"
+              }
+            ],
+            "inCycle": false,
+            "inclusionPath": {
+              "rootUri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/other.tua",
+              "steps": []
+            },
+            "reverseDependencyCount": 0,
+            "root": true,
+            "sourceKind": "tua",
+            "unresolvedDependencyCount": 0,
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/other.tua"
+          }
+        ]
+      }
+    },
+    "signalGraph": {
+      "events": []
+    },
+    "ecsGraph": {
+      "analysisRevision": 15,
+      "graph": {
+        "components": [],
+        "insights": [],
+        "queries": [],
+        "systems": []
+      }
+    },
+    "objectPoolGraph": {
+      "analysisRevision": 15,
+      "graph": {
+        "insights": [],
+        "operations": [],
+        "pools": []
+      }
+    },
+    "audioGraph": {
+      "analysisRevision": 15,
+      "graph": {
+        "systems": []
+      }
+    },
+    "assetInventory": {
+      "analysisRevision": 15,
+      "inventory": {
+        "assets": [],
+        "diagnostics": []
+      }
+    },
+    "inspect": {
+      "analysisRevision": 15,
+      "documentVersion": 4,
+      "items": []
+    }
+  },
+  "created": {
+    "moduleGraph": {
+      "analysisRevision": 20,
+      "graph": {
+        "cycles": [],
+        "edges": [
+          {
+            "inCycle": false,
+            "kind": "require",
+            "range": {
+              "end": {
+                "character": 26,
+                "line": 0
+              },
+              "start": {
+                "character": 22,
+                "line": 0
+              }
+            },
+            "resolution": {
+              "status": "resolved",
+              "targetUri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua"
+            },
+            "sourceUri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/other.tua",
+            "specifier": "main"
+          }
+        ],
+        "modules": [
+          {
+            "dependencyCount": 0,
+            "exports": [
+              {
+                "documentation": null,
+                "exportRange": {
+                  "end": {
+                    "character": 14,
+                    "line": 0
+                  },
+                  "start": {
+                    "character": 9,
+                    "line": 0
+                  }
+                },
+                "name": "plain",
+                "origin": "lua",
+                "range": {
+                  "end": {
+                    "character": 14,
+                    "line": 0
+                  },
+                  "start": {
+                    "character": 9,
+                    "line": 0
+                  }
+                },
+                "type": "boolean"
+              }
+            ],
+            "inCycle": false,
+            "inclusionPath": {
+              "rootUri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/interop.lua",
+              "steps": []
+            },
+            "reverseDependencyCount": 0,
+            "root": true,
+            "sourceKind": "lua",
+            "unresolvedDependencyCount": 0,
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/interop.lua"
+          },
+          {
+            "dependencyCount": 0,
+            "exports": [],
+            "inCycle": false,
+            "inclusionPath": {
+              "rootUri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/other.tua",
+              "steps": [
+                {
+                  "kind": "require",
+                  "range": {
+                    "end": {
+                      "character": 26,
+                      "line": 0
+                    },
+                    "start": {
+                      "character": 22,
+                      "line": 0
+                    }
+                  },
+                  "sourceUri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/other.tua",
+                  "specifier": "main",
+                  "targetUri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua"
+                }
+              ]
+            },
+            "reverseDependencyCount": 1,
+            "root": false,
+            "sourceKind": "tua",
+            "unresolvedDependencyCount": 0,
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua"
+          },
+          {
+            "dependencyCount": 0,
+            "exports": [],
+            "inCycle": false,
+            "inclusionPath": {
+              "rootUri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/new.tua",
+              "steps": []
+            },
+            "reverseDependencyCount": 0,
+            "root": true,
+            "sourceKind": "tua",
+            "unresolvedDependencyCount": 0,
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/new.tua"
+          },
+          {
+            "dependencyCount": 1,
+            "exports": [
+              {
+                "documentation": null,
+                "exportRange": {
+                  "end": {
+                    "character": 14,
+                    "line": 1
+                  },
+                  "start": {
+                    "character": 9,
+                    "line": 1
+                  }
+                },
+                "name": "value",
+                "origin": "tua",
+                "range": {
+                  "end": {
+                    "character": 14,
+                    "line": 1
+                  },
+                  "start": {
+                    "character": 9,
+                    "line": 1
+                  }
+                },
+                "type": "number"
+              }
+            ],
+            "inCycle": false,
+            "inclusionPath": {
+              "rootUri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/other.tua",
+              "steps": []
+            },
+            "reverseDependencyCount": 0,
+            "root": true,
+            "sourceKind": "tua",
+            "unresolvedDependencyCount": 0,
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/other.tua"
+          }
+        ]
+      }
+    },
+    "signalGraph": {
+      "events": []
+    },
+    "ecsGraph": {
+      "analysisRevision": 20,
+      "graph": {
+        "components": [
+          {
+            "fields": [
+              {
+                "name": "value",
+                "range": {
+                  "end": {
+                    "character": 51,
+                    "line": 0
+                  },
+                  "start": {
+                    "character": 43,
+                    "line": 0
+                  }
+                },
+                "type": "number"
+              }
+            ],
+            "id": "component:/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/new.tua:1:7",
+            "localName": "New",
+            "nameRange": {
+              "end": {
+                "character": 9,
+                "line": 0
+              },
+              "start": {
+                "character": 6,
+                "line": 0
+              }
+            },
+            "range": {
+              "end": {
+                "character": 54,
+                "line": 0
+              },
+              "start": {
+                "character": 12,
+                "line": 0
+              }
+            },
+            "runtimeName": "New",
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/new.tua"
+          }
+        ],
+        "insights": [],
+        "queries": [],
+        "systems": []
+      }
+    },
+    "objectPoolGraph": {
+      "analysisRevision": 20,
+      "graph": {
+        "insights": [],
+        "operations": [],
+        "pools": []
+      }
+    },
+    "audioGraph": {
+      "analysisRevision": 20,
+      "graph": {
+        "systems": []
+      }
+    },
+    "assetInventory": {
+      "analysisRevision": 20,
+      "inventory": {
+        "assets": [],
+        "diagnostics": []
+      }
+    },
+    "inspect": {
+      "analysisRevision": 20,
+      "documentVersion": 4,
+      "items": []
+    }
+  },
+  "deleted": {
+    "moduleGraph": {
+      "analysisRevision": 23,
+      "graph": {
+        "cycles": [],
+        "edges": [
+          {
+            "inCycle": false,
+            "kind": "require",
+            "range": {
+              "end": {
+                "character": 26,
+                "line": 0
+              },
+              "start": {
+                "character": 22,
+                "line": 0
+              }
+            },
+            "resolution": {
+              "status": "resolved",
+              "targetUri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua"
+            },
+            "sourceUri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/other.tua",
+            "specifier": "main"
+          }
+        ],
+        "modules": [
+          {
+            "dependencyCount": 0,
+            "exports": [
+              {
+                "documentation": null,
+                "exportRange": {
+                  "end": {
+                    "character": 14,
+                    "line": 0
+                  },
+                  "start": {
+                    "character": 9,
+                    "line": 0
+                  }
+                },
+                "name": "plain",
+                "origin": "lua",
+                "range": {
+                  "end": {
+                    "character": 14,
+                    "line": 0
+                  },
+                  "start": {
+                    "character": 9,
+                    "line": 0
+                  }
+                },
+                "type": "boolean"
+              }
+            ],
+            "inCycle": false,
+            "inclusionPath": {
+              "rootUri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/interop.lua",
+              "steps": []
+            },
+            "reverseDependencyCount": 0,
+            "root": true,
+            "sourceKind": "lua",
+            "unresolvedDependencyCount": 0,
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/interop.lua"
+          },
+          {
+            "dependencyCount": 0,
+            "exports": [],
+            "inCycle": false,
+            "inclusionPath": {
+              "rootUri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/other.tua",
+              "steps": [
+                {
+                  "kind": "require",
+                  "range": {
+                    "end": {
+                      "character": 26,
+                      "line": 0
+                    },
+                    "start": {
+                      "character": 22,
+                      "line": 0
+                    }
+                  },
+                  "sourceUri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/other.tua",
+                  "specifier": "main",
+                  "targetUri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua"
+                }
+              ]
+            },
+            "reverseDependencyCount": 1,
+            "root": false,
+            "sourceKind": "tua",
+            "unresolvedDependencyCount": 0,
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua"
+          },
+          {
+            "dependencyCount": 1,
+            "exports": [
+              {
+                "documentation": null,
+                "exportRange": {
+                  "end": {
+                    "character": 14,
+                    "line": 1
+                  },
+                  "start": {
+                    "character": 9,
+                    "line": 1
+                  }
+                },
+                "name": "value",
+                "origin": "tua",
+                "range": {
+                  "end": {
+                    "character": 14,
+                    "line": 1
+                  },
+                  "start": {
+                    "character": 9,
+                    "line": 1
+                  }
+                },
+                "type": "number"
+              }
+            ],
+            "inCycle": false,
+            "inclusionPath": {
+              "rootUri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/other.tua",
+              "steps": []
+            },
+            "reverseDependencyCount": 0,
+            "root": true,
+            "sourceKind": "tua",
+            "unresolvedDependencyCount": 0,
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/other.tua"
+          }
+        ]
+      }
+    },
+    "signalGraph": {
+      "events": []
+    },
+    "ecsGraph": {
+      "analysisRevision": 23,
+      "graph": {
+        "components": [],
+        "insights": [],
+        "queries": [],
+        "systems": []
+      }
+    },
+    "objectPoolGraph": {
+      "analysisRevision": 23,
+      "graph": {
+        "insights": [],
+        "operations": [],
+        "pools": []
+      }
+    },
+    "audioGraph": {
+      "analysisRevision": 23,
+      "graph": {
+        "systems": []
+      }
+    },
+    "assetInventory": {
+      "analysisRevision": 23,
+      "inventory": {
+        "assets": [],
+        "diagnostics": []
+      }
+    },
+    "inspect": {
+      "analysisRevision": 23,
+      "documentVersion": 4,
+      "items": []
+    }
+  }
+}

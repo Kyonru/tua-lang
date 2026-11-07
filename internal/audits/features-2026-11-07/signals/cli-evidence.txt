@@ -1,0 +1,44 @@
+## positive: tua check (exit 0)
+checked 1 file(s)
+
+## positive: tua build (exit 0)
+built 2 file(s)
+
+## positive: lua main.lua (exit 0)
+positive	5
+
+## once_nested: tua check (exit 0)
+checked 1 file(s)
+
+## once_nested: tua build (exit 0)
+built 2 file(s)
+
+## once_nested: lua main.lua (exit 1)
+once count	2
+lua: main.lua:14: once callback must run at most once
+stack traceback:
+	[C]: in function 'assert'
+	main.lua:14: in main chunk
+	[C]: in ?
+
+## invalid_handlers: tua check (exit 0)
+checked 1 file(s)
+
+## invalid_handlers: tua build (exit 0)
+built 2 file(s)
+
+## invalid_handlers: lua main.lua (exit 1)
+lua: ./tuasignal.lua:13: signal handler must be a function
+stack traceback:
+	[C]: in function 'assert'
+	./tuasignal.lua:13: in upvalue 'assert_handler'
+	./tuasignal.lua:46: in method 'on'
+	main.lua:3: in main chunk
+	[C]: in ?
+
+## imported: tua check (exit 1)
+/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/signals/imported/src/main.tua:7:22 error TL1003: type mismatch at value: expected number, found string
+
+## imported: tua build (exit 1)
+/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/signals/imported/src/main.tua:7:22 error TL1003: type mismatch at value: expected number, found string
+

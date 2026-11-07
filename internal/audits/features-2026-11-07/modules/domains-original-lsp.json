@@ -1,0 +1,392 @@
+{
+  "root": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/modules/domains",
+  "source": "local G = require(\"game\")\nlocal game = G.game\nlocal state = game:get()\nlocal direct = require(\"game\").game\nlocal ds = direct:get()\nlocal N = require(\"normal\")\nlocal n = N.inc(3)\nlocal C = require(\"components\")\nlocal world = ecs.world()\nlocal e = world:create()\nworld:add(e,C.Position,{x=4})\nlocal position = world:get(e,C.Position)\nlocal x = position.x\nprint(state.score,ds.score,n,x)\nlocal inline = require(\"normal\").inc\nlocal Position = ecs.component(\"Position\",{x=\"number\"})\nworld:add(e,Position,{x=5})\nlocal localpos = world:get(e,Position)\nlocal localx = localpos.x\nprint(localx,inline(2))\n",
+  "initial": [
+    {
+      "name": "G",
+      "hover": {
+        "contents": {
+          "kind": "markdown",
+          "value": "```tua\n(module) G = require(\"game\") -> /Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/modules/domains/src/game.tua\n```"
+        },
+        "range": {
+          "end": {
+            "character": 7,
+            "line": 0
+          },
+          "start": {
+            "character": 6,
+            "line": 0
+          }
+        }
+      }
+    },
+    {
+      "name": "game",
+      "hover": {
+        "contents": {
+          "kind": "markdown",
+          "value": "```tua\nlocal game: Store\n```\n\nHolds runtime state of type `{ paused: boolean, score: number }`."
+        },
+        "range": {
+          "end": {
+            "character": 10,
+            "line": 1
+          },
+          "start": {
+            "character": 6,
+            "line": 1
+          }
+        }
+      }
+    },
+    {
+      "name": "state",
+      "hover": {
+        "contents": {
+          "kind": "markdown",
+          "value": "```tua\nlocal state: { paused: boolean, score: number }\n```"
+        },
+        "range": {
+          "end": {
+            "character": 11,
+            "line": 2
+          },
+          "start": {
+            "character": 6,
+            "line": 2
+          }
+        }
+      }
+    },
+    {
+      "name": "direct",
+      "hover": {
+        "contents": {
+          "kind": "markdown",
+          "value": "```tua\nlocal direct: any\n```"
+        },
+        "range": {
+          "end": {
+            "character": 12,
+            "line": 3
+          },
+          "start": {
+            "character": 6,
+            "line": 3
+          }
+        }
+      }
+    },
+    {
+      "name": "ds",
+      "hover": {
+        "contents": {
+          "kind": "markdown",
+          "value": "```tua\nlocal ds: any\n```"
+        },
+        "range": {
+          "end": {
+            "character": 8,
+            "line": 4
+          },
+          "start": {
+            "character": 6,
+            "line": 4
+          }
+        }
+      }
+    },
+    {
+      "name": "N",
+      "hover": {
+        "contents": {
+          "kind": "markdown",
+          "value": "```tua\n(module) N = require(\"normal\") -> /Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/modules/domains/src/normal.tua\n```"
+        },
+        "range": {
+          "end": {
+            "character": 7,
+            "line": 5
+          },
+          "start": {
+            "character": 6,
+            "line": 5
+          }
+        }
+      }
+    },
+    {
+      "name": "n",
+      "hover": {
+        "contents": {
+          "kind": "markdown",
+          "value": "```tua\nlocal n: number\n```"
+        },
+        "range": {
+          "end": {
+            "character": 7,
+            "line": 6
+          },
+          "start": {
+            "character": 6,
+            "line": 6
+          }
+        }
+      }
+    },
+    {
+      "name": "C",
+      "hover": {
+        "contents": {
+          "kind": "markdown",
+          "value": "```tua\n(module) C = require(\"components\") -> /Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/modules/domains/src/components.tua\n```"
+        },
+        "range": {
+          "end": {
+            "character": 7,
+            "line": 7
+          },
+          "start": {
+            "character": 6,
+            "line": 7
+          }
+        }
+      }
+    },
+    {
+      "name": "world",
+      "hover": {
+        "contents": {
+          "kind": "markdown",
+          "value": "```tua\nlocal world: EcsWorld\n```"
+        },
+        "range": {
+          "end": {
+            "character": 11,
+            "line": 8
+          },
+          "start": {
+            "character": 6,
+            "line": 8
+          }
+        }
+      }
+    },
+    {
+      "name": "e",
+      "hover": {
+        "contents": {
+          "kind": "markdown",
+          "value": "```tua\nlocal e: EcsEntityId\n```"
+        },
+        "range": {
+          "end": {
+            "character": 7,
+            "line": 9
+          },
+          "start": {
+            "character": 6,
+            "line": 9
+          }
+        }
+      }
+    },
+    {
+      "name": "position",
+      "hover": {
+        "contents": {
+          "kind": "markdown",
+          "value": "```tua\nlocal position: any\n```"
+        },
+        "range": {
+          "end": {
+            "character": 14,
+            "line": 11
+          },
+          "start": {
+            "character": 6,
+            "line": 11
+          }
+        }
+      }
+    },
+    {
+      "name": "x",
+      "hover": {
+        "contents": {
+          "kind": "markdown",
+          "value": "```tua\nlocal x: any\n```"
+        },
+        "range": {
+          "end": {
+            "character": 7,
+            "line": 12
+          },
+          "start": {
+            "character": 6,
+            "line": 12
+          }
+        }
+      }
+    },
+    {
+      "name": "inline",
+      "hover": {
+        "contents": {
+          "kind": "markdown",
+          "value": "```tua\nlocal inline: any\n```"
+        },
+        "range": {
+          "end": {
+            "character": 12,
+            "line": 14
+          },
+          "start": {
+            "character": 6,
+            "line": 14
+          }
+        }
+      }
+    },
+    {
+      "name": "Position",
+      "hover": {
+        "contents": {
+          "kind": "markdown",
+          "value": "```tua\nlocal Position: EcsComponent\n```"
+        },
+        "range": {
+          "end": {
+            "character": 14,
+            "line": 15
+          },
+          "start": {
+            "character": 6,
+            "line": 15
+          }
+        }
+      }
+    },
+    {
+      "name": "localpos",
+      "hover": {
+        "contents": {
+          "kind": "markdown",
+          "value": "```tua\nlocal localpos: { x: number }\n```"
+        },
+        "range": {
+          "end": {
+            "character": 14,
+            "line": 17
+          },
+          "start": {
+            "character": 6,
+            "line": 17
+          }
+        }
+      }
+    },
+    {
+      "name": "localx",
+      "hover": {
+        "contents": {
+          "kind": "markdown",
+          "value": "```tua\nlocal localx: number\n```"
+        },
+        "range": {
+          "end": {
+            "character": 12,
+            "line": 18
+          },
+          "start": {
+            "character": 6,
+            "line": 18
+          }
+        }
+      }
+    }
+  ],
+  "diagnostics": [
+    {
+      "jsonrpc": "2.0",
+      "method": "textDocument/publishDiagnostics",
+      "params": {
+        "diagnostics": [],
+        "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/modules/domains/src/main.tua"
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "textDocument/publishDiagnostics",
+      "params": {
+        "diagnostics": [],
+        "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/modules/domains/src/normal.tua"
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "textDocument/publishDiagnostics",
+      "params": {
+        "diagnostics": [],
+        "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/modules/domains/src/normal.tua"
+      }
+    }
+  ],
+  "signature": null,
+  "definition": {
+    "range": {
+      "end": {
+        "character": 18,
+        "line": 0
+      },
+      "start": {
+        "character": 15,
+        "line": 0
+      }
+    },
+    "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/modules/domains/src/normal.tua"
+  },
+  "unsavedHover": {
+    "contents": {
+      "kind": "markdown",
+      "value": "```tua\nfunction N.inc(x: string): string\n```\n\n---\n\n- kind: function\n- module: /Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/modules/domains/src/normal.tua"
+    },
+    "range": {
+      "end": {
+        "character": 15,
+        "line": 6
+      },
+      "start": {
+        "character": 12,
+        "line": 6
+      }
+    }
+  },
+  "unsavedDiagnostics": [
+    {
+      "jsonrpc": "2.0",
+      "method": "textDocument/publishDiagnostics",
+      "params": {
+        "diagnostics": [],
+        "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/modules/domains/src/main.tua"
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "textDocument/publishDiagnostics",
+      "params": {
+        "diagnostics": [],
+        "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/modules/domains/src/normal.tua"
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "textDocument/publishDiagnostics",
+      "params": {
+        "diagnostics": [],
+        "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/modules/domains/src/normal.tua"
+      }
+    }
+  ]
+}

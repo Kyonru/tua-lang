@@ -1,0 +1,43 @@
+local function probe()
+  local sheets = require('sheets')
+  local S = sheets.Sheet
+  local function state(label,p) print(label,p.name,p.animation.position,p.animation.timer,p.playing) end
+  local a,b = S:player('run'),S:player('run')
+  local hits = {}
+  a:on('step',function(p,m,n,f) hits[#hits+1] = n..':'..f end)
+  a:on('start',function(p,m,n,f) hits[#hits+1] = n..':'..f end)
+  a:update(2.3)
+  state('MARKERS',a)
+  print('HITS',table.concat(hits,','))
+  assert(#hits == 5 and b.animation.position == 1)
+  a:play('run'); assert(a.animation.position == 2)
+  a:seekFrame(999); assert(a.animation.position == 4)
+  a:seek(0); assert(a.animation.position == 1)
+  a:stop(); a:update(1); assert(a.animation.position == 1)
+  a:resume(); a:update(0.3); assert(a.animation.position == 2)
+  a.speed=-1; a:update(0.1); assert(a.animation.position == 1)
+  print('PASS independent players, markers, same-name play, seeking, pause/resume, reverse')
+  for _,name in ipairs({'stopStart','stopEnd','loopFn'}) do
+    local p=S:player(name); p:update(2.2); state('LOOP_RESULT',p)
+  end
+  local parent=sheets.Parent:player()
+  parent:update(0.3); assert(parent:child('hat').animation.position == 2)
+  parent:draw(100,100,0.2,2,2)
+  local batch=love.graphics.newSpriteBatch(S.image,10)
+  assert(b:addToBatch(batch,0,0)==1)
+  local ok,err=pcall(function() parent:addToBatch(batch,0,0) end)
+  assert(not ok and err:find('nested children'))
+  print('PASS nested update/draw, leaf batch and parent batch rejection')
+  local multi=S:player('multi'); assert(#multi.animation.frames == 3)
+  multi:update(0.15); assert(multi.animation.position == 2)
+  print('PASS multi-row frames and durations')
+  local p=S:player('run')
+  p:on('step',function(player) player:play('single') end)
+  local ok,err=pcall(function() p:update(0.8) end)
+  print('SWITCH_CALLBACK',ok,err); state('SWITCH_STATE',p)
+end
+function love.load()
+ local ok,err=xpcall(probe,debug.traceback)
+ print('PROBE_COMPLETE',ok,err)
+ love.event.quit(ok and 0 or 1)
+end

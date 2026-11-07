@@ -1,0 +1,4 @@
+source="src"
+out="build"
+[diagnostics]
+rules=false

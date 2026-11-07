@@ -1,0 +1,7 @@
+source="src"
+out="build"
+[[asset_pipelines]]
+name="edge"
+inputs=["import.py"]
+command=["python3","import.py"]
+output="src/generated"

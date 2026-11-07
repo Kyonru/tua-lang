@@ -1,0 +1,6 @@
+/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/tween/invalid/src/main.tua:2:24 error TL1003: type mismatch at values.x: expected number, found string
+/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/tween/invalid/src/main.tua:3:35 error TL1003: type mismatch at easing: expected "linear" | "quadin" | "quadout" | "quadinout" | "cubicin" | "cubicout" | "cubicinout" | "quartin" | "quartout" | "quartinout" | "quintin" | "quintout" | "quintinout" | "expoin" | "expoout" | "expoinout" | "sinein" | "sineout" | "sineinout" | "circin" | "circout" | "circinout" | "backin" | "backout" | "backinout" | "elasticin" | "elasticout" | "elasticinout", found "bounce"
+/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/tween/invalid/src/main.tua:4:14 error TL1003: type mismatch at dt: expected number, found string
+/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/tween/invalid/src/main.tua:6:9 error TL1003: type mismatch at seconds: expected number, found string
+/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/tween/invalid/src/main.tua:7:14 error TL1003: type mismatch at callback: callback requires 1 parameters, but it may be called with only 0
+EXIT=1

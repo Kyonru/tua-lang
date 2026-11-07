@@ -1,0 +1,155 @@
+[
+  {
+    "jsonrpc": "2.0",
+    "method": "textDocument/publishDiagnostics",
+    "params": {
+      "diagnostics": [],
+      "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua"
+    }
+  },
+  {
+    "jsonrpc": "2.0",
+    "method": "textDocument/publishDiagnostics",
+    "params": {
+      "diagnostics": [
+        {
+          "code": "TL4054",
+          "message": "import `other` is never used; prefix with `_` to silence",
+          "range": {
+            "end": {
+              "character": 11,
+              "line": 0
+            },
+            "start": {
+              "character": 6,
+              "line": 0
+            }
+          },
+          "severity": 2,
+          "source": "tua"
+        },
+        {
+          "code": "TL4005",
+          "message": "unused local `movement`; prefix with `_` to silence",
+          "range": {
+            "end": {
+              "character": 14,
+              "line": 7
+            },
+            "start": {
+              "character": 6,
+              "line": 7
+            }
+          },
+          "severity": 2,
+          "source": "tua"
+        },
+        {
+          "code": "TL4005",
+          "message": "unused local `found`; prefix with `_` to silence",
+          "range": {
+            "end": {
+              "character": 11,
+              "line": 8
+            },
+            "start": {
+              "character": 6,
+              "line": 8
+            }
+          },
+          "severity": 2,
+          "source": "tua"
+        },
+        {
+          "code": "TL4005",
+          "message": "unused local `machine`; prefix with `_` to silence",
+          "range": {
+            "end": {
+              "character": 13,
+              "line": 12
+            },
+            "start": {
+              "character": 6,
+              "line": 12
+            }
+          },
+          "severity": 2,
+          "source": "tua"
+        },
+        {
+          "code": "TL4005",
+          "message": "unused local `audio`; prefix with `_` to silence",
+          "range": {
+            "end": {
+              "character": 11,
+              "line": 13
+            },
+            "start": {
+              "character": 6,
+              "line": 13
+            }
+          },
+          "severity": 2,
+          "source": "tua"
+        }
+      ],
+      "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua"
+    }
+  },
+  {
+    "jsonrpc": "2.0",
+    "method": "textDocument/publishDiagnostics",
+    "params": {
+      "diagnostics": [],
+      "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua"
+    }
+  },
+  {
+    "jsonrpc": "2.0",
+    "method": "textDocument/publishDiagnostics",
+    "params": {
+      "diagnostics": [],
+      "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua"
+    }
+  },
+  {
+    "jsonrpc": "2.0",
+    "method": "textDocument/publishDiagnostics",
+    "params": {
+      "diagnostics": [],
+      "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua"
+    }
+  },
+  {
+    "jsonrpc": "2.0",
+    "method": "textDocument/publishDiagnostics",
+    "params": {
+      "diagnostics": [],
+      "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/new.tua"
+    }
+  },
+  {
+    "jsonrpc": "2.0",
+    "method": "textDocument/publishDiagnostics",
+    "params": {
+      "diagnostics": [],
+      "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua"
+    }
+  },
+  {
+    "jsonrpc": "2.0",
+    "method": "textDocument/publishDiagnostics",
+    "params": {
+      "diagnostics": [],
+      "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/new.tua"
+    }
+  },
+  {
+    "jsonrpc": "2.0",
+    "method": "textDocument/publishDiagnostics",
+    "params": {
+      "diagnostics": [],
+      "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/explorers/fixture/src/main.tua"
+    }
+  }
+]

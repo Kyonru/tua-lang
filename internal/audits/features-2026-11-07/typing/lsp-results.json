@@ -1,0 +1,193 @@
+[
+  {
+    "name": "positive",
+    "diagnostic": {
+      "items": [],
+      "kind": "full"
+    },
+    "hover": []
+  },
+  {
+    "name": "callback_short",
+    "diagnostic": {
+      "items": [
+        {
+          "code": "TL1003",
+          "message": "type mismatch at cb: callback requires 1 parameters, but it may be called with only 2",
+          "range": {
+            "end": {
+              "character": 30,
+              "line": 1
+            },
+            "start": {
+              "character": 4,
+              "line": 1
+            }
+          },
+          "severity": 1,
+          "source": "tua"
+        }
+      ],
+      "kind": "full"
+    },
+    "hover": [
+      {
+        "line": 1,
+        "character": 13,
+        "result": {
+          "contents": {
+            "kind": "markdown",
+            "value": "```tua\nparameter x: number\n```"
+          },
+          "range": {
+            "end": {
+              "character": 14,
+              "line": 1
+            },
+            "start": {
+              "character": 13,
+              "line": 1
+            }
+          }
+        }
+      }
+    ]
+  },
+  {
+    "name": "callback_full",
+    "diagnostic": {
+      "items": [],
+      "kind": "full"
+    },
+    "hover": [
+      {
+        "line": 1,
+        "character": 13,
+        "result": {
+          "contents": {
+            "kind": "markdown",
+            "value": "```tua\nparameter x: number\n```"
+          },
+          "range": {
+            "end": {
+              "character": 14,
+              "line": 1
+            },
+            "start": {
+              "character": 13,
+              "line": 1
+            }
+          }
+        }
+      }
+    ]
+  },
+  {
+    "name": "optional_dot",
+    "diagnostic": {
+      "items": [
+        {
+          "code": "TL1003",
+          "message": "type mismatch: expected number, found nil",
+          "range": {
+            "end": {
+              "character": 15,
+              "line": 2
+            },
+            "start": {
+              "character": 12,
+              "line": 2
+            }
+          },
+          "severity": 1,
+          "source": "tua"
+        }
+      ],
+      "kind": "full"
+    },
+    "hover": []
+  },
+  {
+    "name": "dictionary_runtime",
+    "diagnostic": {
+      "items": [],
+      "kind": "full"
+    },
+    "hover": [
+      {
+        "line": 3,
+        "character": 16,
+        "result": {
+          "contents": {
+            "kind": "markdown",
+            "value": "```tua\nlocal n: number\n```"
+          },
+          "range": {
+            "end": {
+              "character": 17,
+              "line": 3
+            },
+            "start": {
+              "character": 16,
+              "line": 3
+            }
+          }
+        }
+      }
+    ]
+  },
+  {
+    "name": "dictionary_bracket",
+    "diagnostic": {
+      "items": [
+        {
+          "code": "TL1003",
+          "message": "type mismatch: expected number | nil, found string",
+          "range": {
+            "end": {
+              "character": 25,
+              "line": 1
+            },
+            "start": {
+              "character": 18,
+              "line": 1
+            }
+          },
+          "severity": 1,
+          "source": "tua"
+        }
+      ],
+      "kind": "full"
+    },
+    "hover": []
+  },
+  {
+    "name": "multi_assignment",
+    "diagnostic": {
+      "items": [],
+      "kind": "full"
+    },
+    "hover": [
+      {
+        "line": 3,
+        "character": 6,
+        "result": {
+          "contents": {
+            "kind": "markdown",
+            "value": "```tua\nlocal s: string\n```"
+          },
+          "range": {
+            "end": {
+              "character": 7,
+              "line": 3
+            },
+            "start": {
+              "character": 6,
+              "line": 3
+            }
+          }
+        }
+      }
+    ]
+  }
+]

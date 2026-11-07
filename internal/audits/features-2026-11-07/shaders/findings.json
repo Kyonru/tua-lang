@@ -1,0 +1,30 @@
+[
+  {
+    "id": "SHADERS-01",
+    "title": "Macro-defined uniform names trigger false missing-uniform errors",
+    "category": "confirmed defect",
+    "severity": "medium",
+    "status": "confirmed",
+    "summary": "Valid GLSL macro-expanded alpha uniform is rejected as absent; metadata records macro identifier NAME despite documented conservative handling.",
+    "evidence": [
+      "shaders/validators.json",
+      "shaders/macro-validator.json",
+      "shaders/fixtures/macro/effect.glsl",
+      "shaders/fixtures/macro/src/main.tua"
+    ],
+    "known": false
+  },
+  {
+    "id": "SHADERS-02",
+    "title": "Shader hover embeds a GLSL fence inside a Tua fence",
+    "category": "confirmed defect",
+    "severity": "low",
+    "status": "confirmed",
+    "summary": "Actual asset and inline uniform LSP hover serializes already formatted GLSL Markdown within unconditional Tua fences.",
+    "evidence": [
+      "shaders/lsp.json",
+      "shaders/probe.js"
+    ],
+    "known": false
+  }
+]

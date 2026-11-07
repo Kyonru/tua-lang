@@ -1,0 +1,7 @@
+/opt/homebrew/bin/lua: ./tuatween.lua:143: attempt to compare number with string
+stack traceback:
+	./tuatween.lua:143: in field 'new'
+	./tuatween.lua:173: in method 'after'
+	main.lua:4: in main chunk
+	[C]: in ?
+EXIT=1

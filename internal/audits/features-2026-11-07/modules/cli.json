@@ -1,0 +1,60 @@
+{
+  "happy": {
+    "check": {
+      "code": 0,
+      "stdout": "checked 4 file(s)\n",
+      "stderr": ""
+    },
+    "build": {
+      "code": 0,
+      "stdout": "built 3 file(s)\n",
+      "stderr": ""
+    },
+    "runtime": {
+      "code": 0,
+      "stdout": "modules happy passed\n",
+      "stderr": ""
+    }
+  },
+  "cycle": {
+    "check": {
+      "code": 1,
+      "stdout": "",
+      "stderr": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/modules/cycle/src/a.d.tua:1:15 error TL1010: cyclic type re-export involving `B`\n/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/modules/cycle/src/b.d.tua:1:15 error TL1010: cyclic type re-export involving `A`\n/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/modules/cycle/src/main.tua:1:15 error TL1010: cyclic type re-export involving `A`\n/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/modules/cycle/src/main.tua:1:15 warning TL4054: type import `A` is never used; prefix with `_` to silence\n"
+    },
+    "build": {
+      "code": 1,
+      "stdout": "",
+      "stderr": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/modules/cycle/src/a.d.tua:1:15 error TL1010: cyclic type re-export involving `B`\n/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/modules/cycle/src/b.d.tua:1:15 error TL1010: cyclic type re-export involving `A`\n/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/modules/cycle/src/main.tua:1:15 error TL1010: cyclic type re-export involving `A`\n/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/modules/cycle/src/main.tua:1:15 warning TL4054: type import `A` is never used; prefix with `_` to silence\n"
+    }
+  },
+  "missing": {
+    "check": {
+      "code": 0,
+      "stdout": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/modules/missing/src/main.tua:1:7 warning TL4054: import `M` is never used; prefix with `_` to silence\n/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/modules/missing/src/main.tua:1:19 warning TL4002: import file not found: `./absent` (searched: /Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/modules/missing/src)\nchecked 1 file(s)\n",
+      "stderr": ""
+    },
+    "build": {
+      "code": 1,
+      "stdout": "",
+      "stderr": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/modules/missing/src/main.tua:1:1 error TL4002: import not found: `./absent`\n/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/modules/missing/src/main.tua:1:7 warning TL4054: import `M` is never used; prefix with `_` to silence\n/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/modules/missing/src/main.tua:1:19 warning TL4002: import file not found: `./absent` (searched: /Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/modules/missing/src)\n"
+    }
+  },
+  "domains": {
+    "check": {
+      "code": 0,
+      "stdout": "checked 4 file(s)\n",
+      "stderr": ""
+    },
+    "build": {
+      "code": 0,
+      "stdout": "built 6 file(s)\n",
+      "stderr": ""
+    },
+    "runtime": {
+      "code": 0,
+      "stdout": "0\t0\t4\t4\n",
+      "stderr": ""
+    }
+  }
+}

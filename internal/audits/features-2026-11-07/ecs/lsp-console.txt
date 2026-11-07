@@ -1,0 +1,358 @@
+{
+  "missing_get position hover": {
+    "id": 10,
+    "jsonrpc": "2.0",
+    "result": {
+      "contents": {
+        "kind": "markdown",
+        "value": "```tua\nlocal position: { x: number }\n```"
+      },
+      "range": {
+        "end": {
+          "character": 14,
+          "line": 3
+        },
+        "start": {
+          "character": 6,
+          "line": 3
+        }
+      }
+    }
+  },
+  "missing_get get signature": {
+    "id": 11,
+    "jsonrpc": "2.0",
+    "result": {
+      "activeParameter": 0,
+      "activeSignature": 0,
+      "signatures": [
+        {
+          "documentation": {
+            "kind": "markdown",
+            "value": "Return an entity's component data, or nil when it is absent."
+          },
+          "label": "function world:get(entity: EcsEntityId, component: EcsComponent): any",
+          "parameters": [
+            {
+              "label": "entity: EcsEntityId"
+            },
+            {
+              "label": "component: EcsComponent"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "bad_callback callback position hover": {
+    "id": 20,
+    "jsonrpc": "2.0",
+    "result": {
+      "contents": {
+        "kind": "markdown",
+        "value": "```tua\nparameter position: any\n```"
+      },
+      "range": {
+        "end": {
+          "character": 27,
+          "line": 3
+        },
+        "start": {
+          "character": 19,
+          "line": 3
+        }
+      }
+    }
+  },
+  "bad_callback callback completion": {
+    "id": 21,
+    "jsonrpc": "2.0",
+    "result": [
+      {
+        "data": {
+          "kind": "variable",
+          "label": "position",
+          "position": {
+            "character": 27,
+            "line": 3
+          },
+          "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/ecs/bad_callback/src/main.tua"
+        },
+        "kind": 6,
+        "label": "position",
+        "sortText": "0000_position",
+        "textEdit": {
+          "newText": "position",
+          "range": {
+            "end": {
+              "character": 27,
+              "line": 3
+            },
+            "start": {
+              "character": 19,
+              "line": 3
+            }
+          }
+        }
+      }
+    ]
+  },
+  "imported imported position hover": {
+    "id": 30,
+    "jsonrpc": "2.0",
+    "result": {
+      "contents": {
+        "kind": "markdown",
+        "value": "```tua\nlocal position: any\n```"
+      },
+      "range": {
+        "end": {
+          "character": 14,
+          "line": 4
+        },
+        "start": {
+          "character": 6,
+          "line": 4
+        }
+      }
+    }
+  },
+  "ecs graph": {
+    "id": 50,
+    "jsonrpc": "2.0",
+    "result": {
+      "analysisRevision": 17,
+      "graph": {
+        "components": [
+          {
+            "fields": [
+              {
+                "name": "x",
+                "range": {
+                  "end": {
+                    "character": 47,
+                    "line": 0
+                  },
+                  "start": {
+                    "character": 39,
+                    "line": 0
+                  }
+                },
+                "type": "number"
+              }
+            ],
+            "id": "component:/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/ecs/bad_callback/src/main.tua:1:7",
+            "localName": "P",
+            "nameRange": {
+              "end": {
+                "character": 7,
+                "line": 0
+              },
+              "start": {
+                "character": 6,
+                "line": 0
+              }
+            },
+            "range": {
+              "end": {
+                "character": 49,
+                "line": 0
+              },
+              "start": {
+                "character": 10,
+                "line": 0
+              }
+            },
+            "runtimeName": "Position",
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/ecs/bad_callback/src/main.tua"
+          },
+          {
+            "fields": [
+              {
+                "name": "x",
+                "range": {
+                  "end": {
+                    "character": 51,
+                    "line": 0
+                  },
+                  "start": {
+                    "character": 43,
+                    "line": 0
+                  }
+                },
+                "type": "number"
+              }
+            ],
+            "id": "component:/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/ecs/imported/src/components.tua:1:7",
+            "localName": "Position",
+            "nameRange": {
+              "end": {
+                "character": 14,
+                "line": 0
+              },
+              "start": {
+                "character": 6,
+                "line": 0
+              }
+            },
+            "range": {
+              "end": {
+                "character": 53,
+                "line": 0
+              },
+              "start": {
+                "character": 15,
+                "line": 0
+              }
+            },
+            "runtimeName": "Position",
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/ecs/imported/src/components.tua"
+          },
+          {
+            "fields": [
+              {
+                "name": "x",
+                "range": {
+                  "end": {
+                    "character": 47,
+                    "line": 0
+                  },
+                  "start": {
+                    "character": 39,
+                    "line": 0
+                  }
+                },
+                "type": "number"
+              }
+            ],
+            "id": "component:/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/ecs/missing_get/src/main.tua:1:7",
+            "localName": "P",
+            "nameRange": {
+              "end": {
+                "character": 7,
+                "line": 0
+              },
+              "start": {
+                "character": 6,
+                "line": 0
+              }
+            },
+            "range": {
+              "end": {
+                "character": 49,
+                "line": 0
+              },
+              "start": {
+                "character": 10,
+                "line": 0
+              }
+            },
+            "runtimeName": "Position",
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/ecs/missing_get/src/main.tua"
+          }
+        ],
+        "insights": [],
+        "queries": [
+          {
+            "components": [
+              {
+                "access": "read",
+                "componentId": "component:/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/ecs/bad_callback/src/main.tua:1:7",
+                "range": {
+                  "end": {
+                    "character": 34,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 33,
+                    "line": 2
+                  }
+                },
+                "reference": "P"
+              }
+            ],
+            "id": "system:/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/ecs/bad_callback/src/main.tua:3:16:query",
+            "kind": "system",
+            "name": "system",
+            "nameRange": {
+              "end": {
+                "character": 12,
+                "line": 2
+              },
+              "start": {
+                "character": 6,
+                "line": 2
+              }
+            },
+            "ownerSystemId": "system:/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/ecs/bad_callback/src/main.tua:3:16",
+            "range": {
+              "end": {
+                "character": 4,
+                "line": 5
+              },
+              "start": {
+                "character": 15,
+                "line": 2
+              }
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/ecs/bad_callback/src/main.tua"
+          }
+        ],
+        "systems": [
+          {
+            "callbackRange": {
+              "end": {
+                "character": 3,
+                "line": 5
+              },
+              "start": {
+                "character": 36,
+                "line": 2
+              }
+            },
+            "components": [
+              {
+                "access": "read",
+                "componentId": "component:/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/ecs/bad_callback/src/main.tua:1:7",
+                "range": {
+                  "end": {
+                    "character": 34,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 33,
+                    "line": 2
+                  }
+                },
+                "reference": "P"
+              }
+            ],
+            "id": "system:/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/ecs/bad_callback/src/main.tua:3:16",
+            "name": "system",
+            "nameRange": {
+              "end": {
+                "character": 12,
+                "line": 2
+              },
+              "start": {
+                "character": 6,
+                "line": 2
+              }
+            },
+            "range": {
+              "end": {
+                "character": 4,
+                "line": 5
+              },
+              "start": {
+                "character": 15,
+                "line": 2
+              }
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/ecs/bad_callback/src/main.tua"
+          }
+        ]
+      }
+    }
+  }
+}

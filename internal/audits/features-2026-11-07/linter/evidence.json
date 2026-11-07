@@ -1,0 +1,1971 @@
+[
+  {
+    "name": "function-same-line",
+    "source": "local function unused() end; print(\"keep\")\n",
+    "config": "",
+    "cli": {
+      "lint": {
+        "status": 1,
+        "stdout": "",
+        "stderr": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/function-same-line/src/main.tua:1:16 warning TL4055: function `unused` is never used; prefix with `_` to silence\n/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/function-same-line/src/main.tua:1:22 warning TL4066: function `unused` has an empty body; add a comment if this is a deliberate stub\n"
+      },
+      "check": {
+        "status": 0,
+        "stdout": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/function-same-line/src/main.tua:1:16 warning TL4055: function `unused` is never used; prefix with `_` to silence\n/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/function-same-line/src/main.tua:1:22 warning TL4066: function `unused` has an empty body; add a comment if this is a deliberate stub\nchecked 1 file(s)\n",
+        "stderr": ""
+      }
+    },
+    "diagnostics": [
+      {
+        "jsonrpc": "2.0",
+        "method": "textDocument/publishDiagnostics",
+        "params": {
+          "diagnostics": [],
+          "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/function-same-line/src/main.tua"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "textDocument/publishDiagnostics",
+        "params": {
+          "diagnostics": [
+            {
+              "code": "TL4055",
+              "message": "function `unused` is never used; prefix with `_` to silence",
+              "range": {
+                "end": {
+                  "character": 21,
+                  "line": 0
+                },
+                "start": {
+                  "character": 15,
+                  "line": 0
+                }
+              },
+              "severity": 2,
+              "source": "tua"
+            },
+            {
+              "code": "TL4066",
+              "message": "function `unused` has an empty body; add a comment if this is a deliberate stub",
+              "range": {
+                "end": {
+                  "character": 22,
+                  "line": 0
+                },
+                "start": {
+                  "character": 21,
+                  "line": 0
+                }
+              },
+              "severity": 2,
+              "source": "tua"
+            }
+          ],
+          "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/function-same-line/src/main.tua"
+        }
+      }
+    ],
+    "actions": {
+      "quickfix": [
+        {
+          "edit": {
+            "changes": {
+              "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/function-same-line/src/main.tua": [
+                {
+                  "newText": "",
+                  "range": {
+                    "end": {
+                      "character": 27,
+                      "line": 0
+                    },
+                    "start": {
+                      "character": 0,
+                      "line": 0
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "kind": "quickfix",
+          "title": "Remove unused function"
+        },
+        {
+          "edit": {
+            "changes": {
+              "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/function-same-line/src/main.tua": [
+                {
+                  "newText": "-- tua-ignore-file TL4055\n",
+                  "range": {
+                    "end": {
+                      "character": 0,
+                      "line": 0
+                    },
+                    "start": {
+                      "character": 0,
+                      "line": 0
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "kind": "quickfix",
+          "title": "Suppress TL4055 for this file"
+        },
+        {
+          "edit": {
+            "changes": {
+              "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/function-same-line/src/main.tua": [
+                {
+                  "newText": " -- tua-ignore-line TL4055",
+                  "range": {
+                    "end": {
+                      "character": 42,
+                      "line": 0
+                    },
+                    "start": {
+                      "character": 42,
+                      "line": 0
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "kind": "quickfix",
+          "title": "Suppress TL4055 for this line"
+        },
+        {
+          "edit": {
+            "changes": {
+              "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/function-same-line/src/main.tua": [
+                {
+                  "newText": "-- tua-ignore-file TL4066\n",
+                  "range": {
+                    "end": {
+                      "character": 0,
+                      "line": 0
+                    },
+                    "start": {
+                      "character": 0,
+                      "line": 0
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "kind": "quickfix",
+          "title": "Suppress TL4066 for this file"
+        },
+        {
+          "edit": {
+            "changes": {
+              "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/function-same-line/src/main.tua": [
+                {
+                  "newText": " -- tua-ignore-line TL4066",
+                  "range": {
+                    "end": {
+                      "character": 42,
+                      "line": 0
+                    },
+                    "start": {
+                      "character": 42,
+                      "line": 0
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "kind": "quickfix",
+          "title": "Suppress TL4066 for this line"
+        }
+      ],
+      "source.fixAll": [
+        {
+          "edit": {
+            "changes": {
+              "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/function-same-line/src/main.tua": [
+                {
+                  "newText": "",
+                  "range": {
+                    "end": {
+                      "character": 27,
+                      "line": 0
+                    },
+                    "start": {
+                      "character": 0,
+                      "line": 0
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "kind": "source.fixAll",
+          "title": "Fix all safe diagnostics"
+        }
+      ],
+      "source.organizeImports": [],
+      "source.removeUnusedImports": []
+    },
+    "applied": [
+      {
+        "kind": "source.fixAll",
+        "title": "Fix all safe diagnostics",
+        "file": "source-fixAll-0.lua",
+        "status": 0,
+        "stdout": "keep\n",
+        "stderr": ""
+      }
+    ],
+    "staleActions": [],
+    "updatedDiagnostics": [
+      {
+        "jsonrpc": "2.0",
+        "method": "textDocument/publishDiagnostics",
+        "params": {
+          "diagnostics": [],
+          "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/function-same-line/src/main.tua"
+        }
+      }
+    ]
+  },
+  {
+    "name": "valid-suppression",
+    "source": "-- tua-ignore-file TL4005\nlocal unused = 1\n-- tua-ignore-next-line TL4004\nprint(missing)\n",
+    "config": "",
+    "cli": {
+      "lint": {
+        "status": 0,
+        "stdout": "linted 1 file(s)\n",
+        "stderr": ""
+      },
+      "check": {
+        "status": 0,
+        "stdout": "checked 1 file(s)\n",
+        "stderr": ""
+      }
+    },
+    "diagnostics": [
+      {
+        "jsonrpc": "2.0",
+        "method": "textDocument/publishDiagnostics",
+        "params": {
+          "diagnostics": [
+            {
+              "code": "TL4026",
+              "message": "`tua-ignore-file` did not suppress matching TL4005 diagnostics on file",
+              "range": {
+                "end": {
+                  "character": 1,
+                  "line": 0
+                },
+                "start": {
+                  "character": 0,
+                  "line": 0
+                }
+              },
+              "severity": 2,
+              "source": "tua"
+            },
+            {
+              "code": "TL4026",
+              "message": "`tua-ignore-next-line` did not suppress matching TL4004 diagnostics on line 4",
+              "range": {
+                "end": {
+                  "character": 1,
+                  "line": 2
+                },
+                "start": {
+                  "character": 0,
+                  "line": 2
+                }
+              },
+              "severity": 2,
+              "source": "tua"
+            }
+          ],
+          "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/valid-suppression/src/main.tua"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "textDocument/publishDiagnostics",
+        "params": {
+          "diagnostics": [],
+          "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/valid-suppression/src/main.tua"
+        }
+      }
+    ],
+    "actions": {
+      "quickfix": [
+        {
+          "edit": {
+            "changes": {
+              "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/valid-suppression/src/main.tua": [
+                {
+                  "newText": ": number",
+                  "range": {
+                    "end": {
+                      "character": 12,
+                      "line": 1
+                    },
+                    "start": {
+                      "character": 12,
+                      "line": 1
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "kind": "quickfix",
+          "title": "Add type annotation `: number`"
+        }
+      ],
+      "source.fixAll": [],
+      "source.organizeImports": [],
+      "source.removeUnusedImports": []
+    },
+    "staleActions": [],
+    "updatedDiagnostics": [
+      {
+        "jsonrpc": "2.0",
+        "method": "textDocument/publishDiagnostics",
+        "params": {
+          "diagnostics": [],
+          "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/valid-suppression/src/main.tua"
+        }
+      }
+    ]
+  },
+  {
+    "name": "suppression-policy",
+    "source": "local unused = 1 -- preserve comment\n",
+    "config": "[diagnostics]\ninline_ignore_scopes=[\"tua-ignore-file\"]\ninline_ignore_max_per_file=1\n",
+    "cli": {
+      "lint": {
+        "status": 1,
+        "stdout": "",
+        "stderr": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/suppression-policy/src/main.tua:1:7 warning TL4005: unused local `unused`; prefix with `_` to silence\n"
+      },
+      "check": {
+        "status": 0,
+        "stdout": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/suppression-policy/src/main.tua:1:7 warning TL4005: unused local `unused`; prefix with `_` to silence\nchecked 1 file(s)\n",
+        "stderr": ""
+      }
+    },
+    "diagnostics": [
+      {
+        "jsonrpc": "2.0",
+        "method": "textDocument/publishDiagnostics",
+        "params": {
+          "diagnostics": [],
+          "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/suppression-policy/src/main.tua"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "textDocument/publishDiagnostics",
+        "params": {
+          "diagnostics": [
+            {
+              "code": "TL4005",
+              "message": "unused local `unused`; prefix with `_` to silence",
+              "range": {
+                "end": {
+                  "character": 12,
+                  "line": 0
+                },
+                "start": {
+                  "character": 6,
+                  "line": 0
+                }
+              },
+              "severity": 2,
+              "source": "tua"
+            }
+          ],
+          "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/suppression-policy/src/main.tua"
+        }
+      }
+    ],
+    "actions": {
+      "quickfix": [
+        {
+          "edit": {
+            "changes": {
+              "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/suppression-policy/src/main.tua": [
+                {
+                  "newText": "",
+                  "range": {
+                    "end": {
+                      "character": 0,
+                      "line": 1
+                    },
+                    "start": {
+                      "character": 0,
+                      "line": 0
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "kind": "quickfix",
+          "title": "Remove unused local"
+        },
+        {
+          "edit": {
+            "changes": {
+              "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/suppression-policy/src/main.tua": [
+                {
+                  "newText": "-- tua-ignore-file TL4005\n",
+                  "range": {
+                    "end": {
+                      "character": 0,
+                      "line": 0
+                    },
+                    "start": {
+                      "character": 0,
+                      "line": 0
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "kind": "quickfix",
+          "title": "Suppress TL4005 for this file"
+        }
+      ],
+      "source.fixAll": [
+        {
+          "edit": {
+            "changes": {
+              "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/suppression-policy/src/main.tua": [
+                {
+                  "newText": "",
+                  "range": {
+                    "end": {
+                      "character": 0,
+                      "line": 1
+                    },
+                    "start": {
+                      "character": 0,
+                      "line": 0
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "kind": "source.fixAll",
+          "title": "Fix all safe diagnostics"
+        }
+      ],
+      "source.organizeImports": [],
+      "source.removeUnusedImports": []
+    },
+    "applied": [
+      {
+        "kind": "source.fixAll",
+        "title": "Fix all safe diagnostics",
+        "file": "source-fixAll-0.lua",
+        "status": 0,
+        "stdout": "",
+        "stderr": ""
+      }
+    ],
+    "staleActions": [],
+    "updatedDiagnostics": [
+      {
+        "jsonrpc": "2.0",
+        "method": "textDocument/publishDiagnostics",
+        "params": {
+          "diagnostics": [],
+          "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/suppression-policy/src/main.tua"
+        }
+      }
+    ]
+  },
+  {
+    "name": "basic",
+    "source": "local unused = 1\nlocal effect = print(\"effect\")\nlocal x\nprint(x)\n",
+    "config": "",
+    "cli": {
+      "lint": {
+        "status": 1,
+        "stdout": "",
+        "stderr": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/basic/src/main.tua:1:7 warning TL4005: unused local `unused`; prefix with `_` to silence\n/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/basic/src/main.tua:2:7 warning TL4005: unused local `effect`; prefix with `_` to silence\n/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/basic/src/main.tua:4:7 warning TL4045: local `x` defined at line 3 may be read before it is initialized; initialize with `nil` to silence\n"
+      },
+      "check": {
+        "status": 0,
+        "stdout": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/basic/src/main.tua:1:7 warning TL4005: unused local `unused`; prefix with `_` to silence\n/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/basic/src/main.tua:2:7 warning TL4005: unused local `effect`; prefix with `_` to silence\n/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/basic/src/main.tua:4:7 warning TL4045: local `x` defined at line 3 may be read before it is initialized; initialize with `nil` to silence\nchecked 1 file(s)\n",
+        "stderr": ""
+      }
+    },
+    "diagnostics": [
+      {
+        "jsonrpc": "2.0",
+        "method": "textDocument/publishDiagnostics",
+        "params": {
+          "diagnostics": [],
+          "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/basic/src/main.tua"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "textDocument/publishDiagnostics",
+        "params": {
+          "diagnostics": [
+            {
+              "code": "TL4045",
+              "message": "local `x` defined at line 3 may be read before it is initialized; initialize with `nil` to silence",
+              "range": {
+                "end": {
+                  "character": 7,
+                  "line": 3
+                },
+                "start": {
+                  "character": 6,
+                  "line": 3
+                }
+              },
+              "severity": 2,
+              "source": "tua"
+            },
+            {
+              "code": "TL4005",
+              "message": "unused local `unused`; prefix with `_` to silence",
+              "range": {
+                "end": {
+                  "character": 12,
+                  "line": 0
+                },
+                "start": {
+                  "character": 6,
+                  "line": 0
+                }
+              },
+              "severity": 2,
+              "source": "tua"
+            },
+            {
+              "code": "TL4005",
+              "message": "unused local `effect`; prefix with `_` to silence",
+              "range": {
+                "end": {
+                  "character": 12,
+                  "line": 1
+                },
+                "start": {
+                  "character": 6,
+                  "line": 1
+                }
+              },
+              "severity": 2,
+              "source": "tua"
+            }
+          ],
+          "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/basic/src/main.tua"
+        }
+      }
+    ],
+    "actions": {
+      "quickfix": [
+        {
+          "edit": {
+            "changes": {
+              "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/basic/src/main.tua": [
+                {
+                  "newText": "",
+                  "range": {
+                    "end": {
+                      "character": 0,
+                      "line": 1
+                    },
+                    "start": {
+                      "character": 0,
+                      "line": 0
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "kind": "quickfix",
+          "title": "Remove unused local"
+        },
+        {
+          "edit": {
+            "changes": {
+              "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/basic/src/main.tua": [
+                {
+                  "newText": "-- tua-ignore-file TL4005\n",
+                  "range": {
+                    "end": {
+                      "character": 0,
+                      "line": 0
+                    },
+                    "start": {
+                      "character": 0,
+                      "line": 0
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "kind": "quickfix",
+          "title": "Suppress TL4005 for this file"
+        },
+        {
+          "edit": {
+            "changes": {
+              "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/basic/src/main.tua": [
+                {
+                  "newText": " -- tua-ignore-line TL4005",
+                  "range": {
+                    "end": {
+                      "character": 16,
+                      "line": 0
+                    },
+                    "start": {
+                      "character": 16,
+                      "line": 0
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "kind": "quickfix",
+          "title": "Suppress TL4005 for this line"
+        },
+        {
+          "edit": {
+            "changes": {
+              "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/basic/src/main.tua": [
+                {
+                  "newText": " -- tua-ignore-line TL4005",
+                  "range": {
+                    "end": {
+                      "character": 30,
+                      "line": 1
+                    },
+                    "start": {
+                      "character": 30,
+                      "line": 1
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "kind": "quickfix",
+          "title": "Suppress TL4005 for this line"
+        },
+        {
+          "edit": {
+            "changes": {
+              "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/basic/src/main.tua": [
+                {
+                  "newText": "-- tua-ignore-file TL4045\n",
+                  "range": {
+                    "end": {
+                      "character": 0,
+                      "line": 0
+                    },
+                    "start": {
+                      "character": 0,
+                      "line": 0
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "kind": "quickfix",
+          "title": "Suppress TL4045 for this file"
+        },
+        {
+          "edit": {
+            "changes": {
+              "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/basic/src/main.tua": [
+                {
+                  "newText": " -- tua-ignore-line TL4045",
+                  "range": {
+                    "end": {
+                      "character": 8,
+                      "line": 3
+                    },
+                    "start": {
+                      "character": 8,
+                      "line": 3
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "kind": "quickfix",
+          "title": "Suppress TL4045 for this line"
+        }
+      ],
+      "source.fixAll": [
+        {
+          "edit": {
+            "changes": {
+              "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/basic/src/main.tua": [
+                {
+                  "newText": "",
+                  "range": {
+                    "end": {
+                      "character": 0,
+                      "line": 1
+                    },
+                    "start": {
+                      "character": 0,
+                      "line": 0
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "kind": "source.fixAll",
+          "title": "Fix all safe diagnostics"
+        }
+      ],
+      "source.organizeImports": [],
+      "source.removeUnusedImports": []
+    },
+    "applied": [
+      {
+        "kind": "source.fixAll",
+        "title": "Fix all safe diagnostics",
+        "file": "source-fixAll-0.lua",
+        "status": 0,
+        "stdout": "effect\nnil\n",
+        "stderr": ""
+      }
+    ],
+    "staleActions": [],
+    "updatedDiagnostics": [
+      {
+        "jsonrpc": "2.0",
+        "method": "textDocument/publishDiagnostics",
+        "params": {
+          "diagnostics": [],
+          "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/basic/src/main.tua"
+        }
+      }
+    ]
+  },
+  {
+    "name": "unicode",
+    "source": "print(\"😀\"); local unused = 1\nlocal function unusedFn()\n print(\"never\")\nend\n",
+    "config": "",
+    "cli": {
+      "lint": {
+        "status": 1,
+        "stdout": "",
+        "stderr": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/unicode/src/main.tua:1:19 warning TL4005: unused local `unused`; prefix with `_` to silence\n/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/unicode/src/main.tua:2:16 warning TL4055: function `unusedFn` is never used; prefix with `_` to silence\n"
+      },
+      "check": {
+        "status": 0,
+        "stdout": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/unicode/src/main.tua:1:19 warning TL4005: unused local `unused`; prefix with `_` to silence\n/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/unicode/src/main.tua:2:16 warning TL4055: function `unusedFn` is never used; prefix with `_` to silence\nchecked 1 file(s)\n",
+        "stderr": ""
+      }
+    },
+    "diagnostics": [
+      {
+        "jsonrpc": "2.0",
+        "method": "textDocument/publishDiagnostics",
+        "params": {
+          "diagnostics": [],
+          "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/unicode/src/main.tua"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "textDocument/publishDiagnostics",
+        "params": {
+          "diagnostics": [
+            {
+              "code": "TL4005",
+              "message": "unused local `unused`; prefix with `_` to silence",
+              "range": {
+                "end": {
+                  "character": 25,
+                  "line": 0
+                },
+                "start": {
+                  "character": 19,
+                  "line": 0
+                }
+              },
+              "severity": 2,
+              "source": "tua"
+            },
+            {
+              "code": "TL4055",
+              "message": "function `unusedFn` is never used; prefix with `_` to silence",
+              "range": {
+                "end": {
+                  "character": 23,
+                  "line": 1
+                },
+                "start": {
+                  "character": 15,
+                  "line": 1
+                }
+              },
+              "severity": 2,
+              "source": "tua"
+            }
+          ],
+          "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/unicode/src/main.tua"
+        }
+      }
+    ],
+    "actions": {
+      "quickfix": [
+        {
+          "edit": {
+            "changes": {
+              "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/unicode/src/main.tua": [
+                {
+                  "newText": "",
+                  "range": {
+                    "end": {
+                      "character": 0,
+                      "line": 4
+                    },
+                    "start": {
+                      "character": 0,
+                      "line": 1
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "kind": "quickfix",
+          "title": "Remove unused function"
+        },
+        {
+          "edit": {
+            "changes": {
+              "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/unicode/src/main.tua": [
+                {
+                  "newText": "",
+                  "range": {
+                    "end": {
+                      "character": 0,
+                      "line": 1
+                    },
+                    "start": {
+                      "character": 0,
+                      "line": 0
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "kind": "quickfix",
+          "title": "Remove unused local"
+        },
+        {
+          "edit": {
+            "changes": {
+              "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/unicode/src/main.tua": [
+                {
+                  "newText": "-- tua-ignore-file TL4005\n",
+                  "range": {
+                    "end": {
+                      "character": 0,
+                      "line": 0
+                    },
+                    "start": {
+                      "character": 0,
+                      "line": 0
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "kind": "quickfix",
+          "title": "Suppress TL4005 for this file"
+        },
+        {
+          "edit": {
+            "changes": {
+              "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/unicode/src/main.tua": [
+                {
+                  "newText": " -- tua-ignore-line TL4005",
+                  "range": {
+                    "end": {
+                      "character": 29,
+                      "line": 0
+                    },
+                    "start": {
+                      "character": 29,
+                      "line": 0
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "kind": "quickfix",
+          "title": "Suppress TL4005 for this line"
+        },
+        {
+          "edit": {
+            "changes": {
+              "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/unicode/src/main.tua": [
+                {
+                  "newText": "-- tua-ignore-file TL4055\n",
+                  "range": {
+                    "end": {
+                      "character": 0,
+                      "line": 0
+                    },
+                    "start": {
+                      "character": 0,
+                      "line": 0
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "kind": "quickfix",
+          "title": "Suppress TL4055 for this file"
+        },
+        {
+          "edit": {
+            "changes": {
+              "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/unicode/src/main.tua": [
+                {
+                  "newText": " -- tua-ignore-line TL4055",
+                  "range": {
+                    "end": {
+                      "character": 25,
+                      "line": 1
+                    },
+                    "start": {
+                      "character": 25,
+                      "line": 1
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "kind": "quickfix",
+          "title": "Suppress TL4055 for this line"
+        }
+      ],
+      "source.fixAll": [
+        {
+          "edit": {
+            "changes": {
+              "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/unicode/src/main.tua": [
+                {
+                  "newText": "",
+                  "range": {
+                    "end": {
+                      "character": 0,
+                      "line": 1
+                    },
+                    "start": {
+                      "character": 0,
+                      "line": 0
+                    }
+                  }
+                },
+                {
+                  "newText": "",
+                  "range": {
+                    "end": {
+                      "character": 0,
+                      "line": 4
+                    },
+                    "start": {
+                      "character": 0,
+                      "line": 1
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "kind": "source.fixAll",
+          "title": "Fix all safe diagnostics"
+        }
+      ],
+      "source.organizeImports": [],
+      "source.removeUnusedImports": []
+    },
+    "applied": [
+      {
+        "kind": "source.fixAll",
+        "title": "Fix all safe diagnostics",
+        "file": "source-fixAll-0.lua",
+        "status": 0,
+        "stdout": "",
+        "stderr": ""
+      }
+    ],
+    "staleActions": [],
+    "updatedDiagnostics": [
+      {
+        "jsonrpc": "2.0",
+        "method": "textDocument/publishDiagnostics",
+        "params": {
+          "diagnostics": [],
+          "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/unicode/src/main.tua"
+        }
+      }
+    ]
+  },
+  {
+    "name": "suppression",
+    "source": "-- tua-ignore-file TL4005\nlocal unused = 1\nprint(missing) -- tua-ignore-line TL4004\n-- tua-ignore-next-line TL4045\nlocal x\nprint(x)\n",
+    "config": "",
+    "cli": {
+      "lint": {
+        "status": 1,
+        "stdout": "",
+        "stderr": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/suppression/src/main.tua:4:1 warning TL4026: `tua-ignore-next-line` did not suppress matching TL4045 diagnostics on line 5\n/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/suppression/src/main.tua:6:7 warning TL4045: local `x` defined at line 5 may be read before it is initialized; initialize with `nil` to silence\n"
+      },
+      "check": {
+        "status": 0,
+        "stdout": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/suppression/src/main.tua:4:1 warning TL4026: `tua-ignore-next-line` did not suppress matching TL4045 diagnostics on line 5\n/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/suppression/src/main.tua:6:7 warning TL4045: local `x` defined at line 5 may be read before it is initialized; initialize with `nil` to silence\nchecked 1 file(s)\n",
+        "stderr": ""
+      }
+    },
+    "diagnostics": [
+      {
+        "jsonrpc": "2.0",
+        "method": "textDocument/publishDiagnostics",
+        "params": {
+          "diagnostics": [
+            {
+              "code": "TL4026",
+              "message": "`tua-ignore-file` did not suppress matching TL4005 diagnostics on file",
+              "range": {
+                "end": {
+                  "character": 1,
+                  "line": 0
+                },
+                "start": {
+                  "character": 0,
+                  "line": 0
+                }
+              },
+              "severity": 2,
+              "source": "tua"
+            },
+            {
+              "code": "TL4026",
+              "message": "`tua-ignore-line` did not suppress matching TL4004 diagnostics on line 3",
+              "range": {
+                "end": {
+                  "character": 1,
+                  "line": 2
+                },
+                "start": {
+                  "character": 0,
+                  "line": 2
+                }
+              },
+              "severity": 2,
+              "source": "tua"
+            },
+            {
+              "code": "TL4026",
+              "message": "`tua-ignore-next-line` did not suppress matching TL4045 diagnostics on line 5",
+              "range": {
+                "end": {
+                  "character": 1,
+                  "line": 3
+                },
+                "start": {
+                  "character": 0,
+                  "line": 3
+                }
+              },
+              "severity": 2,
+              "source": "tua"
+            }
+          ],
+          "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/suppression/src/main.tua"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "textDocument/publishDiagnostics",
+        "params": {
+          "diagnostics": [
+            {
+              "code": "TL4026",
+              "message": "`tua-ignore-next-line` did not suppress matching TL4045 diagnostics on line 5",
+              "range": {
+                "end": {
+                  "character": 1,
+                  "line": 3
+                },
+                "start": {
+                  "character": 0,
+                  "line": 3
+                }
+              },
+              "severity": 2,
+              "source": "tua"
+            },
+            {
+              "code": "TL4045",
+              "message": "local `x` defined at line 5 may be read before it is initialized; initialize with `nil` to silence",
+              "range": {
+                "end": {
+                  "character": 7,
+                  "line": 5
+                },
+                "start": {
+                  "character": 6,
+                  "line": 5
+                }
+              },
+              "severity": 2,
+              "source": "tua"
+            }
+          ],
+          "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/suppression/src/main.tua"
+        }
+      }
+    ],
+    "actions": {
+      "quickfix": [
+        {
+          "edit": {
+            "changes": {
+              "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/suppression/src/main.tua": [
+                {
+                  "newText": " TL4045",
+                  "range": {
+                    "end": {
+                      "character": 25,
+                      "line": 0
+                    },
+                    "start": {
+                      "character": 25,
+                      "line": 0
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "kind": "quickfix",
+          "title": "Suppress TL4045 for this file"
+        },
+        {
+          "edit": {
+            "changes": {
+              "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/suppression/src/main.tua": [
+                {
+                  "newText": " -- tua-ignore-line TL4045",
+                  "range": {
+                    "end": {
+                      "character": 8,
+                      "line": 5
+                    },
+                    "start": {
+                      "character": 8,
+                      "line": 5
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "kind": "quickfix",
+          "title": "Suppress TL4045 for this line"
+        }
+      ],
+      "source.fixAll": [],
+      "source.organizeImports": [],
+      "source.removeUnusedImports": []
+    },
+    "staleActions": [],
+    "updatedDiagnostics": [
+      {
+        "jsonrpc": "2.0",
+        "method": "textDocument/publishDiagnostics",
+        "params": {
+          "diagnostics": [],
+          "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/suppression/src/main.tua"
+        }
+      }
+    ]
+  },
+  {
+    "name": "disabled",
+    "source": "local unused = 1\nprint(missing)\n",
+    "config": "[diagnostics]\nrules=false\n",
+    "cli": {
+      "lint": {
+        "status": 1,
+        "stdout": "",
+        "stderr": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/disabled/src/main.tua:1:7 warning TL4005: unused local `unused`; prefix with `_` to silence\n/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/disabled/src/main.tua:2:7 error TL4004: undefined variable `missing`\n"
+      },
+      "check": {
+        "status": 0,
+        "stdout": "checked 1 file(s)\n",
+        "stderr": ""
+      }
+    },
+    "diagnostics": [
+      {
+        "jsonrpc": "2.0",
+        "method": "textDocument/publishDiagnostics",
+        "params": {
+          "diagnostics": [
+            {
+              "code": "TL4004",
+              "message": "undefined variable `missing`",
+              "range": {
+                "end": {
+                  "character": 13,
+                  "line": 1
+                },
+                "start": {
+                  "character": 6,
+                  "line": 1
+                }
+              },
+              "severity": 1,
+              "source": "tua"
+            }
+          ],
+          "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/disabled/src/main.tua"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "textDocument/publishDiagnostics",
+        "params": {
+          "diagnostics": [],
+          "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/disabled/src/main.tua"
+        }
+      }
+    ],
+    "actions": {
+      "quickfix": [
+        {
+          "edit": {
+            "changes": {
+              "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/disabled/src/main.tua": [
+                {
+                  "newText": ": number",
+                  "range": {
+                    "end": {
+                      "character": 12,
+                      "line": 0
+                    },
+                    "start": {
+                      "character": 12,
+                      "line": 0
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "kind": "quickfix",
+          "title": "Add type annotation `: number`"
+        }
+      ],
+      "source.fixAll": [],
+      "source.organizeImports": [],
+      "source.removeUnusedImports": []
+    },
+    "staleActions": [],
+    "updatedDiagnostics": [
+      {
+        "jsonrpc": "2.0",
+        "method": "textDocument/publishDiagnostics",
+        "params": {
+          "diagnostics": [],
+          "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/disabled/src/main.tua"
+        }
+      }
+    ]
+  },
+  {
+    "name": "severity",
+    "source": "local unused = 1\nprint(missing)\n",
+    "config": "[diagnostics.severity]\nTL4005=\"allow\"\nTL4004=\"info\"\n",
+    "cli": {
+      "lint": {
+        "status": 0,
+        "stdout": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/severity/src/main.tua:2:7 info TL4004: undefined variable `missing`\nlinted 1 file(s)\n",
+        "stderr": ""
+      },
+      "check": {
+        "status": 0,
+        "stdout": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/severity/src/main.tua:2:7 info TL4004: undefined variable `missing`\nchecked 1 file(s)\n",
+        "stderr": ""
+      }
+    },
+    "diagnostics": [
+      {
+        "jsonrpc": "2.0",
+        "method": "textDocument/publishDiagnostics",
+        "params": {
+          "diagnostics": [
+            {
+              "code": "TL4004",
+              "message": "undefined variable `missing`",
+              "range": {
+                "end": {
+                  "character": 13,
+                  "line": 1
+                },
+                "start": {
+                  "character": 6,
+                  "line": 1
+                }
+              },
+              "severity": 3,
+              "source": "tua"
+            }
+          ],
+          "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/severity/src/main.tua"
+        }
+      }
+    ],
+    "actions": {
+      "quickfix": [
+        {
+          "edit": {
+            "changes": {
+              "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/severity/src/main.tua": [
+                {
+                  "newText": "-- tua-ignore-file TL4004\n",
+                  "range": {
+                    "end": {
+                      "character": 0,
+                      "line": 0
+                    },
+                    "start": {
+                      "character": 0,
+                      "line": 0
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "kind": "quickfix",
+          "title": "Suppress TL4004 for this file"
+        },
+        {
+          "edit": {
+            "changes": {
+              "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/severity/src/main.tua": [
+                {
+                  "newText": " -- tua-ignore-line TL4004",
+                  "range": {
+                    "end": {
+                      "character": 14,
+                      "line": 1
+                    },
+                    "start": {
+                      "character": 14,
+                      "line": 1
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "kind": "quickfix",
+          "title": "Suppress TL4004 for this line"
+        }
+      ],
+      "source.fixAll": [],
+      "source.organizeImports": [],
+      "source.removeUnusedImports": []
+    },
+    "staleActions": [],
+    "updatedDiagnostics": [
+      {
+        "jsonrpc": "2.0",
+        "method": "textDocument/publishDiagnostics",
+        "params": {
+          "diagnostics": [],
+          "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/severity/src/main.tua"
+        }
+      }
+    ]
+  },
+  {
+    "name": "no-suppression",
+    "source": "local unused = 1\n",
+    "config": "[diagnostics]\ninline_ignores=false\n",
+    "cli": {
+      "lint": {
+        "status": 1,
+        "stdout": "",
+        "stderr": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/no-suppression/src/main.tua:1:7 warning TL4005: unused local `unused`; prefix with `_` to silence\n"
+      },
+      "check": {
+        "status": 0,
+        "stdout": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/no-suppression/src/main.tua:1:7 warning TL4005: unused local `unused`; prefix with `_` to silence\nchecked 1 file(s)\n",
+        "stderr": ""
+      }
+    },
+    "diagnostics": [
+      {
+        "jsonrpc": "2.0",
+        "method": "textDocument/publishDiagnostics",
+        "params": {
+          "diagnostics": [],
+          "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/no-suppression/src/main.tua"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "textDocument/publishDiagnostics",
+        "params": {
+          "diagnostics": [
+            {
+              "code": "TL4005",
+              "message": "unused local `unused`; prefix with `_` to silence",
+              "range": {
+                "end": {
+                  "character": 12,
+                  "line": 0
+                },
+                "start": {
+                  "character": 6,
+                  "line": 0
+                }
+              },
+              "severity": 2,
+              "source": "tua"
+            }
+          ],
+          "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/no-suppression/src/main.tua"
+        }
+      }
+    ],
+    "actions": {
+      "quickfix": [
+        {
+          "edit": {
+            "changes": {
+              "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/no-suppression/src/main.tua": [
+                {
+                  "newText": "",
+                  "range": {
+                    "end": {
+                      "character": 0,
+                      "line": 1
+                    },
+                    "start": {
+                      "character": 0,
+                      "line": 0
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "kind": "quickfix",
+          "title": "Remove unused local"
+        }
+      ],
+      "source.fixAll": [
+        {
+          "edit": {
+            "changes": {
+              "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/no-suppression/src/main.tua": [
+                {
+                  "newText": "",
+                  "range": {
+                    "end": {
+                      "character": 0,
+                      "line": 1
+                    },
+                    "start": {
+                      "character": 0,
+                      "line": 0
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "kind": "source.fixAll",
+          "title": "Fix all safe diagnostics"
+        }
+      ],
+      "source.organizeImports": [],
+      "source.removeUnusedImports": []
+    },
+    "applied": [
+      {
+        "kind": "source.fixAll",
+        "title": "Fix all safe diagnostics",
+        "file": "source-fixAll-0.lua",
+        "status": 0,
+        "stdout": "",
+        "stderr": ""
+      }
+    ],
+    "staleActions": [],
+    "updatedDiagnostics": [
+      {
+        "jsonrpc": "2.0",
+        "method": "textDocument/publishDiagnostics",
+        "params": {
+          "diagnostics": [],
+          "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/no-suppression/src/main.tua"
+        }
+      }
+    ]
+  },
+  {
+    "name": "imports",
+    "source": "local Z = require(\"z\")\nlocal A = require(\"a\")\nlocal Unused = require(\"effect\")\nprint(A, Z)\n",
+    "config": "",
+    "files": {
+      "z.lua": "print(\"z\"); return \"Z\"\n",
+      "a.lua": "print(\"a\"); return \"A\"\n",
+      "effect.lua": "print(\"effect\"); return {}\n"
+    },
+    "cli": {
+      "lint": {
+        "status": 1,
+        "stdout": "",
+        "stderr": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/imports/src/main.tua:3:7 warning TL4054: import `Unused` is never used; prefix with `_` to silence\n"
+      },
+      "check": {
+        "status": 0,
+        "stdout": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/imports/src/main.tua:3:7 warning TL4054: import `Unused` is never used; prefix with `_` to silence\nchecked 1 file(s)\n",
+        "stderr": ""
+      }
+    },
+    "diagnostics": [
+      {
+        "jsonrpc": "2.0",
+        "method": "textDocument/publishDiagnostics",
+        "params": {
+          "diagnostics": [],
+          "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/imports/src/main.tua"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "textDocument/publishDiagnostics",
+        "params": {
+          "diagnostics": [
+            {
+              "code": "TL4054",
+              "message": "import `Unused` is never used; prefix with `_` to silence",
+              "range": {
+                "end": {
+                  "character": 12,
+                  "line": 2
+                },
+                "start": {
+                  "character": 6,
+                  "line": 2
+                }
+              },
+              "severity": 2,
+              "source": "tua"
+            }
+          ],
+          "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/imports/src/main.tua"
+        }
+      }
+    ],
+    "actions": {
+      "quickfix": [
+        {
+          "edit": {
+            "changes": {
+              "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/imports/src/main.tua": [
+                {
+                  "newText": "-- tua-ignore-file TL4054\n",
+                  "range": {
+                    "end": {
+                      "character": 0,
+                      "line": 0
+                    },
+                    "start": {
+                      "character": 0,
+                      "line": 0
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "kind": "quickfix",
+          "title": "Suppress TL4054 for this file"
+        },
+        {
+          "edit": {
+            "changes": {
+              "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/imports/src/main.tua": [
+                {
+                  "newText": " -- tua-ignore-line TL4054",
+                  "range": {
+                    "end": {
+                      "character": 32,
+                      "line": 2
+                    },
+                    "start": {
+                      "character": 32,
+                      "line": 2
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "kind": "quickfix",
+          "title": "Suppress TL4054 for this line"
+        }
+      ],
+      "source.fixAll": [],
+      "source.organizeImports": [
+        {
+          "edit": {
+            "changes": {
+              "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/imports/src/main.tua": [
+                {
+                  "newText": "local A = require(\"a\")\nlocal Z = require(\"z\")\nprint(A, Z)\n",
+                  "range": {
+                    "end": {
+                      "character": 0,
+                      "line": 4
+                    },
+                    "start": {
+                      "character": 0,
+                      "line": 0
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "kind": "source.organizeImports",
+          "title": "Organize imports"
+        }
+      ],
+      "source.removeUnusedImports": [
+        {
+          "edit": {
+            "changes": {
+              "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/imports/src/main.tua": [
+                {
+                  "newText": "local Z = require(\"z\")\nlocal A = require(\"a\")\nprint(A, Z)\n",
+                  "range": {
+                    "end": {
+                      "character": 0,
+                      "line": 4
+                    },
+                    "start": {
+                      "character": 0,
+                      "line": 0
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "kind": "source.removeUnusedImports",
+          "title": "Remove unused imports"
+        }
+      ]
+    },
+    "applied": [
+      {
+        "kind": "source.organizeImports",
+        "title": "Organize imports",
+        "file": "source-organizeImports-0.lua",
+        "status": 0,
+        "stdout": "a\nz\nA\tZ\n",
+        "stderr": ""
+      },
+      {
+        "kind": "source.removeUnusedImports",
+        "title": "Remove unused imports",
+        "file": "source-removeUnusedImports-0.lua",
+        "status": 0,
+        "stdout": "z\na\nA\tZ\n",
+        "stderr": ""
+      }
+    ],
+    "staleActions": [],
+    "updatedDiagnostics": [
+      {
+        "jsonrpc": "2.0",
+        "method": "textDocument/publishDiagnostics",
+        "params": {
+          "diagnostics": [],
+          "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/imports/src/main.tua"
+        }
+      }
+    ]
+  },
+  {
+    "name": "incomplete",
+    "source": "local used = 1\nprint(used)\nlocal bad =\n",
+    "config": "",
+    "cli": {
+      "lint": {
+        "status": 1,
+        "stdout": "",
+        "stderr": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/incomplete/src/main.tua:3:11 error TL0001: expected an expression\n"
+      },
+      "check": {
+        "status": 1,
+        "stdout": "",
+        "stderr": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/incomplete/src/main.tua:3:11 error TL0001: expected an expression\n"
+      }
+    },
+    "diagnostics": [
+      {
+        "jsonrpc": "2.0",
+        "method": "textDocument/publishDiagnostics",
+        "params": {
+          "diagnostics": [
+            {
+              "code": "TL0001",
+              "message": "expected an expression",
+              "range": {
+                "end": {
+                  "character": 11,
+                  "line": 2
+                },
+                "start": {
+                  "character": 10,
+                  "line": 2
+                }
+              },
+              "severity": 1,
+              "source": "tua"
+            }
+          ],
+          "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/incomplete/src/main.tua"
+        }
+      }
+    ],
+    "actions": {
+      "quickfix": [],
+      "source.fixAll": [],
+      "source.organizeImports": [],
+      "source.removeUnusedImports": []
+    },
+    "staleActions": [],
+    "updatedDiagnostics": [
+      {
+        "jsonrpc": "2.0",
+        "method": "textDocument/publishDiagnostics",
+        "params": {
+          "diagnostics": [],
+          "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/incomplete/src/main.tua"
+        }
+      }
+    ]
+  },
+  {
+    "name": "same-line",
+    "source": "local unused = 1; print(\"keep\")\n",
+    "config": "",
+    "cli": {
+      "lint": {
+        "status": 1,
+        "stdout": "",
+        "stderr": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/same-line/src/main.tua:1:7 warning TL4005: unused local `unused`; prefix with `_` to silence\n"
+      },
+      "check": {
+        "status": 0,
+        "stdout": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/same-line/src/main.tua:1:7 warning TL4005: unused local `unused`; prefix with `_` to silence\nchecked 1 file(s)\n",
+        "stderr": ""
+      }
+    },
+    "diagnostics": [
+      {
+        "jsonrpc": "2.0",
+        "method": "textDocument/publishDiagnostics",
+        "params": {
+          "diagnostics": [],
+          "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/same-line/src/main.tua"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "textDocument/publishDiagnostics",
+        "params": {
+          "diagnostics": [
+            {
+              "code": "TL4005",
+              "message": "unused local `unused`; prefix with `_` to silence",
+              "range": {
+                "end": {
+                  "character": 12,
+                  "line": 0
+                },
+                "start": {
+                  "character": 6,
+                  "line": 0
+                }
+              },
+              "severity": 2,
+              "source": "tua"
+            }
+          ],
+          "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/same-line/src/main.tua"
+        }
+      }
+    ],
+    "actions": {
+      "quickfix": [
+        {
+          "edit": {
+            "changes": {
+              "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/same-line/src/main.tua": [
+                {
+                  "newText": "",
+                  "range": {
+                    "end": {
+                      "character": 0,
+                      "line": 1
+                    },
+                    "start": {
+                      "character": 0,
+                      "line": 0
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "kind": "quickfix",
+          "title": "Remove unused local"
+        },
+        {
+          "edit": {
+            "changes": {
+              "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/same-line/src/main.tua": [
+                {
+                  "newText": "-- tua-ignore-file TL4005\n",
+                  "range": {
+                    "end": {
+                      "character": 0,
+                      "line": 0
+                    },
+                    "start": {
+                      "character": 0,
+                      "line": 0
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "kind": "quickfix",
+          "title": "Suppress TL4005 for this file"
+        },
+        {
+          "edit": {
+            "changes": {
+              "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/same-line/src/main.tua": [
+                {
+                  "newText": " -- tua-ignore-line TL4005",
+                  "range": {
+                    "end": {
+                      "character": 31,
+                      "line": 0
+                    },
+                    "start": {
+                      "character": 31,
+                      "line": 0
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "kind": "quickfix",
+          "title": "Suppress TL4005 for this line"
+        }
+      ],
+      "source.fixAll": [
+        {
+          "edit": {
+            "changes": {
+              "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/same-line/src/main.tua": [
+                {
+                  "newText": "",
+                  "range": {
+                    "end": {
+                      "character": 0,
+                      "line": 1
+                    },
+                    "start": {
+                      "character": 0,
+                      "line": 0
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "kind": "source.fixAll",
+          "title": "Fix all safe diagnostics"
+        }
+      ],
+      "source.organizeImports": [],
+      "source.removeUnusedImports": []
+    },
+    "applied": [
+      {
+        "kind": "source.fixAll",
+        "title": "Fix all safe diagnostics",
+        "file": "source-fixAll-0.lua",
+        "status": 0,
+        "stdout": "",
+        "stderr": ""
+      }
+    ],
+    "staleActions": [],
+    "updatedDiagnostics": [
+      {
+        "jsonrpc": "2.0",
+        "method": "textDocument/publishDiagnostics",
+        "params": {
+          "diagnostics": [],
+          "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/linter/same-line/src/main.tua"
+        }
+      }
+    ]
+  }
+]

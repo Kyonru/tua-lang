@@ -1,0 +1,3 @@
+local scores: {[string]: number} = {}
+local key="missing"
+scores[key]="wrong"

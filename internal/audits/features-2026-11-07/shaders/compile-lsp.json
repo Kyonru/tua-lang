@@ -1,0 +1,220 @@
+{
+  "before": [
+    {
+      "jsonrpc": "2.0",
+      "method": "textDocument/publishDiagnostics",
+      "params": {
+        "diagnostics": [],
+        "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/shaders/fixtures/inlineerror/src/main.tua"
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "textDocument/publishDiagnostics",
+      "params": {
+        "diagnostics": [
+          {
+            "code": "TL4005",
+            "message": "unused local `fx`; prefix with `_` to silence",
+            "range": {
+              "end": {
+                "character": 8,
+                "line": 0
+              },
+              "start": {
+                "character": 6,
+                "line": 0
+              }
+            },
+            "severity": 2,
+            "source": "tua"
+          }
+        ],
+        "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/shaders/fixtures/inlineerror/src/main.tua"
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "textDocument/publishDiagnostics",
+      "params": {
+        "diagnostics": [
+          {
+            "code": "TL4005",
+            "message": "unused local `fx`; prefix with `_` to silence",
+            "range": {
+              "end": {
+                "character": 8,
+                "line": 0
+              },
+              "start": {
+                "character": 6,
+                "line": 0
+              }
+            },
+            "severity": 2,
+            "source": "tua"
+          },
+          {
+            "code": "TL2016",
+            "message": "shader does not compile for desktop (pixel stage): 'missing': undeclared identifier",
+            "range": {
+              "end": {
+                "character": 1,
+                "line": 2
+              },
+              "start": {
+                "character": 0,
+                "line": 2
+              }
+            },
+            "severity": 1,
+            "source": "tua"
+          },
+          {
+            "code": "TL2016",
+            "message": "shader does not compile for desktop (pixel stage): 'return': cannot convert return value to function return type",
+            "range": {
+              "end": {
+                "character": 1,
+                "line": 2
+              },
+              "start": {
+                "character": 0,
+                "line": 2
+              }
+            },
+            "severity": 1,
+            "source": "tua"
+          }
+        ],
+        "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/shaders/fixtures/inlineerror/src/main.tua"
+      }
+    }
+  ],
+  "after": [
+    {
+      "jsonrpc": "2.0",
+      "method": "textDocument/publishDiagnostics",
+      "params": {
+        "diagnostics": [
+          {
+            "code": "TL2016",
+            "message": "shader does not compile for desktop (pixel stage): 'missing': undeclared identifier",
+            "range": {
+              "end": {
+                "character": 1,
+                "line": 2
+              },
+              "start": {
+                "character": 0,
+                "line": 2
+              }
+            },
+            "severity": 1,
+            "source": "tua"
+          },
+          {
+            "code": "TL2016",
+            "message": "shader does not compile for desktop (pixel stage): 'return': cannot convert return value to function return type",
+            "range": {
+              "end": {
+                "character": 1,
+                "line": 2
+              },
+              "start": {
+                "character": 0,
+                "line": 2
+              }
+            },
+            "severity": 1,
+            "source": "tua"
+          }
+        ],
+        "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/shaders/fixtures/inlineerror/src/main.tua"
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "textDocument/publishDiagnostics",
+      "params": {
+        "diagnostics": [
+          {
+            "code": "TL4005",
+            "message": "unused local `fx`; prefix with `_` to silence",
+            "range": {
+              "end": {
+                "character": 8,
+                "line": 0
+              },
+              "start": {
+                "character": 6,
+                "line": 0
+              }
+            },
+            "severity": 2,
+            "source": "tua"
+          },
+          {
+            "code": "TL2016",
+            "message": "shader does not compile for desktop (pixel stage): 'missing': undeclared identifier",
+            "range": {
+              "end": {
+                "character": 1,
+                "line": 2
+              },
+              "start": {
+                "character": 0,
+                "line": 2
+              }
+            },
+            "severity": 1,
+            "source": "tua"
+          },
+          {
+            "code": "TL2016",
+            "message": "shader does not compile for desktop (pixel stage): 'return': cannot convert return value to function return type",
+            "range": {
+              "end": {
+                "character": 1,
+                "line": 2
+              },
+              "start": {
+                "character": 0,
+                "line": 2
+              }
+            },
+            "severity": 1,
+            "source": "tua"
+          }
+        ],
+        "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/shaders/fixtures/inlineerror/src/main.tua"
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "textDocument/publishDiagnostics",
+      "params": {
+        "diagnostics": [
+          {
+            "code": "TL4005",
+            "message": "unused local `fx`; prefix with `_` to silence",
+            "range": {
+              "end": {
+                "character": 8,
+                "line": 0
+              },
+              "start": {
+                "character": 6,
+                "line": 0
+              }
+            },
+            "severity": 2,
+            "source": "tua"
+          }
+        ],
+        "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/shaders/fixtures/inlineerror/src/main.tua"
+      }
+    }
+  ],
+  "stderr": ""
+}

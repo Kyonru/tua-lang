@@ -1,0 +1,507 @@
+[
+  {
+    "cwd": "fixtures/init",
+    "command": [
+      "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+      "init"
+    ],
+    "exit": 0,
+    "stdout": "initialized tua project\ncreated tua.toml\ncreated src/\ncreated src/main.tua\nupdated .gitignore with Tua-generated folders\n",
+    "stderr": ""
+  },
+  {
+    "cwd": "fixtures/init",
+    "command": [
+      "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+      "init"
+    ],
+    "exit": 0,
+    "stdout": "initialized tua project\ntua.toml already exists; left unchanged\nsrc/ already exists\nsrc/main.tua already exists; left unchanged\n.gitignore already covers Tua-generated folders; left unchanged\n",
+    "stderr": ""
+  },
+  {
+    "cwd": "fixtures/init",
+    "command": [
+      "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+      "check"
+    ],
+    "exit": 0,
+    "stdout": "checked 1 file(s)\n",
+    "stderr": ""
+  },
+  {
+    "cwd": "fixtures/init",
+    "command": [
+      "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+      "build"
+    ],
+    "exit": 0,
+    "stdout": "built 1 file(s)\n",
+    "stderr": ""
+  },
+  {
+    "cwd": "fixtures/init",
+    "files": {
+      ".gitignore": "custom/\n\n# Tua generated files\n/build/\n/dist/\n/.tua/\n",
+      "build/.tua-build-manifest.json": "{\"main.lua\":17525393709217049727,\"main.lua.map\":14099827434929468752,\"main.lua.map.json\":4321715196383750633}",
+      "build/main.lua": "local message = \"hello from tua\"\nprint(message)\n",
+      "build/main.lua.map": "{\"file\":\"main.lua\",\"mappings\":\"AAAA;AACA\",\"names\":[],\"sourceRoot\":\"..\",\"sources\":[\"src/main.tua\"],\"version\":3}\n",
+      "build/main.lua.map.json": "{\n  \"generated\": \"build/main.lua\",\n  \"lineMappings\": [\n    {\n      \"generatedLine\": 1,\n      \"sourceLine\": 1\n    },\n    {\n      \"generatedLine\": 2,\n      \"sourceLine\": 2\n    }\n  ],\n  \"source\": \"src/main.tua\",\n  \"version\": 1\n}\n",
+      "src/main.tua": "local message: string = \"hello from tua\"\nprint(message)\n",
+      "tua.toml": "source = \"src\"\nout = \"build\"\nmain = \"main.tua\"\ntarget = \"love11-luajit\"\nextension = \"tua\"\nemit_maps = true\ntype_libraries = []\nasset_pipelines = []\n\n[test]\nsource = \"\"\nexclude_specs = true\n\n[emit]\nannotation_mode = \"off\"\n\n[format]\nindent_style = \"spaces\"\nindent_width = 2\nline_width = 100\nquote_style = \"preserve\"\nline_ending = \"lf\"\nfinal_newline = true\n\n[jit]\nenabled = false\nvariable_type_drift = true\ntable_shape_drift = true\nhot_loop_hints = true\n\n[ecs]\nenabled = true\nbackend = \"tua\"\n\n[shaders]\nvalidate = \"auto\"\ntargets = [\"desktop\"]\nwarn_unsent = false\n\n[diagnostics]\n# rules enables Tua's standard diagnostics. The individual switches below\n# control additional opt-in checks; false does not disable a standard rule.\nrules = true\nduplicate_keys = false\nmissing_requires = true\nself_assignments = false\ndoc_annotations = false\nundefined_variables = false\nunused_locals = false\nunused_parameters = false\nuse_before_definition = false\nduplicate_parameters = false\nbad_requires = false\nimpossible_boolean_expressions = false\nduplicate_if_conditions = false\nduplicate_binary_operands = false\nfloat_equality = false\nconst_assignments = false\nassignment_arity = false\nlocal_declaration_arity = false\nunused_assignments = false\nbinary_operator_type_mismatches = false\nuncalled_local_functions = false\nmax_cyclomatic_complexity = 0\ndivide_by_zero = false\nalmost_swapped = false\nmixed_tables = false\nunknown_record_fields = false\nlove_callback_order = true\ninline_ignores = true\ninline_ignore_scopes = [\"tua-ignore-line\", \"tua-ignore-next-line\", \"tua-ignore-file\"]\ninline_ignore_max_per_file = 0\nglobals = []\nseverity = {}\n"
+    }
+  },
+  {
+    "cwd": "fixtures/symlink-init",
+    "command": [
+      "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+      "init"
+    ],
+    "exit": 1,
+    "stdout": "",
+    "stderr": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/projects/fixtures/symlink-init/src:1:1 error TL3002: output path `/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/projects/fixtures/symlink-init/src` crosses a symbolic link\n"
+  },
+  {
+    "cwd": "fixtures/symlink-init",
+    "files": {
+      "outside/keep": "preserve"
+    }
+  },
+  {
+    "cwd": "fixtures/mixed",
+    "command": [
+      "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+      "check"
+    ],
+    "exit": 1,
+    "stdout": "",
+    "stderr": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/projects/fixtures/mixed/code/broken_spec.tua:1:7 error TL0001: expected either a variable name or `function`\n"
+  },
+  {
+    "cwd": "fixtures/mixed",
+    "command": [
+      "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+      "build"
+    ],
+    "exit": 0,
+    "stdout": "built 4 file(s)\n",
+    "stderr": ""
+  },
+  {
+    "cwd": "fixtures/mixed/output",
+    "command": [
+      "/opt/homebrew/bin/lua",
+      "main.lua"
+    ],
+    "exit": 0,
+    "stdout": "mixed-ok\n",
+    "stderr": ""
+  },
+  {
+    "cwd": "fixtures/mixed",
+    "files": {
+      "code/.git/bad.tua": "local =\n",
+      "code/boot/start.tua": "local m = require(\"helper\")\nassert(m.value == 42)\nprint(\"mixed-ok\")\n",
+      "code/broken_spec.tua": "local =\n",
+      "code/data.txt": "asset exact bytes\n",
+      "code/helper.lua": "return {value=42}\n",
+      "output/.tua-build-manifest.json": "{\"boot/start.lua\":15710091577773704633,\"boot/start.lua.map\":17733125022173792238,\"boot/start.lua.map.json\":5379109459824215047,\"data.txt\":523219034023095563,\"helper.lua\":13554384928527546887,\"main.lua\":15710091577773704633,\"main.lua.map\":16654791028382283772,\"main.lua.map.json\":4945508826574368341}",
+      "output/boot/start.lua": "local m = require(\"helper\")\nassert(m.value == 42)\nprint(\"mixed-ok\")\n",
+      "output/boot/start.lua.map": "{\"file\":\"start.lua\",\"mappings\":\"AAAA;AACA;AACA\",\"names\":[],\"sourceRoot\":\"../..\",\"sources\":[\"code/boot/start.tua\"],\"version\":3}\n",
+      "output/boot/start.lua.map.json": "{\n  \"generated\": \"output/boot/start.lua\",\n  \"lineMappings\": [\n    {\n      \"generatedLine\": 1,\n      \"sourceLine\": 1\n    },\n    {\n      \"generatedLine\": 2,\n      \"sourceLine\": 2\n    },\n    {\n      \"generatedLine\": 3,\n      \"sourceLine\": 3\n    }\n  ],\n  \"source\": \"code/boot/start.tua\",\n  \"version\": 1\n}\n",
+      "output/data.txt": "asset exact bytes\n",
+      "output/helper.lua": "return {value=42}\n",
+      "output/main.lua": "local m = require(\"helper\")\nassert(m.value == 42)\nprint(\"mixed-ok\")\n",
+      "output/main.lua.map": "{\"file\":\"main.lua\",\"mappings\":\"AAAA;AACA;AACA\",\"names\":[],\"sourceRoot\":\"..\",\"sources\":[\"code/boot/start.tua\"],\"version\":3}\n",
+      "output/main.lua.map.json": "{\n  \"generated\": \"output/main.lua\",\n  \"lineMappings\": [\n    {\n      \"generatedLine\": 1,\n      \"sourceLine\": 1\n    },\n    {\n      \"generatedLine\": 2,\n      \"sourceLine\": 2\n    },\n    {\n      \"generatedLine\": 3,\n      \"sourceLine\": 3\n    }\n  ],\n  \"source\": \"code/boot/start.tua\",\n  \"version\": 1\n}\n",
+      "tua.toml": "source=\"code\"\nout=\"output\"\nmain=\"boot/start.tua\"\n"
+    }
+  },
+  {
+    "cwd": "fixtures/unknown",
+    "command": [
+      "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+      "check"
+    ],
+    "exit": 1,
+    "stdout": "",
+    "stderr": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/projects/fixtures/unknown/tua.toml:1:1 error TL3001: unknown config key `soruce`; did you mean `source`?\n"
+  },
+  {
+    "cwd": "fixtures/unknown",
+    "command": [
+      "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+      "build"
+    ],
+    "exit": 1,
+    "stdout": "",
+    "stderr": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/projects/fixtures/unknown/tua.toml:1:1 error TL3001: unknown config key `soruce`; did you mean `source`?\n"
+  },
+  {
+    "cwd": "fixtures/unknown",
+    "files": {
+      "src/main.tua": "print(\"hello\")\n",
+      "tua.toml": "soruce=\"src\"\n"
+    }
+  },
+  {
+    "cwd": "fixtures/enum",
+    "command": [
+      "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+      "check"
+    ],
+    "exit": 1,
+    "stdout": "",
+    "stderr": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/projects/fixtures/enum/tua.toml:2:17 error TL3001: expected annotation mode \"off\" or \"luacats\"\n"
+  },
+  {
+    "cwd": "fixtures/enum",
+    "command": [
+      "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+      "build"
+    ],
+    "exit": 1,
+    "stdout": "",
+    "stderr": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/projects/fixtures/enum/tua.toml:2:17 error TL3001: expected annotation mode \"off\" or \"luacats\"\n"
+  },
+  {
+    "cwd": "fixtures/enum",
+    "files": {
+      "src/main.tua": "print(\"hello\")\n",
+      "tua.toml": "[emit]\nannotation_mode=\"wat\"\n"
+    }
+  },
+  {
+    "cwd": "fixtures/missing-main",
+    "command": [
+      "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+      "check"
+    ],
+    "exit": 0,
+    "stdout": "checked 1 file(s)\n",
+    "stderr": ""
+  },
+  {
+    "cwd": "fixtures/missing-main",
+    "command": [
+      "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+      "build"
+    ],
+    "exit": 0,
+    "stdout": "built 1 file(s)\n",
+    "stderr": ""
+  },
+  {
+    "cwd": "fixtures/missing-main",
+    "files": {
+      "build/.tua-build-manifest.json": "{\"main.lua\":10756529168037144383,\"main.lua.map\":808189235236934277,\"main.lua.map.json\":5575325079839146711}",
+      "build/main.lua": "print(\"hello\")\n",
+      "build/main.lua.map": "{\"file\":\"main.lua\",\"mappings\":\"AAAA\",\"names\":[],\"sourceRoot\":\"..\",\"sources\":[\"src/main.tua\"],\"version\":3}\n",
+      "build/main.lua.map.json": "{\n  \"generated\": \"build/main.lua\",\n  \"lineMappings\": [\n    {\n      \"generatedLine\": 1,\n      \"sourceLine\": 1\n    }\n  ],\n  \"source\": \"src/main.tua\",\n  \"version\": 1\n}\n",
+      "src/main.tua": "print(\"hello\")\n",
+      "tua.toml": "main=\"missing.tua\"\n"
+    }
+  },
+  {
+    "cwd": "fixtures/missing-source",
+    "command": [
+      "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+      "check"
+    ],
+    "exit": 1,
+    "stdout": "",
+    "stderr": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/projects/fixtures/missing-source/missing:1:1 error TL2002: No such file or directory (os error 2)\n"
+  },
+  {
+    "cwd": "fixtures/missing-source",
+    "command": [
+      "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+      "build"
+    ],
+    "exit": 1,
+    "stdout": "",
+    "stderr": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/projects/fixtures/missing-source/missing:1:1 error TL2002: No such file or directory (os error 2)\n"
+  },
+  {
+    "cwd": "fixtures/missing-source",
+    "files": {
+      "src/main.tua": "print(\"hello\")\n",
+      "tua.toml": "source=\"missing\"\n"
+    }
+  },
+  {
+    "cwd": "fixtures/unsupported-target",
+    "command": [
+      "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+      "check"
+    ],
+    "exit": 0,
+    "stdout": "checked 1 file(s)\n",
+    "stderr": ""
+  },
+  {
+    "cwd": "fixtures/unsupported-target",
+    "command": [
+      "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+      "build"
+    ],
+    "exit": 0,
+    "stdout": "built 1 file(s)\n",
+    "stderr": ""
+  },
+  {
+    "cwd": "fixtures/unsupported-target",
+    "files": {
+      "build/.tua-build-manifest.json": "{\"main.lua\":10756529168037144383,\"main.lua.map\":808189235236934277,\"main.lua.map.json\":5575325079839146711}",
+      "build/main.lua": "print(\"hello\")\n",
+      "build/main.lua.map": "{\"file\":\"main.lua\",\"mappings\":\"AAAA\",\"names\":[],\"sourceRoot\":\"..\",\"sources\":[\"src/main.tua\"],\"version\":3}\n",
+      "build/main.lua.map.json": "{\n  \"generated\": \"build/main.lua\",\n  \"lineMappings\": [\n    {\n      \"generatedLine\": 1,\n      \"sourceLine\": 1\n    }\n  ],\n  \"source\": \"src/main.tua\",\n  \"version\": 1\n}\n",
+      "src/main.tua": "print(\"hello\")\n",
+      "tua.toml": "target=\"potato\"\n"
+    }
+  },
+  {
+    "cwd": "fixtures/invalid-extension",
+    "command": [
+      "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+      "check"
+    ],
+    "exit": 0,
+    "stdout": "checked 0 file(s)\n",
+    "stderr": ""
+  },
+  {
+    "cwd": "fixtures/invalid-extension",
+    "command": [
+      "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+      "build"
+    ],
+    "exit": 0,
+    "stdout": "built 1 file(s)\n",
+    "stderr": ""
+  },
+  {
+    "cwd": "fixtures/invalid-extension",
+    "files": {
+      "build/.tua-build-manifest.json": "{\"main.tua\":10756529168037144383}",
+      "build/main.tua": "print(\"hello\")\n",
+      "src/main.tua": "print(\"hello\")\n",
+      "tua.toml": "extension=\".tua\"\n"
+    }
+  },
+  {
+    "cwd": "fixtures/cleanup",
+    "command": [
+      "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+      "build"
+    ],
+    "exit": 0,
+    "stdout": "built 3 file(s)\n",
+    "stderr": ""
+  },
+  {
+    "cwd": "fixtures/cleanup",
+    "command": [
+      "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+      "build"
+    ],
+    "exit": 0,
+    "stdout": "built 1 file(s)\n",
+    "stderr": ""
+  },
+  {
+    "cwd": "fixtures/cleanup",
+    "files": {
+      "build/.tua-build-manifest.json": "{\"main.lua\":10978092295694357,\"main.lua.map\":808189235236934277,\"main.lua.map.json\":5575325079839146711}",
+      "build/main.lua": "print(\"ok\")\n",
+      "build/main.lua.map": "{\"file\":\"main.lua\",\"mappings\":\"AAAA\",\"names\":[],\"sourceRoot\":\"..\",\"sources\":[\"src/main.tua\"],\"version\":3}\n",
+      "build/main.lua.map.json": "{\n  \"generated\": \"build/main.lua\",\n  \"lineMappings\": [\n    {\n      \"generatedLine\": 1,\n      \"sourceLine\": 1\n    }\n  ],\n  \"source\": \"src/main.tua\",\n  \"version\": 1\n}\n",
+      "build/modified.lua": "-- user modified\n",
+      "build/untracked.lua": "-- untracked\n",
+      "src/main.tua": "print(\"ok\")\n",
+      "tua.toml": ""
+    }
+  },
+  {
+    "cwd": "fixtures/emit-switch",
+    "command": [
+      "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+      "build"
+    ],
+    "exit": 0,
+    "stdout": "built 1 file(s)\n",
+    "stderr": ""
+  },
+  {
+    "cwd": "fixtures/emit-switch",
+    "command": [
+      "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+      "build"
+    ],
+    "exit": 0,
+    "stdout": "built 1 file(s)\n",
+    "stderr": ""
+  },
+  {
+    "cwd": "fixtures/emit-switch",
+    "files": {
+      "build/.tua-build-manifest.json": "{\"main.lua\":455929245796326948}",
+      "build/main.lua": "---@type number\nlocal x = 1\nprint(x)\n",
+      "src/main.tua": "local x: number = 1\nprint(x)\n",
+      "tua.toml": "emit_maps=false\n[emit]\nannotation_mode=\"luacats\"\n"
+    }
+  },
+  {
+    "cwd": "fixtures/error",
+    "command": [
+      "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+      "build"
+    ],
+    "exit": 1,
+    "stdout": "",
+    "stderr": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/projects/fixtures/error/src/main.tua:1:19 error TL1003: type mismatch: expected number, found string\n/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/projects/fixtures/error/src/syntax.tua:1:7 error TL0001: expected either a variable name or `function`\n"
+  },
+  {
+    "cwd": "fixtures/error",
+    "files": {
+      "src/good.tua": "print(\"good\")\n",
+      "src/main.tua": "local x: number = \"bad\"\nprint(x)\n",
+      "src/syntax.tua": "local =\n",
+      "tua.toml": ""
+    }
+  },
+  {
+    "cwd": "fixtures/error",
+    "command": [
+      "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+      "build",
+      "--emit-on-error"
+    ],
+    "exit": 1,
+    "stdout": "",
+    "stderr": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/projects/fixtures/error/src/main.tua:1:19 error TL1003: type mismatch: expected number, found string\n/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/projects/fixtures/error/src/syntax.tua:1:7 error TL0001: expected either a variable name or `function`\n"
+  },
+  {
+    "cwd": "fixtures/error",
+    "files": {
+      "build/good.lua": "print(\"good\")\n",
+      "build/good.lua.map": "{\"file\":\"good.lua\",\"mappings\":\"AAAA\",\"names\":[],\"sourceRoot\":\"..\",\"sources\":[\"src/good.tua\"],\"version\":3}\n",
+      "build/good.lua.map.json": "{\n  \"generated\": \"build/good.lua\",\n  \"lineMappings\": [\n    {\n      \"generatedLine\": 1,\n      \"sourceLine\": 1\n    }\n  ],\n  \"source\": \"src/good.tua\",\n  \"version\": 1\n}\n",
+      "build/main.lua": "local x = \"bad\"\nprint(x)\n",
+      "build/main.lua.map": "{\"file\":\"main.lua\",\"mappings\":\"AAAA;AACA\",\"names\":[],\"sourceRoot\":\"..\",\"sources\":[\"src/main.tua\"],\"version\":3}\n",
+      "build/main.lua.map.json": "{\n  \"generated\": \"build/main.lua\",\n  \"lineMappings\": [\n    {\n      \"generatedLine\": 1,\n      \"sourceLine\": 1\n    },\n    {\n      \"generatedLine\": 2,\n      \"sourceLine\": 2\n    }\n  ],\n  \"source\": \"src/main.tua\",\n  \"version\": 1\n}\n",
+      "src/good.tua": "print(\"good\")\n",
+      "src/main.tua": "local x: number = \"bad\"\nprint(x)\n",
+      "src/syntax.tua": "local =\n",
+      "tua.toml": ""
+    }
+  },
+  {
+    "cwd": "fixtures/nested-output",
+    "command": [
+      "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+      "build"
+    ],
+    "exit": 0,
+    "stdout": "built 2 file(s)\n",
+    "stderr": ""
+  },
+  {
+    "cwd": "fixtures/nested-output",
+    "command": [
+      "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+      "build"
+    ],
+    "exit": 0,
+    "stdout": "built 2 file(s)\n",
+    "stderr": ""
+  },
+  {
+    "cwd": "fixtures/nested-output",
+    "files": {
+      "build/main.lua": "print(\"ok\")\n",
+      "build/main.lua.map": "{\"file\":\"main.lua\",\"mappings\":\"AAAA\",\"names\":[],\"sourceRoot\":\"..\",\"sources\":[\"main.tua\"],\"version\":3}\n",
+      "build/main.lua.map.json": "{\n  \"generated\": \"build/main.lua\",\n  \"lineMappings\": [\n    {\n      \"generatedLine\": 1,\n      \"sourceLine\": 1\n    }\n  ],\n  \"source\": \"main.tua\",\n  \"version\": 1\n}\n",
+      "build/tua.toml": "source=\".\"\nout=\"build\"\n",
+      "main.tua": "print(\"ok\")\n",
+      "tua.toml": "source=\".\"\nout=\"build\"\n"
+    }
+  },
+  {
+    "cwd": "fixtures/in-place",
+    "command": [
+      "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+      "build"
+    ],
+    "exit": 0,
+    "stdout": "built 1 file(s)\n",
+    "stderr": ""
+  },
+  {
+    "cwd": "fixtures/in-place",
+    "command": [
+      "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+      "build"
+    ],
+    "exit": 0,
+    "stdout": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/projects/fixtures/in-place/src/main.lua:1:1 warning TL2003: `/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/projects/fixtures/in-place/src/main.lua` will be overwritten by generated Lua from `/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/projects/fixtures/in-place/src/main.tua`\nbuilt 1 file(s)\n",
+    "stderr": ""
+  },
+  {
+    "cwd": "fixtures/in-place",
+    "files": {
+      "src/data.txt": "safe\n",
+      "src/main.lua": "print(\"ok\")\n",
+      "src/main.lua.map": "{\"file\":\"main.lua\",\"mappings\":\"AAAA\",\"names\":[],\"sourceRoot\":\"..\",\"sources\":[\"src/main.tua\"],\"version\":3}\n",
+      "src/main.lua.map.json": "{\n  \"generated\": \"src/main.lua\",\n  \"lineMappings\": [\n    {\n      \"generatedLine\": 1,\n      \"sourceLine\": 1\n    }\n  ],\n  \"source\": \"src/main.tua\",\n  \"version\": 1\n}\n",
+      "src/main.tua": "print(\"ok\")\n",
+      "tua.toml": "source=\"src\"\nout=\"src\"\n"
+    }
+  },
+  {
+    "cwd": "fixtures/precedence",
+    "command": [
+      "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+      "check"
+    ],
+    "exit": 0,
+    "stdout": "checked 2 file(s)\n",
+    "stderr": ""
+  },
+  {
+    "cwd": "fixtures/precedence",
+    "command": [
+      "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+      "build"
+    ],
+    "exit": 0,
+    "stdout": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/projects/fixtures/precedence/src/mod.lua:1:1 warning TL2003: `/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/projects/fixtures/precedence/src/mod.lua` would overwrite generated Lua from `/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/projects/fixtures/precedence/src/mod.tua`; skipping asset copy\nbuilt 2 file(s)\n",
+    "stderr": ""
+  },
+  {
+    "cwd": "fixtures/precedence/build",
+    "command": [
+      "/opt/homebrew/bin/lua",
+      "main.lua"
+    ],
+    "exit": 0,
+    "stdout": "42\n",
+    "stderr": ""
+  },
+  {
+    "cwd": "fixtures/precedence",
+    "files": {
+      "build/.tua-build-manifest.json": "{\"main.lua\":16358051231275434870,\"main.lua.map\":10246368951293926163,\"main.lua.map.json\":1122579975660822105,\"mod.lua\":13554384928527546887,\"mod.lua.map\":9769396291287182295,\"mod.lua.map.json\":17681779681239298363}",
+      "build/main.lua": "local m = require(\"mod\")\nlocal n = m.value\nprint(n)\n",
+      "build/main.lua.map": "{\"file\":\"main.lua\",\"mappings\":\"AAAA;AACA;AACA\",\"names\":[],\"sourceRoot\":\"..\",\"sources\":[\"src/main.tua\"],\"version\":3}\n",
+      "build/main.lua.map.json": "{\n  \"generated\": \"build/main.lua\",\n  \"lineMappings\": [\n    {\n      \"generatedLine\": 1,\n      \"sourceLine\": 1\n    },\n    {\n      \"generatedLine\": 2,\n      \"sourceLine\": 2\n    },\n    {\n      \"generatedLine\": 3,\n      \"sourceLine\": 3\n    }\n  ],\n  \"source\": \"src/main.tua\",\n  \"version\": 1\n}\n",
+      "build/mod.lua": "return {value=42}\n",
+      "build/mod.lua.map": "{\"file\":\"mod.lua\",\"mappings\":\"AAAA\",\"names\":[],\"sourceRoot\":\"..\",\"sources\":[\"src/mod.tua\"],\"version\":3}\n",
+      "build/mod.lua.map.json": "{\n  \"generated\": \"build/mod.lua\",\n  \"lineMappings\": [\n    {\n      \"generatedLine\": 1,\n      \"sourceLine\": 1\n    }\n  ],\n  \"source\": \"src/mod.tua\",\n  \"version\": 1\n}\n",
+      "src/main.tua": "local m = require(\"mod\")\nlocal n: number = m.value\nprint(n)\n",
+      "src/mod.lua": "return {value=\"wrong\"}\n",
+      "src/mod.tua": "return {value=42}\n",
+      "tua.toml": ""
+    }
+  }
+]

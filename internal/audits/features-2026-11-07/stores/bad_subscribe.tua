@@ -1,0 +1,2 @@
+local game = store({ score = 0 })
+game:subscribe(function(state, previous) local wrong: string = previous.score end)

@@ -1,0 +1,10 @@
+{
+  "argv": [
+    "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+    "build"
+  ],
+  "cwd": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/testing/edges-fixture",
+  "returncode": 0,
+  "stdout": "built 2 file(s)\n",
+  "stderr": ""
+}

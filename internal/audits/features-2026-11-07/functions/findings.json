@@ -1,0 +1,49 @@
+[
+  {
+    "id": "FUNCTIONS-01",
+    "title": "Return expressions skip call validation without matching result slots",
+    "category": "confirmed defect",
+    "severity": "medium",
+    "status": "confirmed",
+    "summary": "Module returns and excess return expressions accept invalid typed arguments; local and ordinary function-return controls reject.",
+    "evidence": [
+      "results.json",
+      "lsp.json",
+      "bad_return/src/main.tua",
+      "bad_extra_return/src/main.tua",
+      "sprite_return/src/sheets.tua",
+      "sprite_local/build.log"
+    ],
+    "known": false
+  },
+  {
+    "id": "FUNCTIONS-02",
+    "title": "Default expressions bypass declared parameter types",
+    "category": "confirmed defect",
+    "severity": "medium",
+    "status": "confirmed",
+    "summary": "A number parameter with string default builds with no LSP diagnostics and crashes arithmetic at runtime.",
+    "evidence": [
+      "results.json",
+      "lsp.json",
+      "bad_default/src/main.tua",
+      "bad_default/build/main.lua"
+    ],
+    "known": false
+  },
+  {
+    "id": "FUNCTIONS-03",
+    "title": "Explicit nil rejected for defaulted parameters",
+    "category": "confirmed defect",
+    "severity": "medium",
+    "status": "confirmed",
+    "summary": "Documented nil-triggered default semantics work in emitted runtime but are rejected by CLI and LSP.",
+    "evidence": [
+      "results.json",
+      "lsp.json",
+      "default_nil/src/main.tua",
+      "default-nil-runtime.json"
+    ],
+    "known": false
+  }
+]

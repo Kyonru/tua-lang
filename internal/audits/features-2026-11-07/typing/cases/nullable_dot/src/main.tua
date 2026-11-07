@@ -1,0 +1,2 @@
+local row: {value: number | nil} = {value=1}
+row.value = nil

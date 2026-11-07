@@ -1,0 +1,3 @@
+source = "src"
+out = "build"
+emit_maps = true

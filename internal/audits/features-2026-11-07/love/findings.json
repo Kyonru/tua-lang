@@ -1,0 +1,4 @@
+[
+  {"id":"LOVE-01","title":"Known void LOVE call chains pass checking and fail at runtime","category":"confirmed defect","severity":"medium","status":"confirmed","summary":"Text:set(...):getWidth() passes CLI and LSP checks, though LOVE 11.5 raises nil-index and LSP correctly suppresses post-void completion/signature help.","evidence":["love/evidence.json","love/runtime/src/main.tua","love/runtime/build/main.lua","love/runtime-build.log","love/runtime-unsandboxed.log"],"known":false},
+  {"id":"LOVE-02","title":"Unannotated LOVE callback parameters remain any","category":"feature gap","severity":"low","status":"observed","summary":"update dt and keypressed key/isrepeat hover any despite generated catalog signatures; declaration validation works and docs do not promise contextual body inference.","evidence":["love/evidence.json","love/callbacks/src/main.tua"],"known":false}
+]

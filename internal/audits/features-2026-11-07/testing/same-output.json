@@ -1,0 +1,14 @@
+{
+  "argv": [
+    "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+    "test",
+    "--report",
+    "same.json",
+    "--coverage",
+    "same.json"
+  ],
+  "cwd": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/testing/fixture",
+  "returncode": 1,
+  "stdout": "",
+  "stderr": "error: test and coverage reports must use different paths\n"
+}

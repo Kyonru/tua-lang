@@ -1,0 +1,15 @@
+{
+  "argv": [
+    "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+    "test",
+    "math_spec.tua",
+    "--filter",
+    "^math #unit ",
+    "--report",
+    "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/testing/suite-results.json"
+  ],
+  "cwd": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/testing/fixture",
+  "returncode": 0,
+  "stdout": "++.\n2 successes / 0 failures / 0 errors / 1 pending : 0.002864 seconds\n\nPending -> tests/math_spec.tua:10 (generated __tua_tests__/math_spec.lua:10)\nmath #unit nested later\n",
+  "stderr": ""
+}

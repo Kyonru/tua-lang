@@ -1,0 +1,6 @@
+open class Base {
+ read(): number { return 1 }
+}
+class Child extends Base {
+ override read(): string { return "bad" }
+}

@@ -1,0 +1,11 @@
+existing runtime suite PASS (LOVE double, Lua 5.4)
+style/zoom/split viewport roundtrip PASS	lockon	1000.0	500.0
+style/zoom/split viewport roundtrip PASS	platformer	987.5	475.0
+style/zoom/split viewport roundtrip PASS	topdown	975.0	475.0
+style/zoom/split viewport roundtrip PASS	topdowntight	987.5	487.5
+style/zoom/split viewport roundtrip PASS	screen	1100.0	450.0
+smoothing timestep equivalence PASS
+rotated bounded center	400.0	300.0	visible bounds	-94.974746830583	-194.97474683058	989.94949366117	989.94949366117
+pixel perfect drawn center	201	151	toScreen center	200.5	150.5
+shake viewport top-left	-408.19508050504	-294.83514682673	reported visibleBounds	-400.0	-300.0	800.0	600.0	offset	-8.1950805050446	5.1648531732704
+platformer deadzone x y w h	350.0	150.0	100.0	200.0

@@ -1,0 +1,126 @@
+{
+  "check": {
+    "status": 0,
+    "stdout": "checked 2 file(s)\n",
+    "stderr": ""
+  },
+  "build": {
+    "status": 0,
+    "stdout": "built 2 file(s)\n",
+    "stderr": ""
+  },
+  "lua": {
+    "status": 0,
+    "stdout": "6\n",
+    "stderr": ""
+  },
+  "hover": {
+    "contents": {
+      "kind": "markdown",
+      "value": "```tua\n(field) update: (self: Actor, dt: number) -> number\n```\n\nIncrease the value."
+    },
+    "range": {
+      "end": {
+        "character": 26,
+        "line": 3
+      },
+      "start": {
+        "character": 20,
+        "line": 3
+      }
+    }
+  },
+  "signature": {
+    "activeParameter": 0,
+    "activeSignature": 0,
+    "signatures": [
+      {
+        "label": "function actor:update(dt: number): number",
+        "parameters": [
+          {
+            "label": "dt: number"
+          }
+        ]
+      }
+    ]
+  },
+  "completion": [
+    {
+      "data": {
+        "kind": "field",
+        "label": "value",
+        "position": {
+          "character": 12,
+          "line": 5
+        },
+        "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/classes/module/src/main.tua"
+      },
+      "kind": 5,
+      "label": "value",
+      "sortText": "0000_value",
+      "textEdit": {
+        "newText": "value",
+        "range": {
+          "end": {
+            "character": 17,
+            "line": 5
+          },
+          "start": {
+            "character": 12,
+            "line": 5
+          }
+        }
+      }
+    },
+    {
+      "data": {
+        "kind": "function",
+        "label": "update",
+        "position": {
+          "character": 12,
+          "line": 5
+        },
+        "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/classes/module/src/main.tua"
+      },
+      "kind": 3,
+      "label": "update",
+      "sortText": "0001_update",
+      "textEdit": {
+        "newText": "update",
+        "range": {
+          "end": {
+            "character": 17,
+            "line": 5
+          },
+          "start": {
+            "character": 12,
+            "line": 5
+          }
+        }
+      }
+    }
+  ],
+  "definition": {
+    "range": {
+      "end": {
+        "character": 7,
+        "line": 3
+      },
+      "start": {
+        "character": 1,
+        "line": 3
+      }
+    },
+    "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/classes/module/src/actor.tua"
+  },
+  "diagnostics": [
+    {
+      "jsonrpc": "2.0",
+      "method": "textDocument/publishDiagnostics",
+      "params": {
+        "diagnostics": [],
+        "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/classes/module/src/main.tua"
+      }
+    }
+  ]
+}

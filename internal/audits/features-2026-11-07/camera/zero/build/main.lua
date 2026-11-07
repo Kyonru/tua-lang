@@ -1,0 +1,3 @@
+local Camera = require("tuacamera")
+local cam = Camera.new({zoom=0})
+print(cam:toWorld(0, 0))

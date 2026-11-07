@@ -1,0 +1,12 @@
+{
+  "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua build --emit-on-error": {
+    "status": 1,
+    "stdout": "",
+    "stderr": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/lua_interop/metatable/src/main.tua:3:1 error TL1004: argument count mismatch: expected 1, found 2\n"
+  },
+  "/opt/homebrew/bin/lua main.lua": {
+    "status": 0,
+    "stdout": "2.0\n",
+    "stderr": ""
+  }
+}

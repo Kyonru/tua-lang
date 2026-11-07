@@ -1,0 +1,56 @@
+{
+  "before": "local s = [[a  \nb]]\nprint(#s)\n",
+  "after": "local s = [[a\nb]]\nprint(#s)\n",
+  "runs": [
+    {
+      "command": [
+        "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+        "build"
+      ],
+      "cwd": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/cross-checks/formatter-string",
+      "code": 0,
+      "stdout": "built 1 file(s)\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "lua",
+        "main.lua"
+      ],
+      "cwd": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/cross-checks/formatter-string/build",
+      "code": 0,
+      "stdout": "5\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+        "fmt"
+      ],
+      "cwd": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/cross-checks/formatter-string",
+      "code": 0,
+      "stdout": "formatted 1 file(s)\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+        "build"
+      ],
+      "cwd": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/cross-checks/formatter-string",
+      "code": 0,
+      "stdout": "built 1 file(s)\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "lua",
+        "main.lua"
+      ],
+      "cwd": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/cross-checks/formatter-string/build",
+      "code": 0,
+      "stdout": "3\n",
+      "stderr": ""
+    }
+  ]
+}

@@ -1,0 +1,74 @@
+[
+  {
+    "mode": "off",
+    "name": "positive",
+    "code": -6,
+    "output": ""
+  },
+  {
+    "mode": "off",
+    "name": "chained_constructor",
+    "code": -6,
+    "output": ""
+  },
+  {
+    "mode": "off",
+    "name": "underflow_div",
+    "code": -6,
+    "output": ""
+  },
+  {
+    "mode": "off",
+    "name": "normalization",
+    "code": -6,
+    "output": ""
+  },
+  {
+    "mode": "off",
+    "name": "comment_math",
+    "code": -6,
+    "output": ""
+  },
+  {
+    "mode": "off",
+    "name": "edge_math",
+    "code": -6,
+    "output": ""
+  },
+  {
+    "mode": "on",
+    "name": "positive",
+    "code": -6,
+    "output": ""
+  },
+  {
+    "mode": "on",
+    "name": "chained_constructor",
+    "code": -6,
+    "output": ""
+  },
+  {
+    "mode": "on",
+    "name": "underflow_div",
+    "code": -6,
+    "output": ""
+  },
+  {
+    "mode": "on",
+    "name": "normalization",
+    "code": -6,
+    "output": ""
+  },
+  {
+    "mode": "on",
+    "name": "comment_math",
+    "code": -6,
+    "output": ""
+  },
+  {
+    "mode": "on",
+    "name": "edge_math",
+    "code": -6,
+    "output": ""
+  }
+]

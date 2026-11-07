@@ -1,0 +1,2 @@
+local values: number[] = {}
+values[1]="wrong"

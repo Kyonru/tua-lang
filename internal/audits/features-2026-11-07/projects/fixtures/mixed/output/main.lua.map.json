@@ -1,0 +1,19 @@
+{
+  "generated": "output/main.lua",
+  "lineMappings": [
+    {
+      "generatedLine": 1,
+      "sourceLine": 1
+    },
+    {
+      "generatedLine": 2,
+      "sourceLine": 2
+    },
+    {
+      "generatedLine": 3,
+      "sourceLine": 3
+    }
+  ],
+  "source": "code/boot/start.tua",
+  "version": 1
+}

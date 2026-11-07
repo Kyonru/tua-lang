@@ -1,0 +1,2294 @@
+[
+  {
+    "mode": "api",
+    "request": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "tua.api/projectSummary",
+      "params": {}
+    },
+    "response": {
+      "error": {
+        "code": -32002,
+        "message": "tua.api/initialize must be called first"
+      },
+      "id": 1,
+      "jsonrpc": "2.0"
+    }
+  },
+  {
+    "mode": "api",
+    "request": "{bad",
+    "response": {
+      "error": {
+        "code": -32700,
+        "message": "parse error: key must be a string at line 1 column 2"
+      },
+      "id": null,
+      "jsonrpc": "2.0"
+    }
+  },
+  {
+    "mode": "api",
+    "request": {
+      "jsonrpc": "2.0",
+      "id": 3,
+      "method": "tua.api/initialize",
+      "params": {}
+    },
+    "response": {
+      "id": 3,
+      "jsonrpc": "2.0",
+      "result": {
+        "capabilities": {
+          "overlays": true,
+          "readOnly": true,
+          "refresh": "explicit",
+          "sourceContext": false
+        },
+        "protocolVersion": "1",
+        "serverInfo": {
+          "name": "tua-api",
+          "version": "0.6.0"
+        }
+      }
+    }
+  },
+  {
+    "mode": "api",
+    "request": {
+      "jsonrpc": "2.0",
+      "id": 4,
+      "method": "tua.api/completionContext",
+      "params": {
+        "path": "src/main.tua",
+        "position": {
+          "line": 1,
+          "character": 13
+        }
+      }
+    },
+    "response": {
+      "error": {
+        "code": -32010,
+        "message": "client must negotiate capabilities.sourceContext=true"
+      },
+      "id": 4,
+      "jsonrpc": "2.0"
+    }
+  },
+  {
+    "mode": "api",
+    "request": {
+      "jsonrpc": "2.0",
+      "id": 5,
+      "method": "tua.api/formatPreview",
+      "params": {
+        "path": "src/main.tua",
+        "position": {
+          "line": 1,
+          "character": 13
+        }
+      }
+    },
+    "response": {
+      "error": {
+        "code": -32010,
+        "message": "client must negotiate capabilities.sourceContext=true"
+      },
+      "id": 5,
+      "jsonrpc": "2.0"
+    }
+  },
+  {
+    "mode": "api",
+    "request": {
+      "jsonrpc": "2.0",
+      "id": 6,
+      "method": "tua.api/codeActions",
+      "params": {
+        "path": "src/main.tua",
+        "position": {
+          "line": 1,
+          "character": 13
+        }
+      }
+    },
+    "response": {
+      "error": {
+        "code": -32010,
+        "message": "client must negotiate capabilities.sourceContext=true"
+      },
+      "id": 6,
+      "jsonrpc": "2.0"
+    }
+  },
+  {
+    "mode": "api",
+    "request": {
+      "jsonrpc": "2.0",
+      "id": 7,
+      "method": "tua.api/initialize",
+      "params": {
+        "capabilities": {
+          "sourceContext": true
+        }
+      }
+    },
+    "response": {
+      "id": 7,
+      "jsonrpc": "2.0",
+      "result": {
+        "capabilities": {
+          "overlays": true,
+          "readOnly": true,
+          "refresh": "explicit",
+          "sourceContext": true
+        },
+        "protocolVersion": "1",
+        "serverInfo": {
+          "name": "tua-api",
+          "version": "0.6.0"
+        }
+      }
+    }
+  },
+  {
+    "mode": "api",
+    "request": {
+      "jsonrpc": "2.0",
+      "id": 8,
+      "method": "tua.api/projectSummary",
+      "params": {
+        "path": "src/main.tua",
+        "position": {
+          "line": 1,
+          "character": 13
+        }
+      }
+    },
+    "response": {
+      "id": 8,
+      "jsonrpc": "2.0",
+      "result": {
+        "analysisRevision": 5,
+        "extension": "tua",
+        "files": [
+          "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/api_mcp/fixture/src/main.tua"
+        ],
+        "overlays": [],
+        "readOnly": true,
+        "sourceRoots": [
+          "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/api_mcp/fixture/src"
+        ],
+        "target": "love11-luajit",
+        "workspace": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/api_mcp/fixture"
+      }
+    }
+  },
+  {
+    "mode": "api",
+    "request": {
+      "jsonrpc": "2.0",
+      "id": 9,
+      "method": "tua.api/diagnostics",
+      "params": {
+        "path": "src/main.tua",
+        "position": {
+          "line": 1,
+          "character": 13
+        }
+      }
+    },
+    "response": {
+      "id": 9,
+      "jsonrpc": "2.0",
+      "result": {
+        "analysisRevision": 5,
+        "diagnostics": [
+          {
+            "code": "TL0001",
+            "message": "expected an expression",
+            "path": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/api_mcp/fixture/src/main.tua",
+            "range": {
+              "end": {
+                "character": 12,
+                "line": 1
+              },
+              "start": {
+                "character": 11,
+                "line": 1
+              }
+            },
+            "severity": "error"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "mode": "api",
+    "request": {
+      "jsonrpc": "2.0",
+      "id": 10,
+      "method": "tua.api/semanticFacts",
+      "params": {
+        "path": "src/main.tua",
+        "position": {
+          "line": 1,
+          "character": 13
+        }
+      }
+    },
+    "response": {
+      "id": 10,
+      "jsonrpc": "2.0",
+      "result": {
+        "analysisRevision": 5,
+        "bindings": [],
+        "path": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/api_mcp/fixture/src/main.tua",
+        "symbols": []
+      }
+    }
+  },
+  {
+    "mode": "api",
+    "request": {
+      "jsonrpc": "2.0",
+      "id": 11,
+      "method": "tua.api/moduleGraph",
+      "params": {
+        "path": "src/main.tua",
+        "position": {
+          "line": 1,
+          "character": 13
+        }
+      }
+    },
+    "response": {
+      "id": 11,
+      "jsonrpc": "2.0",
+      "result": {
+        "analysisRevision": 5,
+        "modules": [
+          {
+            "exports": [],
+            "path": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/api_mcp/fixture/src/main.tua",
+            "requires": []
+          }
+        ]
+      }
+    }
+  },
+  {
+    "mode": "api",
+    "request": {
+      "jsonrpc": "2.0",
+      "id": 12,
+      "method": "tua.api/assetMetadata",
+      "params": {
+        "path": "src/main.tua",
+        "position": {
+          "line": 1,
+          "character": 13
+        }
+      }
+    },
+    "response": {
+      "id": 12,
+      "jsonrpc": "2.0",
+      "result": {
+        "analysisRevision": 5,
+        "assets": [],
+        "diagnostics": []
+      }
+    }
+  },
+  {
+    "mode": "api",
+    "request": {
+      "jsonrpc": "2.0",
+      "id": 13,
+      "method": "tua.api/references",
+      "params": {
+        "path": "src/main.tua",
+        "position": {
+          "line": 1,
+          "character": 13
+        }
+      }
+    },
+    "response": {
+      "id": 13,
+      "jsonrpc": "2.0",
+      "result": {
+        "analysisRevision": 5,
+        "references": []
+      }
+    }
+  },
+  {
+    "mode": "api",
+    "request": {
+      "jsonrpc": "2.0",
+      "id": 14,
+      "method": "tua.api/codeActions",
+      "params": {
+        "path": "src/main.tua",
+        "position": {
+          "line": 1,
+          "character": 13
+        }
+      }
+    },
+    "response": {
+      "id": 14,
+      "jsonrpc": "2.0",
+      "result": {
+        "actions": [],
+        "analysisRevision": 5,
+        "applied": false
+      }
+    }
+  },
+  {
+    "mode": "api",
+    "request": {
+      "jsonrpc": "2.0",
+      "id": 15,
+      "method": "tua.api/formatPreview",
+      "params": {
+        "path": "src/main.tua",
+        "position": {
+          "line": 1,
+          "character": 13
+        }
+      }
+    },
+    "response": {
+      "id": 15,
+      "jsonrpc": "2.0",
+      "result": {
+        "changed": false,
+        "diagnostics": [
+          {
+            "code": "TL0001",
+            "message": "expected an expression",
+            "path": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/api_mcp/fixture/src/main.tua",
+            "range": {
+              "end": {
+                "character": 12,
+                "line": 1
+              },
+              "start": {
+                "character": 11,
+                "line": 1
+              }
+            },
+            "severity": "error"
+          }
+        ],
+        "formatted": null,
+        "path": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/api_mcp/fixture/src/main.tua"
+      }
+    }
+  },
+  {
+    "mode": "api",
+    "request": {
+      "jsonrpc": "2.0",
+      "id": 16,
+      "method": "tua.api/completionContext",
+      "params": {
+        "path": "src/main.tua",
+        "position": {
+          "line": 1,
+          "character": 13
+        }
+      }
+    },
+    "response": {
+      "id": 16,
+      "jsonrpc": "2.0",
+      "result": {
+        "analysisRevision": 5,
+        "completionScope": "local",
+        "contextBytes": 12288,
+        "contextId": "06cb5f458bd3f84f",
+        "maxCompletionBytes": 1024,
+        "maxCompletionLines": 8,
+        "position": {
+          "character": 13,
+          "line": 1
+        },
+        "prompt": "-- TUA INLINE COMPLETION HARNESS. Continue this as ordinary Lua 5.1/LuaJIT code with optional Tua additions, never as TypeScript, JavaScript, Luau, Python, or Markdown.\n-- Output only the exact code inserted at the cursor; do not explain, fence, or repeat suffix text.\n-- INFERENCE: write `local score = 0`, not `local score: number = 0`; annotate a local only when inference cannot express its intended wider or empty-container contract.\n-- LOVE: when game context needs it, use the LOVE 11.x `love.*` API, callbacks, and colon calls such as `image:setFilter(...)`.\n-- FORBIDDEN: const, let, =>, interface, null, undefined, console.*, JS object syntax, and } as a Lua function terminator.\n-- Ordinary Tua function example: function add(a: number, b: number): number\n--   return a + b\n-- end\n-- Native class method example: update(dt: number) { self.x += dt }\n-- Inferred LOVE local example: local image = love.graphics.newImage(\"player.png\")\n-- COMPLETION SCOPE: Finish only the current expression or nearby statement. Keep this completion local and concise.\n-- Cursor semantics:\n-- Visible typed bindings: none resolved\n-- Tua language contract and feature inventory:\n-- Tua is Lua first: a gradual typed superset that emits readable Lua\n-- 5.1-compatible code for LuaJIT and LOVE 11.x. Write normal Lua unless a Tua\n-- addition supplies useful static information or nearby source already uses it.\n-- Never answer with TypeScript, JavaScript, Luau, Python, or Markdown.\n-- ## Completion policy\n-- Continue the syntax and style around the cursor. Output only the inserted\n-- source: no explanation, fence, suffix repetition, or unrelated rewrite.\n-- Prefer Lua control flow, tables, functions, closures, varargs, metatables,\n-- `require`, standard globals, and `math`, `string`, and `table` libraries.\n-- Locals infer one stable widened type from a known initializer. Prefer\n-- `local score = 0` and `local image = love.graphics.newImage(path)`, not\n-- redundant forms such as `local score: number = 0`.\n-- Annotate a local only when the annotation adds information: for example\n-- `local value: number | nil = nil`, `local names: string[] = {}`, an explicit\n-- `any` boundary, or a wider/public shape not established by the initializer.\n-- Function, callback, and module boundaries benefit from parameter and return\n-- annotations, but normal unannotated Lua functions and inferred returns work.\n-- Prefer visible bindings, existing modules/helpers, and project-native APIs.\n-- Keep expression and statement completions short and syntactically local.\n-- When the cursor is in an unfinished function or method, complete its useful\n-- remaining body and required closing `end` or `}` without repeating suffix\n-- code.\n-- Feature index: Lua/LuaJIT syntax and libraries; gradual inference and `any`;\n-- aliases, shapes, optional fields, arrays, dictionaries, unions,\n-- literals, enums, function types, defaults, varargs, multiple returns, and\n-- runtime `is`; compound assignment; metatable-style classes and inheritance;\n-- mixed Lua/Tua modules, static imports, type-only modules, generated modules,\n-- and LuaDoc; the LOVE 11.x catalog, callbacks, objects, and assets; `Vec2`,\n-- asset helpers, sprite sheets, Signals, stores, state machines, Baton input,\n-- object pools, ECS, and `audioSystem`.\n-- ## Lua and modules\n-- Normal Lua assignments and multiple returns, `nil`, truthiness, tables,\n-- numeric/generic `for`, `while`, `repeat`/`until`, `if`/`elseif`/`else`,\n-- local/global functions, colon methods, closures, varargs, and metatables are\n-- the runtime foundation. Blocks use `then`, `do`, and `end`.\n-- `require(\"module\")` keeps Lua semantics. Mixed `.lua`/`.tua` projects,\n-- simple Lua module exports, and LuaDoc/LuaCATS annotations interoperate.\n-- Static top-level local bindings may use `import(\"./child\")` or\n-- `import(\"project.module\")`; these lower to `require` and are not JavaScript\n-- imports. Tua has no JavaScript-style runtime `export`.\n-- `export type Name = ...` publishes a type alias. Consume exported aliases\n-- with `import type Types from \"./types\"` or\n-- `import type { Player, Room as LevelRoom } from \"./types\"`; type imports and\n-- `export type { Player as Hero } from \"./types\"` re-exports are erased and do\n-- not load a runtime module. Only explicitly exported aliases cross modules.\n-- Editor type completion and unknown-type quick fixes can add or extend these\n-- imports automatically.\n-- Put declaration-only project modules in `.d.tua` files. They accept type\n-- aliases, type imports, type exports, and comments, reject runtime statements,\n-- and never emit Lua or source maps.\n-- Put `--!tua generated` in the first eight lines of a generated `.tua` module\n-- when its executable source is Lua 5.1-compatible and its large tables are\n-- described by LuaDoc schemas. The directive keeps Tua module identity and\n-- checks entries contextually; it does not make tables immutable.\n-- LuaDoc support includes `---@class`, `---@field`, `---@alias`, `---@type`,\n-- `---@param`, `---@return`, `---@overload`, and `---@vararg`, including\n-- declaration-only external type libraries.\n-- Statically visible Lua metatable patterns can type `__index`, constructor\n-- prototypes, `__newindex`, arithmetic/comparison/length/call metamethods,\n-- `__pairs`, `__ipairs`, and `tostring`; dynamic mutation stays conservative.\n-- Unknown modules, keys, and metatable behavior stay dynamic through `any`;\n-- never invent types for runtime-computed Lua.\n-- ## LOVE 11.x foundation\n-- In game code, suggest suitable `love.*` callbacks, modules, constructors,\n-- enums, and methods rather than browser or Node APIs.\n-- Callbacks are Lua functions such as `function love.load() ... end`,\n-- `function love.update(dt) ... end`, `function love.draw() ... end`, and\n-- `function love.keypressed(key) ... end`; unused parameters may be omitted.\n-- Native loaders include `love.graphics.newImage`, `newFont`, `newShader`,\n-- `newCanvas`, `newQuad`, `newSpriteBatch`, `newParticleSystem`,\n-- `love.image.newImageData`, and `love.audio.newSource`.\n-- LOVE object methods require colon calls, for example\n-- `image:setFilter(\"nearest\")`, `image:getWidth()`, and `source:play()`.\n-- The LOVE catalog supplies callbacks, overloads, enums, object inheritance,\n-- parameter names, returns, and documentation. Known explicit annotations\n-- should agree with it.\n-- Native loader and helper asset paths receive project-aware completion,\n-- validation, metadata, definition, and references.\n-- ## Projects and generated assets\n-- A `tua.toml` project normally reads sources below `source`, emits Lua below\n-- `out`, and may index declaration-only external `type_libraries`.\n-- Opt-in `[[asset_pipelines]]` run before `check`, `build`, and `watch`. Each\n-- external `command` or built-in importer owns one generated directory below\n-- the source root and declares regular-file outputs through a version-1 JSON\n-- manifest. Generated `.tua`, `.d.tua`, Lua, and assets then join the normal\n-- project flow.\n-- Asset pipeline commands are trusted local code, not compiler plugins or a\n-- sandbox. Never invent or enable an importer implicitly. The language server\n-- only indexes already-materialized output and does not execute pipelines.\n-- ## Tua types and syntax\n-- Primitive types are `number`, `string`, `boolean`, `nil`, and `any`.\n-- Annotations use `name: Type`; function returns use `): Type`.\n-- `type Name = ...` declares an erased alias; `Self` refers to the supported\n-- current alias or receiver.\n-- Shapes use `{ field: Type, optional?: Type }`; arrays use `T[]`;\n-- dictionaries use `{ [Key]: Value }`; native fixed-length positional table\n-- types are not supported (`[First, Second]` is LuaCATS-only); unions use\n-- `A | B`; exact strings use literal types such as\n-- `\"idle\" | \"running\"`.\n-- `enum Name ... end` is erased string-union sugar.\n-- Function types use `(value: T) -> U`; parenthesized returns represent\n-- multiple returns. Declarations support typed `...: Type`, optional trailing\n-- `mode?: string`, and defaults such as `amount: number = 5`.\n-- `value is Type` performs supported runtime identity checks and branch\nlocal value: number = 1\nlocal next = ",
+        "range": {
+          "end": {
+            "character": 13,
+            "line": 1
+          },
+          "start": {
+            "character": 13,
+            "line": 1
+          }
+        },
+        "sourceFingerprint": "98b7851a01bb7bbb",
+        "suffix": "\n"
+      }
+    }
+  },
+  {
+    "mode": "api",
+    "request": {
+      "jsonrpc": "2.0",
+      "id": 17,
+      "method": "tua.api/formatPreview",
+      "params": {
+        "path": "../outside.tua"
+      }
+    },
+    "response": {
+      "error": {
+        "code": -32602,
+        "message": "path must remain inside the workspace"
+      },
+      "id": 17,
+      "jsonrpc": "2.0"
+    }
+  },
+  {
+    "mode": "api",
+    "request": {
+      "jsonrpc": "2.0",
+      "id": 18,
+      "method": "tua.api/formatPreview",
+      "params": {
+        "path": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/api_mcp/outside.tua"
+      }
+    },
+    "response": {
+      "error": {
+        "code": -32602,
+        "message": "path must remain inside the workspace"
+      },
+      "id": 18,
+      "jsonrpc": "2.0"
+    }
+  },
+  {
+    "mode": "api",
+    "request": {
+      "jsonrpc": "2.0",
+      "id": 19,
+      "method": "tua.api/formatPreview",
+      "params": {
+        "path": "src/linked.tua"
+      }
+    },
+    "response": {
+      "error": {
+        "code": -32602,
+        "message": "path is not indexed"
+      },
+      "id": 19,
+      "jsonrpc": "2.0"
+    }
+  },
+  {
+    "mode": "api",
+    "request": {
+      "jsonrpc": "2.0",
+      "id": 20,
+      "method": "tua.api/setOverlay",
+      "params": {
+        "path": "src/main.tua",
+        "source": "local overlay: string = \"present\"\n"
+      }
+    },
+    "response": {
+      "id": 20,
+      "jsonrpc": "2.0",
+      "result": {
+        "overlay": true,
+        "path": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/api_mcp/fixture/src/main.tua"
+      }
+    }
+  },
+  {
+    "mode": "api",
+    "request": {
+      "jsonrpc": "2.0",
+      "id": 21,
+      "method": "tua.api/projectSummary",
+      "params": {}
+    },
+    "response": {
+      "id": 21,
+      "jsonrpc": "2.0",
+      "result": {
+        "analysisRevision": 6,
+        "extension": "tua",
+        "files": [
+          "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/api_mcp/fixture/src/main.tua"
+        ],
+        "overlays": [
+          "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/api_mcp/fixture/src/main.tua"
+        ],
+        "readOnly": true,
+        "sourceRoots": [
+          "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/api_mcp/fixture/src"
+        ],
+        "target": "love11-luajit",
+        "workspace": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/api_mcp/fixture"
+      }
+    }
+  },
+  {
+    "mode": "api",
+    "request": {
+      "jsonrpc": "2.0",
+      "id": 22,
+      "method": "tua.api/refresh",
+      "params": {}
+    },
+    "response": {
+      "id": 22,
+      "jsonrpc": "2.0",
+      "result": {
+        "analysisRevision": 6,
+        "extension": "tua",
+        "files": [
+          "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/api_mcp/fixture/src/main.tua"
+        ],
+        "overlays": [
+          "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/api_mcp/fixture/src/main.tua"
+        ],
+        "readOnly": true,
+        "sourceRoots": [
+          "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/api_mcp/fixture/src"
+        ],
+        "target": "love11-luajit",
+        "workspace": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/api_mcp/fixture"
+      }
+    }
+  },
+  {
+    "mode": "api",
+    "request": {
+      "jsonrpc": "2.0",
+      "id": 23,
+      "method": "tua.api/formatPreview",
+      "params": {
+        "path": "src/main.tua"
+      }
+    },
+    "response": {
+      "id": 23,
+      "jsonrpc": "2.0",
+      "result": {
+        "changed": false,
+        "formatted": "local overlay: string = \"present\"\n",
+        "path": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/api_mcp/fixture/src/main.tua"
+      }
+    }
+  },
+  {
+    "mode": "api",
+    "request": {
+      "jsonrpc": "2.0",
+      "id": 24,
+      "method": "tua.api/clearOverlay",
+      "params": {
+        "path": "src/main.tua"
+      }
+    },
+    "response": {
+      "id": 24,
+      "jsonrpc": "2.0",
+      "result": {
+        "overlay": false,
+        "path": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/api_mcp/fixture/src/main.tua"
+      }
+    }
+  },
+  {
+    "mode": "api",
+    "request": {
+      "jsonrpc": "2.0",
+      "id": 25,
+      "method": "tua.api/projectSummary",
+      "params": {}
+    },
+    "response": {
+      "id": 25,
+      "jsonrpc": "2.0",
+      "result": {
+        "analysisRevision": 5,
+        "extension": "tua",
+        "files": [
+          "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/api_mcp/fixture/src/main.tua"
+        ],
+        "overlays": [],
+        "readOnly": true,
+        "sourceRoots": [
+          "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/api_mcp/fixture/src"
+        ],
+        "target": "love11-luajit",
+        "workspace": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/api_mcp/fixture"
+      }
+    }
+  },
+  {
+    "mode": "api",
+    "request": {
+      "jsonrpc": "2.0",
+      "id": 26,
+      "method": "tua.api/semanticFacts",
+      "params": {
+        "path": "src/main.tua"
+      }
+    },
+    "response": {
+      "id": 26,
+      "jsonrpc": "2.0",
+      "result": {
+        "analysisRevision": 5,
+        "bindings": [],
+        "path": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/api_mcp/fixture/src/main.tua",
+        "symbols": []
+      }
+    }
+  },
+  {
+    "mode": "api",
+    "request": {
+      "jsonrpc": "2.0",
+      "id": 27,
+      "method": "tua.api/semanticFacts",
+      "params": {
+        "path": "src/main.tua"
+      }
+    },
+    "response": {
+      "id": 27,
+      "jsonrpc": "2.0",
+      "result": {
+        "analysisRevision": 5,
+        "bindings": [],
+        "path": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/api_mcp/fixture/src/main.tua",
+        "symbols": []
+      }
+    }
+  },
+  {
+    "mode": "api",
+    "request": {
+      "jsonrpc": "2.0",
+      "id": 28,
+      "method": "tua.api/refresh",
+      "params": {}
+    },
+    "response": {
+      "id": 28,
+      "jsonrpc": "2.0",
+      "result": {
+        "analysisRevision": 5,
+        "extension": "tua",
+        "files": [
+          "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/api_mcp/fixture/src/main.tua"
+        ],
+        "overlays": [],
+        "readOnly": true,
+        "sourceRoots": [
+          "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/api_mcp/fixture/src"
+        ],
+        "target": "love11-luajit",
+        "workspace": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/api_mcp/fixture"
+      }
+    }
+  },
+  {
+    "mode": "api",
+    "request": {
+      "jsonrpc": "2.0",
+      "id": 29,
+      "method": "tua.api/semanticFacts",
+      "params": {
+        "path": "src/main.tua"
+      }
+    },
+    "response": {
+      "id": 29,
+      "jsonrpc": "2.0",
+      "result": {
+        "analysisRevision": 5,
+        "bindings": [
+          {
+            "name": "Camera",
+            "type": "{ new: (options: { bounds?: { h: number, w: number, x: number, y: number }, lead?: number, pixelPerfect?: boolean, rotation?: number, shakeAmount?: number, shakeDecay?: number, smoothing?: number, style?: \"lockon\" | \"platformer\" | \"topdown\" | \"topdowntight\" | \"screen\", viewport?: { h: number, w: number, x: number, y: number }, x?: number, y?: number, zoom?: number }) -> { attach: (self: any) -> nil, clearBounds: (self: any) -> nil, clearViewport: (self: any) -> nil, detach: (self: any) -> nil, draw: (self: any, draw: () -> nil) -> nil, follow: (self: any, x: number, y: number) -> nil, lead: number, lookAt: (self: any, x: number, y: number) -> nil, mousePosition: (self: any) -> number, move: (self: any, dx: number, dy: number) -> nil, pixelPerfect: boolean, rotation: number, setBounds: (self: any, x: number, y: number, w: number, h: number) -> nil, setDeadzone: (self: any, x: number, y: number, w: number, h: number) -> nil, setStyle: (self: any, style: \"lockon\" | \"platformer\" | \"topdown\" | \"topdowntight\" | \"screen\") -> nil, setViewport: (self: any, x: number, y: number, w: number, h: number) -> nil, shake: (self: any, trauma: number) -> nil, smoothing: number, toScreen: (self: any, wx: number, wy: number) -> number, toWorld: (self: any, sx: number, sy: number) -> number, update: (self: any, dt: number) -> nil, visibleBounds: (self: any) -> number, x: number, y: number, zoom: number } }"
+          },
+          {
+            "name": "disk_changed",
+            "type": "string"
+          },
+          {
+            "name": "ecs",
+            "type": "{ component: (name: string, schema: {  }) -> EcsComponent, system: (world: EcsWorld, components: EcsComponent[], update: any) -> EcsSystem, world: () -> EcsWorld }"
+          },
+          {
+            "name": "tween",
+            "type": "{ _version: string, easing: { [string]: (p: number) -> number }, group: () -> { remove: (self: any, tween: { after: (self: any, target: any, seconds: number | { [string]: number }, values: { [string]: number } | nil) -> any, delay: (self: any, seconds: number) -> any, ease: (self: any, easing: \"linear\" | \"quadin\" | \"quadout\" | \"quadinout\" | \"cubicin\" | \"cubicout\" | \"cubicinout\" | \"quartin\" | \"quartout\" | \"quartinout\" | \"quintin\" | \"quintout\" | \"quintinout\" | \"expoin\" | \"expoout\" | \"expoinout\" | \"sinein\" | \"sineout\" | \"sineinout\" | \"circin\" | \"circout\" | \"circinout\" | \"backin\" | \"backout\" | \"backinout\" | \"elasticin\" | \"elasticout\" | \"elasticinout\") -> any, obj: any, oncomplete: (self: any, callback: () -> nil) -> any, onstart: (self: any, callback: () -> nil) -> any, onupdate: (self: any, callback: () -> nil) -> any, progress: number, stop: (self: any) -> nil }) -> nil, to: (self: any, target: any, seconds: number, values: { [string]: number }) -> { after: (self: any, target: any, seconds: number | { [string]: number }, values: { [string]: number } | nil) -> any, delay: (self: any, seconds: number) -> any, ease: (self: any, easing: \"linear\" | \"quadin\" | \"quadout\" | \"quadinout\" | \"cubicin\" | \"cubicout\" | \"cubicinout\" | \"quartin\" | \"quartout\" | \"quartinout\" | \"quintin\" | \"quintout\" | \"quintinout\" | \"expoin\" | \"expoout\" | \"expoinout\" | \"sinein\" | \"sineout\" | \"sineinout\" | \"circin\" | \"circout\" | \"circinout\" | \"backin\" | \"backout\" | \"backinout\" | \"elasticin\" | \"elasticout\" | \"elasticinout\") -> any, obj: any, oncomplete: (self: any, callback: () -> nil) -> any, onstart: (self: any, callback: () -> nil) -> any, onupdate: (self: any, callback: () -> nil) -> any, progress: number, stop: (self: any) -> nil }, update: (self: any, dt: number) -> nil }, remove: (tween: { after: (self: any, target: any, seconds: number | { [string]: number }, values: { [string]: number } | nil) -> any, delay: (self: any, seconds: number) -> any, ease: (self: any, easing: \"linear\" | \"quadin\" | \"quadout\" | \"quadinout\" | \"cubicin\" | \"cubicout\" | \"cubicinout\" | \"quartin\" | \"quartout\" | \"quartinout\" | \"quintin\" | \"quintout\" | \"quintinout\" | \"expoin\" | \"expoout\" | \"expoinout\" | \"sinein\" | \"sineout\" | \"sineinout\" | \"circin\" | \"circout\" | \"circinout\" | \"backin\" | \"backout\" | \"backinout\" | \"elasticin\" | \"elasticout\" | \"elasticinout\") -> any, obj: any, oncomplete: (self: any, callback: () -> nil) -> any, onstart: (self: any, callback: () -> nil) -> any, onupdate: (self: any, callback: () -> nil) -> any, progress: number, stop: (self: any) -> nil }) -> any, to: (target: any, seconds: number, values: { [string]: number }) -> { after: (self: any, target: any, seconds: number | { [string]: number }, values: { [string]: number } | nil) -> any, delay: (self: any, seconds: number) -> any, ease: (self: any, easing: \"linear\" | \"quadin\" | \"quadout\" | \"quadinout\" | \"cubicin\" | \"cubicout\" | \"cubicinout\" | \"quartin\" | \"quartout\" | \"quartinout\" | \"quintin\" | \"quintout\" | \"quintinout\" | \"expoin\" | \"expoout\" | \"expoinout\" | \"sinein\" | \"sineout\" | \"sineinout\" | \"circin\" | \"circout\" | \"circinout\" | \"backin\" | \"backout\" | \"backinout\" | \"elasticin\" | \"elasticout\" | \"elasticinout\") -> any, obj: any, oncomplete: (self: any, callback: () -> nil) -> any, onstart: (self: any, callback: () -> nil) -> any, onupdate: (self: any, callback: () -> nil) -> any, progress: number, stop: (self: any) -> nil }, update: (dt: number) -> any }"
+          }
+        ],
+        "path": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/api_mcp/fixture/src/main.tua",
+        "symbols": [
+          {
+            "children": [],
+            "detail": "string",
+            "kind": "Local",
+            "name": "disk_changed",
+            "range": {
+              "end": {
+                "character": 34,
+                "line": 0
+              },
+              "start": {
+                "character": 0,
+                "line": 0
+              }
+            },
+            "selectionRange": {
+              "end": {
+                "character": 18,
+                "line": 0
+              },
+              "start": {
+                "character": 6,
+                "line": 0
+              }
+            }
+          }
+        ]
+      }
+    }
+  },
+  {
+    "mode": "api",
+    "request": {
+      "jsonrpc": "2.0",
+      "id": 30,
+      "method": "tua.api/noSuchMethod",
+      "params": {}
+    },
+    "response": {
+      "error": {
+        "code": -32601,
+        "message": "method not found: noSuchMethod"
+      },
+      "id": 30,
+      "jsonrpc": "2.0"
+    }
+  },
+  {
+    "mode": "api",
+    "request": {
+      "jsonrpc": "1.0",
+      "id": 90,
+      "method": "tua.api/projectSummary"
+    },
+    "response": {
+      "id": 90,
+      "jsonrpc": "2.0",
+      "result": {
+        "analysisRevision": 5,
+        "extension": "tua",
+        "files": [
+          "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/api_mcp/fixture/src/main.tua"
+        ],
+        "overlays": [],
+        "readOnly": true,
+        "sourceRoots": [
+          "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/api_mcp/fixture/src"
+        ],
+        "target": "love11-luajit",
+        "workspace": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/api_mcp/fixture"
+      }
+    }
+  },
+  {
+    "mode": "api",
+    "request": {
+      "jsonrpc": "2.0",
+      "id": {},
+      "method": "tua.api/projectSummary"
+    },
+    "response": {
+      "id": {},
+      "jsonrpc": "2.0",
+      "result": {
+        "analysisRevision": 5,
+        "extension": "tua",
+        "files": [
+          "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/api_mcp/fixture/src/main.tua"
+        ],
+        "overlays": [],
+        "readOnly": true,
+        "sourceRoots": [
+          "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/api_mcp/fixture/src"
+        ],
+        "target": "love11-luajit",
+        "workspace": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/api_mcp/fixture"
+      }
+    }
+  },
+  {
+    "mode": "api",
+    "request": {
+      "jsonrpc": "2.0",
+      "id": 33,
+      "method": "tua.api/shutdown",
+      "params": {}
+    },
+    "response": {
+      "id": 33,
+      "jsonrpc": "2.0",
+      "result": null
+    }
+  },
+  {
+    "mode": "api",
+    "exit": 0,
+    "stderr": ""
+  },
+  {
+    "mode": "mcp",
+    "request": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "tools/list",
+      "params": {}
+    },
+    "response": {
+      "error": {
+        "code": -32601,
+        "message": "method not found: tools/list"
+      },
+      "id": 1,
+      "jsonrpc": "2.0"
+    }
+  },
+  {
+    "mode": "mcp",
+    "request": {
+      "jsonrpc": "2.0",
+      "id": 2,
+      "method": "initialize",
+      "params": {
+        "protocolVersion": "2025-11-25",
+        "capabilities": {},
+        "clientInfo": {
+          "name": "audit",
+          "version": "1"
+        }
+      }
+    },
+    "response": {
+      "id": 2,
+      "jsonrpc": "2.0",
+      "result": {
+        "capabilities": {
+          "tools": {
+            "listChanged": false
+          }
+        },
+        "protocolVersion": "2025-11-25",
+        "serverInfo": {
+          "name": "tua",
+          "version": "0.6.0"
+        }
+      }
+    }
+  },
+  {
+    "mode": "mcp",
+    "request": {
+      "jsonrpc": "2.0",
+      "id": 3,
+      "method": "tools/list",
+      "params": {}
+    },
+    "response": {
+      "id": 3,
+      "jsonrpc": "2.0",
+      "result": {
+        "tools": [
+          {
+            "description": "Summarize the loaded Tua project.",
+            "inputSchema": {
+              "additionalProperties": false,
+              "properties": {},
+              "type": "object"
+            },
+            "name": "tua_project_summary"
+          },
+          {
+            "description": "Return the compact Tua language contract.",
+            "inputSchema": {
+              "additionalProperties": false,
+              "properties": {},
+              "type": "object"
+            },
+            "name": "tua_language_contract"
+          },
+          {
+            "description": "Explicitly rescan the workspace from disk.",
+            "inputSchema": {
+              "additionalProperties": false,
+              "properties": {},
+              "type": "object"
+            },
+            "name": "tua_refresh"
+          },
+          {
+            "description": "Return compiler diagnostics.",
+            "inputSchema": {
+              "additionalProperties": false,
+              "properties": {
+                "path": {
+                  "type": "string"
+                }
+              },
+              "required": [],
+              "type": "object"
+            },
+            "name": "tua_diagnostics"
+          },
+          {
+            "description": "Return symbols and typed bindings for a file.",
+            "inputSchema": {
+              "additionalProperties": false,
+              "properties": {
+                "path": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "path"
+              ],
+              "type": "object"
+            },
+            "name": "tua_semantic_facts"
+          },
+          {
+            "description": "Return project modules, imports, and exports.",
+            "inputSchema": {
+              "additionalProperties": false,
+              "properties": {},
+              "type": "object"
+            },
+            "name": "tua_module_graph"
+          },
+          {
+            "description": "Find references at a zero-based source position.",
+            "inputSchema": {
+              "additionalProperties": false,
+              "properties": {
+                "includeDeclaration": {
+                  "type": "boolean"
+                },
+                "path": {
+                  "type": "string"
+                },
+                "position": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "character": {
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "line": {
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "line",
+                    "character"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "path",
+                "position"
+              ],
+              "type": "object"
+            },
+            "name": "tua_references"
+          },
+          {
+            "description": "Return LOVE asset metadata and references.",
+            "inputSchema": {
+              "additionalProperties": false,
+              "properties": {},
+              "type": "object"
+            },
+            "name": "tua_asset_metadata"
+          },
+          {
+            "description": "Build bounded model-ready FIM context.",
+            "inputSchema": {
+              "additionalProperties": false,
+              "properties": {
+                "includeDeclaration": {
+                  "type": "boolean"
+                },
+                "path": {
+                  "type": "string"
+                },
+                "position": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "character": {
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "line": {
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "line",
+                    "character"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "path",
+                "position"
+              ],
+              "type": "object"
+            },
+            "name": "tua_completion_context"
+          },
+          {
+            "description": "Validate a model completion without mutating the project.",
+            "inputSchema": {
+              "additionalProperties": false,
+              "properties": {
+                "analysisRevision": {
+                  "type": "integer"
+                },
+                "candidate": {
+                  "type": "string"
+                },
+                "contextBytes": {
+                  "type": "integer"
+                },
+                "contextId": {
+                  "type": "string"
+                },
+                "path": {
+                  "type": "string"
+                },
+                "position": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "character": {
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "line": {
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "line",
+                    "character"
+                  ],
+                  "type": "object"
+                },
+                "sourceFingerprint": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "path",
+                "position",
+                "contextId",
+                "analysisRevision",
+                "contextBytes",
+                "sourceFingerprint",
+                "candidate"
+              ],
+              "type": "object"
+            },
+            "name": "tua_validate_completion"
+          },
+          {
+            "description": "Preview formatting without writing files.",
+            "inputSchema": {
+              "additionalProperties": false,
+              "properties": {
+                "path": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "path"
+              ],
+              "type": "object"
+            },
+            "name": "tua_format_preview"
+          },
+          {
+            "description": "Preview compiler-proven code actions without applying them.",
+            "inputSchema": {
+              "additionalProperties": false,
+              "properties": {
+                "path": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "path"
+              ],
+              "type": "object"
+            },
+            "name": "tua_code_actions"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "mode": "mcp",
+    "request": {
+      "jsonrpc": "2.0",
+      "id": 4,
+      "method": "tools/call",
+      "params": {
+        "name": "tua_project_summary",
+        "arguments": {
+          "path": "src/main.tua",
+          "position": {
+            "line": 1,
+            "character": 13
+          }
+        }
+      }
+    },
+    "response": {
+      "id": 4,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "Tua project: /Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/api_mcp/fixture (1 indexed files)",
+            "type": "text"
+          }
+        ],
+        "isError": false,
+        "structuredContent": {
+          "analysisRevision": 5,
+          "extension": "tua",
+          "files": [
+            "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/api_mcp/fixture/src/main.tua"
+          ],
+          "overlays": [],
+          "readOnly": true,
+          "sourceRoots": [
+            "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/api_mcp/fixture/src"
+          ],
+          "target": "love11-luajit",
+          "workspace": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/api_mcp/fixture"
+        }
+      }
+    }
+  },
+  {
+    "mode": "mcp",
+    "request": {
+      "jsonrpc": "2.0",
+      "id": 5,
+      "method": "tools/call",
+      "params": {
+        "name": "tua_language_contract",
+        "arguments": {
+          "path": "src/main.tua",
+          "position": {
+            "line": 1,
+            "character": 13
+          }
+        }
+      }
+    },
+    "response": {
+      "id": 5,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "# Tua language contract for models\n\nTua is Lua first: a gradual typed superset that emits readable Lua\n5.1-compatible code for LuaJIT and LOVE 11.x. Write normal Lua unless a Tua\naddition supplies useful static information or nearby source already uses it.\nNever answer with TypeScript, JavaScript, Luau, Python, or Markdown.\n\n## Completion policy\n\n- Continue the syntax and style around the cursor. Output only the inserted\n  source: no explanation, fence, suffix repetition, or unrelated rewrite.\n- Prefer Lua control flow, tables, functions, closures, varargs, metatables,\n  `require`, standard globals, and `math`, `string`, and `table` libraries.\n- Locals infer one stable widened type from a known initializer. Prefer\n  `local score = 0` and `local image = love.graphics.newImage(path)`, not\n  redundant forms such as `local score: number = 0`.\n- Annotate a local only when the annotation adds information: for example\n  `local value: number | nil = nil`, `local names: string[] = {}`, an explicit\n  `any` boundary, or a wider/public shape not established by the initializer.\n- Function, callback, and module boundaries benefit from parameter and return\n  annotations, but normal unannotated Lua functions and inferred returns work.\n- Prefer visible bindings, existing modules/helpers, and project-native APIs.\n  Keep expression and statement completions short and syntactically local.\n  When the cursor is in an unfinished function or method, complete its useful\n  remaining body and required closing `end` or `}` without repeating suffix\n  code.\n- Feature index: Lua/LuaJIT syntax and libraries; gradual inference and `any`;\n  aliases, shapes, optional fields, arrays, dictionaries, unions,\n  literals, enums, function types, defaults, varargs, multiple returns, and\n  runtime `is`; compound assignment; metatable-style classes and inheritance;\n  mixed Lua/Tua modules, static imports, type-only modules, generated modules,\n  and LuaDoc; the LOVE 11.x catalog, callbacks, objects, and assets; `Vec2`,\n  asset helpers, sprite sheets, Signals, stores, state machines, Baton input,\n  object pools, ECS, and `audioSystem`.\n\n## Lua and modules\n\n- Normal Lua assignments and multiple returns, `nil`, truthiness, tables,\n  numeric/generic `for`, `while`, `repeat`/`until`, `if`/`elseif`/`else`,\n  local/global functions, colon methods, closures, varargs, and metatables are\n  the runtime foundation. Blocks use `then`, `do`, and `end`.\n- `require(\"module\")` keeps Lua semantics. Mixed `.lua`/`.tua` projects,\n  simple Lua module exports, and LuaDoc/LuaCATS annotations interoperate.\n- Static top-level local bindings may use `import(\"./child\")` or\n  `import(\"project.module\")`; these lower to `require` and are not JavaScript\n  imports. Tua has no JavaScript-style runtime `export`.\n- `export type Name = ...` publishes a type alias. Consume exported aliases\n  with `import type Types from \"./types\"` or\n  `import type { Player, Room as LevelRoom } from \"./types\"`; type imports and\n  `export type { Player as Hero } from \"./types\"` re-exports are erased and do\n  not load a runtime module. Only explicitly exported aliases cross modules.\n  Editor type completion and unknown-type quick fixes can add or extend these\n  imports automatically.\n- Put declaration-only project modules in `.d.tua` files. They accept type\n  aliases, type imports, type exports, and comments, reject runtime statements,\n  and never emit Lua or source maps.\n- Put `--!tua generated` in the first eight lines of a generated `.tua` module\n  when its executable source is Lua 5.1-compatible and its large tables are\n  described by LuaDoc schemas. The directive keeps Tua module identity and\n  checks entries contextually; it does not make tables immutable.\n- LuaDoc support includes `---@class`, `---@field`, `---@alias`, `---@type`,\n  `---@param`, `---@return`, `---@overload`, and `---@vararg`, including\n  declaration-only external type libraries.\n- Statically visible Lua metatable patterns can type `__index`, constructor\n  prototypes, `__newindex`, arithmetic/comparison/length/call metamethods,\n  `__pairs`, `__ipairs`, and `tostring`; dynamic mutation stays conservative.\n- Unknown modules, keys, and metatable behavior stay dynamic through `any`;\n  never invent types for runtime-computed Lua.\n\n## LOVE 11.x foundation\n\n- In game code, suggest suitable `love.*` callbacks, modules, constructors,\n  enums, and methods rather than browser or Node APIs.\n- Callbacks are Lua functions such as `function love.load() ... end`,\n  `function love.update(dt) ... end`, `function love.draw() ... end`, and\n  `function love.keypressed(key) ... end`; unused parameters may be omitted.\n- Native loaders include `love.graphics.newImage`, `newFont`, `newShader`,\n  `newCanvas`, `newQuad`, `newSpriteBatch`, `newParticleSystem`,\n  `love.image.newImageData`, and `love.audio.newSource`.\n- LOVE object methods require colon calls, for example\n  `image:setFilter(\"nearest\")`, `image:getWidth()`, and `source:play()`.\n- The LOVE catalog supplies callbacks, overloads, enums, object inheritance,\n  parameter names, returns, and documentation. Known explicit annotations\n  should agree with it.\n- Native loader and helper asset paths receive project-aware completion,\n  validation, metadata, definition, and references.\n\n## Projects and generated assets\n\n- A `tua.toml` project normally reads sources below `source`, emits Lua below\n  `out`, and may index declaration-only external `type_libraries`.\n- Opt-in `[[asset_pipelines]]` run before `check`, `build`, and `watch`. Each\n  external `command` or built-in importer owns one generated directory below\n  the source root and declares regular-file outputs through a version-1 JSON\n  manifest. Generated `.tua`, `.d.tua`, Lua, and assets then join the normal\n  project flow.\n- Asset pipeline commands are trusted local code, not compiler plugins or a\n  sandbox. Never invent or enable an importer implicitly. The language server\n  only indexes already-materialized output and does not execute pipelines.\n\n## Tua types and syntax\n\n- Primitive types are `number`, `string`, `boolean`, `nil`, and `any`.\n  Annotations use `name: Type`; function returns use `): Type`.\n- `type Name = ...` declares an erased alias; `Self` refers to the supported\n  current alias or receiver.\n- Shapes use `{ field: Type, optional?: Type }`; arrays use `T[]`;\n  dictionaries use `{ [Key]: Value }`; native fixed-length positional table\n  types are not supported (`[First, Second]` is LuaCATS-only); unions use\n  `A | B`; exact strings use literal types such as\n  `\"idle\" | \"running\"`.\n- `enum Name ... end` is erased string-union sugar.\n- Function types use `(value: T) -> U`; parenthesized returns represent\n  multiple returns. Declarations support typed `...: Type`, optional trailing\n  `mode?: string`, and defaults such as `amount: number = 5`.\n- `value is Type` performs supported runtime identity checks and branch\n  narrowing. Tua has no generics; use concrete aliases and containers or\n  gradual `any`, never `<T>` or `Table<T>`.\n- Ordinary functions remain Lua:\n  `function name(args): Return ... end` and\n  `local function name(args): Return ... end`.\n- `+=`, `-=`, `*=`, `/=`, and `%=` work on names and plain field chains.\n- Classes use `class Name { ... }`, `open class Base { ... }`, or\n  `final class Child extends Base { ... }`. Bodies support typed fields and\n  defaults, `init(...) { ... }`, methods `name(args): Return { ... }`,\n  `override`, final methods, `super(...)`, inheritance, and typed `self`.\n  Classes are closed/final by default and construct with `Name.new(...)`.\n- Class/method bodies close with `}`; Lua functions and control flow close\n  with `end`. Types, enums, classes, imports, defaults, `is`, and compound\n  assignments lower to LuaJIT-compatible Lua and add no new VM.\n\n## Tua LOVE and game helpers\n\n- `math` and `love.math` provide opt-in `tau`, `clamp`, `lerp`, `inverseLerp`,\n  `remap`, `sign`, `round`, `smoothstep`, `rgb`, and `rgba` helpers. `rgb` and\n  `rgba` convert 0-255 components into array-like 0-1 color tables. Each helper\n  is emitted only in files that reference it.\n- Typed asset helpers lower to native LOVE: `image \"path\"`, `sound \"path\"`,\n  `music \"path\"`, `font(path, size)`, `shader \"path\"`, `imageData \"path\"`,\n  `canvas(width, height)`, `quad(...)`, `spriteBatch(image, count)`, and\n  `particles(image, count)`.\n- `Vec2`/`vec2(x, y)` provide typed BrineVector operations; typed arithmetic\n  fuses temporary vectors, including values inferred from required modules.\n  Use `v.length`, not `#v`: with the JIT off, vectors are plain tables and\n  `#v` returns 0 (lint `TL4060`).\n- `spriteSheet({...})` derives exact animation keys and typed `SpriteAnimation`\n  values, supports ordered multi-row ranges, registration origins,\n  durations/fps, per-animation frames, markers, and loop callbacks.\n- `sheet:player(name)` returns a replaceable-runtime `SpritePlayer` with checked\n  `play`, `gotoAndPlay`, `gotoAndStop`, marker subscriptions, time updates,\n  manual seeking, origin-aware drawing, and explicit leaf insertion into a\n  caller-owned `SpriteBatch` through `addToBatch`. Players share the sheet's\n  read-only frame, duration, and interval arrays; use `player.speed` for\n  per-player timing, or `player.animations.run = player.animations.run:clone()`\n  followed by `player:play(\"run\", true)` for private arrays.\n- Sprite sheets may contain optional named child sheets; `player:child(name)`\n  checks the child name and returns its recursively updated/drawn controller.\n- `signal()` provides typed event names/payloads through `on`, `once`,\n  `declare`, `emit`, `off`, `clear`, `has`, and `listeners`. Remove a `once`\n  handler with the value `once` returns. `onPattern`, `emitPattern`,\n  `offPattern`, and `clearPattern` match only event names that already have\n  handlers.\n- `store({...})` infers state for `get`, `set`, `update`, `subscribe`, and\n  typed field `watch`.\n- `stateMachine({...})` derives state/event names, event methods, transition\n  checks, and lifecycle callbacks.\n- `input({...})` provides Baton-backed controls/pairs, LOVE key/gamepad source\n  completion, polling, deadzones, and joystick support.\n- `objectPool({...})` types factory results and supports `acquire`, `release`,\n  `prewarm`, ownership/count inspection, cleanup, and `clear`.\n- Built-in `ecs` supplies typed components, worlds, systems, and queries\n  without an explicit package import.\n- `audioSystem({...})` derives exact bus, cue, music-scene, layer, effect, and\n  event names. It supports bounded polyphonic voices, priorities, fades,\n  snapshots, positional sources, effects, and beat/bar-quantized music; use\n  configured names instead of inventing string identifiers.\n- Cached audio metadata may come from an `audio-analysis` asset pipeline and a\n  generated catalog passed as `analysis`. Authored `bpm`, `offset`, and\n  `signature` remain authoritative; analysis is advisory, and dynamic\n  `requestAnalysis` is explicit rather than automatic.\n- Use native LOVE freely. Use a Tua helper when nearby code uses it or its\n  typed configuration fits the task; do not force helpers into ordinary LOVE.\n- Plain `.lua` files access bundled Tua runtimes through explicit imports such\n  as `require(\"tuastore\")`, `require(\"brinevector\")`,\n  `require(\"tuaobjectpool\")`, `require(\"tuaaudio\")`,\n  `require(\"tuastatemachine\").create`, and `require(\"baton\").new`. Literal\n  runtime imports are typed and make `tua build` emit the required runtime;\n  compiler-only helpers and syntax remain `.tua`-only.\n\n## Never emit\n\n- JavaScript/TypeScript: `const`, `let`, `=>`, `interface`, `namespace`,\n  `null`, `undefined`, `this.`, `console.*`, `===`, `!==`, `?.`, `??`,\n  JavaScript objects, or `}` to close a Lua function.\n- Luau-only casts (`value :: Type`), `continue`, conditional expressions,\n  interpolated strings, or Luau generics.\n- Invented package managers, runtime type objects, decorators, async/promises,\n  DOM APIs, or executable plugins.\n",
+            "type": "text"
+          }
+        ],
+        "isError": false,
+        "structuredContent": {
+          "content": "# Tua language contract for models\n\nTua is Lua first: a gradual typed superset that emits readable Lua\n5.1-compatible code for LuaJIT and LOVE 11.x. Write normal Lua unless a Tua\naddition supplies useful static information or nearby source already uses it.\nNever answer with TypeScript, JavaScript, Luau, Python, or Markdown.\n\n## Completion policy\n\n- Continue the syntax and style around the cursor. Output only the inserted\n  source: no explanation, fence, suffix repetition, or unrelated rewrite.\n- Prefer Lua control flow, tables, functions, closures, varargs, metatables,\n  `require`, standard globals, and `math`, `string`, and `table` libraries.\n- Locals infer one stable widened type from a known initializer. Prefer\n  `local score = 0` and `local image = love.graphics.newImage(path)`, not\n  redundant forms such as `local score: number = 0`.\n- Annotate a local only when the annotation adds information: for example\n  `local value: number | nil = nil`, `local names: string[] = {}`, an explicit\n  `any` boundary, or a wider/public shape not established by the initializer.\n- Function, callback, and module boundaries benefit from parameter and return\n  annotations, but normal unannotated Lua functions and inferred returns work.\n- Prefer visible bindings, existing modules/helpers, and project-native APIs.\n  Keep expression and statement completions short and syntactically local.\n  When the cursor is in an unfinished function or method, complete its useful\n  remaining body and required closing `end` or `}` without repeating suffix\n  code.\n- Feature index: Lua/LuaJIT syntax and libraries; gradual inference and `any`;\n  aliases, shapes, optional fields, arrays, dictionaries, unions,\n  literals, enums, function types, defaults, varargs, multiple returns, and\n  runtime `is`; compound assignment; metatable-style classes and inheritance;\n  mixed Lua/Tua modules, static imports, type-only modules, generated modules,\n  and LuaDoc; the LOVE 11.x catalog, callbacks, objects, and assets; `Vec2`,\n  asset helpers, sprite sheets, Signals, stores, state machines, Baton input,\n  object pools, ECS, and `audioSystem`.\n\n## Lua and modules\n\n- Normal Lua assignments and multiple returns, `nil`, truthiness, tables,\n  numeric/generic `for`, `while`, `repeat`/`until`, `if`/`elseif`/`else`,\n  local/global functions, colon methods, closures, varargs, and metatables are\n  the runtime foundation. Blocks use `then`, `do`, and `end`.\n- `require(\"module\")` keeps Lua semantics. Mixed `.lua`/`.tua` projects,\n  simple Lua module exports, and LuaDoc/LuaCATS annotations interoperate.\n- Static top-level local bindings may use `import(\"./child\")` or\n  `import(\"project.module\")`; these lower to `require` and are not JavaScript\n  imports. Tua has no JavaScript-style runtime `export`.\n- `export type Name = ...` publishes a type alias. Consume exported aliases\n  with `import type Types from \"./types\"` or\n  `import type { Player, Room as LevelRoom } from \"./types\"`; type imports and\n  `export type { Player as Hero } from \"./types\"` re-exports are erased and do\n  not load a runtime module. Only explicitly exported aliases cross modules.\n  Editor type completion and unknown-type quick fixes can add or extend these\n  imports automatically.\n- Put declaration-only project modules in `.d.tua` files. They accept type\n  aliases, type imports, type exports, and comments, reject runtime statements,\n  and never emit Lua or source maps.\n- Put `--!tua generated` in the first eight lines of a generated `.tua` module\n  when its executable source is Lua 5.1-compatible and its large tables are\n  described by LuaDoc schemas. The directive keeps Tua module identity and\n  checks entries contextually; it does not make tables immutable.\n- LuaDoc support includes `---@class`, `---@field`, `---@alias`, `---@type`,\n  `---@param`, `---@return`, `---@overload`, and `---@vararg`, including\n  declaration-only external type libraries.\n- Statically visible Lua metatable patterns can type `__index`, constructor\n  prototypes, `__newindex`, arithmetic/comparison/length/call metamethods,\n  `__pairs`, `__ipairs`, and `tostring`; dynamic mutation stays conservative.\n- Unknown modules, keys, and metatable behavior stay dynamic through `any`;\n  never invent types for runtime-computed Lua.\n\n## LOVE 11.x foundation\n\n- In game code, suggest suitable `love.*` callbacks, modules, constructors,\n  enums, and methods rather than browser or Node APIs.\n- Callbacks are Lua functions such as `function love.load() ... end`,\n  `function love.update(dt) ... end`, `function love.draw() ... end`, and\n  `function love.keypressed(key) ... end`; unused parameters may be omitted.\n- Native loaders include `love.graphics.newImage`, `newFont`, `newShader`,\n  `newCanvas`, `newQuad`, `newSpriteBatch`, `newParticleSystem`,\n  `love.image.newImageData`, and `love.audio.newSource`.\n- LOVE object methods require colon calls, for example\n  `image:setFilter(\"nearest\")`, `image:getWidth()`, and `source:play()`.\n- The LOVE catalog supplies callbacks, overloads, enums, object inheritance,\n  parameter names, returns, and documentation. Known explicit annotations\n  should agree with it.\n- Native loader and helper asset paths receive project-aware completion,\n  validation, metadata, definition, and references.\n\n## Projects and generated assets\n\n- A `tua.toml` project normally reads sources below `source`, emits Lua below\n  `out`, and may index declaration-only external `type_libraries`.\n- Opt-in `[[asset_pipelines]]` run before `check`, `build`, and `watch`. Each\n  external `command` or built-in importer owns one generated directory below\n  the source root and declares regular-file outputs through a version-1 JSON\n  manifest. Generated `.tua`, `.d.tua`, Lua, and assets then join the normal\n  project flow.\n- Asset pipeline commands are trusted local code, not compiler plugins or a\n  sandbox. Never invent or enable an importer implicitly. The language server\n  only indexes already-materialized output and does not execute pipelines.\n\n## Tua types and syntax\n\n- Primitive types are `number`, `string`, `boolean`, `nil`, and `any`.\n  Annotations use `name: Type`; function returns use `): Type`.\n- `type Name = ...` declares an erased alias; `Self` refers to the supported\n  current alias or receiver.\n- Shapes use `{ field: Type, optional?: Type }`; arrays use `T[]`;\n  dictionaries use `{ [Key]: Value }`; native fixed-length positional table\n  types are not supported (`[First, Second]` is LuaCATS-only); unions use\n  `A | B`; exact strings use literal types such as\n  `\"idle\" | \"running\"`.\n- `enum Name ... end` is erased string-union sugar.\n- Function types use `(value: T) -> U`; parenthesized returns represent\n  multiple returns. Declarations support typed `...: Type`, optional trailing\n  `mode?: string`, and defaults such as `amount: number = 5`.\n- `value is Type` performs supported runtime identity checks and branch\n  narrowing. Tua has no generics; use concrete aliases and containers or\n  gradual `any`, never `<T>` or `Table<T>`.\n- Ordinary functions remain Lua:\n  `function name(args): Return ... end` and\n  `local function name(args): Return ... end`.\n- `+=`, `-=`, `*=`, `/=`, and `%=` work on names and plain field chains.\n- Classes use `class Name { ... }`, `open class Base { ... }`, or\n  `final class Child extends Base { ... }`. Bodies support typed fields and\n  defaults, `init(...) { ... }`, methods `name(args): Return { ... }`,\n  `override`, final methods, `super(...)`, inheritance, and typed `self`.\n  Classes are closed/final by default and construct with `Name.new(...)`.\n- Class/method bodies close with `}`; Lua functions and control flow close\n  with `end`. Types, enums, classes, imports, defaults, `is`, and compound\n  assignments lower to LuaJIT-compatible Lua and add no new VM.\n\n## Tua LOVE and game helpers\n\n- `math` and `love.math` provide opt-in `tau`, `clamp`, `lerp`, `inverseLerp`,\n  `remap`, `sign`, `round`, `smoothstep`, `rgb`, and `rgba` helpers. `rgb` and\n  `rgba` convert 0-255 components into array-like 0-1 color tables. Each helper\n  is emitted only in files that reference it.\n- Typed asset helpers lower to native LOVE: `image \"path\"`, `sound \"path\"`,\n  `music \"path\"`, `font(path, size)`, `shader \"path\"`, `imageData \"path\"`,\n  `canvas(width, height)`, `quad(...)`, `spriteBatch(image, count)`, and\n  `particles(image, count)`.\n- `Vec2`/`vec2(x, y)` provide typed BrineVector operations; typed arithmetic\n  fuses temporary vectors, including values inferred from required modules.\n  Use `v.length`, not `#v`: with the JIT off, vectors are plain tables and\n  `#v` returns 0 (lint `TL4060`).\n- `spriteSheet({...})` derives exact animation keys and typed `SpriteAnimation`\n  values, supports ordered multi-row ranges, registration origins,\n  durations/fps, per-animation frames, markers, and loop callbacks.\n- `sheet:player(name)` returns a replaceable-runtime `SpritePlayer` with checked\n  `play`, `gotoAndPlay`, `gotoAndStop`, marker subscriptions, time updates,\n  manual seeking, origin-aware drawing, and explicit leaf insertion into a\n  caller-owned `SpriteBatch` through `addToBatch`. Players share the sheet's\n  read-only frame, duration, and interval arrays; use `player.speed` for\n  per-player timing, or `player.animations.run = player.animations.run:clone()`\n  followed by `player:play(\"run\", true)` for private arrays.\n- Sprite sheets may contain optional named child sheets; `player:child(name)`\n  checks the child name and returns its recursively updated/drawn controller.\n- `signal()` provides typed event names/payloads through `on`, `once`,\n  `declare`, `emit`, `off`, `clear`, `has`, and `listeners`. Remove a `once`\n  handler with the value `once` returns. `onPattern`, `emitPattern`,\n  `offPattern`, and `clearPattern` match only event names that already have\n  handlers.\n- `store({...})` infers state for `get`, `set`, `update`, `subscribe`, and\n  typed field `watch`.\n- `stateMachine({...})` derives state/event names, event methods, transition\n  checks, and lifecycle callbacks.\n- `input({...})` provides Baton-backed controls/pairs, LOVE key/gamepad source\n  completion, polling, deadzones, and joystick support.\n- `objectPool({...})` types factory results and supports `acquire`, `release`,\n  `prewarm`, ownership/count inspection, cleanup, and `clear`.\n- Built-in `ecs` supplies typed components, worlds, systems, and queries\n  without an explicit package import.\n- `audioSystem({...})` derives exact bus, cue, music-scene, layer, effect, and\n  event names. It supports bounded polyphonic voices, priorities, fades,\n  snapshots, positional sources, effects, and beat/bar-quantized music; use\n  configured names instead of inventing string identifiers.\n- Cached audio metadata may come from an `audio-analysis` asset pipeline and a\n  generated catalog passed as `analysis`. Authored `bpm`, `offset`, and\n  `signature` remain authoritative; analysis is advisory, and dynamic\n  `requestAnalysis` is explicit rather than automatic.\n- Use native LOVE freely. Use a Tua helper when nearby code uses it or its\n  typed configuration fits the task; do not force helpers into ordinary LOVE.\n- Plain `.lua` files access bundled Tua runtimes through explicit imports such\n  as `require(\"tuastore\")`, `require(\"brinevector\")`,\n  `require(\"tuaobjectpool\")`, `require(\"tuaaudio\")`,\n  `require(\"tuastatemachine\").create`, and `require(\"baton\").new`. Literal\n  runtime imports are typed and make `tua build` emit the required runtime;\n  compiler-only helpers and syntax remain `.tua`-only.\n\n## Never emit\n\n- JavaScript/TypeScript: `const`, `let`, `=>`, `interface`, `namespace`,\n  `null`, `undefined`, `this.`, `console.*`, `===`, `!==`, `?.`, `??`,\n  JavaScript objects, or `}` to close a Lua function.\n- Luau-only casts (`value :: Type`), `continue`, conditional expressions,\n  interpolated strings, or Luau generics.\n- Invented package managers, runtime type objects, decorators, async/promises,\n  DOM APIs, or executable plugins.\n",
+          "format": "text/plain"
+        }
+      }
+    }
+  },
+  {
+    "mode": "mcp",
+    "request": {
+      "jsonrpc": "2.0",
+      "id": 6,
+      "method": "tools/call",
+      "params": {
+        "name": "tua_refresh",
+        "arguments": {
+          "path": "src/main.tua",
+          "position": {
+            "line": 1,
+            "character": 13
+          }
+        }
+      }
+    },
+    "response": {
+      "id": 6,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "{\"analysisRevision\":5,\"extension\":\"tua\",\"files\":[\"/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/api_mcp/fixture/src/main.tua\"],\"overlays\":[],\"readOnly\":true,\"sourceRoots\":[\"/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/api_mcp/fixture/src\"],\"target\":\"love11-luajit\",\"workspace\":\"/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/api_mcp/fixture\"}",
+            "type": "text"
+          }
+        ],
+        "isError": false,
+        "structuredContent": {
+          "analysisRevision": 5,
+          "extension": "tua",
+          "files": [
+            "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/api_mcp/fixture/src/main.tua"
+          ],
+          "overlays": [],
+          "readOnly": true,
+          "sourceRoots": [
+            "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/api_mcp/fixture/src"
+          ],
+          "target": "love11-luajit",
+          "workspace": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/api_mcp/fixture"
+        }
+      }
+    }
+  },
+  {
+    "mode": "mcp",
+    "request": {
+      "jsonrpc": "2.0",
+      "id": 7,
+      "method": "tools/call",
+      "params": {
+        "name": "tua_diagnostics",
+        "arguments": {
+          "path": "src/main.tua",
+          "position": {
+            "line": 1,
+            "character": 13
+          }
+        }
+      }
+    },
+    "response": {
+      "id": 7,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "{\"analysisRevision\":5,\"diagnostics\":[{\"code\":\"TL0001\",\"message\":\"expected an expression\",\"path\":\"/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/api_mcp/fixture/src/main.tua\",\"range\":{\"end\":{\"character\":12,\"line\":1},\"start\":{\"character\":11,\"line\":1}},\"severity\":\"error\"}]}",
+            "type": "text"
+          }
+        ],
+        "isError": false,
+        "structuredContent": {
+          "analysisRevision": 5,
+          "diagnostics": [
+            {
+              "code": "TL0001",
+              "message": "expected an expression",
+              "path": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/api_mcp/fixture/src/main.tua",
+              "range": {
+                "end": {
+                  "character": 12,
+                  "line": 1
+                },
+                "start": {
+                  "character": 11,
+                  "line": 1
+                }
+              },
+              "severity": "error"
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "mode": "mcp",
+    "request": {
+      "jsonrpc": "2.0",
+      "id": 8,
+      "method": "tools/call",
+      "params": {
+        "name": "tua_semantic_facts",
+        "arguments": {
+          "path": "src/main.tua",
+          "position": {
+            "line": 1,
+            "character": 13
+          }
+        }
+      }
+    },
+    "response": {
+      "id": 8,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "{\"analysisRevision\":5,\"bindings\":[],\"path\":\"/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/api_mcp/fixture/src/main.tua\",\"symbols\":[]}",
+            "type": "text"
+          }
+        ],
+        "isError": false,
+        "structuredContent": {
+          "analysisRevision": 5,
+          "bindings": [],
+          "path": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/api_mcp/fixture/src/main.tua",
+          "symbols": []
+        }
+      }
+    }
+  },
+  {
+    "mode": "mcp",
+    "request": {
+      "jsonrpc": "2.0",
+      "id": 9,
+      "method": "tools/call",
+      "params": {
+        "name": "tua_module_graph",
+        "arguments": {
+          "path": "src/main.tua",
+          "position": {
+            "line": 1,
+            "character": 13
+          }
+        }
+      }
+    },
+    "response": {
+      "id": 9,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "{\"analysisRevision\":5,\"modules\":[{\"exports\":[],\"path\":\"/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/api_mcp/fixture/src/main.tua\",\"requires\":[]}]}",
+            "type": "text"
+          }
+        ],
+        "isError": false,
+        "structuredContent": {
+          "analysisRevision": 5,
+          "modules": [
+            {
+              "exports": [],
+              "path": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/api_mcp/fixture/src/main.tua",
+              "requires": []
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "mode": "mcp",
+    "request": {
+      "jsonrpc": "2.0",
+      "id": 10,
+      "method": "tools/call",
+      "params": {
+        "name": "tua_references",
+        "arguments": {
+          "path": "src/main.tua",
+          "position": {
+            "line": 1,
+            "character": 13
+          }
+        }
+      }
+    },
+    "response": {
+      "id": 10,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "{\"analysisRevision\":5,\"references\":[]}",
+            "type": "text"
+          }
+        ],
+        "isError": false,
+        "structuredContent": {
+          "analysisRevision": 5,
+          "references": []
+        }
+      }
+    }
+  },
+  {
+    "mode": "mcp",
+    "request": {
+      "jsonrpc": "2.0",
+      "id": 11,
+      "method": "tools/call",
+      "params": {
+        "name": "tua_asset_metadata",
+        "arguments": {
+          "path": "src/main.tua",
+          "position": {
+            "line": 1,
+            "character": 13
+          }
+        }
+      }
+    },
+    "response": {
+      "id": 11,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "{\"analysisRevision\":5,\"assets\":[],\"diagnostics\":[]}",
+            "type": "text"
+          }
+        ],
+        "isError": false,
+        "structuredContent": {
+          "analysisRevision": 5,
+          "assets": [],
+          "diagnostics": []
+        }
+      }
+    }
+  },
+  {
+    "mode": "mcp",
+    "request": {
+      "jsonrpc": "2.0",
+      "id": 12,
+      "method": "tools/call",
+      "params": {
+        "name": "tua_completion_context",
+        "arguments": {
+          "path": "src/main.tua",
+          "position": {
+            "line": 1,
+            "character": 13
+          }
+        }
+      }
+    },
+    "response": {
+      "id": 12,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "{\"analysisRevision\":5,\"completionScope\":\"local\",\"contextBytes\":12288,\"contextId\":\"06cb5f458bd3f84f\",\"maxCompletionBytes\":1024,\"maxCompletionLines\":8,\"position\":{\"character\":13,\"line\":1},\"prompt\":\"-- TUA INLINE COMPLETION HARNESS. Continue this as ordinary Lua 5.1/LuaJIT code with optional Tua additions, never as TypeScript, JavaScript, Luau, Python, or Markdown.\\n-- Output only the exact code inserted at the cursor; do not explain, fence, or repeat suffix text.\\n-- INFERENCE: write `local score = 0`, not `local score: number = 0`; annotate a local only when inference cannot express its intended wider or empty-container contract.\\n-- LOVE: when game context needs it, use the LOVE 11.x `love.*` API, callbacks, and colon calls such as `image:setFilter(...)`.\\n-- FORBIDDEN: const, let, =>, interface, null, undefined, console.*, JS object syntax, and } as a Lua function terminator.\\n-- Ordinary Tua function example: function add(a: number, b: number): number\\n--   return a + b\\n-- end\\n-- Native class method example: update(dt: number) { self.x += dt }\\n-- Inferred LOVE local example: local image = love.graphics.newImage(\\\"player.png\\\")\\n-- COMPLETION SCOPE: Finish only the current expression or nearby statement. Keep this completion local and concise.\\n-- Cursor semantics:\\n-- Visible typed bindings: none resolved\\n-- Tua language contract and feature inventory:\\n-- Tua is Lua first: a gradual typed superset that emits readable Lua\\n-- 5.1-compatible code for LuaJIT and LOVE 11.x. Write normal Lua unless a Tua\\n-- addition supplies useful static information or nearby source already uses it.\\n-- Never answer with TypeScript, JavaScript, Luau, Python, or Markdown.\\n-- ## Completion policy\\n-- Continue the syntax and style around the cursor. Output only the inserted\\n-- source: no explanation, fence, suffix repetition, or unrelated rewrite.\\n-- Prefer Lua control flow, tables, functions, closures, varargs, metatables,\\n-- `require`, standard globals, and `math`, `string`, and `table` libraries.\\n-- Locals infer one stable widened type from a known initializer. Prefer\\n-- `local score = 0` and `local image = love.graphics.newImage(path)`, not\\n-- redundant forms such as `local score: number = 0`.\\n-- Annotate a local only when the annotation adds information: for example\\n-- `local value: number | nil = nil`, `local names: string[] = {}`, an explicit\\n-- `any` boundary, or a wider/public shape not established by the initializer.\\n-- Function, callback, and module boundaries benefit from parameter and return\\n-- annotations, but normal unannotated Lua functions and inferred returns work.\\n-- Prefer visible bindings, existing modules/helpers, and project-native APIs.\\n-- Keep expression and statement completions short and syntactically local.\\n-- When the cursor is in an unfinished function or method, complete its useful\\n-- remaining body and required closing `end` or `}` without repeating suffix\\n-- code.\\n-- Feature index: Lua/LuaJIT syntax and libraries; gradual inference and `any`;\\n-- aliases, shapes, optional fields, arrays, dictionaries, unions,\\n-- literals, enums, function types, defaults, varargs, multiple returns, and\\n-- runtime `is`; compound assignment; metatable-style classes and inheritance;\\n-- mixed Lua/Tua modules, static imports, type-only modules, generated modules,\\n-- and LuaDoc; the LOVE 11.x catalog, callbacks, objects, and assets; `Vec2`,\\n-- asset helpers, sprite sheets, Signals, stores, state machines, Baton input,\\n-- object pools, ECS, and `audioSystem`.\\n-- ## Lua and modules\\n-- Normal Lua assignments and multiple returns, `nil`, truthiness, tables,\\n-- numeric/generic `for`, `while`, `repeat`/`until`, `if`/`elseif`/`else`,\\n-- local/global functions, colon methods, closures, varargs, and metatables are\\n-- the runtime foundation. Blocks use `then`, `do`, and `end`.\\n-- `require(\\\"module\\\")` keeps Lua semantics. Mixed `.lua`/`.tua` projects,\\n-- simple Lua module exports, and LuaDoc/LuaCATS annotations interoperate.\\n-- Static top-level local bindings may use `import(\\\"./child\\\")` or\\n-- `import(\\\"project.module\\\")`; these lower to `require` and are not JavaScript\\n-- imports. Tua has no JavaScript-style runtime `export`.\\n-- `export type Name = ...` publishes a type alias. Consume exported aliases\\n-- with `import type Types from \\\"./types\\\"` or\\n-- `import type { Player, Room as LevelRoom } from \\\"./types\\\"`; type imports and\\n-- `export type { Player as Hero } from \\\"./types\\\"` re-exports are erased and do\\n-- not load a runtime module. Only explicitly exported aliases cross modules.\\n-- Editor type completion and unknown-type quick fixes can add or extend these\\n-- imports automatically.\\n-- Put declaration-only project modules in `.d.tua` files. They accept type\\n-- aliases, type imports, type exports, and comments, reject runtime statements,\\n-- and never emit Lua or source maps.\\n-- Put `--!tua generated` in the first eight lines of a generated `.tua` module\\n-- when its executable source is Lua 5.1-compatible and its large tables are\\n-- described by LuaDoc schemas. The directive keeps Tua module identity and\\n-- checks entries contextually; it does not make tables immutable.\\n-- LuaDoc support includes `---@class`, `---@field`, `---@alias`, `---@type`,\\n-- `---@param`, `---@return`, `---@overload`, and `---@vararg`, including\\n-- declaration-only external type libraries.\\n-- Statically visible Lua metatable patterns can type `__index`, constructor\\n-- prototypes, `__newindex`, arithmetic/comparison/length/call metamethods,\\n-- `__pairs`, `__ipairs`, and `tostring`; dynamic mutation stays conservative.\\n-- Unknown modules, keys, and metatable behavior stay dynamic through `any`;\\n-- never invent types for runtime-computed Lua.\\n-- ## LOVE 11.x foundation\\n-- In game code, suggest suitable `love.*` callbacks, modules, constructors,\\n-- enums, and methods rather than browser or Node APIs.\\n-- Callbacks are Lua functions such as `function love.load() ... end`,\\n-- `function love.update(dt) ... end`, `function love.draw() ... end`, and\\n-- `function love.keypressed(key) ... end`; unused parameters may be omitted.\\n-- Native loaders include `love.graphics.newImage`, `newFont`, `newShader`,\\n-- `newCanvas`, `newQuad`, `newSpriteBatch`, `newParticleSystem`,\\n-- `love.image.newImageData`, and `love.audio.newSource`.\\n-- LOVE object methods require colon calls, for example\\n-- `image:setFilter(\\\"nearest\\\")`, `image:getWidth()`, and `source:play()`.\\n-- The LOVE catalog supplies callbacks, overloads, enums, object inheritance,\\n-- parameter names, returns, and documentation. Known explicit annotations\\n-- should agree with it.\\n-- Native loader and helper asset paths receive project-aware completion,\\n-- validation, metadata, definition, and references.\\n-- ## Projects and generated assets\\n-- A `tua.toml` project normally reads sources below `source`, emits Lua below\\n-- `out`, and may index declaration-only external `type_libraries`.\\n-- Opt-in `[[asset_pipelines]]` run before `check`, `build`, and `watch`. Each\\n-- external `command` or built-in importer owns one generated directory below\\n-- the source root and declares regular-file outputs through a version-1 JSON\\n-- manifest. Generated `.tua`, `.d.tua`, Lua, and assets then join the normal\\n-- project flow.\\n-- Asset pipeline commands are trusted local code, not compiler plugins or a\\n-- sandbox. Never invent or enable an importer implicitly. The language server\\n-- only indexes already-materialized output and does not execute pipelines.\\n-- ## Tua types and syntax\\n-- Primitive types are `number`, `string`, `boolean`, `nil`, and `any`.\\n-- Annotations use `name: Type`; function returns use `): Type`.\\n-- `type Name = ...` declares an erased alias; `Self` refers to the supported\\n-- current alias or receiver.\\n-- Shapes use `{ field: Type, optional?: Type }`; arrays use `T[]`;\\n-- dictionaries use `{ [Key]: Value }`; native fixed-length positional table\\n-- types are not supported (`[First, Second]` is LuaCATS-only); unions use\\n-- `A | B`; exact strings use literal types such as\\n-- `\\\"idle\\\" | \\\"running\\\"`.\\n-- `enum Name ... end` is erased string-union sugar.\\n-- Function types use `(value: T) -> U`; parenthesized returns represent\\n-- multiple returns. Declarations support typed `...: Type`, optional trailing\\n-- `mode?: string`, and defaults such as `amount: number = 5`.\\n-- `value is Type` performs supported runtime identity checks and branch\\nlocal value: number = 1\\nlocal next = \",\"range\":{\"end\":{\"character\":13,\"line\":1},\"start\":{\"character\":13,\"line\":1}},\"sourceFingerprint\":\"98b7851a01bb7bbb\",\"suffix\":\"\\n\"}",
+            "type": "text"
+          }
+        ],
+        "isError": false,
+        "structuredContent": {
+          "analysisRevision": 5,
+          "completionScope": "local",
+          "contextBytes": 12288,
+          "contextId": "06cb5f458bd3f84f",
+          "maxCompletionBytes": 1024,
+          "maxCompletionLines": 8,
+          "position": {
+            "character": 13,
+            "line": 1
+          },
+          "prompt": "-- TUA INLINE COMPLETION HARNESS. Continue this as ordinary Lua 5.1/LuaJIT code with optional Tua additions, never as TypeScript, JavaScript, Luau, Python, or Markdown.\n-- Output only the exact code inserted at the cursor; do not explain, fence, or repeat suffix text.\n-- INFERENCE: write `local score = 0`, not `local score: number = 0`; annotate a local only when inference cannot express its intended wider or empty-container contract.\n-- LOVE: when game context needs it, use the LOVE 11.x `love.*` API, callbacks, and colon calls such as `image:setFilter(...)`.\n-- FORBIDDEN: const, let, =>, interface, null, undefined, console.*, JS object syntax, and } as a Lua function terminator.\n-- Ordinary Tua function example: function add(a: number, b: number): number\n--   return a + b\n-- end\n-- Native class method example: update(dt: number) { self.x += dt }\n-- Inferred LOVE local example: local image = love.graphics.newImage(\"player.png\")\n-- COMPLETION SCOPE: Finish only the current expression or nearby statement. Keep this completion local and concise.\n-- Cursor semantics:\n-- Visible typed bindings: none resolved\n-- Tua language contract and feature inventory:\n-- Tua is Lua first: a gradual typed superset that emits readable Lua\n-- 5.1-compatible code for LuaJIT and LOVE 11.x. Write normal Lua unless a Tua\n-- addition supplies useful static information or nearby source already uses it.\n-- Never answer with TypeScript, JavaScript, Luau, Python, or Markdown.\n-- ## Completion policy\n-- Continue the syntax and style around the cursor. Output only the inserted\n-- source: no explanation, fence, suffix repetition, or unrelated rewrite.\n-- Prefer Lua control flow, tables, functions, closures, varargs, metatables,\n-- `require`, standard globals, and `math`, `string`, and `table` libraries.\n-- Locals infer one stable widened type from a known initializer. Prefer\n-- `local score = 0` and `local image = love.graphics.newImage(path)`, not\n-- redundant forms such as `local score: number = 0`.\n-- Annotate a local only when the annotation adds information: for example\n-- `local value: number | nil = nil`, `local names: string[] = {}`, an explicit\n-- `any` boundary, or a wider/public shape not established by the initializer.\n-- Function, callback, and module boundaries benefit from parameter and return\n-- annotations, but normal unannotated Lua functions and inferred returns work.\n-- Prefer visible bindings, existing modules/helpers, and project-native APIs.\n-- Keep expression and statement completions short and syntactically local.\n-- When the cursor is in an unfinished function or method, complete its useful\n-- remaining body and required closing `end` or `}` without repeating suffix\n-- code.\n-- Feature index: Lua/LuaJIT syntax and libraries; gradual inference and `any`;\n-- aliases, shapes, optional fields, arrays, dictionaries, unions,\n-- literals, enums, function types, defaults, varargs, multiple returns, and\n-- runtime `is`; compound assignment; metatable-style classes and inheritance;\n-- mixed Lua/Tua modules, static imports, type-only modules, generated modules,\n-- and LuaDoc; the LOVE 11.x catalog, callbacks, objects, and assets; `Vec2`,\n-- asset helpers, sprite sheets, Signals, stores, state machines, Baton input,\n-- object pools, ECS, and `audioSystem`.\n-- ## Lua and modules\n-- Normal Lua assignments and multiple returns, `nil`, truthiness, tables,\n-- numeric/generic `for`, `while`, `repeat`/`until`, `if`/`elseif`/`else`,\n-- local/global functions, colon methods, closures, varargs, and metatables are\n-- the runtime foundation. Blocks use `then`, `do`, and `end`.\n-- `require(\"module\")` keeps Lua semantics. Mixed `.lua`/`.tua` projects,\n-- simple Lua module exports, and LuaDoc/LuaCATS annotations interoperate.\n-- Static top-level local bindings may use `import(\"./child\")` or\n-- `import(\"project.module\")`; these lower to `require` and are not JavaScript\n-- imports. Tua has no JavaScript-style runtime `export`.\n-- `export type Name = ...` publishes a type alias. Consume exported aliases\n-- with `import type Types from \"./types\"` or\n-- `import type { Player, Room as LevelRoom } from \"./types\"`; type imports and\n-- `export type { Player as Hero } from \"./types\"` re-exports are erased and do\n-- not load a runtime module. Only explicitly exported aliases cross modules.\n-- Editor type completion and unknown-type quick fixes can add or extend these\n-- imports automatically.\n-- Put declaration-only project modules in `.d.tua` files. They accept type\n-- aliases, type imports, type exports, and comments, reject runtime statements,\n-- and never emit Lua or source maps.\n-- Put `--!tua generated` in the first eight lines of a generated `.tua` module\n-- when its executable source is Lua 5.1-compatible and its large tables are\n-- described by LuaDoc schemas. The directive keeps Tua module identity and\n-- checks entries contextually; it does not make tables immutable.\n-- LuaDoc support includes `---@class`, `---@field`, `---@alias`, `---@type`,\n-- `---@param`, `---@return`, `---@overload`, and `---@vararg`, including\n-- declaration-only external type libraries.\n-- Statically visible Lua metatable patterns can type `__index`, constructor\n-- prototypes, `__newindex`, arithmetic/comparison/length/call metamethods,\n-- `__pairs`, `__ipairs`, and `tostring`; dynamic mutation stays conservative.\n-- Unknown modules, keys, and metatable behavior stay dynamic through `any`;\n-- never invent types for runtime-computed Lua.\n-- ## LOVE 11.x foundation\n-- In game code, suggest suitable `love.*` callbacks, modules, constructors,\n-- enums, and methods rather than browser or Node APIs.\n-- Callbacks are Lua functions such as `function love.load() ... end`,\n-- `function love.update(dt) ... end`, `function love.draw() ... end`, and\n-- `function love.keypressed(key) ... end`; unused parameters may be omitted.\n-- Native loaders include `love.graphics.newImage`, `newFont`, `newShader`,\n-- `newCanvas`, `newQuad`, `newSpriteBatch`, `newParticleSystem`,\n-- `love.image.newImageData`, and `love.audio.newSource`.\n-- LOVE object methods require colon calls, for example\n-- `image:setFilter(\"nearest\")`, `image:getWidth()`, and `source:play()`.\n-- The LOVE catalog supplies callbacks, overloads, enums, object inheritance,\n-- parameter names, returns, and documentation. Known explicit annotations\n-- should agree with it.\n-- Native loader and helper asset paths receive project-aware completion,\n-- validation, metadata, definition, and references.\n-- ## Projects and generated assets\n-- A `tua.toml` project normally reads sources below `source`, emits Lua below\n-- `out`, and may index declaration-only external `type_libraries`.\n-- Opt-in `[[asset_pipelines]]` run before `check`, `build`, and `watch`. Each\n-- external `command` or built-in importer owns one generated directory below\n-- the source root and declares regular-file outputs through a version-1 JSON\n-- manifest. Generated `.tua`, `.d.tua`, Lua, and assets then join the normal\n-- project flow.\n-- Asset pipeline commands are trusted local code, not compiler plugins or a\n-- sandbox. Never invent or enable an importer implicitly. The language server\n-- only indexes already-materialized output and does not execute pipelines.\n-- ## Tua types and syntax\n-- Primitive types are `number`, `string`, `boolean`, `nil`, and `any`.\n-- Annotations use `name: Type`; function returns use `): Type`.\n-- `type Name = ...` declares an erased alias; `Self` refers to the supported\n-- current alias or receiver.\n-- Shapes use `{ field: Type, optional?: Type }`; arrays use `T[]`;\n-- dictionaries use `{ [Key]: Value }`; native fixed-length positional table\n-- types are not supported (`[First, Second]` is LuaCATS-only); unions use\n-- `A | B`; exact strings use literal types such as\n-- `\"idle\" | \"running\"`.\n-- `enum Name ... end` is erased string-union sugar.\n-- Function types use `(value: T) -> U`; parenthesized returns represent\n-- multiple returns. Declarations support typed `...: Type`, optional trailing\n-- `mode?: string`, and defaults such as `amount: number = 5`.\n-- `value is Type` performs supported runtime identity checks and branch\nlocal value: number = 1\nlocal next = ",
+          "range": {
+            "end": {
+              "character": 13,
+              "line": 1
+            },
+            "start": {
+              "character": 13,
+              "line": 1
+            }
+          },
+          "sourceFingerprint": "98b7851a01bb7bbb",
+          "suffix": "\n"
+        }
+      }
+    }
+  },
+  {
+    "mode": "mcp",
+    "request": {
+      "jsonrpc": "2.0",
+      "id": 13,
+      "method": "tools/call",
+      "params": {
+        "name": "tua_validate_completion",
+        "arguments": {
+          "path": "src/main.tua",
+          "position": {
+            "line": 1,
+            "character": 13
+          },
+          "contextId": "bad",
+          "analysisRevision": 0,
+          "contextBytes": 0,
+          "sourceFingerprint": "bad",
+          "candidate": "1"
+        }
+      }
+    },
+    "response": {
+      "id": 13,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "{\"insertText\":null,\"range\":{\"end\":{\"character\":13,\"line\":1},\"start\":{\"character\":13,\"line\":1}},\"reason\":\"stale\",\"status\":\"rejected\"}",
+            "type": "text"
+          }
+        ],
+        "isError": false,
+        "structuredContent": {
+          "insertText": null,
+          "range": {
+            "end": {
+              "character": 13,
+              "line": 1
+            },
+            "start": {
+              "character": 13,
+              "line": 1
+            }
+          },
+          "reason": "stale",
+          "status": "rejected"
+        }
+      }
+    }
+  },
+  {
+    "mode": "mcp",
+    "request": {
+      "jsonrpc": "2.0",
+      "id": 14,
+      "method": "tools/call",
+      "params": {
+        "name": "tua_format_preview",
+        "arguments": {
+          "path": "src/main.tua",
+          "position": {
+            "line": 1,
+            "character": 13
+          }
+        }
+      }
+    },
+    "response": {
+      "id": 14,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "{\"changed\":false,\"diagnostics\":[{\"code\":\"TL0001\",\"message\":\"expected an expression\",\"path\":\"/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/api_mcp/fixture/src/main.tua\",\"range\":{\"end\":{\"character\":12,\"line\":1},\"start\":{\"character\":11,\"line\":1}},\"severity\":\"error\"}],\"formatted\":null,\"path\":\"/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/api_mcp/fixture/src/main.tua\"}",
+            "type": "text"
+          }
+        ],
+        "isError": false,
+        "structuredContent": {
+          "changed": false,
+          "diagnostics": [
+            {
+              "code": "TL0001",
+              "message": "expected an expression",
+              "path": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/api_mcp/fixture/src/main.tua",
+              "range": {
+                "end": {
+                  "character": 12,
+                  "line": 1
+                },
+                "start": {
+                  "character": 11,
+                  "line": 1
+                }
+              },
+              "severity": "error"
+            }
+          ],
+          "formatted": null,
+          "path": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/api_mcp/fixture/src/main.tua"
+        }
+      }
+    }
+  },
+  {
+    "mode": "mcp",
+    "request": {
+      "jsonrpc": "2.0",
+      "id": 15,
+      "method": "tools/call",
+      "params": {
+        "name": "tua_code_actions",
+        "arguments": {
+          "path": "src/main.tua",
+          "position": {
+            "line": 1,
+            "character": 13
+          }
+        }
+      }
+    },
+    "response": {
+      "id": 15,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "{\"actions\":[],\"analysisRevision\":5,\"applied\":false}",
+            "type": "text"
+          }
+        ],
+        "isError": false,
+        "structuredContent": {
+          "actions": [],
+          "analysisRevision": 5,
+          "applied": false
+        }
+      }
+    }
+  },
+  {
+    "mode": "mcp",
+    "request": {
+      "jsonrpc": "2.0",
+      "id": 16,
+      "method": "tools/call",
+      "params": {
+        "name": "unknown",
+        "arguments": {}
+      }
+    },
+    "response": {
+      "id": 16,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "method not found: unknown",
+            "type": "text"
+          }
+        ],
+        "isError": true
+      }
+    }
+  },
+  {
+    "mode": "mcp",
+    "request": {
+      "jsonrpc": "2.0",
+      "id": 17,
+      "method": "unknown",
+      "params": {}
+    },
+    "response": {
+      "error": {
+        "code": -32601,
+        "message": "method not found: unknown"
+      },
+      "id": 17,
+      "jsonrpc": "2.0"
+    }
+  },
+  {
+    "mode": "mcp",
+    "request": {
+      "jsonrpc": "2.0",
+      "id": 18,
+      "method": "shutdown",
+      "params": {}
+    },
+    "response": {
+      "id": 18,
+      "jsonrpc": "2.0",
+      "result": null
+    }
+  },
+  {
+    "mode": "mcp",
+    "exit": 0,
+    "stderr": ""
+  },
+  {
+    "mode": "api",
+    "request": {
+      "jsonrpc": "2.0",
+      "method": "tua.api/initialize"
+    },
+    "response": {
+      "id": null,
+      "jsonrpc": "2.0",
+      "result": {
+        "capabilities": {
+          "overlays": true,
+          "readOnly": true,
+          "refresh": "explicit",
+          "sourceContext": false
+        },
+        "protocolVersion": "1",
+        "serverInfo": {
+          "name": "tua-api",
+          "version": "0.6.0"
+        }
+      }
+    }
+  },
+  {
+    "mode": "api",
+    "exit": 0,
+    "stderr": ""
+  },
+  {
+    "mode": "mcp",
+    "request": {
+      "jsonrpc": "2.0",
+      "method": "initialize"
+    },
+    "response": {
+      "id": null,
+      "jsonrpc": "2.0",
+      "result": {
+        "capabilities": {
+          "tools": {
+            "listChanged": false
+          }
+        },
+        "protocolVersion": "2025-11-25",
+        "serverInfo": {
+          "name": "tua",
+          "version": "0.6.0"
+        }
+      }
+    }
+  },
+  {
+    "mode": "mcp",
+    "exit": 0,
+    "stderr": ""
+  },
+  {
+    "mode": "api",
+    "request": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "tua.api/initialize",
+      "params": {
+        "capabilities": {
+          "sourceContext": true
+        }
+      }
+    },
+    "response": {
+      "id": 1,
+      "jsonrpc": "2.0",
+      "result": {
+        "capabilities": {
+          "overlays": true,
+          "readOnly": true,
+          "refresh": "explicit",
+          "sourceContext": true
+        },
+        "protocolVersion": "1",
+        "serverInfo": {
+          "name": "tua-api",
+          "version": "0.6.0"
+        }
+      }
+    }
+  },
+  {
+    "mode": "api",
+    "request": {
+      "jsonrpc": "2.0",
+      "id": 2,
+      "method": "tua.api/completionContext",
+      "params": {
+        "path": "src/main.tua",
+        "position": {
+          "line": 1,
+          "character": 13
+        }
+      }
+    },
+    "response": {
+      "id": 2,
+      "jsonrpc": "2.0",
+      "result": {
+        "analysisRevision": 5,
+        "completionScope": "local",
+        "contextBytes": 12288,
+        "contextId": "06cb5f458bd3f84f",
+        "maxCompletionBytes": 1024,
+        "maxCompletionLines": 8,
+        "position": {
+          "character": 13,
+          "line": 1
+        },
+        "prompt": "-- TUA INLINE COMPLETION HARNESS. Continue this as ordinary Lua 5.1/LuaJIT code with optional Tua additions, never as TypeScript, JavaScript, Luau, Python, or Markdown.\n-- Output only the exact code inserted at the cursor; do not explain, fence, or repeat suffix text.\n-- INFERENCE: write `local score = 0`, not `local score: number = 0`; annotate a local only when inference cannot express its intended wider or empty-container contract.\n-- LOVE: when game context needs it, use the LOVE 11.x `love.*` API, callbacks, and colon calls such as `image:setFilter(...)`.\n-- FORBIDDEN: const, let, =>, interface, null, undefined, console.*, JS object syntax, and } as a Lua function terminator.\n-- Ordinary Tua function example: function add(a: number, b: number): number\n--   return a + b\n-- end\n-- Native class method example: update(dt: number) { self.x += dt }\n-- Inferred LOVE local example: local image = love.graphics.newImage(\"player.png\")\n-- COMPLETION SCOPE: Finish only the current expression or nearby statement. Keep this completion local and concise.\n-- Cursor semantics:\n-- Visible typed bindings: none resolved\n-- Tua language contract and feature inventory:\n-- Tua is Lua first: a gradual typed superset that emits readable Lua\n-- 5.1-compatible code for LuaJIT and LOVE 11.x. Write normal Lua unless a Tua\n-- addition supplies useful static information or nearby source already uses it.\n-- Never answer with TypeScript, JavaScript, Luau, Python, or Markdown.\n-- ## Completion policy\n-- Continue the syntax and style around the cursor. Output only the inserted\n-- source: no explanation, fence, suffix repetition, or unrelated rewrite.\n-- Prefer Lua control flow, tables, functions, closures, varargs, metatables,\n-- `require`, standard globals, and `math`, `string`, and `table` libraries.\n-- Locals infer one stable widened type from a known initializer. Prefer\n-- `local score = 0` and `local image = love.graphics.newImage(path)`, not\n-- redundant forms such as `local score: number = 0`.\n-- Annotate a local only when the annotation adds information: for example\n-- `local value: number | nil = nil`, `local names: string[] = {}`, an explicit\n-- `any` boundary, or a wider/public shape not established by the initializer.\n-- Function, callback, and module boundaries benefit from parameter and return\n-- annotations, but normal unannotated Lua functions and inferred returns work.\n-- Prefer visible bindings, existing modules/helpers, and project-native APIs.\n-- Keep expression and statement completions short and syntactically local.\n-- When the cursor is in an unfinished function or method, complete its useful\n-- remaining body and required closing `end` or `}` without repeating suffix\n-- code.\n-- Feature index: Lua/LuaJIT syntax and libraries; gradual inference and `any`;\n-- aliases, shapes, optional fields, arrays, dictionaries, unions,\n-- literals, enums, function types, defaults, varargs, multiple returns, and\n-- runtime `is`; compound assignment; metatable-style classes and inheritance;\n-- mixed Lua/Tua modules, static imports, type-only modules, generated modules,\n-- and LuaDoc; the LOVE 11.x catalog, callbacks, objects, and assets; `Vec2`,\n-- asset helpers, sprite sheets, Signals, stores, state machines, Baton input,\n-- object pools, ECS, and `audioSystem`.\n-- ## Lua and modules\n-- Normal Lua assignments and multiple returns, `nil`, truthiness, tables,\n-- numeric/generic `for`, `while`, `repeat`/`until`, `if`/`elseif`/`else`,\n-- local/global functions, colon methods, closures, varargs, and metatables are\n-- the runtime foundation. Blocks use `then`, `do`, and `end`.\n-- `require(\"module\")` keeps Lua semantics. Mixed `.lua`/`.tua` projects,\n-- simple Lua module exports, and LuaDoc/LuaCATS annotations interoperate.\n-- Static top-level local bindings may use `import(\"./child\")` or\n-- `import(\"project.module\")`; these lower to `require` and are not JavaScript\n-- imports. Tua has no JavaScript-style runtime `export`.\n-- `export type Name = ...` publishes a type alias. Consume exported aliases\n-- with `import type Types from \"./types\"` or\n-- `import type { Player, Room as LevelRoom } from \"./types\"`; type imports and\n-- `export type { Player as Hero } from \"./types\"` re-exports are erased and do\n-- not load a runtime module. Only explicitly exported aliases cross modules.\n-- Editor type completion and unknown-type quick fixes can add or extend these\n-- imports automatically.\n-- Put declaration-only project modules in `.d.tua` files. They accept type\n-- aliases, type imports, type exports, and comments, reject runtime statements,\n-- and never emit Lua or source maps.\n-- Put `--!tua generated` in the first eight lines of a generated `.tua` module\n-- when its executable source is Lua 5.1-compatible and its large tables are\n-- described by LuaDoc schemas. The directive keeps Tua module identity and\n-- checks entries contextually; it does not make tables immutable.\n-- LuaDoc support includes `---@class`, `---@field`, `---@alias`, `---@type`,\n-- `---@param`, `---@return`, `---@overload`, and `---@vararg`, including\n-- declaration-only external type libraries.\n-- Statically visible Lua metatable patterns can type `__index`, constructor\n-- prototypes, `__newindex`, arithmetic/comparison/length/call metamethods,\n-- `__pairs`, `__ipairs`, and `tostring`; dynamic mutation stays conservative.\n-- Unknown modules, keys, and metatable behavior stay dynamic through `any`;\n-- never invent types for runtime-computed Lua.\n-- ## LOVE 11.x foundation\n-- In game code, suggest suitable `love.*` callbacks, modules, constructors,\n-- enums, and methods rather than browser or Node APIs.\n-- Callbacks are Lua functions such as `function love.load() ... end`,\n-- `function love.update(dt) ... end`, `function love.draw() ... end`, and\n-- `function love.keypressed(key) ... end`; unused parameters may be omitted.\n-- Native loaders include `love.graphics.newImage`, `newFont`, `newShader`,\n-- `newCanvas`, `newQuad`, `newSpriteBatch`, `newParticleSystem`,\n-- `love.image.newImageData`, and `love.audio.newSource`.\n-- LOVE object methods require colon calls, for example\n-- `image:setFilter(\"nearest\")`, `image:getWidth()`, and `source:play()`.\n-- The LOVE catalog supplies callbacks, overloads, enums, object inheritance,\n-- parameter names, returns, and documentation. Known explicit annotations\n-- should agree with it.\n-- Native loader and helper asset paths receive project-aware completion,\n-- validation, metadata, definition, and references.\n-- ## Projects and generated assets\n-- A `tua.toml` project normally reads sources below `source`, emits Lua below\n-- `out`, and may index declaration-only external `type_libraries`.\n-- Opt-in `[[asset_pipelines]]` run before `check`, `build`, and `watch`. Each\n-- external `command` or built-in importer owns one generated directory below\n-- the source root and declares regular-file outputs through a version-1 JSON\n-- manifest. Generated `.tua`, `.d.tua`, Lua, and assets then join the normal\n-- project flow.\n-- Asset pipeline commands are trusted local code, not compiler plugins or a\n-- sandbox. Never invent or enable an importer implicitly. The language server\n-- only indexes already-materialized output and does not execute pipelines.\n-- ## Tua types and syntax\n-- Primitive types are `number`, `string`, `boolean`, `nil`, and `any`.\n-- Annotations use `name: Type`; function returns use `): Type`.\n-- `type Name = ...` declares an erased alias; `Self` refers to the supported\n-- current alias or receiver.\n-- Shapes use `{ field: Type, optional?: Type }`; arrays use `T[]`;\n-- dictionaries use `{ [Key]: Value }`; native fixed-length positional table\n-- types are not supported (`[First, Second]` is LuaCATS-only); unions use\n-- `A | B`; exact strings use literal types such as\n-- `\"idle\" | \"running\"`.\n-- `enum Name ... end` is erased string-union sugar.\n-- Function types use `(value: T) -> U`; parenthesized returns represent\n-- multiple returns. Declarations support typed `...: Type`, optional trailing\n-- `mode?: string`, and defaults such as `amount: number = 5`.\n-- `value is Type` performs supported runtime identity checks and branch\nlocal value: number = 1\nlocal next = ",
+        "range": {
+          "end": {
+            "character": 13,
+            "line": 1
+          },
+          "start": {
+            "character": 13,
+            "line": 1
+          }
+        },
+        "sourceFingerprint": "98b7851a01bb7bbb",
+        "suffix": "\n"
+      }
+    }
+  },
+  {
+    "mode": "api",
+    "request": {
+      "jsonrpc": "2.0",
+      "id": 3,
+      "method": "tua.api/validateCompletion",
+      "params": {
+        "contextId": "06cb5f458bd3f84f",
+        "analysisRevision": 5,
+        "contextBytes": 12288,
+        "sourceFingerprint": "98b7851a01bb7bbb",
+        "position": {
+          "character": 13,
+          "line": 1
+        },
+        "path": "src/main.tua",
+        "candidate": "1"
+      }
+    },
+    "response": {
+      "id": 3,
+      "jsonrpc": "2.0",
+      "result": {
+        "insertText": "1",
+        "range": {
+          "end": {
+            "character": 13,
+            "line": 1
+          },
+          "start": {
+            "character": 13,
+            "line": 1
+          }
+        },
+        "reason": null,
+        "status": "accepted"
+      }
+    }
+  },
+  {
+    "mode": "api",
+    "request": {
+      "jsonrpc": "2.0",
+      "id": 4,
+      "method": "tua.api/setOverlay",
+      "params": {
+        "path": "src/new.tua",
+        "source": "local broken: number = \"wrong\"\n"
+      }
+    },
+    "response": {
+      "id": 4,
+      "jsonrpc": "2.0",
+      "result": {
+        "overlay": true,
+        "path": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/api_mcp/fixture/src/new.tua"
+      }
+    }
+  },
+  {
+    "mode": "api",
+    "request": {
+      "jsonrpc": "2.0",
+      "id": 5,
+      "method": "tua.api/diagnostics",
+      "params": {
+        "path": "src/new.tua"
+      }
+    },
+    "response": {
+      "id": 5,
+      "jsonrpc": "2.0",
+      "result": {
+        "analysisRevision": 6,
+        "diagnostics": [
+          {
+            "code": "TL1003",
+            "message": "type mismatch: expected number, found string",
+            "path": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/api_mcp/fixture/src/new.tua",
+            "range": {
+              "end": {
+                "character": 30,
+                "line": 0
+              },
+              "start": {
+                "character": 23,
+                "line": 0
+              }
+            },
+            "severity": "error"
+          },
+          {
+            "code": "TL4005",
+            "message": "unused local `broken`; prefix with `_` to silence",
+            "path": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/api_mcp/fixture/src/new.tua",
+            "range": {
+              "end": {
+                "character": 12,
+                "line": 0
+              },
+              "start": {
+                "character": 6,
+                "line": 0
+              }
+            },
+            "severity": "warning"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "mode": "api",
+    "request": {
+      "jsonrpc": "2.0",
+      "id": 6,
+      "method": "tua.api/diagnostics",
+      "params": {}
+    },
+    "response": {
+      "id": 6,
+      "jsonrpc": "2.0",
+      "result": {
+        "analysisRevision": 6,
+        "diagnostics": [
+          {
+            "code": "TL0001",
+            "message": "expected an expression",
+            "path": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/api_mcp/fixture/src/main.tua",
+            "range": {
+              "end": {
+                "character": 12,
+                "line": 1
+              },
+              "start": {
+                "character": 11,
+                "line": 1
+              }
+            },
+            "severity": "error"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "mode": "api",
+    "request": {
+      "jsonrpc": "2.0",
+      "id": 7,
+      "method": "tua.api/projectSummary",
+      "params": {}
+    },
+    "response": {
+      "id": 7,
+      "jsonrpc": "2.0",
+      "result": {
+        "analysisRevision": 6,
+        "extension": "tua",
+        "files": [
+          "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/api_mcp/fixture/src/main.tua"
+        ],
+        "overlays": [
+          "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/api_mcp/fixture/src/new.tua"
+        ],
+        "readOnly": true,
+        "sourceRoots": [
+          "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/api_mcp/fixture/src"
+        ],
+        "target": "love11-luajit",
+        "workspace": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/api_mcp/fixture"
+      }
+    }
+  },
+  {
+    "mode": "api",
+    "request": {
+      "jsonrpc": "2.0",
+      "id": 8,
+      "method": "tua.api/moduleGraph",
+      "params": {}
+    },
+    "response": {
+      "id": 8,
+      "jsonrpc": "2.0",
+      "result": {
+        "analysisRevision": 6,
+        "modules": [
+          {
+            "exports": [],
+            "path": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/api_mcp/fixture/src/main.tua",
+            "requires": []
+          },
+          {
+            "exports": [],
+            "path": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/api_mcp/fixture/src/new.tua",
+            "requires": []
+          }
+        ]
+      }
+    }
+  },
+  {
+    "mode": "api",
+    "request": {
+      "jsonrpc": "2.0",
+      "id": 9,
+      "method": "tua.api/validateCompletion",
+      "params": {
+        "contextId": "06cb5f458bd3f84f",
+        "analysisRevision": 5,
+        "contextBytes": 12288,
+        "sourceFingerprint": "98b7851a01bb7bbb",
+        "position": {
+          "character": 13,
+          "line": 1
+        },
+        "path": "src/main.tua",
+        "candidate": "1"
+      }
+    },
+    "response": {
+      "id": 9,
+      "jsonrpc": "2.0",
+      "result": {
+        "insertText": null,
+        "range": {
+          "end": {
+            "character": 13,
+            "line": 1
+          },
+          "start": {
+            "character": 13,
+            "line": 1
+          }
+        },
+        "reason": "stale",
+        "status": "rejected"
+      }
+    }
+  },
+  {
+    "mode": "api",
+    "request": {
+      "jsonrpc": "2.0",
+      "id": 10,
+      "method": "tua.api/refresh",
+      "params": {}
+    },
+    "response": {
+      "id": 10,
+      "jsonrpc": "2.0",
+      "result": {
+        "analysisRevision": 6,
+        "extension": "tua",
+        "files": [
+          "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/api_mcp/fixture/src/main.tua"
+        ],
+        "overlays": [
+          "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/api_mcp/fixture/src/new.tua"
+        ],
+        "readOnly": true,
+        "sourceRoots": [
+          "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/api_mcp/fixture/src"
+        ],
+        "target": "love11-luajit",
+        "workspace": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/api_mcp/fixture"
+      }
+    }
+  },
+  {
+    "mode": "api",
+    "request": {
+      "jsonrpc": "2.0",
+      "id": 11,
+      "method": "tua.api/diagnostics",
+      "params": {
+        "path": "src/new.tua"
+      }
+    },
+    "response": {
+      "id": 11,
+      "jsonrpc": "2.0",
+      "result": {
+        "analysisRevision": 6,
+        "diagnostics": [
+          {
+            "code": "TL1003",
+            "message": "type mismatch: expected number, found string",
+            "path": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/api_mcp/fixture/src/new.tua",
+            "range": {
+              "end": {
+                "character": 30,
+                "line": 0
+              },
+              "start": {
+                "character": 23,
+                "line": 0
+              }
+            },
+            "severity": "error"
+          },
+          {
+            "code": "TL4005",
+            "message": "unused local `broken`; prefix with `_` to silence",
+            "path": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/api_mcp/fixture/src/new.tua",
+            "range": {
+              "end": {
+                "character": 12,
+                "line": 0
+              },
+              "start": {
+                "character": 6,
+                "line": 0
+              }
+            },
+            "severity": "warning"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "mode": "api",
+    "request": {
+      "jsonrpc": "2.0",
+      "id": 12,
+      "method": "tua.api/diagnostics",
+      "params": {}
+    },
+    "response": {
+      "id": 12,
+      "jsonrpc": "2.0",
+      "result": {
+        "analysisRevision": 6,
+        "diagnostics": [
+          {
+            "code": "TL0001",
+            "message": "expected an expression",
+            "path": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/api_mcp/fixture/src/main.tua",
+            "range": {
+              "end": {
+                "character": 12,
+                "line": 1
+              },
+              "start": {
+                "character": 11,
+                "line": 1
+              }
+            },
+            "severity": "error"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "mode": "api",
+    "request": {
+      "jsonrpc": "2.0",
+      "id": 13,
+      "method": "tua.api/shutdown",
+      "params": {}
+    },
+    "response": {
+      "id": 13,
+      "jsonrpc": "2.0",
+      "result": null
+    }
+  },
+  {
+    "mode": "api",
+    "exit": 0,
+    "stderr": ""
+  },
+  {
+    "mode": "api",
+    "frameBytes": 8388610,
+    "framePrefix": "b'                                                                                                    '",
+    "stdout": "",
+    "stderr": "error: protocol request exceeds 8388608 bytes\n",
+    "exit": 1
+  },
+  {
+    "mode": "api",
+    "frameBytes": 2,
+    "framePrefix": "b'\\xff\\n'",
+    "stdout": "",
+    "stderr": "error: failed to read stdio: invalid utf-8 sequence of 1 bytes from index 0\n",
+    "exit": 1
+  },
+  {
+    "mode": "mcp",
+    "frameBytes": 122,
+    "framePrefix": "b'{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{\"requestId\":99}}\\r\\n{\"jsonrpc\":\"2.0\",\"id'",
+    "stdout": "{\"id\":1,\"jsonrpc\":\"2.0\",\"result\":{}}\n",
+    "stderr": "",
+    "exit": 0
+  },
+  {
+    "readonly_hashes_equal": true,
+    "before": {
+      "fixture/tua.toml": "fcc21a722e8cc7b21dd8ea13921424e2500698cab05508a56914ea87c26f69de",
+      "fixture/src/main.tua": "218e0e06ee6690837ddd795cc4c98de2bac3785ffa044c78e8ade04dc741ab23",
+      "outside.tua": "b4072f76d5e26cfa3dd20c042e088ca2a85d73d4e8214c0f498bda885b8aa17c"
+    },
+    "after": {
+      "fixture/tua.toml": "fcc21a722e8cc7b21dd8ea13921424e2500698cab05508a56914ea87c26f69de",
+      "fixture/src/main.tua": "218e0e06ee6690837ddd795cc4c98de2bac3785ffa044c78e8ade04dc741ab23",
+      "outside.tua": "b4072f76d5e26cfa3dd20c042e088ca2a85d73d4e8214c0f498bda885b8aa17c"
+    }
+  }
+]

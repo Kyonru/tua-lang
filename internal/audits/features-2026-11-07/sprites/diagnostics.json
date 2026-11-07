@@ -1,0 +1,38 @@
+[
+  {
+    "name": "conflict",
+    "status": 1,
+    "stdout": "",
+    "stderr": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/sprites/conflict/src/sheets.tua:1:113 error TL5004: sprite animation `idle` cannot combine `fps` with `durations`\n"
+  },
+  {
+    "name": "unknown_local",
+    "status": 1,
+    "stdout": "",
+    "stderr": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/sprites/unknown_local/src/sheets.tua:2:20 error TL1003: type mismatch at initial: expected \"idle\", found \"absent\"\n"
+  },
+  {
+    "name": "unknown_name",
+    "status": 0,
+    "stdout": "built 2 file(s)\n",
+    "stderr": ""
+  },
+  {
+    "name": "marker_bounds",
+    "status": 1,
+    "stdout": "",
+    "stderr": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/sprites/marker_bounds/src/sheets.tua:1:174 error TL5004: sprite animation `idle` marker `x` targets frame 2, but the animation has 2 frame(s)\n"
+  },
+  {
+    "name": "zero_list",
+    "status": 0,
+    "stdout": "built 2 file(s)\n",
+    "stderr": ""
+  },
+  {
+    "name": "missing_timing",
+    "status": 1,
+    "stdout": "",
+    "stderr": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/sprites/missing_timing/src/sheets.tua:1:1 error TL5004: sprite sheet requires at least one animation\n"
+  }
+]

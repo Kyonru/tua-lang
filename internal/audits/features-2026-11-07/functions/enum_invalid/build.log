@@ -1,0 +1,2 @@
+/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/functions/enum_invalid/src/main.tua:5:7 warning TL4005: unused local `mode`; prefix with `_` to silence
+/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/functions/enum_invalid/src/main.tua:5:20 error TL1003: type mismatch: expected "fast" | "slow", found "no"

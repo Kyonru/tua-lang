@@ -1,0 +1,5 @@
+source = "src"
+out = "build"
+emit_maps = false
+[test]
+source = "tests"

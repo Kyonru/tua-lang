@@ -1,0 +1,4 @@
+local function call(cb: (a: number, b: string) -> nil)
+ cb(1, "x")
+end
+call(function(a: number) print(a) end)

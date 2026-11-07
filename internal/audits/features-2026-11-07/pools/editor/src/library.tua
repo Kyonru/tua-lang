@@ -1,0 +1,3 @@
+type Bullet = {x:number}
+local pool=objectPool({create=function(): Bullet return {x=0} end})
+return {pool=pool}

@@ -1,0 +1,2 @@
+local player = {health=10, name="A"}
+player.

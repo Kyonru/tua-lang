@@ -1,0 +1,18 @@
+[
+  {
+    "id": "CLASS-01",
+    "title": "Flattening constructor self references loses object identity",
+    "category": "confirmed defect",
+    "severity": "high",
+    "status": "confirmed",
+    "summary": "A Self field assigned self passes check/build but optimized constructor emits an unbound self; the required field is nil. A local-capture control preserves identity.",
+    "evidence": [
+      "classes/results.json",
+      "classes/self-reference/src/main.tua",
+      "classes/self-reference/build/main.lua",
+      "classes/self-control/src/main.tua",
+      "classes/self-control/build/main.lua"
+    ],
+    "known": false
+  }
+]

@@ -1,0 +1,4 @@
+local p = vec2(1e-200,1e-200)
+local q = vec2(1e-200,1e-200)
+local result = p / q
+print(result.x,result.y)

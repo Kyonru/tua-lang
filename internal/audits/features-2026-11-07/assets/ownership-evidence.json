@@ -1,0 +1,16 @@
+{
+  "root": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/assets/fixtures/ownership-clean",
+  "first": {
+    "status": 0,
+    "stdout": "checked 1 file(s)\n",
+    "stderr": ""
+  },
+  "stateBeforeMove": "{\n  \"outputs\": [\n    \"data.txt\"\n  ]\n}\n",
+  "before": "USER AUTHORED CONTENT",
+  "second": {
+    "status": 0,
+    "stdout": "checked 1 file(s)\n",
+    "stderr": ""
+  },
+  "after": "GENERATED CONTENT"
+}

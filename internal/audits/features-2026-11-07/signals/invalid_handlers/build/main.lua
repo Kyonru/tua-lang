@@ -1,0 +1,5 @@
+local __tua_signal = require("tuasignal")
+local events = __tua_signal()
+events:on("bad", 123)
+events:once("bad", false)
+events:declare("bad", "not a schema")

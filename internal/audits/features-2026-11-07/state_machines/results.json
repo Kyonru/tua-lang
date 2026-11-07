@@ -1,0 +1,94 @@
+[
+  {
+    "case": "happy",
+    "command": [
+      "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+      "check"
+    ],
+    "exit": 0,
+    "stdout": "checked 1 file(s)\n",
+    "stderr": ""
+  },
+  {
+    "case": "happy",
+    "command": [
+      "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+      "build"
+    ],
+    "exit": 0,
+    "stdout": "built 2 file(s)\n",
+    "stderr": ""
+  },
+  {
+    "case": "happy",
+    "command": [
+      "lua",
+      "main.lua"
+    ],
+    "exit": 0,
+    "stdout": "PASS transitions, wildcard, payload, async cancellation/resume\n",
+    "stderr": ""
+  },
+  {
+    "case": "reserved",
+    "command": [
+      "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+      "check"
+    ],
+    "exit": 0,
+    "stdout": "checked 1 file(s)\n",
+    "stderr": ""
+  },
+  {
+    "case": "reserved",
+    "command": [
+      "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+      "build"
+    ],
+    "exit": 0,
+    "stdout": "built 2 file(s)\n",
+    "stderr": ""
+  },
+  {
+    "case": "reserved",
+    "command": [
+      "lua",
+      "main.lua"
+    ],
+    "exit": 1,
+    "stdout": "",
+    "stderr": "lua: main.lua:6: attempt to call a string value (method 'current')\nstack traceback:\n\tmain.lua:6: in main chunk\n\t[C]: in ?\n"
+  },
+  {
+    "case": "dynamic",
+    "command": [
+      "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+      "check"
+    ],
+    "exit": 1,
+    "stdout": "",
+    "stderr": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/dynamic/src/main.tua:8:34 error TL1003: type mismatch at state: expected \"none\" | \"running\", found \"idle\"\n"
+  },
+  {
+    "case": "dynamic",
+    "command": [
+      "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+      "build"
+    ],
+    "exit": 1,
+    "stdout": "",
+    "stderr": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/dynamic/src/main.tua:8:34 error TL1003: type mismatch at state: expected \"none\" | \"running\", found \"idle\"\n"
+  },
+  {
+    "case": "runtime edges",
+    "exit": 1,
+    "stdout": "cancel\tfalse\tidle\tleave callback count\t1\nchain\ttrue\trun\tnone\tnil\n",
+    "stderr": "lua: ...al/audits/features-2026-11-07/state_machines/runtime.lua:15: bad argument #1 to 'tostring' (value expected)\nstack traceback:\n\t[C]: in function 'tostring'\n\t...al/audits/features-2026-11-07/state_machines/runtime.lua:15: in main chunk\n\t[C]: in ?\n"
+  },
+  {
+    "case": "existing runtime suite",
+    "exit": 0,
+    "stdout": "",
+    "stderr": ""
+  }
+]

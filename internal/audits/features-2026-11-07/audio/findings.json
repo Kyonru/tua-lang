@@ -1,0 +1,73 @@
+[
+  {
+    "id": "AUDIO-01",
+    "title": "Overlapping global and cue limits are not enforced together",
+    "category": "confirmed defect",
+    "severity": "Medium",
+    "status": "confirmed",
+    "summary": "The victim selector steals a low-priority voice outside the full cue, leaving two voices for a cue capped at one while the global cap remains respected. Ancestor bus aggregation is a separate policy question.",
+    "evidence": [
+      "probe.lua",
+      "runtime.log",
+      "emitted-runtime.log"
+    ],
+    "known": false,
+    "review_note": "Independent evidence review confirmed the bounded cap violation; downgraded High to Medium. Ancestor cap inheritance is not explicitly promised."
+  },
+  {
+    "id": "AUDIO-02",
+    "title": "Bar transitions miss boundaries crossed by a long frame",
+    "category": "confirmed defect",
+    "severity": "Medium",
+    "status": "confirmed",
+    "summary": "At 60 BPM, schedule bar transition from scene one after update at position 0, then move leader to 5.1 seconds. Bar 1 is emitted but the transition remains pending in scene one.",
+    "evidence": [
+      "probe.lua",
+      "runtime.log",
+      "emitted-runtime.log"
+    ],
+    "known": false
+  },
+  {
+    "id": "AUDIO-03",
+    "title": "Looping music stops emitting beats after the first playback cycle",
+    "category": "confirmed defect",
+    "severity": "Medium",
+    "status": "confirmed",
+    "summary": "Default music layers loop. Advance leader to 3.9, wrap to 0.1, then advance to 1.1. Beat count stays 4 because runtime.beat retains the previous cycle maximum.",
+    "evidence": [
+      "probe.lua",
+      "runtime.log",
+      "emitted-runtime.log"
+    ],
+    "known": false
+  },
+  {
+    "id": "AUDIO-04",
+    "title": "Loop regions are ignored when a scene has no BPM",
+    "category": "confirmed defect",
+    "severity": "Medium",
+    "status": "confirmed",
+    "summary": "Create an immediate scene with loopRegion={start=1,finish=2}, no BPM or analysis, and a source at 2.1. update leaves its position at 2.1 instead of seeking to 1.",
+    "evidence": [
+      "probe.lua",
+      "runtime.log",
+      "emitted-runtime.log"
+    ],
+    "known": false
+  },
+  {
+    "id": "AUDIO-05",
+    "title": "snapshot analysis state is not detached",
+    "category": "confirmed defect",
+    "severity": "Low",
+    "status": "confirmed",
+    "summary": "Assign snapshot.analysis.fake=\"corrupted\", then take another snapshot. The new snapshot contains fake=\"corrupted\" because analysis returns the internal status table directly.",
+    "evidence": [
+      "probe.lua",
+      "runtime.log",
+      "emitted-runtime.log"
+    ],
+    "known": false
+  }
+]

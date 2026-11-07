@@ -1,0 +1,13 @@
+{
+  "argv": [
+    "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+    "test",
+    "failing_spec.tua",
+    "--report",
+    "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/testing/failure-results.json"
+  ],
+  "cwd": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/testing/fixture",
+  "returncode": 1,
+  "stdout": "",
+  "stderr": "error: unit tests failed (exit status: 1)\n-\n0 successes / 1 failure / 0 errors / 0 pending : 0.001089 seconds\n\nFailure -> tests/failing_spec.tua:2 (generated __tua_tests__/failing_spec.lua:2)\nfailure mapped\ntests/failing_spec.tua:3 (generated __tua_tests__/failing_spec.lua:3): Expected objects to be equal.\nPassed in:\n(number) 456\nExpected:\n(number) 123\n\nstack traceback:\n\ttests/failing_spec.tua:3 (generated __tua_tests__/failing_spec.lua:3): in function <__tua_tests__/failing_spec.lua:2>\n\n"
+}

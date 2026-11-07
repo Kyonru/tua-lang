@@ -1,0 +1,10 @@
+function love.load() end
+function love.update(dt)
+ print(dt)
+end
+function love.keypressed(key, scancode, isrepeat)
+ print(key, isrepeat)
+end
+function love.mousepressed(x: string) end
+function love.udpate(dt: number) end
+function love.draw(unused: number) end

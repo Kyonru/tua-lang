@@ -1,0 +1,770 @@
+{
+  "constructor": {
+    "contents": {
+      "kind": "markdown",
+      "value": "```tua\n(field) new: (\n  options: {\n    bounds?: { h: number, w: number, x: number, y: number },\n    lead?: number,\n    pixelPerfect?: boolean,\n    rotation?: number,\n    shakeAmount?: number,\n    shakeDecay?: number,\n    smoothing?: number,\n    style?: \"lockon\" | \"platformer\" | \"topdown\" | \"topdowntight\" | \"screen\",\n    viewport?: { h: number, w: number, x: number, y: number },\n    x?: number,\n    y?: number,\n    zoom?: number\n  }\n) -> {\n  attach: (self: any) -> nil,\n  clearBounds: (self: any) -> nil,\n  clearViewport: (self: any) -> nil,\n  detach: (self: any) -> nil,\n  draw: (self: any, draw: () -> nil) -> nil,\n  follow: (self: any, x: number, y: number) -> nil,\n  lead: number,\n  lookAt: (self: any, x: number, y: number) -> nil,\n  mousePosition: (self: any) -> number,\n  move: (self: any, dx: number, dy: number) -> nil,\n  pixelPerfect: boolean,\n  rotation: number,\n  setBounds: (self: any, x: number, y: number, w: number, h: number) -> nil,\n  setDeadzone: (self: any, x: number, y: number, w: number, h: number) -> nil,\n  setStyle: (\n    self: any,\n    style: \"lockon\" | \"platformer\" | \"topdown\" | \"topdowntight\" | \"screen\"\n  ) -> nil,\n  setViewport: (self: any, x: number, y: number, w: number, h: number) -> nil,\n  shake: (self: any, trauma: number) -> nil,\n  smoothing: number,\n  toScreen: (self: any, wx: number, wy: number) -> number,\n  toWorld: (self: any, sx: number, sy: number) -> number,\n  update: (self: any, dt: number) -> nil,\n  visibleBounds: (self: any) -> number,\n  x: number,\n  y: number,\n  zoom: number\n}\n```"
+    },
+    "range": {
+      "end": {
+        "character": 22,
+        "line": 0
+      },
+      "start": {
+        "character": 19,
+        "line": 0
+      }
+    }
+  },
+  "camera": {
+    "contents": {
+      "kind": "markdown",
+      "value": "```tua\nlocal cam: {\n  attach: (self: any) -> nil,\n  clearBounds: (self: any) -> nil,\n  clearViewport: (self: any) -> nil,\n  detach: (self: any) -> nil,\n  draw: (self: any, draw: () -> nil) -> nil,\n  follow: (self: any, x: number, y: number) -> nil,\n  lead: number,\n  lookAt: (self: any, x: number, y: number) -> nil,\n  mousePosition: (self: any) -> number,\n  move: (self: any, dx: number, dy: number) -> nil,\n  pixelPerfect: boolean,\n  rotation: number,\n  setBounds: (self: any, x: number, y: number, w: number, h: number) -> nil,\n  setDeadzone: (self: any, x: number, y: number, w: number, h: number) -> nil,\n  setStyle: (\n    self: any,\n    style: \"lockon\" | \"platformer\" | \"topdown\" | \"topdowntight\" | \"screen\"\n  ) -> nil,\n  setViewport: (self: any, x: number, y: number, w: number, h: number) -> nil,\n  shake: (self: any, trauma: number) -> nil,\n  smoothing: number,\n  toScreen: (self: any, wx: number, wy: number) -> number,\n  toWorld: (self: any, sx: number, sy: number) -> number,\n  update: (self: any, dt: number) -> nil,\n  visibleBounds: (self: any) -> number,\n  x: number,\n  y: number,\n  zoom: number\n}\n```"
+    },
+    "range": {
+      "end": {
+        "character": 3,
+        "line": 1
+      },
+      "start": {
+        "character": 0,
+        "line": 1
+      }
+    }
+  },
+  "follow": {
+    "activeParameter": 0,
+    "activeSignature": 0,
+    "signatures": [
+      {
+        "label": "function cam:follow(x: number, y: number): nil",
+        "parameters": [
+          {
+            "label": "x: number"
+          },
+          {
+            "label": "y: number"
+          }
+        ]
+      }
+    ]
+  },
+  "methods": [
+    {
+      "data": {
+        "kind": "function",
+        "label": "follow",
+        "position": {
+          "character": 4,
+          "line": 1
+        },
+        "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/camera/happy/src/main.tua"
+      },
+      "kind": 3,
+      "label": "follow",
+      "sortText": "0000_follow",
+      "textEdit": {
+        "newText": "follow",
+        "range": {
+          "end": {
+            "character": 10,
+            "line": 1
+          },
+          "start": {
+            "character": 4,
+            "line": 1
+          }
+        }
+      }
+    },
+    {
+      "data": {
+        "kind": "function",
+        "label": "update",
+        "position": {
+          "character": 4,
+          "line": 1
+        },
+        "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/camera/happy/src/main.tua"
+      },
+      "kind": 3,
+      "label": "update",
+      "sortText": "0001_update",
+      "textEdit": {
+        "newText": "update",
+        "range": {
+          "end": {
+            "character": 10,
+            "line": 1
+          },
+          "start": {
+            "character": 4,
+            "line": 1
+          }
+        }
+      }
+    },
+    {
+      "data": {
+        "kind": "function",
+        "label": "toScreen",
+        "position": {
+          "character": 4,
+          "line": 1
+        },
+        "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/camera/happy/src/main.tua"
+      },
+      "kind": 3,
+      "label": "toScreen",
+      "sortText": "0002_toScreen",
+      "textEdit": {
+        "newText": "toScreen",
+        "range": {
+          "end": {
+            "character": 10,
+            "line": 1
+          },
+          "start": {
+            "character": 4,
+            "line": 1
+          }
+        }
+      }
+    },
+    {
+      "data": {
+        "kind": "function",
+        "label": "toWorld",
+        "position": {
+          "character": 4,
+          "line": 1
+        },
+        "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/camera/happy/src/main.tua"
+      },
+      "kind": 3,
+      "label": "toWorld",
+      "sortText": "0003_toWorld",
+      "textEdit": {
+        "newText": "toWorld",
+        "range": {
+          "end": {
+            "character": 10,
+            "line": 1
+          },
+          "start": {
+            "character": 4,
+            "line": 1
+          }
+        }
+      }
+    },
+    {
+      "data": {
+        "kind": "field",
+        "label": "x",
+        "position": {
+          "character": 4,
+          "line": 1
+        },
+        "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/camera/happy/src/main.tua"
+      },
+      "kind": 5,
+      "label": "x",
+      "sortText": "0004_x",
+      "textEdit": {
+        "newText": "x",
+        "range": {
+          "end": {
+            "character": 10,
+            "line": 1
+          },
+          "start": {
+            "character": 4,
+            "line": 1
+          }
+        }
+      }
+    },
+    {
+      "data": {
+        "kind": "field",
+        "label": "y",
+        "position": {
+          "character": 4,
+          "line": 1
+        },
+        "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/camera/happy/src/main.tua"
+      },
+      "kind": 5,
+      "label": "y",
+      "sortText": "0005_y",
+      "textEdit": {
+        "newText": "y",
+        "range": {
+          "end": {
+            "character": 10,
+            "line": 1
+          },
+          "start": {
+            "character": 4,
+            "line": 1
+          }
+        }
+      }
+    },
+    {
+      "data": {
+        "kind": "function",
+        "label": "draw",
+        "position": {
+          "character": 4,
+          "line": 1
+        },
+        "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/camera/happy/src/main.tua"
+      },
+      "kind": 3,
+      "label": "draw",
+      "sortText": "0006_draw",
+      "textEdit": {
+        "newText": "draw",
+        "range": {
+          "end": {
+            "character": 10,
+            "line": 1
+          },
+          "start": {
+            "character": 4,
+            "line": 1
+          }
+        }
+      }
+    },
+    {
+      "data": {
+        "kind": "function",
+        "label": "move",
+        "position": {
+          "character": 4,
+          "line": 1
+        },
+        "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/camera/happy/src/main.tua"
+      },
+      "kind": 3,
+      "label": "move",
+      "sortText": "0007_move",
+      "textEdit": {
+        "newText": "move",
+        "range": {
+          "end": {
+            "character": 10,
+            "line": 1
+          },
+          "start": {
+            "character": 4,
+            "line": 1
+          }
+        }
+      }
+    },
+    {
+      "data": {
+        "kind": "function",
+        "label": "shake",
+        "position": {
+          "character": 4,
+          "line": 1
+        },
+        "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/camera/happy/src/main.tua"
+      },
+      "kind": 3,
+      "label": "shake",
+      "sortText": "0008_shake",
+      "textEdit": {
+        "newText": "shake",
+        "range": {
+          "end": {
+            "character": 10,
+            "line": 1
+          },
+          "start": {
+            "character": 4,
+            "line": 1
+          }
+        }
+      }
+    },
+    {
+      "data": {
+        "kind": "function",
+        "label": "attach",
+        "position": {
+          "character": 4,
+          "line": 1
+        },
+        "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/camera/happy/src/main.tua"
+      },
+      "kind": 3,
+      "label": "attach",
+      "sortText": "0009_attach",
+      "textEdit": {
+        "newText": "attach",
+        "range": {
+          "end": {
+            "character": 10,
+            "line": 1
+          },
+          "start": {
+            "character": 4,
+            "line": 1
+          }
+        }
+      }
+    },
+    {
+      "data": {
+        "kind": "function",
+        "label": "detach",
+        "position": {
+          "character": 4,
+          "line": 1
+        },
+        "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/camera/happy/src/main.tua"
+      },
+      "kind": 3,
+      "label": "detach",
+      "sortText": "0010_detach",
+      "textEdit": {
+        "newText": "detach",
+        "range": {
+          "end": {
+            "character": 10,
+            "line": 1
+          },
+          "start": {
+            "character": 4,
+            "line": 1
+          }
+        }
+      }
+    },
+    {
+      "data": {
+        "kind": "function",
+        "label": "lookAt",
+        "position": {
+          "character": 4,
+          "line": 1
+        },
+        "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/camera/happy/src/main.tua"
+      },
+      "kind": 3,
+      "label": "lookAt",
+      "sortText": "0011_lookAt",
+      "textEdit": {
+        "newText": "lookAt",
+        "range": {
+          "end": {
+            "character": 10,
+            "line": 1
+          },
+          "start": {
+            "character": 4,
+            "line": 1
+          }
+        }
+      }
+    },
+    {
+      "data": {
+        "kind": "function",
+        "label": "setStyle",
+        "position": {
+          "character": 4,
+          "line": 1
+        },
+        "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/camera/happy/src/main.tua"
+      },
+      "kind": 3,
+      "label": "setStyle",
+      "sortText": "0012_setStyle",
+      "textEdit": {
+        "newText": "setStyle",
+        "range": {
+          "end": {
+            "character": 10,
+            "line": 1
+          },
+          "start": {
+            "character": 4,
+            "line": 1
+          }
+        }
+      }
+    },
+    {
+      "data": {
+        "kind": "function",
+        "label": "setBounds",
+        "position": {
+          "character": 4,
+          "line": 1
+        },
+        "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/camera/happy/src/main.tua"
+      },
+      "kind": 3,
+      "label": "setBounds",
+      "sortText": "0013_setBounds",
+      "textEdit": {
+        "newText": "setBounds",
+        "range": {
+          "end": {
+            "character": 10,
+            "line": 1
+          },
+          "start": {
+            "character": 4,
+            "line": 1
+          }
+        }
+      }
+    },
+    {
+      "data": {
+        "kind": "function",
+        "label": "clearBounds",
+        "position": {
+          "character": 4,
+          "line": 1
+        },
+        "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/camera/happy/src/main.tua"
+      },
+      "kind": 3,
+      "label": "clearBounds",
+      "sortText": "0014_clearBounds",
+      "textEdit": {
+        "newText": "clearBounds",
+        "range": {
+          "end": {
+            "character": 10,
+            "line": 1
+          },
+          "start": {
+            "character": 4,
+            "line": 1
+          }
+        }
+      }
+    },
+    {
+      "data": {
+        "kind": "function",
+        "label": "setDeadzone",
+        "position": {
+          "character": 4,
+          "line": 1
+        },
+        "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/camera/happy/src/main.tua"
+      },
+      "kind": 3,
+      "label": "setDeadzone",
+      "sortText": "0015_setDeadzone",
+      "textEdit": {
+        "newText": "setDeadzone",
+        "range": {
+          "end": {
+            "character": 10,
+            "line": 1
+          },
+          "start": {
+            "character": 4,
+            "line": 1
+          }
+        }
+      }
+    },
+    {
+      "data": {
+        "kind": "function",
+        "label": "setViewport",
+        "position": {
+          "character": 4,
+          "line": 1
+        },
+        "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/camera/happy/src/main.tua"
+      },
+      "kind": 3,
+      "label": "setViewport",
+      "sortText": "0016_setViewport",
+      "textEdit": {
+        "newText": "setViewport",
+        "range": {
+          "end": {
+            "character": 10,
+            "line": 1
+          },
+          "start": {
+            "character": 4,
+            "line": 1
+          }
+        }
+      }
+    },
+    {
+      "data": {
+        "kind": "function",
+        "label": "clearViewport",
+        "position": {
+          "character": 4,
+          "line": 1
+        },
+        "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/camera/happy/src/main.tua"
+      },
+      "kind": 3,
+      "label": "clearViewport",
+      "sortText": "0017_clearViewport",
+      "textEdit": {
+        "newText": "clearViewport",
+        "range": {
+          "end": {
+            "character": 10,
+            "line": 1
+          },
+          "start": {
+            "character": 4,
+            "line": 1
+          }
+        }
+      }
+    },
+    {
+      "data": {
+        "kind": "function",
+        "label": "mousePosition",
+        "position": {
+          "character": 4,
+          "line": 1
+        },
+        "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/camera/happy/src/main.tua"
+      },
+      "kind": 3,
+      "label": "mousePosition",
+      "sortText": "0018_mousePosition",
+      "textEdit": {
+        "newText": "mousePosition",
+        "range": {
+          "end": {
+            "character": 10,
+            "line": 1
+          },
+          "start": {
+            "character": 4,
+            "line": 1
+          }
+        }
+      }
+    },
+    {
+      "data": {
+        "kind": "function",
+        "label": "visibleBounds",
+        "position": {
+          "character": 4,
+          "line": 1
+        },
+        "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/camera/happy/src/main.tua"
+      },
+      "kind": 3,
+      "label": "visibleBounds",
+      "sortText": "0019_visibleBounds",
+      "textEdit": {
+        "newText": "visibleBounds",
+        "range": {
+          "end": {
+            "character": 10,
+            "line": 1
+          },
+          "start": {
+            "character": 4,
+            "line": 1
+          }
+        }
+      }
+    },
+    {
+      "data": {
+        "kind": "field",
+        "label": "lead",
+        "position": {
+          "character": 4,
+          "line": 1
+        },
+        "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/camera/happy/src/main.tua"
+      },
+      "kind": 5,
+      "label": "lead",
+      "sortText": "0020_lead",
+      "textEdit": {
+        "newText": "lead",
+        "range": {
+          "end": {
+            "character": 10,
+            "line": 1
+          },
+          "start": {
+            "character": 4,
+            "line": 1
+          }
+        }
+      }
+    },
+    {
+      "data": {
+        "kind": "field",
+        "label": "zoom",
+        "position": {
+          "character": 4,
+          "line": 1
+        },
+        "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/camera/happy/src/main.tua"
+      },
+      "kind": 5,
+      "label": "zoom",
+      "sortText": "0021_zoom",
+      "textEdit": {
+        "newText": "zoom",
+        "range": {
+          "end": {
+            "character": 10,
+            "line": 1
+          },
+          "start": {
+            "character": 4,
+            "line": 1
+          }
+        }
+      }
+    },
+    {
+      "data": {
+        "kind": "field",
+        "label": "rotation",
+        "position": {
+          "character": 4,
+          "line": 1
+        },
+        "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/camera/happy/src/main.tua"
+      },
+      "kind": 5,
+      "label": "rotation",
+      "sortText": "0022_rotation",
+      "textEdit": {
+        "newText": "rotation",
+        "range": {
+          "end": {
+            "character": 10,
+            "line": 1
+          },
+          "start": {
+            "character": 4,
+            "line": 1
+          }
+        }
+      }
+    },
+    {
+      "data": {
+        "kind": "field",
+        "label": "smoothing",
+        "position": {
+          "character": 4,
+          "line": 1
+        },
+        "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/camera/happy/src/main.tua"
+      },
+      "kind": 5,
+      "label": "smoothing",
+      "sortText": "0023_smoothing",
+      "textEdit": {
+        "newText": "smoothing",
+        "range": {
+          "end": {
+            "character": 10,
+            "line": 1
+          },
+          "start": {
+            "character": 4,
+            "line": 1
+          }
+        }
+      }
+    },
+    {
+      "data": {
+        "kind": "field",
+        "label": "pixelPerfect",
+        "position": {
+          "character": 4,
+          "line": 1
+        },
+        "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/camera/happy/src/main.tua"
+      },
+      "kind": 5,
+      "label": "pixelPerfect",
+      "sortText": "0024_pixelPerfect",
+      "textEdit": {
+        "newText": "pixelPerfect",
+        "range": {
+          "end": {
+            "character": 10,
+            "line": 1
+          },
+          "start": {
+            "character": 4,
+            "line": 1
+          }
+        }
+      }
+    }
+  ],
+  "worldX": {
+    "contents": {
+      "kind": "markdown",
+      "value": "```tua\nlocal wx: number\n```"
+    },
+    "range": {
+      "end": {
+        "character": 22,
+        "line": 5
+      },
+      "start": {
+        "character": 20,
+        "line": 5
+      }
+    }
+  },
+  "worldY": {
+    "contents": {
+      "kind": "markdown",
+      "value": "```tua\nlocal wy: any\n```"
+    },
+    "range": {
+      "end": {
+        "character": 26,
+        "line": 5
+      },
+      "start": {
+        "character": 24,
+        "line": 5
+      }
+    }
+  },
+  "diagnostics": [
+    {
+      "jsonrpc": "2.0",
+      "method": "textDocument/publishDiagnostics",
+      "params": {
+        "diagnostics": [],
+        "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/camera/happy/src/main.tua"
+      }
+    }
+  ]
+}

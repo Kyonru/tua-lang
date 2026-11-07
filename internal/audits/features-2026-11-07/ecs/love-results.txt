@@ -1,0 +1,7 @@
+runtime	Lua 5.1	LuaJIT 2.1.1700008891
+happy lifecycle passed
+happy	true	nil
+has	true	get	nil	count	1
+false_value	false	...udits/features-2026-11-07/ecs/false_value/build/main.lua:8: false is a valid stored component value
+missing_get	false	...udits/features-2026-11-07/ecs/missing_get/build/main.lua:6: attempt to index local 'position' (a nil value)
+missing_remove	false	...ts/features-2026-11-07/ecs/missing_remove/build/main.lua:6: attempt to index local 'position' (a nil value)

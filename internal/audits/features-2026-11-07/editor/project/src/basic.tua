@@ -1,0 +1,4 @@
+local function add(a: number, b: number): number return a+b end
+local value = add(1, 2)
+local emoji = "😀"; print(value)
+print(value)

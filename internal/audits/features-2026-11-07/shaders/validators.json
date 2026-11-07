@@ -1,0 +1,54 @@
+[
+  {
+    "name": "positive-auto",
+    "args": [],
+    "status": 0,
+    "stdout": "checked 1 file(s)\n",
+    "stderr": ""
+  },
+  {
+    "name": "inline-auto",
+    "args": [],
+    "status": 0,
+    "stdout": "checked 1 file(s)\n",
+    "stderr": ""
+  },
+  {
+    "name": "inlineerror-auto",
+    "args": [],
+    "status": 1,
+    "stdout": "",
+    "stderr": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/shaders/fixtures/inlineerror/src/main.tua:1:7 warning TL4005: unused local `fx`; prefix with `_` to silence\n/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/shaders/fixtures/inlineerror/src/main.tua:3:1 error TL2016: shader does not compile for desktop (pixel stage): 'missing': undeclared identifier\n/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/shaders/fixtures/inlineerror/src/main.tua:3:1 error TL2016: shader does not compile for desktop (pixel stage): 'return': cannot convert return value to function return type\n"
+  },
+  {
+    "name": "include-auto",
+    "args": [],
+    "status": 1,
+    "stdout": "",
+    "stderr": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/shaders/fixtures/include/effect.glsl:1:1 error TL2016: shader does not compile for desktop (pixel stage): must be followed by a header name\n/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/shaders/fixtures/include/effect.glsl:1:1 error TL2016: shader does not compile for desktop (pixel stage): required extension not requested: Possible extensions include:\n/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/shaders/fixtures/include/src/main.tua:1:19 error TL2016: shader `effect.glsl` does not compile for desktop: line 1: required extension not requested: Possible extensions include:\n/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/shaders/fixtures/include/src/main.tua:2:9 error TL2013: shader `effect.glsl` has no uniform `alpha`, so LOVE raises an error when it is sent; it declares no uniforms\n"
+  },
+  {
+    "name": "macro-name",
+    "args": [],
+    "status": 1,
+    "stdout": "",
+    "stderr": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/shaders/fixtures/macro/src/main.tua:2:9 error TL2013: shader `effect.glsl` has no uniform `alpha`, so LOVE raises an error when it is sent; it declares `NAME`\n"
+  },
+  {
+    "name": "missing-tools",
+    "args": [
+      "check",
+      "--deny-warnings"
+    ],
+    "status": 0,
+    "stdout": "note: shader compilation skipped: neither LOVE nor glslangValidator was found\nchecked 1 file(s)\n",
+    "stderr": ""
+  },
+  {
+    "name": "explicit-glslang",
+    "args": [],
+    "status": 0,
+    "stdout": "checked 1 file(s)\n",
+    "stderr": ""
+  }
+]

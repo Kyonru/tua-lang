@@ -1,0 +1,4 @@
+local function new(name: string): {name: string}
+ return {name=name}
+end
+return {new=new}

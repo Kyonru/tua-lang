@@ -1,0 +1,2435 @@
+[
+  {
+    "case": "happy",
+    "position": {
+      "line": 17,
+      "character": 15
+    },
+    "hover": {
+      "id": 3,
+      "jsonrpc": "2.0",
+      "result": {
+        "contents": {
+          "kind": "markdown",
+          "value": "```tua\n(field) current: \"idle\" | \"running\"\n```"
+        },
+        "range": {
+          "end": {
+            "character": 22,
+            "line": 17
+          },
+          "start": {
+            "character": 15,
+            "line": 17
+          }
+        }
+      }
+    },
+    "inspection": {
+      "id": 2,
+      "jsonrpc": "2.0",
+      "result": {
+        "analysisRevision": 10,
+        "documentVersion": 1,
+        "items": [
+          {
+            "initial": "idle",
+            "kind": "stateMachine",
+            "name": "machine",
+            "range": {
+              "end": {
+                "character": 2,
+                "line": 11
+              },
+              "start": {
+                "character": 0,
+                "line": 1
+              }
+            },
+            "selectionRange": {
+              "end": {
+                "character": 13,
+                "line": 1
+              },
+              "start": {
+                "character": 6,
+                "line": 1
+              }
+            },
+            "states": [
+              {
+                "initial": true,
+                "name": "idle",
+                "range": {
+                  "end": {
+                    "character": 17,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 11,
+                    "line": 2
+                  }
+                }
+              },
+              {
+                "initial": false,
+                "name": "running",
+                "range": {
+                  "end": {
+                    "character": 42,
+                    "line": 4
+                  },
+                  "start": {
+                    "character": 33,
+                    "line": 4
+                  }
+                }
+              }
+            ],
+            "transitions": [
+              {
+                "event": "start",
+                "from": [
+                  "idle"
+                ],
+                "range": {
+                  "end": {
+                    "character": 43,
+                    "line": 4
+                  },
+                  "start": {
+                    "character": 2,
+                    "line": 4
+                  }
+                },
+                "selectionRange": {
+                  "end": {
+                    "character": 15,
+                    "line": 4
+                  },
+                  "start": {
+                    "character": 8,
+                    "line": 4
+                  }
+                },
+                "to": "running",
+                "wildcardFrom": false
+              },
+              {
+                "event": "reset",
+                "from": [],
+                "range": {
+                  "end": {
+                    "character": 37,
+                    "line": 5
+                  },
+                  "start": {
+                    "character": 2,
+                    "line": 5
+                  }
+                },
+                "selectionRange": {
+                  "end": {
+                    "character": 15,
+                    "line": 5
+                  },
+                  "start": {
+                    "character": 8,
+                    "line": 5
+                  }
+                },
+                "to": "idle",
+                "wildcardFrom": true
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "completion": {
+      "id": 4,
+      "jsonrpc": "2.0",
+      "result": [
+        {
+          "data": {
+            "kind": "function",
+            "label": "reset",
+            "position": {
+              "character": 15,
+              "line": 17
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/happy/src/main.tua"
+          },
+          "kind": 3,
+          "label": "reset",
+          "sortText": "0000_reset",
+          "textEdit": {
+            "newText": "reset",
+            "range": {
+              "end": {
+                "character": 22,
+                "line": 17
+              },
+              "start": {
+                "character": 15,
+                "line": 17
+              }
+            }
+          }
+        },
+        {
+          "data": {
+            "kind": "function",
+            "label": "is",
+            "position": {
+              "character": 15,
+              "line": 17
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/happy/src/main.tua"
+          },
+          "kind": 3,
+          "label": "is",
+          "sortText": "0001_is",
+          "textEdit": {
+            "newText": "is",
+            "range": {
+              "end": {
+                "character": 22,
+                "line": 17
+              },
+              "start": {
+                "character": 15,
+                "line": 17
+              }
+            }
+          }
+        },
+        {
+          "data": {
+            "kind": "field",
+            "label": "current",
+            "position": {
+              "character": 15,
+              "line": 17
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/happy/src/main.tua"
+          },
+          "kind": 5,
+          "label": "current",
+          "sortText": "0002_current",
+          "textEdit": {
+            "newText": "current",
+            "range": {
+              "end": {
+                "character": 22,
+                "line": 17
+              },
+              "start": {
+                "character": 15,
+                "line": 17
+              }
+            }
+          }
+        },
+        {
+          "data": {
+            "kind": "function",
+            "label": "can",
+            "position": {
+              "character": 15,
+              "line": 17
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/happy/src/main.tua"
+          },
+          "kind": 3,
+          "label": "can",
+          "sortText": "0003_can",
+          "textEdit": {
+            "newText": "can",
+            "range": {
+              "end": {
+                "character": 22,
+                "line": 17
+              },
+              "start": {
+                "character": 15,
+                "line": 17
+              }
+            }
+          }
+        },
+        {
+          "data": {
+            "kind": "function",
+            "label": "start",
+            "position": {
+              "character": 15,
+              "line": 17
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/happy/src/main.tua"
+          },
+          "kind": 3,
+          "label": "start",
+          "sortText": "0004_start",
+          "textEdit": {
+            "newText": "start",
+            "range": {
+              "end": {
+                "character": 22,
+                "line": 17
+              },
+              "start": {
+                "character": 15,
+                "line": 17
+              }
+            }
+          }
+        },
+        {
+          "data": {
+            "kind": "function",
+            "label": "cancelTransition",
+            "position": {
+              "character": 15,
+              "line": 17
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/happy/src/main.tua"
+          },
+          "kind": 3,
+          "label": "cancelTransition",
+          "sortText": "0005_cancelTransition",
+          "textEdit": {
+            "newText": "cancelTransition",
+            "range": {
+              "end": {
+                "character": 22,
+                "line": 17
+              },
+              "start": {
+                "character": 15,
+                "line": 17
+              }
+            }
+          }
+        },
+        {
+          "data": {
+            "kind": "function",
+            "label": "transition",
+            "position": {
+              "character": 15,
+              "line": 17
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/happy/src/main.tua"
+          },
+          "kind": 3,
+          "label": "transition",
+          "sortText": "0006_transition",
+          "textEdit": {
+            "newText": "transition",
+            "range": {
+              "end": {
+                "character": 22,
+                "line": 17
+              },
+              "start": {
+                "character": 15,
+                "line": 17
+              }
+            }
+          }
+        },
+        {
+          "data": {
+            "kind": "field",
+            "label": "ASYNC",
+            "position": {
+              "character": 15,
+              "line": 17
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/happy/src/main.tua"
+          },
+          "kind": 5,
+          "label": "ASYNC",
+          "sortText": "0007_ASYNC",
+          "textEdit": {
+            "newText": "ASYNC",
+            "range": {
+              "end": {
+                "character": 22,
+                "line": 17
+              },
+              "start": {
+                "character": 15,
+                "line": 17
+              }
+            }
+          }
+        },
+        {
+          "data": {
+            "kind": "function",
+            "label": "todot",
+            "position": {
+              "character": 15,
+              "line": 17
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/happy/src/main.tua"
+          },
+          "kind": 3,
+          "label": "todot",
+          "sortText": "0008_todot",
+          "textEdit": {
+            "newText": "todot",
+            "range": {
+              "end": {
+                "character": 22,
+                "line": 17
+              },
+              "start": {
+                "character": 15,
+                "line": 17
+              }
+            }
+          }
+        },
+        {
+          "data": {
+            "kind": "function",
+            "label": "cannot",
+            "position": {
+              "character": 15,
+              "line": 17
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/happy/src/main.tua"
+          },
+          "kind": 3,
+          "label": "cannot",
+          "sortText": "0009_cannot",
+          "textEdit": {
+            "newText": "cannot",
+            "range": {
+              "end": {
+                "character": 22,
+                "line": 17
+              },
+              "start": {
+                "character": 15,
+                "line": 17
+              }
+            }
+          }
+        },
+        {
+          "data": {
+            "kind": "function",
+            "label": "onidle",
+            "position": {
+              "character": 15,
+              "line": 17
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/happy/src/main.tua"
+          },
+          "kind": 3,
+          "label": "onidle",
+          "sortText": "0010_onidle",
+          "textEdit": {
+            "newText": "onidle",
+            "range": {
+              "end": {
+                "character": 22,
+                "line": 17
+              },
+              "start": {
+                "character": 15,
+                "line": 17
+              }
+            }
+          }
+        },
+        {
+          "data": {
+            "kind": "function",
+            "label": "onreset",
+            "position": {
+              "character": 15,
+              "line": 17
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/happy/src/main.tua"
+          },
+          "kind": 3,
+          "label": "onreset",
+          "sortText": "0011_onreset",
+          "textEdit": {
+            "newText": "onreset",
+            "range": {
+              "end": {
+                "character": 22,
+                "line": 17
+              },
+              "start": {
+                "character": 15,
+                "line": 17
+              }
+            }
+          }
+        },
+        {
+          "data": {
+            "kind": "function",
+            "label": "onstart",
+            "position": {
+              "character": 15,
+              "line": 17
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/happy/src/main.tua"
+          },
+          "kind": 3,
+          "label": "onstart",
+          "sortText": "0012_onstart",
+          "textEdit": {
+            "newText": "onstart",
+            "range": {
+              "end": {
+                "character": 22,
+                "line": 17
+              },
+              "start": {
+                "character": 15,
+                "line": 17
+              }
+            }
+          }
+        },
+        {
+          "data": {
+            "kind": "function",
+            "label": "onrunning",
+            "position": {
+              "character": 15,
+              "line": 17
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/happy/src/main.tua"
+          },
+          "kind": 3,
+          "label": "onrunning",
+          "sortText": "0013_onrunning",
+          "textEdit": {
+            "newText": "onrunning",
+            "range": {
+              "end": {
+                "character": 22,
+                "line": 17
+              },
+              "start": {
+                "character": 15,
+                "line": 17
+              }
+            }
+          }
+        },
+        {
+          "data": {
+            "kind": "function",
+            "label": "onenteridle",
+            "position": {
+              "character": 15,
+              "line": 17
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/happy/src/main.tua"
+          },
+          "kind": 3,
+          "label": "onenteridle",
+          "sortText": "0014_onenteridle",
+          "textEdit": {
+            "newText": "onenteridle",
+            "range": {
+              "end": {
+                "character": 22,
+                "line": 17
+              },
+              "start": {
+                "character": 15,
+                "line": 17
+              }
+            }
+          }
+        },
+        {
+          "data": {
+            "kind": "function",
+            "label": "onleaveidle",
+            "position": {
+              "character": 15,
+              "line": 17
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/happy/src/main.tua"
+          },
+          "kind": 3,
+          "label": "onleaveidle",
+          "sortText": "0015_onleaveidle",
+          "textEdit": {
+            "newText": "onleaveidle",
+            "range": {
+              "end": {
+                "character": 22,
+                "line": 17
+              },
+              "start": {
+                "character": 15,
+                "line": 17
+              }
+            }
+          }
+        },
+        {
+          "data": {
+            "kind": "function",
+            "label": "onafterreset",
+            "position": {
+              "character": 15,
+              "line": 17
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/happy/src/main.tua"
+          },
+          "kind": 3,
+          "label": "onafterreset",
+          "sortText": "0016_onafterreset",
+          "textEdit": {
+            "newText": "onafterreset",
+            "range": {
+              "end": {
+                "character": 22,
+                "line": 17
+              },
+              "start": {
+                "character": 15,
+                "line": 17
+              }
+            }
+          }
+        },
+        {
+          "data": {
+            "kind": "function",
+            "label": "onafterstart",
+            "position": {
+              "character": 15,
+              "line": 17
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/happy/src/main.tua"
+          },
+          "kind": 3,
+          "label": "onafterstart",
+          "sortText": "0017_onafterstart",
+          "textEdit": {
+            "newText": "onafterstart",
+            "range": {
+              "end": {
+                "character": 22,
+                "line": 17
+              },
+              "start": {
+                "character": 15,
+                "line": 17
+              }
+            }
+          }
+        },
+        {
+          "data": {
+            "kind": "function",
+            "label": "onbeforereset",
+            "position": {
+              "character": 15,
+              "line": 17
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/happy/src/main.tua"
+          },
+          "kind": 3,
+          "label": "onbeforereset",
+          "sortText": "0018_onbeforereset",
+          "textEdit": {
+            "newText": "onbeforereset",
+            "range": {
+              "end": {
+                "character": 22,
+                "line": 17
+              },
+              "start": {
+                "character": 15,
+                "line": 17
+              }
+            }
+          }
+        },
+        {
+          "data": {
+            "kind": "function",
+            "label": "onbeforestart",
+            "position": {
+              "character": 15,
+              "line": 17
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/happy/src/main.tua"
+          },
+          "kind": 3,
+          "label": "onbeforestart",
+          "sortText": "0019_onbeforestart",
+          "textEdit": {
+            "newText": "onbeforestart",
+            "range": {
+              "end": {
+                "character": 22,
+                "line": 17
+              },
+              "start": {
+                "character": 15,
+                "line": 17
+              }
+            }
+          }
+        },
+        {
+          "data": {
+            "kind": "function",
+            "label": "onstatechange",
+            "position": {
+              "character": 15,
+              "line": 17
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/happy/src/main.tua"
+          },
+          "kind": 3,
+          "label": "onstatechange",
+          "sortText": "0020_onstatechange",
+          "textEdit": {
+            "newText": "onstatechange",
+            "range": {
+              "end": {
+                "character": 22,
+                "line": 17
+              },
+              "start": {
+                "character": 15,
+                "line": 17
+              }
+            }
+          }
+        },
+        {
+          "data": {
+            "kind": "function",
+            "label": "onenterrunning",
+            "position": {
+              "character": 15,
+              "line": 17
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/happy/src/main.tua"
+          },
+          "kind": 3,
+          "label": "onenterrunning",
+          "sortText": "0021_onenterrunning",
+          "textEdit": {
+            "newText": "onenterrunning",
+            "range": {
+              "end": {
+                "character": 22,
+                "line": 17
+              },
+              "start": {
+                "character": 15,
+                "line": 17
+              }
+            }
+          }
+        },
+        {
+          "data": {
+            "kind": "function",
+            "label": "onleaverunning",
+            "position": {
+              "character": 15,
+              "line": 17
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/happy/src/main.tua"
+          },
+          "kind": 3,
+          "label": "onleaverunning",
+          "sortText": "0022_onleaverunning",
+          "textEdit": {
+            "newText": "onleaverunning",
+            "range": {
+              "end": {
+                "character": 22,
+                "line": 17
+              },
+              "start": {
+                "character": 15,
+                "line": 17
+              }
+            }
+          }
+        },
+        {
+          "data": {
+            "kind": "field",
+            "label": "NONE",
+            "position": {
+              "character": 15,
+              "line": 17
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/happy/src/main.tua"
+          },
+          "kind": 5,
+          "label": "NONE",
+          "sortText": "0023_NONE",
+          "textEdit": {
+            "newText": "NONE",
+            "range": {
+              "end": {
+                "character": 22,
+                "line": 17
+              },
+              "start": {
+                "character": 15,
+                "line": 17
+              }
+            }
+          }
+        },
+        {
+          "data": {
+            "kind": "field",
+            "label": "events",
+            "position": {
+              "character": 15,
+              "line": 17
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/happy/src/main.tua"
+          },
+          "kind": 5,
+          "label": "events",
+          "sortText": "0024_events",
+          "textEdit": {
+            "newText": "events",
+            "range": {
+              "end": {
+                "character": 22,
+                "line": 17
+              },
+              "start": {
+                "character": 15,
+                "line": 17
+              }
+            }
+          }
+        },
+        {
+          "data": {
+            "kind": "field",
+            "label": "options",
+            "position": {
+              "character": 15,
+              "line": 17
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/happy/src/main.tua"
+          },
+          "kind": 5,
+          "label": "options",
+          "sortText": "0025_options",
+          "textEdit": {
+            "newText": "options",
+            "range": {
+              "end": {
+                "character": 22,
+                "line": 17
+              },
+              "start": {
+                "character": 15,
+                "line": 17
+              }
+            }
+          }
+        },
+        {
+          "data": {
+            "kind": "field",
+            "label": "asyncState",
+            "position": {
+              "character": 15,
+              "line": 17
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/happy/src/main.tua"
+          },
+          "kind": 5,
+          "label": "asyncState",
+          "sortText": "0026_asyncState",
+          "textEdit": {
+            "newText": "asyncState",
+            "range": {
+              "end": {
+                "character": 22,
+                "line": 17
+              },
+              "start": {
+                "character": 15,
+                "line": 17
+              }
+            }
+          }
+        },
+        {
+          "data": {
+            "kind": "field",
+            "label": "currentTransitioningEvent",
+            "position": {
+              "character": 15,
+              "line": 17
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/happy/src/main.tua"
+          },
+          "kind": 5,
+          "label": "currentTransitioningEvent",
+          "sortText": "0027_currentTransitioningEvent",
+          "textEdit": {
+            "newText": "currentTransitioningEvent",
+            "range": {
+              "end": {
+                "character": 22,
+                "line": 17
+              },
+              "start": {
+                "character": 15,
+                "line": 17
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  {
+    "case": "dynamic",
+    "position": {
+      "line": 5,
+      "character": 23
+    },
+    "hover": {
+      "id": 3,
+      "jsonrpc": "2.0",
+      "result": {
+        "contents": {
+          "kind": "markdown",
+          "value": "```tua\n(field) current: \"none\" | \"running\"\n```"
+        },
+        "range": {
+          "end": {
+            "character": 30,
+            "line": 5
+          },
+          "start": {
+            "character": 23,
+            "line": 5
+          }
+        }
+      }
+    },
+    "inspection": {
+      "id": 2,
+      "jsonrpc": "2.0",
+      "result": {
+        "analysisRevision": 9,
+        "documentVersion": 1,
+        "items": [
+          {
+            "initial": "none",
+            "kind": "stateMachine",
+            "name": "machine",
+            "range": {
+              "end": {
+                "character": 2,
+                "line": 4
+              },
+              "start": {
+                "character": 0,
+                "line": 1
+              }
+            },
+            "selectionRange": {
+              "end": {
+                "character": 13,
+                "line": 1
+              },
+              "start": {
+                "character": 6,
+                "line": 1
+              }
+            },
+            "states": [
+              {
+                "initial": true,
+                "name": "none",
+                "range": {
+                  "end": {
+                    "character": 16,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 11,
+                    "line": 2
+                  }
+                }
+              },
+              {
+                "initial": false,
+                "name": "running",
+                "range": {
+                  "end": {
+                    "character": 49,
+                    "line": 3
+                  },
+                  "start": {
+                    "character": 40,
+                    "line": 3
+                  }
+                }
+              }
+            ],
+            "transitions": [
+              {
+                "event": "reset",
+                "from": [],
+                "range": {
+                  "end": {
+                    "character": 50,
+                    "line": 3
+                  },
+                  "start": {
+                    "character": 12,
+                    "line": 3
+                  }
+                },
+                "selectionRange": {
+                  "end": {
+                    "character": 25,
+                    "line": 3
+                  },
+                  "start": {
+                    "character": 18,
+                    "line": 3
+                  }
+                },
+                "to": "running",
+                "wildcardFrom": true
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "completion": {
+      "id": 4,
+      "jsonrpc": "2.0",
+      "result": [
+        {
+          "data": {
+            "kind": "function",
+            "label": "is",
+            "position": {
+              "character": 23,
+              "line": 5
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/dynamic/src/main.tua"
+          },
+          "kind": 3,
+          "label": "is",
+          "sortText": "0000_is",
+          "textEdit": {
+            "newText": "is",
+            "range": {
+              "end": {
+                "character": 30,
+                "line": 5
+              },
+              "start": {
+                "character": 23,
+                "line": 5
+              }
+            }
+          }
+        },
+        {
+          "data": {
+            "kind": "field",
+            "label": "current",
+            "position": {
+              "character": 23,
+              "line": 5
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/dynamic/src/main.tua"
+          },
+          "kind": 5,
+          "label": "current",
+          "sortText": "0001_current",
+          "textEdit": {
+            "newText": "current",
+            "range": {
+              "end": {
+                "character": 30,
+                "line": 5
+              },
+              "start": {
+                "character": 23,
+                "line": 5
+              }
+            }
+          }
+        },
+        {
+          "data": {
+            "kind": "function",
+            "label": "can",
+            "position": {
+              "character": 23,
+              "line": 5
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/dynamic/src/main.tua"
+          },
+          "kind": 3,
+          "label": "can",
+          "sortText": "0002_can",
+          "textEdit": {
+            "newText": "can",
+            "range": {
+              "end": {
+                "character": 30,
+                "line": 5
+              },
+              "start": {
+                "character": 23,
+                "line": 5
+              }
+            }
+          }
+        },
+        {
+          "data": {
+            "kind": "function",
+            "label": "reset",
+            "position": {
+              "character": 23,
+              "line": 5
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/dynamic/src/main.tua"
+          },
+          "kind": 3,
+          "label": "reset",
+          "sortText": "0003_reset",
+          "textEdit": {
+            "newText": "reset",
+            "range": {
+              "end": {
+                "character": 30,
+                "line": 5
+              },
+              "start": {
+                "character": 23,
+                "line": 5
+              }
+            }
+          }
+        },
+        {
+          "data": {
+            "kind": "function",
+            "label": "todot",
+            "position": {
+              "character": 23,
+              "line": 5
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/dynamic/src/main.tua"
+          },
+          "kind": 3,
+          "label": "todot",
+          "sortText": "0004_todot",
+          "textEdit": {
+            "newText": "todot",
+            "range": {
+              "end": {
+                "character": 30,
+                "line": 5
+              },
+              "start": {
+                "character": 23,
+                "line": 5
+              }
+            }
+          }
+        },
+        {
+          "data": {
+            "kind": "function",
+            "label": "cannot",
+            "position": {
+              "character": 23,
+              "line": 5
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/dynamic/src/main.tua"
+          },
+          "kind": 3,
+          "label": "cannot",
+          "sortText": "0005_cannot",
+          "textEdit": {
+            "newText": "cannot",
+            "range": {
+              "end": {
+                "character": 30,
+                "line": 5
+              },
+              "start": {
+                "character": 23,
+                "line": 5
+              }
+            }
+          }
+        },
+        {
+          "data": {
+            "kind": "function",
+            "label": "onnone",
+            "position": {
+              "character": 23,
+              "line": 5
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/dynamic/src/main.tua"
+          },
+          "kind": 3,
+          "label": "onnone",
+          "sortText": "0006_onnone",
+          "textEdit": {
+            "newText": "onnone",
+            "range": {
+              "end": {
+                "character": 30,
+                "line": 5
+              },
+              "start": {
+                "character": 23,
+                "line": 5
+              }
+            }
+          }
+        },
+        {
+          "data": {
+            "kind": "function",
+            "label": "onreset",
+            "position": {
+              "character": 23,
+              "line": 5
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/dynamic/src/main.tua"
+          },
+          "kind": 3,
+          "label": "onreset",
+          "sortText": "0007_onreset",
+          "textEdit": {
+            "newText": "onreset",
+            "range": {
+              "end": {
+                "character": 30,
+                "line": 5
+              },
+              "start": {
+                "character": 23,
+                "line": 5
+              }
+            }
+          }
+        },
+        {
+          "data": {
+            "kind": "function",
+            "label": "onrunning",
+            "position": {
+              "character": 23,
+              "line": 5
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/dynamic/src/main.tua"
+          },
+          "kind": 3,
+          "label": "onrunning",
+          "sortText": "0008_onrunning",
+          "textEdit": {
+            "newText": "onrunning",
+            "range": {
+              "end": {
+                "character": 30,
+                "line": 5
+              },
+              "start": {
+                "character": 23,
+                "line": 5
+              }
+            }
+          }
+        },
+        {
+          "data": {
+            "kind": "function",
+            "label": "transition",
+            "position": {
+              "character": 23,
+              "line": 5
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/dynamic/src/main.tua"
+          },
+          "kind": 3,
+          "label": "transition",
+          "sortText": "0009_transition",
+          "textEdit": {
+            "newText": "transition",
+            "range": {
+              "end": {
+                "character": 30,
+                "line": 5
+              },
+              "start": {
+                "character": 23,
+                "line": 5
+              }
+            }
+          }
+        },
+        {
+          "data": {
+            "kind": "function",
+            "label": "onenternone",
+            "position": {
+              "character": 23,
+              "line": 5
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/dynamic/src/main.tua"
+          },
+          "kind": 3,
+          "label": "onenternone",
+          "sortText": "0010_onenternone",
+          "textEdit": {
+            "newText": "onenternone",
+            "range": {
+              "end": {
+                "character": 30,
+                "line": 5
+              },
+              "start": {
+                "character": 23,
+                "line": 5
+              }
+            }
+          }
+        },
+        {
+          "data": {
+            "kind": "function",
+            "label": "onleavenone",
+            "position": {
+              "character": 23,
+              "line": 5
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/dynamic/src/main.tua"
+          },
+          "kind": 3,
+          "label": "onleavenone",
+          "sortText": "0011_onleavenone",
+          "textEdit": {
+            "newText": "onleavenone",
+            "range": {
+              "end": {
+                "character": 30,
+                "line": 5
+              },
+              "start": {
+                "character": 23,
+                "line": 5
+              }
+            }
+          }
+        },
+        {
+          "data": {
+            "kind": "function",
+            "label": "onafterreset",
+            "position": {
+              "character": 23,
+              "line": 5
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/dynamic/src/main.tua"
+          },
+          "kind": 3,
+          "label": "onafterreset",
+          "sortText": "0012_onafterreset",
+          "textEdit": {
+            "newText": "onafterreset",
+            "range": {
+              "end": {
+                "character": 30,
+                "line": 5
+              },
+              "start": {
+                "character": 23,
+                "line": 5
+              }
+            }
+          }
+        },
+        {
+          "data": {
+            "kind": "function",
+            "label": "onbeforereset",
+            "position": {
+              "character": 23,
+              "line": 5
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/dynamic/src/main.tua"
+          },
+          "kind": 3,
+          "label": "onbeforereset",
+          "sortText": "0013_onbeforereset",
+          "textEdit": {
+            "newText": "onbeforereset",
+            "range": {
+              "end": {
+                "character": 30,
+                "line": 5
+              },
+              "start": {
+                "character": 23,
+                "line": 5
+              }
+            }
+          }
+        },
+        {
+          "data": {
+            "kind": "function",
+            "label": "onstatechange",
+            "position": {
+              "character": 23,
+              "line": 5
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/dynamic/src/main.tua"
+          },
+          "kind": 3,
+          "label": "onstatechange",
+          "sortText": "0014_onstatechange",
+          "textEdit": {
+            "newText": "onstatechange",
+            "range": {
+              "end": {
+                "character": 30,
+                "line": 5
+              },
+              "start": {
+                "character": 23,
+                "line": 5
+              }
+            }
+          }
+        },
+        {
+          "data": {
+            "kind": "function",
+            "label": "onenterrunning",
+            "position": {
+              "character": 23,
+              "line": 5
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/dynamic/src/main.tua"
+          },
+          "kind": 3,
+          "label": "onenterrunning",
+          "sortText": "0015_onenterrunning",
+          "textEdit": {
+            "newText": "onenterrunning",
+            "range": {
+              "end": {
+                "character": 30,
+                "line": 5
+              },
+              "start": {
+                "character": 23,
+                "line": 5
+              }
+            }
+          }
+        },
+        {
+          "data": {
+            "kind": "function",
+            "label": "onleaverunning",
+            "position": {
+              "character": 23,
+              "line": 5
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/dynamic/src/main.tua"
+          },
+          "kind": 3,
+          "label": "onleaverunning",
+          "sortText": "0016_onleaverunning",
+          "textEdit": {
+            "newText": "onleaverunning",
+            "range": {
+              "end": {
+                "character": 30,
+                "line": 5
+              },
+              "start": {
+                "character": 23,
+                "line": 5
+              }
+            }
+          }
+        },
+        {
+          "data": {
+            "kind": "function",
+            "label": "cancelTransition",
+            "position": {
+              "character": 23,
+              "line": 5
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/dynamic/src/main.tua"
+          },
+          "kind": 3,
+          "label": "cancelTransition",
+          "sortText": "0017_cancelTransition",
+          "textEdit": {
+            "newText": "cancelTransition",
+            "range": {
+              "end": {
+                "character": 30,
+                "line": 5
+              },
+              "start": {
+                "character": 23,
+                "line": 5
+              }
+            }
+          }
+        },
+        {
+          "data": {
+            "kind": "field",
+            "label": "NONE",
+            "position": {
+              "character": 23,
+              "line": 5
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/dynamic/src/main.tua"
+          },
+          "kind": 5,
+          "label": "NONE",
+          "sortText": "0018_NONE",
+          "textEdit": {
+            "newText": "NONE",
+            "range": {
+              "end": {
+                "character": 30,
+                "line": 5
+              },
+              "start": {
+                "character": 23,
+                "line": 5
+              }
+            }
+          }
+        },
+        {
+          "data": {
+            "kind": "field",
+            "label": "ASYNC",
+            "position": {
+              "character": 23,
+              "line": 5
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/dynamic/src/main.tua"
+          },
+          "kind": 5,
+          "label": "ASYNC",
+          "sortText": "0019_ASYNC",
+          "textEdit": {
+            "newText": "ASYNC",
+            "range": {
+              "end": {
+                "character": 30,
+                "line": 5
+              },
+              "start": {
+                "character": 23,
+                "line": 5
+              }
+            }
+          }
+        },
+        {
+          "data": {
+            "kind": "field",
+            "label": "events",
+            "position": {
+              "character": 23,
+              "line": 5
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/dynamic/src/main.tua"
+          },
+          "kind": 5,
+          "label": "events",
+          "sortText": "0020_events",
+          "textEdit": {
+            "newText": "events",
+            "range": {
+              "end": {
+                "character": 30,
+                "line": 5
+              },
+              "start": {
+                "character": 23,
+                "line": 5
+              }
+            }
+          }
+        },
+        {
+          "data": {
+            "kind": "field",
+            "label": "options",
+            "position": {
+              "character": 23,
+              "line": 5
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/dynamic/src/main.tua"
+          },
+          "kind": 5,
+          "label": "options",
+          "sortText": "0021_options",
+          "textEdit": {
+            "newText": "options",
+            "range": {
+              "end": {
+                "character": 30,
+                "line": 5
+              },
+              "start": {
+                "character": 23,
+                "line": 5
+              }
+            }
+          }
+        },
+        {
+          "data": {
+            "kind": "field",
+            "label": "asyncState",
+            "position": {
+              "character": 23,
+              "line": 5
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/dynamic/src/main.tua"
+          },
+          "kind": 5,
+          "label": "asyncState",
+          "sortText": "0022_asyncState",
+          "textEdit": {
+            "newText": "asyncState",
+            "range": {
+              "end": {
+                "character": 30,
+                "line": 5
+              },
+              "start": {
+                "character": 23,
+                "line": 5
+              }
+            }
+          }
+        },
+        {
+          "data": {
+            "kind": "field",
+            "label": "currentTransitioningEvent",
+            "position": {
+              "character": 23,
+              "line": 5
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/dynamic/src/main.tua"
+          },
+          "kind": 5,
+          "label": "currentTransitioningEvent",
+          "sortText": "0023_currentTransitioningEvent",
+          "textEdit": {
+            "newText": "currentTransitioningEvent",
+            "range": {
+              "end": {
+                "character": 30,
+                "line": 5
+              },
+              "start": {
+                "character": 23,
+                "line": 5
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  {
+    "case": "reserved",
+    "position": {
+      "line": 4,
+      "character": 31
+    },
+    "hover": {
+      "id": 3,
+      "jsonrpc": "2.0",
+      "result": {
+        "contents": {
+          "kind": "markdown",
+          "value": "```tua\nfunction StateMachine:current(...: any): boolean\n```\n\nFire the `current` state machine event with optional payload arguments.\n\n---\n\n- kind: function"
+        },
+        "range": {
+          "end": {
+            "character": 38,
+            "line": 4
+          },
+          "start": {
+            "character": 31,
+            "line": 4
+          }
+        }
+      }
+    },
+    "inspection": {
+      "id": 2,
+      "jsonrpc": "2.0",
+      "result": {
+        "analysisRevision": 10,
+        "documentVersion": 1,
+        "items": [
+          {
+            "initial": "idle",
+            "kind": "stateMachine",
+            "name": "machine",
+            "range": {
+              "end": {
+                "character": 2,
+                "line": 3
+              },
+              "start": {
+                "character": 0,
+                "line": 0
+              }
+            },
+            "selectionRange": {
+              "end": {
+                "character": 13,
+                "line": 0
+              },
+              "start": {
+                "character": 6,
+                "line": 0
+              }
+            },
+            "states": [
+              {
+                "initial": true,
+                "name": "idle",
+                "range": {
+                  "end": {
+                    "character": 17,
+                    "line": 1
+                  },
+                  "start": {
+                    "character": 11,
+                    "line": 1
+                  }
+                }
+              },
+              {
+                "initial": false,
+                "name": "running",
+                "range": {
+                  "end": {
+                    "character": 54,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 45,
+                    "line": 2
+                  }
+                }
+              }
+            ],
+            "transitions": [
+              {
+                "event": "current",
+                "from": [
+                  "idle"
+                ],
+                "range": {
+                  "end": {
+                    "character": 55,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 12,
+                    "line": 2
+                  }
+                },
+                "selectionRange": {
+                  "end": {
+                    "character": 27,
+                    "line": 2
+                  },
+                  "start": {
+                    "character": 18,
+                    "line": 2
+                  }
+                },
+                "to": "running",
+                "wildcardFrom": false
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "completion": {
+      "id": 4,
+      "jsonrpc": "2.0",
+      "result": [
+        {
+          "data": {
+            "kind": "function",
+            "label": "current",
+            "position": {
+              "character": 31,
+              "line": 4
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/reserved/src/main.tua"
+          },
+          "kind": 3,
+          "label": "current",
+          "sortText": "0000_current",
+          "textEdit": {
+            "newText": "current",
+            "range": {
+              "end": {
+                "character": 38,
+                "line": 4
+              },
+              "start": {
+                "character": 31,
+                "line": 4
+              }
+            }
+          }
+        },
+        {
+          "data": {
+            "kind": "function",
+            "label": "is",
+            "position": {
+              "character": 31,
+              "line": 4
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/reserved/src/main.tua"
+          },
+          "kind": 3,
+          "label": "is",
+          "sortText": "0001_is",
+          "textEdit": {
+            "newText": "is",
+            "range": {
+              "end": {
+                "character": 38,
+                "line": 4
+              },
+              "start": {
+                "character": 31,
+                "line": 4
+              }
+            }
+          }
+        },
+        {
+          "data": {
+            "kind": "function",
+            "label": "can",
+            "position": {
+              "character": 31,
+              "line": 4
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/reserved/src/main.tua"
+          },
+          "kind": 3,
+          "label": "can",
+          "sortText": "0002_can",
+          "textEdit": {
+            "newText": "can",
+            "range": {
+              "end": {
+                "character": 38,
+                "line": 4
+              },
+              "start": {
+                "character": 31,
+                "line": 4
+              }
+            }
+          }
+        },
+        {
+          "data": {
+            "kind": "function",
+            "label": "todot",
+            "position": {
+              "character": 31,
+              "line": 4
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/reserved/src/main.tua"
+          },
+          "kind": 3,
+          "label": "todot",
+          "sortText": "0003_todot",
+          "textEdit": {
+            "newText": "todot",
+            "range": {
+              "end": {
+                "character": 38,
+                "line": 4
+              },
+              "start": {
+                "character": 31,
+                "line": 4
+              }
+            }
+          }
+        },
+        {
+          "data": {
+            "kind": "function",
+            "label": "cannot",
+            "position": {
+              "character": 31,
+              "line": 4
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/reserved/src/main.tua"
+          },
+          "kind": 3,
+          "label": "cannot",
+          "sortText": "0004_cannot",
+          "textEdit": {
+            "newText": "cannot",
+            "range": {
+              "end": {
+                "character": 38,
+                "line": 4
+              },
+              "start": {
+                "character": 31,
+                "line": 4
+              }
+            }
+          }
+        },
+        {
+          "data": {
+            "kind": "function",
+            "label": "onidle",
+            "position": {
+              "character": 31,
+              "line": 4
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/reserved/src/main.tua"
+          },
+          "kind": 3,
+          "label": "onidle",
+          "sortText": "0005_onidle",
+          "textEdit": {
+            "newText": "onidle",
+            "range": {
+              "end": {
+                "character": 38,
+                "line": 4
+              },
+              "start": {
+                "character": 31,
+                "line": 4
+              }
+            }
+          }
+        },
+        {
+          "data": {
+            "kind": "function",
+            "label": "oncurrent",
+            "position": {
+              "character": 31,
+              "line": 4
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/reserved/src/main.tua"
+          },
+          "kind": 3,
+          "label": "oncurrent",
+          "sortText": "0006_oncurrent",
+          "textEdit": {
+            "newText": "oncurrent",
+            "range": {
+              "end": {
+                "character": 38,
+                "line": 4
+              },
+              "start": {
+                "character": 31,
+                "line": 4
+              }
+            }
+          }
+        },
+        {
+          "data": {
+            "kind": "function",
+            "label": "onrunning",
+            "position": {
+              "character": 31,
+              "line": 4
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/reserved/src/main.tua"
+          },
+          "kind": 3,
+          "label": "onrunning",
+          "sortText": "0007_onrunning",
+          "textEdit": {
+            "newText": "onrunning",
+            "range": {
+              "end": {
+                "character": 38,
+                "line": 4
+              },
+              "start": {
+                "character": 31,
+                "line": 4
+              }
+            }
+          }
+        },
+        {
+          "data": {
+            "kind": "function",
+            "label": "transition",
+            "position": {
+              "character": 31,
+              "line": 4
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/reserved/src/main.tua"
+          },
+          "kind": 3,
+          "label": "transition",
+          "sortText": "0008_transition",
+          "textEdit": {
+            "newText": "transition",
+            "range": {
+              "end": {
+                "character": 38,
+                "line": 4
+              },
+              "start": {
+                "character": 31,
+                "line": 4
+              }
+            }
+          }
+        },
+        {
+          "data": {
+            "kind": "function",
+            "label": "onenteridle",
+            "position": {
+              "character": 31,
+              "line": 4
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/reserved/src/main.tua"
+          },
+          "kind": 3,
+          "label": "onenteridle",
+          "sortText": "0009_onenteridle",
+          "textEdit": {
+            "newText": "onenteridle",
+            "range": {
+              "end": {
+                "character": 38,
+                "line": 4
+              },
+              "start": {
+                "character": 31,
+                "line": 4
+              }
+            }
+          }
+        },
+        {
+          "data": {
+            "kind": "function",
+            "label": "onleaveidle",
+            "position": {
+              "character": 31,
+              "line": 4
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/reserved/src/main.tua"
+          },
+          "kind": 3,
+          "label": "onleaveidle",
+          "sortText": "0010_onleaveidle",
+          "textEdit": {
+            "newText": "onleaveidle",
+            "range": {
+              "end": {
+                "character": 38,
+                "line": 4
+              },
+              "start": {
+                "character": 31,
+                "line": 4
+              }
+            }
+          }
+        },
+        {
+          "data": {
+            "kind": "function",
+            "label": "onstatechange",
+            "position": {
+              "character": 31,
+              "line": 4
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/reserved/src/main.tua"
+          },
+          "kind": 3,
+          "label": "onstatechange",
+          "sortText": "0011_onstatechange",
+          "textEdit": {
+            "newText": "onstatechange",
+            "range": {
+              "end": {
+                "character": 38,
+                "line": 4
+              },
+              "start": {
+                "character": 31,
+                "line": 4
+              }
+            }
+          }
+        },
+        {
+          "data": {
+            "kind": "function",
+            "label": "onaftercurrent",
+            "position": {
+              "character": 31,
+              "line": 4
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/reserved/src/main.tua"
+          },
+          "kind": 3,
+          "label": "onaftercurrent",
+          "sortText": "0012_onaftercurrent",
+          "textEdit": {
+            "newText": "onaftercurrent",
+            "range": {
+              "end": {
+                "character": 38,
+                "line": 4
+              },
+              "start": {
+                "character": 31,
+                "line": 4
+              }
+            }
+          }
+        },
+        {
+          "data": {
+            "kind": "function",
+            "label": "onenterrunning",
+            "position": {
+              "character": 31,
+              "line": 4
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/reserved/src/main.tua"
+          },
+          "kind": 3,
+          "label": "onenterrunning",
+          "sortText": "0013_onenterrunning",
+          "textEdit": {
+            "newText": "onenterrunning",
+            "range": {
+              "end": {
+                "character": 38,
+                "line": 4
+              },
+              "start": {
+                "character": 31,
+                "line": 4
+              }
+            }
+          }
+        },
+        {
+          "data": {
+            "kind": "function",
+            "label": "onleaverunning",
+            "position": {
+              "character": 31,
+              "line": 4
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/reserved/src/main.tua"
+          },
+          "kind": 3,
+          "label": "onleaverunning",
+          "sortText": "0014_onleaverunning",
+          "textEdit": {
+            "newText": "onleaverunning",
+            "range": {
+              "end": {
+                "character": 38,
+                "line": 4
+              },
+              "start": {
+                "character": 31,
+                "line": 4
+              }
+            }
+          }
+        },
+        {
+          "data": {
+            "kind": "function",
+            "label": "onbeforecurrent",
+            "position": {
+              "character": 31,
+              "line": 4
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/reserved/src/main.tua"
+          },
+          "kind": 3,
+          "label": "onbeforecurrent",
+          "sortText": "0015_onbeforecurrent",
+          "textEdit": {
+            "newText": "onbeforecurrent",
+            "range": {
+              "end": {
+                "character": 38,
+                "line": 4
+              },
+              "start": {
+                "character": 31,
+                "line": 4
+              }
+            }
+          }
+        },
+        {
+          "data": {
+            "kind": "function",
+            "label": "cancelTransition",
+            "position": {
+              "character": 31,
+              "line": 4
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/reserved/src/main.tua"
+          },
+          "kind": 3,
+          "label": "cancelTransition",
+          "sortText": "0016_cancelTransition",
+          "textEdit": {
+            "newText": "cancelTransition",
+            "range": {
+              "end": {
+                "character": 38,
+                "line": 4
+              },
+              "start": {
+                "character": 31,
+                "line": 4
+              }
+            }
+          }
+        },
+        {
+          "data": {
+            "kind": "field",
+            "label": "NONE",
+            "position": {
+              "character": 31,
+              "line": 4
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/reserved/src/main.tua"
+          },
+          "kind": 5,
+          "label": "NONE",
+          "sortText": "0017_NONE",
+          "textEdit": {
+            "newText": "NONE",
+            "range": {
+              "end": {
+                "character": 38,
+                "line": 4
+              },
+              "start": {
+                "character": 31,
+                "line": 4
+              }
+            }
+          }
+        },
+        {
+          "data": {
+            "kind": "field",
+            "label": "ASYNC",
+            "position": {
+              "character": 31,
+              "line": 4
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/reserved/src/main.tua"
+          },
+          "kind": 5,
+          "label": "ASYNC",
+          "sortText": "0018_ASYNC",
+          "textEdit": {
+            "newText": "ASYNC",
+            "range": {
+              "end": {
+                "character": 38,
+                "line": 4
+              },
+              "start": {
+                "character": 31,
+                "line": 4
+              }
+            }
+          }
+        },
+        {
+          "data": {
+            "kind": "field",
+            "label": "events",
+            "position": {
+              "character": 31,
+              "line": 4
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/reserved/src/main.tua"
+          },
+          "kind": 5,
+          "label": "events",
+          "sortText": "0019_events",
+          "textEdit": {
+            "newText": "events",
+            "range": {
+              "end": {
+                "character": 38,
+                "line": 4
+              },
+              "start": {
+                "character": 31,
+                "line": 4
+              }
+            }
+          }
+        },
+        {
+          "data": {
+            "kind": "field",
+            "label": "options",
+            "position": {
+              "character": 31,
+              "line": 4
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/reserved/src/main.tua"
+          },
+          "kind": 5,
+          "label": "options",
+          "sortText": "0020_options",
+          "textEdit": {
+            "newText": "options",
+            "range": {
+              "end": {
+                "character": 38,
+                "line": 4
+              },
+              "start": {
+                "character": 31,
+                "line": 4
+              }
+            }
+          }
+        },
+        {
+          "data": {
+            "kind": "field",
+            "label": "asyncState",
+            "position": {
+              "character": 31,
+              "line": 4
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/reserved/src/main.tua"
+          },
+          "kind": 5,
+          "label": "asyncState",
+          "sortText": "0021_asyncState",
+          "textEdit": {
+            "newText": "asyncState",
+            "range": {
+              "end": {
+                "character": 38,
+                "line": 4
+              },
+              "start": {
+                "character": 31,
+                "line": 4
+              }
+            }
+          }
+        },
+        {
+          "data": {
+            "kind": "field",
+            "label": "currentTransitioningEvent",
+            "position": {
+              "character": 31,
+              "line": 4
+            },
+            "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/state_machines/reserved/src/main.tua"
+          },
+          "kind": 5,
+          "label": "currentTransitioningEvent",
+          "sortText": "0022_currentTransitioningEvent",
+          "textEdit": {
+            "newText": "currentTransitioningEvent",
+            "range": {
+              "end": {
+                "character": 38,
+                "line": 4
+              },
+              "start": {
+                "character": 31,
+                "line": 4
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+]

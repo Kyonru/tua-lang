@@ -1,0 +1,6 @@
+local P = ecs.component("Position", {x="number"})
+local world = ecs.world()
+local system = ecs.system(world,{P},function(entity,position,dt)
+ local n: number = position.x
+ local bad: string = position.x
+end)

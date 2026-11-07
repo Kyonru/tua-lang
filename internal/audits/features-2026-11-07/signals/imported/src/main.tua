@@ -1,0 +1,7 @@
+local events = require("events")
+events:on("hit", function(player, amount)
+  print(player.hp, amount)
+end)
+events:emit("hit", { hp = 10 }, 2)
+events:declare("score", function(value: number) end)
+events:emit("score", "bad")

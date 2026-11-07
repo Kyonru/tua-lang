@@ -1,0 +1,65 @@
+[
+  {
+    "name": "positive",
+    "build_code": 0,
+    "build": "built 1 file(s)\n",
+    "lua_code": 0,
+    "lua": "positive passed\ttable\n"
+  },
+  {
+    "name": "underflow_div",
+    "build_code": 0,
+    "build": "built 1 file(s)\n",
+    "lua_code": 1,
+    "lua": "/opt/homebrew/bin/lua: main.lua:4: Cannot divide a vector by a vector with a zero component\nstack traceback:\n\t[C]: in function 'error'\n\t./brinevector.lua:249: in function 'brinevector.__div'\n\tmain.lua:4: in main chunk\n\t[C]: in function 'dofile'\n\t(command line):1: in main chunk\n\t[C]: in ?\n"
+  },
+  {
+    "name": "chained_constructor",
+    "build_code": 0,
+    "build": "built 1 file(s)\n",
+    "lua_code": 1,
+    "lua": "/opt/homebrew/bin/lua: main.lua:1: attempt to call a nil value (global 'vec2')\nstack traceback:\n\tmain.lua:1: in main chunk\n\t[C]: in function 'dofile'\n\t(command line):1: in main chunk\n\t[C]: in ?\n"
+  },
+  {
+    "name": "normalization",
+    "build_code": 0,
+    "build": "built 2 file(s)\n",
+    "lua_code": 0,
+    "lua": "big\t0.0\t0.0\t0.0\ntiny\t0\t0\t0.0\n"
+  },
+  {
+    "name": "comment_math",
+    "build_code": 0,
+    "build": "built 1 file(s)\n",
+    "lua_code": 1,
+    "lua": "/opt/homebrew/bin/lua: main.lua:2: attempt to call a nil value (field 'clamp')\nstack traceback:\n\tmain.lua:2: in main chunk\n\t[C]: in function 'dofile'\n\t(command line):1: in main chunk\n\t[C]: in ?\n"
+  },
+  {
+    "name": "bracket_math",
+    "build_code": 0,
+    "build": "built 1 file(s)\n",
+    "lua_code": 1,
+    "lua": "/opt/homebrew/bin/lua: main.lua:1: attempt to call a nil value (field 'clamp')\nstack traceback:\n\tmain.lua:1: in main chunk\n\t[C]: in function 'dofile'\n\t(command line):1: in main chunk\n\t[C]: in ?\n"
+  },
+  {
+    "name": "zero_div",
+    "build_code": 0,
+    "build": "built 1 file(s)\n",
+    "lua_code": 1,
+    "lua": "/opt/homebrew/bin/lua: main.lua:3: Cannot divide a vector by zero\nstack traceback:\n\t[C]: in function 'error'\n\t./brinevector.lua:246: in function 'brinevector.__div'\n\tmain.lua:3: in main chunk\n\t[C]: in function 'dofile'\n\t(command line):1: in main chunk\n\t[C]: in ?\n"
+  },
+  {
+    "name": "known_nominal",
+    "build_code": 0,
+    "build": "built 1 file(s)\n",
+    "lua_code": 0,
+    "lua": "table: 0x101034000\n"
+  },
+  {
+    "name": "edge_math",
+    "build_code": 0,
+    "build": "built 1 file(s)\n",
+    "lua_code": 0,
+    "lua": "equal endpoints\tnan\t1\nreverse clamp\t10\nround extreme\tnan\n"
+  }
+]

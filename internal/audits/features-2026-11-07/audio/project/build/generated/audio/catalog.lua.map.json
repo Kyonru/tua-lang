@@ -1,0 +1,15 @@
+{
+  "generated": "build/generated/audio/catalog.lua",
+  "lineMappings": [
+    {
+      "generatedLine": 1,
+      "sourceLine": 30
+    },
+    {
+      "generatedLine": 2,
+      "sourceLine": 31
+    }
+  ],
+  "source": "src/generated/audio/catalog.tua",
+  "version": 1
+}

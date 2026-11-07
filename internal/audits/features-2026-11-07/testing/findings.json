@@ -1,0 +1,12 @@
+[
+  {
+    "id": "TESTING-01",
+    "title": "Structured reports hide backend startup diagnostics",
+    "category": "confirmed defect",
+    "severity": "medium",
+    "status": "reproduced",
+    "summary": "When Busted cannot launch the selected Lua interpreter or initialize coverage, --report returns a generic missing-report error before exposing captured backend stderr. Test Explorer always uses --report, obscuring actionable configuration failures. Incomplete reports remain safe.",
+    "evidence": ["testing/missing-lua.json", "testing/missing-lua-no-report.json", "testing/all.json", "testing/coverage-only.json", "testing/REPORT.md"],
+    "known": false
+  }
+]

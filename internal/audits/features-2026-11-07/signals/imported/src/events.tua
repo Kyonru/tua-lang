@@ -1,0 +1,2 @@
+local events = signal()
+return events

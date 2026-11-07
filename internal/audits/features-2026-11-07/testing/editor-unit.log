@@ -1,0 +1,15 @@
+✔ test selection deduplicates ancestors and respects excluded files/cases (0.831167ms)
+✔ suite selections deduplicate descendants and preserve excluded nested cases (0.13175ms)
+✔ test process runner preserves Unicode and supports cancellation without a shell (27.716833ms)
+✔ Opening a test document discovers gutter cases and suites without running tests (1414.1355ms)
+✔ coverage merges selected runs and rejects incomplete data (0.37975ms)
+✔ test discovery timeout terminates a child that ignores SIGTERM (1305.709625ms)
+✔ test logs may be truncated without replacing the backend exit status (43.115875ms)
+ℹ tests 7
+ℹ suites 0
+ℹ pass 7
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2832.5785

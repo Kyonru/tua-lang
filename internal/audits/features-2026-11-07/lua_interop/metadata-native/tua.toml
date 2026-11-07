@@ -1,0 +1,7 @@
+source="src"
+out="build"
+[diagnostics]
+rules=true
+doc_annotations=true
+[emit]
+annotation_mode="luacats"

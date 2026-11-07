@@ -1,0 +1,22 @@
+[
+  {
+    "command": [
+      "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+      "check"
+    ],
+    "cwd": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/typing/cases/dictionary_runtime",
+    "code": 0,
+    "stdout": "checked 1 file(s)\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "lua",
+      "main.lua"
+    ],
+    "cwd": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/typing/cases/dictionary_runtime/build",
+    "code": 1,
+    "stdout": "",
+    "stderr": "lua: main.lua:4: attempt to add a 'string' with a 'number'\nstack traceback:\n\t[C]: in metamethod 'add'\n\tmain.lua:4: in main chunk\n\t[C]: in ?\n"
+  }
+]

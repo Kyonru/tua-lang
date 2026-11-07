@@ -1,0 +1,9 @@
+local start = "idle"
+local machine = stateMachine({
+ initial = start,
+ events = { {name="reset", from="*", to="running"} },
+})
+local actual = machine.current
+print(actual)
+local idle: boolean = machine:is("idle")
+print(idle)

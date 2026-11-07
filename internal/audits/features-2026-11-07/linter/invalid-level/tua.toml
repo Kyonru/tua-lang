@@ -1,0 +1,4 @@
+source="src"
+out="build"
+[diagnostics.severity]
+TL4005="warnn"

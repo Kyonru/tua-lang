@@ -1,0 +1,3 @@
+local p=vec2(1,2)
+local result=p/0
+print(result)

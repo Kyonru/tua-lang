@@ -1,0 +1,46 @@
+[
+  {
+    "id": "MODULES-01",
+    "title": "Inline require field extraction loses types",
+    "category": "confirmed defect",
+    "severity": "Medium",
+    "status": "confirmed",
+    "summary": "Inline require field extraction loses types",
+    "evidence": [
+      "REPORT.md",
+      "domains-lsp.json",
+      "cli.json"
+    ],
+    "known": false
+  },
+  {
+    "id": "MODULES-02",
+    "title": "Imported ECS component loses payload schema",
+    "category": "confirmed defect",
+    "severity": "Medium",
+    "status": "confirmed",
+    "summary": "Imported ECS component loses payload schema",
+    "evidence": [
+      "REPORT.md",
+      "domains-lsp.json",
+      "domains-provider-world-lsp.json",
+      "cli.json"
+    ],
+    "known": false
+  },
+  {
+    "id": "MODULES-03",
+    "title": "Declaration overlay disagrees across hover, signature and result inference",
+    "category": "confirmed defect",
+    "severity": "Medium",
+    "status": "confirmed",
+    "summary": "Declaration overlay disagrees across hover, signature and result inference",
+    "evidence": [
+      "REPORT.md",
+      "declarations-with-runtime-lsp.json",
+      "declarations-no-runtime-lsp.json",
+      "declarations-cli.json"
+    ],
+    "known": false
+  }
+]

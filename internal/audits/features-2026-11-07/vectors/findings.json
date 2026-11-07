@@ -1,0 +1,62 @@
+[
+  {
+    "id": "VECTORS-01",
+    "title": "Chained constructor property reads escape builtin lowering",
+    "category": "confirmed defect",
+    "severity": "medium",
+    "status": "reproduced",
+    "summary": "Accepted vec2(3,4).normalized is emitted unchanged, fails with nil global vec2, and does not bundle the runtime.",
+    "evidence": [
+      "chained_constructor/src/main.tua",
+      "chained_constructor/build/main.lua",
+      "cli-results.json",
+      "luajit-results.json"
+    ],
+    "known": false
+  },
+  {
+    "id": "VECTORS-02",
+    "title": "Game-math helper injection misses comments and bracket members",
+    "category": "confirmed defect",
+    "severity": "medium",
+    "status": "reproduced",
+    "summary": "math. --comment newline clamp(...) and math[\"clamp\"](...) build successfully but execute without the required helper.",
+    "evidence": [
+      "comment_math/src/main.tua",
+      "comment_math/build/main.lua",
+      "cli-results.json",
+      "luajit-results.json"
+    ],
+    "known": false
+  },
+  {
+    "id": "VECTORS-03",
+    "title": "Nonzero tiny vector divisors incorrectly raise zero-component error",
+    "category": "confirmed defect",
+    "severity": "low",
+    "status": "reproduced",
+    "summary": "The zero guard multiplies components; 1e-200 * 1e-200 underflows, rejecting valid component-wise division.",
+    "evidence": [
+      "underflow_div/src/main.tua",
+      "underflow_div/build/main.lua",
+      "cli-results.json",
+      "luajit-results.json"
+    ],
+    "known": false
+  },
+  {
+    "id": "VECTORS-04",
+    "title": "Normalization collapses finite large and small vectors to zero",
+    "category": "confirmed defect",
+    "severity": "low",
+    "status": "reproduced",
+    "summary": "Vectors (1e200,0) and (1e-200,0) normalize to (0,0) rather than (1,0) through overflow/underflow in squared length.",
+    "evidence": [
+      "normalization/src/main.tua",
+      "normalization/build/main.lua",
+      "cli-results.json",
+      "luajit-results.json"
+    ],
+    "known": false
+  }
+]

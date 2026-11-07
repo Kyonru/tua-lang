@@ -1,0 +1,6 @@
+source="src"
+out="build"
+[diagnostics]
+rules=false
+[format]
+indent_width=0

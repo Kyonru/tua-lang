@@ -1,0 +1,11 @@
+{
+  "generated": "new-build/main.lua",
+  "lineMappings": [
+    {
+      "generatedLine": 1,
+      "sourceLine": 1
+    }
+  ],
+  "source": "src/main.tua",
+  "version": 1
+}

@@ -1,0 +1,2 @@
+local Position=ecs.component("Position",{x="number"})
+return {Position=Position}

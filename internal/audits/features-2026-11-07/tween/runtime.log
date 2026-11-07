@@ -1,0 +1,12 @@
+existing_suite	true	
+takeover	true	
+callback_accumulation	true	
+stop_from_onupdate	false	vendor/runtime/tuatween.lua:253: attempt to index a nil value (field '?')
+stop_other_from_oncomplete	false	vendor/runtime/tuatween.lua:202: attempt to index a nil value (local 't')
+cancelled_value	0.75
+stop_from_onstart	false	internal/audits/features-2026-11-07/tween/runtime.lua:33: stop changed target after cancellation
+zero_negative_duration	true	
+after_one_second	0
+delay_overshoot	true	
+vendor/runtime/tuatween.lua:162: bad value on object key 'x'; expected number
+missing_property_runtime	true	

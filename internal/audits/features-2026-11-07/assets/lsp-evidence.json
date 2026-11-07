@@ -1,0 +1,491 @@
+{
+  "initialize": {
+    "capabilities": {
+      "callHierarchyProvider": true,
+      "codeActionProvider": {
+        "codeActionKinds": [
+          "quickfix",
+          "source.organizeImports",
+          "source.sortImports",
+          "source.removeUnusedImports",
+          "source.tua.createMissingLoveCallbacks",
+          "source.fixAll"
+        ]
+      },
+      "codeLensProvider": {
+        "resolveProvider": true
+      },
+      "completionProvider": {
+        "resolveProvider": true,
+        "triggerCharacters": [
+          ":",
+          ".",
+          "\"",
+          "'",
+          "@",
+          "-",
+          "_",
+          "a",
+          "b",
+          "c",
+          "d",
+          "e",
+          "f",
+          "g",
+          "h",
+          "i",
+          "j",
+          "k",
+          "l",
+          "m",
+          "n",
+          "o",
+          "p",
+          "q",
+          "r",
+          "s",
+          "t",
+          "u",
+          "v",
+          "w",
+          "x",
+          "y",
+          "z",
+          "A",
+          "B",
+          "C",
+          "D",
+          "E",
+          "F",
+          "G",
+          "H",
+          "I",
+          "J",
+          "K",
+          "L",
+          "M",
+          "N",
+          "O",
+          "P",
+          "Q",
+          "R",
+          "S",
+          "T",
+          "U",
+          "V",
+          "W",
+          "X",
+          "Y",
+          "Z",
+          "0",
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9"
+        ]
+      },
+      "definitionProvider": true,
+      "documentFormattingProvider": true,
+      "documentHighlightProvider": true,
+      "documentLinkProvider": {
+        "resolveProvider": false
+      },
+      "documentOnTypeFormattingProvider": {
+        "firstTriggerCharacter": "\n",
+        "moreTriggerCharacter": [
+          "}",
+          ")",
+          "]",
+          ",",
+          "d"
+        ]
+      },
+      "documentRangeFormattingProvider": true,
+      "documentSymbolProvider": true,
+      "foldingRangeProvider": true,
+      "hoverProvider": true,
+      "implementationProvider": true,
+      "inlayHintProvider": {
+        "resolveProvider": false
+      },
+      "inlineCompletionProvider": true,
+      "positionEncoding": "utf-16",
+      "referencesProvider": true,
+      "renameProvider": {
+        "prepareProvider": true
+      },
+      "selectionRangeProvider": true,
+      "semanticTokensProvider": {
+        "full": {
+          "delta": true
+        },
+        "legend": {
+          "tokenModifiers": [
+            "declaration",
+            "readonly",
+            "deprecated",
+            "modification",
+            "defaultLibrary",
+            "propertyChain1",
+            "propertyChain2",
+            "propertyChain3",
+            "propertyChain4"
+          ],
+          "tokenTypes": [
+            "type",
+            "function",
+            "variable",
+            "parameter",
+            "property",
+            "method",
+            "class",
+            "enum",
+            "enumMember",
+            "namespace",
+            "event",
+            "label",
+            "decorator"
+          ]
+        },
+        "range": true
+      },
+      "signatureHelpProvider": {
+        "retriggerCharacters": [
+          ")"
+        ],
+        "triggerCharacters": [
+          "(",
+          ","
+        ]
+      },
+      "textDocumentSync": {
+        "change": 2,
+        "openClose": true,
+        "save": {
+          "includeText": true
+        }
+      },
+      "typeDefinitionProvider": true,
+      "workspace": {
+        "fileOperations": {
+          "willRename": {
+            "filters": [
+              {
+                "pattern": {
+                  "glob": "**/*"
+                },
+                "scheme": "file"
+              }
+            ]
+          }
+        },
+        "workspaceFolders": {
+          "changeNotifications": true,
+          "supported": true
+        }
+      },
+      "workspaceSymbolProvider": true
+    },
+    "serverInfo": {
+      "name": "tua-lsp",
+      "version": "0.6.0"
+    }
+  },
+  "helper": {
+    "hover": {
+      "contents": {
+        "kind": "markdown",
+        "value": "```tua\nasset `assets/pixel.png`\nkind: image\nLOVE type: Image\nstatus: valid\nextension: .png\ndimensions: 1x1\n```"
+      },
+      "range": {
+        "end": {
+          "character": 39,
+          "line": 0
+        },
+        "start": {
+          "character": 21,
+          "line": 0
+        }
+      }
+    },
+    "completion": [
+      {
+        "data": {
+          "kind": "value",
+          "label": "assets/pixel.png",
+          "position": {
+            "character": 28,
+            "line": 0
+          },
+          "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/assets/fixtures/assets/src/main.tua"
+        },
+        "insertText": "assets/pixel.png",
+        "kind": 12,
+        "label": "assets/pixel.png",
+        "sortText": "0000_assets/pixel.png",
+        "textEdit": {
+          "newText": "assets/pixel.png",
+          "range": {
+            "end": {
+              "character": 38,
+              "line": 0
+            },
+            "start": {
+              "character": 22,
+              "line": 0
+            }
+          }
+        }
+      }
+    ]
+  },
+  "native": {
+    "hover": {
+      "contents": {
+        "kind": "markdown",
+        "value": "```tua\nasset `assets/pixel.png`\nkind: image\nLOVE type: Image\nstatus: valid\nextension: .png\ndimensions: 1x1\n```"
+      },
+      "range": {
+        "end": {
+          "character": 56,
+          "line": 1
+        },
+        "start": {
+          "character": 38,
+          "line": 1
+        }
+      }
+    },
+    "completion": [
+      {
+        "data": {
+          "kind": "value",
+          "label": "assets/pixel.png",
+          "position": {
+            "character": 45,
+            "line": 1
+          },
+          "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/assets/fixtures/assets/src/main.tua"
+        },
+        "insertText": "assets/pixel.png",
+        "kind": 12,
+        "label": "assets/pixel.png",
+        "sortText": "0000_assets/pixel.png",
+        "textEdit": {
+          "newText": "assets/pixel.png",
+          "range": {
+            "end": {
+              "character": 55,
+              "line": 1
+            },
+            "start": {
+              "character": 39,
+              "line": 1
+            }
+          }
+        }
+      }
+    ]
+  },
+  "shadow": {
+    "hover": {
+      "contents": {
+        "kind": "markdown",
+        "value": "```tua\nexpression: string\n```"
+      },
+      "range": {
+        "end": {
+          "character": 38,
+          "line": 3
+        },
+        "start": {
+          "character": 13,
+          "line": 3
+        }
+      }
+    },
+    "completion": []
+  },
+  "rename": {
+    "changes": {
+      "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/assets/fixtures/assets/src/main.tua": [
+        {
+          "newText": "\"assets/renamed.png\"",
+          "range": {
+            "end": {
+              "character": 39,
+              "line": 0
+            },
+            "start": {
+              "character": 21,
+              "line": 0
+            }
+          }
+        },
+        {
+          "newText": "\"assets/renamed.png\"",
+          "range": {
+            "end": {
+              "character": 56,
+              "line": 1
+            },
+            "start": {
+              "character": 38,
+              "line": 1
+            }
+          }
+        }
+      ]
+    }
+  },
+  "inventory": {
+    "analysisRevision": 11,
+    "inventory": {
+      "assets": [
+        {
+          "category": "image",
+          "categoryLabel": "Images",
+          "dimensions": {
+            "height": 1,
+            "width": 1
+          },
+          "extension": "png",
+          "path": "assets/pixel.png",
+          "references": [
+            {
+              "loaderKind": "image",
+              "range": {
+                "end": {
+                  "character": 39,
+                  "line": 0
+                },
+                "start": {
+                  "character": 21,
+                  "line": 0
+                }
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/assets/fixtures/assets/src/main.tua"
+            },
+            {
+              "loaderKind": "image",
+              "range": {
+                "end": {
+                  "character": 56,
+                  "line": 1
+                },
+                "start": {
+                  "character": 38,
+                  "line": 1
+                }
+              },
+              "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/assets/fixtures/assets/src/main.tua"
+            }
+          ],
+          "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/assets/fixtures/assets/src/assets/pixel.png",
+          "usageCount": 2
+        },
+        {
+          "category": "audio",
+          "categoryLabel": "Audio",
+          "dimensions": null,
+          "extension": "wav",
+          "path": "assets/sound.wav",
+          "references": [],
+          "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/assets/fixtures/assets/src/assets/sound.wav",
+          "usageCount": 0
+        }
+      ],
+      "diagnostics": [
+        {
+          "diagnostic": {
+            "code": "TL2009",
+            "message": "asset `assets/sound.wav` has no static Tua or Lua references; dynamically loaded assets may still be used",
+            "range": {
+              "end": {
+                "character": 1,
+                "line": 0
+              },
+              "start": {
+                "character": 0,
+                "line": 0
+              }
+            },
+            "severity": 4,
+            "source": "tua"
+          },
+          "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/assets/fixtures/assets/src/assets/sound.wav"
+        }
+      ]
+    }
+  },
+  "unfinished": [
+    {
+      "data": {
+        "kind": "value",
+        "label": "assets/pixel.png",
+        "position": {
+          "character": 24,
+          "line": 0
+        },
+        "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/assets/fixtures/assets/src/main.tua"
+      },
+      "insertText": "assets/pixel.png",
+      "kind": 12,
+      "label": "assets/pixel.png",
+      "sortText": "0000_assets/pixel.png",
+      "textEdit": {
+        "newText": "assets/pixel.png",
+        "range": {
+          "end": {
+            "character": 24,
+            "line": 0
+          },
+          "start": {
+            "character": 17,
+            "line": 0
+          }
+        }
+      }
+    }
+  ],
+  "diagnostics": [
+    {
+      "jsonrpc": "2.0",
+      "method": "textDocument/publishDiagnostics",
+      "params": {
+        "diagnostics": [],
+        "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/assets/fixtures/assets/src/main.tua"
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "textDocument/publishDiagnostics",
+      "params": {
+        "diagnostics": [
+          {
+            "code": "TL0001",
+            "message": "unclosed string (1:17 to 1:25)",
+            "range": {
+              "end": {
+                "character": 17,
+                "line": 0
+              },
+              "start": {
+                "character": 16,
+                "line": 0
+              }
+            },
+            "severity": 1,
+            "source": "tua"
+          }
+        ],
+        "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/assets/fixtures/assets/src/main.tua"
+      }
+    }
+  ]
+}

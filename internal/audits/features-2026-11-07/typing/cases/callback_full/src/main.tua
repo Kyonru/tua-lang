@@ -1,0 +1,2 @@
+local function use(cb: (x: number, y: string) -> nil) cb(1,"a") end
+use(function(x,y) print(x+1,y) end)

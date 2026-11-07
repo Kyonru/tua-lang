@@ -1,0 +1,8 @@
+watching src/**/*
+using polling file watcher
+initial build: built 1 file(s)
+dev: ready /Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/watch_reload/config-dev/build
+changed 1 file(s)
+watching src/**/*
+configuration rebuild: rebuilt 1 file(s)
+dev: sent reload 2 to the game

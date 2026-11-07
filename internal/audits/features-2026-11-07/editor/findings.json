@@ -1,0 +1,42 @@
+[
+  {
+    "id": "EDITOR-01",
+    "title": "Colon string completion enumerates receiver internals",
+    "category": "confirmed defect",
+    "severity": "Medium",
+    "status": "confirmed",
+    "summary": "Explicit-self method completion selects receiver type and splits formatted nested unions into malformed candidates; independently reproduces audio symptom.",
+    "evidence": [
+      "editor/responses.json",
+      "editor/project/src/method.tua",
+      "audio/lsp.json"
+    ],
+    "known": false
+  },
+  {
+    "id": "EDITOR-02",
+    "title": "Shader hover nests GLSL Markdown in a Tua fence",
+    "category": "confirmed defect",
+    "severity": "Low",
+    "status": "confirmed",
+    "summary": "Core shader hover is preformatted Markdown but LSP wraps it again as Tua.",
+    "evidence": [
+      "editor/responses.json",
+      "shaders/lsp.json"
+    ],
+    "known": false
+  },
+  {
+    "id": "EDITOR-G01",
+    "title": "Same-arity overload selection ignores literal argument",
+    "category": "feature gap",
+    "severity": "Low",
+    "status": "confirmed known; deduplicate INPUT-G01 and HOV-G01",
+    "summary": "Input move signature exists but scalar overload remains active.",
+    "evidence": [
+      "editor/responses.json",
+      "input/editor-results.json"
+    ],
+    "known": true
+  }
+]

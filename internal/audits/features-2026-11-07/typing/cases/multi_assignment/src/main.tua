@@ -1,0 +1,4 @@
+local n: number = 1
+local s: string = "s"
+n,s = 2
+print(s .. "!")

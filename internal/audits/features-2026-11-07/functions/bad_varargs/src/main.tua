@@ -1,0 +1,2 @@
+local function f(...: number) return ... end
+local n = f(1, "bad")

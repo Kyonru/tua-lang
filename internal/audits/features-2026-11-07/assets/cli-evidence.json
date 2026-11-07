@@ -1,0 +1,95 @@
+[
+  {
+    "case": "pipeline-first",
+    "command": [
+      "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+      "check"
+    ],
+    "cwd": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/assets/fixtures/pipeline",
+    "status": 0,
+    "stdout": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/assets/fixtures/pipeline/src/main.tua:1:7 warning TL4005: unused local `x`; prefix with `_` to silence\nchecked 2 file(s)\n",
+    "stderr": ""
+  },
+  {
+    "case": "pipeline-hit",
+    "command": [
+      "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+      "check"
+    ],
+    "cwd": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/assets/fixtures/pipeline",
+    "status": 0,
+    "stdout": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/assets/fixtures/pipeline/src/main.tua:1:7 warning TL4005: unused local `x`; prefix with `_` to silence\nchecked 2 file(s)\n",
+    "stderr": ""
+  },
+  {
+    "runsAfterHit": "1"
+  },
+  {
+    "case": "pipeline-input-change",
+    "command": [
+      "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+      "build"
+    ],
+    "cwd": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/assets/fixtures/pipeline",
+    "status": 0,
+    "stdout": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/assets/fixtures/pipeline/src/main.tua:1:7 warning TL4005: unused local `x`; prefix with `_` to silence\nbuilt 2 file(s)\n",
+    "stderr": ""
+  },
+  {
+    "runsAfterChange": "2",
+    "declarationEmitted": false
+  },
+  {
+    "case": "pipeline-output-root-change",
+    "command": [
+      "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+      "check"
+    ],
+    "cwd": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/assets/fixtures/pipeline",
+    "status": 0,
+    "stdout": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/assets/fixtures/pipeline/src/main.tua:1:7 warning TL4005: unused local `x`; prefix with `_` to silence\nchecked 3 file(s)\n",
+    "stderr": ""
+  },
+  {
+    "unownedFileAfterRootChange": "second",
+    "oldRootStillExists": true
+  },
+  {
+    "case": "pipeline-corrupt-cache",
+    "command": [
+      "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+      "check"
+    ],
+    "cwd": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/assets/fixtures/pipeline",
+    "status": 0,
+    "stdout": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/assets/fixtures/pipeline/src/main.tua:1:7 warning TL4005: unused local `x`; prefix with `_` to silence\nchecked 3 file(s)\n",
+    "stderr": ""
+  },
+  {
+    "materializedAfterCorruption": "CORRUPT",
+    "runsAfterCorruption": "3",
+    "corruptCache": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/assets/fixtures/pipeline/.tua/cache/asset-pipelines/world/ecd8987c68ce21cd97e48081747ed614"
+  },
+  {
+    "case": "valid-shadowing",
+    "command": [
+      "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+      "build"
+    ],
+    "cwd": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/assets/fixtures/assets",
+    "status": 0,
+    "stdout": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/assets/fixtures/assets/src/main.tua:1:7 warning TL4005: unused local `player`; prefix with `_` to silence\n/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/assets/fixtures/assets/src/main.tua:2:7 warning TL4005: unused local `native`; prefix with `_` to silence\n/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/assets/fixtures/assets/src/main.tua:4:7 warning TL4005: unused local `fake`; prefix with `_` to silence\nbuilt 2 file(s)\n",
+    "stderr": ""
+  },
+  {
+    "case": "missing-and-mismatch",
+    "command": [
+      "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+      "check"
+    ],
+    "cwd": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/assets/fixtures/assets",
+    "status": 1,
+    "stdout": "",
+    "stderr": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/assets/fixtures/assets/src/invalid.tua:1:7 warning TL4005: unused local `missing`; prefix with `_` to silence\n/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/assets/fixtures/assets/src/invalid.tua:1:23 error TL2004: image asset not found: assets/missing.png\n/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/assets/fixtures/assets/src/invalid.tua:2:7 warning TL4005: unused local `wrong`; prefix with `_` to silence\n/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/assets/fixtures/assets/src/invalid.tua:2:21 error TL2006: wrong image asset type for `assets/sound.wav`; found audio asset, expected one of: bmp, exr, hdr, jpeg, jpg, pic, png, tga\n/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/assets/fixtures/assets/src/invalid.tua:3:7 warning TL4005: unused local `format`; prefix with `_` to silence\n/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/assets/fixtures/assets/src/invalid.tua:3:22 error TL2005: unsupported image asset extension for `assets/file.xyz`; expected one of: bmp, exr, hdr, jpeg, jpg, pic, png, tga\n/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/assets/fixtures/assets/src/main.tua:1:7 warning TL4005: unused local `player`; prefix with `_` to silence\n/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/assets/fixtures/assets/src/main.tua:2:7 warning TL4005: unused local `native`; prefix with `_` to silence\n/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/assets/fixtures/assets/src/main.tua:4:7 warning TL4005: unused local `fake`; prefix with `_` to silence\n"
+  }
+]

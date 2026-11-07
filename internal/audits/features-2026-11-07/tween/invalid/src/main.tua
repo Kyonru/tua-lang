@@ -1,0 +1,7 @@
+local box = { x = 0 }
+tween.to(box, 1, { x = "far" })
+tween.to(box, 1, { x = 10 }):ease("bounce")
+tween.update("fast")
+local t = tween.to(box, 1, { x = 10 })
+t:delay("later")
+t:oncomplete(function(x: number) print(x) end)

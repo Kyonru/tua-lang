@@ -1,0 +1,2 @@
+local pool = objectPool({create=function(): {x:number} return {x=0} end,dispose=function(b: {name:string}) print(string.upper(b.name)) end,initial=1})
+pool:clear()

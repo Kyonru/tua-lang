@@ -1,0 +1,632 @@
+{
+  "testing": [
+    {
+      "command": "tua.tests.refresh",
+      "title": "Refresh Unit Tests",
+      "category": "Tua"
+    },
+    {
+      "command": "tua.tests.createForFunction",
+      "title": "Create Unit Test for Function",
+      "category": "Tua",
+      "icon": "$(beaker)"
+    },
+    {
+      "command": "tua.testProject",
+      "title": "Run Unit Tests",
+      "category": "Tua",
+      "icon": "$(beaker)"
+    }
+  ],
+  "setup_docs": [
+    {
+      "command": "tua.openAnnotationGuide",
+      "title": "Open Annotation Guide (Offline)",
+      "category": "Tua"
+    },
+    {
+      "command": "tua.openLoveApiReference",
+      "title": "Open L\u00d6VE API Reference (Offline)",
+      "category": "Tua"
+    },
+    {
+      "command": "tua.openSettings",
+      "title": "Open Settings",
+      "category": "Tua"
+    },
+    {
+      "command": "tua.selectServer",
+      "title": "Select Server",
+      "category": "Tua"
+    },
+    {
+      "command": "tua.reportIssue",
+      "title": "Report Issue",
+      "category": "Tua"
+    },
+    {
+      "command": "tua.openSetup",
+      "title": "Set Up Tua",
+      "category": "Tua"
+    },
+    {
+      "command": "tua.setup.applyTheme",
+      "title": "Use Indigo Carbon Theme",
+      "category": "Tua"
+    },
+    {
+      "command": "tua.setup.restoreTheme",
+      "title": "Restore Previous Theme",
+      "category": "Tua"
+    },
+    {
+      "command": "tua.setup.applyLayout",
+      "title": "Apply Recommended Layout",
+      "category": "Tua"
+    },
+    {
+      "command": "tua.setup.restoreLayout",
+      "title": "Restore Previous Layout",
+      "category": "Tua"
+    },
+    {
+      "command": "tua.setup.useMaterialIcons",
+      "title": "Install / Use Material File Icons",
+      "category": "Tua"
+    },
+    {
+      "command": "tua.setup.restoreIcons",
+      "title": "Restore Previous File Icons",
+      "category": "Tua"
+    }
+  ],
+  "projects": [
+    {
+      "command": "tua.initProject",
+      "title": "Initialize Tua Project",
+      "category": "Tua",
+      "icon": "$(new-folder)"
+    },
+    {
+      "command": "tua.checks.run",
+      "title": "Check Project Setup",
+      "category": "Tua",
+      "icon": "$(checklist)"
+    },
+    {
+      "command": "tua.checks.fix",
+      "title": "Resolve Setup Finding",
+      "category": "Tua",
+      "icon": "$(wrench)"
+    },
+    {
+      "command": "tua.checks.chooseLove",
+      "title": "Choose LOVE Executable",
+      "category": "Tua",
+      "icon": "$(folder-opened)"
+    },
+    {
+      "command": "tua.checks.enableMaps",
+      "title": "Enable Project Source Maps",
+      "category": "Tua",
+      "icon": "$(go-to-file)"
+    },
+    {
+      "command": "tua.checks.build",
+      "title": "Build Source Maps",
+      "category": "Tua",
+      "icon": "$(tools)"
+    },
+    {
+      "command": "tua.buildProject",
+      "title": "Build Project",
+      "category": "Tua",
+      "icon": "$(tools)"
+    }
+  ],
+  "editor": [
+    {
+      "command": "tua.restartServer",
+      "title": "Restart Language Server",
+      "category": "Tua"
+    },
+    {
+      "command": "tua.output.focus",
+      "title": "Focus Output",
+      "category": "Tua"
+    },
+    {
+      "command": "tua.copyDebugInfo",
+      "title": "Copy Debug Info",
+      "category": "Tua"
+    },
+    {
+      "command": "tua.copyCacheStats",
+      "title": "Copy Cache Stats",
+      "category": "Tua"
+    },
+    {
+      "command": "tua.saveCacheStats",
+      "title": "Save Cache Stats",
+      "category": "Tua"
+    },
+    {
+      "command": "tua.showServerHealth",
+      "title": "Show Language Server Health",
+      "category": "Tua",
+      "icon": "$(pulse)"
+    },
+    {
+      "command": "tua.saveCpuProfile",
+      "title": "Save CPU Profile",
+      "category": "Tua"
+    },
+    {
+      "command": "tua.saveHeapSummary",
+      "title": "Save Heap Summary",
+      "category": "Tua"
+    },
+    {
+      "command": "tua.copyQualifiedName",
+      "title": "Copy Fully Qualified Symbol Name",
+      "category": "Tua",
+      "icon": "$(copy)"
+    },
+    {
+      "command": "tua.showWorkspaceSymbolsByModule",
+      "title": "Workspace Symbols by Module",
+      "category": "Tua",
+      "icon": "$(list-tree)"
+    },
+    {
+      "command": "tua.hover.references",
+      "title": "Show References from Hover",
+      "category": "Tua"
+    },
+    {
+      "command": "tua.hover.implementations",
+      "title": "Show Implementations from Hover",
+      "category": "Tua"
+    },
+    {
+      "command": "tua.inlayHints.selectMode",
+      "title": "Select Inlay Hint Mode",
+      "category": "Tua",
+      "icon": "$(ellipsis)"
+    },
+    {
+      "command": "tua.explainType",
+      "title": "Explain Type / Why Is This Any?",
+      "category": "Tua"
+    },
+    {
+      "command": "tua.inlayHints.inspect",
+      "title": "Inspect Hints at Cursor",
+      "category": "Tua",
+      "icon": "$(symbol-type-parameter)"
+    }
+  ],
+  "inline": [
+    {
+      "command": "tua.resetCompletionStats",
+      "title": "Reset Completion Learning Stats",
+      "category": "Tua"
+    },
+    {
+      "command": "tua.completion.toggleExperimental",
+      "title": "Toggle Experimental Completions",
+      "category": "Tua"
+    },
+    {
+      "command": "tua.completion.toggleLocalInline",
+      "title": "Toggle Deterministic Inline Completions",
+      "category": "Tua"
+    },
+    {
+      "command": "tua.completion.toggleOllama",
+      "title": "Toggle Local Ollama Completions",
+      "category": "Tua"
+    },
+    {
+      "command": "tua.completion.warmOllama",
+      "title": "Test and Warm Ollama Model",
+      "category": "Tua"
+    }
+  ],
+  "debugging": [
+    {
+      "command": "tua.openGeneratedLua",
+      "title": "Open Generated Lua Beside Tua",
+      "category": "Tua",
+      "icon": "$(go-to-file)"
+    },
+    {
+      "command": "tua.jumpBetweenSourceAndGenerated",
+      "title": "Jump Between Tua and Generated Lua",
+      "category": "Tua",
+      "icon": "$(arrow-swap)"
+    },
+    {
+      "command": "tua.debugLoveProject",
+      "title": "Debug LOVE Project",
+      "category": "Tua",
+      "icon": "$(debug-alt)"
+    },
+    {
+      "command": "tua.console.open",
+      "title": "Open Game Console",
+      "category": "Tua",
+      "icon": "$(output)"
+    },
+    {
+      "command": "tua.console.clear",
+      "title": "Clear Game Console",
+      "category": "Tua",
+      "icon": "$(clear-all)"
+    },
+    {
+      "command": "tua.console.level",
+      "title": "Filter Console Severity",
+      "category": "Tua",
+      "icon": "$(filter)"
+    },
+    {
+      "command": "tua.console.module",
+      "title": "Filter Console Module",
+      "category": "Tua",
+      "icon": "$(symbol-namespace)"
+    },
+    {
+      "command": "tua.console.session",
+      "title": "Filter Console Session",
+      "category": "Tua",
+      "icon": "$(history)"
+    },
+    {
+      "command": "tua.console.copy",
+      "title": "Copy Console Message",
+      "category": "Tua",
+      "icon": "$(copy)"
+    },
+    {
+      "command": "tua.inspector.enable",
+      "title": "Enable Runtime Inspection",
+      "category": "Tua",
+      "icon": "$(plug)"
+    },
+    {
+      "command": "tua.inspector.disable",
+      "title": "Disable Runtime Inspection",
+      "category": "Tua",
+      "icon": "$(debug-disconnect)"
+    },
+    {
+      "command": "tua.inspector.open",
+      "title": "Open Runtime Inspector",
+      "category": "Tua",
+      "icon": "$(inspect)"
+    },
+    {
+      "command": "tua.inspector.select",
+      "title": "Select Runtime Player",
+      "category": "Tua",
+      "icon": "$(list-selection)"
+    },
+    {
+      "command": "tua.inspector.pause",
+      "title": "Pause Inspector Updates",
+      "category": "Tua",
+      "icon": "$(debug-pause)",
+      "enablement": "tua.inspectorCanControl && !tua.inspectorPaused"
+    },
+    {
+      "command": "tua.inspector.refresh",
+      "title": "Refresh Runtime Snapshot",
+      "category": "Tua",
+      "icon": "$(refresh)"
+    },
+    {
+      "command": "tua.inspector.resume",
+      "title": "Resume Inspector Updates",
+      "category": "Tua",
+      "icon": "$(debug-continue)",
+      "enablement": "tua.inspectorCanControl && tua.inspectorPaused"
+    },
+    {
+      "command": "tua.inspector.goToSource",
+      "title": "Go to Runtime Object Creation Site",
+      "category": "Tua",
+      "icon": "$(go-to-file)"
+    },
+    {
+      "command": "tua.declaration.tools",
+      "title": "Tools for Declaration\u2026",
+      "category": "Tua"
+    },
+    {
+      "command": "tua.inspector.forDeclaration",
+      "title": "Inspect Runtime Declaration",
+      "category": "Tua"
+    },
+    {
+      "command": "tua.inspector.configure",
+      "title": "Configure Runtime Inspection\u2026",
+      "category": "Tua",
+      "icon": "$(settings-gear)"
+    }
+  ],
+  "watch_reload": [
+    {
+      "command": "tua.runLoveProject",
+      "title": "Run LOVE Project",
+      "category": "Tua",
+      "icon": {
+        "light": "assets/toolbar/run-light.svg",
+        "dark": "assets/toolbar/run-dark.svg"
+      }
+    },
+    {
+      "command": "tua.stopLoveProject",
+      "title": "Stop LOVE Project",
+      "category": "Tua",
+      "icon": {
+        "light": "assets/toolbar/stop-light.svg",
+        "dark": "assets/toolbar/stop-dark.svg"
+      }
+    },
+    {
+      "command": "tua.runLoveProjectWithHotReload",
+      "title": "Run LOVE Project With Hot Reload",
+      "category": "Tua",
+      "icon": "$(flame)"
+    },
+    {
+      "command": "tua.restartLoveProject",
+      "title": "Restart LOVE Project",
+      "category": "Tua",
+      "icon": "$(debug-restart)"
+    },
+    {
+      "command": "tua.activity.show",
+      "title": "Inspect Run Status",
+      "category": "Tua",
+      "icon": "$(pulse)"
+    },
+    {
+      "command": "tua.activity.stop",
+      "title": "Stop Session",
+      "category": "Tua",
+      "icon": {
+        "light": "assets/toolbar/stop-light.svg",
+        "dark": "assets/toolbar/stop-dark.svg"
+      }
+    },
+    {
+      "command": "tua.run.select",
+      "title": "Select Run Configuration",
+      "icon": "$(list-selection)",
+      "category": "Tua"
+    },
+    {
+      "command": "tua.run.selected",
+      "title": "Run Selected Configuration",
+      "icon": {
+        "light": "assets/toolbar/run-light.svg",
+        "dark": "assets/toolbar/run-dark.svg"
+      },
+      "category": "Tua"
+    },
+    {
+      "command": "tua.run.configuration",
+      "title": "Run This Configuration",
+      "icon": {
+        "light": "assets/toolbar/run-light.svg",
+        "dark": "assets/toolbar/run-dark.svg"
+      },
+      "category": "Tua"
+    },
+    {
+      "command": "tua.run.configure",
+      "title": "Edit Run Configurations",
+      "icon": "$(settings-gear)",
+      "category": "Tua"
+    },
+    {
+      "command": "tua.run.stopSelected",
+      "title": "Stop Selected Run",
+      "category": "Tua",
+      "icon": {
+        "light": "assets/toolbar/stop-light.svg",
+        "dark": "assets/toolbar/stop-dark.svg"
+      }
+    }
+  ],
+  "packaging": [
+    {
+      "command": "tua.packageGame",
+      "title": "Package Game...",
+      "category": "Tua",
+      "icon": "$(package)"
+    }
+  ],
+  "explorers": [
+    {
+      "command": "tua.previewSprites",
+      "title": "Preview Sprite Animations",
+      "category": "Tua"
+    },
+    {
+      "command": "tua.previewStateMachine",
+      "title": "Preview State Machine",
+      "category": "Tua",
+      "icon": "$(type-hierarchy)"
+    },
+    {
+      "command": "tua.showSignalGraph",
+      "title": "Show Signal Graph",
+      "category": "Tua",
+      "icon": "$(type-hierarchy)"
+    },
+    {
+      "command": "tua.showModuleGraph",
+      "title": "Show Module Dependency Graph",
+      "category": "Tua",
+      "icon": "$(type-hierarchy)"
+    },
+    {
+      "command": "tua.showEcsExplorer",
+      "title": "Show ECS Explorer",
+      "category": "Tua",
+      "icon": "$(symbol-structure)"
+    },
+    {
+      "command": "tua.showObjectPoolExplorer",
+      "title": "Show Object Pool Explorer",
+      "category": "Tua",
+      "icon": "$(database)"
+    },
+    {
+      "command": "tua.showAudioExplorer",
+      "title": "Show Audio Explorer",
+      "category": "Tua",
+      "icon": "$(unmute)"
+    },
+    {
+      "command": "tua.whyModuleIncluded",
+      "title": "Why Is This Module Included?",
+      "category": "Tua",
+      "icon": "$(question)"
+    },
+    {
+      "command": "tua.workspace.open",
+      "title": "Open Tua Workspace",
+      "category": "Tua",
+      "icon": "$(layout-sidebar-left)"
+    },
+    {
+      "command": "tua.workspace.refresh",
+      "title": "Refresh Project",
+      "category": "Tua",
+      "icon": "$(refresh)"
+    },
+    {
+      "command": "tua.workspace.graph",
+      "title": "Open Graph",
+      "category": "Tua",
+      "icon": "$(type-hierarchy)"
+    },
+    {
+      "command": "tua.workspace.sprites",
+      "title": "Preview File Sprites",
+      "category": "Tua",
+      "icon": "$(play-circle)"
+    },
+    {
+      "command": "tua.workspace.states",
+      "title": "Preview File State Machine",
+      "category": "Tua",
+      "icon": "$(type-hierarchy)"
+    },
+    {
+      "command": "tua.workspace.generated",
+      "title": "Open File Generated Lua",
+      "category": "Tua",
+      "icon": "$(go-to-file)"
+    }
+  ],
+  "assets": [
+    {
+      "command": "tua.assets.refresh",
+      "title": "Refresh Asset Explorer",
+      "category": "Tua",
+      "icon": "$(refresh)"
+    },
+    {
+      "command": "tua.assets.preview",
+      "title": "Preview Asset",
+      "category": "Tua"
+    },
+    {
+      "command": "tua.assets.open",
+      "title": "Open Asset",
+      "category": "Tua"
+    },
+    {
+      "command": "tua.assets.openReference",
+      "title": "Open Asset Reference",
+      "category": "Tua"
+    },
+    {
+      "command": "tua.assets.findReferences",
+      "title": "Find Asset References",
+      "category": "Tua",
+      "icon": "$(references)"
+    },
+    {
+      "command": "tua.assets.rename",
+      "title": "Rename Asset...",
+      "category": "Tua",
+      "icon": "$(edit)"
+    },
+    {
+      "command": "tua.assets.reveal",
+      "title": "Reveal Asset in File Explorer",
+      "category": "Tua",
+      "icon": "$(folder-opened)"
+    }
+  ],
+  "linter": [
+    {
+      "command": "tua.source.organizeImports",
+      "title": "Organize Imports",
+      "category": "Tua"
+    },
+    {
+      "command": "tua.source.sortImports",
+      "title": "Sort Imports",
+      "category": "Tua"
+    },
+    {
+      "command": "tua.source.removeUnusedImports",
+      "title": "Remove Unused Imports",
+      "category": "Tua"
+    },
+    {
+      "command": "tua.source.fixAll",
+      "title": "Fix All Safe Diagnostics",
+      "category": "Tua"
+    }
+  ],
+  "shaders": [
+    {
+      "command": "tua.setup.applyShaders",
+      "title": "Use L\u00d6VE Shader Associations",
+      "category": "Tua"
+    },
+    {
+      "command": "tua.setup.restoreShaders",
+      "title": "Restore Shader Associations",
+      "category": "Tua"
+    },
+    {
+      "command": "tua.setup.installShaderHighlighting",
+      "title": "Install Shader Highlighting",
+      "category": "Tua"
+    },
+    {
+      "command": "tua.setup.skipShaders",
+      "title": "Skip Shader Setup",
+      "category": "Tua"
+    },
+    {
+      "command": "tua.setup.checkShaderTools",
+      "title": "Check Shader Validators",
+      "category": "Tua"
+    },
+    {
+      "command": "tua.setup.selectGlslang",
+      "title": "Select glslangValidator",
+      "category": "Tua"
+    }
+  ]
+}

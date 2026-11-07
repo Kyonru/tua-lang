@@ -1,0 +1,19 @@
+type Row = { name: string, score: number, note?: string }
+local rows: Row[] = {}
+table.insert(rows, {name="Mina",score=3})
+local scores: {[string]: number} = {}
+scores.Mina = 3
+local n = scores.Mina
+if n then print(n + 1) end
+for _, row in ipairs(rows) do print(row.name, row.score) end
+local function label(prefix: string = "ok", suffix?: string): string
+ return prefix .. (suffix or "!")
+end
+print(label())
+local state: number | nil = nil
+state = 5
+if state then print(state+1) end
+local a: any = "dynamic"
+local b: string = a
+print(b)
+do local state = "shadow" print(state) end

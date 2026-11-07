@@ -1,0 +1,30 @@
+[
+  {
+    "id": "TWEEN-01",
+    "title": "Callback cancellation can crash tween updates",
+    "category": "confirmed defect",
+    "severity": "medium",
+    "status": "confirmed",
+    "summary": "Stopping self or another tween from callbacks invalidates live update indices; onstart cancellation also still mutates the target.",
+    "evidence": [
+      "tween/runtime.lua",
+      "tween/runtime.log"
+    ],
+    "known": false
+  },
+  {
+    "id": "TWEEN-02",
+    "title": "Shorthand after accepts invalid duration",
+    "category": "confirmed defect",
+    "severity": "medium",
+    "status": "confirmed",
+    "summary": "The merged after annotation treats shorthand seconds as any; build succeeds but Lua crashes, and signature help describes the wrong argument.",
+    "evidence": [
+      "tween/after_invalid/src/main.tua",
+      "tween/after_invalid/build.log",
+      "tween/after_invalid/runtime.log",
+      "tween/lsp.json"
+    ],
+    "known": false
+  }
+]

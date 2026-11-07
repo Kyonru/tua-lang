@@ -1,0 +1,10 @@
+local anim8=assert(loadfile('vendor/runtime/anim8.lua'))()
+local a=anim8.newAnimation({'a','b','c','d'},0.25,function(animation,loops)
+ print('ANIM8_LOOPS',loops)
+ if loops>1 then animation:pause() end
+end)
+a:update(2.2)
+print('ANIM8_CALLBACK_STATE',a.position,a.timer,a.status)
+local b=anim8.newAnimation({'a','b','c','d'},0.25,'pauseAtStart')
+b:update(2.2)
+print('ANIM8_START_STATE',b.position,b.timer,b.status)

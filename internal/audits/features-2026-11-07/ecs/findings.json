@@ -1,0 +1,58 @@
+[
+  {
+    "id": "ECS-01",
+    "title": "get/remove erase component absence",
+    "category": "confirmed defect",
+    "severity": "Medium",
+    "status": "confirmed and independently cross-checked",
+    "summary": "Absent typed components check/build successfully; emitted Lua crashes; hover promises a nonnullable record.",
+    "evidence": [
+      "results.json",
+      "lsp-evidence.json",
+      "love-results.txt",
+      "../cross-checks/ecs-absent-components.json"
+    ],
+    "known": false
+  },
+  {
+    "id": "ECS-02",
+    "title": "World:get converts stored false to nil",
+    "category": "confirmed defect",
+    "severity": "Medium",
+    "status": "confirmed",
+    "summary": "A false component is present and counted but get returns nil in Lua and LOVE.",
+    "evidence": [
+      "false_value/src/main.tua",
+      "results.json",
+      "love-results.txt"
+    ],
+    "known": false
+  },
+  {
+    "id": "ECS-03",
+    "title": "Documented optional component schema is required",
+    "category": "confirmed defect",
+    "severity": "Medium",
+    "status": "confirmed",
+    "summary": "component(name) is documented/runtime supported but checker requires two arguments.",
+    "evidence": [
+      "optional_schema/src/main.tua",
+      "results.json"
+    ],
+    "known": false
+  },
+  {
+    "id": "ECS-GAP-01",
+    "title": "System callback schema does not flow into checking/hover",
+    "category": "feature gap",
+    "severity": "Medium",
+    "status": "observed",
+    "summary": "Known component list and graph facts coexist with any callback parameter and missed incompatible assignment.",
+    "evidence": [
+      "bad_callback/src/main.tua",
+      "results.json",
+      "lsp-evidence.json"
+    ],
+    "known": false
+  }
+]

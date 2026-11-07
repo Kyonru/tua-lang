@@ -1,0 +1,1 @@
+/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/functions/bad_unannotated_return/src/main.tua:2:33 error TL1003: type mismatch at n: expected number, found string

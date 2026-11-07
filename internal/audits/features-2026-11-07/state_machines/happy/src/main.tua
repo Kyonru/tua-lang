@@ -1,0 +1,24 @@
+local seen = {}
+local machine = stateMachine({
+ initial = "idle",
+ events = {
+  {name="start", from="idle", to="running"},
+  {name="reset", from="*", to="idle"},
+ },
+ callbacks = {
+  onleaverunning = function(self) return self.ASYNC end,
+  onafterstart = function(self, event, from, to, ...) seen = {...} end,
+ },
+})
+assert(machine:start(nil, "payload", nil))
+assert(machine:is("running"))
+local allowed, destination = machine:can("reset")
+assert(allowed and destination == "idle")
+assert(machine:reset())
+assert(machine.current == "running")
+machine:cancelTransition("reset")
+assert(machine.current == "running")
+assert(machine:reset())
+assert(machine:transition("reset"))
+assert(machine:is("idle"))
+print("PASS transitions, wildcard, payload, async cancellation/resume")

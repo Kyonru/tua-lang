@@ -1,0 +1,3 @@
+digraph {
+* -> game over [label=start game];
+}

@@ -1,0 +1,183 @@
+{
+  "generated": "build/main.lua",
+  "lineMappings": [
+    {
+      "generatedLine": 1,
+      "sourceLine": 1
+    },
+    {
+      "generatedLine": 2,
+      "sourceLine": 28
+    },
+    {
+      "generatedLine": 3,
+      "sourceLine": 29
+    },
+    {
+      "generatedLine": 4,
+      "sourceLine": 28
+    },
+    {
+      "generatedLine": 5,
+      "sourceLine": 29
+    },
+    {
+      "generatedLine": 6,
+      "sourceLine": 32
+    },
+    {
+      "generatedLine": 7,
+      "sourceLine": 26
+    },
+    {
+      "generatedLine": 8,
+      "sourceLine": 30
+    },
+    {
+      "generatedLine": 9,
+      "sourceLine": 31
+    },
+    {
+      "generatedLine": 10,
+      "sourceLine": 31
+    },
+    {
+      "generatedLine": 11,
+      "sourceLine": 32
+    },
+    {
+      "generatedLine": 12,
+      "sourceLine": 1
+    },
+    {
+      "generatedLine": 13,
+      "sourceLine": 2
+    },
+    {
+      "generatedLine": 14,
+      "sourceLine": 3
+    },
+    {
+      "generatedLine": 15,
+      "sourceLine": 4
+    },
+    {
+      "generatedLine": 16,
+      "sourceLine": 5
+    },
+    {
+      "generatedLine": 17,
+      "sourceLine": 6
+    },
+    {
+      "generatedLine": 18,
+      "sourceLine": 7
+    },
+    {
+      "generatedLine": 19,
+      "sourceLine": 8
+    },
+    {
+      "generatedLine": 20,
+      "sourceLine": 9
+    },
+    {
+      "generatedLine": 21,
+      "sourceLine": 10
+    },
+    {
+      "generatedLine": 22,
+      "sourceLine": 11
+    },
+    {
+      "generatedLine": 23,
+      "sourceLine": 12
+    },
+    {
+      "generatedLine": 24,
+      "sourceLine": 13
+    },
+    {
+      "generatedLine": 25,
+      "sourceLine": 14
+    },
+    {
+      "generatedLine": 26,
+      "sourceLine": 15
+    },
+    {
+      "generatedLine": 27,
+      "sourceLine": 16
+    },
+    {
+      "generatedLine": 28,
+      "sourceLine": 17
+    },
+    {
+      "generatedLine": 29,
+      "sourceLine": 18
+    },
+    {
+      "generatedLine": 30,
+      "sourceLine": 19
+    },
+    {
+      "generatedLine": 31,
+      "sourceLine": 20
+    },
+    {
+      "generatedLine": 32,
+      "sourceLine": 21
+    },
+    {
+      "generatedLine": 33,
+      "sourceLine": 22
+    },
+    {
+      "generatedLine": 34,
+      "sourceLine": 23
+    },
+    {
+      "generatedLine": 35,
+      "sourceLine": 24
+    },
+    {
+      "generatedLine": 36,
+      "sourceLine": 25
+    },
+    {
+      "generatedLine": 37,
+      "sourceLine": 26
+    },
+    {
+      "generatedLine": 38,
+      "sourceLine": 27
+    },
+    {
+      "generatedLine": 39,
+      "sourceLine": 28
+    },
+    {
+      "generatedLine": 40,
+      "sourceLine": 29
+    },
+    {
+      "generatedLine": 41,
+      "sourceLine": 30
+    },
+    {
+      "generatedLine": 42,
+      "sourceLine": 31
+    },
+    {
+      "generatedLine": 43,
+      "sourceLine": 32
+    },
+    {
+      "generatedLine": 44,
+      "sourceLine": 33
+    }
+  ],
+  "source": "src/main.tua",
+  "version": 1
+}

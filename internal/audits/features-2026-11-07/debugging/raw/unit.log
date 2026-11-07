@@ -1,0 +1,65 @@
+✔ debug players build once, retain source maps, and release their snapshot only after the last exit (12.0005ms)
+✔ player stop is independent; group stop closes all remaining debugger sessions (2.880375ms)
+✔ partial debugger launch failure stops started peers and cleans up (2.475292ms)
+✔ stop during build prevents debugger launches (0.912959ms)
+✔ a failed build never prepares or launches a debugger (0.955166ms)
+✔ runtime binding names cover typed stores, pools, signals, states, worlds and multiline arguments (1.091875ms)
+✔ runtime names do not guess through comments, strings, nested constructors or multi-assignments (0.17875ms)
+✔ origins map creation lines to Tua names, reject external paths, and reset on reconnect (2.9775ms)
+✔ runtime view switches player data and preserves object identities across snapshots (0.845667ms)
+✔ runtime values are displayed as data, with bounded depth and stable escaped keys (0.48925ms)
+✔ store state marks nested changes, additions and removals without flagging unchanged values (0.333083ms)
+✔ inspector pause/resume icons follow the selected player's state and connection (1.304958ms)
+✔ named runtime objects expose creation-site actions and retain separate runtime identities (0.2805ms)
+✔ inspector can be re-enabled from its toolbar while a retained snapshot hides welcome content (0.082666ms)
+✔ inspector exposes store values directly and collapses bookkeeping (0.161375ms)
+✔ type-specific rows replace raw runtime field dumps without losing essentials (0.253792ms)
+✔ empty snapshots and sampling limits remain explicit (0.07625ms)
+✖ inspector authenticates loopback connections, handles partial frames and rejects oversized input (4.514292ms)
+✔ development launcher leaves build output untouched and follows new hot-reload files (1011.291375ms)
+✖ inspection is opt-in, player launchers are independent, disabling keeps running game files (3.212084ms)
+✔ Lua snapshots bound large/cyclic data without retaining dead objects or invoking metamethods (33.59875ms)
+✔ store shim preserves returns, errors, notifications and collection without adding subscriptions (6.603709ms)
+✔ collection options exclude disabled wrappers and preserve enabled store inspection (6.5035ms)
+✔ empty categories skip launchers and intervals are clamped (0.358583ms)
+✔ signal history reuses bounded slots while preserving newest-first snapshot order (5.713541ms)
+ℹ tests 25
+ℹ suites 0
+ℹ pass 23
+ℹ fail 2
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1113.883417
+
+✖ failing tests:
+
+test at editors/vscode/test/unit/runtime-inspector.test.js:17:1
+✖ inspector authenticates loopback connections, handles partial frames and rejects oversized input (4.514292ms)
+  Error: listen EPERM: operation not permitted 127.0.0.1
+      at Server.setupListenHandle [as _listen2] (node:net:1986:21)
+      at listenInCluster (node:net:2065:12)
+      at node:net:2274:7
+      at process.processTicksAndRejections (node:internal/process/task_queues:90:21) {
+    code: 'EPERM',
+    errno: -1,
+    syscall: 'listen',
+    address: '127.0.0.1'
+  }
+
+test at editors/vscode/test/unit/runtime-inspector.test.js:70:1
+✖ inspection is opt-in, player launchers are independent, disabling keeps running game files (3.212084ms)
+  AssertionError [ERR_ASSERTION]: Expected "actual" to be strictly unequal to:
+  
+  undefined
+      at TestContext.<anonymous> (/Users/kyonru/Documents/projects/Experiments/tlua/editors/vscode/test/unit/runtime-inspector.test.js:79:10)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: undefined,
+    operator: 'notStrictEqual',
+    diff: 'simple'
+  }

@@ -1,0 +1,6 @@
+[ { title: 'Host', status: 'unavailable', sequence: undefined } ]
+Error: Runtime inspector unavailable: listen EPERM: operation not permitted 127.0.0.1. The game will run without inspection.
+    at InspectorSessions.reportError (/Users/kyonru/Documents/projects/Experiments/tlua/editors/vscode/scripts/runtime-inspector-e2e.js:15:239)
+    at InspectorSessions.launch (/Users/kyonru/Documents/projects/Experiments/tlua/editors/vscode/src/inspector/sessions.js:38:12)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async main (/Users/kyonru/Documents/projects/Experiments/tlua/editors/vscode/scripts/runtime-inspector-e2e.js:64:20)

@@ -1,0 +1,24 @@
+[
+  {
+    "command": [
+      "check"
+    ],
+    "exit": 0,
+    "stdout": "checked 1 file(s)\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "build"
+    ],
+    "exit": 0,
+    "stdout": "built 1 file(s)\n",
+    "stderr": ""
+  },
+  {
+    "command": "lua quickstart with LOVE callback stub",
+    "exit": 0,
+    "stdout": "quickstart: x=200 after dt=1; draw arguments correct\n",
+    "stderr": ""
+  }
+]

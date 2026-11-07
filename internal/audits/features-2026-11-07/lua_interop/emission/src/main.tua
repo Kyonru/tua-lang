@@ -1,0 +1,6 @@
+type Point = {x: number, y: number}
+--- Make a point.
+local function point(x: number, y: number): Point return {x=x,y=y} end
+local p: Point = point(2,3)
+print(p.x+p.y)
+return {point=point}

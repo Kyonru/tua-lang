@@ -1,0 +1,3 @@
+source="src"
+out="build"
+target="love11-luajit"
