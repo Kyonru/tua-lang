@@ -258,22 +258,23 @@ function Audio:_activeCount(cueName, busName)
 end
 
 function Audio:_limitVictims(cueName, cue, bus)
-  local candidates = {}
-  local constrained = false
-  local function append(records)
-    for _, record in ipairs(records) do candidates[record] = true end
-  end
-  if self.maxVoices and self._activeVoiceCount >= self.maxVoices then constrained = true append(self:_activeFor()) end
-  if cue.maxVoices and self:_activeCount(cueName) >= cue.maxVoices then constrained = true append(self:_activeFor(cueName)) end
-  if bus and bus.maxVoices and self:_activeCount(nil, cue.bus) >= bus.maxVoices then constrained = true append(self:_activeFor(nil, cue.bus)) end
-  if not constrained then return nil end
+  local globalLimited = self.maxVoices and self._activeVoiceCount >= self.maxVoices
+  local cueLimited = cue.maxVoices and self:_activeCount(cueName) >= cue.maxVoices
+  local busLimited = bus and bus.maxVoices and self:_activeCount(nil, cue.bus) >= bus.maxVoices
+  if not (globalLimited or cueLimited or busLimited) then return nil, false end
+  -- A single victim must relieve every simultaneously constrained group.
   local list = {}
-  for record in pairs(candidates) do list[#list + 1] = record end
+  for _, record in ipairs(self._voices) do
+    if record.active and (not cueLimited or record.cueName == cueName)
+      and (not busLimited or self:_busContains(record.bus, cue.bus)) then
+      list[#list + 1] = record
+    end
+  end
   table.sort(list, function(a, b)
     if a.priority == b.priority then return a.startOrder < b.startOrder end
     return a.priority < b.priority
   end)
-  return list[1]
+  return list[1], true
 end
 
 function Audio:_overflow(cue, bus)
@@ -351,10 +352,10 @@ function Audio:play(cueName, options)
   end
   local bus = self._buses[cue.bus]
   local priority = options.priority or cue.priority or 0
-  local victim = self:_limitVictims(cueName, cue, bus)
+  local victim, constrained = self:_limitVictims(cueName, cue, bus)
   local result = "started"
-  if victim then
-    if self:_overflow(cue, bus) ~= "steal" or victim.priority > priority then
+  if constrained then
+    if not victim or self:_overflow(cue, bus) ~= "steal" or victim.priority > priority then
       self._stats.rejected = self._stats.rejected + 1
       self:_emit("voiceRejected", { cue = cueName, priority = priority, reason = "voice-limit" })
       return nil, "rejected"

@@ -131,3 +131,13 @@ assert(snapshot.started == 4 and snapshot.stolen == 2 and snapshot.rejected == 1
 assert(high2:stop(0))
 audio:update(0)
 assert(audio:snapshot().pooledVoices >= 1)
+
+-- Victims must satisfy overlapping global and cue limits simultaneously.
+do
+  local system = audioSystem({maxVoices=2,cues={low={source=source,priority=1},
+    high={source=source,priority=10,maxVoices=1}}})
+  local low, high = system:play('low'), system:play('high')
+  local voice, result = system:play('high')
+  assert(voice and result == 'stolen' and system:_activeCount('high') == 1)
+  assert(high:status() == 'released' and low:status() ~= 'released')
+end
