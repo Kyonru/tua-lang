@@ -74,6 +74,16 @@ pub(super) fn runtime_callee(name: &str) -> Option<&'static str> {
 }
 
 impl VisitorMut for Lowerer<'_> {
+    fn visit_var_expression_end(&mut self, expression: ast::VarExpression) -> ast::VarExpression {
+        // A constructor followed by a property read is represented as a variable
+        // expression, although its prefix and first suffix still form a call.
+        let call = ast::FunctionCall::new(expression.prefix().clone())
+            .with_suffixes(expression.suffixes().cloned().collect());
+        let lowered = self.visit_function_call_end(call);
+        expression.with_prefix(lowered.prefix().clone())
+            .with_suffixes(lowered.suffixes().cloned().collect())
+    }
+
     fn visit_function_call_end(&mut self, call: ast::FunctionCall) -> ast::FunctionCall {
         let Prefix::Name(name) = call.prefix() else {
             return call;

@@ -2499,3 +2499,12 @@ final class Child extends Node {}
         "{emitted}"
     );
 }
+
+#[test]
+fn lowers_constructor_prefixes_of_property_reads() {
+    let source = "local unit = vec2(3, 4).normalized\nlocal x = vec2(1, 2).x\n";
+    let lua = emit_tua_source("src/main.tua", source).unwrap();
+    assert!(lua.contains("__tua_vec2(3, 4).normalized"), "{lua}");
+    assert!(lua.contains("__tua_vec2(1, 2).x"), "{lua}");
+    assert!(lua.contains("require(\"brinevector\")"), "{lua}");
+}
