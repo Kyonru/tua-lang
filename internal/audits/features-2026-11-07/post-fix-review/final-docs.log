@@ -1,0 +1,4 @@
+bash scripts/docs.sh build
+Build started
+No issues found
+Build finished in 0.34s

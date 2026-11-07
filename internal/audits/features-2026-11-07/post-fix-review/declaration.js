@@ -1,0 +1,11 @@
+'use strict';
+const fs=require('fs'),path=require('path'),assert=require('assert');
+const repo=process.cwd(),{LspClient,pathToFileURL}=require(path.join(repo,'editors/vscode/scripts/lsp-profile-common'));
+const root=path.join(__dirname,'declaration-project');
+for(const dir of ['src/lib','src/vendor-types','build/lib'])fs.mkdirSync(path.join(root,dir),{recursive:true});
+fs.writeFileSync(path.join(root,'tua.toml'),'source="src"\nout="build"\n[[type_libraries]]\npath="src/vendor-types"\ndeclaration_prefix="feel"\nruntime_prefix="lib.feel"\n');
+fs.writeFileSync(path.join(root,'src/vendor-types/feel.lua'),'---@meta feel\nlocal M={}\n---@param value string\n---@return string\nfunction M.echo(value) end\nreturn M\n');
+for(const name of ['src/lib/feel.lua','build/lib/feel.lua'])fs.writeFileSync(path.join(root,name),'local M={}\nfunction M.echo(value) return value end\nreturn M\n');
+const source='local F = require("lib.feel")\nlocal result = F.echo("hello")\nprint(result)\n',file=path.join(root,'src/main.tua'),uri=pathToFileURL(file).href;
+fs.writeFileSync(file,source);const client=new LspClient(path.join(repo,'target/debug/tua'),root,{requestTimeoutMs:60000});
+(async()=>{await client.start();try{await client.request('initialize',{processId:process.pid,rootUri:pathToFileURL(root).href,capabilities:{}});client.notify('initialized',{});client.notify('textDocument/didOpen',{textDocument:{uri,languageId:'tua',version:1,text:source}});const request=(method,line,character)=>client.request(method,{textDocument:{uri},position:{line,character}});const result={signature:await request('textDocument/signatureHelp',1,22),member:await request('textDocument/hover',1,18),result:await request('textDocument/hover',2,8)};fs.writeFileSync(path.join(__dirname,'declaration.json'),JSON.stringify(result,null,2));assert(result.signature.signatures[0].label.includes('value: string'));assert(JSON.stringify(result.result).includes('result: string'));await client.request('shutdown',null);client.notify('exit',null);console.log('Declaration overlay signature and inferred result agree on string.');}finally{client.child.kill();}})().catch(e=>{console.error(e);process.exitCode=1});

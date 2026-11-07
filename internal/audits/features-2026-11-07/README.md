@@ -4,6 +4,14 @@
 
 Tua has a broad, working foundation: representative typed modules, inheritance, domain runtimes, actual LSP requests, Busted execution, native debugging and packaging work. Reliability is less consistent at feature boundaries: imported domain types, shortened callbacks, nested runtime callbacks, constructor lowering and editor assistance can disagree with runtime behavior. Existing passing suites do not cover these combinations sufficiently.
 
+## Implementation follow-up
+
+The sections below preserve the original audit baseline. Fixes were subsequently
+implemented and committed at the user’s request. See the [implementation ledger](IMPLEMENTATION.md)
+and [final verification](FIX-VERIFICATION.md) for current status and remaining
+qualification limits. The original defect counts describe the audited baseline,
+not the number still open.
+
 ## Start here
 
 - [Findings index](FINDINGS.md): every stable ID, severity and link to its detailed reproduction.

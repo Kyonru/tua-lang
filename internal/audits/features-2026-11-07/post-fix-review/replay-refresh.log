@@ -1,0 +1,19 @@
+✔ curated replay scenarios remain exact and tuning-only (2.635666ms)
+✔ replay matches the production Tua-only selector and suggest-preview default (0.06725ms)
+✔ scenario validation rejects files outside the tuning allowlist (0.600917ms)
+✔ scenario validation rejects source drift (0.432208ms)
+✔ scenario validation rejects absolute, parent, and broad copy roots (0.43575ms)
+✔ capture validation distinguishes real open and closed menu state (0.423458ms)
+✔ network proof fails closed unless loopback works and outbound is denied (0.145417ms)
+✔ provider attribution requires expected returns and no competing local source (0.187083ms)
+✔ UTF-16 positions count surrogate pairs as two code units (0.06125ms)
+✔ ghost-text matching normalizes nbsp and rejects absent candidates (0.089416ms)
+✔ atomic evidence writes are private (0.747834ms)
+ℹ tests 11
+ℹ suites 0
+ℹ pass 11
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 59.666708

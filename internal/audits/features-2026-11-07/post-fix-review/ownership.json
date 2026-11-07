@@ -1,0 +1,70 @@
+[
+  {
+    "name": "inplace-declaration",
+    "command": [
+      "/Users/kyonru/Documents/projects/Experiments/tlua/target/debug/tua",
+      "build"
+    ],
+    "cwd": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/post-fix-review/fixtures/inplace-declaration",
+    "before": {
+      "src/types.d.tua": "export type Point = {x: number}\n",
+      "src/types.d.lua": "return { important = \"handwritten source\" }\n",
+      "tua.toml": "source=\"src\"\nout=\"src\"\n"
+    },
+    "exit": 0,
+    "stdout": "built 0 file(s)\n",
+    "stderr": "",
+    "after": {
+      "tua.toml": "source=\"src\"\nout=\"src\"\n",
+      "src/types.d.tua": "export type Point = {x: number}\n",
+      "src/types.d.lua": "return { important = \"handwritten source\" }\n"
+    }
+  },
+  {
+    "name": "unowned-declaration",
+    "command": [
+      "/Users/kyonru/Documents/projects/Experiments/tlua/target/debug/tua",
+      "build"
+    ],
+    "cwd": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/post-fix-review/fixtures/unowned-declaration",
+    "before": {
+      "src/types.d.tua": "export type Point = {x: number}\n",
+      "build/types.d.lua": "return { important = \"unrecorded output\" }\n",
+      "tua.toml": ""
+    },
+    "exit": 0,
+    "stdout": "built 0 file(s)\n",
+    "stderr": "",
+    "after": {
+      "tua.toml": "",
+      "build/types.d.lua": "return { important = \"unrecorded output\" }\n",
+      "build/.tua-build-manifest.json": "{}",
+      "src/types.d.tua": "export type Point = {x: number}\n"
+    }
+  },
+  {
+    "name": "modified-maps",
+    "command": [
+      "/Users/kyonru/Documents/projects/Experiments/tlua/target/debug/tua",
+      "build"
+    ],
+    "cwd": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/post-fix-review/fixtures/modified-maps",
+    "before": {
+      "src/main.tua": "print(\"ok\")\n",
+      "build/main.lua.map": "manually maintained map\n",
+      "build/main.lua.map.json": "manually maintained metadata\n",
+      "tua.toml": "emit_maps=false\n"
+    },
+    "exit": 0,
+    "stdout": "built 1 file(s)\n",
+    "stderr": "",
+    "after": {
+      "tua.toml": "emit_maps=false\n",
+      "build/main.lua": "print(\"ok\")\n",
+      "build/main.lua.map": "manually maintained map\n",
+      "build/main.lua.map.json": "manually maintained metadata\n",
+      "build/.tua-build-manifest.json": "{\"main.lua\":10978092295694357}",
+      "src/main.tua": "print(\"ok\")\n"
+    }
+  }
+]

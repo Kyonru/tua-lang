@@ -1,0 +1,13 @@
+{
+  "command": [
+    "/Users/kyonru/Documents/projects/Experiments/tlua/target/debug/tua",
+    "check"
+  ],
+  "status": 0,
+  "stderr": "",
+  "cachedAfter": {
+    "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/post-fix-review/pipeline-root/.tua/cache/asset-pipelines/world/aca6363acc27267504c2b8e9551153d8/files/data.txt": "CORRUPT",
+    "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/post-fix-review/pipeline-root/.tua/cache/asset-pipelines/world/3ee91276d4708ec4dd4a88f5dd7d1e3a/files/data.txt": "GENERATED CONTENT"
+  },
+  "materializedAfter": "GENERATED CONTENT"
+}

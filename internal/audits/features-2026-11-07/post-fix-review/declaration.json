@@ -1,0 +1,48 @@
+{
+  "signature": {
+    "activeParameter": 0,
+    "activeSignature": 0,
+    "signatures": [
+      {
+        "label": "function F.echo(value: string): string",
+        "parameters": [
+          {
+            "label": "value: string"
+          }
+        ]
+      }
+    ]
+  },
+  "member": {
+    "contents": {
+      "kind": "markdown",
+      "value": "```tua\nfunction F.echo(value: string): string\n```\n\n---\n\n- kind: function\n- module: /Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/post-fix-review/declaration-project/src/vendor-types/feel.lua"
+    },
+    "range": {
+      "end": {
+        "character": 21,
+        "line": 1
+      },
+      "start": {
+        "character": 17,
+        "line": 1
+      }
+    }
+  },
+  "result": {
+    "contents": {
+      "kind": "markdown",
+      "value": "```tua\nlocal result: string\n```"
+    },
+    "range": {
+      "end": {
+        "character": 12,
+        "line": 2
+      },
+      "start": {
+        "character": 6,
+        "line": 2
+      }
+    }
+  }
+}

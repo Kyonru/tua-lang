@@ -1,0 +1,16 @@
+{
+  "root": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/post-fix-review/pipeline-root",
+  "first": {
+    "status": 0,
+    "stdout": "checked 1 file(s)\n",
+    "stderr": ""
+  },
+  "stateBeforeMove": "{\n  \"output_root\": \"/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/post-fix-review/pipeline-root/src/generated/a\",\n  \"outputs\": [\n    \"data.txt\"\n  ]\n}\n",
+  "before": "USER AUTHORED CONTENT",
+  "second": {
+    "status": 1,
+    "stdout": "",
+    "stderr": "/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/post-fix-review/pipeline-root/tua.toml:1:1 error TL2011: asset pipeline `world`: generated output `/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/post-fix-review/pipeline-root/src/generated/b/data.txt` would overwrite an unowned source file\n"
+  },
+  "after": "USER AUTHORED CONTENT"
+}
