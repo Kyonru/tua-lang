@@ -3,9 +3,9 @@
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
-const { runTests, downloadAndUnzipVSCode, resolveCliArgsFromVSCodeExecutablePath } = require("@vscode/test-electron");
+const { runTests, downloadAndUnzipVSCode } = require("@vscode/test-electron");
 const { spawnSync } = require("child_process");
-const { localVSCodeExecutable } = require("../vscode-executable");
+const { localVSCodeExecutable, localVSCodeCliArgs } = require("../vscode-executable");
 
 async function main() {
   let extensionDevelopmentPath = path.resolve(__dirname, "..", "..");
@@ -26,7 +26,7 @@ async function main() {
     let vscodeExecutablePath = localVSCodeExecutable();
     if (vsix) {
       vscodeExecutablePath ||= await downloadAndUnzipVSCode();
-      const [cli, ...cliArgs] = resolveCliArgsFromVSCodeExecutablePath(vscodeExecutablePath);
+      const [cli, ...cliArgs] = localVSCodeCliArgs(vscodeExecutablePath);
       const installed = path.join(tempRoot, "extensions");
       const result = spawnSync(cli, [...cliArgs, "--user-data-dir", path.join(tempRoot, "user-data"),
         "--extensions-dir", installed, "--install-extension", path.resolve(vsix), "--force"],

@@ -3,6 +3,7 @@
 const assert = require("assert/strict");
 const test = require("node:test");
 const {
+  localVSCodeCliArgs,
   MACOS_EXECUTABLES,
   localVSCodeExecutable,
 } = require("../vscode-executable");
@@ -45,4 +46,28 @@ test("unsupported platforms let @vscode/test-electron select its executable", ()
     localVSCodeExecutable({ env: {}, existsSync: () => true, platform: "linux" }),
     undefined,
   );
+});
+
+
+test("installed VSIX testing resolves VSCodium's sibling CLI and preserves arguments", () => {
+  const args = ["/app/bin/code", "--user-data-dir=/tmp/profile"];
+  assert.deepEqual(localVSCodeCliArgs("/app/VSCodium", {
+    resolve: () => args,
+    existsSync: candidate => candidate === "/app/bin/codium",
+  }), ["/app/bin/codium", args[1]]);
+  assert.deepEqual(args, ["/app/bin/code", "--user-data-dir=/tmp/profile"]);
+});
+
+test("installed VSIX testing preserves an existing Code CLI", () => {
+  const args = ["/app/bin/code", "--profile=test"];
+  assert.deepEqual(localVSCodeCliArgs("/app/Code", {
+    resolve: () => args, existsSync: () => true,
+  }), args);
+});
+
+test("installed VSIX testing does not invent an absent CLI", () => {
+  const args = ["/app/bin/code"];
+  assert.deepEqual(localVSCodeCliArgs("/app/Code", {
+    resolve: () => args, existsSync: () => false,
+  }), args);
 });
