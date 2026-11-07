@@ -215,6 +215,46 @@ pub(crate) fn narrowed_type_at_position(
         &mut narrowed,
     );
 
+    struct ShortCircuit<'a, F> {
+        aliases: &'a BTreeMap<String, Type>,
+        name: &'a str,
+        position: SourcePosition,
+        lookup: F,
+        narrowed: &'a mut Option<Type>,
+    }
+    impl<F: Fn(&str) -> Option<Type> + Copy> Visitor for ShortCircuit<'_, F> {
+        fn visit_expression(&mut self, expression: &Expression) {
+            let Expression::BinaryOperator { lhs, binop, rhs } = expression else {
+                return;
+            };
+            if !node_span(rhs.as_ref()).is_some_and(|span| contains_position(span, self.position)) {
+                return;
+            }
+            if self.name.contains('.')
+                && (member_path_effect_before(lhs.as_ref(), self.name, self.position, false)
+                    || member_path_effect_before(rhs.as_ref(), self.name, self.position, false))
+            {
+                return;
+            }
+            let mut locals = match binop {
+                ast::BinOp::And(_) => narrowed_locals_for_condition(lhs, self.aliases, self.lookup),
+                ast::BinOp::Or(_) => {
+                    narrowed_locals_after_false_condition(lhs, self.aliases, self.lookup)
+                }
+                _ => return,
+            };
+            if let Some(ty) = locals.remove(self.name) {
+                *self.narrowed = Some(ty);
+            }
+        }
+    }
+    parsed.ast.nodes().visit(&mut ShortCircuit {
+        aliases,
+        name,
+        position,
+        lookup,
+        narrowed: &mut narrowed,
+    });
     narrowed
 }
 
@@ -242,7 +282,7 @@ pub(crate) fn guarded_member_type(
         if table.metatable_facts().is_some() {
             return None;
         }
-        current = table.semantic_field(field)?.ty.clone();
+        current = table.semantic_field(field)?.value_type();
         path.push('.');
         path.push_str(field);
         if !type_may_be_nil(&current) || matches!(current, Type::Any) {
@@ -1024,11 +1064,15 @@ fn metatable_instance_type(
 fn remove_nil(ty: &Type) -> Type {
     match ty {
         Type::Union(types) => {
-            let without_nil = types
-                .iter()
-                .filter(|ty| !matches!(ty, Type::Primitive(PrimitiveType::Nil)))
-                .cloned()
-                .collect::<Vec<_>>();
+            fn collect(ty: &Type, result: &mut Vec<Type>) {
+                match ty {
+                    Type::Primitive(PrimitiveType::Nil) => {}
+                    Type::Union(types) => types.iter().for_each(|ty| collect(ty, result)),
+                    _ => result.push(ty.clone()),
+                }
+            }
+            let mut without_nil = Vec::new();
+            types.iter().for_each(|ty| collect(ty, &mut without_nil));
 
             match without_nil.len() {
                 0 => ty.clone(),
