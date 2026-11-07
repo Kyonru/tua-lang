@@ -1969,7 +1969,6 @@ mod tests {
         fs::remove_dir_all(outside).unwrap();
     }
 
-    #[cfg(unix)]
     fn test_pipeline(output: &str) -> AssetPipelineConfig {
         AssetPipelineConfig {
             name: "audio".to_owned(),
@@ -1985,7 +1984,6 @@ mod tests {
         }
     }
 
-    #[cfg(unix)]
     fn temp_dir(name: &str) -> PathBuf {
         let path = std::env::temp_dir().join(format!(
             "tua-asset-{name}-{}-{}",
