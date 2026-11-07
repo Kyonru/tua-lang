@@ -5469,3 +5469,10 @@ fn nil_arguments_trigger_defaults_without_weakening_body_types() {
     check_tua_source("defaults.tua", "local function f(x: number = 7): number return x + 1 end\nlocal maybe: number | nil = nil\nprint(f(), f(nil), f(maybe), f(0))\nlocal g = function(x: number = 3): number return x + 1 end\nprint(g(nil))").unwrap();
     assert!(check_tua_source("defaults.tua", "local function f(x: number): number return x end\nprint(f(nil))").is_err());
 }
+
+#[test]
+fn void_love_method_results_cannot_receive_chained_calls() {
+    let errors = check_tua_source("void.tua", "local function bad(text: Text) print(text:set('hello'):getWidth()) end").unwrap_err();
+    assert!(errors.iter().any(|d| d.message.contains("nil")), "{errors:?}");
+    check_tua_source("chain.tua", "local function good(data: ImageData): number return data:clone():getWidth() end").unwrap();
+}

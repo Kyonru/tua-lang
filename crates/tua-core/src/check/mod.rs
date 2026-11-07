@@ -1878,11 +1878,15 @@ impl<'a> Checker<'a> {
             return first;
         }
 
-        let mut current = first.into_iter().next();
+        let known_void = first.is_empty() && matches!(self.infer_call_target(function_call),
+            Some(Callable::ExternalFunction(ref function)) if !function.variants.is_empty() && function.variants.iter().all(|variant| variant.return_types.is_empty()));
+        let mut current = first.into_iter().next().or_else(|| known_void.then(Type::nil));
         for suffix in rest {
             current = match suffix {
                 Suffix::Index(Index::Dot { name, .. }) => current.and_then(|ty| {
-                    resolve_table_field_type(self.environment, &ty, &token_text(name))
+                    let result = resolve_table_field_type(self.environment, &ty, &token_text(name));
+                    if result.is_none() { self.report_unsafe_union_operation(name, &ty, "access a field on"); }
+                    result
                 }),
                 Suffix::Call(call) => self.check_chained_call(suffix, call, current),
                 _ => None,
@@ -1925,6 +1929,11 @@ impl<'a> Checker<'a> {
             _ => None,
         };
 
+        if callable.is_none() {
+            if let Some(ty) = &current {
+                self.report_unsafe_union_operation(suffix, ty, if method.is_some() { "call a method on" } else { "call" });
+            }
+        }
         match callable {
             Some(Callable::Function(function)) => {
                 if let Some(receiver) = receiver {
@@ -1937,7 +1946,7 @@ impl<'a> Checker<'a> {
             Some(Callable::ExternalFunction(function)) => self
                 .check_external_argument_list(suffix, arguments, &function)
                 .into_iter()
-                .next(),
+                .next().or(Some(Type::nil())),
             Some(Callable::TypedFunction(function)) => {
                 if let Some(receiver) = receiver { arguments.insert(0, CallArgument::Inferred(receiver)); }
                 self.check_typed_argument_list(suffix, arguments, &function).into_iter().next()
@@ -4261,7 +4270,9 @@ fn external_function_variant_from_detail(detail: &str) -> Option<ExternalFunctio
     let (parameters, vararg_type) = parameters_from_function_detail(detail)?;
     let mut return_types = return_types_from_function_detail(detail);
 
-    if return_types.is_empty() {
+    // An absent result annotation in the API catalog is a void function.
+    // Only an explicit but unsupported result spelling remains dynamic.
+    if return_types.is_empty() && detail.contains("): ") {
         return_types.push(Type::Any);
     }
 
