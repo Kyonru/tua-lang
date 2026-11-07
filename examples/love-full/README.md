@@ -14,6 +14,10 @@ The example enables `diagnostics.undefined_variables` and declares the
 intentional runtime globals `screen_width` and `screen_height` in `tua.toml` so
 stale local names are caught before the generated game runs.
 
+Game-state records initialize their required fields before callbacks run. Each
+`load()` resets the round; resources created there remain optional and are guarded
+before use in `update()` or `draw()`.
+
 Build the converted modules into the runnable LOVE root:
 
 ```sh

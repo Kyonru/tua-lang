@@ -1,14 +1,21 @@
 type ScoreModule = {
-  time?: number,
-  score?: number,
+  time: number,
+  score: number,
   font?: any,
-  time_x?: number,
-  time_y?: number,
-  score_x?: number,
-  score_y?: number,
+  time_x: number,
+  time_y: number,
+  score_x: number,
+  score_y: number,
 }
 
-local score: ScoreModule = {}
+local score: ScoreModule = {
+  time = 0,
+  score = 0,
+  time_x = 0,
+  time_y = 16,
+  score_x = 0,
+  score_y = 16,
+}
 
 function score.load()
   score.time = 0
@@ -26,7 +33,9 @@ function score.update(dt: number)
 end
 
 function score.draw()
-  love.graphics.setFont(score.font)
+  local font = score.font
+  if not font then return end
+  love.graphics.setFont(font)
   love.graphics.print(tostring(math.floor(score.time)), score.time_x, score.time_y)
   love.graphics.print(tostring(math.floor(score.score)), score.score_x, score.score_y)
 end

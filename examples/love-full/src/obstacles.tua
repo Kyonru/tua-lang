@@ -6,10 +6,10 @@ type Obstacle = {
 }
 
 type ObstaclesModule = {
-  list?: any,
-  spawn_timer?: number,
-  spawn_interval?: number,
-  speed?: number,
+  list: Obstacle[],
+  spawn_timer: number,
+  spawn_interval: number,
+  speed: number,
 }
 
 local player = require("player")
@@ -18,11 +18,14 @@ local score = require("score")
 local sound = require("sound")
 local particles = require("particles")
 
-local obstacles: ObstaclesModule = {}
+local obstacles: ObstaclesModule = {
+  list = {}, spawn_timer = 0, spawn_interval = 2, speed = 1,
+}
 local block = image "assets/block.png"
 
 function obstacles.load()
-  obstacles.list = {}
+  local empty: Obstacle[] = {}
+  obstacles.list = empty
   obstacles.spawn_timer = 0
   obstacles.spawn_interval = 2
   obstacles.speed = 1

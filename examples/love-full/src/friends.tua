@@ -9,9 +9,9 @@ type Friend = {
 }
 
 type FriendsModule = {
-  list?: any,
-  spawn_timer?: number,
-  types?: any,
+  list: Friend[],
+  spawn_timer: number,
+  types: any,
 }
 
 local utils: any = require("utils")
@@ -20,7 +20,7 @@ local sound: any = require("sound")
 local particles: any = require("particles")
 local score: any = require("score")
 
-local friends: FriendsModule = {}
+local friends: FriendsModule = { list = {}, spawn_timer = 2, types = {} }
 
 local fish_asset: any = love.graphics.newImage("assets/friends/fish.png")
 local fly_asset: any = love.graphics.newImage("assets/friends/fly.png")

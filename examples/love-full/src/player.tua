@@ -4,22 +4,22 @@ type Vec2 = {
 }
 
 type PlayerModule = {
-  sprite?: any,
-  x?: number,
-  y?: number,
-  width?: number,
-  height?: number,
-  speed?: number,
-  velocity?: Vec2,
-  max_lives?: number,
-  lives?: number,
-  drag?: number,
-  drag_start_at?: number,
-  last_input?: number,
-  wind_force?: number,
-  bounce_force?: number,
-  stop_timer?: number,
-  time?: number,
+  sprite: any,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  speed: number,
+  velocity: Vec2,
+  max_lives: number,
+  lives: number,
+  drag: number,
+  drag_start_at: number,
+  last_input: number,
+  wind_force: number,
+  bounce_force: number,
+  stop_timer: number,
+  time: number,
   jetpack?: any,
 }
 
@@ -27,8 +27,6 @@ local utils: any = require("utils")
 local inspect: any = require("inspect")
 local sound: any = require("sound")
 local particles: any = require("particles")
-
-local player: PlayerModule = {}
 
 local PLAYER_SPRITES = {
   IDLE = love.graphics.newImage("assets/player/idle.png"),
@@ -38,6 +36,26 @@ local PLAYER_SPRITES = {
   HIT = love.graphics.newImage("assets/player/hit.png"),
   MOVE = love.graphics.newImage("assets/player/move.png"),
   BACK = love.graphics.newImage("assets/player/hit.png"),
+}
+
+-- Required game state exists before callbacks run; load() resets each round.
+local player: PlayerModule = {
+  sprite = PLAYER_SPRITES.IDLE,
+  x = 100,
+  y = 100,
+  width = 52,
+  height = 52,
+  speed = 6,
+  velocity = { x = 0, y = 0 },
+  max_lives = 3,
+  lives = 3,
+  drag = 0.8,
+  drag_start_at = 0.2,
+  last_input = 0,
+  wind_force = 0.5,
+  bounce_force = 0.25,
+  stop_timer = 0,
+  time = 0,
 }
 
 local font: any = love.graphics.newFont("assets/sniglet.otf", 32)
@@ -173,12 +191,18 @@ function player.update(dt: number)
     player.velocity.x = utils.easeOutCirc(player.velocity.x, player.drag)
   end
 
-  player.jetpack:update(dt)
-  player.jetpack:setPosition(player.x + 16, player.y + 32)
+  local jetpack = player.jetpack
+  if jetpack then
+    jetpack:update(dt)
+    jetpack:setPosition(player.x + 16, player.y + 32)
+  end
 end
 
 function player.draw()
-  love.graphics.draw(player.jetpack, 0, 0)
+  local jetpack = player.jetpack
+  if jetpack then
+    love.graphics.draw(jetpack, 0, 0)
+  end
 
   if inspect.inspecting then
     love.graphics.rectangle("line", player.x, player.y, player.width, player.height)
