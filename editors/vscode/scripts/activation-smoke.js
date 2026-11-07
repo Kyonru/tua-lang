@@ -310,6 +310,7 @@ async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
           moduleName: "love.boot",
           outputDirectory: path.join(workspace, "build"),
           sourceDirectory: path.join(workspace, "src"),
+          testSourceDirectory: path.join(workspace, "src"),
           workspaceRoot: workspace,
         },
         path: path.join(workspace, "build", "main.lua"),
