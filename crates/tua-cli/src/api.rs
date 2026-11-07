@@ -283,9 +283,18 @@ impl ApiSession {
 
     fn diagnostics(&self, params: &Value) -> Result<Value, ApiError> {
         let snapshot = self.host.snapshot();
-        let paths = self
-            .optional_path(params)?
-            .map_or_else(|| self.indexed_paths.clone(), |path| vec![path]);
+        let paths = self.optional_path(params)?.map_or_else(
+            || {
+                self.indexed_paths
+                    .iter()
+                    .chain(self.overlays.keys())
+                    .cloned()
+                    .collect::<BTreeSet<_>>()
+                    .into_iter()
+                    .collect()
+            },
+            |path| vec![path],
+        );
         let diagnostics = paths
             .iter()
             .flat_map(|path| snapshot.diagnostics(path))
@@ -1003,6 +1012,38 @@ mod tests {
         .unwrap();
 
         assert_eq!(response_lines(&output), vec![json!({"ok": true})]);
+    }
+
+    #[test]
+    fn diagnostics_include_new_unsaved_overlay_files() {
+        let project = TempProject::new();
+        project.write("tua.toml", "source = \"src\"\n");
+        project.write("src/main.tua", "return 1");
+        let mut session = ApiSession::load(&project.root).unwrap();
+        session
+            .dispatch_api(
+                "setOverlay",
+                &json!({"path":"src/new.tua", "source":"local value: number = \"bad\""}),
+            )
+            .unwrap();
+        for refresh in [false, true] {
+            if refresh {
+                session.refresh().unwrap();
+            }
+            let diagnostics = session.diagnostics(&json!({})).unwrap();
+            assert!(diagnostics["diagnostics"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|item| item.to_string().contains("new.tua")));
+        }
+        session
+            .dispatch_api("clearOverlay", &json!({"path":"src/new.tua"}))
+            .unwrap();
+        assert!(session.diagnostics(&json!({})).unwrap()["diagnostics"]
+            .as_array()
+            .unwrap()
+            .is_empty());
     }
 
     #[test]
