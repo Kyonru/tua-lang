@@ -1630,7 +1630,9 @@ enabled = true
 -- file: src/main.tua
 local ECS = require("ecs_state")
 local velocity = ECS.world:get(ECS.player, ECS.VelocityComponent)
-local speed = velocity.
+if velocity then
+  local speed = velocity.
+end
 -- file: src/ecs_state.tua
 local VelocityComponent = ecs.component("Velocity", { x = "number", y = "number" })
 local world = ecs.world()
@@ -1648,13 +1650,27 @@ return {
         .expect("fixture should write");
     let main = fixture.source("src/main.tua");
     let uri = path_uri(&temp.join("src/main.tua"));
+    for guarded in [
+        main.to_owned(),
+        main.replace("if velocity then", "if false then\nelseif velocity then"),
+        main.replace("if velocity then", "while velocity do"),
+    ] {
+        let output = run_messages(vec![
+            initialize_with_root(1, path_uri(temp.path())),
+            did_open(&uri, &guarded),
+            completion_request(2, &uri, &guarded, "velocity."),
+            hover_request(3, &uri, &guarded, "velocity ="),
+        ]);
+        assert_completion_labels(&output, 2, ["x", "y"]);
+        assert_hover_contains(&output, 3, "nil");
+    }
+    let unguarded = main.replace("if velocity then", "if velocity then\nelse");
     let output = run_messages(vec![
         initialize_with_root(1, path_uri(temp.path())),
-        did_open(&uri, main),
-        completion_request(2, &uri, main, "velocity."),
+        did_open(&uri, &unguarded),
+        completion_request(2, &uri, &unguarded, "velocity."),
     ]);
-
-    assert_completion_labels(&output, 2, ["x", "y"]);
+    assert_completion_labels(&output, 2, []);
 }
 
 #[test]

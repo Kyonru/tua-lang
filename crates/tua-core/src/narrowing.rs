@@ -403,26 +403,31 @@ fn collect_narrowed_type_at_position(
                 narrowed,
             ),
             ast::Stmt::If(if_stmt) => {
-                collect_if_branch_narrowing(
-                    if_stmt.condition(),
-                    if_stmt.block(),
-                    aliases,
-                    name,
-                    position,
-                    lookup,
-                    narrowed,
-                );
-
-                if let Some(else_ifs) = if_stmt.else_if() {
-                    for else_if in else_ifs {
-                        collect_if_branch_narrowing(
-                            else_if.condition(),
-                            else_if.block(),
-                            aliases,
-                            name,
+                let branches =
+                    std::iter::once((if_stmt.condition(), if_stmt.block(), if_stmt.then_token()))
+                        .chain(if_stmt.else_if().into_iter().flatten().map(|branch| {
+                            (branch.condition(), branch.block(), branch.then_token())
+                        }));
+                let boundaries = if_stmt
+                    .else_if()
+                    .into_iter()
+                    .flatten()
+                    .filter_map(node_start)
+                    .chain(node_start(
+                        if_stmt.else_token().unwrap_or_else(|| if_stmt.end_token()),
+                    ));
+                for ((condition, block, then_token), end) in branches.zip(boundaries) {
+                    if node_span(then_token).is_some_and(|span| {
+                        contains_position(
+                            SourceSpan {
+                                start: span.end,
+                                end,
+                            },
                             position,
-                            lookup,
-                            narrowed,
+                        )
+                    }) {
+                        collect_if_branch_narrowing(
+                            condition, block, aliases, name, position, lookup, narrowed,
                         );
                     }
                 }
@@ -457,15 +462,30 @@ fn collect_narrowed_type_at_position(
                 lookup,
                 narrowed,
             ),
-            ast::Stmt::While(while_stmt) => collect_if_branch_narrowing(
-                while_stmt.condition(),
-                while_stmt.block(),
-                aliases,
-                name,
-                position,
-                lookup,
-                narrowed,
-            ),
+            ast::Stmt::While(while_stmt) => {
+                if node_span(while_stmt.do_token())
+                    .zip(node_start(while_stmt.end_token()))
+                    .is_some_and(|(start, end)| {
+                        contains_position(
+                            SourceSpan {
+                                start: start.end,
+                                end,
+                            },
+                            position,
+                        )
+                    })
+                {
+                    collect_if_branch_narrowing(
+                        while_stmt.condition(),
+                        while_stmt.block(),
+                        aliases,
+                        name,
+                        position,
+                        lookup,
+                        narrowed,
+                    );
+                }
+            }
             _ => {}
         }
     }
@@ -540,24 +560,8 @@ fn collect_if_branch_narrowing(
     lookup: impl Fn(&str) -> Option<Type> + Copy,
     narrowed: &mut Option<Type>,
 ) {
-    let Some(block_span) = node_span(block) else {
-        return;
-    };
-
-    // Assignment inference evaluates the RHS just before its statement so a
-    // reassignment still sees the previous binding. Include that boundary for
-    // the first statement too: it already executes under this branch's guard.
-    let evaluation_span = SourceSpan {
-        start: SourcePosition {
-            column: block_span.start.column.saturating_sub(1),
-            ..block_span.start
-        },
-        ..block_span
-    };
-    if !contains_position(evaluation_span, position) {
-        return;
-    }
-
+    // The caller establishes membership using syntax delimiters, so empty
+    // recovered bodies and whitespace before the first statement retain guards.
     struct ConditionCalls(bool);
     impl Visitor for ConditionCalls {
         fn visit_function_call(&mut self, _: &FunctionCall) {
