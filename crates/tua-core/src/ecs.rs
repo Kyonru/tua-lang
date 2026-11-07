@@ -182,9 +182,10 @@ pub(crate) fn inferred_method_return_types(
         return None;
     }
 
-    Some(vec![component_argument_type
+    let value = component_argument_type
         .and_then(component_value_type)
-        .unwrap_or(Type::Any)])
+        .unwrap_or(Type::Any);
+    Some(vec![if method == "add" { value } else { Type::union([value, Type::nil()]) }])
 }
 
 pub(crate) fn component_argument<'a>(
@@ -966,7 +967,8 @@ end
                         Some(component_type(Type::number()))
                     });
                 assert_eq!(queries, 1);
-                assert_eq!(returns, Some(vec![Type::number()]));
+                let expected = if method == "add" { Type::number() } else { Type::union([Type::number(), Type::nil()]) };
+                assert_eq!(returns, Some(vec![expected]));
             }
         }
     }
