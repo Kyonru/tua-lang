@@ -546,6 +546,7 @@ impl AnalysisSnapshot {
                     }),
             )
             .with_exact_module_bindings(self.project_exact_module_bindings(parsed))
+            .with_project_module_signatures(self.project_module_signatures(parsed))
             .with_deprecated_accesses(self.project_module_binding_deprecations(parsed))
             .with_must_use_accesses(self.project_module_binding_must_use_accesses(parsed))
             .with_local_types(project_inference.local_types.clone())
@@ -576,6 +577,88 @@ impl AnalysisSnapshot {
                 Some((binding.alias, ty))
             })
             .collect()
+    }
+
+    // Preserve authored alias labels and documentation for presentation without
+    // weakening the resolved module types used by inference and checking.
+    fn project_module_signatures(
+        &self,
+        parsed: &ParsedSource,
+    ) -> Vec<(String, (Type, TypedFunction))> {
+        let mut signatures = Vec::new();
+        for binding in require_bindings_for_parsed_source(parsed) {
+            let Some(path) = self.indexed_required_module_path(parsed, &binding.alias) else {
+                continue;
+            };
+            let Some(raw) = self.file(path).and_then(|file| file.exports.as_ref()) else {
+                continue;
+            };
+            let Some(exports) = self.indexed_module_export_fields(path) else {
+                continue;
+            };
+            for (name, export) in exports {
+                if !matches!(
+                    raw.fields.get(&name).map(|field| &field.ty),
+                    Some(Type::Function(_))
+                ) {
+                    continue;
+                }
+                let Type::Function(resolved) =
+                    self.type_database
+                        .resolve_type(&self.module_graph, path, &export.ty)
+                else {
+                    continue;
+                };
+                let contract = Type::Function(resolved.clone());
+                let qualified = format!("{}.{}", binding.alias, name);
+                let mut function = crate::semantic::typed_function_from_function_type(
+                    Some(qualified.clone()),
+                    resolved,
+                );
+                function.documentation = export.documentation.clone();
+                for (index, parameter) in function.parameters.iter_mut().enumerate() {
+                    parameter.documentation =
+                        export.parameter_documentation.get(index).cloned().flatten();
+                }
+                if let Some(authored) = raw.fields.get(&name) {
+                    if let Type::Function(authored_type) = &authored.ty {
+                        for (parameter, authored_parameter) in function
+                            .parameters
+                            .iter_mut()
+                            .zip(&authored_type.parameters)
+                        {
+                            if matches!(authored_parameter.ty, Type::Alias(_))
+                                && self.type_database.resolve_type(
+                                    &self.module_graph,
+                                    path,
+                                    &authored_parameter.ty,
+                                ) == parameter.ty
+                            {
+                                parameter.ty = authored_parameter.ty.clone();
+                            }
+                        }
+                        for (result, authored_result) in function
+                            .return_types
+                            .iter_mut()
+                            .zip(authored_type.return_types_or_any())
+                        {
+                            if matches!(authored_result, Type::Alias(_))
+                                && self.type_database.resolve_type(
+                                    &self.module_graph,
+                                    path,
+                                    authored_result,
+                                ) == *result
+                            {
+                                *result = authored_result.clone();
+                            }
+                        }
+                        function.return_type = function.return_types.first().cloned();
+                    }
+                }
+                signatures.push((qualified, (contract, function)));
+            }
+        }
+        signatures
     }
 
     fn project_exact_module_bindings(&self, parsed: &ParsedSource) -> Vec<(String, String)> {
@@ -2462,7 +2545,7 @@ mod declaration_overlay_tests {
             "local M={}\nfunction M.echo(value) return value end\nreturn M\n",
         )
         .unwrap();
-        std::fs::write(root.join("src/vendor-types/feel.lua"), "---@meta feel\nlocal M={}\n---@param value string\n---@return string\nfunction M.echo(value) end\nreturn M\n").unwrap();
+        std::fs::write(root.join("src/vendor-types/feel.lua"), "---@meta feel\nlocal M={}\n---@param value string echoed value\n---@return string\nfunction M.echo(value) end\nreturn M\n").unwrap();
         let main = root.join("src/main.tua");
         std::fs::write(&main, &fixture.files()[0].source).unwrap();
         let mut host = AnalysisHost::new();
@@ -2474,7 +2557,7 @@ mod declaration_overlay_tests {
             "lib.feel",
         )]);
         host.set_file(&main, fixture.files()[0].source.clone());
-        host.set_file_with_kind(root.join("src/vendor-types/feel.lua"), "---@meta feel\nlocal M={}\n---@param value string\n---@return string\nfunction M.echo(value) end\nreturn M\n", AnalysisSourceKind::Lua);
+        host.set_file_with_kind(root.join("src/vendor-types/feel.lua"), "---@meta feel\nlocal M={}\n---@param value string echoed value\n---@return string\nfunction M.echo(value) end\nreturn M\n", AnalysisSourceKind::Lua);
         host.set_file_with_kind(
             root.join("src/lib/feel.lua"),
             "local M={}\nfunction M.echo(value) return value end\nreturn M\n",
@@ -2501,6 +2584,12 @@ mod declaration_overlay_tests {
         assert!(
             signature.signatures[0].label.ends_with(": string"),
             "{signature:?}"
+        );
+        assert_eq!(
+            signature.signatures[0].parameters[0]
+                .documentation
+                .as_deref(),
+            Some("echoed value")
         );
         let hover = snapshot.hover(&main, fixture.position("hover")).unwrap();
         assert!(hover.contents.contains("result: string"), "{hover:?}");

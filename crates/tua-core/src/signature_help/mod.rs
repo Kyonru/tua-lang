@@ -213,6 +213,13 @@ impl<'a> SignatureResolver<'a> {
         let (root, fields) = parts.split_first()?;
         let qualified_name = parts.join(".");
 
+        if let Some(function) = self.semantic.project_module_signature(parts, position) {
+            return Some(signatures_from_typed_function(
+                function,
+                Some(&qualified_name),
+            ));
+        }
+
         if (!fields.is_empty() && self.environment.exact_module_binding(root).is_some())
             || self
                 .semantic

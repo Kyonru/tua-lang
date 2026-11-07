@@ -915,6 +915,23 @@ impl<'a> SemanticModel<'a> {
         matches!(lua::first_call_argument(call), Some(Expression::String(value)) if unquote_string(&value.to_string()) == module)
     }
 
+    pub(crate) fn project_module_signature(
+        &self,
+        parts: &[String],
+        position: SourcePosition,
+    ) -> Option<&TypedFunction> {
+        if !self.project_module_binding_visible(parts.first()?, position) {
+            return None;
+        }
+        let (contract, presentation) = self
+            .environment
+            .project_module_signature(&parts.join("."))?;
+        let resolved = self
+            .typed_function_for_call_parts(parts, position)?
+            .as_type()?;
+        (resolved == *contract).then_some(presentation)
+    }
+
     pub(crate) fn typed_function_for_call_parts(
         &self,
         parts: &[String],
