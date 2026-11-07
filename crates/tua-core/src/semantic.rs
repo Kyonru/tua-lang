@@ -417,6 +417,24 @@ impl<'a> SemanticModel<'a> {
                 .unwrap_or_default();
         };
 
+        if parts == ["require"] && self.environment.local("require").is_none()
+            && self.environment.function("require").is_none() {
+            if let Some(Expression::String(module)) = lua::first_call_argument(function_call) {
+                let name = module.to_string();
+                let name = name.trim().trim_matches(['\"', '\'']);
+                if let Some(ty) = self.environment.required_module_type(name) {
+                    return vec![ty.clone()];
+                }
+                if self.environment.has_project_module_types() {
+                    return vec![Type::Any];
+                }
+                if let Some(exports) = crate::module_index::resolve_required_module(&self.parsed.path, name)
+                    .and_then(|path| crate::module_index::required_module_exports_for_path(&path)) {
+                    return vec![exports.value_type];
+                }
+            }
+        }
+
         if let Some(domain) =
             domains.imported_constructor_domain_from_bindings(self.runtime_imports(), &parts)
         {
@@ -1898,7 +1916,10 @@ impl<'a> SemanticModel<'a> {
 
         let mut current = match expression.prefix() {
             Prefix::Name(name) => {
-                self.type_of_name_at_depth(&token_text(name), position, depth + 1)?
+                self.type_of_name_at_depth(&token_text(name), position, depth + 1)
+                    .or_else(|| (token_text(name) == "require" && self.is_unshadowed_lua_root("require")
+                        && matches!(expression.suffixes().next(), Some(Suffix::Call(_))))
+                        .then_some(Type::Any))?
             }
             Prefix::Expression(expression) => {
                 self.type_of_expression_return_at_depth(expression, position, 0, depth + 1)?

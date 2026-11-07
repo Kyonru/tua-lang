@@ -8490,6 +8490,24 @@ unrelated:emit("score", "other")
 }
 
 #[test]
+fn inline_require_field_extraction_preserves_exported_types() {
+    let fixture = Fixture::parse(r#"-- file: src/provider.tua
+return {inc = function(x: number): number return x + 1 end, game = store({score=1})}
+-- file: src/main.tua
+local inc = require("provider").inc
+local n = inc(2)
+local state = require("provider").game:get()
+print(<|number|>n, <|state|>state)
+"#);
+    let mut host = AnalysisHost::new();
+    for file in fixture.files() { host.set_file(&file.path, &file.source); }
+    let snapshot = host.snapshot();
+    let number = snapshot.hover("src/main.tua", fixture.position("number")).unwrap();
+    assert!(number.contents.contains("number"), "{}", number.contents);
+    assert!(snapshot.hover("src/main.tua", fixture.position("state")).unwrap().contents.contains("score: number"));
+}
+
+#[test]
 fn imported_ecs_component_retains_its_payload_schema() {
     let fixture = Fixture::parse(r#"-- file: src/components.tua
 local Position = ecs.component("Position", {x="number"})

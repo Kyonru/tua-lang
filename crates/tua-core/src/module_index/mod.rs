@@ -238,7 +238,7 @@ fn parse_module_source(
     }
 }
 
-fn required_module_exports_for_path(path: &Path) -> Option<ModuleExports> {
+pub(crate) fn required_module_exports_for_path(path: &Path) -> Option<ModuleExports> {
     let path = path.to_path_buf();
     let source = crate::input_limits::read_source(&path).ok()?;
 
@@ -285,6 +285,10 @@ fn require_bindings(parsed: &ParsedSource) -> BTreeMap<String, RequireBinding> {
         let expressions = local.expressions().into_iter().collect::<Vec<_>>();
 
         for (name, expression) in names.iter().zip(expressions.iter()) {
+            // An extracted field/call result is not an alias of the entire module.
+            if matches!(expression, Expression::FunctionCall(call) if call.suffixes().count() != 1) {
+                continue;
+            }
             let Some((module, kind)) =
                 module_specifier_from_expression(expression, names.len(), expressions.len())
             else {

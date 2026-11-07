@@ -49,6 +49,7 @@ pub struct TypeEnvironment {
     deprecated_accesses: BTreeMap<Vec<String>, Deprecation>,
     must_use_accesses: BTreeSet<Vec<String>>,
     exact_module_bindings: BTreeMap<String, String>,
+    required_module_types: Option<BTreeMap<String, Type>>,
     table_remove_overridden: bool,
     assert_overridden: bool,
     table_insert_overridden: bool,
@@ -462,6 +463,19 @@ impl TypeEnvironment {
     ) -> Self {
         self.must_use_accesses.extend(accesses);
         self
+    }
+
+    pub(crate) fn with_required_module_types(mut self, modules: impl IntoIterator<Item = (String, Type)>) -> Self {
+        self.required_module_types = Some(modules.into_iter().collect());
+        self
+    }
+
+    pub(crate) fn required_module_type(&self, module: &str) -> Option<&Type> {
+        self.required_module_types.as_ref()?.get(module)
+    }
+
+    pub(crate) fn has_project_module_types(&self) -> bool {
+        self.required_module_types.is_some()
     }
 
     pub(crate) fn with_exact_module_bindings(
@@ -981,6 +995,7 @@ pub(crate) fn build_type_environment_with_domain_registry(
             deprecated_accesses: BTreeMap::new(),
             must_use_accesses: BTreeSet::new(),
             exact_module_bindings: BTreeMap::new(),
+            required_module_types: None,
             table_remove_overridden: lua::table_remove_is_overridden(parsed),
             assert_overridden: lua::global_name_is_assigned(parsed, "assert"),
             table_insert_overridden: lua::table_member_is_overridden(parsed, "insert"),

@@ -530,6 +530,13 @@ impl AnalysisSnapshot {
             .with_project_module_globals(parsed, self.project_module_globals())
             .with_alias_types(self.project_imported_alias_types(parsed))
             .with_local_types(self.project_module_binding_types(parsed))
+            .with_required_module_types(self.module_graph.module(&parsed.path).into_iter()
+                .flat_map(|module| &module.require_edges)
+                .filter_map(|edge| {
+                    let path = self.indexed_module_path_for_specifier(parsed, &edge.module)?;
+                    let ty = self.indexed_module_value_type(path)?;
+                    Some((edge.module.clone(), self.type_database.resolve_type(&self.module_graph, path, &ty)))
+                }))
             .with_exact_module_bindings(self.project_exact_module_bindings(parsed))
             .with_deprecated_accesses(self.project_module_binding_deprecations(parsed))
             .with_must_use_accesses(self.project_module_binding_must_use_accesses(parsed))
