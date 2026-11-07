@@ -246,3 +246,27 @@ fn hex_digit(byte: u8) -> Option<u8> {
         _ => None,
     }
 }
+
+pub(crate) fn parse_lua_number(text: &str) -> Option<f64> {
+    let normalized = text.replace('_', "");
+
+    if let Some(hex) = normalized
+        .strip_prefix("0x")
+        .or_else(|| normalized.strip_prefix("0X"))
+    {
+        u64::from_str_radix(hex, 16).ok().map(|value| value as f64)
+    } else {
+        normalized.parse().ok()
+    }
+}
+
+
+/// A numeric literal, optionally parenthesized or negated; never evaluates user code.
+pub(crate) fn numeric_literal(expression: &Expression) -> Option<f64> {
+    match expression {
+        Expression::Number(token) => parse_lua_number(&token_text(token)),
+        Expression::UnaryOperator { unop: ast::UnOp::Minus(_), expression } => numeric_literal(expression).map(|value| -value),
+        Expression::Parentheses { expression, .. } | Expression::TypeAssertion { expression, .. } => numeric_literal(expression),
+        _ => None,
+    }
+}

@@ -1125,19 +1125,8 @@ fn validate_config(path: &Path, config: &TableConstructor, diagnostics: &mut Vec
     }
 
     if let Some(deadzone) = named_field(config, "deadzone") {
-        if let Expression::Number(number) = deadzone {
-            if number
-                .to_string()
-                .trim()
-                .parse::<f64>()
-                .is_ok_and(|value| !(0.0..=1.0).contains(&value))
-            {
-                diagnostics.push(input_diagnostic(
-                    path,
-                    deadzone,
-                    "input `deadzone` must be between 0 and 1",
-                ));
-            }
+        if crate::ast_utils::numeric_literal(deadzone).is_some_and(|value| !(0.0..=1.0).contains(&value)) {
+            diagnostics.push(input_diagnostic(path, deadzone, "input `deadzone` must be between 0 and 1"));
         }
     }
 
@@ -1442,4 +1431,12 @@ local controls = input({
 
         assert_eq!(input_type_from_call(call), Some(Type::alias(TYPE_NAME)));
     }
+    #[test]
+    fn validates_signed_and_hex_deadzone_literals() {
+        for (literal, invalid) in [("-0.25", true), ("0x2", true), ("1.25", true), ("0", false), ("0x1", false)] {
+            let parsed = crate::parse_tua_source("input.tua", format!("local c = input({{controls={{}}, deadzone={literal}}})")).unwrap();
+            assert_eq!(!config_diagnostics(&parsed).is_empty(), invalid, "{literal}");
+        }
+    }
+
 }

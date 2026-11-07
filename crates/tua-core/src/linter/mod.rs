@@ -11,7 +11,7 @@ use full_moon::tokenizer::{TokenReference, TokenType};
 use full_moon::visitors::Visitor;
 
 use crate::ast_utils::{
-    field_chain_before_first_call, plain_field_chain_from_expression, plain_field_chain_from_var,
+    field_chain_before_first_call, parse_lua_number, plain_field_chain_from_expression, plain_field_chain_from_var,
     string_literal_runtime_bytes,
 };
 use crate::config::{DiagnosticsConfig, JitConfig};
@@ -3130,18 +3130,6 @@ fn number_literal_text(token: &TokenReference) -> Option<String> {
     }
 }
 
-fn parse_lua_number(text: &str) -> Option<f64> {
-    let normalized = text.replace('_', "");
-
-    if let Some(hex) = normalized
-        .strip_prefix("0x")
-        .or_else(|| normalized.strip_prefix("0X"))
-    {
-        u64::from_str_radix(hex, 16).ok().map(|value| value as f64)
-    } else {
-        normalized.parse().ok()
-    }
-}
 
 fn duplicate_key_diagnostic(
     path: &Path,
