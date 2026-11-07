@@ -356,15 +356,9 @@ impl TypeContext {
                 .map(|parameter| &parameter.ty)
                 .or(source.vararg_type.as_deref())
             else {
-                return Err(Box::new(AssignabilityFailure {
-                    path: Vec::new(),
-                    expected: Type::Function(target.clone()),
-                    found: Type::Function(source.clone()),
-                    kind: AssignabilityFailureKind::FunctionParameterCount {
-                        expected: target.parameters.len(),
-                        found: source.parameters.len(),
-                    },
-                }));
+                // Lua callbacks may ignore trailing arguments. Required source
+                // arity was checked above; only consumed arguments need variance checks.
+                continue;
             };
 
             if self

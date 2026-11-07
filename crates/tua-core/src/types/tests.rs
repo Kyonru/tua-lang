@@ -1832,3 +1832,14 @@ documented = "invalid"
         "{diagnostics:?}"
     );
 }
+
+#[test]
+fn shortened_callbacks_can_ignore_trailing_arguments() {
+    let target = Type::function([Type::number(), Type::string()], Type::nil());
+    for params in [vec![], vec![Type::number()], vec![Type::number(), Type::string()]] {
+        assert!(is_assignable(&Type::function(params, Type::nil()), &target));
+    }
+    for params in [vec![Type::string()], vec![Type::number(), Type::string(), Type::number()]] {
+        assert!(!is_assignable(&Type::function(params, Type::nil()), &target));
+    }
+}
