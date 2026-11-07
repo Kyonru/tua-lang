@@ -134,10 +134,12 @@ local function create_transition(name)
       return true
     end
 
-    call_handler(self[afterCallback] or self[eventCallback], self, name, from, to, extra)
-    call_handler(self.onstatechange, self, name, from, to, extra)
+    -- Completion releases this transition before callbacks can start another.
+    local completedFrom, completedTo, completedExtra = from, to, extra
     self.asyncState = NONE
     self.currentTransitioningEvent = nil
+    call_handler(self[afterCallback] or self[eventCallback], self, name, completedFrom, completedTo, completedExtra)
+    call_handler(self.onstatechange, self, name, completedFrom, completedTo, completedExtra)
     return true
   end
 

@@ -211,3 +211,15 @@ do
     callbacks={onbeforego=function() return false end, onleavea=function() left=true end}})
   assert(machine:go() == false and machine.current == 'a' and not left)
 end
+
+-- An after callback may begin an asynchronous successor transition.
+do
+  local machine = stateMachine.create({initial='a', events={
+    {name='first',from='a',to='b'}, {name='second',from='b',to='c'}}, callbacks={
+    onafterfirst=function(self) self:second() end,
+    onleaveb=function() return stateMachine.ASYNC end}})
+  assert(machine:first())
+  assert(machine.currentTransitioningEvent == 'second')
+  assert(machine:transition('second'))
+  assert(machine.current == 'c' and machine.currentTransitioningEvent == nil)
+end
