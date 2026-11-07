@@ -27,49 +27,71 @@ pub(crate) fn run_dev(
     no_launch: bool,
 ) -> Result<(), CliError> {
     let cwd = cwd.as_ref();
-    let workspace = ProjectWorkspace::from_loaded(cwd, loaded.clone());
-    let out_dir = workspace.primary_output_root().to_path_buf();
-    let output_guard = OutputGuard::new(&workspace).map_err(|diagnostic| {
-        CliError::from_diagnostics("unsafe dev output path", vec![diagnostic])
-    })?;
     let mut generation = 0u64;
     let mut launched = false;
+    let mut previous_output: Option<PathBuf> = None;
+    let mut game: Option<std::sync::Arc<std::sync::Mutex<Child>>> = None;
 
-    run_watch_with_hook(cwd, loaded, &mut |outcome: &BuildOutcome| {
-        if has_errors(&outcome.diagnostics) {
-            println!(
-                "{}",
-                if launched {
-                    "dev: keeping the running game on its last good build"
-                } else {
-                    "dev: fix the errors above to start the game"
-                }
-            );
-            return Ok(());
-        }
-        prepare_output(&output_guard, &out_dir).map_err(|error| io_error(&out_dir, error))?;
-        generation += 1;
-        write_signal(
-            &output_guard,
-            &out_dir,
-            generation,
-            &outcome.shader_dependencies,
-        )
-        .map_err(|error| io_error(&out_dir, error))?;
-        if !launched {
-            if no_launch {
-                // Emitted only after all output and the initial reload signal are ready.
-                println!("dev: ready {}", out_dir.display());
-            } else {
-                let child = launch(love.as_deref(), &out_dir)?;
-                exit_with_game(child);
+    run_watch_with_hook(
+        cwd,
+        loaded,
+        &mut |outcome: &BuildOutcome, current: &LoadedConfig| {
+            if has_errors(&outcome.diagnostics) {
+                println!(
+                    "{}",
+                    if launched {
+                        "dev: keeping the running game on its last good build"
+                    } else {
+                        "dev: fix the errors above to start the game"
+                    }
+                );
+                return Ok(());
             }
-            launched = true;
-        } else {
-            println!("dev: sent reload {generation} to the game");
-        }
-        Ok(())
-    })
+            let workspace = ProjectWorkspace::from_loaded(cwd, current.clone());
+            let out_dir = workspace.primary_output_root().to_path_buf();
+            let output_guard = OutputGuard::new(&workspace).map_err(|diagnostic| {
+                CliError::from_diagnostics("unsafe dev output path", vec![diagnostic])
+            })?;
+            if previous_output
+                .as_ref()
+                .is_some_and(|previous| previous != &out_dir)
+            {
+                if let Some(game) = &game {
+                    let mut child = game.lock().expect("game monitor poisoned");
+                    child.kill().map_err(|error| io_error(&out_dir, error))?;
+                    let _ = child.wait();
+                    prepare_output(&output_guard, &out_dir)
+                        .map_err(|error| io_error(&out_dir, error))?;
+                    *child = launch(love.as_deref(), &out_dir)?;
+                } else {
+                    launched = false;
+                }
+            }
+            previous_output = Some(out_dir.clone());
+            prepare_output(&output_guard, &out_dir).map_err(|error| io_error(&out_dir, error))?;
+            generation += 1;
+            write_signal(
+                &output_guard,
+                &out_dir,
+                generation,
+                &outcome.shader_dependencies,
+            )
+            .map_err(|error| io_error(&out_dir, error))?;
+            if !launched {
+                if no_launch {
+                    // Emitted only after all output and the initial reload signal are ready.
+                    println!("dev: ready {}", out_dir.display());
+                } else {
+                    let child = launch(love.as_deref(), &out_dir)?;
+                    game = Some(exit_with_game(child));
+                }
+                launched = true;
+            } else {
+                println!("dev: sent reload {generation} to the game");
+            }
+            Ok(())
+        },
+    )
 }
 
 /// Make the build output hot reloadable: the runtime beside it and the
@@ -177,15 +199,22 @@ fn launch(love: Option<&Path>, out_dir: &Path) -> Result<Child, CliError> {
 /// End `tua dev` with the game's exit status when the window closes. The
 /// watch loop holds stdout and stderr for its whole run, so this thread exits
 /// without printing.
-fn exit_with_game(mut child: Child) {
-    std::thread::spawn(move || {
-        let code = child
-            .wait()
-            .ok()
-            .and_then(|status| status.code())
-            .unwrap_or(1);
-        std::process::exit(code);
+fn exit_with_game(child: Child) -> std::sync::Arc<std::sync::Mutex<Child>> {
+    let child = std::sync::Arc::new(std::sync::Mutex::new(child));
+    let monitored = child.clone();
+    std::thread::spawn(move || loop {
+        let mut child = monitored.lock().expect("game monitor poisoned");
+        let status = child.try_wait();
+        match status {
+            Ok(Some(status)) => std::process::exit(status.code().unwrap_or(1)),
+            Err(_) => std::process::exit(1),
+            Ok(None) => {
+                drop(child);
+                std::thread::sleep(std::time::Duration::from_millis(50));
+            }
+        }
     });
+    child
 }
 
 fn io_error(path: &Path, error: io::Error) -> CliError {

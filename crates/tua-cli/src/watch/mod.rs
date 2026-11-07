@@ -181,7 +181,7 @@ impl ChangeSet {
 }
 
 pub(crate) fn run_watch(cwd: impl AsRef<Path>, loaded: LoadedConfig) -> Result<(), CliError> {
-    run_watch_with_hook(cwd, loaded, &mut |_| Ok(()))
+    run_watch_with_hook(cwd, loaded, &mut |_, _| Ok(()))
 }
 
 /// Watch and rebuild like `tua watch`, calling `after_build` after every
@@ -189,7 +189,7 @@ pub(crate) fn run_watch(cwd: impl AsRef<Path>, loaded: LoadedConfig) -> Result<(
 pub(crate) fn run_watch_with_hook(
     cwd: impl AsRef<Path>,
     loaded: LoadedConfig,
-    after_build: &mut dyn FnMut(&BuildOutcome) -> Result<(), CliError>,
+    after_build: &mut dyn FnMut(&BuildOutcome, &LoadedConfig) -> Result<(), CliError>,
 ) -> Result<(), CliError> {
     let mut stdout = io::stdout().lock();
     let mut stderr = io::stderr().lock();
@@ -210,7 +210,7 @@ fn run_watch_with_options<W: Write, E: Write>(
     options: WatchOptions,
     stdout: &mut W,
     stderr: &mut E,
-    after_build: &mut dyn FnMut(&BuildOutcome) -> Result<(), CliError>,
+    after_build: &mut dyn FnMut(&BuildOutcome, &LoadedConfig) -> Result<(), CliError>,
 ) -> Result<(), CliError> {
     let mut layout = WatchLayout::new(cwd, &loaded);
     write_watch_target(cwd, &layout, stdout)?;
@@ -237,7 +237,7 @@ fn run_watch_with_options<W: Write, E: Write>(
     let mut snapshot = snapshot_watch_tree(&layout, None, &WatchBatch::rescan_all())
         .map_err(|diagnostic| watch_error("failed to read source directory", diagnostic))?;
     write_outcome(stdout, stderr, "initial build", "built", &initial)?;
-    after_build(&initial)?;
+    after_build(&initial, &loaded)?;
 
     let mut rebuilds = 0usize;
 
@@ -290,7 +290,7 @@ fn run_watch_with_options<W: Write, E: Write>(
                 "rebuilt",
                 &outcome,
             )?;
-            after_build(&outcome)?;
+            after_build(&outcome, &loaded)?;
 
             rebuilds += 1;
             if reached_rebuild_limit(rebuilds, options.exit_after_rebuilds) {
@@ -318,7 +318,7 @@ fn run_watch_with_options<W: Write, E: Write>(
                         "rebuilt",
                         &next.outcome,
                     )?;
-                    after_build(&next.outcome)?;
+                    after_build(&next.outcome, &loaded)?;
 
                     if let Some(error) = next.fallback_error {
                         write_stdout(
@@ -365,7 +365,7 @@ fn run_watch_with_options<W: Write, E: Write>(
         }
 
         write_outcome(stdout, stderr, "rebuild", "rebuilt", &outcome)?;
-        after_build(&outcome)?;
+        after_build(&outcome, &loaded)?;
 
         rebuilds += 1;
         if reached_rebuild_limit(rebuilds, options.exit_after_rebuilds) {

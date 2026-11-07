@@ -5592,3 +5592,65 @@ fn test_report_preserves_backend_startup_error() {
         String::from_utf8_lossy(&output.stderr)
     );
 }
+
+#[test]
+fn dev_output_root_change_prepares_new_location() {
+    let _guard = watch_test_guard();
+    let temp = TempDir::new("dev-output-root-change");
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).unwrap();
+    fs::create_dir_all(temp.path().join("src")).unwrap();
+    fs::write(
+        temp.path().join("src/main.tua"),
+        "local value = 1\nreturn value\n",
+    )
+    .unwrap();
+    let mut child = tua()
+        .args([
+            "dev",
+            "--no-launch",
+            "--love",
+            "missing-love-must-not-be-launched",
+        ])
+        .current_dir(temp.path())
+        .env("TUA_INTERNAL_WATCH_POLL_MS", "20")
+        .env("TUA_INTERNAL_WATCH_DEBOUNCE_MS", "40")
+        .env("TUA_INTERNAL_WATCH_RECONCILE_MS", "100")
+        .env("TUA_INTERNAL_WATCH_EXIT_AFTER_REBUILDS", "1")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let capture = CapturedChildStdout::start(&mut child, "dev: ready ");
+    capture
+        .ready
+        .recv_timeout(Duration::from_secs(10))
+        .expect("dev did not prepare initial output");
+    assert!(temp.path().join("build/tuahotreload.lua").is_file());
+    assert!(fs::read_to_string(temp.path().join("build/main.lua"))
+        .unwrap()
+        .contains("require(\"tuahotreload\").install()"));
+    let signal = temp.path().join("build/.tuahotreload");
+    assert_eq!(fs::read_to_string(&signal).unwrap(), "1\n");
+    fs::write(
+        temp.path().join(CONFIG_FILE),
+        DEFAULT_CONFIG_TEXT.replace("out = \"build\"", "out = \"other-build\""),
+    )
+    .unwrap();
+    let output = wait_for_child_output(child, Duration::from_secs(5));
+    let stdout = String::from_utf8(capture.finish()).unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(stdout.matches("dev: ready ").count(), 2);
+    assert!(temp.path().join("other-build/tuahotreload.lua").is_file());
+    assert!(fs::read_to_string(temp.path().join("other-build/main.lua"))
+        .unwrap()
+        .contains("require(\"tuahotreload\").install()"));
+    assert_eq!(fs::read_to_string(signal).unwrap(), "1\n");
+    assert_eq!(
+        fs::read_to_string(temp.path().join("other-build/.tuahotreload")).unwrap(),
+        "2\n"
+    );
+}
