@@ -3322,19 +3322,6 @@ fn contextual_callback_path(expression: &Expression, body_span: SourceSpan) -> O
     }
 }
 
-fn contextual_callback_path(expression: &Expression, body_span: SourceSpan) -> Option<(&ast::FunctionBody, Vec<String>)> {
-    match expression {
-        Expression::Function(function) if node_span(function.body()) == Some(body_span) => Some((function.body(), Vec::new())),
-        Expression::TableConstructor(table) => table.fields().iter().find_map(|field| {
-            let Field::NameKey { key, value, .. } = field else { return None; };
-            let (body, mut fields) = contextual_callback_path(value, body_span)?;
-            fields.insert(0, token_text(key));
-            Some((body, fields))
-        }),
-        _ => None,
-    }
-}
-
 fn typed_function_from_module_export(
     name: Option<String>,
     export: ModuleExportField,
