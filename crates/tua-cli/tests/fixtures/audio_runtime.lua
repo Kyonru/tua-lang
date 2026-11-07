@@ -185,3 +185,16 @@ do
   snapshot.analysis.fake = 'corrupted'
   assert(system:snapshot().analysis.fake == nil)
 end
+
+-- Region loops do not replay beat events before their authored start.
+do
+  local system = audioSystem({music={one={bpm=60,loopRegion={start=2,finish=4},layers={main={source=source}}}}})
+  local beats = {}
+  system:on('beat',function(event) beats[#beats+1]=event.beat end)
+  system:setMusicState('one')
+  local leader=system._musicRuntime.layers.main._record.source
+  leader.position=3; system:update(3)
+  beats={}
+  leader.position=4.1; system:update(1.1)
+  assert(#beats == 1 and beats[1] == 2)
+end

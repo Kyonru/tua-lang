@@ -485,6 +485,7 @@ function Audio:_updateMusic()
   for _, voice in pairs(runtime.layers) do if voice and validVoice(voice) then leader = voice._record.source break end end
   local position = leader and leader.tell and leader:tell("seconds") or self._clock - runtime.startedAt
   local loopRegion = runtime.scene.loopRegion or runtime.scene.loop
+  local regionWrapped = false
   if type(loopRegion) == "table" then
     local loopStart = loopRegion.start or loopRegion[1] or 0
     local loopEnd = loopRegion.finish or loopRegion[2]
@@ -493,14 +494,16 @@ function Audio:_updateMusic()
         if voice and validVoice(voice) then sourceCall(voice._record.source, "seek", loopStart, "seconds") end
       end
       position = loopStart
+      regionWrapped = true
       if bpm then
         runtime.beat = math.floor(math.max(0, position - offset) * bpm / 60) - 1
         runtime.bar = -1
+        if self._pendingMusic then self._pendingMusic.afterBeat = runtime.beat end
       end
     end
   end
   if not bpm then runtime.position = position return end
-  if runtime.position and position < runtime.position then
+  if not regionWrapped and runtime.position and position < runtime.position then
     -- A looping Source clock is per-cycle; event cursors must follow it.
     runtime.beat, runtime.bar = -1, -1
     if self._pendingMusic then self._pendingMusic.afterBeat = -1 end
