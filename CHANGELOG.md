@@ -8,6 +8,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Stabilize extension setup verification by waiting for configuration snapshots
+  after preset changes, while continuing to reject failed restores.
+
 - Assignment type errors identify the destination and call return position,
   with separate highlights for failing multi-return destinations and explicit
   context for missing assignment values.

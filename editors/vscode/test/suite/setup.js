@@ -2,10 +2,17 @@
 
 const assert = require("assert/strict");
 const vscode = require("vscode");
+const { waitUntil } = require("./support");
 
 async function runSetupTests() {
   const config = () => vscode.workspace.getConfiguration(undefined, null);
   const before = (key) => config().inspect(key)?.globalValue;
+  // Settings writes cross the workbench RPC boundary. The extension-host
+  // configuration snapshot can arrive after the command promise resolves.
+  const waitForGlobal = (key, expected) => waitUntil(
+    () => before(key) === expected,
+    `${key} user setting to become ${JSON.stringify(expected)}`,
+  );
   const appearanceKeys = [
     "workbench.colorTheme", "workbench.iconTheme", "window.commandCenter",
     "workbench.editor.editorActionsLocation", "workbench.layoutControl.enabled",
@@ -21,27 +28,40 @@ async function runSetupTests() {
   }
 
   await vscode.commands.executeCommand("tua.setup.applyTheme");
+  await waitForGlobal("workbench.colorTheme", "Indigo Carbon HC");
   assert.equal(config().get("workbench.colorTheme"), "Indigo Carbon HC");
   await vscode.commands.executeCommand("tua.setup.applyTheme");
   await vscode.commands.executeCommand("tua.setup.restoreTheme");
+  await waitForGlobal("workbench.colorTheme", undefined);
   assert.equal(before("workbench.colorTheme"), undefined);
 
   await vscode.commands.executeCommand("tua.setup.applyLayout");
+  await waitUntil(() =>
+    config().get("workbench.editor.editorActionsLocation") === "titleBar"
+      && config().get("workbench.layoutControl.enabled") === true
+      && config().get("workbench.layoutControl.type") === "both"
+      && config().get("window.commandCenter") === true,
+  "layout preset to reach the extension-host configuration");
   assert.equal(config().get("workbench.editor.editorActionsLocation"), "titleBar");
   assert.equal(config().get("workbench.layoutControl.enabled"), true);
   assert.equal(config().get("workbench.layoutControl.type"), "both");
   assert.equal(config().get("window.commandCenter"), true);
   await config().update("workbench.layoutControl.type", "toggles", vscode.ConfigurationTarget.Global);
+  await waitForGlobal("workbench.layoutControl.type", "toggles");
   await vscode.commands.executeCommand("tua.setup.restoreLayout");
+  await waitForGlobal("workbench.editor.editorActionsLocation", undefined);
   assert.equal(before("workbench.editor.editorActionsLocation"), undefined);
   assert.equal(before("workbench.layoutControl.type"), "toggles", "restore must preserve manual edits");
   await config().update("workbench.layoutControl.type", undefined, vscode.ConfigurationTarget.Global);
+  await waitForGlobal("workbench.layoutControl.type", undefined);
 
   // A walkthrough is active, with no Tua document in the editor.
   assert.equal(await vscode.commands.executeCommand("tua.inlayHints.selectMode", "compact", true), "compact");
   const editor = () => vscode.workspace.getConfiguration("editor", { languageId: "tua" });
+  await waitUntil(() => editor().get("inlayHints.maximumLength") === 1, "compact inlay hint setting");
   assert.equal(editor().get("inlayHints.maximumLength"), 1);
   assert.equal(await vscode.commands.executeCommand("tua.inlayHints.selectMode", "full", true), "full");
+  await waitUntil(() => editor().inspect("inlayHints.maximumLength").workspaceLanguageValue === undefined, "restored inlay hint setting");
   assert.equal(editor().inspect("inlayHints.maximumLength").workspaceLanguageValue, undefined);
 
   if (process.env.TUA_SETUP_PREVIEW === "1") {
