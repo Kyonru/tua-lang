@@ -262,6 +262,10 @@ fn uniform_editor_features_return_shader_locations_and_live_overlays() {
     );
     server.send(hover_request(3, &uri, source, "tint"));
     assert_hover_contains(server.output(), 3, "extern vec4 tint;");
+    let hover = server.output().iter().find(|message| message["id"] == 3).unwrap();
+    let markdown = hover["result"]["contents"]["value"].as_str().unwrap();
+    assert!(markdown.starts_with("```glsl\n"), "{markdown}");
+    assert!(!markdown.contains("```tua"), "{markdown}");
     server.send(completion_request(4, &uri, source, "effect:send(\""));
     assert_completion_labels(server.output(), 4, ["tint"]);
 

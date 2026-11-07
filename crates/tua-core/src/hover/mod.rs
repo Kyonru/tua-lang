@@ -24,6 +24,8 @@ use crate::{
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Hover {
+    /// Whether contents already carries Markdown rather than a Tua declaration.
+    pub is_markdown: bool,
     pub contents: String,
     pub span: Option<SourceSpan>,
     pub documentation: Option<String>,
@@ -90,6 +92,7 @@ impl<'a> HoverResolver<'a> {
                     .trim_start_matches('@');
                 if let Some(tag) = crate::annotation_tags::get(name) {
                     return Some(Hover {
+                        is_markdown: false,
                         contents: tag.syntax.clone(),
                         span: Some(span),
                         documentation: Some(tag.documentation()),
@@ -119,6 +122,7 @@ impl<'a> HoverResolver<'a> {
                             },
                         };
                         return Some(Hover {
+                            is_markdown: false,
                             contents: tag.syntax.clone(),
                             span: Some(span),
                             documentation: Some(tag.documentation()),
@@ -450,6 +454,7 @@ impl<'a> HoverResolver<'a> {
         .unwrap_or(base);
 
         Some(Hover {
+            is_markdown: false,
             contents: format_type_with_prefix(format!("parameter {name}: "), &ty),
             span: Some(hover_span),
             documentation: None,
@@ -495,6 +500,7 @@ impl<'a> HoverResolver<'a> {
         let contents = format_type_with_prefix(format!("local {name}: "), &ty);
 
         Some(Hover {
+            is_markdown: false,
             contents,
             span: Some(hover_span),
             documentation: None,
@@ -633,6 +639,7 @@ impl<'a> HoverResolver<'a> {
 
 fn hover(contents: impl Into<String>, span: Option<SourceSpan>) -> Hover {
     Hover {
+        is_markdown: false,
         contents: contents.into(),
         span,
         documentation: None,
@@ -920,6 +927,7 @@ fn object_pool_local_hover(
         .then(|| format!("Acquires and releases values of type `{item_type}`."));
 
     Some(Hover {
+        is_markdown: false,
         contents: format!("local {name}: {}", object_pool::TYPE_NAME),
         span: Some(span),
         documentation,
@@ -936,6 +944,7 @@ fn state_machine_local_hover(
     let (states, events) = state_machine::type_summary(environment, ty)?;
 
     Some(Hover {
+        is_markdown: false,
         contents: format!("local {name}: {}", state_machine::TYPE_NAME),
         span: Some(span),
         documentation: Some(format!("States: `{states}`. Events: `{events}`.")),
@@ -954,6 +963,7 @@ fn store_local_hover(
         (state_type != Type::Any).then(|| format!("Holds runtime state of type `{state_type}`."));
 
     Some(Hover {
+        is_markdown: false,
         contents: format!("local {name}: {}", store::TYPE_NAME),
         span: Some(span),
         documentation,
@@ -983,6 +993,7 @@ fn input_local_hover(
     });
 
     Some(Hover {
+        is_markdown: false,
         contents: format!("local {name}: {}", input::TYPE_NAME),
         span: Some(span),
         documentation,

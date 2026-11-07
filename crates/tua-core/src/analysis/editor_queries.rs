@@ -17,6 +17,7 @@ impl AnalysisSnapshot {
 
                 if let Some(asset) = asset::asset_at_position(&file.assets, position) {
                     return Some(Hover {
+                        is_markdown: false,
                         contents: asset.hover_markdown(),
                         span: Some(asset.span),
                         documentation: None,
@@ -761,6 +762,7 @@ impl AnalysisSnapshot {
             let path = self.resolved_module_path(&parsed.path, &specifier.module)?;
 
             return Some(Hover {
+                is_markdown: false,
                 contents: format!("(module) {} -> {}", specifier.module, path.display()),
                 span: None,
                 documentation: None,
@@ -777,6 +779,7 @@ impl AnalysisSnapshot {
             let path = self.resolved_module_path(&parsed.path, &binding.module)?;
 
             return Some(Hover {
+                is_markdown: false,
                 contents: format!(
                     "(module) {} = {}(\"{}\") -> {}",
                     binding.alias,
@@ -810,6 +813,7 @@ impl AnalysisSnapshot {
         };
 
         Some(Hover {
+            is_markdown: false,
             contents: format_module_export_hover(
                 &chain
                     .parts

@@ -179,7 +179,11 @@ fn lsp_severity(severity: DiagnosticSeverity) -> u8 {
 }
 
 pub(super) fn lsp_hover_from_core(hover: Hover, source: &str) -> Value {
-    let mut markdown = format!("```tua\n{}\n```", hover.contents);
+    let mut markdown = if hover.is_markdown {
+        hover.contents.clone()
+    } else {
+        format!("```tua\n{}\n```", hover.contents)
+    };
 
     if let Some(documentation) = &hover.documentation {
         markdown.push_str("\n\n");

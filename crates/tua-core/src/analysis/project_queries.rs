@@ -161,6 +161,7 @@ impl AnalysisSnapshot {
             self.type_database
                 .resolve_type_name(&self.module_graph, &parsed.path, &name)?;
         let mut hover = Hover {
+            is_markdown: false,
             contents: format_type_with_prefix(format!("type {name} = "), &binding.ty),
             span: Some(current_part.span),
             documentation: None,
@@ -197,6 +198,7 @@ impl AnalysisSnapshot {
         }
 
         Some(Hover {
+            is_markdown: false,
             contents: format_type_with_prefix(format!("local {}: ", current_part.text), &ty),
             span: Some(current_part.span),
             documentation: None,
@@ -234,6 +236,7 @@ impl AnalysisSnapshot {
         }
 
         Some(Hover {
+            is_markdown: false,
             contents: format_type_with_prefix(format!("local {}: ", current_part.text), &ty),
             span: Some(current_part.span),
             documentation: None,
@@ -1285,6 +1288,7 @@ impl AnalysisSnapshot {
         };
 
         Some(Hover {
+            is_markdown: false,
             contents: format_type_with_prefix(format!("{prefix} {}: ", part.text), &ty),
             span: Some(part.span),
             documentation: None,
@@ -1305,6 +1309,7 @@ impl AnalysisSnapshot {
         let optional = if table_field.optional { "?" } else { "" };
 
         Some(Hover {
+            is_markdown: false,
             contents: format_type_with_prefix(format!("(field) {field}{optional}: "), &ty),
             span: Some(span),
             documentation: None,
@@ -1338,6 +1343,7 @@ impl AnalysisSnapshot {
         };
 
         Some(Hover {
+            is_markdown: false,
             contents: format_type_with_prefix(format!("(field) {}: ", reference.key), &ty),
             span: Some(reference.span),
             documentation: Some(format!(
@@ -1368,6 +1374,7 @@ impl AnalysisSnapshot {
             })
         {
             return Some(Hover {
+                is_markdown: false,
                 contents: format!(
                     "(animation) {}: {}",
                     animation.name,
@@ -1393,6 +1400,7 @@ impl AnalysisSnapshot {
             let ty = crate::state_machine::derived_member_type(&call, &part.text)?;
 
             Some(Hover {
+                is_markdown: false,
                 contents: format_type_with_prefix(format!("(field) {}: ", part.text), &ty),
                 span: Some(part.span),
                 documentation: Some(

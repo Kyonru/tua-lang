@@ -1267,6 +1267,7 @@ fn signal_event_hover(
         .count();
 
     Some(Hover {
+        is_markdown: false,
         contents: format!("SignalBus event \"{}\"({payload})", event.mention.name),
         span: Some(event.mention.name_span),
         documentation: Some(format!(

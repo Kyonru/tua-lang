@@ -176,6 +176,7 @@ impl AnalysisSnapshot {
             .collect::<Vec<_>>()
             .join("\n\n---\n\n");
         Some(Hover {
+            is_markdown: true,
             contents,
             span: Some(call.span),
             documentation: None,

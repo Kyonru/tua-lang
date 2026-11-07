@@ -1026,6 +1026,7 @@ impl AnalysisHost {
 
         if let Some(asset) = asset::asset_at_position(&file.assets, position) {
             return Some(Hover {
+                is_markdown: false,
                 contents: asset.hover_markdown(),
                 span: Some(asset.span),
                 documentation: None,
