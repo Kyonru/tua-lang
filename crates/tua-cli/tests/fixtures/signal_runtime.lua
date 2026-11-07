@@ -103,3 +103,14 @@ do
   events:emit("hit")
   assert(calls == 1, "subscription mutation after a handler error must recover")
 end
+
+-- Earlier listeners can recurse before an outer snapshot reaches once.
+do
+  local bus, calls, nested = signal(), 0, false
+  bus:on('nested', function()
+    if not nested then nested = true; bus:emit('nested') end
+  end)
+  bus:once('nested', function() calls = calls + 1 end)
+  bus:emit('nested')
+  assert(calls == 1)
+end

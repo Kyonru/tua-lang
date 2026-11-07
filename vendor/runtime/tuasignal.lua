@@ -56,7 +56,10 @@ function SignalBus:once(name, handler)
   assert_handler(handler)
 
   local wrapped
+  local fired = false
   wrapped = function(...)
+    if fired then return end
+    fired = true
     self:off(name, wrapped)
     return handler(...)
   end
