@@ -72,6 +72,7 @@ function love.update(dt)
 
   local moveX, moveY = controller:get("move")
   local velocity = world:get(ECS.player, ECS.VelocityComponent)
+  assert(velocity ~= nil)
   velocity.x = moveX * 220
   velocity.y = moveY * 220
   movement:update(dt)

@@ -68,7 +68,8 @@ three simple ideas:
 
 The component order in `ecs.system(world, { Position, Velocity }, callback)`
 is also the callback data order. The callback receives the entity ID first and
-`dt` last.
+`dt` last. For a literal component list, unannotated callback parameters inherit
+the component schemas, with a numeric entity ID and `dt`.
 
 Tua completes the built-in module and its methods, shows named signatures and
 short API documentation, checks static component values, and reports unknown
@@ -155,7 +156,10 @@ world:remove(enemy, Position)
 world:destroy(enemy)
 ```
 
-Here `position` is inferred as `{ x: number, y: number }` from `Position`.
+Here `position` is inferred as `{ x: number, y: number } | nil` from `Position`.
+Check it for `nil` before reading fields: an entity may not have that component.
+`world:add` returns the non-null payload; `world:get` and `world:remove` include
+`nil` in their result type.
 When a component or schema is assembled dynamically, Tua keeps the operation
 permissive and falls back to `any` instead of guessing a payload shape.
 

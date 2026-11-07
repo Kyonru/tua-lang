@@ -3,7 +3,7 @@
 This small bullet-hell loop keeps ordinary Lua and LOVE structure visible while
 showing where Tua adds value:
 
-- ECS owns the player's typed position, velocity, and rotation.
+- ECS owns the player's typed position, velocity, and rotation; lookup assertions make required components explicit.
 - An object pool reuses typed projectiles.
 - A store owns score, shot, and wave state.
 - A state machine checks pause/resume transitions.

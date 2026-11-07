@@ -9,6 +9,8 @@ local bullets = Globals.bullets
 local function drawPlayer()
   local position = world:get(ECS.player, ECS.PositionComponent)
   local rotation = world:get(ECS.player, ECS.RotationComponent)
+  -- Component lookups may be absent; this player requires both components.
+  assert(position ~= nil and rotation ~= nil)
 
   love.graphics.push()
   love.graphics.translate(position.x, position.y)
@@ -40,6 +42,7 @@ end
 
 local function spawnRing()
   local position = world:get(ECS.player, ECS.PositionComponent)
+  assert(position ~= nil)
   local wave = patterns.ring(8, 110)
 
   for _, shot in ipairs(wave) do
