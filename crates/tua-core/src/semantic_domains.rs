@@ -230,6 +230,12 @@ impl BuiltinDomainRegistry {
     ) -> Vec<Diagnostic> {
         let mut diagnostics = signal::event_schema_diagnostics(parsed, environment);
 
+        if environment.local(state_machine::CONSTRUCTOR_NAME).is_none()
+            && environment.function(state_machine::CONSTRUCTOR_NAME).is_none()
+        {
+            diagnostics.extend(state_machine::config_diagnostics(parsed));
+        }
+
         if environment.local(input::CONSTRUCTOR_NAME).is_none()
             && environment.function(input::CONSTRUCTOR_NAME).is_none()
         {

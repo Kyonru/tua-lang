@@ -138,6 +138,33 @@ pub(crate) fn inspections(parsed: &ParsedSource) -> Vec<StateMachineInspection> 
     visitor.inspections
 }
 
+pub(crate) fn config_diagnostics(parsed: &ParsedSource) -> Vec<crate::Diagnostic> {
+    struct Check<'a> { parsed: &'a ParsedSource, diagnostics: Vec<crate::Diagnostic> }
+    impl Visitor for Check<'_> {
+        fn visit_function_call(&mut self, call: &FunctionCall) {
+            let Some(parts) = field_chain_before_first_call(call) else { return; };
+            if parts.as_slice() != [CONSTRUCTOR_NAME] { return; }
+            let Some(Expression::TableConstructor(config)) = first_parenthesized_argument(call) else { return; };
+            let Some(events) = named_field(config, "events").and_then(table_expression) else { return; };
+            for event in table_values(events).filter_map(table_expression) {
+                let Some(expression) = named_field(event, "name") else { continue; };
+                let Some(name) = string_expression(expression) else { continue; };
+                if BASE_FIELD_NAMES.contains(&name.as_str()) || BASE_METHOD_NAMES.contains(&name.as_str()) {
+                    if let Some(span) = node_span(expression) {
+                        self.diagnostics.push(crate::Diagnostic::error(&self.parsed.path, span.start.line, span.start.column,
+                            format!("state-machine event `{name}` conflicts with a built-in member"))
+                            .with_code(crate::DiagnosticCode::TYPE_MISMATCH)
+                            .with_range(span.start.line, span.start.column, span.end.line, span.end.column));
+                    }
+                }
+            }
+        }
+    }
+    let mut check = Check { parsed, diagnostics: Vec::new() };
+    check.visit_ast(&parsed.ast);
+    check.diagnostics
+}
+
 pub(crate) fn machine_type_from_call(call: &FunctionCall) -> Option<Type> {
     let Expression::TableConstructor(config) = first_parenthesized_argument(call)? else {
         return None;
@@ -1281,4 +1308,13 @@ mod tests {
 
         assert!(labels.contains("onbeforewarn"));
     }
+    #[test]
+    fn reserved_event_names_are_diagnosed() {
+        for name in ["current", "transition", "events"] {
+            let source = "local m = stateMachine({initial='a', events={{name='NAME',from='a',to='b'}}})".replace("NAME", name);
+            let parsed = parse_tua_source("machine.tua", source).unwrap();
+            assert_eq!(config_diagnostics(&parsed).len(), 1, "{name}");
+        }
+    }
+
 }
