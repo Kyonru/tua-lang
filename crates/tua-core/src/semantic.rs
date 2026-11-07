@@ -717,6 +717,11 @@ impl<'a> SemanticModel<'a> {
         if self.environment.alias(ecs::WORLD_TYPE).is_some() {
             if let Some((_, receiver_parts)) = parts.split_last() {
                 if let Some(receiver_type) = self.type_of_field_chain(receiver_parts, position) {
+                    if let Some(callback) = ecs::system_callback_type(&receiver_type, function_call, |expression| {
+                        self.type_of_expression_return_at_depth(expression, position, 0, 1)
+                    }) {
+                        if let Some(parameter) = function.parameters.get_mut(2) { parameter.ty = callback; }
+                    }
                     let component_type = ecs::component_argument(&receiver_type, function_call)
                         .and_then(|expression| {
                             self.type_of_expression_return_at_depth(expression, position, 0, 1)

@@ -2607,7 +2607,17 @@ impl<'a> Checker<'a> {
         }
 
         if !fields.is_empty() {
-            if let Some(function) = self.builtin_domain_method_call_target(&parts) {
+            if let Some(mut function) = self.builtin_domain_method_call_target(&parts) {
+                if let Some(receiver) = self.resolve_field_chain_type(&parts[..parts.len() - 1]) {
+                    let model = SemanticModel::new(self.parsed, self.environment);
+                    if let Some(callback) = crate::ecs::system_callback_type(&receiver, function_call, |expression| {
+                        model.type_of_expression_return(expression, node_position(expression), 0)
+                    }) {
+                        if let Some(parameter) = function.parameters.get_mut(2) {
+                            parameter.ty = callback;
+                        }
+                    }
+                }
                 return Some(Callable::from_typed_function(&function));
             }
 
