@@ -3366,7 +3366,7 @@ impl<'a> Checker<'a> {
 
     fn resolve_direct_table_field_type(&self, ty: &Type, field: &str) -> Option<Type> {
         match resolve_aliases(ty, self.environment, 0) {
-            Type::Table(table) => table.field(field).map(|field| field.ty.clone()),
+            Type::Table(table) => table.field(field).map(TableField::value_type),
             // Dot syntax is a string-key dictionary write. Reads are nilable,
             // and writes permit nil to remove the entry just like indexing.
             Type::Dictionary { key, value }

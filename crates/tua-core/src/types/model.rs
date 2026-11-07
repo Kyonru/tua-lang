@@ -477,6 +477,10 @@ pub struct TableField {
 }
 
 impl TableField {
+    pub(crate) fn value_type(&self) -> Type {
+        if self.optional { Type::union([self.ty.clone(), Type::nil()]) } else { self.ty.clone() }
+    }
+
     pub fn required(ty: Type) -> Self {
         Self {
             ty,

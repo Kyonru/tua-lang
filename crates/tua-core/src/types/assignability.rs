@@ -478,7 +478,7 @@ impl TypeContext {
                 }));
             }
 
-            self.check_assignable_inner(&source_field.ty, &target_field.ty, depth + 1, resolving)
+            self.check_assignable_inner(&source_field.ty, &target_field.value_type(), depth + 1, resolving)
                 .map_err(|failure| failure.at(AssignabilityPathSegment::Field(name.to_owned())))?;
         }
 

@@ -5431,3 +5431,12 @@ fn reassignment_checks_nil_padding_and_expanded_returns() {
     )
     .is_err());
 }
+
+#[test]
+fn optional_record_fields_accept_nil_but_reject_wrong_values() {
+    for field in ["row.value", "row['value']"] {
+        check_tua_source("optional.tua", format!("local row: {{value?: number}} = {{value=nil}}\n{field} = nil\n")).unwrap();
+        assert!(check_tua_source("optional.tua", format!("local row: {{value?: number}} = {{}}\n{field} = 'wrong'\n")).is_err());
+    }
+    assert!(check_tua_source("optional.tua", "local row: {value: number} = {value=1}\nrow.value=nil").is_err());
+}

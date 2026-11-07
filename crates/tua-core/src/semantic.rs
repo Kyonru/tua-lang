@@ -2409,7 +2409,7 @@ pub(crate) fn resolve_table_field_type(
     field: &str,
 ) -> Option<Type> {
     match resolve_aliases(environment, ty, 0) {
-        Type::Table(table) => table.semantic_field(field).map(|field| field.ty.clone()),
+        Type::Table(table) => table.semantic_field(field).map(|field| field.value_type()),
         Type::Dictionary { key, value } => key_accepts_index(&key, &Type::string_literal(field))
             .then(|| Type::union([*value, Type::nil()])),
         Type::Union(types) => resolve_union_operation(types, |ty| {
@@ -2436,9 +2436,9 @@ pub(crate) fn resolve_index_type(
             value,
         } => key_accepts_index(&dict_key, key).then(|| Type::union([*value, Type::nil()])),
         Type::Table(table) => match key {
-            Type::StringLiteral(value) => table.semantic_field(value).map(|field| field.ty.clone()),
+            Type::StringLiteral(value) => table.semantic_field(value).map(|field| field.value_type()),
             Type::Primitive(PrimitiveType::String) => {
-                union_types_optional(table.semantic_fields().into_values().map(|field| field.ty))
+                union_types_optional(table.semantic_fields().into_values().map(|field| field.value_type()))
             }
             _ => None,
         },
