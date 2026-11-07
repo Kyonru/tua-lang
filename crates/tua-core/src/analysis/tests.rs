@@ -8527,3 +8527,20 @@ print(<|payload|>p)
     assert!(hover.contents.contains("x: number"), "{}", hover.contents);
     assert!(hover.contents.contains("nil"), "{}", hover.contents);
 }
+
+#[test]
+fn inline_require_inference_respects_shadowed_loader() {
+    let fixture = Fixture::parse(r#"-- file: src/provider.tua
+return {inc = function(x: number): number return x + 1 end}
+-- file: src/main.tua
+local require = function(name: string): {inc: (x: string) -> string}
+  return {inc = function(x: string): string return x end}
+end
+local result = require("provider").inc("yes")
+print(<|result|>result)
+"#);
+    let mut host = AnalysisHost::new();
+    for file in fixture.files() { host.set_file(&file.path, &file.source); }
+    let hover = host.snapshot().hover("src/main.tua", fixture.position("result")).unwrap();
+    assert!(hover.contents.contains("string"), "{hover:?}");
+}

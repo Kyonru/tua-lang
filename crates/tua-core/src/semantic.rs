@@ -417,8 +417,7 @@ impl<'a> SemanticModel<'a> {
                 .unwrap_or_default();
         };
 
-        if parts == ["require"] && self.environment.local("require").is_none()
-            && self.environment.function("require").is_none() {
+        if parts == ["require"] && self.is_unshadowed_lua_root("require") {
             if let Some(Expression::String(module)) = lua::first_call_argument(function_call) {
                 let name = module.to_string();
                 let name = name.trim().trim_matches(['\"', '\'']);
