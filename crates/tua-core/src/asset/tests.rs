@@ -451,11 +451,14 @@ fn shader_source_cache_reuses_unchanged_models_and_invalidates_changed_source() 
 fn escaped_asset_literals_share_runtime_identity_diagnostics_and_hover() {
     let temp = TempProject::new("escaped-literals");
     temp.write("assets/player's.png", png_header(32, 16));
+    // Windows forbids double quotes in filenames; the other escaped paths are portable.
+    #[cfg(not(windows))]
     temp.write("assets/player\"s.png", png_header(32, 16));
     for (literal, expected) in [
         (r"'assets/player\'s.png'", "assets/player's.png"),
         (r"'assets/player\039s.png'", "assets/player's.png"),
         (r"'assets/player\x27s.png'", "assets/player's.png"),
+        #[cfg(not(windows))]
         (r#""assets/player\"s.png""#, "assets/player\"s.png"),
         ("[=[\nassets/player's.png]=]", "assets/player's.png"),
     ] {
