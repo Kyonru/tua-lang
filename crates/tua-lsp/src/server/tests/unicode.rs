@@ -46,7 +46,7 @@ fn standard_requests_and_rename_edits_use_utf16_columns() {
             .unwrap();
         let mut character = 0;
         let mut found = false;
-        for token in data.chunks_exact(5) {
+        for token in data.as_chunks::<5>().0 {
             if token[0].as_u64().unwrap() == 0 {
                 character += token[1].as_u64().unwrap();
             } else {
