@@ -132,6 +132,14 @@ requests retain the previous revision without copying its AST and semantic data.
 Identical builtin alias and local catalogs also share storage across files;
 project-specific additions use copy-on-write storage.
 
+Standalone import inference, including initial file-fact construction, uses a
+bounded filesystem export cache. Reuse validates transitive source contents and
+resolved import links, so edits, deletions, newly available modules, and resolution
+precedence changes invalidate unchanged importers. Results truncated by a cycle
+or depth limit are not retained. Oversized dependency graphs may share work only
+within the current resolution walk. Project queries continue to prefer snapshot
+module facts rather than this filesystem fallback.
+
 Module-path completion follows the same boundary. Workspace indexing and file
 events provide normalized module paths and workspace-scoped require roots to
 `AnalysisHost`; each snapshot combines that inventory with live VFS overlays

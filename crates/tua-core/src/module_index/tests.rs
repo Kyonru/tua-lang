@@ -828,3 +828,98 @@ fn final_review_transitive_module_cache_tracks_dependency_edits() {
         Some(&Type::string())
     );
 }
+
+#[test]
+fn dependency_walk_reuses_exports_without_retaining_transitive_results() {
+    let project = TempProject::new("memoized_import_walk");
+    project.write("tua.toml", "source = \"src\"\n");
+    const DEPTH: usize = 10;
+    for index in 0..DEPTH {
+        project.write(
+            &format!("src/m{index}.tua"),
+            &format!(
+                "local child = require('m{}')\nreturn {{ value = child.value }}\n",
+                index + 1
+            ),
+        );
+    }
+    project.write("src/m10.tua", "return { value = 123 }\n");
+    MODULE_EXPORT_INFERENCE_COUNT.with(|count| count.set(0));
+    let root = project.path.join("src/m0.tua");
+    assert_eq!(
+        required_module_exports_for_path(&root)
+            .unwrap()
+            .field("value"),
+        Some(&Type::number())
+    );
+    let count = MODULE_EXPORT_INFERENCE_COUNT.with(|count| count.get());
+    assert!(
+        count <= DEPTH + 1,
+        "dependency walk repeated inference {count} times"
+    );
+    MODULE_EXPORT_WALK_CACHE.with(|cache| assert!(cache.borrow().is_empty()));
+    assert_eq!(
+        required_module_exports_for_path(&root)
+            .unwrap()
+            .field("value"),
+        Some(&Type::number())
+    );
+    assert_eq!(
+        MODULE_EXPORT_INFERENCE_COUNT.with(|count| count.get()),
+        count,
+        "an unchanged dependency graph must reuse inference across requests"
+    );
+    project.write("src/m10.tua", "return { value = 'changed' }\n");
+    assert_eq!(
+        required_module_exports_for_path(&root)
+            .unwrap()
+            .field("value"),
+        Some(&Type::string())
+    );
+}
+
+#[test]
+fn dependency_cache_tracks_new_deleted_and_preferred_modules() {
+    let project = TempProject::new("dependency_resolution_changes");
+    project.write("tua.toml", "source = \"src\"\n");
+    project.write(
+        "src/main.tua",
+        "local value = require('provider').value\nreturn { value = value }\n",
+    );
+    let path = project.path.join("src/main.tua");
+    let value = || {
+        required_module_exports_for_path(&path)
+            .unwrap()
+            .field("value")
+            .cloned()
+    };
+    assert_eq!(value(), Some(Type::Any));
+    project.write("src/provider.lua", "return { value = 123 }\n");
+    assert_eq!(value(), Some(Type::number()));
+    project.write("src/provider.tua", "return { value = 'preferred' }\n");
+    assert_eq!(value(), Some(Type::string()));
+    fs::remove_file(project.path.join("src/provider.tua")).unwrap();
+    assert_eq!(value(), Some(Type::number()));
+    fs::remove_file(project.path.join("src/provider.lua")).unwrap();
+    assert_eq!(value(), Some(Type::Any));
+}
+
+#[test]
+fn dependency_cache_does_not_reuse_cycle_truncated_exports() {
+    let project = TempProject::new("dependency_cycle_context");
+    project.write("tua.toml", "source = \"src\"\n");
+    project.write(
+        "src/a.tua",
+        "local b = require('b')\nreturn { value = 123, other = b.value }\n",
+    );
+    project.write(
+        "src/b.tua",
+        "local a = require('a')\nreturn { value = 'b', other = a.value }\n",
+    );
+    for _ in 0..2 {
+        let a = required_module_exports_for_path(&project.path.join("src/a.tua")).unwrap();
+        assert_eq!(a.field("other"), Some(&Type::string()));
+        let b = required_module_exports_for_path(&project.path.join("src/b.tua")).unwrap();
+        assert_eq!(b.field("other"), Some(&Type::number()));
+    }
+}

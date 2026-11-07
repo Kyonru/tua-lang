@@ -1,6 +1,7 @@
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use full_moon::ast::{
     self, Expression, Field, FunctionArgs, LastStmt, Prefix, Suffix, TableConstructor, Var,
@@ -26,6 +27,13 @@ use crate::{parse_lua_source, parse_tua_source, ParsedSource, SourceSpan};
 thread_local! {
     static REQUIRED_MODULE_EXPORT_CACHE: RefCell<BTreeMap<PathBuf, CachedRequiredModuleExports>> =
         const { RefCell::new(BTreeMap::new()) };
+    // Oversized dependency graphs can still share work within one resolution
+    // walk, without retaining unvalidated inputs across requests.
+    static MODULE_EXPORT_WALK_CACHE: RefCell<BTreeMap<PathBuf, CachedRequiredModuleExports>> =
+        const { RefCell::new(BTreeMap::new()) };
+    static MODULE_EXPORT_CYCLE_REVISION: Cell<u64> = const { Cell::new(0) };
+    #[cfg(test)]
+    static MODULE_EXPORT_INFERENCE_COUNT: Cell<usize> = const { Cell::new(0) };
     static RESOLVING_MODULE_EXPORTS: RefCell<std::collections::BTreeSet<PathBuf>> =
         const { RefCell::new(std::collections::BTreeSet::new()) };
 }
@@ -34,9 +42,14 @@ struct ModuleExportResolutionGuard(PathBuf);
 
 impl Drop for ModuleExportResolutionGuard {
     fn drop(&mut self) {
-        RESOLVING_MODULE_EXPORTS.with(|paths| {
-            paths.borrow_mut().remove(&self.0);
+        let finished = RESOLVING_MODULE_EXPORTS.with(|paths| {
+            let mut paths = paths.borrow_mut();
+            paths.remove(&self.0);
+            paths.is_empty()
         });
+        if finished {
+            MODULE_EXPORT_WALK_CACHE.with(|cache| cache.borrow_mut().clear());
+        }
     }
 }
 
@@ -44,6 +57,77 @@ impl Drop for ModuleExportResolutionGuard {
 struct CachedRequiredModuleExports {
     source: String,
     exports: Option<ModuleExports>,
+    dependencies: Vec<ModuleDependencyInput>,
+}
+
+#[derive(Clone, Debug)]
+struct ModuleDependencyInput {
+    path: PathBuf,
+    source: Arc<str>,
+    literals: Vec<crate::module_link::ModuleSpecifierLiteral>,
+    links: Vec<crate::ModuleLink>,
+}
+
+impl ModuleDependencyInput {
+    fn is_current(&self) -> bool {
+        if crate::input_limits::read_source(&self.path).ok().as_deref()
+            != Some(self.source.as_ref())
+        {
+            return false;
+        }
+        self.literals.is_empty()
+            || ProjectModel::load_for_path(&self.path).is_ok_and(|model| {
+                crate::module_link::resolve_module_specifier_literals(
+                    &self.path,
+                    &self.literals,
+                    &model,
+                )
+                .links
+                    == self.links
+            })
+    }
+}
+
+// Capture both contents and resolution edges: file creation/deletion and a new
+// higher-priority declaration can invalidate an unchanged importing source.
+fn module_dependency_inputs(path: &Path, source: &str) -> Option<Vec<ModuleDependencyInput>> {
+    let mut inputs = BTreeMap::new();
+    let mut pending = vec![path.to_path_buf()];
+    while let Some(current) = pending.pop() {
+        if inputs.contains_key(&current) {
+            continue;
+        }
+        if inputs.len() >= 128 {
+            return None;
+        }
+        let text: Arc<str> = if current == path {
+            Arc::from(source)
+        } else {
+            Arc::from(crate::input_limits::read_source(&current).ok()?)
+        };
+        let literals = crate::module_link::module_specifier_literals(&text);
+        let links = if literals.is_empty() {
+            Vec::new()
+        } else {
+            let model = ProjectModel::load_for_path(&current).ok()?;
+            crate::module_link::resolve_module_specifier_literals(&current, &literals, &model).links
+        };
+        pending.extend(
+            links
+                .iter()
+                .map(|link| crate::vfs::normalize_path(&link.target)),
+        );
+        inputs.insert(
+            current.clone(),
+            ModuleDependencyInput {
+                path: current,
+                source: text,
+                literals,
+                links,
+            },
+        );
+    }
+    Some(inputs.into_values().collect())
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -253,18 +337,38 @@ fn parse_module_source(
 pub(crate) fn required_module_exports_for_path(path: &Path) -> Option<ModuleExports> {
     let path = crate::vfs::normalize_path(path);
     let source = crate::input_limits::read_source(&path).ok()?;
-    // The filesystem fallback has no dependency fingerprints. Retain only
-    // self-contained exports; snapshots own dependency-aware project caching.
-    let cacheable = crate::module_link::module_specifier_literals(&source).is_empty();
+    // Snapshots own project queries; this fallback validates all filesystem
+    // inputs before reusing standalone import inference.
+    let self_contained = crate::module_link::module_specifier_literals(&source).is_empty();
 
-    if let Some(cached) = REQUIRED_MODULE_EXPORT_CACHE.with(|cache| {
-        cache
-            .borrow()
-            .get(&path)
-            .filter(|cached| cacheable && cached.source == source)
-            .cloned()
-    }) {
+    if let Some(cached) = REQUIRED_MODULE_EXPORT_CACHE
+        .with(|cache| {
+            cache
+                .borrow()
+                .get(&path)
+                .filter(|cached| cached.source == source)
+                .cloned()
+        })
+        .filter(|cached| {
+            cached
+                .dependencies
+                .iter()
+                .all(ModuleDependencyInput::is_current)
+        })
+    {
         return cached.exports;
+    }
+
+    if !self_contained {
+        if let Some(cached) = MODULE_EXPORT_WALK_CACHE.with(|cache| {
+            cache
+                .borrow()
+                .get(&path)
+                .filter(|cached| cached.source == source)
+                .cloned()
+        }) {
+            return cached.exports;
+        }
     }
 
     let entered = RESOLVING_MODULE_EXPORTS.with(|paths| {
@@ -272,28 +376,61 @@ pub(crate) fn required_module_exports_for_path(path: &Path) -> Option<ModuleExpo
         paths.len() < 32 && paths.insert(path.clone())
     });
     if !entered {
+        MODULE_EXPORT_CYCLE_REVISION.with(|revision| revision.set(revision.get().wrapping_add(1)));
         return None;
     }
     let _guard = ModuleExportResolutionGuard(path.clone());
+    let cycle_revision = MODULE_EXPORT_CYCLE_REVISION.with(Cell::get);
+    #[cfg(test)]
+    MODULE_EXPORT_INFERENCE_COUNT.with(|count| count.set(count.get() + 1));
 
+    // Capture inputs before inference and validate them afterward. An edit
+    // during inference must not stamp older exports with newer dependency text.
+    let dependencies = if self_contained {
+        Some(Vec::new())
+    } else {
+        module_dependency_inputs(&path, &source)
+    };
     let exports = parse_module_source(&path, source.clone())
         .ok()
         .and_then(|parsed| infer_module_exports(&parsed));
 
-    if cacheable {
-        REQUIRED_MODULE_EXPORT_CACHE.with(|cache| {
-            let mut cache = cache.borrow_mut();
-            if cache.len() >= 128 {
-                cache.clear();
+    if cycle_revision == MODULE_EXPORT_CYCLE_REVISION.with(Cell::get) {
+        if let Some(dependencies) = dependencies {
+            if !dependencies.iter().all(ModuleDependencyInput::is_current) {
+                return exports;
             }
-            cache.insert(
-                path,
-                CachedRequiredModuleExports {
-                    source,
-                    exports: exports.clone(),
-                },
-            );
-        });
+            REQUIRED_MODULE_EXPORT_CACHE.with(|cache| {
+                let mut cache = cache.borrow_mut();
+                if cache.len() >= 128 {
+                    cache.clear();
+                }
+                cache.insert(
+                    path,
+                    CachedRequiredModuleExports {
+                        source,
+                        exports: exports.clone(),
+                        dependencies,
+                    },
+                );
+            });
+        } else {
+            // Large walks still memoize within this query, without keeping
+            // unvalidated dependencies across independent requests.
+            MODULE_EXPORT_WALK_CACHE.with(|cache| {
+                let mut cache = cache.borrow_mut();
+                if cache.len() < 128 {
+                    cache.insert(
+                        path,
+                        CachedRequiredModuleExports {
+                            source,
+                            exports: exports.clone(),
+                            dependencies: Vec::new(),
+                        },
+                    );
+                }
+            });
+        }
     }
 
     exports
