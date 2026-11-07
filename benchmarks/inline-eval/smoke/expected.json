@@ -3,14 +3,14 @@
     "current-file": {
       "overall": {
         "eligible": 2415,
-        "suggested": 301,
+        "suggested": 303,
         "exact": 191,
         "template_match": 191,
         "correct_prefix": 197,
-        "first_token": 254,
+        "first_token": 256,
         "first_three_tokens": 153,
         "chars_saved": 3734,
-        "incorrect_chars": 1222
+        "incorrect_chars": 1242
       },
       "abstain": {
         "eligible": 132,
@@ -26,14 +26,14 @@
       "by_language": {
         "lua": {
           "eligible": 1238,
-          "suggested": 191,
+          "suggested": 193,
           "exact": 132,
           "template_match": 132,
           "correct_prefix": 138,
-          "first_token": 167,
+          "first_token": 169,
           "first_three_tokens": 108,
           "chars_saved": 3351,
-          "incorrect_chars": 421
+          "incorrect_chars": 441
         },
         "tua": {
           "eligible": 1177,
@@ -61,38 +61,38 @@
         },
         "cut": {
           "eligible": 1114,
-          "suggested": 107,
+          "suggested": 108,
           "exact": 57,
           "template_match": 57,
           "correct_prefix": 60,
-          "first_token": 89,
+          "first_token": 90,
           "first_three_tokens": 47,
           "chars_saved": 1210,
-          "incorrect_chars": 465
+          "incorrect_chars": 484
         },
         "edit": {
           "eligible": 1114,
-          "suggested": 174,
+          "suggested": 175,
           "exact": 114,
           "template_match": 114,
           "correct_prefix": 117,
-          "first_token": 145,
+          "first_token": 146,
           "first_three_tokens": 92,
           "chars_saved": 2414,
-          "incorrect_chars": 757
+          "incorrect_chars": 758
         }
       },
       "by_prefix": {
         "partial-1": {
           "eligible": 385,
-          "suggested": 23,
+          "suggested": 24,
           "exact": 12,
           "template_match": 12,
           "correct_prefix": 14,
-          "first_token": 19,
+          "first_token": 20,
           "first_three_tokens": 9,
           "chars_saved": 318,
-          "incorrect_chars": 120
+          "incorrect_chars": 139
         },
         "partial-2": {
           "eligible": 344,
@@ -129,14 +129,14 @@
         },
         "token-end": {
           "eligible": 835,
-          "suggested": 133,
+          "suggested": 134,
           "exact": 89,
           "template_match": 89,
           "correct_prefix": 89,
-          "first_token": 111,
+          "first_token": 112,
           "first_three_tokens": 76,
           "chars_saved": 1598,
-          "incorrect_chars": 466
+          "incorrect_chars": 467
         },
         "whitespace": {
           "eligible": 362,
@@ -154,14 +154,14 @@
     "current-file-prefix": {
       "overall": {
         "eligible": 2415,
-        "suggested": 409,
+        "suggested": 414,
         "exact": 191,
         "template_match": 191,
-        "correct_prefix": 313,
-        "first_token": 362,
+        "correct_prefix": 316,
+        "first_token": 367,
         "first_three_tokens": 157,
-        "chars_saved": 4164,
-        "incorrect_chars": 832
+        "chars_saved": 4171,
+        "incorrect_chars": 852
       },
       "abstain": {
         "eligible": 132,
@@ -177,14 +177,14 @@
       "by_language": {
         "lua": {
           "eligible": 1238,
-          "suggested": 258,
+          "suggested": 263,
           "exact": 132,
           "template_match": 132,
-          "correct_prefix": 191,
-          "first_token": 231,
+          "correct_prefix": 194,
+          "first_token": 236,
           "first_three_tokens": 108,
-          "chars_saved": 3508,
-          "incorrect_chars": 453
+          "chars_saved": 3515,
+          "incorrect_chars": 473
         },
         "tua": {
           "eligible": 1177,
@@ -212,38 +212,38 @@
         },
         "cut": {
           "eligible": 1114,
-          "suggested": 140,
+          "suggested": 143,
           "exact": 57,
           "template_match": 57,
-          "correct_prefix": 97,
-          "first_token": 122,
+          "correct_prefix": 99,
+          "first_token": 125,
           "first_three_tokens": 48,
-          "chars_saved": 1338,
-          "incorrect_chars": 385
+          "chars_saved": 1344,
+          "incorrect_chars": 404
         },
         "edit": {
           "eligible": 1114,
-          "suggested": 249,
+          "suggested": 251,
           "exact": 114,
           "template_match": 114,
-          "correct_prefix": 196,
-          "first_token": 220,
+          "correct_prefix": 197,
+          "first_token": 222,
           "first_three_tokens": 95,
-          "chars_saved": 2716,
-          "incorrect_chars": 447
+          "chars_saved": 2717,
+          "incorrect_chars": 448
         }
       },
       "by_prefix": {
         "partial-1": {
           "eligible": 385,
-          "suggested": 38,
+          "suggested": 41,
           "exact": 12,
           "template_match": 12,
-          "correct_prefix": 30,
-          "first_token": 34,
+          "correct_prefix": 32,
+          "first_token": 37,
           "first_three_tokens": 9,
-          "chars_saved": 399,
-          "incorrect_chars": 67
+          "chars_saved": 405,
+          "incorrect_chars": 86
         },
         "partial-2": {
           "eligible": 344,
@@ -280,14 +280,14 @@
         },
         "token-end": {
           "eligible": 835,
-          "suggested": 157,
+          "suggested": 159,
           "exact": 89,
           "template_match": 89,
-          "correct_prefix": 115,
-          "first_token": 135,
+          "correct_prefix": 116,
+          "first_token": 137,
           "first_three_tokens": 76,
-          "chars_saved": 1667,
-          "incorrect_chars": 347
+          "chars_saved": 1668,
+          "incorrect_chars": 348
         },
         "whitespace": {
           "eligible": 362,
@@ -456,13 +456,13 @@
     "phase1": {
       "overall": {
         "eligible": 2415,
-        "suggested": 257,
+        "suggested": 262,
         "exact": 18,
         "template_match": 42,
-        "correct_prefix": 223,
-        "first_token": 225,
+        "correct_prefix": 228,
+        "first_token": 230,
         "first_three_tokens": 0,
-        "chars_saved": 552,
+        "chars_saved": 563,
         "incorrect_chars": 92
       },
       "abstain": {
@@ -479,13 +479,13 @@
       "by_language": {
         "lua": {
           "eligible": 1238,
-          "suggested": 169,
+          "suggested": 174,
           "exact": 11,
           "template_match": 29,
-          "correct_prefix": 152,
-          "first_token": 157,
+          "correct_prefix": 157,
+          "first_token": 162,
           "first_three_tokens": 0,
-          "chars_saved": 381,
+          "chars_saved": 392,
           "incorrect_chars": 31
         },
         "tua": {
@@ -514,37 +514,37 @@
         },
         "cut": {
           "eligible": 1114,
-          "suggested": 92,
+          "suggested": 95,
           "exact": 1,
           "template_match": 16,
-          "correct_prefix": 77,
-          "first_token": 77,
+          "correct_prefix": 80,
+          "first_token": 80,
           "first_three_tokens": 0,
-          "chars_saved": 195,
+          "chars_saved": 204,
           "incorrect_chars": 14
         },
         "edit": {
           "eligible": 1114,
-          "suggested": 151,
+          "suggested": 153,
           "exact": 13,
           "template_match": 22,
-          "correct_prefix": 132,
-          "first_token": 134,
+          "correct_prefix": 134,
+          "first_token": 136,
           "first_three_tokens": 0,
-          "chars_saved": 337,
+          "chars_saved": 339,
           "incorrect_chars": 78
         }
       },
       "by_prefix": {
         "partial-1": {
           "eligible": 385,
-          "suggested": 30,
+          "suggested": 33,
           "exact": 1,
           "template_match": 1,
-          "correct_prefix": 26,
-          "first_token": 26,
+          "correct_prefix": 29,
+          "first_token": 29,
           "first_three_tokens": 0,
-          "chars_saved": 100,
+          "chars_saved": 109,
           "incorrect_chars": 22
         },
         "partial-2": {
@@ -582,13 +582,13 @@
         },
         "token-end": {
           "eligible": 835,
-          "suggested": 67,
+          "suggested": 69,
           "exact": 7,
           "template_match": 15,
-          "correct_prefix": 53,
-          "first_token": 53,
+          "correct_prefix": 55,
+          "first_token": 55,
           "first_three_tokens": 0,
-          "chars_saved": 115,
+          "chars_saved": 117,
           "incorrect_chars": 9
         },
         "whitespace": {
@@ -607,14 +607,14 @@
     "phase1-prototype": {
       "overall": {
         "eligible": 2415,
-        "suggested": 377,
+        "suggested": 379,
         "exact": 191,
         "template_match": 231,
         "correct_prefix": 239,
-        "first_token": 292,
+        "first_token": 294,
         "first_three_tokens": 152,
         "chars_saved": 3944,
-        "incorrect_chars": 1268
+        "incorrect_chars": 1288
       },
       "abstain": {
         "eligible": 132,
@@ -630,14 +630,14 @@
       "by_language": {
         "lua": {
           "eligible": 1238,
-          "suggested": 245,
+          "suggested": 247,
           "exact": 132,
           "template_match": 164,
           "correct_prefix": 162,
-          "first_token": 189,
+          "first_token": 191,
           "first_three_tokens": 108,
           "chars_saved": 3471,
-          "incorrect_chars": 479
+          "incorrect_chars": 499
         },
         "tua": {
           "eligible": 1177,
@@ -665,38 +665,38 @@
         },
         "cut": {
           "eligible": 1114,
-          "suggested": 143,
+          "suggested": 144,
           "exact": 57,
           "template_match": 77,
           "correct_prefix": 81,
-          "first_token": 106,
+          "first_token": 107,
           "first_three_tokens": 46,
           "chars_saved": 1315,
-          "incorrect_chars": 463
+          "incorrect_chars": 482
         },
         "edit": {
           "eligible": 1114,
-          "suggested": 214,
+          "suggested": 215,
           "exact": 114,
           "template_match": 134,
           "correct_prefix": 138,
-          "first_token": 166,
+          "first_token": 167,
           "first_three_tokens": 92,
           "chars_saved": 2519,
-          "incorrect_chars": 805
+          "incorrect_chars": 806
         }
       },
       "by_prefix": {
         "partial-1": {
           "eligible": 385,
-          "suggested": 35,
+          "suggested": 36,
           "exact": 12,
           "template_match": 12,
           "correct_prefix": 14,
-          "first_token": 19,
+          "first_token": 20,
           "first_three_tokens": 9,
           "chars_saved": 318,
-          "incorrect_chars": 168
+          "incorrect_chars": 187
         },
         "partial-2": {
           "eligible": 344,
@@ -733,14 +733,14 @@
         },
         "token-end": {
           "eligible": 835,
-          "suggested": 145,
+          "suggested": 146,
           "exact": 89,
           "template_match": 99,
           "correct_prefix": 89,
-          "first_token": 109,
+          "first_token": 110,
           "first_three_tokens": 76,
           "chars_saved": 1598,
-          "incorrect_chars": 441
+          "incorrect_chars": 442
         },
         "whitespace": {
           "eligible": 362,
