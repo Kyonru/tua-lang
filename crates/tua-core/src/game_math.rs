@@ -1,3 +1,6 @@
+use full_moon::ast::{self, Expression, Index, Prefix, Suffix};
+use full_moon::visitors::Visitor;
+use std::collections::BTreeMap;
 use crate::lua::{LuaItem, LuaItemKind};
 use crate::scope::{scope_map_parsed_source, ScopeGlobalKind, ScopeResolution};
 use crate::{ParsedSource, SourceSpan};
@@ -80,6 +83,8 @@ pub(crate) fn all_items() -> impl Iterator<Item = LuaItem> {
 
 pub(crate) fn used_helpers(parsed: &ParsedSource) -> Vec<UsedGameMathHelper> {
     let scope = scope_map_parsed_source(parsed);
+    let mut chains = HelperChains::default();
+    chains.visit_ast(&parsed.ast);
     let mut used = Vec::new();
 
     for reference in scope.references() {
@@ -96,15 +101,14 @@ pub(crate) fn used_helpers(parsed: &ParsedSource) -> Vec<UsedGameMathHelper> {
             }
             _ => continue,
         };
-        let Some(offset) =
-            crate::source_text::byte_for_position(&parsed.source, reference.span.end)
-        else {
-            continue;
+        let Some(fields) = chains.0.get(&(reference.span.start.line, reference.span.start.column)) else { continue; };
+        let label = match namespace {
+            MathNamespace::Math => fields.first(),
+            MathNamespace::LoveMath if fields.first().map(String::as_str) == Some("math") => fields.get(1),
+            _ => None,
         };
-        let Some(label) = helper_label_after(&parsed.source, offset, namespace) else {
-            continue;
-        };
-        let Some(helper) = HELPERS.iter().copied().find(|helper| helper.label == label) else {
+        let Some(label) = label else { continue; };
+        let Some(helper) = HELPERS.iter().copied().find(|helper| helper.label == label.as_str()) else {
             continue;
         };
 
@@ -124,54 +128,32 @@ pub(crate) fn used_helpers(parsed: &ParsedSource) -> Vec<UsedGameMathHelper> {
     used
 }
 
-fn helper_label_after(source: &str, mut offset: usize, namespace: MathNamespace) -> Option<&str> {
-    if namespace == MathNamespace::LoveMath {
-        offset = consume_dot_member(source, offset, "math")?;
-    }
+#[derive(Default)]
+struct HelperChains(BTreeMap<(usize, usize), Vec<String>>);
 
-    let (label, _) = dot_member(source, offset)?;
-    Some(label)
-}
-
-fn consume_dot_member(source: &str, offset: usize, expected: &str) -> Option<usize> {
-    let (member, end) = dot_member(source, offset)?;
-    (member == expected).then_some(end)
-}
-
-fn dot_member(source: &str, mut offset: usize) -> Option<(&str, usize)> {
-    offset = skip_whitespace(source, offset);
-    if !source[offset..].starts_with('.') {
-        return None;
-    }
-    offset += 1;
-    offset = skip_whitespace(source, offset);
-
-    let start = offset;
-    let mut chars = source[offset..].char_indices();
-    let (_, first) = chars.next()?;
-    if first != '_' && !first.is_ascii_alphabetic() {
-        return None;
-    }
-    offset += first.len_utf8();
-    for (index, character) in chars {
-        if character != '_' && !character.is_ascii_alphanumeric() {
-            offset = start + index;
-            break;
+impl HelperChains {
+    fn collect<'a>(&mut self, prefix: &Prefix, suffixes: impl Iterator<Item = &'a Suffix>) {
+        let Prefix::Name(root) = prefix else { return; };
+        let mut fields = Vec::new();
+        for suffix in suffixes {
+            let field = match suffix {
+                Suffix::Index(Index::Dot { name, .. }) => crate::ast_utils::token_text(name),
+                Suffix::Index(Index::Brackets { expression: Expression::String(text), .. }) => {
+                    let Some(bytes) = crate::ast_utils::string_literal_runtime_bytes(text) else { break; };
+                    let Ok(name) = String::from_utf8(bytes) else { break; };
+                    name
+                }
+                _ => break,
+            };
+            fields.push(field);
         }
-        offset = start + index + character.len_utf8();
+        self.0.insert((root.start_position().line(), root.start_position().character()), fields);
     }
-
-    Some((&source[start..offset], offset))
 }
 
-fn skip_whitespace(source: &str, mut offset: usize) -> usize {
-    while let Some(character) = source[offset..].chars().next() {
-        if !character.is_whitespace() {
-            break;
-        }
-        offset += character.len_utf8();
-    }
-    offset
+impl Visitor for HelperChains {
+    fn visit_function_call(&mut self, call: &ast::FunctionCall) { self.collect(call.prefix(), call.suffixes()); }
+    fn visit_var_expression(&mut self, expression: &ast::VarExpression) { self.collect(expression.prefix(), expression.suffixes()); }
 }
 
 const HELPERS: &[GameMathHelper] = &[
@@ -261,6 +243,14 @@ const HELPERS: &[GameMathHelper] = &[
 mod tests {
     use super::*;
     use crate::parse_tua_source;
+
+    #[test]
+    fn discovers_helpers_through_trivia_and_static_bracket_members() {
+        let source = "local a = math -- comment\n .clamp(4,0,2)\nlocal b = math[\"lerp\"](0,1,.5)\nlocal c = love[\"math\"][\"rgba\"](1,2,3,4)\n";
+        let parsed = parse_tua_source("src/main.tua", source).unwrap();
+        let used = used_helpers(&parsed);
+        assert_eq!(used.iter().map(|used| used.helper.label).collect::<Vec<_>>(), vec!["clamp", "lerp", "rgba"]);
+    }
 
     #[test]
     fn finds_unshadowed_helpers_in_both_namespaces_once() {
