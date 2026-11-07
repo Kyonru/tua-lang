@@ -29,7 +29,10 @@ end
     );
     assert_hover_contains(&output, 2, "local bad: number");
     assert_completion_labels(&output, 3, ["font"]);
-    assert_eq!(inlay_hint_labels(hints), vec![": string | nil", ": string | nil"]);
+    assert_eq!(
+        inlay_hint_labels(hints),
+        vec![": string | nil", ": string | nil"]
+    );
 }
 #[test]
 fn semantic_features_use_last_good_snapshot_during_unrecoverable_edits() {
