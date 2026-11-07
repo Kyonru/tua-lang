@@ -187,6 +187,8 @@ function Camera:clampToBounds()
   end
   local _, _, w, h = self:viewportRect()
   local halfW, halfH = w / 2 / self.zoom, h / 2 / self.zoom
+  local cos, sin = math.abs(math.cos(self.rotation)), math.abs(math.sin(self.rotation))
+  halfW, halfH = halfW * cos + halfH * sin, halfW * sin + halfH * cos
   if b.w <= halfW * 2 then
     self.x = b.x + b.w / 2
   else

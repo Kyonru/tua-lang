@@ -104,3 +104,13 @@ assert(not pcall(function() view:draw(function() error("boom") end) end))
 assert(calls[#calls] == "pop", "detached after error")
 
 assert(not pcall(camera.new, { style = "orbit" }))
+
+-- Rotated view corners remain inside sufficiently large world bounds.
+do
+  local c = camera.new({rotation=math.pi/4, bounds={x=0,y=0,w=2000,h=2000}})
+  for _, target in ipairs({-100, 3000}) do
+    c:lookAt(target,target)
+    local x,y,w,h = c:visibleBounds()
+    assert(x >= -1e-6 and y >= -1e-6 and x+w <= 2000+1e-6 and y+h <= 2000+1e-6)
+  end
+end
