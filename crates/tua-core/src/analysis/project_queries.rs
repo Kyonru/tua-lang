@@ -1632,13 +1632,22 @@ impl AnalysisSnapshot {
             else {
                 continue;
             };
+            let builtin_type_name = resolved.builtin_type_name.or_else(|| {
+                let environment = self.semantic_environment(parsed);
+                let semantic = SemanticModel::new(parsed, &environment);
+                let parts = field_chain_before_first_call(call)?;
+                let generic = semantic.typed_function_for_call_parts(&parts, node_span(call)?.start)?;
+                let is_method = call.suffixes().any(|suffix| matches!(suffix, ast::Suffix::Call(ast::Call::MethodCall(_))));
+                let ty = typed_function_parameter_type(&generic, argument_index, is_method)?;
+                self.expected_type_after_table_steps(parsed, &origin_path, ty, &steps)?.builtin_type_name
+            });
             let ty = self.narrow_expected_table_type(&origin_path, resolved.ty, &syntax.table);
 
             return Some(ExpectedTableType {
                 ty,
                 origin_path,
                 table: syntax.table,
-                builtin_type_name: resolved.builtin_type_name,
+                builtin_type_name,
             });
         }
 
