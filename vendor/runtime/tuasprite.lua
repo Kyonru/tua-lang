@@ -162,6 +162,7 @@ function SpritePlayer:update(dt)
         else
           animation.position = #animation.frames
           animation.timer = animation.totalDuration
+          invokeLoop(animation, 1)
           self.playing = false
         end
       end
@@ -184,6 +185,7 @@ function SpritePlayer:update(dt)
       else
         animation.position = 1
         animation.timer = 0
+        invokeLoop(animation, -1)
         self.playing = false
       end
     end
