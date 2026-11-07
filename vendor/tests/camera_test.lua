@@ -126,3 +126,14 @@ do
   c:attach(); c:detach()
   assert(calls[before+2] == 'translate 201 151')
 end
+
+-- Culling bounds include every rendered corner during shake and rounding.
+do
+  local c = camera.new({rotation=.3, pixelPerfect=true, viewport={x=0,y=0,w=401,h=301}})
+  c.shakeX, c.shakeY = 8, -5
+  local x,y,w,h = c:visibleBounds()
+  for _, corner in ipairs({{0,0},{401,0},{0,301},{401,301}}) do
+    local wx,wy = c:toWorld(corner[1],corner[2])
+    assert(wx >= x-1e-6 and wy >= y-1e-6 and wx <= x+w+1e-6 and wy <= y+h+1e-6)
+  end
+end

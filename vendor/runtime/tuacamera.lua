@@ -336,13 +336,13 @@ function Camera:mousePosition()
 end
 
 function Camera:visibleBounds()
-  local _, _, w, h = self:viewportRect()
-  local halfW, halfH = w / 2 / self.zoom, h / 2 / self.zoom
-  -- A rotated view covers a larger axis-aligned area.
-  local cos, sin = math.abs(math.cos(self.rotation)), math.abs(math.sin(self.rotation))
-  local extentW = halfW * cos + halfH * sin
-  local extentH = halfW * sin + halfH * cos
-  return self.x - extentW, self.y - extentH, extentW * 2, extentH * 2
+  local vx, vy, w, h = self:viewportRect()
+  local x1, y1 = self:toWorld(vx, vy)
+  local x2, y2 = self:toWorld(vx + w, vy)
+  local x3, y3 = self:toWorld(vx, vy + h)
+  local x4, y4 = self:toWorld(vx + w, vy + h)
+  local left, top = math.min(x1, x2, x3, x4), math.min(y1, y2, y3, y4)
+  return left, top, math.max(x1, x2, x3, x4) - left, math.max(y1, y2, y3, y4) - top
 end
 
 ---Create a camera. Every option is optional.
