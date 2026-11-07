@@ -135,7 +135,7 @@ From there you can:
 
 Run **Tua: Set Up Tua** from the Command Palette or the **Tua Tools** menu.
 The native Getting Started walkthrough also appears on a fresh installation.
-All four steps are optional; opening setup does not change settings.
+All five steps are optional; opening setup does not change settings.
 
 - **Theme:** choose the bundled Indigo Carbon theme, browse other themes, or
   restore the previous theme. Its existing picker name, `Indigo Carbon HC`, is
@@ -148,6 +148,9 @@ All four steps are optional; opening setup does not change settings.
   editor's configured extension registry. It is not a dependency. Restore changes
   the selected file icons; it leaves that extension installed. Product icons are
   unchanged.
+- **Shaders:** check available validators, select a glslang executable, apply or
+  restore workspace LOVE shader associations, and optionally install shader
+  highlighting from the editor's extension registry.
 - **Hints:** choose Contextual, Full, Compact, Types Only, Parameters Only, or Off for the
   current workspace (or user profile when no folder is open), even with no Tua
   file open.
@@ -165,8 +168,8 @@ The layout preset changes only `window.commandCenter`,
 Installing Tua or selecting its theme never applies the layout preset.
 
 The theme and setup add no telemetry, account requirements, or trial period.
-Setup uses no remote content. The optional icon install contacts your editor's
-extension registry only when you click its button. The existing separately
+Setup uses no remote content. The optional icon and shader tooling installs contact your editor's
+extension registry only when you click their install buttons. The existing separately
 opted-in Ollama integration is unaffected.
 
 ### Migrating from the personal theme extension
