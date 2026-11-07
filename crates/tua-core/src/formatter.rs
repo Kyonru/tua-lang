@@ -635,11 +635,16 @@ impl<'a> Formatter<'a> {
                 output.push('\n');
                 self.pending_blank_line = false;
             }
+            self.update_multiline_state(line);
             self.format_line(line, output);
+            if !matches!(self.multiline_state, MultilineState::Code) {
+                // Trimming code must not consume whitespace belonging to the
+                // multiline literal/comment opened on this line.
+                let trailing = &line[line.trim_end().len()..];
+                output.insert_str(output.len() - 1, trailing);
+            }
             self.has_content = true;
         }
-
-        self.update_multiline_state(line);
     }
 
     fn update_multiline_state(&mut self, line: &str) -> Option<usize> {
