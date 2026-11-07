@@ -732,6 +732,13 @@ impl<'a> SemanticModel<'a> {
             }
         }
         let mut function = self.typed_function_for_call_parts(&parts, position)?;
+        if parts == [object_pool::CONSTRUCTOR_NAME] && self.is_unshadowed_lua_root(object_pool::CONSTRUCTOR_NAME) {
+            if let Some(signature) = object_pool::contextual_constructor_type(function_call, |expression| {
+                self.type_of_expression_return_at_depth(expression, position, 0, 1)
+            }) {
+                function = typed_function_from_function_type(Some(object_pool::CONSTRUCTOR_NAME.into()), signature);
+            }
+        }
         if let Some(result) = self.table_remove_result(function_call, &parts, position, 0) {
             function.return_type = Some(result.clone());
             function.return_types = vec![result];
@@ -2065,18 +2072,10 @@ impl<'a> SemanticModel<'a> {
                 if !contains_position(call_span, position) {
                     return None;
                 }
-                let (argument_index, body) = function_call_expression_arguments(call)
-                    .enumerate()
-                    .find_map(|(index, expression)| {
-                    let Expression::Function(function) = expression else {
-                        return None;
-                    };
-                    let body = function.body();
-
-                    node_span(body)
-                        .is_some_and(|span| contains_position(span, position))
-                        .then_some((index, body))
-                })?;
+                let (argument_index, body, fields) = function_call_expression_arguments(call)
+                    .enumerate().find_map(|(index, expression)| {
+                        contextual_callback_path(expression, binding_body).map(|(body, fields)| (index, body, fields))
+                    })?;
                 if node_span(body) != Some(binding_body) {
                     return None;
                 }
@@ -2118,10 +2117,13 @@ impl<'a> SemanticModel<'a> {
 
                 let function = self.typed_function_for_call(call, call_span.start)?;
                 let argument_index = argument_index + usize::from(function_call_is_method(call));
-                let expected = &function.parameters.get(argument_index)?.ty;
+                let mut expected = function.parameters.get(argument_index)?.ty.clone();
+                for field in fields {
+                    expected = resolve_table_field_type(self.environment, &expected, &field)?;
+                }
                 let callback = crate::types::contextual_function_type(resolve_aliases(
                     self.environment,
-                    expected,
+                    &expected,
                     0,
                 ))?;
                 let ty = callback
@@ -3282,6 +3284,19 @@ pub(crate) fn typed_function_from_function_type(
         return_types,
         documentation: None,
         overloads,
+    }
+}
+
+fn contextual_callback_path(expression: &Expression, body_span: SourceSpan) -> Option<(&ast::FunctionBody, Vec<String>)> {
+    match expression {
+        Expression::Function(function) if node_span(function.body()) == Some(body_span) => Some((function.body(), Vec::new())),
+        Expression::TableConstructor(table) => table.fields().iter().find_map(|field| {
+            let Field::NameKey { key, value, .. } = field else { return None; };
+            let (body, mut fields) = contextual_callback_path(value, body_span)?;
+            fields.insert(0, token_text(key));
+            Some((body, fields))
+        }),
+        _ => None,
     }
 }
 

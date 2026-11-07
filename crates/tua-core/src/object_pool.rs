@@ -46,6 +46,10 @@ pub(crate) fn builtin_aliases() -> Vec<(String, Type)> {
 }
 
 pub(crate) fn options_type() -> Type {
+    options_type_for_item(Type::Any)
+}
+
+fn options_type_for_item(item: Type) -> Type {
     Type::table([
         (
             "create",
@@ -53,14 +57,29 @@ pub(crate) fn options_type() -> Type {
         ),
         (
             "reset",
-            TableField::optional(Type::Function(FunctionType::new([Type::Any], Type::nil()))),
+            TableField::optional(Type::Function(FunctionType::new([item.clone()], Type::nil()))),
         ),
         (
             "dispose",
-            TableField::optional(Type::Function(FunctionType::new([Type::Any], Type::nil()))),
+            TableField::optional(Type::Function(FunctionType::new([item.clone()], Type::nil()))),
         ),
         ("initial", TableField::optional(Type::number())),
     ])
+}
+
+/// Resolve only the factory, avoiding recursive inference of its sibling hooks.
+pub(crate) fn contextual_constructor_type(
+    call: &FunctionCall,
+    mut resolve: impl FnMut(&Expression) -> Option<Type>,
+) -> Option<FunctionType> {
+    let Expression::TableConstructor(options) = crate::lua::first_call_argument(call)? else { return None; };
+    let factory = options.fields().iter().find_map(|field| match field {
+        ast::Field::NameKey { key, value, .. } if token_text(key) == "create" => Some(value),
+        _ => None,
+    })?;
+    let Type::Function(factory) = resolve(factory)? else { return None; };
+    let item = factory.return_types_or_any().first().cloned().unwrap_or(Type::Any);
+    Some(FunctionType::new([options_type_for_item(item.clone())], pool_type(item)))
 }
 
 pub(crate) fn pool_type(item_type: Type) -> Type {
@@ -676,4 +695,35 @@ fn parameter(name: &str, ty: Type) -> TypedParameter {
         ty,
         documentation: None,
     }
+}
+
+#[cfg(test)]
+mod context_tests {
+    #[test]
+    fn pool_hooks_inherit_and_validate_factory_payloads() {
+        for hook in ["reset", "dispose"] {
+            let source = format!("type Bullet = {{ x: number }}\nlocal pool = objectPool({{\n create = function(): Bullet return {{x=0}} end,\n {hook} = function(item: {{name: string}}) print(item.name) end,\n}})\nprint(pool)\n");
+            let errors = crate::check_tua_source("src/main.tua", &source).expect_err("incompatible hook must reject");
+            assert!(errors.iter().any(|error| error.code == Some(crate::DiagnosticCode::TYPE_MISMATCH)), "{errors:?}");
+        }
+        let source = "type Bullet = { x: number }\nlocal pool = objectPool({\n create = function(): Bullet return {x=0} end,\n reset = function(item)\n   local bad: string = item.x\n end,\n})\nprint(pool)\n";
+        let errors = crate::check_tua_source("src/main.tua", source).expect_err("contextually typed body must reject");
+        assert!(errors.iter().any(|error| error.message.contains("number") && error.message.contains("string")), "{errors:?}");
+        let hover = crate::hover_tua_source("src/main.tua", source, crate::SourcePosition {line:5,column:24}).unwrap().unwrap();
+        assert!(hover.contents.contains("Bullet"), "{}", hover.contents);
+        let valid = source.replace("local bad: string = item.x", "item.x = 0");
+        crate::check_tua_source("src/main.tua", &valid).expect("matching hook checks");
+        let unknown = "local function factory(): any return {} end\nlocal pool = objectPool({ create=factory, reset=function(item) item.dynamic = true end })\nprint(pool)\n";
+        crate::check_tua_source("src/main.tua", unknown).expect("unknown factories remain dynamic");
+
+    }
+    #[test]
+    fn pool_hooks_follow_imported_factories() {
+        let mut host = crate::AnalysisHost::new();
+        host.set_file("src/factory.tua", "local function make(): { x: number } return {x=0} end\nreturn {make=make}\n");
+        host.set_file("src/main.tua", "local Factory = require(\"factory\")\nlocal pool = objectPool({create=Factory.make, reset=function(item)\n local bad: string = item.x\nend})\nprint(pool)\n");
+        let errors = host.snapshot().diagnostics("src/main.tua");
+        assert!(errors.iter().any(|error| error.message.contains("number") && error.message.contains("string")), "{errors:?}");
+    }
+
 }

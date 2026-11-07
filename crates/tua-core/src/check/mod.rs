@@ -1155,6 +1155,9 @@ impl<'a> Checker<'a> {
         target: &Type,
         root: Option<&str>,
     ) {
+        if let Expression::TableConstructor(table) = expression {
+            self.check_table_callback_contexts(table, target);
+        }
         if let (Expression::Function(function), Some(expected)) = (
             expression,
             crate::types::contextual_function_type(self.environment.resolve_aliases(target)),
@@ -1204,6 +1207,19 @@ impl<'a> Checker<'a> {
         };
 
         self.check_inferred_expression_assignable_at(expression, &source, target, root);
+    }
+
+    fn check_table_callback_contexts(&mut self, table: &ast::TableConstructor, target: &Type) {
+        let Type::Table(expected) = self.environment.resolve_aliases(target) else { return; };
+        for field in table.fields().iter() {
+            let ast::Field::NameKey { key, value, .. } = field else { continue; };
+            let Some(expected) = expected.field(&token_text(key)) else { continue; };
+            match value {
+                Expression::Function(_) => self.check_expression_assignable_at(value, &expected.ty, None),
+                Expression::TableConstructor(nested) => self.check_table_callback_contexts(nested, &expected.ty),
+                _ => {},
+            }
+        }
     }
 
     fn check_inferred_expression_assignable_at(
@@ -2631,6 +2647,14 @@ impl<'a> Checker<'a> {
                 return Some(Callable::Function(kind.function_type()));
             }
 
+            if crate::object_pool::is_constructor(root) {
+                let model = SemanticModel::new(self.parsed, self.environment);
+                if let Some(function) = crate::object_pool::contextual_constructor_type(function_call, |expression| {
+                    model.type_of_expression_return(expression, node_position(expression), 0)
+                }) {
+                    return Some(Callable::Function(function));
+                }
+            }
             if let Some(constructor) = BuiltinDomainRegistry::standard().constructor(root) {
                 return Some(match constructor {
                     BuiltinConstructor::Function(function) => Callable::Function(function),

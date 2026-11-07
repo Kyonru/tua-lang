@@ -75,6 +75,10 @@ releases it for later reuse.
     `bullets:acquire()`. An unannotated factory remains valid and permissive,
     but its acquired values have type `any`.
 
+The factory return type supplies the `reset` and `dispose` parameter types.
+You can omit their parameter annotations; incompatible explicit hook types are
+reported, and dynamic factories remain permissive.
+
 The `reset` hook runs before a released object becomes available again. Keep it
 small and deterministic. If resetting fails, the object remains active instead
 of entering the available stack in a partially reset state.
