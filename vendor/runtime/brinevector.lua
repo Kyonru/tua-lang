@@ -68,7 +68,9 @@ function Vector.__index(t, k)
 end
 
 function Vector.getLength(v)
-  return math.sqrt(v.x * v.x + v.y * v.y)
+  local scale = math.max(math.abs(v.x), math.abs(v.y))
+  if scale == 0 then return 0 end
+  return scale * math.sqrt((v.x / scale)^2 + (v.y / scale)^2)
 end
 
 function Vector.getLengthSquared(v)
@@ -76,9 +78,11 @@ function Vector.getLengthSquared(v)
 end
 
 function Vector.getNormalized(v)
-  local length = v.length
-  if length == 0 then return Vector(0,0) end
-  return Vector(v.x / length, v.y / length)
+  local scale = math.max(math.abs(v.x), math.abs(v.y))
+  if scale == 0 then return Vector(0,0) end
+  local x, y = v.x / scale, v.y / scale
+  local length = math.sqrt(x*x + y*y)
+  return Vector(x / length, y / length)
 end
 
 function Vector.getAngle(v)
