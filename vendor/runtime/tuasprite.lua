@@ -136,8 +136,9 @@ function SpritePlayer:update(dt)
   local direction = self.speed < 0 and -1 or 1
   local remaining = math.abs(dt * self.speed)
   local looping = self.sheet.looping[self.name] ~= false
+  local loops = 0
 
-  while remaining > 0 and self.playing do
+  while remaining > 0 and self.playing and self.animation == animation do
     local position = animation.position
     local frameStart = animation.intervals[position]
     local elapsed = animation.timer - frameStart
@@ -156,7 +157,7 @@ function SpritePlayer:update(dt)
         elseif looping then
           animation.position = 1
           animation.timer = 0
-          invokeLoop(animation, 1)
+          loops = loops + 1
           self:_emitFrame(1)
           if animation.status == "paused" then self.playing = false end
         else
@@ -179,7 +180,7 @@ function SpritePlayer:update(dt)
         remaining = remaining - math.max(0, elapsed)
         animation.position = #animation.frames
         animation.timer = animation.totalDuration
-        invokeLoop(animation, -1)
+        loops = loops - 1
         self:_emitFrame(animation.position)
         if animation.status == "paused" then self.playing = false end
       else
@@ -191,6 +192,10 @@ function SpritePlayer:update(dt)
     end
   end
 
+  if loops ~= 0 and self.animation == animation then
+    invokeLoop(animation, loops)
+    if animation.status == "paused" then self.playing = false end
+  end
   syncAnimation(self)
 end
 
