@@ -1158,3 +1158,17 @@ fn audit_native_constructor_signature_for_direct_and_local_receivers() {
         );
     }
 }
+
+#[test]
+fn literal_first_argument_selects_same_arity_overload() {
+    let source = r#"---@overload fun(mode: "scalar"): number
+---@overload fun(mode: "vector"): number, number
+local function read(mode) end
+read("vector"
+"#;
+    let help = signature_at(source, "read(\"vector\"").unwrap();
+    assert!(help.signatures[help.active_signature].label.contains("vector"), "{help:?}");
+    let unknown = source.replace("vector\"\n", "unknown\"\n");
+    let fallback = signature_at(&unknown, "read(\"unknown\"").unwrap();
+    assert_eq!(fallback.active_signature, 0);
+}
