@@ -244,6 +244,21 @@ impl<'a> SemanticModel<'a> {
         plain_field_chain_from_expression(expression)
     }
 
+    pub(crate) fn local_initializer_callee_chain(
+        &self,
+        name: &str,
+        position: SourcePosition,
+    ) -> Option<Vec<String>> {
+        let mut expression = self.local_assignment_value(name, position)?.expression?;
+        while let Expression::Parentheses { expression: inner, .. }
+            | Expression::TypeAssertion { expression: inner, .. } = expression
+        {
+            expression = inner;
+        }
+        let Expression::FunctionCall(call) = expression else { return None; };
+        field_chain_before_first_call(call)
+    }
+
     pub(crate) fn local_initializer_field_chain_with_position(
         &self,
         name: &str,
@@ -331,6 +346,16 @@ impl<'a> SemanticModel<'a> {
 
         if fields.is_empty() {
             return self.type_of_name(root, position);
+        }
+
+        if self.environment.exact_module_binding(root).is_some()
+            && !self.project_module_binding_visible(root, position)
+        {
+            let mut current = self.type_of_name(root, position)?;
+            for field in fields {
+                current = resolve_table_field_type(self.environment, &current, field)?;
+            }
+            return Some(current);
         }
 
         if let Some(ty) = crate::narrowing::guarded_member_type(
@@ -825,6 +850,15 @@ impl<'a> SemanticModel<'a> {
         self.environment.function_at(name, parser_position)
     }
 
+    fn project_module_binding_visible(&self, root: &str, position: SourcePosition) -> bool {
+        let Some(module) = self.environment.exact_module_binding(root) else { return false; };
+        let Some(mut expression) = self.local_assignment_value(root, position).and_then(|local| local.expression) else { return false; };
+        while let Expression::Parentheses { expression: inner, .. } | Expression::TypeAssertion { expression: inner, .. } = expression { expression = inner; }
+        let Expression::FunctionCall(call) = expression else { return false; };
+        if field_chain_before_first_call(call).as_deref() != Some(&["require".to_owned()]) { return false; }
+        matches!(lua::first_call_argument(call), Some(Expression::String(value)) if unquote_string(&value.to_string()) == module)
+    }
+
     pub(crate) fn typed_function_for_call_parts(
         &self,
         parts: &[String],
@@ -846,8 +880,11 @@ impl<'a> SemanticModel<'a> {
             });
         }
 
-        if let Some(function) = self.function_at_source_position(&qualified_name, position) {
-            return Some(function.clone());
+        let project_module = !fields.is_empty() && self.environment.exact_module_binding(root).is_some();
+        if !project_module {
+            if let Some(function) = self.function_at_source_position(&qualified_name, position) {
+                return Some(function.clone());
+            }
         }
 
         if fields.is_empty() {
@@ -937,6 +974,17 @@ impl<'a> SemanticModel<'a> {
                 signal_typed_method_for_receiver(self.environment, &receiver_type, method)
             {
                 return Some(function);
+            }
+        }
+
+        // Keep specialized domain methods above, but prefer snapshot module
+        // contracts to current-file filesystem metadata for ordinary exports.
+        if project_module {
+            if let Some(Type::Function(function)) = self.type_of_field_chain(parts, position) {
+                return Some(typed_function_from_function_type(
+                    Some(qualified_name.clone()),
+                    function,
+                ));
             }
         }
 
@@ -1181,6 +1229,19 @@ impl<'a> SemanticModel<'a> {
             .is_some_and(|binding| binding.kind == crate::ScopeDeclarationKind::Parameter)
         {
             return self.parameter_type_at_source_position(name, position);
+        }
+        if self.environment.exact_module_binding(name).is_some()
+            && !self.project_module_binding_visible(name, position)
+        {
+            if self.environment.annotated_name_binding(name, parser_position).is_some() {
+                return self.local_contract_at_source_position(name, position).cloned();
+            }
+            if let Some(local) = self.local_assignment_value(name, position) {
+                return match local.expression {
+                    Some(expression) => self.type_of_expression_return_at_depth(expression, local.evaluation_position, local.return_index, depth + 1),
+                    None => Some(Type::nil()),
+                };
+            }
         }
         let ty = self
             .class_self_type_at_position(name, position)

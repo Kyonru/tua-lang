@@ -209,12 +209,15 @@ impl<'a> SignatureResolver<'a> {
         let (root, fields) = parts.split_first()?;
         let qualified_name = parts.join(".");
 
-        if let Some(function) = self
-            .semantic
-            .function_at_source_position(&qualified_name, context.position)
+        if (!fields.is_empty() && self.environment.exact_module_binding(root).is_some())
+            || self
+                .semantic
+                .function_at_source_position(&qualified_name, context.position)
+                .is_some()
         {
+            let function = self.semantic.typed_function_for_call_parts(parts, position)?;
             return Some(signatures_from_typed_function(
-                function,
+                &function,
                 Some(&qualified_name),
             ));
         }

@@ -811,9 +811,10 @@ impl AnalysisSnapshot {
             return None;
         }
 
-        self.type_database
-            .module_export_type(&self.module_graph, &parsed.path, root, fields)
-            .or_else(|| self.project_indexed_module_export_type(parsed, root, fields))
+        self.project_indexed_module_export_type(parsed, root, fields)
+            .or_else(|| {
+                self.type_database.module_export_type(&self.module_graph, &parsed.path, root, fields)
+            })
     }
 
     pub(super) fn project_indexed_module_export_type(
@@ -824,10 +825,10 @@ impl AnalysisSnapshot {
     ) -> Option<Type> {
         let (first, rest) = fields.split_first()?;
         let module_path = self.indexed_required_module_path(parsed, root)?;
-        let entry = self.module_graph.export(module_path, first)?;
+        let entry = self.indexed_module_export_fields(module_path)?.remove(first)?;
         let mut current =
             self.type_database
-                .resolve_type(&self.module_graph, module_path, &entry.field.ty);
+                .resolve_type(&self.module_graph, module_path, &entry.ty);
 
         for field in rest {
             current = project_table_field_type(&current, field)?;
@@ -1112,9 +1113,15 @@ impl AnalysisSnapshot {
         parsed: &ParsedSource,
         module: &str,
     ) -> Option<&Path> {
+        let has_declaration = self
+            .module_graph
+            .declaration_module_for_path(&parsed.path, module)
+            .and_then(|path| self.type_database.module(path))
+            .is_some();
         if let Some(path) = self
             .module_graph
             .resolve_require(&parsed.path, module)
+            .filter(|_| !has_declaration)
             .and_then(|resolution| match resolution {
                 crate::module_graph::RequireResolution::Resolved { path }
                 | crate::module_graph::RequireResolution::Duplicate { selected: path, .. } => {
@@ -2403,5 +2410,107 @@ fn dictionary_key_accepts_field(ty: &Type, field: &str) -> bool {
         | Type::Array(_)
         | Type::Tuple(_)
         | Type::Dictionary { .. } => false,
+    }
+}
+
+#[cfg(test)]
+mod declaration_overlay_tests {
+    use super::*;
+    use crate::Fixture;
+
+    #[test]
+    fn declaration_overlay_controls_callable_and_result_types_with_runtime_present() {
+        let fixture = Fixture::parse("-- file: src/main.tua\nlocal F = require(\"lib.feel\")\nlocal result = F.echo(<|signature|>\"hello\")\nprint(<|hover|>result)\n");
+        let root = std::env::temp_dir().join(format!(
+            "tua-declaration-overlay-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(root.join("src/lib")).unwrap();
+        std::fs::create_dir_all(root.join("src/vendor-types")).unwrap();
+        std::fs::create_dir_all(root.join("build/lib")).unwrap();
+        std::fs::write(
+            root.join("build/lib/feel.lua"),
+            "local M={}\nfunction M.echo(value) return value end\nreturn M\n",
+        )
+        .unwrap();
+        std::fs::write(root.join("tua.toml"), "source=\"src\"\nout=\"build\"\n").unwrap();
+        std::fs::write(
+            root.join("src/lib/feel.lua"),
+            "local M={}\nfunction M.echo(value) return value end\nreturn M\n",
+        )
+        .unwrap();
+        std::fs::write(root.join("src/vendor-types/feel.lua"), "---@meta feel\nlocal M={}\n---@param value string\n---@return string\nfunction M.echo(value) end\nreturn M\n").unwrap();
+        let main = root.join("src/main.tua");
+        std::fs::write(&main, &fixture.files()[0].source).unwrap();
+        let mut host = AnalysisHost::new();
+        host.set_source_roots([root.join("src")]);
+        host.set_output_roots([root.join("build")]);
+        host.set_type_libraries([ProjectTypeLibrary::new(
+            root.join("src/vendor-types"),
+            "feel",
+            "lib.feel",
+        )]);
+        host.set_file(&main, fixture.files()[0].source.clone());
+        host.set_file_with_kind(root.join("src/vendor-types/feel.lua"), "---@meta feel\nlocal M={}\n---@param value string\n---@return string\nfunction M.echo(value) end\nreturn M\n", AnalysisSourceKind::Lua);
+        host.set_file_with_kind(
+            root.join("src/lib/feel.lua"),
+            "local M={}\nfunction M.echo(value) return value end\nreturn M\n",
+            AnalysisSourceKind::Lua,
+        );
+        host.set_file_with_kind(
+            root.join("build/lib/feel.lua"),
+            "local M={}\nfunction M.echo(value) return value end\nreturn M\n",
+            AnalysisSourceKind::Lua,
+        );
+        assert!(host.current_file_hover(&main, fixture.position("hover")).is_none(),
+            "module-call results must use project-aware hover");
+        let snapshot = host.snapshot();
+        let signature = snapshot
+            .signature_help(&main, fixture.position("signature"))
+            .unwrap();
+        assert!(
+            signature.signatures[0].label.contains("value: string"),
+            "{signature:?}"
+        );
+        assert!(
+            signature.signatures[0].label.ends_with(": string"),
+            "{signature:?}"
+        );
+        let hover = snapshot.hover(&main, fixture.position("hover")).unwrap();
+        assert!(hover.contents.contains("result: string"), "{hover:?}");
+        for runtime in ["src/lib/feel.lua", "build/lib/feel.lua"] {
+            std::fs::remove_file(root.join(runtime)).unwrap();
+            host.remove_file(root.join(runtime));
+            let snapshot = host.snapshot();
+            let signature = snapshot
+                .signature_help(&main, fixture.position("signature"))
+                .unwrap();
+            assert!(
+                signature.signatures[0].label.contains("value: string"),
+                "{signature:?}"
+            );
+            assert!(snapshot
+                .hover(&main, fixture.position("hover"))
+                .unwrap()
+                .contents
+                .contains("result: string"));
+        }
+        host.set_file(&main, "local F=require(\"lib.feel\")\nF.echo(42)\n");
+        assert!(
+            host.snapshot()
+                .diagnostics(&main)
+                .iter()
+                .any(|diagnostic| diagnostic.message.contains("string")),
+            "bad argument must use declaration contract"
+        );
+        let shadow = Fixture::parse("-- file: src/main.tua\nlocal F = require(\"lib.feel\")\ndo\n local F = {echo = function(value: number): number return value end}\n local number = F.echo(<|signature|>42)\nend\n");
+        host.set_file(&main, shadow.files()[0].source.clone());
+        let signature = host.snapshot().signature_help(&main, shadow.position("signature")).unwrap();
+        assert!(signature.signatures[0].label.contains("value: number"), "shadowed module: {signature:?}");
+        std::fs::remove_dir_all(root).unwrap();
     }
 }
