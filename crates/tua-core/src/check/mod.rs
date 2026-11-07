@@ -1158,48 +1158,7 @@ impl<'a> Checker<'a> {
         if let Expression::TableConstructor(table) = expression {
             self.check_table_callback_contexts(table, target);
         }
-        if let (Expression::Function(function), Some(expected)) = (
-            expression,
-            crate::types::contextual_function_type(self.environment.resolve_aliases(target)),
-        ) {
-            let Type::Function(mut signature) =
-                crate::types::function_type_from_body_with_metadata(self.parsed, function.body())
-            else {
-                unreachable!()
-            };
-            let mut annotations = function.body().type_specifiers();
-            for (index, parameter) in signature.parameters.iter_mut().enumerate() {
-                if annotations.next().flatten().is_none() {
-                    if let Some(context) = expected.parameters.get(index) {
-                        parameter.ty = context.ty.clone();
-                    }
-                }
-            }
-            if function.body().return_type().is_none() {
-                signature.return_types = expected.return_types.clone();
-            }
-            let locals = signature
-                .parameters
-                .iter()
-                .filter_map(|parameter| {
-                    parameter
-                        .name
-                        .as_ref()
-                        .map(|name| (name.clone(), parameter.ty.clone()))
-                })
-                .collect();
-            self.check_function_body(
-                function.body(),
-                Some(signature.return_types_or_any()),
-                locals,
-                true,
-            );
-            self.check_inferred_expression_assignable_at(
-                expression,
-                &Type::Function(signature),
-                target,
-                root,
-            );
+        if self.check_contextual_function(expression, target, root, true) {
             return;
         }
         let Some(source) = self.infer_expression(expression) else {
@@ -1209,15 +1168,81 @@ impl<'a> Checker<'a> {
         self.check_inferred_expression_assignable_at(expression, &source, target, root);
     }
 
+    fn check_contextual_function(
+        &mut self,
+        expression: &Expression,
+        target: &Type,
+        root: Option<&str>,
+        check_signature: bool,
+    ) -> bool {
+        let (Expression::Function(function), Some(expected)) = (
+            expression,
+            crate::types::contextual_function_type(self.environment.resolve_aliases(target)),
+        ) else {
+            return false;
+        };
+        let Type::Function(mut signature) =
+            crate::types::function_type_from_body_with_metadata(self.parsed, function.body())
+        else {
+            unreachable!()
+        };
+        let mut annotations = function.body().type_specifiers();
+        for (index, parameter) in signature.parameters.iter_mut().enumerate() {
+            if annotations.next().flatten().is_none() {
+                if let Some(context) = expected.parameters.get(index) {
+                    parameter.ty = context.ty.clone();
+                }
+            }
+        }
+        if function.body().return_type().is_none() {
+            signature.return_types = expected.return_types.clone();
+        }
+        let locals = signature
+            .parameters
+            .iter()
+            .filter_map(|parameter| {
+                parameter
+                    .name
+                    .as_ref()
+                    .map(|name| (name.clone(), parameter.ty.clone()))
+            })
+            .collect();
+        self.check_function_body(
+            function.body(),
+            Some(signature.return_types_or_any()),
+            locals,
+            true,
+        );
+        if check_signature {
+            self.check_inferred_expression_assignable_at(
+                expression,
+                &Type::Function(signature),
+                target,
+                root,
+            );
+        }
+        true
+    }
+
     fn check_table_callback_contexts(&mut self, table: &ast::TableConstructor, target: &Type) {
-        let Type::Table(expected) = self.environment.resolve_aliases(target) else { return; };
+        let Type::Table(expected) = self.environment.resolve_aliases(target) else {
+            return;
+        };
         for field in table.fields().iter() {
-            let ast::Field::NameKey { key, value, .. } = field else { continue; };
-            let Some(expected) = expected.field(&token_text(key)) else { continue; };
+            let ast::Field::NameKey { key, value, .. } = field else {
+                continue;
+            };
+            let Some(expected) = expected.field(&token_text(key)) else {
+                continue;
+            };
             match value {
-                Expression::Function(_) => self.check_expression_assignable_at(value, &expected.ty, None),
-                Expression::TableConstructor(nested) => self.check_table_callback_contexts(nested, &expected.ty),
-                _ => {},
+                Expression::Function(_) => {
+                    self.check_contextual_function(value, &expected.ty, None, false);
+                }
+                Expression::TableConstructor(nested) => {
+                    self.check_table_callback_contexts(nested, &expected.ty)
+                }
+                _ => {}
             }
         }
     }
@@ -1322,16 +1347,33 @@ impl<'a> Checker<'a> {
     }
 
     fn check_parameter_defaults(&mut self, body_span: SourceSpan) {
-        let defaults = self.parsed.function_annotations.iter()
+        let defaults = self
+            .parsed
+            .function_annotations
+            .iter()
             .find(|function| function.span == Some(body_span))
-            .map(|function| function.default_parameters.clone()).unwrap_or_default();
+            .map(|function| function.default_parameters.clone())
+            .unwrap_or_default();
         for default in defaults {
-            let Some(target) = self.infer_named_value(&default.name) else { continue; };
+            let Some(target) = self.infer_named_value(&default.name) else {
+                continue;
+            };
             let position = default.span.map_or(body_span.start, |span| span.start);
-            let source = format!("{}{}return {}", "\n".repeat(position.line.saturating_sub(1)), " ".repeat(position.column.saturating_sub(1)), default.expression);
-            let Ok(parsed) = crate::parse_tua_source(&self.parsed.path, source) else { continue; };
-            let Some(ast::LastStmt::Return(statement)) = parsed.ast.nodes().last_stmt() else { continue; };
-            let Some(expression) = statement.returns().iter().next() else { continue; };
+            let source = format!(
+                "{}{}return {}",
+                "\n".repeat(position.line.saturating_sub(1)),
+                " ".repeat(position.column.saturating_sub(1)),
+                default.expression
+            );
+            let Ok(parsed) = crate::parse_tua_source(&self.parsed.path, source) else {
+                continue;
+            };
+            let Some(ast::LastStmt::Return(statement)) = parsed.ast.nodes().last_stmt() else {
+                continue;
+            };
+            let Some(expression) = statement.returns().iter().next() else {
+                continue;
+            };
             let start = self.diagnostics.len();
             if let Some(source) = self.infer_expression(expression) {
                 self.check_type_assignable_at_position(position, &source, &target);
@@ -1878,14 +1920,20 @@ impl<'a> Checker<'a> {
             return first;
         }
 
-        let known_void = first.is_empty() && matches!(self.infer_call_target(function_call),
+        let known_void = first.is_empty()
+            && matches!(self.infer_call_target(function_call),
             Some(Callable::ExternalFunction(ref function)) if !function.variants.is_empty() && function.variants.iter().all(|variant| variant.return_types.is_empty()));
-        let mut current = first.into_iter().next().or_else(|| known_void.then(Type::nil));
+        let mut current = first
+            .into_iter()
+            .next()
+            .or_else(|| known_void.then(Type::nil));
         for suffix in rest {
             current = match suffix {
                 Suffix::Index(Index::Dot { name, .. }) => current.and_then(|ty| {
                     let result = resolve_table_field_type(self.environment, &ty, &token_text(name));
-                    if result.is_none() { self.report_unsafe_union_operation(name, &ty, "access a field on"); }
+                    if result.is_none() {
+                        self.report_unsafe_union_operation(name, &ty, "access a field on");
+                    }
                     result
                 }),
                 Suffix::Call(call) => self.check_chained_call(suffix, call, current),
@@ -1931,7 +1979,15 @@ impl<'a> Checker<'a> {
 
         if callable.is_none() {
             if let Some(ty) = &current {
-                self.report_unsafe_union_operation(suffix, ty, if method.is_some() { "call a method on" } else { "call" });
+                self.report_unsafe_union_operation(
+                    suffix,
+                    ty,
+                    if method.is_some() {
+                        "call a method on"
+                    } else {
+                        "call"
+                    },
+                );
             }
         }
         match callable {
@@ -1946,10 +2002,15 @@ impl<'a> Checker<'a> {
             Some(Callable::ExternalFunction(function)) => self
                 .check_external_argument_list(suffix, arguments, &function)
                 .into_iter()
-                .next().or(Some(Type::nil())),
+                .next()
+                .or(Some(Type::nil())),
             Some(Callable::TypedFunction(function)) => {
-                if let Some(receiver) = receiver { arguments.insert(0, CallArgument::Inferred(receiver)); }
-                self.check_typed_argument_list(suffix, arguments, &function).into_iter().next()
+                if let Some(receiver) = receiver {
+                    arguments.insert(0, CallArgument::Inferred(receiver));
+                }
+                self.check_typed_argument_list(suffix, arguments, &function)
+                    .into_iter()
+                    .next()
             }
             Some(Callable::Any) | None => {
                 for argument in arguments {
@@ -2658,9 +2719,11 @@ impl<'a> Checker<'a> {
 
             if crate::object_pool::is_constructor(root) {
                 let model = SemanticModel::new(self.parsed, self.environment);
-                if let Some(function) = crate::object_pool::contextual_constructor_type(function_call, |expression| {
-                    model.type_of_expression_return(expression, node_position(expression), 0)
-                }) {
+                if let Some(function) =
+                    crate::object_pool::contextual_constructor_type(function_call, |expression| {
+                        model.type_of_expression_return(expression, node_position(expression), 0)
+                    })
+                {
                     return Some(Callable::Function(function));
                 }
             }
@@ -2676,9 +2739,15 @@ impl<'a> Checker<'a> {
             if let Some(mut function) = self.builtin_domain_method_call_target(&parts) {
                 if let Some(receiver) = self.resolve_field_chain_type(&parts[..parts.len() - 1]) {
                     let model = SemanticModel::new(self.parsed, self.environment);
-                    if let Some(callback) = crate::ecs::system_callback_type(&receiver, function_call, |expression| {
-                        model.type_of_expression_return(expression, node_position(expression), 0)
-                    }) {
+                    if let Some(callback) =
+                        crate::ecs::system_callback_type(&receiver, function_call, |expression| {
+                            model.type_of_expression_return(
+                                expression,
+                                node_position(expression),
+                                0,
+                            )
+                        })
+                    {
                         if let Some(parameter) = function.parameters.get_mut(2) {
                             parameter.ty = callback;
                         }
@@ -2872,7 +2941,12 @@ impl<'a> Checker<'a> {
                 .map(|parameter| (&parameter.ty, parameter.name.as_deref()))
                 .or_else(|| function.vararg_type.as_deref().map(|ty| (ty, Some("..."))))
                 .expect("argument count was validated");
-            let target = call_argument_contract(parameter.0, index, function.required_parameter_count, function.parameters.len());
+            let target = call_argument_contract(
+                parameter.0,
+                index,
+                function.required_parameter_count,
+                function.parameters.len(),
+            );
 
             match argument {
                 CallArgument::Expression(argument) => {
@@ -3110,7 +3184,12 @@ impl<'a> Checker<'a> {
                 continue;
             };
 
-            let parameter_type = call_argument_contract(parameter_type, index, candidate.required_parameter_count, candidate.parameters.len());
+            let parameter_type = call_argument_contract(
+                parameter_type,
+                index,
+                candidate.required_parameter_count,
+                candidate.parameters.len(),
+            );
             let Some(failure) =
                 self.diagnostic_assignability_failure(argument_type, &parameter_type)
             else {
@@ -4085,14 +4164,26 @@ fn typed_call_candidate_matches(
                 return true;
             };
 
-            checker.context.is_assignable(argument_type, &call_argument_contract(parameter_type, index, candidate.required_parameter_count, candidate.parameters.len()))
+            checker.context.is_assignable(
+                argument_type,
+                &call_argument_contract(
+                    parameter_type,
+                    index,
+                    candidate.required_parameter_count,
+                    candidate.parameters.len(),
+                ),
+            )
         })
 }
 
 // In Lua an explicit nil at an omittable fixed argument is equivalent to
 // omission. Keep this call contract separate from post-default body bindings.
 fn call_argument_contract(parameter: &Type, index: usize, required: usize, fixed: usize) -> Type {
-    if index >= required && index < fixed { Type::union([parameter.clone(), Type::nil()]) } else { parameter.clone() }
+    if index >= required && index < fixed {
+        Type::union([parameter.clone(), Type::nil()])
+    } else {
+        parameter.clone()
+    }
 }
 
 fn expected_typed_argument_count(candidate: &TypedCallCandidate, actual: usize) -> Option<usize> {
@@ -4686,9 +4777,11 @@ fn type_from_type_label(label: &str) -> Option<Type> {
 fn callable_from_type(ty: &Type, environment: &TypeEnvironment) -> Option<Callable> {
     match resolve_aliases(ty, environment, 0) {
         Type::Any => Some(Callable::Any),
-        Type::Function(function) if !function.overloads.is_empty() => Some(Callable::TypedFunction(Box::new(
-            crate::semantic::typed_function_from_function_type(None, function)
-        ))),
+        Type::Function(function) if !function.overloads.is_empty() => {
+            Some(Callable::TypedFunction(Box::new(
+                crate::semantic::typed_function_from_function_type(None, function),
+            )))
+        }
         Type::Function(function) => Some(Callable::Function(function)),
         Type::Table(table) => table
             .metatable_facts()
