@@ -530,13 +530,21 @@ impl AnalysisSnapshot {
             .with_project_module_globals(parsed, self.project_module_globals())
             .with_alias_types(self.project_imported_alias_types(parsed))
             .with_local_types(self.project_module_binding_types(parsed))
-            .with_required_module_types(self.module_graph.module(&parsed.path).into_iter()
-                .flat_map(|module| &module.require_edges)
-                .filter_map(|edge| {
-                    let path = self.indexed_module_path_for_specifier(parsed, &edge.module)?;
-                    let ty = self.indexed_module_value_type(path)?;
-                    Some((edge.module.clone(), self.type_database.resolve_type(&self.module_graph, path, &ty)))
-                }))
+            .with_required_module_types(
+                self.module_graph
+                    .module(&parsed.path)
+                    .into_iter()
+                    .flat_map(|module| &module.require_edges)
+                    .filter_map(|edge| {
+                        let path = self.indexed_module_path_for_specifier(parsed, &edge.module)?;
+                        let ty = self.indexed_module_value_type(path)?;
+                        Some((
+                            edge.module.clone(),
+                            self.type_database
+                                .resolve_type(&self.module_graph, path, &ty),
+                        ))
+                    }),
+            )
             .with_exact_module_bindings(self.project_exact_module_bindings(parsed))
             .with_deprecated_accesses(self.project_module_binding_deprecations(parsed))
             .with_must_use_accesses(self.project_module_binding_must_use_accesses(parsed))
@@ -813,7 +821,12 @@ impl AnalysisSnapshot {
 
         self.project_indexed_module_export_type(parsed, root, fields)
             .or_else(|| {
-                self.type_database.module_export_type(&self.module_graph, &parsed.path, root, fields)
+                self.type_database.module_export_type(
+                    &self.module_graph,
+                    &parsed.path,
+                    root,
+                    fields,
+                )
             })
     }
 
@@ -825,7 +838,9 @@ impl AnalysisSnapshot {
     ) -> Option<Type> {
         let (first, rest) = fields.split_first()?;
         let module_path = self.indexed_required_module_path(parsed, root)?;
-        let entry = self.indexed_module_export_fields(module_path)?.remove(first)?;
+        let entry = self
+            .indexed_module_export_fields(module_path)?
+            .remove(first)?;
         let mut current =
             self.type_database
                 .resolve_type(&self.module_graph, module_path, &entry.ty);
@@ -1643,10 +1658,14 @@ impl AnalysisSnapshot {
                 let environment = self.semantic_environment(parsed);
                 let semantic = SemanticModel::new(parsed, &environment);
                 let parts = field_chain_before_first_call(call)?;
-                let generic = semantic.typed_function_for_call_parts(&parts, node_span(call)?.start)?;
-                let is_method = call.suffixes().any(|suffix| matches!(suffix, ast::Suffix::Call(ast::Call::MethodCall(_))));
+                let generic =
+                    semantic.typed_function_for_call_parts(&parts, node_span(call)?.start)?;
+                let is_method = call
+                    .suffixes()
+                    .any(|suffix| matches!(suffix, ast::Suffix::Call(ast::Call::MethodCall(_))));
                 let ty = typed_function_parameter_type(&generic, argument_index, is_method)?;
-                self.expected_type_after_table_steps(parsed, &origin_path, ty, &steps)?.builtin_type_name
+                self.expected_type_after_table_steps(parsed, &origin_path, ty, &steps)?
+                    .builtin_type_name
             });
             let ty = self.narrow_expected_table_type(&origin_path, resolved.ty, &syntax.table);
 
@@ -2466,8 +2485,11 @@ mod declaration_overlay_tests {
             "local M={}\nfunction M.echo(value) return value end\nreturn M\n",
             AnalysisSourceKind::Lua,
         );
-        assert!(host.current_file_hover(&main, fixture.position("hover")).is_none(),
-            "module-call results must use project-aware hover");
+        assert!(
+            host.current_file_hover(&main, fixture.position("hover"))
+                .is_none(),
+            "module-call results must use project-aware hover"
+        );
         let snapshot = host.snapshot();
         let signature = snapshot
             .signature_help(&main, fixture.position("signature"))
@@ -2509,8 +2531,14 @@ mod declaration_overlay_tests {
         );
         let shadow = Fixture::parse("-- file: src/main.tua\nlocal F = require(\"lib.feel\")\ndo\n local F = {echo = function(value: number): number return value end}\n local number = F.echo(<|signature|>42)\nend\n");
         host.set_file(&main, shadow.files()[0].source.clone());
-        let signature = host.snapshot().signature_help(&main, shadow.position("signature")).unwrap();
-        assert!(signature.signatures[0].label.contains("value: number"), "shadowed module: {signature:?}");
+        let signature = host
+            .snapshot()
+            .signature_help(&main, shadow.position("signature"))
+            .unwrap();
+        assert!(
+            signature.signatures[0].label.contains("value: number"),
+            "shadowed module: {signature:?}"
+        );
         std::fs::remove_dir_all(root).unwrap();
     }
 }

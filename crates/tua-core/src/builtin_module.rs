@@ -129,7 +129,9 @@ fn inline_aliases(ty: &Type, environment: &TypeEnvironment, visiting: &mut Vec<S
                 *return_type = inline_aliases(return_type, environment, visiting);
             }
             for overload in &mut function.overloads {
-                if let Type::Function(inlined) = inline_aliases(&Type::Function(overload.clone()), environment, visiting) {
+                if let Type::Function(inlined) =
+                    inline_aliases(&Type::Function(overload.clone()), environment, visiting)
+                {
                     *overload = inlined;
                 }
             }
@@ -238,15 +240,32 @@ mod tests {
     fn tween_after_checks_each_overload_as_a_complete_contract() {
         let prelude = "local box = {x=0}\nlocal t = tween.to(box, 1, {x=1})\n";
         for call in ["t:after(.5, {x=2})", "t:after(box, .5, {x=2})"] {
-            crate::check_tua_source("src/main.tua", format!("{prelude}{call}\n")).expect("valid after overload");
+            crate::check_tua_source("src/main.tua", format!("{prelude}{call}\n"))
+                .expect("valid after overload");
         }
-        for call in ["t:after(\"slow\", {x=2})", "t:after(box, \"slow\", {x=2})", "t:after(.5, 2)",
-                     "tween.to(box, 1, {x=1}):after(\"slow\", {x=2})"] {
-            let errors = crate::check_tua_source("src/main.tua", format!("{prelude}{call}\n")).expect_err("bad overload must reject");
-            assert!(errors.iter().any(|error| error.code == Some(crate::DiagnosticCode::TYPE_MISMATCH)), "{call}: {errors:?}");
+        for call in [
+            "t:after(\"slow\", {x=2})",
+            "t:after(box, \"slow\", {x=2})",
+            "t:after(.5, 2)",
+            "tween.to(box, 1, {x=1}):after(\"slow\", {x=2})",
+        ] {
+            let errors = crate::check_tua_source("src/main.tua", format!("{prelude}{call}\n"))
+                .expect_err("bad overload must reject");
+            assert!(
+                errors
+                    .iter()
+                    .any(|error| error.code == Some(crate::DiagnosticCode::TYPE_MISMATCH)),
+                "{call}: {errors:?}"
+            );
         }
         let source = format!("{prelude}t:after(.5, {{x=2}})\n");
-        let help = crate::signature_help_tua_source("src/main.tua", &source, crate::SourcePosition {line:3,column:9}).unwrap().unwrap();
+        let help = crate::signature_help_tua_source(
+            "src/main.tua",
+            &source,
+            crate::SourcePosition { line: 3, column: 9 },
+        )
+        .unwrap()
+        .unwrap();
         assert_eq!(help.signatures.len(), 2, "{help:?}");
     }
 

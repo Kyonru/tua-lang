@@ -260,13 +260,16 @@ pub(crate) fn parse_lua_number(text: &str) -> Option<f64> {
     }
 }
 
-
 /// A numeric literal, optionally parenthesized or negated; never evaluates user code.
 pub(crate) fn numeric_literal(expression: &Expression) -> Option<f64> {
     match expression {
         Expression::Number(token) => parse_lua_number(&token_text(token)),
-        Expression::UnaryOperator { unop: ast::UnOp::Minus(_), expression } => numeric_literal(expression).map(|value| -value),
-        Expression::Parentheses { expression, .. } | Expression::TypeAssertion { expression, .. } => numeric_literal(expression),
+        Expression::UnaryOperator {
+            unop: ast::UnOp::Minus(_),
+            expression,
+        } => numeric_literal(expression).map(|value| -value),
+        Expression::Parentheses { expression, .. }
+        | Expression::TypeAssertion { expression, .. } => numeric_literal(expression),
         _ => None,
     }
 }

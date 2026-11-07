@@ -140,28 +140,62 @@ pub(crate) fn inspections(parsed: &ParsedSource) -> Vec<StateMachineInspection> 
 }
 
 pub(crate) fn config_diagnostics(parsed: &ParsedSource) -> Vec<crate::Diagnostic> {
-    struct Check<'a> { parsed: &'a ParsedSource, diagnostics: Vec<crate::Diagnostic> }
+    struct Check<'a> {
+        parsed: &'a ParsedSource,
+        diagnostics: Vec<crate::Diagnostic>,
+    }
     impl Visitor for Check<'_> {
         fn visit_function_call(&mut self, call: &FunctionCall) {
-            let Some(parts) = field_chain_before_first_call(call) else { return; };
-            if parts.as_slice() != [CONSTRUCTOR_NAME] { return; }
-            let Some(Expression::TableConstructor(config)) = first_parenthesized_argument(call) else { return; };
-            let Some(events) = named_field(config, "events").and_then(table_expression) else { return; };
+            let Some(parts) = field_chain_before_first_call(call) else {
+                return;
+            };
+            if parts.as_slice() != [CONSTRUCTOR_NAME] {
+                return;
+            }
+            let Some(Expression::TableConstructor(config)) = first_parenthesized_argument(call)
+            else {
+                return;
+            };
+            let Some(events) = named_field(config, "events").and_then(table_expression) else {
+                return;
+            };
             for event in table_values(events).filter_map(table_expression) {
-                let Some(expression) = named_field(event, "name") else { continue; };
-                let Some(name) = string_expression(expression) else { continue; };
-                if BASE_FIELD_NAMES.contains(&name.as_str()) || BASE_METHOD_NAMES.contains(&name.as_str()) {
+                let Some(expression) = named_field(event, "name") else {
+                    continue;
+                };
+                let Some(name) = string_expression(expression) else {
+                    continue;
+                };
+                if BASE_FIELD_NAMES.contains(&name.as_str())
+                    || BASE_METHOD_NAMES.contains(&name.as_str())
+                {
                     if let Some(span) = node_span(expression) {
-                        self.diagnostics.push(crate::Diagnostic::error(&self.parsed.path, span.start.line, span.start.column,
-                            format!("state-machine event `{name}` conflicts with a built-in member"))
+                        self.diagnostics.push(
+                            crate::Diagnostic::error(
+                                &self.parsed.path,
+                                span.start.line,
+                                span.start.column,
+                                format!(
+                                    "state-machine event `{name}` conflicts with a built-in member"
+                                ),
+                            )
                             .with_code(crate::DiagnosticCode::TYPE_MISMATCH)
-                            .with_range(span.start.line, span.start.column, span.end.line, span.end.column));
+                            .with_range(
+                                span.start.line,
+                                span.start.column,
+                                span.end.line,
+                                span.end.column,
+                            ),
+                        );
                     }
                 }
             }
         }
     }
-    let mut check = Check { parsed, diagnostics: Vec::new() };
+    let mut check = Check {
+        parsed,
+        diagnostics: Vec::new(),
+    };
     check.visit_ast(&parsed.ast);
     check.diagnostics
 }
@@ -400,7 +434,11 @@ fn base_machine_type() -> Type {
 }
 
 fn machine_type(spec: &StateMachineSpec) -> Type {
-    let state_type = if spec.has_dynamic_initial { Type::string() } else { literal_union_or_string(&spec.states) };
+    let state_type = if spec.has_dynamic_initial {
+        Type::string()
+    } else {
+        literal_union_or_string(&spec.states)
+    };
     let event_type = literal_union_or_string(&spec.events);
     // The receiver is hidden at colon call sites. Keeping it permissive avoids
     // recursively comparing a specialized machine against its generic alias.
@@ -904,7 +942,13 @@ fn inspection_from_local_assignment(
     let initial_expression = named_field(config, "initial");
     let initial = initial_expression
         .and_then(string_expression)
-        .unwrap_or_else(|| if initial_expression.is_some() { "<dynamic>".to_owned() } else { "none".to_owned() });
+        .unwrap_or_else(|| {
+            if initial_expression.is_some() {
+                "<dynamic>".to_owned()
+            } else {
+                "none".to_owned()
+            }
+        });
     let mut state_spans = BTreeMap::new();
 
     state_spans.insert(
@@ -1073,7 +1117,8 @@ fn spec_from_config(config: &TableConstructor) -> StateMachineSpec {
     let mut transitions = Vec::new();
 
     let initial = named_field(config, "initial");
-    let has_dynamic_initial = initial.is_some_and(|expression| string_expression(expression).is_none());
+    let has_dynamic_initial =
+        initial.is_some_and(|expression| string_expression(expression).is_none());
     if let Some(initial) = initial.and_then(string_expression) {
         states.insert(initial);
     } else if initial.is_none() {
@@ -1315,7 +1360,9 @@ mod tests {
     #[test]
     fn reserved_event_names_are_diagnosed() {
         for name in ["current", "transition", "events"] {
-            let source = "local m = stateMachine({initial='a', events={{name='NAME',from='a',to='b'}}})".replace("NAME", name);
+            let source =
+                "local m = stateMachine({initial='a', events={{name='NAME',from='a',to='b'}}})"
+                    .replace("NAME", name);
             let parsed = parse_tua_source("machine.tua", source).unwrap();
             assert_eq!(config_diagnostics(&parsed).len(), 1, "{name}");
         }
@@ -1323,13 +1370,21 @@ mod tests {
 
     #[test]
     fn dynamic_initial_state_does_not_invent_none() {
-        let parsed = parse_tua_source("machine.tua", "local initial = 'idle'\nlocal machine = stateMachine({initial=initial,events={}})").unwrap();
+        let parsed = parse_tua_source(
+            "machine.tua",
+            "local initial = 'idle'\nlocal machine = stateMachine({initial=initial,events={}})",
+        )
+        .unwrap();
         let inspections = inspections(&parsed);
         assert_eq!(inspections[0].initial, "<dynamic>");
         assert!(inspections[0].states.is_empty());
-        let spec = StateMachineSpec { has_dynamic_initial: true, ..StateMachineSpec::default() };
-        let Type::Table(table) = machine_type(&spec) else { panic!("machine"); };
+        let spec = StateMachineSpec {
+            has_dynamic_initial: true,
+            ..StateMachineSpec::default()
+        };
+        let Type::Table(table) = machine_type(&spec) else {
+            panic!("machine");
+        };
         assert_eq!(table.field("current").unwrap().ty, Type::string());
     }
-
 }

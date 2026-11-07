@@ -2065,17 +2065,33 @@ fn complete_string_argument_values(
         }
     }
 
-    let function = semantic.typed_function_for_call_parts(callee_parts, position)
+    let function = semantic
+        .typed_function_for_call_parts(callee_parts, position)
         .and_then(|function| function.as_type())
-        .and_then(|ty| if let Type::Function(function) = ty { Some(function) } else { None })
+        .and_then(|ty| {
+            if let Type::Function(function) = ty {
+                Some(function)
+            } else {
+                None
+            }
+        })
         .or_else(|| semantic.function_type_for_call_parts(callee_parts, position));
     if let Some(function) = function {
-        let receiver = callee_parts.split_last().and_then(|(_, parts)|
-            semantic.type_of_field_chain(parts, position));
-        let implicit_self = is_method_call && function.parameters.first().is_some_and(|first| {
-            let label = first.name.as_ref().map_or_else(|| first.ty.to_string(), |name| format!("{name}: {}", first.ty));
-            crate::signature_help::is_synthetic_method_receiver(&label, receiver.as_ref(), environment)
-        });
+        let receiver = callee_parts
+            .split_last()
+            .and_then(|(_, parts)| semantic.type_of_field_chain(parts, position));
+        let implicit_self = is_method_call
+            && function.parameters.first().is_some_and(|first| {
+                let label = first.name.as_ref().map_or_else(
+                    || first.ty.to_string(),
+                    |name| format!("{name}: {}", first.ty),
+                );
+                crate::signature_help::is_synthetic_method_receiver(
+                    &label,
+                    receiver.as_ref(),
+                    environment,
+                )
+            });
         let active_parameter = active_parameter + usize::from(implicit_self);
         let Some(parameter) = function
             .parameters
@@ -2366,7 +2382,11 @@ fn complete_type_enum_values(ty: &Type, prefix: &str) -> Vec<Completion> {
     fn collect(ty: &Type, prefix: &str, output: &mut Vec<Completion>) {
         match ty {
             Type::StringLiteral(_) => output.extend(literal_value_item(&ty.to_string(), prefix)),
-            Type::Alias(name) => output.extend(lua::enum_value_items(name, prefix).into_iter().map(completion_from_lua_item)),
+            Type::Alias(name) => output.extend(
+                lua::enum_value_items(name, prefix)
+                    .into_iter()
+                    .map(completion_from_lua_item),
+            ),
             Type::Union(items) => items.iter().for_each(|item| collect(item, prefix, output)),
             _ => {}
         }

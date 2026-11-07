@@ -11,8 +11,8 @@ use full_moon::tokenizer::{TokenReference, TokenType};
 use full_moon::visitors::Visitor;
 
 use crate::ast_utils::{
-    field_chain_before_first_call, parse_lua_number, plain_field_chain_from_expression, plain_field_chain_from_var,
-    string_literal_runtime_bytes,
+    field_chain_before_first_call, parse_lua_number, plain_field_chain_from_expression,
+    plain_field_chain_from_var, string_literal_runtime_bytes,
 };
 use crate::config::{DiagnosticsConfig, JitConfig};
 use crate::control_flow::block_fallthrough_position;
@@ -3129,7 +3129,6 @@ fn number_literal_text(token: &TokenReference) -> Option<String> {
         _ => None,
     }
 }
-
 
 fn duplicate_key_diagnostic(
     path: &Path,

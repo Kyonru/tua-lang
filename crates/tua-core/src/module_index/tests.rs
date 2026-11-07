@@ -207,8 +207,14 @@ return Player
         panic!("new should return the instance shape: {constructor:#?}");
     };
     let fields = instance.semantic_fields();
-    let Type::Function(update) = &fields.get("update").unwrap().ty else { panic!("method"); };
-    assert_eq!(update.parameters.len(), 2, "colon methods include the implicit receiver");
+    let Type::Function(update) = &fields.get("update").unwrap().ty else {
+        panic!("method");
+    };
+    assert_eq!(
+        update.parameters.len(),
+        2,
+        "colon methods include the implicit receiver"
+    );
     assert_eq!(update.required_parameter_count, 2);
 
     assert_eq!(fields.get("name").map(|field| &field.ty), Some(&Type::Any));
@@ -775,18 +781,27 @@ fn imported_lua_overloads_preserve_all_call_contracts() {
     project.write("tua.toml", "source = \"src\"\n");
     project.write("src/legacy.lua", "---@overload fun(value: string): string\n---@overload fun(value: number): number\nlocal function identity(value) return value end\nreturn {identity=identity}\n");
     let path = project.path.join("src/main.tua");
-    let source = "local Legacy = require('legacy')\nlocal value = Legacy.identity(true)\nprint(value)\n";
+    let source =
+        "local Legacy = require('legacy')\nlocal value = Legacy.identity(true)\nprint(value)\n";
     project.write("src/main.tua", source);
     let parsed = parse_tua_source(&path, source).unwrap();
     let exports = required_module_exports_for_receiver(&parsed, "Legacy").unwrap();
-    let Type::Function(function) = exports.field("identity").unwrap() else { panic!("function"); };
+    let Type::Function(function) = exports.field("identity").unwrap() else {
+        panic!("function");
+    };
     assert_eq!(function.overloads.len(), 2);
-    assert!(crate::check_tua_source(&path, source).unwrap_err().iter().any(|d| d.code == Some(crate::DiagnosticCode::TYPE_MISMATCH)));
+    assert!(crate::check_tua_source(&path, source)
+        .unwrap_err()
+        .iter()
+        .any(|d| d.code == Some(crate::DiagnosticCode::TYPE_MISMATCH)));
     crate::check_tua_source(&path, source.replace("true", "42")).unwrap();
     let parsed = parse_tua_source(&path, source.replace("true", "42")).unwrap();
     let environment = crate::build_type_environment(&parsed).unwrap();
     let model = crate::semantic::SemanticModel::new(&parsed, &environment);
-    assert_eq!(model.type_of_name("value", crate::SourcePosition {line: 3, column: 7}), Some(Type::number()));
+    assert_eq!(
+        model.type_of_name("value", crate::SourcePosition { line: 3, column: 7 }),
+        Some(Type::number())
+    );
 }
 
 #[test]
@@ -794,9 +809,22 @@ fn final_review_transitive_module_cache_tracks_dependency_edits() {
     let project = TempProject::new("review_transitive_cache");
     project.write("tua.toml", "source = \"src\"\n");
     project.write("src/b.tua", "return { value = 123 }\n");
-    project.write("src/a.tua", "local value = require('b').value\nreturn { value = value }\n");
+    project.write(
+        "src/a.tua",
+        "local value = require('b').value\nreturn { value = value }\n",
+    );
     let path = project.path.join("src/a.tua");
-    assert_eq!(required_module_exports_for_path(&path).unwrap().field("value"), Some(&Type::number()));
+    assert_eq!(
+        required_module_exports_for_path(&path)
+            .unwrap()
+            .field("value"),
+        Some(&Type::number())
+    );
     project.write("src/b.tua", "return { value = 'changed' }\n");
-    assert_eq!(required_module_exports_for_path(&path).unwrap().field("value"), Some(&Type::string()));
+    assert_eq!(
+        required_module_exports_for_path(&path)
+            .unwrap()
+            .field("value"),
+        Some(&Type::string())
+    );
 }

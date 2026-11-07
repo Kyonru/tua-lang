@@ -34,7 +34,9 @@ struct ModuleExportResolutionGuard(PathBuf);
 
 impl Drop for ModuleExportResolutionGuard {
     fn drop(&mut self) {
-        RESOLVING_MODULE_EXPORTS.with(|paths| { paths.borrow_mut().remove(&self.0); });
+        RESOLVING_MODULE_EXPORTS.with(|paths| {
+            paths.borrow_mut().remove(&self.0);
+        });
     }
 }
 
@@ -269,26 +271,30 @@ pub(crate) fn required_module_exports_for_path(path: &Path) -> Option<ModuleExpo
         let mut paths = paths.borrow_mut();
         paths.len() < 32 && paths.insert(path.clone())
     });
-    if !entered { return None; }
+    if !entered {
+        return None;
+    }
     let _guard = ModuleExportResolutionGuard(path.clone());
 
     let exports = parse_module_source(&path, source.clone())
         .ok()
         .and_then(|parsed| infer_module_exports(&parsed));
 
-    if cacheable { REQUIRED_MODULE_EXPORT_CACHE.with(|cache| {
-        let mut cache = cache.borrow_mut();
-        if cache.len() >= 128 {
-            cache.clear();
-        }
-        cache.insert(
-            path,
-            CachedRequiredModuleExports {
-                source,
-                exports: exports.clone(),
-            },
-        );
-    }); }
+    if cacheable {
+        REQUIRED_MODULE_EXPORT_CACHE.with(|cache| {
+            let mut cache = cache.borrow_mut();
+            if cache.len() >= 128 {
+                cache.clear();
+            }
+            cache.insert(
+                path,
+                CachedRequiredModuleExports {
+                    source,
+                    exports: exports.clone(),
+                },
+            );
+        });
+    }
 
     exports
 }
@@ -306,7 +312,8 @@ fn require_bindings(parsed: &ParsedSource) -> BTreeMap<String, RequireBinding> {
 
         for (name, expression) in names.iter().zip(expressions.iter()) {
             // An extracted field/call result is not an alias of the entire module.
-            if matches!(expression, Expression::FunctionCall(call) if call.suffixes().count() != 1) {
+            if matches!(expression, Expression::FunctionCall(call) if call.suffixes().count() != 1)
+            {
                 continue;
             }
             let Some((module, kind)) =
@@ -545,7 +552,9 @@ impl<'a> ExportInferer<'a> {
                         .unwrap_or_else(|| function_type_from_body(function.body()));
                     if is_method {
                         if let Type::Function(signature) = &mut inferred {
-                            signature.parameters.insert(0, FunctionParameter::named("self", Type::Any));
+                            signature
+                                .parameters
+                                .insert(0, FunctionParameter::named("self", Type::Any));
                             signature.required_parameter_count += 1;
                         }
                     }
@@ -576,11 +585,16 @@ impl<'a> ExportInferer<'a> {
             }
             ast::Stmt::LocalAssignment(local) => {
                 for (name, expression) in local.names().iter().zip(local.expressions()) {
-                    let explicit_contract = node_span(name).is_some_and(|span| self.environment
-                        .is_some_and(|environment| environment.has_local_contract_at(span.start)));
+                    let explicit_contract = node_span(name).is_some_and(|span| {
+                        self.environment.is_some_and(|environment| {
+                            environment.has_local_contract_at(span.start)
+                        })
+                    });
                     let name = token_text(name);
                     self.update_local_alias(&name, expression);
-                    if explicit_contract { continue; }
+                    if explicit_contract {
+                        continue;
+                    }
                     let inferred = self.infer_expression(expression);
                     if inferred != Type::Any {
                         self.locals.entry(name).or_insert(inferred);
@@ -1324,10 +1338,21 @@ fn resolve_export_aliases_inner(
                     .collect()
             });
 
-            let overloads = function.overloads.iter().map(|overload| {
-                let Type::Function(overload) = resolve_export_aliases_inner(environment, &Type::Function(overload.clone()), false, visiting) else { unreachable!() };
-                overload
-            }).collect::<Vec<_>>();
+            let overloads = function
+                .overloads
+                .iter()
+                .map(|overload| {
+                    let Type::Function(overload) = resolve_export_aliases_inner(
+                        environment,
+                        &Type::Function(overload.clone()),
+                        false,
+                        visiting,
+                    ) else {
+                        unreachable!()
+                    };
+                    overload
+                })
+                .collect::<Vec<_>>();
             Type::Function(
                 FunctionType::new_signature(
                     parameters,
@@ -1335,7 +1360,8 @@ fn resolve_export_aliases_inner(
                     vararg_type,
                     return_types,
                 )
-                .with_guarded_return_types(guarded).with_overloads(overloads),
+                .with_guarded_return_types(guarded)
+                .with_overloads(overloads),
             )
         }
         Type::Table(table) => {
@@ -1628,7 +1654,12 @@ fn typed_function_type(function: &TypedFunction) -> Type {
             function.return_types_or_any(),
         )
         .with_guarded_return_types(function.guarded_return_types.clone())
-        .with_overloads(function.overloads.iter().map(crate::types::TypedFunctionOverload::as_function_type)),
+        .with_overloads(
+            function
+                .overloads
+                .iter()
+                .map(crate::types::TypedFunctionOverload::as_function_type),
+        ),
     )
 }
 

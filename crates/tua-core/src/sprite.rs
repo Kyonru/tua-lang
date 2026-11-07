@@ -2070,14 +2070,19 @@ fn parse_animation_field(field: &Field) -> Option<SpriteAnimation> {
         duration_preview: durations_expression.and_then(duration_preview_value),
         duration_values,
         has_invalid_duration: durations_expression.is_some_and(|expression| {
-            let invalid = |value: &Expression| crate::ast_utils::numeric_literal(value)
-                .is_some_and(|value| !value.is_finite() || value <= 0.0);
-            invalid(expression) || table_expression(expression).is_some_and(|table| {
-                table.fields().iter().any(|field| match field {
-                    Field::ExpressionKey { value, .. } | Field::NameKey { value, .. } | Field::NoKey(value) => invalid(value),
-                    _ => false,
+            let invalid = |value: &Expression| {
+                crate::ast_utils::numeric_literal(value)
+                    .is_some_and(|value| !value.is_finite() || value <= 0.0)
+            };
+            invalid(expression)
+                || table_expression(expression).is_some_and(|table| {
+                    table.fields().iter().any(|field| match field {
+                        Field::ExpressionKey { value, .. }
+                        | Field::NameKey { value, .. }
+                        | Field::NoKey(value) => invalid(value),
+                        _ => false,
+                    })
                 })
-            })
         }),
         on_loop: on_loop.as_ref().map(|(value, _)| value.clone()),
         looping,
@@ -2498,7 +2503,10 @@ fn sprite_declaration_diagnostics(
             (&animation.durations, animation.durations_span)
         {
             if animation.has_invalid_duration
-                || durations.parse::<f64>().ok().is_some_and(|duration| duration <= 0.0)
+                || durations
+                    .parse::<f64>()
+                    .ok()
+                    .is_some_and(|duration| duration <= 0.0)
             {
                 diagnostics.push(sprite_diagnostic(
                     path,
@@ -3198,9 +3206,17 @@ local Player = spriteSheet({
         for durations in ["{0, 0}", "{0.1, -0.2}", "{['1-2'] = 0}"] {
             let source = "local Player = spriteSheet({image='x.png', frame={width=16,height=16}, animations={idle={from=0,to=1,row=0,durations=DURATIONS}}})".replace("DURATIONS", durations);
             let parsed = parse_tua_source("sprites.tua", source).unwrap();
-            let diagnostics = super::sprite_declaration_diagnostics(std::path::Path::new("sprites.tua"), &[], &parsed.sprite_declarations[0]);
-            assert!(diagnostics.iter().any(|d| d.message.contains("durations must be greater than zero")), "{durations}: {diagnostics:?}");
+            let diagnostics = super::sprite_declaration_diagnostics(
+                std::path::Path::new("sprites.tua"),
+                &[],
+                &parsed.sprite_declarations[0],
+            );
+            assert!(
+                diagnostics
+                    .iter()
+                    .any(|d| d.message.contains("durations must be greater than zero")),
+                "{durations}: {diagnostics:?}"
+            );
         }
     }
-
 }

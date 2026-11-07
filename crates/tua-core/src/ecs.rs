@@ -185,7 +185,11 @@ pub(crate) fn inferred_method_return_types(
     let value = component_argument_type
         .and_then(component_value_type)
         .unwrap_or(Type::Any);
-    Some(vec![if method == "add" { value } else { Type::union([value, Type::nil()]) }])
+    Some(vec![if method == "add" {
+        value
+    } else {
+        Type::union([value, Type::nil()])
+    }])
 }
 
 /// Contextual system arguments share the same component value metadata as lookups.
@@ -195,17 +199,38 @@ pub(crate) fn system_callback_type(
     mut resolve: impl FnMut(&Expression) -> Option<Type>,
 ) -> Option<Type> {
     if !is_module_type_direct(receiver_type)
-        || field_chain_before_first_call(call)?.last()?.as_str() != "system" { return None; }
-    let Expression::TableConstructor(components) = call_argument(call, 1)? else { return None; };
-    let mut parameters = vec![crate::FunctionParameter::named("entity", Type::alias(ENTITY_ID_TYPE))];
+        || field_chain_before_first_call(call)?.last()?.as_str() != "system"
+    {
+        return None;
+    }
+    let Expression::TableConstructor(components) = call_argument(call, 1)? else {
+        return None;
+    };
+    let mut parameters = vec![crate::FunctionParameter::named(
+        "entity",
+        Type::alias(ENTITY_ID_TYPE),
+    )];
     for (index, field) in components.fields().iter().enumerate() {
-        let Field::NoKey(expression) = field else { return None; };
-        let ty = resolve(expression).as_ref().and_then(component_value_type).unwrap_or(Type::Any);
-        parameters.push(crate::FunctionParameter::named(format!("component{}", index + 1), ty));
+        let Field::NoKey(expression) = field else {
+            return None;
+        };
+        let ty = resolve(expression)
+            .as_ref()
+            .and_then(component_value_type)
+            .unwrap_or(Type::Any);
+        parameters.push(crate::FunctionParameter::named(
+            format!("component{}", index + 1),
+            ty,
+        ));
     }
     parameters.push(crate::FunctionParameter::named("dt", Type::number()));
     let count = parameters.len();
-    Some(Type::Function(crate::FunctionType::new_signature(parameters, count, None, [Type::nil()])))
+    Some(Type::Function(crate::FunctionType::new_signature(
+        parameters,
+        count,
+        None,
+        [Type::nil()],
+    )))
 }
 
 pub(crate) fn component_argument<'a>(
@@ -344,17 +369,17 @@ pub(crate) fn typed_module_function(name: &str) -> Option<TypedFunction> {
         )),
         "component" => {
             let mut function = typed_function(
-            name,
-            [
-                parameter("name", Type::string()),
-                parameter("schema", Type::empty_table()),
-            ],
-            Type::alias(COMPONENT_TYPE),
-            "Declare a reusable component and its optional editor-checked data schema.",
+                name,
+                [
+                    parameter("name", Type::string()),
+                    parameter("schema", Type::empty_table()),
+                ],
+                Type::alias(COMPONENT_TYPE),
+                "Declare a reusable component and its optional editor-checked data schema.",
             );
             function.required_parameter_count = 1;
             Some(function)
-        },
+        }
         "system" => Some(typed_function(
             name,
             [
@@ -810,25 +835,69 @@ mod tests {
     fn system_callbacks_receive_component_schema_and_dt() {
         let source = "local Position = ecs.component(\"Position\", { x = \"number\" })\nlocal world = ecs.world()\necs.system(world, { Position }, function(entity, position, dt)\n local x: number = position.x\n local wrong: string = dt\nend)\n";
         let parsed = parse_tua_source("src/main.tua", source).unwrap();
-        let (environment, _) = crate::types::build_type_environment_with_domain_registry(&parsed,
-            crate::semantic_domains::BuiltinDomainRegistry::with_ecs(true));
+        let (environment, _) = crate::types::build_type_environment_with_domain_registry(
+            &parsed,
+            crate::semantic_domains::BuiltinDomainRegistry::with_ecs(true),
+        );
         let model = SemanticModel::new(&parsed, &environment);
-        assert_eq!(model.type_of_name("dt", SourcePosition {line:5,column:24}), Some(Type::number()));
-        let position = model.type_of_name("position", SourcePosition {line:4,column:20}).unwrap();
+        assert_eq!(
+            model.type_of_name(
+                "dt",
+                SourcePosition {
+                    line: 5,
+                    column: 24
+                }
+            ),
+            Some(Type::number())
+        );
+        let position = model
+            .type_of_name(
+                "position",
+                SourcePosition {
+                    line: 4,
+                    column: 20,
+                },
+            )
+            .unwrap();
         assert_eq!(position.to_string(), "{ x: number }");
-        let errors = crate::check::check_parsed_source_with_asset_roots_diagnostics_jit_and_ecs_config(
-            &parsed, &[], &crate::DiagnosticsConfig::default(), &crate::JitConfig::default(),
-            &crate::EcsConfig { enabled:true, ..crate::EcsConfig::default() }).expect_err("dt must be numeric");
-        assert!(errors.iter().any(|error| error.message.contains("number") && error.message.contains("string")), "{errors:?}");
+        let errors =
+            crate::check::check_parsed_source_with_asset_roots_diagnostics_jit_and_ecs_config(
+                &parsed,
+                &[],
+                &crate::DiagnosticsConfig::default(),
+                &crate::JitConfig::default(),
+                &crate::EcsConfig {
+                    enabled: true,
+                    ..crate::EcsConfig::default()
+                },
+            )
+            .expect_err("dt must be numeric");
+        assert!(
+            errors
+                .iter()
+                .any(|error| error.message.contains("number") && error.message.contains("string")),
+            "{errors:?}"
+        );
     }
 
     #[test]
     fn component_schema_is_optional() {
-        let parsed = parse_tua_source("src/main.tua", "local _Marker = ecs.component(\"Marker\")\n").unwrap();
+        let parsed = parse_tua_source(
+            "src/main.tua",
+            "local _Marker = ecs.component(\"Marker\")\n",
+        )
+        .unwrap();
         crate::check::check_parsed_source_with_asset_roots_diagnostics_jit_and_ecs_config(
-            &parsed, &[], &crate::DiagnosticsConfig::default(), &crate::JitConfig::default(),
-            &crate::EcsConfig { enabled: true, ..crate::EcsConfig::default() },
-        ).expect("component schema may be omitted");
+            &parsed,
+            &[],
+            &crate::DiagnosticsConfig::default(),
+            &crate::JitConfig::default(),
+            &crate::EcsConfig {
+                enabled: true,
+                ..crate::EcsConfig::default()
+            },
+        )
+        .expect("component schema may be omitted");
     }
 
     #[test]
@@ -1016,7 +1085,11 @@ end
                         Some(component_type(Type::number()))
                     });
                 assert_eq!(queries, 1);
-                let expected = if method == "add" { Type::number() } else { Type::union([Type::number(), Type::nil()]) };
+                let expected = if method == "add" {
+                    Type::number()
+                } else {
+                    Type::union([Type::number(), Type::nil()])
+                };
                 assert_eq!(returns, Some(vec![expected]));
             }
         }

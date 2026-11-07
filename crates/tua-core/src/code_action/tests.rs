@@ -1219,19 +1219,29 @@ fn unused_local_removal_preserves_adjacent_statements() {
         "local unused = 1; print(\"keep\") -- comment\n",
     ] {
         let parsed = parse_tua_source("src/main.tua", source).unwrap();
-        let diagnostics = diagnostics(&parsed, DiagnosticsConfig {
-            rules: false,
-            unused_locals: true,
-            ..DiagnosticsConfig::default()
-        });
+        let diagnostics = diagnostics(
+            &parsed,
+            DiagnosticsConfig {
+                rules: false,
+                unused_locals: true,
+                ..DiagnosticsConfig::default()
+            },
+        );
         for kinds in [vec![AssistKind::QuickFix], vec![AssistKind::SourceFixAll]] {
             let actions = code_actions_parsed_source_with_kinds(
-                &parsed, &diagnostics, range_line(1),
-                std::path::Path::new("src"), "tua", &kinds,
+                &parsed,
+                &diagnostics,
+                range_line(1),
+                std::path::Path::new("src"),
+                "tua",
+                &kinds,
             );
-            let action = actions.iter().find(|action|
-                action.title == "Remove unused local" || action.kind == AssistKind::SourceFixAll
-            ).expect("safe removal should be available");
+            let action = actions
+                .iter()
+                .find(|action| {
+                    action.title == "Remove unused local" || action.kind == AssistKind::SourceFixAll
+                })
+                .expect("safe removal should be available");
             let edits = &action.edit.changes[&parsed.path];
             assert_eq!(edits.len(), 1);
             let removed = source_text_for_span(source, edits[0].span).unwrap();

@@ -250,12 +250,18 @@ impl<'a> SemanticModel<'a> {
         position: SourcePosition,
     ) -> Option<Vec<String>> {
         let mut expression = self.local_assignment_value(name, position)?.expression?;
-        while let Expression::Parentheses { expression: inner, .. }
-            | Expression::TypeAssertion { expression: inner, .. } = expression
+        while let Expression::Parentheses {
+            expression: inner, ..
+        }
+        | Expression::TypeAssertion {
+            expression: inner, ..
+        } = expression
         {
             expression = inner;
         }
-        let Expression::FunctionCall(call) = expression else { return None; };
+        let Expression::FunctionCall(call) = expression else {
+            return None;
+        };
         field_chain_before_first_call(call)
     }
 
@@ -452,21 +458,28 @@ impl<'a> SemanticModel<'a> {
                 if self.environment.has_project_module_types() {
                     return vec![Type::Any];
                 }
-                if let Some(exports) = crate::module_index::resolve_required_module(&self.parsed.path, name)
-                    .and_then(|path| crate::module_index::required_module_exports_for_path(&path)) {
+                if let Some(exports) =
+                    crate::module_index::resolve_required_module(&self.parsed.path, name).and_then(
+                        |path| crate::module_index::required_module_exports_for_path(&path),
+                    )
+                {
                     return vec![exports.value_type];
                 }
             }
         }
 
-        let constructor_domain = domains.imported_constructor_domain_from_bindings(self.runtime_imports(), &parts)
+        let constructor_domain = domains
+            .imported_constructor_domain_from_bindings(self.runtime_imports(), &parts)
             .or_else(|| {
-                let [name] = parts.as_slice() else { return None; };
-                (self.environment.local(name).is_none() && self.environment.function(name).is_none())
-                    .then(|| domains.constructor_domain(name)).flatten()
+                let [name] = parts.as_slice() else {
+                    return None;
+                };
+                (self.environment.local(name).is_none()
+                    && self.environment.function(name).is_none())
+                .then(|| domains.constructor_domain(name))
+                .flatten()
             });
         if let Some(domain) = constructor_domain {
-
             let argument = first_parenthesized_call_argument(function_call).and_then(|argument| {
                 self.type_of_expression_return_at_depth(argument, position, 0, 1)
             });
@@ -584,17 +597,30 @@ impl<'a> SemanticModel<'a> {
         if let Some(function) = self.typed_function_for_call_parts(&parts, position) {
             if !function.overloads.is_empty() {
                 let mut arguments = function_call_expression_arguments(function_call)
-                    .map(|expression| self.type_of_expression_return_at_depth(expression, position, 0, depth + 1).unwrap_or(Type::Any))
+                    .map(|expression| {
+                        self.type_of_expression_return_at_depth(expression, position, 0, depth + 1)
+                            .unwrap_or(Type::Any)
+                    })
                     .collect::<Vec<_>>();
-                if function_call.suffixes().any(|suffix| matches!(suffix, Suffix::Call(Call::MethodCall(_)))) {
-                    arguments.insert(0, self.type_of_field_chain(&parts[..parts.len()-1], position).unwrap_or(Type::Any));
+                if function_call
+                    .suffixes()
+                    .any(|suffix| matches!(suffix, Suffix::Call(Call::MethodCall(_))))
+                {
+                    arguments.insert(
+                        0,
+                        self.type_of_field_chain(&parts[..parts.len() - 1], position)
+                            .unwrap_or(Type::Any),
+                    );
                 }
                 let context = self.environment.to_type_context();
                 if let Some(overload) = function.overloads.iter().find(|overload| {
                     arguments.len() >= overload.parameters.len()
                         && (overload.has_varargs || arguments.len() == overload.parameters.len())
                         && arguments.iter().enumerate().all(|(index, argument)| {
-                            overload.parameters.get(index).map(|parameter| &parameter.ty)
+                            overload
+                                .parameters
+                                .get(index)
+                                .map(|parameter| &parameter.ty)
                                 .or(overload.vararg_type.as_ref())
                                 .is_none_or(|parameter| context.is_assignable(argument, parameter))
                         })
@@ -778,11 +804,18 @@ impl<'a> SemanticModel<'a> {
             }
         }
         let mut function = self.typed_function_for_call_parts(&parts, position)?;
-        if parts == [object_pool::CONSTRUCTOR_NAME] && self.is_unshadowed_lua_root(object_pool::CONSTRUCTOR_NAME) {
-            if let Some(signature) = object_pool::contextual_constructor_type(function_call, |expression| {
-                self.type_of_expression_return_at_depth(expression, position, 0, 1)
-            }) {
-                function = typed_function_from_function_type(Some(object_pool::CONSTRUCTOR_NAME.into()), signature);
+        if parts == [object_pool::CONSTRUCTOR_NAME]
+            && self.is_unshadowed_lua_root(object_pool::CONSTRUCTOR_NAME)
+        {
+            if let Some(signature) =
+                object_pool::contextual_constructor_type(function_call, |expression| {
+                    self.type_of_expression_return_at_depth(expression, position, 0, 1)
+                })
+            {
+                function = typed_function_from_function_type(
+                    Some(object_pool::CONSTRUCTOR_NAME.into()),
+                    signature,
+                );
             }
         }
         if let Some(result) = self.table_remove_result(function_call, &parts, position, 0) {
@@ -793,10 +826,14 @@ impl<'a> SemanticModel<'a> {
         if self.environment.alias(ecs::WORLD_TYPE).is_some() {
             if let Some((_, receiver_parts)) = parts.split_last() {
                 if let Some(receiver_type) = self.type_of_field_chain(receiver_parts, position) {
-                    if let Some(callback) = ecs::system_callback_type(&receiver_type, function_call, |expression| {
-                        self.type_of_expression_return_at_depth(expression, position, 0, 1)
-                    }) {
-                        if let Some(parameter) = function.parameters.get_mut(2) { parameter.ty = callback; }
+                    if let Some(callback) =
+                        ecs::system_callback_type(&receiver_type, function_call, |expression| {
+                            self.type_of_expression_return_at_depth(expression, position, 0, 1)
+                        })
+                    {
+                        if let Some(parameter) = function.parameters.get_mut(2) {
+                            parameter.ty = callback;
+                        }
                     }
                     let component_type = ecs::component_argument(&receiver_type, function_call)
                         .and_then(|expression| {
@@ -851,11 +888,30 @@ impl<'a> SemanticModel<'a> {
     }
 
     fn project_module_binding_visible(&self, root: &str, position: SourcePosition) -> bool {
-        let Some(module) = self.environment.exact_module_binding(root) else { return false; };
-        let Some(mut expression) = self.local_assignment_value(root, position).and_then(|local| local.expression) else { return false; };
-        while let Expression::Parentheses { expression: inner, .. } | Expression::TypeAssertion { expression: inner, .. } = expression { expression = inner; }
-        let Expression::FunctionCall(call) = expression else { return false; };
-        if field_chain_before_first_call(call).as_deref() != Some(&["require".to_owned()]) { return false; }
+        let Some(module) = self.environment.exact_module_binding(root) else {
+            return false;
+        };
+        let Some(mut expression) = self
+            .local_assignment_value(root, position)
+            .and_then(|local| local.expression)
+        else {
+            return false;
+        };
+        while let Expression::Parentheses {
+            expression: inner, ..
+        }
+        | Expression::TypeAssertion {
+            expression: inner, ..
+        } = expression
+        {
+            expression = inner;
+        }
+        let Expression::FunctionCall(call) = expression else {
+            return false;
+        };
+        if field_chain_before_first_call(call).as_deref() != Some(&["require".to_owned()]) {
+            return false;
+        }
         matches!(lua::first_call_argument(call), Some(Expression::String(value)) if unquote_string(&value.to_string()) == module)
     }
 
@@ -880,7 +936,8 @@ impl<'a> SemanticModel<'a> {
             });
         }
 
-        let project_module = !fields.is_empty() && self.environment.exact_module_binding(root).is_some();
+        let project_module =
+            !fields.is_empty() && self.environment.exact_module_binding(root).is_some();
         if !project_module {
             if let Some(function) = self.function_at_source_position(&qualified_name, position) {
                 return Some(function.clone());
@@ -1233,12 +1290,23 @@ impl<'a> SemanticModel<'a> {
         if self.environment.exact_module_binding(name).is_some()
             && !self.project_module_binding_visible(name, position)
         {
-            if self.environment.annotated_name_binding(name, parser_position).is_some() {
-                return self.local_contract_at_source_position(name, position).cloned();
+            if self
+                .environment
+                .annotated_name_binding(name, parser_position)
+                .is_some()
+            {
+                return self
+                    .local_contract_at_source_position(name, position)
+                    .cloned();
             }
             if let Some(local) = self.local_assignment_value(name, position) {
                 return match local.expression {
-                    Some(expression) => self.type_of_expression_return_at_depth(expression, local.evaluation_position, local.return_index, depth + 1),
+                    Some(expression) => self.type_of_expression_return_at_depth(
+                        expression,
+                        local.evaluation_position,
+                        local.return_index,
+                        depth + 1,
+                    ),
                     None => Some(Type::nil()),
                 };
             }
@@ -1989,12 +2057,14 @@ impl<'a> SemanticModel<'a> {
         }
 
         let mut current = match expression.prefix() {
-            Prefix::Name(name) => {
-                self.type_of_name_at_depth(&token_text(name), position, depth + 1)
-                    .or_else(|| (token_text(name) == "require" && self.is_unshadowed_lua_root("require")
+            Prefix::Name(name) => self
+                .type_of_name_at_depth(&token_text(name), position, depth + 1)
+                .or_else(|| {
+                    (token_text(name) == "require"
+                        && self.is_unshadowed_lua_root("require")
                         && matches!(expression.suffixes().next(), Some(Suffix::Call(_))))
-                        .then_some(Type::Any))?
-            }
+                    .then_some(Type::Any)
+                })?,
             Prefix::Expression(expression) => {
                 self.type_of_expression_return_at_depth(expression, position, 0, depth + 1)?
             }
@@ -2155,8 +2225,10 @@ impl<'a> SemanticModel<'a> {
                     return None;
                 }
                 let (argument_index, body, fields) = function_call_expression_arguments(call)
-                    .enumerate().find_map(|(index, expression)| {
-                        contextual_callback_path(expression, binding_body).map(|(body, fields)| (index, body, fields))
+                    .enumerate()
+                    .find_map(|(index, expression)| {
+                        contextual_callback_path(expression, binding_body)
+                            .map(|(body, fields)| (index, body, fields))
                     })?;
                 if node_span(body) != Some(binding_body) {
                     return None;
@@ -2531,10 +2603,15 @@ pub(crate) fn resolve_index_type(
             value,
         } => key_accepts_index(&dict_key, key).then(|| Type::union([*value, Type::nil()])),
         Type::Table(table) => match key {
-            Type::StringLiteral(value) => table.semantic_field(value).map(|field| field.value_type()),
-            Type::Primitive(PrimitiveType::String) => {
-                union_types_optional(table.semantic_fields().into_values().map(|field| field.value_type()))
+            Type::StringLiteral(value) => {
+                table.semantic_field(value).map(|field| field.value_type())
             }
+            Type::Primitive(PrimitiveType::String) => union_types_optional(
+                table
+                    .semantic_fields()
+                    .into_values()
+                    .map(|field| field.value_type()),
+            ),
             _ => None,
         },
         Type::Union(types) => resolve_union_operation(types, |ty| {
@@ -3342,21 +3419,31 @@ pub(crate) fn typed_function_from_function_type(
 ) -> TypedFunction {
     let return_types = function.return_types_or_any().to_vec();
     let parameter_count = function.parameters.len();
-    let overloads = function.overloads.into_iter().map(|overload| {
-        let typed = typed_function_from_function_type(None, overload);
-        crate::types::TypedFunctionOverload {
-            parameters: typed.parameters,
-            has_varargs: typed.has_varargs,
-            vararg_type: typed.vararg_type,
-            return_types: typed.return_types,
-            documentation: typed.documentation,
-        }
-    }).collect();
+    let overloads = function
+        .overloads
+        .into_iter()
+        .map(|overload| {
+            let typed = typed_function_from_function_type(None, overload);
+            crate::types::TypedFunctionOverload {
+                parameters: typed.parameters,
+                has_varargs: typed.has_varargs,
+                vararg_type: typed.vararg_type,
+                return_types: typed.return_types,
+                documentation: typed.documentation,
+            }
+        })
+        .collect();
     TypedFunction {
         name,
-        parameters: function.parameters.into_iter().map(|parameter| TypedParameter {
-            name: parameter.name.unwrap_or_default(), ty: parameter.ty, documentation: None,
-        }).collect(),
+        parameters: function
+            .parameters
+            .into_iter()
+            .map(|parameter| TypedParameter {
+                name: parameter.name.unwrap_or_default(),
+                ty: parameter.ty,
+                documentation: None,
+            })
+            .collect(),
         parameter_count,
         required_parameter_count: function.required_parameter_count,
         has_varargs: function.vararg_type.is_some(),
@@ -3369,11 +3456,18 @@ pub(crate) fn typed_function_from_function_type(
     }
 }
 
-fn contextual_callback_path(expression: &Expression, body_span: SourceSpan) -> Option<(&ast::FunctionBody, Vec<String>)> {
+fn contextual_callback_path(
+    expression: &Expression,
+    body_span: SourceSpan,
+) -> Option<(&ast::FunctionBody, Vec<String>)> {
     match expression {
-        Expression::Function(function) if node_span(function.body()) == Some(body_span) => Some((function.body(), Vec::new())),
+        Expression::Function(function) if node_span(function.body()) == Some(body_span) => {
+            Some((function.body(), Vec::new()))
+        }
         Expression::TableConstructor(table) => table.fields().iter().find_map(|field| {
-            let Field::NameKey { key, value, .. } = field else { return None; };
+            let Field::NameKey { key, value, .. } = field else {
+                return None;
+            };
             let (body, mut fields) = contextual_callback_path(value, body_span)?;
             fields.insert(0, token_text(key));
             Some((body, fields))
@@ -3386,11 +3480,17 @@ fn typed_function_from_module_export(
     name: Option<String>,
     export: ModuleExportField,
 ) -> Option<TypedFunction> {
-    let Type::Function(function) = export.ty else { return None; };
+    let Type::Function(function) = export.ty else {
+        return None;
+    };
     let mut function = typed_function_from_function_type(name, function);
     for (index, parameter) in function.parameters.iter_mut().enumerate() {
         if parameter.name.is_empty() {
-            parameter.name = export.parameter_names.get(index).cloned().unwrap_or_default();
+            parameter.name = export
+                .parameter_names
+                .get(index)
+                .cloned()
+                .unwrap_or_default();
         }
         parameter.documentation = export.parameter_documentation.get(index).cloned().flatten();
     }

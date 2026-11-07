@@ -186,8 +186,16 @@ impl TypeContext {
                             self.check_assignable_inner(source, target, depth + 1, resolving)
                         }),
                         Type::Table(source_table) => match self.alias(name) {
-                            Some(Type::Table(target_table)) if target_table.nominal_identity().is_some() =>
-                                self.check_table_assignable(source_table, target_table, depth + 1, resolving),
+                            Some(Type::Table(target_table))
+                                if target_table.nominal_identity().is_some() =>
+                            {
+                                self.check_table_assignable(
+                                    source_table,
+                                    target_table,
+                                    depth + 1,
+                                    resolving,
+                                )
+                            }
                             _ => Err(AssignabilityFailure::type_mismatch(source, target)),
                         },
                         _ => Err(AssignabilityFailure::type_mismatch(source, target)),
@@ -493,8 +501,13 @@ impl TypeContext {
                 }));
             }
 
-            self.check_assignable_inner(&source_field.ty, &target_field.value_type(), depth + 1, resolving)
-                .map_err(|failure| failure.at(AssignabilityPathSegment::Field(name.to_owned())))?;
+            self.check_assignable_inner(
+                &source_field.ty,
+                &target_field.value_type(),
+                depth + 1,
+                resolving,
+            )
+            .map_err(|failure| failure.at(AssignabilityPathSegment::Field(name.to_owned())))?;
         }
 
         Ok(())

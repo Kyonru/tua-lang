@@ -323,17 +323,18 @@ fn string_argument_context(
 
     let (prefix, quote_start) = string_prefix_at(line, cursor)?;
     let cursor = byte_offset_for_position(source, position)?;
-    let (callee_parts, active_parameter, is_method_call) = if let Some(open) = active_call_open(source, cursor) {
-        (
-            callee_parts_before(source, open)?,
-            active_parameter_index(source, open + 1, cursor),
-            method_separator_before(source, open),
-        )
-    } else {
-        let callee = callee_parts_before(line, quote_start)?;
+    let (callee_parts, active_parameter, is_method_call) =
+        if let Some(open) = active_call_open(source, cursor) {
+            (
+                callee_parts_before(source, open)?,
+                active_parameter_index(source, open + 1, cursor),
+                method_separator_before(source, open),
+            )
+        } else {
+            let callee = callee_parts_before(line, quote_start)?;
 
-        (callee, 0, method_separator_before(line, quote_start))
-    };
+            (callee, 0, method_separator_before(line, quote_start))
+        };
 
     Some(CompletionContext::StringArgument {
         is_method_call,

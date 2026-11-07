@@ -171,12 +171,20 @@ pub(crate) fn shader_uniforms(source: &str) -> Option<ShaderUniformSet> {
     }) {
         return None;
     }
-    let macros = code.lines().filter_map(|line| {
-        let directive = line.trim_start().strip_prefix('#')?.trim_start();
-        let definition = directive.strip_prefix("define")?;
-        if !definition.starts_with(char::is_whitespace) { return None; }
-        definition.trim_start().split(|c: char| !c.is_ascii_alphanumeric() && c != '_').next()
-    }).collect::<std::collections::BTreeSet<_>>();
+    let macros = code
+        .lines()
+        .filter_map(|line| {
+            let directive = line.trim_start().strip_prefix('#')?.trim_start();
+            let definition = directive.strip_prefix("define")?;
+            if !definition.starts_with(char::is_whitespace) {
+                return None;
+            }
+            definition
+                .trim_start()
+                .split(|c: char| !c.is_ascii_alphanumeric() && c != '_')
+                .next()
+        })
+        .collect::<std::collections::BTreeSet<_>>();
     let tokens = tokens(&code);
     let mut result = ShaderUniformSet::default();
     for window in tokens.windows(3) {

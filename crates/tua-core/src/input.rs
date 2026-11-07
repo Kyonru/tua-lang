@@ -329,7 +329,8 @@ fn input_type(spec: &InputSpec) -> Type {
             .iter()
             .chain(&spec.pairs)
             .cloned()
-            .collect::<Vec<_>>(), exact,
+            .collect::<Vec<_>>(),
+        exact,
     );
     let second_number = if exact && spec.pairs.is_empty() {
         None
@@ -483,7 +484,10 @@ fn typed_member_for_spec(member: &str, spec: &InputSpec, exact: bool) -> Option<
 
             Some(TypedFunction {
                 name: Some(format!("Input:{member}")),
-                parameters: vec![parameter("self", Type::Any), parameter("name", name_type.clone())],
+                parameters: vec![
+                    parameter("self", Type::Any),
+                    parameter("name", name_type.clone()),
+                ],
                 parameter_count: 2,
                 required_parameter_count: 2,
                 has_varargs: false,
@@ -511,7 +515,10 @@ fn typed_member_for_spec(member: &str, spec: &InputSpec, exact: bool) -> Option<
         )),
         "down" | "pressed" | "released" if exact => Some(TypedFunction {
             name: Some(format!("Input:{member}")),
-            parameters: vec![parameter("self", Type::Any), parameter("name", name_type.clone())],
+            parameters: vec![
+                parameter("self", Type::Any),
+                parameter("name", name_type.clone()),
+            ],
             parameter_count: 2,
             required_parameter_count: 2,
             has_varargs: false,
@@ -710,7 +717,11 @@ fn field_names(table: &crate::TableShape) -> Vec<String> {
 }
 
 fn literal_union_for_names(values: &[String], exact: bool) -> Type {
-    if exact && values.is_empty() { Type::union([]) } else { literal_union_or_string(values) }
+    if exact && values.is_empty() {
+        Type::union([])
+    } else {
+        literal_union_or_string(values)
+    }
 }
 
 fn literal_union_or_string(values: &[String]) -> Type {
@@ -1133,8 +1144,14 @@ fn validate_config(path: &Path, config: &TableConstructor, diagnostics: &mut Vec
     }
 
     if let Some(deadzone) = named_field(config, "deadzone") {
-        if crate::ast_utils::numeric_literal(deadzone).is_some_and(|value| !(0.0..=1.0).contains(&value)) {
-            diagnostics.push(input_diagnostic(path, deadzone, "input `deadzone` must be between 0 and 1"));
+        if crate::ast_utils::numeric_literal(deadzone)
+            .is_some_and(|value| !(0.0..=1.0).contains(&value))
+        {
+            diagnostics.push(input_diagnostic(
+                path,
+                deadzone,
+                "input `deadzone` must be between 0 and 1",
+            ));
         }
     }
 
@@ -1441,19 +1458,41 @@ local controls = input({
     }
     #[test]
     fn validates_signed_and_hex_deadzone_literals() {
-        for (literal, invalid) in [("-0.25", true), ("0x2", true), ("1.25", true), ("0", false), ("0x1", false)] {
-            let parsed = crate::parse_tua_source("input.tua", format!("local c = input({{controls={{}}, deadzone={literal}}})")).unwrap();
-            assert_eq!(!config_diagnostics(&parsed).is_empty(), invalid, "{literal}");
+        for (literal, invalid) in [
+            ("-0.25", true),
+            ("0x2", true),
+            ("1.25", true),
+            ("0", false),
+            ("0x1", false),
+        ] {
+            let parsed = crate::parse_tua_source(
+                "input.tua",
+                format!("local c = input({{controls={{}}, deadzone={literal}}})"),
+            )
+            .unwrap();
+            assert_eq!(
+                !config_diagnostics(&parsed).is_empty(),
+                invalid,
+                "{literal}"
+            );
         }
     }
 
     #[test]
     fn empty_static_controls_have_no_callable_names() {
-        let spec = InputSpec { exact: true, ..InputSpec::default() };
+        let spec = InputSpec {
+            exact: true,
+            ..InputSpec::default()
+        };
         for method in ["get", "getRaw", "down", "pressed", "released"] {
             let function = typed_member_for_spec(method, &spec, true).unwrap();
-            assert!(!crate::types::is_assignable(&Type::string_literal("missing"), &function.parameters[1].ty), "{method}");
+            assert!(
+                !crate::types::is_assignable(
+                    &Type::string_literal("missing"),
+                    &function.parameters[1].ty
+                ),
+                "{method}"
+            );
         }
     }
-
 }

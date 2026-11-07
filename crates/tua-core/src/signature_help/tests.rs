@@ -1167,7 +1167,12 @@ local function read(mode) end
 read("vector"
 "#;
     let help = signature_at(source, "read(\"vector\"").unwrap();
-    assert!(help.signatures[help.active_signature].label.contains("vector"), "{help:?}");
+    assert!(
+        help.signatures[help.active_signature]
+            .label
+            .contains("vector"),
+        "{help:?}"
+    );
     let unknown = source.replace("vector\"\n", "unknown\"\n");
     let fallback = signature_at(&unknown, "read(\"unknown\"").unwrap();
     assert_eq!(fallback.active_signature, 0);
@@ -1179,9 +1184,13 @@ fn input_pair_literal_selects_specific_overload_over_union() {
 local x,y=c:get("move")
 "#;
     let help = signature_at(source, "c:get(\"move\"").unwrap();
-    assert_eq!(help.signatures[help.active_signature].label,
-        "function c:get(name: \"move\"): number, number");
+    assert_eq!(
+        help.signatures[help.active_signature].label,
+        "function c:get(name: \"move\"): number, number"
+    );
     let scalar = source.replace("c:get(\"move\")", "c:get(\"left\")");
     let help = signature_at(&scalar, "c:get(\"left\"").unwrap();
-    assert!(!help.signatures[help.active_signature].label.contains("move"));
+    assert!(!help.signatures[help.active_signature]
+        .label
+        .contains("move"));
 }

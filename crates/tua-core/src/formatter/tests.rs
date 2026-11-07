@@ -1737,12 +1737,23 @@ fn inline_middle_branch_closes_inside_multiline_callback() {
 fn preserves_literal_whitespace_on_multiline_opening_lines() {
     for ending in ["\n", "\r\n"] {
         for opener in ["[[a  ", "[=[a\t "] {
-            let closer = if opener.starts_with("[=[") { "]=]" } else { "]]" };
-            let source = format!("local text = {opener}{ending}b{closer}{ending}print(#text){ending}");
-            let options = FormatOptions { line_ending: LineEnding::Preserve, ..FormatOptions::default() };
+            let closer = if opener.starts_with("[=[") {
+                "]=]"
+            } else {
+                "]]"
+            };
+            let source =
+                format!("local text = {opener}{ending}b{closer}{ending}print(#text){ending}");
+            let options = FormatOptions {
+                line_ending: LineEnding::Preserve,
+                ..FormatOptions::default()
+            };
             let formatted = format_tua_source("src/main.tua", &source, &options).unwrap();
             assert_eq!(formatted, source);
-            assert_eq!(format_tua_source("src/main.tua", &formatted, &options).unwrap(), source);
+            assert_eq!(
+                format_tua_source("src/main.tua", &formatted, &options).unwrap(),
+                source
+            );
         }
     }
 }

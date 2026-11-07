@@ -3424,7 +3424,8 @@ r:call("")
 r.call(r, "")
 "#;
     for marker in ["r:call(\"", "r.call(r, \""] {
-        let items = complete_tua_source("src/main.tua", source, position_after(source, marker)).unwrap();
+        let items =
+            complete_tua_source("src/main.tua", source, position_after(source, marker)).unwrap();
         let mut values = labels(&items);
         values.sort();
         assert_eq!(values, vec!["no", "yes"], "{marker}");
@@ -3437,12 +3438,26 @@ fn audio_string_arguments_use_specialized_domain_contracts() {
 a:play("")
 a:stopBus("")
 "#;
-    for (marker, expected) in [("a:play(\"", vec!["ping"]), ("a:stopBus(\"", vec!["master", "sfx"])] {
-        let items = complete_tua_source("src/main.tua", source, position_after(source, marker)).unwrap();
-        let mut values = labels(&items); values.sort();
+    for (marker, expected) in [
+        ("a:play(\"", vec!["ping"]),
+        ("a:stopBus(\"", vec!["master", "sfx"]),
+    ] {
+        let items =
+            complete_tua_source("src/main.tua", source, position_after(source, marker)).unwrap();
+        let mut values = labels(&items);
+        values.sort();
         let parsed = parse_tua_source("src/main.tua", source).unwrap();
         let (environment, _) = build_type_environment_with_diagnostics(&parsed);
         let semantic = SemanticModel::new(&parsed, &environment);
-        assert_eq!(values, expected, "{marker}: receiver={:?}; fn={:?}", environment.local("a"), semantic.typed_function_for_call_parts(&["a".into(), "play".into()], position_after(source, marker)));
+        assert_eq!(
+            values,
+            expected,
+            "{marker}: receiver={:?}; fn={:?}",
+            environment.local("a"),
+            semantic.typed_function_for_call_parts(
+                &["a".into(), "play".into()],
+                position_after(source, marker)
+            )
+        );
     }
 }

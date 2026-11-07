@@ -2511,10 +2511,21 @@ fn lowers_constructor_prefixes_of_property_reads() {
 
 #[test]
 fn builtin_modules_are_injected_when_used_as_values() {
-    for source in ["local C = Camera\nlocal cam = C.new()\n", "return Camera\n", "consume(tween)\n"] {
+    for source in [
+        "local C = Camera\nlocal cam = C.new()\n",
+        "return Camera\n",
+        "consume(tween)\n",
+    ] {
         let emitted = emit_tua_source("src/main.tua", source).unwrap();
-        let runtime = if source.contains("Camera") { "tuacamera" } else { "tuatween" };
-        assert!(emitted.contains(&format!("require(\"{runtime}\")")), "{emitted}");
+        let runtime = if source.contains("Camera") {
+            "tuacamera"
+        } else {
+            "tuatween"
+        };
+        assert!(
+            emitted.contains(&format!("require(\"{runtime}\")")),
+            "{emitted}"
+        );
     }
     let shadowed = emit_tua_source("src/main.tua", "local Camera = {}\nreturn Camera\n").unwrap();
     assert!(!shadowed.contains("require("), "{shadowed}");
@@ -2524,7 +2535,13 @@ fn builtin_modules_are_injected_when_used_as_values() {
 fn emits_math_helpers_used_through_comments_and_static_indices() {
     let source = "local a = math -- keep\n .clamp(4,0,2)\nlocal b = math[\"lerp\"](0,1,.5)\n";
     let emitted = emit_tua_source("src/main.tua", source).unwrap();
-    assert!(emitted.contains("math.clamp = math.clamp or function"), "{emitted}");
-    assert!(emitted.contains("math.lerp = math.lerp or function"), "{emitted}");
+    assert!(
+        emitted.contains("math.clamp = math.clamp or function"),
+        "{emitted}"
+    );
+    assert!(
+        emitted.contains("math.lerp = math.lerp or function"),
+        "{emitted}"
+    );
     assert!(emitted.contains("-- keep"), "{emitted}");
 }

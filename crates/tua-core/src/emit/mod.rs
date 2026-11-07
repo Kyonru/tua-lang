@@ -1838,15 +1838,21 @@ fn lower_builtin_call_operations(
     let game_math_helpers = game_math::used_helpers(parsed);
     let explicit_ecs_binding = explicit_binding_position(parsed, ecs::MODULE_NAME);
     let scope = crate::scope::scope_map_parsed_source(parsed);
-    let builtin_module_spans = crate::builtin_module::MODULES.iter().map(|module| {
-        if environment.project_owns_module(module.name) { return None; }
-        scope.references().iter().find_map(|reference| {
-            (reference.name == module.name && matches!(&reference.resolution,
+    let builtin_module_spans = crate::builtin_module::MODULES
+        .iter()
+        .map(|module| {
+            if environment.project_owns_module(module.name) {
+                return None;
+            }
+            scope.references().iter().find_map(|reference| {
+                (reference.name == module.name
+                    && matches!(&reference.resolution,
                 crate::scope::ScopeResolution::Global(global)
                     if global.kind == crate::scope::ScopeGlobalKind::LuaBuiltin))
                 .then_some(reference.span)
+            })
         })
-    }).collect::<Vec<_>>();
+        .collect::<Vec<_>>();
     while index < output.len() {
         let rest = &output[index..];
 

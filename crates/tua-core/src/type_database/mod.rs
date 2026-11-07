@@ -375,10 +375,21 @@ impl ProjectTypeDatabase {
                         .collect()
                 });
 
-                let overloads = function.overloads.iter().map(|overload| {
-                    let Type::Function(overload) = self.resolve_type_inner(module_graph, source_path, &Type::Function(overload.clone()), resolving) else { unreachable!() };
-                    overload
-                }).collect::<Vec<_>>();
+                let overloads = function
+                    .overloads
+                    .iter()
+                    .map(|overload| {
+                        let Type::Function(overload) = self.resolve_type_inner(
+                            module_graph,
+                            source_path,
+                            &Type::Function(overload.clone()),
+                            resolving,
+                        ) else {
+                            unreachable!()
+                        };
+                        overload
+                    })
+                    .collect::<Vec<_>>();
                 Type::Function(
                     FunctionType::new_signature(
                         parameters,
@@ -386,7 +397,8 @@ impl ProjectTypeDatabase {
                         vararg_type,
                         return_types,
                     )
-                    .with_guarded_return_types(guarded).with_overloads(overloads),
+                    .with_guarded_return_types(guarded)
+                    .with_overloads(overloads),
                 )
             }
             Type::Table(table) => {
@@ -758,7 +770,8 @@ fn typed_function_from_export(name: &str, field: &ModuleExportField) -> TypedFun
             guarded_return_types: None,
             return_types: function.return_types_or_any().to_vec(),
             documentation: field.documentation.clone(),
-            overloads: crate::semantic::typed_function_from_function_type(None, function.clone()).overloads,
+            overloads: crate::semantic::typed_function_from_function_type(None, function.clone())
+                .overloads,
         },
         _ => TypedFunction {
             name: Some(name.to_owned()),

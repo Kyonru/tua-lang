@@ -146,8 +146,12 @@ fn signature_help_parsed_source_with_context(
         }
     }
     let active_signature = active_signature_for_literal_argument(
-        &signatures, context.argument_count, context.first_string_argument.as_deref(), environment,
-    ).unwrap_or_else(|| active_signature_for_argument_count(&signatures, context.argument_count));
+        &signatures,
+        context.argument_count,
+        context.first_string_argument.as_deref(),
+        environment,
+    )
+    .unwrap_or_else(|| active_signature_for_argument_count(&signatures, context.argument_count));
     let active_parameter =
         active_parameter_for_signature(context.active_parameter, &signatures[active_signature]);
 
@@ -215,7 +219,9 @@ impl<'a> SignatureResolver<'a> {
                 .function_at_source_position(&qualified_name, context.position)
                 .is_some()
         {
-            let function = self.semantic.typed_function_for_call_parts(parts, position)?;
+            let function = self
+                .semantic
+                .typed_function_for_call_parts(parts, position)?;
             return Some(signatures_from_typed_function(
                 &function,
                 Some(&qualified_name),
@@ -1073,23 +1079,41 @@ fn active_signature_for_literal_argument(
     let value = first_string?;
     // Escape decoding is handled by the parser/checker; do not guess from an
     // incomplete or escaped source spelling in this recovery context.
-    if value.contains('\\') { return None; }
+    if value.contains('\\') {
+        return None;
+    }
     let actual = Type::string_literal(value);
     let context = environment.to_type_context();
     // Prefer the narrowest literal contract; preserve declaration order on ties.
-    signatures.iter().enumerate().filter_map(|(index, signature)| {
-        if argument_count > signature.parameters.len() { return None; }
-        let first = signature.parameters.first()?;
-        let label = first.label.split_once(": ").map_or(first.label.as_str(), |(_, ty)| ty);
-        let ty = crate::types::type_from_tua_type(&crate::parser::parse_tua_type_text(label));
-        let ty = resolve_aliases(environment, &ty, 0);
-        let alternatives = match &ty {
-            Type::StringLiteral(_) => 1,
-            Type::Union(types) if types.iter().all(|ty| matches!(ty, Type::StringLiteral(_))) => types.len(),
-            _ => return None,
-        };
-        context.is_assignable(&actual, &ty).then_some((alternatives, index))
-    }).min().map(|(_, index)| index)
+    signatures
+        .iter()
+        .enumerate()
+        .filter_map(|(index, signature)| {
+            if argument_count > signature.parameters.len() {
+                return None;
+            }
+            let first = signature.parameters.first()?;
+            let label = first
+                .label
+                .split_once(": ")
+                .map_or(first.label.as_str(), |(_, ty)| ty);
+            let ty = crate::types::type_from_tua_type(&crate::parser::parse_tua_type_text(label));
+            let ty = resolve_aliases(environment, &ty, 0);
+            let alternatives = match &ty {
+                Type::StringLiteral(_) => 1,
+                Type::Union(types)
+                    if types.iter().all(|ty| matches!(ty, Type::StringLiteral(_))) =>
+                {
+                    types.len()
+                }
+                _ => return None,
+            };
+            context
+                .is_assignable(&actual, &ty)
+                .then_some((alternatives, index))
+        })
+        .min()
+        .map(|(_, index)| index)
 }
 
 fn active_signature_for_argument_count(

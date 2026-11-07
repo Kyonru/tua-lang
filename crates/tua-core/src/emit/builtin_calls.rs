@@ -80,7 +80,8 @@ impl VisitorMut for Lowerer<'_> {
         let call = ast::FunctionCall::new(expression.prefix().clone())
             .with_suffixes(expression.suffixes().cloned().collect());
         let lowered = self.visit_function_call_end(call);
-        expression.with_prefix(lowered.prefix().clone())
+        expression
+            .with_prefix(lowered.prefix().clone())
             .with_suffixes(lowered.suffixes().cloned().collect())
     }
 

@@ -928,17 +928,42 @@ pub(crate) fn event_schema_diagnostics(
     let index = local_event_index(parsed, environment, &scope);
 
     let mut diagnostics = index.diagnostics_for_path(&parsed.path);
-    struct HandlerCheck<'a> { parsed: &'a ParsedSource, environment: &'a TypeEnvironment, semantic: SemanticModel<'a>, diagnostics: Vec<Diagnostic> }
+    struct HandlerCheck<'a> {
+        parsed: &'a ParsedSource,
+        environment: &'a TypeEnvironment,
+        semantic: SemanticModel<'a>,
+        diagnostics: Vec<Diagnostic>,
+    }
     impl Visitor for HandlerCheck<'_> {
         fn visit_function_call(&mut self, call: &FunctionCall) {
-            let Some(parts) = field_chain_before_first_call(call) else { return; };
-            let Some((method, receiver)) = parts.split_last() else { return; };
-            if !matches!(method.as_str(), "on" | "once" | "register" | "declare" | "onPattern" | "registerPattern") { return; }
+            let Some(parts) = field_chain_before_first_call(call) else {
+                return;
+            };
+            let Some((method, receiver)) = parts.split_last() else {
+                return;
+            };
+            if !matches!(
+                method.as_str(),
+                "on" | "once" | "register" | "declare" | "onPattern" | "registerPattern"
+            ) {
+                return;
+            }
             let model = &self.semantic;
-            if !model.type_of_field_chain(receiver, node_start(call)).is_some_and(|ty| type_is_signal_bus(self.environment, &ty)) { return; }
-            let colon = call.suffixes().any(|suffix| matches!(suffix, Suffix::Call(Call::MethodCall(_))));
-            let Some(handler) = argument_expression(call, if colon { 1 } else { 2 }) else { return; };
-            let Some(ty) = model.type_of_expression_return(handler, node_start(handler), 0) else { return; };
+            if !model
+                .type_of_field_chain(receiver, node_start(call))
+                .is_some_and(|ty| type_is_signal_bus(self.environment, &ty))
+            {
+                return;
+            }
+            let colon = call
+                .suffixes()
+                .any(|suffix| matches!(suffix, Suffix::Call(Call::MethodCall(_))));
+            let Some(handler) = argument_expression(call, if colon { 1 } else { 2 }) else {
+                return;
+            };
+            let Some(ty) = model.type_of_expression_return(handler, node_start(handler), 0) else {
+                return;
+            };
             let ty = self.environment.resolve_aliases(&ty);
             fn valid_handler(ty: &Type, allow_nil: bool) -> bool {
                 match ty {
@@ -947,16 +972,34 @@ pub(crate) fn event_schema_diagnostics(
                     _ => allow_nil && *ty == Type::nil(),
                 }
             }
-            if valid_handler(&ty, method == "declare") { return; }
+            if valid_handler(&ty, method == "declare") {
+                return;
+            }
             if let Some(span) = node_span(handler) {
-                self.diagnostics.push(Diagnostic::error(&self.parsed.path, span.start.line, span.start.column,
-                    format!("signal handler must be a function, found {ty}"))
+                self.diagnostics.push(
+                    Diagnostic::error(
+                        &self.parsed.path,
+                        span.start.line,
+                        span.start.column,
+                        format!("signal handler must be a function, found {ty}"),
+                    )
                     .with_code(DiagnosticCode::TYPE_MISMATCH)
-                    .with_range(span.start.line, span.start.column, span.end.line, span.end.column));
+                    .with_range(
+                        span.start.line,
+                        span.start.column,
+                        span.end.line,
+                        span.end.column,
+                    ),
+                );
             }
         }
     }
-    let mut handlers = HandlerCheck { parsed, environment, semantic: SemanticModel::new(parsed, environment), diagnostics: Vec::new() };
+    let mut handlers = HandlerCheck {
+        parsed,
+        environment,
+        semantic: SemanticModel::new(parsed, environment),
+        diagnostics: Vec::new(),
+    };
     handlers.visit_ast(&parsed.ast);
     diagnostics.extend(handlers.diagnostics);
     diagnostics
@@ -1527,7 +1570,12 @@ mod handler_tests {
         for method in ["on", "once", "declare", "onPattern"] {
             let source = format!("local bus = signal()\nbus:{method}('hit', 42)\n");
             let errors = crate::check_tua_source("signal.tua", source).unwrap_err();
-            assert!(errors.iter().any(|error| error.message.contains("handler must be a function")), "{errors:?}");
+            assert!(
+                errors
+                    .iter()
+                    .any(|error| error.message.contains("handler must be a function")),
+                "{errors:?}"
+            );
         }
         crate::check_tua_source("signal.tua", "local bus = signal()\nbus:declare('hit', nil)\nbus:on('hit', function(value: number) print(value) end)").unwrap();
         crate::check_tua_source("signal.tua", "type First = (value: number) -> nil\ntype Second = (value: string) -> nil\nlocal function register(handler: First | Second) local bus = signal(); bus:on('hit', handler) end\nreturn register").unwrap();

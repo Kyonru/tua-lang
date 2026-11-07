@@ -998,7 +998,8 @@ impl AnalysisHost {
             let copied_from_required_module = root
                 .and_then(|name| {
                     let semantic = SemanticModel::new(parsed, &semantics.environment);
-                    semantic.local_initializer_field_chain(name, position)
+                    semantic
+                        .local_initializer_field_chain(name, position)
                         .or_else(|| semantic.local_initializer_callee_chain(name, position))
                 })
                 .and_then(|parts| parts.into_iter().next())

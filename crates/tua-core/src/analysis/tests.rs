@@ -8466,7 +8466,8 @@ fn workspace_declaration_overlays_keep_project_ownership() {
 
 #[test]
 fn directly_returned_signal_buses_preserve_navigation_through_reexports() {
-    let fixture = Fixture::parse(r#"-- file: src/events.tua
+    let fixture = Fixture::parse(
+        r#"-- file: src/events.tua
 local bus = signal()
 bus:declare("<|declaration|>score", function(value: number) end)
 return bus
@@ -8478,11 +8479,16 @@ local bus = require("relay")
 bus:emit("<|usage|>score", 1)
 local unrelated = signal()
 unrelated:emit("score", "other")
-"#);
+"#,
+    );
     let mut host = AnalysisHost::new();
-    for file in fixture.files() { host.set_file(&file.path, &file.source); }
+    for file in fixture.files() {
+        host.set_file(&file.path, &file.source);
+    }
     let snapshot = host.snapshot();
-    let definition = snapshot.definition("src/main.tua", fixture.position("usage")).unwrap();
+    let definition = snapshot
+        .definition("src/main.tua", fixture.position("usage"))
+        .unwrap();
     assert_eq!(definition.path, PathBuf::from("src/events.tua"));
     assert_eq!(definition.span.start, fixture.position("declaration"));
     let references = snapshot.references("src/main.tua", fixture.position("usage"), true);
@@ -8491,25 +8497,36 @@ unrelated:emit("score", "other")
 
 #[test]
 fn inline_require_field_extraction_preserves_exported_types() {
-    let fixture = Fixture::parse(r#"-- file: src/provider.tua
+    let fixture = Fixture::parse(
+        r#"-- file: src/provider.tua
 return {inc = function(x: number): number return x + 1 end, game = store({score=1})}
 -- file: src/main.tua
 local inc = require("provider").inc
 local n = inc(2)
 local state = require("provider").game:get()
 print(<|number|>n, <|state|>state)
-"#);
+"#,
+    );
     let mut host = AnalysisHost::new();
-    for file in fixture.files() { host.set_file(&file.path, &file.source); }
+    for file in fixture.files() {
+        host.set_file(&file.path, &file.source);
+    }
     let snapshot = host.snapshot();
-    let number = snapshot.hover("src/main.tua", fixture.position("number")).unwrap();
+    let number = snapshot
+        .hover("src/main.tua", fixture.position("number"))
+        .unwrap();
     assert!(number.contents.contains("number"), "{}", number.contents);
-    assert!(snapshot.hover("src/main.tua", fixture.position("state")).unwrap().contents.contains("score: number"));
+    assert!(snapshot
+        .hover("src/main.tua", fixture.position("state"))
+        .unwrap()
+        .contents
+        .contains("score: number"));
 }
 
 #[test]
 fn imported_ecs_component_retains_its_payload_schema() {
-    let fixture = Fixture::parse(r#"-- file: src/components.tua
+    let fixture = Fixture::parse(
+        r#"-- file: src/components.tua
 local Position = ecs.component("Position", {x="number"})
 return {Position=Position}
 -- file: src/main.tua
@@ -8519,18 +8536,24 @@ local entity = world:create()
 world:add(entity, C.Position, {x=1})
 local p = world:get(entity, C.Position)
 print(<|payload|>p)
-"#);
+"#,
+    );
     let mut host = AnalysisHost::new();
-    for file in fixture.files() { host.set_file(&file.path, &file.source); }
+    for file in fixture.files() {
+        host.set_file(&file.path, &file.source);
+    }
     let snapshot = host.snapshot();
-    let hover = snapshot.hover("src/main.tua", fixture.position("payload")).unwrap();
+    let hover = snapshot
+        .hover("src/main.tua", fixture.position("payload"))
+        .unwrap();
     assert!(hover.contents.contains("x: number"), "{}", hover.contents);
     assert!(hover.contents.contains("nil"), "{}", hover.contents);
 }
 
 #[test]
 fn inline_require_inference_respects_shadowed_loader() {
-    let fixture = Fixture::parse(r#"-- file: src/provider.tua
+    let fixture = Fixture::parse(
+        r#"-- file: src/provider.tua
 return {inc = function(x: number): number return x + 1 end}
 -- file: src/main.tua
 local require = function(name: string): {inc: (x: string) -> string}
@@ -8538,9 +8561,15 @@ local require = function(name: string): {inc: (x: string) -> string}
 end
 local result = require("provider").inc("yes")
 print(<|result|>result)
-"#);
+"#,
+    );
     let mut host = AnalysisHost::new();
-    for file in fixture.files() { host.set_file(&file.path, &file.source); }
-    let hover = host.snapshot().hover("src/main.tua", fixture.position("result")).unwrap();
+    for file in fixture.files() {
+        host.set_file(&file.path, &file.source);
+    }
+    let hover = host
+        .snapshot()
+        .hover("src/main.tua", fixture.position("result"))
+        .unwrap();
     assert!(hover.contents.contains("string"), "{hover:?}");
 }
