@@ -159,12 +159,13 @@ impl ApiSession {
     }
 
     fn refresh(&mut self) -> Result<(), CliError> {
-        let (workspace, mut host, indexed_paths) = load_analysis(&self.workspace_root)?;
+        let mut refreshed = self.host.clone();
+        let (workspace, indexed_paths) = refresh_analysis(&self.workspace_root, &mut refreshed)?;
         for (path, source) in &self.overlays {
-            host.open_document(path, source);
+            refreshed.open_document(path, source);
         }
+        self.host = refreshed;
         self.workspace = workspace;
-        self.host = host;
         self.indexed_paths = indexed_paths;
         Ok(())
     }
@@ -600,14 +601,26 @@ impl ApiSession {
 fn load_analysis(
     workspace_root: &Path,
 ) -> Result<(ProjectWorkspace, AnalysisHost, Vec<PathBuf>), CliError> {
+    let mut host = AnalysisHost::default();
+    let (workspace, indexed) = refresh_analysis(workspace_root, &mut host)?;
+    Ok((workspace, host, indexed))
+}
+
+fn refresh_analysis(
+    workspace_root: &Path,
+    host: &mut AnalysisHost,
+) -> Result<(ProjectWorkspace, Vec<PathBuf>), CliError> {
     let loaded =
         tua_core::load_config_from_dir(workspace_root).map_err(CliError::from_config_error)?;
     let workspace = ProjectWorkspace::from_loaded(workspace_root, loaded);
-    let mut host = AnalysisHost::with_config(workspace.config().clone());
+    for path in host.file_paths() {
+        host.remove_file(path);
+    }
+    host.set_config(workspace.config().clone());
     host.set_source_roots(workspace.source_roots().iter().cloned());
     host.set_output_roots(workspace.output_roots().iter().cloned());
     host.set_asset_roots(workspace.asset_roots());
-    let library_diagnostics = load_type_libraries(&mut host, &workspace);
+    let library_diagnostics = load_type_libraries(host, &workspace);
     for diagnostic in library_diagnostics {
         eprintln!("{}", diagnostic.format_cli());
     }
@@ -642,9 +655,10 @@ fn load_analysis(
         }
     }
     host.refresh_asset_index_from_disk();
-    Ok((workspace, host, indexed.into_iter().collect()))
+    Ok((workspace, indexed.into_iter().collect()))
 }
 
+#[derive(Debug)]
 struct ApiError {
     code: i64,
     message: String,
@@ -989,6 +1003,31 @@ mod tests {
         .unwrap();
 
         assert_eq!(response_lines(&output), vec![json!({"ok": true})]);
+    }
+
+    #[test]
+    fn refresh_preserves_monotonic_analysis_revisions() {
+        let project = TempProject::new();
+        project.write("tua.toml", "source = \"src\"\n");
+        project.write("src/main.tua", "local value = 1");
+        let mut session = ApiSession::load(&project.root).unwrap();
+        let initial = session.host.revision();
+        project.write("src/main.tua", "local value = 2");
+        session.refresh().unwrap();
+        assert!(session.host.revision() > initial);
+        let disk = session.host.revision();
+        session
+            .dispatch_api(
+                "setOverlay",
+                &json!({"path":"src/main.tua", "source":"local value = 3"}),
+            )
+            .unwrap();
+        let overlay = session.host.revision();
+        assert!(overlay > disk);
+        session
+            .dispatch_api("clearOverlay", &json!({"path":"src/main.tua"}))
+            .unwrap();
+        assert!(session.host.revision() > overlay);
     }
 
     #[test]
