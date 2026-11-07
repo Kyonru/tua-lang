@@ -2917,7 +2917,7 @@ fn snapshot_recovers_semantics_when_field_chain_statement_is_incomplete() {
 function love.conf(t)
   local bad: number = "oops"
   local title = t.window.<|hover|>title
-  local identity = t.identity -- Always string; window itself can be nil.
+  local identity = t.identity -- Optional config fields retain nil during recovery.
   t.modules.font<|complete|>
 end
 "#,
@@ -2944,9 +2944,12 @@ end
     );
     assert!(hover.contents.contains("title"), "{}", hover.contents);
     assert_eq!(completion_labels(&completions), vec!["font".to_owned()]);
-    assert!(
-        hints.iter().any(|hint| hint.label == ": string"),
-        "{hints:?}"
+    assert_eq!(
+        hints
+            .iter()
+            .map(|hint| hint.label.as_str())
+            .collect::<Vec<_>>(),
+        vec![": string | nil", ": string | nil"]
     );
     assert_eq!(
         snapshot
