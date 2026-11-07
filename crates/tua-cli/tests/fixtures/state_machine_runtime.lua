@@ -203,3 +203,11 @@ do
   assert(blocked:finish())
   assert(blocked.current == "idle" and blocked.asyncState == blocked.NONE)
 end
+
+-- Cancelling before a transition must not run leave side effects.
+do
+  local left = false
+  local machine = stateMachine.create({initial='a', events={{name='go',from='a',to='b'}},
+    callbacks={onbeforego=function() return false end, onleavea=function() left=true end}})
+  assert(machine:go() == false and machine.current == 'a' and not left)
+end

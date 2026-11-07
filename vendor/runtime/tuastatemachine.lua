@@ -102,9 +102,13 @@ local function create_transition(name)
       self.currentTransitioningEvent = name
 
       local beforeReturn = call_handler(self[beforeCallback], self, name, from, to, extra)
+      if beforeReturn == false then
+        self.currentTransitioningEvent = nil
+        return false
+      end
       local leaveReturn = call_handler(self[LEAVE[from]], self, name, from, to, extra)
 
-      if beforeReturn == false or leaveReturn == false then
+      if leaveReturn == false then
         self.currentTransitioningEvent = nil
         return false
       end
