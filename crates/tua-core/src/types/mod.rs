@@ -26,21 +26,22 @@ pub use model::{
 
 /// A callback may be optional, but competing callable contracts are ambiguous.
 pub(crate) fn contextual_function_type(ty: Type) -> Option<FunctionType> {
-    match ty {
-        Type::Function(function) => Some(function),
-        Type::Union(types) => {
-            let mut callback = None;
-            for ty in types {
-                match ty {
-                    Type::Primitive(PrimitiveType::Nil) => {}
-                    Type::Function(function) if callback.is_none() => callback = Some(function),
-                    _ => return None,
+    fn collect(ty: Type, callback: &mut Option<FunctionType>) -> bool {
+        match ty {
+            Type::Primitive(PrimitiveType::Nil) => true,
+            Type::Function(function) => match callback {
+                Some(existing) => *existing == function,
+                None => {
+                    *callback = Some(function);
+                    true
                 }
-            }
-            callback
+            },
+            Type::Union(types) => types.into_iter().all(|ty| collect(ty, callback)),
+            _ => false,
         }
-        _ => None,
     }
+    let mut callback = None;
+    collect(ty, &mut callback).then_some(callback).flatten()
 }
 
 /// Remove duplicate inferred types without repeatedly comparing every deeply
@@ -183,8 +184,13 @@ pub(crate) fn widen_inferred_type(ty: &Type) -> Type {
                     .guarded_return_types
                     .as_ref()
                     .map(|types| types.iter().map(widen_inferred_type).collect()),
-            ).with_overloads(function.overloads.iter().map(|overload| {
-                let Type::Function(overload) = widen_inferred_type(&Type::Function(overload.clone())) else { unreachable!() };
+            )
+            .with_overloads(function.overloads.iter().map(|overload| {
+                let Type::Function(overload) =
+                    widen_inferred_type(&Type::Function(overload.clone()))
+                else {
+                    unreachable!()
+                };
                 overload
             })),
         ),
