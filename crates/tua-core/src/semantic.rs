@@ -557,6 +557,28 @@ impl<'a> SemanticModel<'a> {
             }
         }
 
+        if let Some(function) = self.typed_function_for_call_parts(&parts, position) {
+            if !function.overloads.is_empty() {
+                let mut arguments = function_call_expression_arguments(function_call)
+                    .map(|expression| self.type_of_expression_return_at_depth(expression, position, 0, depth + 1).unwrap_or(Type::Any))
+                    .collect::<Vec<_>>();
+                if function_call.suffixes().any(|suffix| matches!(suffix, Suffix::Call(Call::MethodCall(_)))) {
+                    arguments.insert(0, self.type_of_field_chain(&parts[..parts.len()-1], position).unwrap_or(Type::Any));
+                }
+                let context = self.environment.to_type_context();
+                if let Some(overload) = function.overloads.iter().find(|overload| {
+                    arguments.len() >= overload.parameters.len()
+                        && (overload.has_varargs || arguments.len() == overload.parameters.len())
+                        && arguments.iter().enumerate().all(|(index, argument)| {
+                            overload.parameters.get(index).map(|parameter| &parameter.ty)
+                                .or(overload.vararg_type.as_ref())
+                                .is_none_or(|parameter| context.is_assignable(argument, parameter))
+                        })
+                }) {
+                    return overload.return_types_or_any();
+                }
+            }
+        }
         self.return_types_for_call_parts(&parts, position)
     }
 

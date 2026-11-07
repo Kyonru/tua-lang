@@ -783,4 +783,8 @@ fn imported_lua_overloads_preserve_all_call_contracts() {
     assert_eq!(function.overloads.len(), 2);
     assert!(crate::check_tua_source(&path, source).unwrap_err().iter().any(|d| d.code == Some(crate::DiagnosticCode::TYPE_MISMATCH)));
     crate::check_tua_source(&path, source.replace("true", "42")).unwrap();
+    let parsed = parse_tua_source(&path, source.replace("true", "42")).unwrap();
+    let environment = crate::build_type_environment(&parsed).unwrap();
+    let model = crate::semantic::SemanticModel::new(&parsed, &environment);
+    assert_eq!(model.type_of_name("value", crate::SourcePosition {line: 3, column: 7}), Some(Type::number()));
 }
