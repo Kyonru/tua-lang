@@ -17,6 +17,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Update VSCE, Azure Identity, `qs`, and `follow-redirects` to address npm
+  advisories. Use patched `minimatch` for packaging and a tested, unaffected
+  compatibility version for language-client file filters.
+
 - Editor positions and edits use UTF-16 consistently across normal language
   features, graph/inspector navigation and model-completion round trips, including
   non-BMP text, cross-file rename, semantic tokens and formatting.

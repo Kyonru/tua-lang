@@ -31,6 +31,16 @@ cargo build -p tua-cli
 npm ci --prefix editors/vscode
 ```
 
+When updating extension dependencies, run `npm audit --prefix editors/vscode`
+without omitting development dependencies: the language client is bundled from
+that dependency set. Packaging tools use patched `minimatch` 11.x. The language client has a scoped
+6.2.3 override: that line is outside the affected >=7/<11.0.1 advisory range and
+retains the `makeRe()` API removed in 11.x. Both current client 10.x and upstream
+11.0.0 still call that API. Do not replace this with a global 11.x override;
+`test/unit/language-client-globs.test.js` exercises the actual client consumers.
+Remove the scoped fallback when an upstream client supports a patched matcher.
+Keep both file-pattern matching and VSIX packaging checks for dependency updates.
+
 `make docs-build` creates a Python virtual environment under `.venv/docs` and
 installs Zensical when it is not already available.
 

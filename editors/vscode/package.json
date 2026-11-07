@@ -2101,7 +2101,7 @@
   "devDependencies": {
     "@vscode/debugadapter-testsupport": "1.68.0",
     "@vscode/test-electron": "^2.5.2",
-    "@vscode/vsce": "3.9.2",
+    "@vscode/vsce": "4.1.0",
     "esbuild": "0.28.2",
     "ovsx": "1.2.0",
     "vscode-languageclient": "10.1.2",
@@ -2110,8 +2110,12 @@
   },
   "overrides": {
     "@vscode/vsce": "$@vscode/vsce",
-    "@azure/identity": "4.12.0",
+    "@azure/identity": "4.14.1",
     "uuid": "11.1.1",
-    "qs": "6.16.0"
+    "qs": "6.17.1",
+    "minimatch": "11.0.1",
+    "vscode-languageclient": {
+      "minimatch": "6.2.3"
+    }
   }
 }
