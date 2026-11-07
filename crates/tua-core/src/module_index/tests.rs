@@ -207,6 +207,9 @@ return Player
         panic!("new should return the instance shape: {constructor:#?}");
     };
     let fields = instance.semantic_fields();
+    let Type::Function(update) = &fields.get("update").unwrap().ty else { panic!("method"); };
+    assert_eq!(update.parameters.len(), 2, "colon methods include the implicit receiver");
+    assert_eq!(update.required_parameter_count, 2);
 
     assert_eq!(fields.get("name").map(|field| &field.ty), Some(&Type::Any));
     assert_eq!(

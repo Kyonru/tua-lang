@@ -509,7 +509,7 @@ impl<'a> ExportInferer<'a> {
                             .or_default()
                             .insert(field.clone());
                     }
-                    let inferred = self
+                    let mut inferred = self
                         .environment
                         .map(|environment| {
                             inferred_function_type_from_body(
@@ -519,6 +519,12 @@ impl<'a> ExportInferer<'a> {
                             )
                         })
                         .unwrap_or_else(|| function_type_from_body(function.body()));
+                    if is_method {
+                        if let Type::Function(signature) = &mut inferred {
+                            signature.parameters.insert(0, FunctionParameter::named("self", Type::Any));
+                            signature.required_parameter_count += 1;
+                        }
+                    }
                     let entry = self
                         .table_members
                         .entry(table.clone())
