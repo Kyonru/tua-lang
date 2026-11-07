@@ -1076,19 +1076,20 @@ fn active_signature_for_literal_argument(
     if value.contains('\\') { return None; }
     let actual = Type::string_literal(value);
     let context = environment.to_type_context();
-    signatures.iter().position(|signature| {
-        if argument_count > signature.parameters.len() { return false; }
-        let Some(first) = signature.parameters.first() else { return false; };
+    // Prefer the narrowest literal contract; preserve declaration order on ties.
+    signatures.iter().enumerate().filter_map(|(index, signature)| {
+        if argument_count > signature.parameters.len() { return None; }
+        let first = signature.parameters.first()?;
         let label = first.label.split_once(": ").map_or(first.label.as_str(), |(_, ty)| ty);
         let ty = crate::types::type_from_tua_type(&crate::parser::parse_tua_type_text(label));
         let ty = resolve_aliases(environment, &ty, 0);
-        let literal_contract = match &ty {
-            Type::StringLiteral(_) => true,
-            Type::Union(types) => types.iter().all(|ty| matches!(ty, Type::StringLiteral(_))),
-            _ => false,
+        let alternatives = match &ty {
+            Type::StringLiteral(_) => 1,
+            Type::Union(types) if types.iter().all(|ty| matches!(ty, Type::StringLiteral(_))) => types.len(),
+            _ => return None,
         };
-        literal_contract && context.is_assignable(&actual, &ty)
-    })
+        context.is_assignable(&actual, &ty).then_some((alternatives, index))
+    }).min().map(|(_, index)| index)
 }
 
 fn active_signature_for_argument_count(

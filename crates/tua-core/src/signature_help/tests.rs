@@ -1172,3 +1172,16 @@ read("vector"
     let fallback = signature_at(&unknown, "read(\"unknown\"").unwrap();
     assert_eq!(fallback.active_signature, 0);
 }
+
+#[test]
+fn input_pair_literal_selects_specific_overload_over_union() {
+    let source = r#"local c = input({controls={left={"key:a"},right={"key:d"},up={"key:w"},down={"key:s"}},pairs={move={"left","right","up","down"}}})
+local x,y=c:get("move")
+"#;
+    let help = signature_at(source, "c:get(\"move\"").unwrap();
+    assert_eq!(help.signatures[help.active_signature].label,
+        "function c:get(name: \"move\"): number, number");
+    let scalar = source.replace("c:get(\"move\")", "c:get(\"left\")");
+    let help = signature_at(&scalar, "c:get(\"left\"").unwrap();
+    assert!(!help.signatures[help.active_signature].label.contains("move"));
+}
