@@ -99,7 +99,8 @@ end
 function World:get(entity, component)
   local store = self:_store(component, false)
 
-  return store and store.values[entity] or nil
+  if store then return store.values[entity] end
+  return nil
 end
 
 function World:has(entity, component)

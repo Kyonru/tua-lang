@@ -243,3 +243,13 @@ if failures > 0 then
   os.exit(1)
 end
 print("ecs runtime checks passed")
+
+-- False is a present payload, not an absent component.
+do
+  local world, flag = ecs.world(), ecs.component('Flag', {})
+  local entity = world:create()
+  world:add(entity, flag, false)
+  assert(world:has(entity, flag) and world:get(entity, flag) == false)
+  assert(world:remove(entity, flag) == false)
+  assert(not world:has(entity, flag) and world:get(entity, flag) == nil)
+end
