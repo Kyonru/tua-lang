@@ -167,19 +167,21 @@ pub(crate) fn global_type(name: &str) -> Option<Type> {
 }
 
 fn assert_type() -> Type {
-    let mut facts = MetatableFacts::default();
     // The first parameter represents the callable table receiver and is
     // removed by the shared call resolver.
-    facts.call = Some(FunctionType::new_signature(
-        [
-            FunctionParameter::anonymous(Type::Any),
-            FunctionParameter::named("value", Type::Any),
-            FunctionParameter::named("message", Type::string()),
-        ],
-        1,
-        None,
-        [Type::Any],
-    ));
+    let facts = MetatableFacts {
+        call: Some(FunctionType::new_signature(
+            [
+                FunctionParameter::anonymous(Type::Any),
+                FunctionParameter::named("value", Type::Any),
+                FunctionParameter::named("message", Type::string()),
+            ],
+            1,
+            None,
+            [Type::Any],
+        )),
+        ..MetatableFacts::default()
+    };
     let message = Type::string();
     let assertion = table([
         (

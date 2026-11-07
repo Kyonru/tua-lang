@@ -295,7 +295,7 @@ fn module_specifier_literal_after(
     let quote_end = find_short_string_end(line, index, quote)?;
 
     let module = String::from_utf8(crate::ast_utils::decode_short_string_runtime_bytes(
-        line[module_start..quote_end].as_bytes(),
+        &line.as_bytes()[module_start..quote_end],
     )?)
     .ok()?;
     Some(ModuleSpecifierLiteral {

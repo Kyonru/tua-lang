@@ -416,10 +416,12 @@ struct CompletionCacheStats {
     misses: usize,
 }
 
+type CachedParseResult = Arc<Result<Arc<ParsedSource>, Vec<Diagnostic>>>;
+
 #[derive(Clone, Debug, Default)]
 struct AnalysisQueryCache {
     files: BTreeMap<PathBuf, CachedAnalysisFile>,
-    parsed_files: BTreeMap<ParsedCacheKey, Arc<Result<Arc<ParsedSource>, Vec<Diagnostic>>>>,
+    parsed_files: BTreeMap<ParsedCacheKey, CachedParseResult>,
     dependencies: BTreeMap<PathBuf, BTreeSet<PathBuf>>,
     importers: BTreeMap<PathBuf, BTreeSet<PathBuf>>,
     type_dependency_uses: BTreeMap<(PathBuf, PathBuf), Option<BTreeSet<String>>>,

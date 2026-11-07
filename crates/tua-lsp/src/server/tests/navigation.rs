@@ -723,8 +723,8 @@ return { Enemy = Enemy, Boss = Boss }
         fixture.position("return_enemy"),
     ));
     server.send(hover_request(4, &main_uri, main, "Enemy"));
-    assert_definition_text(server.output(), 2, &type_uri, &types, "Enemy");
-    assert_definition_text(server.output(), 3, &type_uri, &types, "Enemy");
+    assert_definition_text(server.output(), 2, &type_uri, types, "Enemy");
+    assert_definition_text(server.output(), 3, &type_uri, types, "Enemy");
     assert_hover_contains(server.output(), 4, "LuaDocTypes.Enemy");
 
     let edited_fixture = Fixture::parse(
@@ -749,8 +749,8 @@ local function clone(enemy) return enemy end
         edited_fixture.position("return_boss"),
     ));
     server.send(hover_request(7, &main_uri, edited, "Boss"));
-    assert_definition_text(server.output(), 5, &type_uri, &types, "Boss");
-    assert_definition_text(server.output(), 6, &type_uri, &types, "Boss");
+    assert_definition_text(server.output(), 5, &type_uri, types, "Boss");
+    assert_definition_text(server.output(), 6, &type_uri, types, "Boss");
     assert_hover_contains(server.output(), 7, "LuaDocTypes.Boss");
 
     let partial = edited.replace("---@param enemy LuaDocTypes.Boss", "---@param enemy");
@@ -764,7 +764,7 @@ local function clone(enemy) return enemy end
         &main_uri,
         edited_fixture.position("param_boss"),
     ));
-    assert_definition_text(server.output(), 9, &type_uri, &types, "Boss");
+    assert_definition_text(server.output(), 9, &type_uri, types, "Boss");
 }
 
 #[test]
