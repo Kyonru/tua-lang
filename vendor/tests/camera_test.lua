@@ -137,3 +137,9 @@ do
     assert(wx >= x-1e-6 and wy >= y-1e-6 and wx <= x+w+1e-6 and wy <= y+h+1e-6)
   end
 end
+
+-- Preserve the documented narrow-horizontal, tall-vertical platformer preset.
+do
+  local _,_,w,h = camera.new({style='platformer'}):deadzoneRect()
+  assert(w == 100 and h == 200)
+end

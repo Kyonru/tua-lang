@@ -14,7 +14,7 @@
 
 ---@alias CameraStyle
 ---| "lockon"       # keep the target exactly centered
----| "platformer"   # wide horizontal, short vertical deadzone
+---| "platformer"   # narrow horizontal, tall vertical deadzone
 ---| "topdown"      # square deadzone, a quarter of the shorter side
 ---| "topdowntight" # square deadzone, an eighth of the shorter side
 ---| "screen"       # move one whole screen at a time, like room-based games

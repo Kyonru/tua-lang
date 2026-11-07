@@ -77,7 +77,7 @@ without moving the camera.
 | Style | Behavior |
 | --- | --- |
 | `lockon` | No deadzone: the target stays exactly centered. |
-| `platformer` | Wide horizontally and short vertically, slightly above center, so small hops don't move the view. |
+| `platformer` | Narrow horizontally and tall vertically, slightly above center, so small hops don't move the view. |
 | `topdown` | A square a quarter of the shorter screen side. |
 | `topdowntight` | A square an eighth of the shorter screen side. |
 | `screen` | Moves one whole screen at a time, like room-based games. Rooms start at `bounds`' origin, or `0, 0`. |
