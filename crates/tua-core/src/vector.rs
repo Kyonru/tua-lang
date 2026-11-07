@@ -16,6 +16,7 @@ pub(crate) fn vec2_type() -> Type {
         ("x", TableField::required(Type::number())),
         ("y", TableField::required(Type::number())),
     ]);
+    shape.mark_nominal(TYPE_NAME, TYPE_NAME, []);
     shape.set_metatable_facts(brinevector_metatable_facts());
 
     Type::Table(shape)
