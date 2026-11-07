@@ -38,7 +38,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Upgrade notes
 
-ECS `get` and `remove` now include `nil` when a component can be absent. Check or
+Optional record reads now retain `nil`; initialize required module state or guard
+delayed resources before use. ECS `get` and `remove` include `nil` when a component
+can be absent. Check or
 assert that a component exists before reading its fields. Stricter checking can
 expose previously accepted invalid defaults, callbacks and calls. Explicit import
 organization/removal can change runtime initialization effects or order; these

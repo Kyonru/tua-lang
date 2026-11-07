@@ -407,8 +407,14 @@ type SaveSlot = {
 }
 ```
 
-Optional target fields may be absent. Present optional fields must still match
-their declared type.
+Optional fields may be absent. Reading `name?: string` produces `string | nil`;
+check for `nil` before passing it where a string is required. Assigning `nil`
+removes the field, while other assigned values must match its declared type.
+
+For state that must exist throughout a module’s lifetime, use required fields
+and initialize them when constructing the record. A later `load()` callback
+does not make an optional field nonoptional in every other callback. Keep
+truly delayed resources optional and guard their use until initialization.
 
 ## Arrays, Dictionaries, And LuaDoc Tuples
 
