@@ -168,3 +168,12 @@ do
   leader.position=.1; system:update(3)
   assert(beats == 7)
 end
+
+-- Authored loop regions do not require musical timing metadata.
+do
+  local system = audioSystem({music={one={loopRegion={start=1,finish=2},layers={main={source=source}}}}})
+  system:setMusicState('one')
+  local leader = system._musicRuntime.layers.main._record.source
+  leader.position=2.1; system:update(2.1)
+  assert(leader.position == 1 and system:snapshot().music.position == 1)
+end
