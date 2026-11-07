@@ -5402,3 +5402,18 @@ fn shadowed_named_functions_infer_returns_from_their_own_parameters() {
 fn audit_wrapper_return_inference_uses_lexical_function_identity() {
     check_tua_source("shadow.tua", "local function parse(value: number) return value end\nlocal function outer() return parse(1) end\ndo\n local function parse(value: string) return value end\n local function inner() return parse('ok') end\n local text: string=inner()\nend\nlocal n: number=outer()\n").unwrap();
 }
+
+#[test]
+fn dictionary_dot_and_bracket_writes_share_contracts() {
+    for access in ["scores.missing", "scores['missing']"] {
+        let prefix = "local scores: {[string]: number} = {}\n";
+        assert!(
+            check_tua_source("dictionary.tua", format!("{prefix}{access} = 'wrong'\n")).is_err()
+        );
+        check_tua_source(
+            "dictionary.tua",
+            format!("{prefix}{access} = 1\n{access} = nil\n"),
+        )
+        .unwrap();
+    }
+}

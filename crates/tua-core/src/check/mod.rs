@@ -3360,6 +3360,15 @@ impl<'a> Checker<'a> {
     fn resolve_direct_table_field_type(&self, ty: &Type, field: &str) -> Option<Type> {
         match resolve_aliases(ty, self.environment, 0) {
             Type::Table(table) => table.field(field).map(|field| field.ty.clone()),
+            // Dot syntax is a string-key dictionary write. Reads are nilable,
+            // and writes permit nil to remove the entry just like indexing.
+            Type::Dictionary { key, value }
+                if self
+                    .context
+                    .is_assignable(&Type::StringLiteral(field.to_owned()), &key) =>
+            {
+                Some(Type::union(vec![*value, Type::nil()]))
+            }
             Type::Union(types) => {
                 let resolved = types
                     .iter()
