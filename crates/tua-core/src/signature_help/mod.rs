@@ -850,7 +850,7 @@ fn strip_method_receiver(
     );
 }
 
-fn is_synthetic_method_receiver(
+pub(crate) fn is_synthetic_method_receiver(
     label: &str,
     receiver_type: Option<&Type>,
     environment: &TypeEnvironment,

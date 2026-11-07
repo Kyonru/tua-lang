@@ -1923,6 +1923,7 @@ struct FieldCompletionContext<'a> {
 
 #[derive(Clone, Copy)]
 struct StringArgumentCompletionContext<'a> {
+    is_method_call: bool,
     callee_parts: &'a [String],
     active_parameter: usize,
     prefix: &'a str,
@@ -2023,6 +2024,7 @@ fn complete_string_argument_values(
 ) -> Vec<Completion> {
     let _profile = profile::span("analysis.completion.string_argument");
     let StringArgumentCompletionContext {
+        is_method_call,
         callee_parts,
         active_parameter,
         prefix,
@@ -2064,6 +2066,13 @@ fn complete_string_argument_values(
     }
 
     if let Some(function) = semantic.function_type_for_call_parts(callee_parts, position) {
+        let receiver = callee_parts.split_last().and_then(|(_, parts)|
+            semantic.type_of_field_chain(parts, position));
+        let implicit_self = is_method_call && function.parameters.first().is_some_and(|first| {
+            let label = first.name.as_ref().map_or_else(|| first.ty.to_string(), |name| format!("{name}: {}", first.ty));
+            crate::signature_help::is_synthetic_method_receiver(&label, receiver.as_ref(), environment)
+        });
+        let active_parameter = active_parameter + usize::from(implicit_self);
         let Some(parameter) = function
             .parameters
             .get(active_parameter)
@@ -2075,7 +2084,7 @@ fn complete_string_argument_values(
 
         let parameter = resolve_aliases(environment, parameter, 0);
 
-        return complete_lua_enum_values(&parameter.to_string(), prefix);
+        return complete_type_enum_values(&parameter, prefix);
     }
 
     let Some(item) = semantic.lua_function_item_for_call_parts(callee_parts, position) else {
@@ -2347,6 +2356,28 @@ fn parameter_type_from_function_detail(detail: &str, index: usize) -> Option<Str
 fn parameter_type_from_label(parameter: &str) -> Option<String> {
     let (_, ty) = parameter.split_once(':')?;
     Some(ty.trim().to_owned())
+}
+
+fn complete_type_enum_values(ty: &Type, prefix: &str) -> Vec<Completion> {
+    fn collect(ty: &Type, prefix: &str, output: &mut Vec<Completion>) {
+        match ty {
+            Type::StringLiteral(_) => output.extend(literal_value_item(&ty.to_string(), prefix)),
+            Type::Alias(name) => output.extend(lua::enum_value_items(name, prefix).into_iter().map(completion_from_lua_item)),
+            Type::Union(items) => items.iter().for_each(|item| collect(item, prefix, output)),
+            _ => {}
+        }
+    }
+    let mut items = Vec::new();
+    collect(ty, prefix, &mut items);
+    if items.is_empty() && !prefix.is_empty() {
+        collect(ty, "", &mut items);
+        for item in &mut items {
+            item.filter_text = Some(prefix.to_owned());
+        }
+    }
+    let mut seen = BTreeSet::new();
+    items.retain(|item| seen.insert(item.label.clone()));
+    items
 }
 
 fn complete_lua_enum_values(type_label: &str, prefix: &str) -> Vec<Completion> {

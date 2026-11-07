@@ -76,12 +76,14 @@ impl<'a> CompletionQuery<'a> {
                 }
             }
             CompletionContext::StringArgument {
+                is_method_call,
                 callee_parts,
                 active_parameter,
                 prefix,
                 position,
             } => {
                 let string_context = StringArgumentCompletionContext {
+                    is_method_call,
                     callee_parts: &callee_parts,
                     active_parameter,
                     prefix: prefix.as_str(),

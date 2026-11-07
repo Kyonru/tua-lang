@@ -3414,3 +3414,19 @@ fn audit_constructor_resolution_respects_local_shadowing() {
     assert!(names.contains(&"other".to_owned()), "{names:?}");
     assert!(!names.contains(&"read".to_owned()), "{names:?}");
 }
+
+#[test]
+fn colon_string_arguments_skip_self_and_do_not_enumerate_record_fields() {
+    let source = r#"
+type Receiver = {kind: "unrelated" | "leaked", call: (self: Receiver, mode: "yes" | "no") -> nil}
+local r: Receiver = {kind="unrelated", call=function(self: Receiver, mode: "yes" | "no") end}
+r:call("")
+r.call(r, "")
+"#;
+    for marker in ["r:call(\"", "r.call(r, \""] {
+        let items = complete_tua_source("src/main.tua", source, position_after(source, marker)).unwrap();
+        let mut values = labels(&items);
+        values.sort();
+        assert_eq!(values, vec!["no", "yes"], "{marker}");
+    }
+}

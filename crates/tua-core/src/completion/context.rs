@@ -20,6 +20,7 @@ pub(crate) enum CompletionContext {
         separator_span: crate::SourceSpan,
     },
     StringArgument {
+        is_method_call: bool,
         callee_parts: Vec<String>,
         active_parameter: usize,
         prefix: String,
@@ -322,18 +323,20 @@ fn string_argument_context(
 
     let (prefix, quote_start) = string_prefix_at(line, cursor)?;
     let cursor = byte_offset_for_position(source, position)?;
-    let (callee_parts, active_parameter) = if let Some(open) = active_call_open(source, cursor) {
+    let (callee_parts, active_parameter, is_method_call) = if let Some(open) = active_call_open(source, cursor) {
         (
             callee_parts_before(source, open)?,
             active_parameter_index(source, open + 1, cursor),
+            method_separator_before(source, open),
         )
     } else {
         let callee = callee_parts_before(line, quote_start)?;
 
-        (callee, 0)
+        (callee, 0, method_separator_before(line, quote_start))
     };
 
     Some(CompletionContext::StringArgument {
+        is_method_call,
         callee_parts,
         active_parameter,
         prefix,
@@ -556,6 +559,15 @@ fn active_call_open(source: &str, cursor: usize) -> Option<usize> {
         .into_iter()
         .rev()
         .find(|open| callee_parts_before(source, *open).is_some())
+}
+
+fn method_separator_before(source: &str, open: usize) -> bool {
+    let bytes = source.as_bytes();
+    let end = trim_ascii_whitespace_before(bytes, open);
+    reverse_identifier_start_bytes(bytes, end).is_some_and(|start| {
+        let separator = trim_ascii_whitespace_before(bytes, start);
+        separator > 0 && bytes[separator - 1] == b':'
+    })
 }
 
 fn callee_parts_before(source: &str, open: usize) -> Option<Vec<String>> {
