@@ -49,12 +49,13 @@ pub(super) fn mismatch_diagnostic_at_position(
     path: &Path,
     position: SourcePosition,
     failure: &AssignabilityFailure,
+    root: Option<&str>,
 ) -> Diagnostic {
     Diagnostic::error(
         path,
         position.line,
         position.column,
-        mismatch_message(failure, None),
+        mismatch_message(failure, root),
     )
     .with_range(
         position.line,

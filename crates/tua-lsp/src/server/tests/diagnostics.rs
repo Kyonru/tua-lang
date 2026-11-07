@@ -1014,3 +1014,29 @@ fn multi_return_assignment_errors_keep_distinct_destination_ranges() {
         );
     }
 }
+
+#[test]
+fn function_contract_diagnostics_publish_context_and_actionable_ranges() {
+    let uri = "file:///tmp/contracts.tua";
+    let source = "local function dimensions(): (number, number)\n  return 12, 'tall'\nend\nlocal function move(speed: number = 'fast') end\nlocal function draw(width: number, height: number) end\ndraw(12)\n";
+    let output = run_messages(vec![did_open(uri, source)]);
+    let diagnostics = published_diagnostics(&output, uri);
+    for (fragment, line, start, end) in [
+        ("return value 2 of `dimensions`", 1, 13, 19),
+        ("default for parameter `speed`", 3, 20, 25),
+        ("missing required parameters: `height`", 5, 0, 8),
+    ] {
+        let error = diagnostics
+            .iter()
+            .find(|diagnostic| {
+                diagnostic["message"]
+                    .as_str()
+                    .is_some_and(|message| message.contains(fragment))
+            })
+            .unwrap_or_else(|| panic!("missing {fragment}: {diagnostics:#?}"));
+        assert_eq!(
+            error["range"],
+            json!({"start": {"line": line, "character": start}, "end": {"line": line, "character": end}})
+        );
+    }
+}

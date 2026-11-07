@@ -195,6 +195,7 @@ struct Checker<'a> {
     scoped_local_contracts: Vec<BTreeMap<String, Type>>,
     /// Locals declared with later values of a call, per block scope.
     scoped_return_guards: Vec<Vec<ReturnGuard>>,
+    active_function_name: Option<String>,
     stable_inferred_locals: bool,
     unresolved_project_aliases: BTreeSet<String>,
     asset_roots: Vec<PathBuf>,
@@ -283,6 +284,7 @@ impl<'a> Checker<'a> {
             context: environment.to_type_context(),
             scoped_locals: Vec::new(),
             scoped_local_contracts: Vec::new(),
+            active_function_name: None,
             scoped_return_guards: Vec::new(),
             stable_inferred_locals: parsed.raw.language == ParsedLanguage::Tua,
             unresolved_project_aliases: unresolved_project_aliases(parsed, environment),
@@ -1333,7 +1335,13 @@ impl<'a> Checker<'a> {
         ));
     }
 
-    fn check_type_assignable(&mut self, node: &impl Node, source: &Type, target: &Type) {
+    fn check_type_assignable(
+        &mut self,
+        node: &impl Node,
+        source: &Type,
+        target: &Type,
+        root: Option<&str>,
+    ) {
         if type_contains_any_alias(target, &self.unresolved_project_aliases) {
             return;
         }
@@ -1343,7 +1351,7 @@ impl<'a> Checker<'a> {
         };
 
         self.diagnostics
-            .push(mismatch_diagnostic(&self.parsed.path, node, &failure, None));
+            .push(mismatch_diagnostic(&self.parsed.path, node, &failure, root));
     }
 
     fn check_type_assignable_at_position(
@@ -1351,6 +1359,7 @@ impl<'a> Checker<'a> {
         position: SourcePosition,
         source: &Type,
         target: &Type,
+        root: Option<&str>,
     ) {
         if type_contains_any_alias(target, &self.unresolved_project_aliases) {
             return;
@@ -1364,6 +1373,7 @@ impl<'a> Checker<'a> {
             &self.parsed.path,
             position,
             &failure,
+            root,
         ));
     }
 
@@ -1384,11 +1394,20 @@ impl<'a> Checker<'a> {
             return;
         }
 
+        let function_name = self
+            .parsed
+            .function_annotations
+            .iter()
+            .find(|function| function.span == Some(span))
+            .and_then(|function| function.name.clone());
+        let previous_function =
+            std::mem::replace(&mut self.active_function_name, function_name.clone());
         let contracts = scoped_locals.clone();
         self.scoped_locals.push(scoped_locals);
         self.scoped_local_contracts.push(contracts);
         self.check_parameter_defaults(span);
         self.check_block(body.block(), return_types);
+        self.active_function_name = previous_function;
         self.scoped_locals.pop();
         self.scoped_local_contracts.pop();
 
@@ -1404,8 +1423,15 @@ impl<'a> Checker<'a> {
             return;
         };
 
-        for target in targets {
-            self.check_type_assignable_at_position(position, &Type::nil(), target);
+        for (index, target) in targets.iter().enumerate() {
+            let root = return_contract_label(index, function_name.as_deref());
+            let start = self.diagnostics.len();
+            self.check_type_assignable_at_position(position, &Type::nil(), target, Some(&root));
+            for diagnostic in &mut self.diagnostics[start..] {
+                diagnostic
+                    .message
+                    .push_str("; this function can finish without returning a value");
+            }
         }
     }
 
@@ -1439,14 +1465,24 @@ impl<'a> Checker<'a> {
             };
             let start = self.diagnostics.len();
             if let Some(source) = self.infer_expression(expression) {
-                self.check_type_assignable_at_position(position, &source, &target);
+                self.check_type_assignable_at_position(
+                    position,
+                    &source,
+                    &target,
+                    Some(&format!("default for parameter `{}`", default.name)),
+                );
             }
             // The expression is parsed separately because defaults are erased from
             // the Lua AST. Attribute its errors to the original parameter default.
             for diagnostic in &mut self.diagnostics[start..] {
                 diagnostic.line = position.line;
                 diagnostic.column = position.column;
-                if let Some(span) = default.span {
+                if let Some(span) = default.name_span.or(default.span) {
+                    // Defaults are erased from the Lua AST. The original name
+                    // span identifies the affected parameter without inventing
+                    // an expression range from the synthetic parse above.
+                    diagnostic.line = span.start.line;
+                    diagnostic.column = span.start.column;
                     diagnostic.end_line = span.end.line;
                     diagnostic.end_column = span.end.column;
                 }
@@ -1492,17 +1528,19 @@ impl<'a> Checker<'a> {
         };
 
         if expressions.is_empty() {
-            for target in target {
-                self.check_type_assignable(return_stmt, &Type::nil(), target);
+            for (index, target) in target.iter().enumerate() {
+                let root = return_contract_label(index, self.active_function_name.as_deref());
+                self.check_type_assignable(return_stmt, &Type::nil(), target, Some(&root));
             }
             return;
         }
 
         for (index, target) in target.iter().enumerate() {
+            let root = return_contract_label(index, self.active_function_name.as_deref());
             let Some((expression, return_index)) =
                 assignment_expression_for_local(&expressions, index)
             else {
-                self.check_type_assignable(return_stmt, &Type::nil(), target);
+                self.check_type_assignable(return_stmt, &Type::nil(), target, Some(&root));
                 continue;
             };
             let source = match self.infer_expression_return(expression, return_index) {
@@ -1514,7 +1552,7 @@ impl<'a> Checker<'a> {
                 None => Type::Any,
             };
 
-            self.check_inferred_expression_assignable_at(expression, &source, target, None);
+            self.check_inferred_expression_assignable_at(expression, &source, target, Some(&root));
         }
     }
 
@@ -2979,6 +3017,12 @@ impl<'a> Checker<'a> {
                 node,
                 function.required_parameter_count,
                 arguments.len(),
+                |index| {
+                    function
+                        .parameters
+                        .get(index)
+                        .and_then(|parameter| parameter.name.as_deref())
+                },
             );
             if let Some(hint) = missing_hint {
                 diagnostic.message.push_str(&hint);
@@ -2993,6 +3037,12 @@ impl<'a> Checker<'a> {
                 node,
                 function.parameters.len(),
                 arguments.len(),
+                |index| {
+                    function
+                        .parameters
+                        .get(index)
+                        .and_then(|parameter| parameter.name.as_deref())
+                },
             ));
             return;
         }
@@ -3156,6 +3206,16 @@ impl<'a> Checker<'a> {
                 function_call,
                 schema.payload.len() + 1,
                 arguments.len(),
+                |index| {
+                    if index == 0 {
+                        Some("event")
+                    } else {
+                        schema
+                            .payload
+                            .get(index - 1)
+                            .map(|parameter| parameter.name.as_str())
+                    }
+                },
             ));
             return;
         }
@@ -3235,6 +3295,7 @@ impl<'a> Checker<'a> {
                 function_call,
                 expected,
                 argument_types.len(),
+                |index| typed_call_parameter_name(candidate, index),
             ));
             return;
         }
@@ -3412,6 +3473,7 @@ impl<'a> Checker<'a> {
                 node,
                 expected,
                 arguments.len(),
+                |index| variant.parameter_name(index),
             ));
 
             return variant.return_types.clone();
@@ -5067,21 +5129,54 @@ fn iterator_call(function_call: &FunctionCall) -> Option<(String, &Expression)> 
     Some((token_text(name), arguments.iter().next()?))
 }
 
-fn argument_count_diagnostic(
+fn return_contract_label(index: usize, function: Option<&str>) -> String {
+    let owner = function
+        .map(|name| format!(" of `{name}`"))
+        .unwrap_or_default();
+    format!("return value {}{owner}", index + 1)
+}
+
+fn argument_count_diagnostic<'name>(
     path: &Path,
     node: &impl Node,
     expected: usize,
     found: usize,
+    parameter_name: impl Fn(usize) -> Option<&'name str>,
 ) -> Diagnostic {
     let position = node_position(node);
-
-    Diagnostic::error(
-        path,
-        position.line,
-        position.column,
-        format!("argument count mismatch: expected {expected}, found {found}"),
-    )
-    .with_code(DiagnosticCode::TYPE_ARGUMENT_COUNT)
+    let mut message = format!("argument count mismatch: expected {expected}, found {found}");
+    if found < expected {
+        let missing = (found..expected)
+            .map(|index| {
+                parameter_name(index)
+                    .map(|name| format!("`{name}`"))
+                    .unwrap_or_else(|| format!("parameter {}", index + 1))
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+        message.push_str(&format!("; missing required parameters: {missing}"));
+    } else {
+        let extra = found - expected;
+        let description = if extra == 1 {
+            "argument exceeds"
+        } else {
+            "arguments exceed"
+        };
+        message.push_str(&format!(
+            "; {extra} extra {description} this signature's limit"
+        ));
+    }
+    let mut diagnostic = Diagnostic::error(path, position.line, position.column, message)
+        .with_code(DiagnosticCode::TYPE_ARGUMENT_COUNT);
+    if let Some(span) = node_span(node) {
+        diagnostic = diagnostic.with_range(
+            span.start.line,
+            span.start.column,
+            span.end.line,
+            span.end.column,
+        );
+    }
+    diagnostic
 }
 
 fn missing_asset_diagnostic(

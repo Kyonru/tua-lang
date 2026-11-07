@@ -3048,12 +3048,10 @@ return callback, parameterCallback
         .collect::<Vec<_>>();
 
     assert_eq!(mismatches.len(), 2, "{diagnostics:#?}");
-    assert!(mismatches
-        .iter()
-        .any(|diagnostic| diagnostic.message == "type mismatch: expected string, found number"));
-    assert!(mismatches
-        .iter()
-        .any(|diagnostic| diagnostic.message == "type mismatch: expected number, found string"));
+    assert!(mismatches.iter().any(|diagnostic| diagnostic.message
+        == "type mismatch at return value 1: expected string, found number"));
+    assert!(mismatches.iter().any(|diagnostic| diagnostic.message
+        == "type mismatch at return value 1: expected number, found string"));
 }
 
 #[test]
@@ -3089,8 +3087,8 @@ return named, anonymous
             .map(|diagnostic| diagnostic.message.as_str())
             .collect::<Vec<_>>(),
         [
-            "type mismatch: expected number, found nil",
-            "type mismatch: expected string, found nil",
+            "type mismatch at return value 1 of `named`: expected number, found nil; this function can finish without returning a value",
+            "type mismatch at return value 1: expected string, found nil; this function can finish without returning a value",
         ]
     );
 }
@@ -4398,17 +4396,17 @@ api.run()
         vec![
             (
                 18,
-                &*format!("argument count mismatch: expected 2, found 1{hint}")
+                &*format!("argument count mismatch: expected 2, found 1; missing required parameters: `dx`{hint}")
             ),
             (
                 19,
-                &*format!("argument count mismatch: expected 2, found 0{hint}")
+                &*format!("argument count mismatch: expected 2, found 0; missing required parameters: `self`, `dx`{hint}")
             ),
             // Not a method mistake: `move` has no `self`.
-            (22, "argument count mismatch: expected 2, found 1"),
+            (22, "argument count mismatch: expected 2, found 1; missing required parameters: `dy`"),
             // `api` can't be passed as `self: number`, so `api:run()` would be
             // another error; no hint.
-            (23, "argument count mismatch: expected 1, found 0"),
+            (23, "argument count mismatch: expected 1, found 0; missing required parameters: `self`"),
         ],
         "{diagnostics:#?}"
     );
@@ -5580,4 +5578,100 @@ fn chained_call_assignment_does_not_misname_the_returning_function() {
     assert!(!diagnostics
         .iter()
         .any(|d| d.message.contains("of `factory`")));
+}
+
+#[test]
+fn return_diagnostics_name_function_and_slot_and_highlight_bad_value() {
+    let source = "local function dimensions(): (number, number)\n  return 12, 'tall'\nend\n";
+    let diagnostics = check_tua_source("src/returns.tua", source).unwrap_err();
+    assert_single_mismatch(
+        &diagnostics,
+        "type mismatch at return value 2 of `dimensions`: expected number, found string",
+    );
+    let error = diagnostics
+        .iter()
+        .find(|d| d.code == Some(DiagnosticCode::TYPE_MISMATCH))
+        .unwrap();
+    assert_eq!(
+        (error.line, error.column, error.end_line, error.end_column),
+        (2, 14, 2, 20)
+    );
+}
+
+#[test]
+fn nested_function_return_context_does_not_leak_into_outer_function() {
+    let diagnostics = check_tua_source("src/nested.tua", "local function outer(): number\n local function inner(): string return 1 end\n return 'bad'\nend\n").unwrap_err();
+    let messages = diagnostics
+        .iter()
+        .filter(|d| d.code == Some(DiagnosticCode::TYPE_MISMATCH))
+        .map(|d| d.message.as_str())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        messages,
+        [
+            "type mismatch at return value 1 of `inner`: expected string, found number",
+            "type mismatch at return value 1 of `outer`: expected number, found string"
+        ]
+    );
+}
+
+#[test]
+fn parameter_default_diagnostic_names_parameter_and_source_range() {
+    let diagnostics = check_tua_source(
+        "src/default.tua",
+        "local function move(speed: number = 'fast')\nend\n",
+    )
+    .unwrap_err();
+    assert_single_mismatch(
+        &diagnostics,
+        "type mismatch at default for parameter `speed`: expected number, found string",
+    );
+    let error = diagnostics
+        .iter()
+        .find(|d| d.code == Some(DiagnosticCode::TYPE_MISMATCH))
+        .unwrap();
+    assert_eq!(
+        (error.line, error.column, error.end_line, error.end_column),
+        (1, 21, 1, 26)
+    );
+}
+
+#[test]
+fn missing_arguments_identify_only_required_parameters_and_whole_call() {
+    let diagnostics = check_tua_source(
+        "src/args.tua",
+        "local function draw(width: number, height: number, alpha: number = 1) end\ndraw(12)\n",
+    )
+    .unwrap_err();
+    let error = diagnostics
+        .iter()
+        .find(|d| d.code == Some(DiagnosticCode::TYPE_ARGUMENT_COUNT))
+        .unwrap();
+    assert_eq!(
+        error.message,
+        "argument count mismatch: expected 2, found 1; missing required parameters: `height`"
+    );
+    assert_eq!(
+        (error.line, error.column, error.end_line, error.end_column),
+        (2, 1, 2, 9)
+    );
+}
+
+#[test]
+fn excess_arguments_explain_signature_limit_and_varargs_stay_valid() {
+    let diagnostics = check_tua_source(
+        "src/args.tua",
+        "local function draw(width: number) end\ndraw(12, 3)\n",
+    )
+    .unwrap_err();
+    let error = diagnostics
+        .iter()
+        .find(|d| d.code == Some(DiagnosticCode::TYPE_ARGUMENT_COUNT))
+        .unwrap();
+    assert_eq!(error.message, "argument count mismatch: expected 1, found 2; 1 extra argument exceeds this signature's limit");
+    check_tua_source(
+        "src/args.tua",
+        "local function draw(width: number, ...: number) end\ndraw(12, 3)\n",
+    )
+    .expect("variadic arguments are allowed");
 }

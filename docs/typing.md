@@ -344,6 +344,25 @@ The editor highlights the destination for call results, so separate failures in
 one multi-value assignment remain distinguishable. Missing assignment values
 are identified explicitly as Lua nil padding.
 
+Function contract errors also identify the return slot and function name when
+available, or the parameter whose default is invalid:
+
+```text
+type mismatch at return value 2 of `dimensions`: expected number, found string
+type mismatch at default for parameter `speed`: expected number, found string
+argument count mismatch: expected 2, found 1; missing required parameters: `height`
+```
+
+A missing return path explains that the function can finish without returning a
+value. Check each reachable branch against the declared return contract. For
+argument-count errors, supply the named required parameters or check the call
+against its signature. A dot/colon hint is included only when the checker can
+establish that the receiver is missing.
+
+CLI diagnostics include the file, line, and column. In the editor, the Problems
+entry navigates to the bad return expression, the parameter whose default
+fails, or the call.
+
 ## Narrowing
 
 Nil checks narrow optional values inside the guarded branch:

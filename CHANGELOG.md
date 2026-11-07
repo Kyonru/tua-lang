@@ -8,6 +8,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Function contract diagnostics identify return slots and named functions,
+  explain missing return paths, name invalid parameter defaults, and list
+  missing required parameters or excess arguments with navigable call ranges.
+
 - Stabilize extension setup verification by waiting for configuration snapshots
   after preset changes, while continuing to reject failed restores.
 
