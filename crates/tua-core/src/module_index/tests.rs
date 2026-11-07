@@ -923,3 +923,48 @@ fn dependency_cache_does_not_reuse_cycle_truncated_exports() {
         assert_eq!(b.field("other"), Some(&Type::number()));
     }
 }
+
+#[test]
+fn shared_dependency_graph_reuses_inference_and_invalidates_every_branch() {
+    let project = TempProject::new("shared_dependency_graph");
+    project.write("tua.toml", "source = \"src\"\n");
+    // Each layer fans out and rejoins: disabling transitive caching makes this
+    // small graph repeat work exponentially, like a game with shared services.
+    const DEPTH: usize = 6;
+    project.write("src/leaf.tua", "return { value = 123 }\n");
+    for index in (0..DEPTH).rev() {
+        let child = if index + 1 == DEPTH {
+            "leaf".to_owned()
+        } else {
+            format!("layer{}", index + 1)
+        };
+        for side in ["left", "right"] {
+            project.write(
+                &format!("src/{side}{index}.tua"),
+                &format!("local child = require('{child}')\nreturn {{ value = child.value }}\n"),
+            );
+        }
+        project.write(
+            &format!("src/layer{index}.tua"),
+            &format!("local a = require('left{index}')\nlocal b = require('right{index}')\nreturn {{ value = a.value, other = b.value }}\n"),
+        );
+    }
+    let root = project.path.join("src/layer0.tua");
+    for (source, expected) in [
+        ("return { value = 123 }\n", Type::number()),
+        ("return { value = 'changed' }\n", Type::string()),
+    ] {
+        project.write("src/leaf.tua", source);
+        MODULE_EXPORT_INFERENCE_COUNT.with(|count| count.set(0));
+        let exports = required_module_exports_for_path(&root).unwrap();
+        assert_eq!(exports.field("value"), Some(&expected));
+        assert_eq!(exports.field("other"), Some(&expected));
+        let count = MODULE_EXPORT_INFERENCE_COUNT.with(|count| count.get());
+        assert!(count <= DEPTH * 3 + 1, "repeated inference: {count}");
+        required_module_exports_for_path(&root).unwrap();
+        assert_eq!(
+            MODULE_EXPORT_INFERENCE_COUNT.with(|count| count.get()),
+            count
+        );
+    }
+}
