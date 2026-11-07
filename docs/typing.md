@@ -323,11 +323,22 @@ types instead of printing both complete outer types:
 type Enemy = { name: string, stats: { hp: number } }
 
 local boss: Enemy = { name = "Hydra", stats = { hp = "lots" } }
--- TL1003: type mismatch at stats.hp: expected number, found string
+-- TL1003: type mismatch at boss.stats.hp: expected number, found string
 ```
 
 For a table literal, the diagnostic points at the deepest source value Tua can
 identify, here `"lots"`.
+
+Assignment errors name the destination. When a call supplies the value, the
+message also identifies its return position, for example:
+
+```text
+type mismatch at height: expected number, found nil (return value 2 of `size`)
+```
+
+The editor highlights the destination for call results, so separate failures in
+one multi-value assignment remain distinguishable. Missing assignment values
+are identified explicitly as Lua nil padding.
 
 ## Narrowing
 

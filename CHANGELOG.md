@@ -6,6 +6,12 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+### Fixed
+
+- Assignment type errors identify the destination and call return position,
+  with separate highlights for failing multi-return destinations and explicit
+  context for missing assignment values.
+
 ## [0.6.0] - 2026-11-07
 
 ### Release summary

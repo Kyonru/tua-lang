@@ -69,7 +69,9 @@ settings.
 Nested `TL1003` errors identify the failing contract path, such as
 `config.animations.green.row: expected number, found string`, and highlight the
 corresponding table value when it is statically available. Root-level failures
-retain concise declared names such as `Player`.
+retain concise declared names such as `Player`. Assignment failures name the
+destination; call-result failures also include the return position and highlight
+the destination instead of the whole call.
 
 Standard lint rules are published by default. Set `diagnostics.rules = false`
 (or use the `tua.diagnostics.rules` override) to disable them.

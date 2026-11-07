@@ -610,6 +610,7 @@ impl<'a> Checker<'a> {
             }
 
             let declaration_position = node_position(name);
+            let name_token = name;
             let name = token_text(name);
             let Some(target) = self
                 .environment
@@ -636,15 +637,21 @@ impl<'a> Checker<'a> {
                     continue;
                 }
                 if return_index == 0 && matches!(expression, Expression::Function(_)) {
-                    self.check_expression_assignable_at(expression, &target, None);
+                    self.check_expression_assignable_at(expression, &target, Some(&name));
                     continue;
                 }
                 let source = self
                     .infer_expression_return(expression, return_index)
                     .unwrap_or(Type::Any);
-                self.check_inferred_expression_assignable_at(expression, &source, &target, None);
+                self.check_assignment_value(
+                    name_token,
+                    &name,
+                    Some((expression, return_index)),
+                    &source,
+                    &target,
+                );
             } else {
-                self.check_type_assignable(local, &Type::nil(), &target);
+                self.check_assignment_value(name_token, &name, None, &Type::nil(), &target);
             }
         }
 
@@ -835,14 +842,70 @@ impl<'a> Checker<'a> {
                 if let Some((expr, _)) = slot {
                     if !love_conf::is_window_disabled_by_literal_false(self.parsed, variable, expr)
                     {
-                        self.check_inferred_expression_assignable_at(expr, source, target, None);
+                        let name = plain_field_chain_from_var(variable)
+                            .map(|parts| parts.join("."))
+                            .unwrap_or_else(|| "assignment target".to_owned());
+                        self.check_assignment_value(variable, &name, slot, source, target);
                     }
                 } else {
-                    self.check_type_assignable(variable, source, target);
+                    let name = plain_field_chain_from_var(variable)
+                        .map(|parts| parts.join("."))
+                        .unwrap_or_else(|| "assignment target".to_owned());
+                    self.check_assignment_value(variable, &name, None, source, target);
                 }
             }
             self.record_assignment_type(variable, source, target, expression);
         }
+    }
+
+    fn check_assignment_value(
+        &mut self,
+        destination: &impl Node,
+        name: &str,
+        slot: Option<(&Expression, usize)>,
+        source: &Type,
+        target: &Type,
+    ) {
+        if type_contains_any_alias(target, &self.unresolved_project_aliases) {
+            return;
+        }
+        let Some(failure) = self.diagnostic_assignability_failure(source, target) else {
+            return;
+        };
+        let mut diagnostic = match slot {
+            Some((expression, _)) if !matches!(expression, Expression::FunctionCall(_)) => {
+                mismatch_diagnostic_for_expression(
+                    &self.parsed.path,
+                    expression,
+                    &failure,
+                    Some(name),
+                )
+            }
+            _ => mismatch_diagnostic(&self.parsed.path, destination, &failure, Some(name)),
+        };
+        match slot {
+            Some((Expression::FunctionCall(call), index)) => {
+                // A single call can supply multiple destinations. Anchor each error
+                // to its destination so independent failures are not deduplicated.
+                let callee = field_chain_before_first_call(call)
+                    .filter(|_| {
+                        call.suffixes()
+                            .filter(|suffix| matches!(suffix, Suffix::Call(_)))
+                            .count()
+                            == 1
+                    })
+                    .map(|parts| format!(" of `{}`", parts.join(".")))
+                    .unwrap_or_default();
+                diagnostic
+                    .message
+                    .push_str(&format!(" (return value {}{callee})", index + 1));
+            }
+            None => diagnostic
+                .message
+                .push_str(" (no corresponding value; Lua supplies nil)"),
+            _ => {}
+        }
+        self.diagnostics.push(diagnostic);
     }
 
     fn check_compound_assignment(&mut self, assignment: &ast::CompoundAssignment) {

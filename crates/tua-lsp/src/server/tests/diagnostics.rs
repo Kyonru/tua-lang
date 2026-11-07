@@ -99,7 +99,7 @@ fn did_open_publishes_matching_core_diagnostics() {
     assert!(diagnostics[0]["message"]
         .as_str()
         .expect("diagnostic message should be a string")
-        .contains("type mismatch: expected number, found string"));
+        .contains("type mismatch at hp: expected number, found string"));
 }
 
 #[test]
@@ -408,7 +408,7 @@ end
     assert!(diagnostics[0]["message"]
         .as_str()
         .expect("diagnostic message should be a string")
-        .contains("type mismatch: expected number | nil, found string"));
+        .contains("type mismatch at t.window.msaa: expected number | nil, found string"));
 }
 #[test]
 fn did_open_publishes_love_asset_path_diagnostics() {
@@ -986,4 +986,31 @@ fn reserved_function_names_publish_specific_keyword_diagnostics() {
         diagnostic["range"]["end"],
         json!({ "line": 0, "character": 18 })
     );
+}
+
+#[test]
+fn multi_return_assignment_errors_keep_distinct_destination_ranges() {
+    let uri = "file:///tmp/return-slots.tua";
+    let source = "local function values(): (number, string, nil) return 1, 'bad', nil end\nlocal a, b, c = 0, 0, 0\na, b, c = values()\n";
+    let output = run_messages(vec![did_open(uri, source)]);
+    let diagnostics = published_diagnostics(&output, uri);
+    let errors = diagnostics
+        .iter()
+        .filter(|d| d["code"] == "TL1003")
+        .collect::<Vec<_>>();
+    assert_eq!(errors.len(), 2, "{diagnostics:#?}");
+    for (error, name, slot, column) in [(errors[0], "b", 2, 3), (errors[1], "c", 3, 6)] {
+        assert!(error["message"]
+            .as_str()
+            .unwrap()
+            .contains(&format!("type mismatch at {name}:")));
+        assert!(error["message"]
+            .as_str()
+            .unwrap()
+            .contains(&format!("return value {slot} of `values`")));
+        assert_eq!(
+            error["range"],
+            json!({"start": {"line": 2, "character": column}, "end": {"line": 2, "character": column + 1}})
+        );
+    }
 }

@@ -845,7 +845,7 @@ local hp: number = "full"
     let stderr = String::from_utf8(output.stderr).expect("stderr should be valid UTF-8");
 
     assert!(stderr.contains("main.tua:2:20 error TL1003"));
-    assert!(stderr.contains("type mismatch: expected number, found string"));
+    assert!(stderr.contains("type mismatch at hp: expected number, found string"));
     assert!(!stderr.contains("panicked"));
 }
 
@@ -3622,7 +3622,7 @@ return hp
     let stderr = String::from_utf8(output.stderr).expect("stderr should be valid UTF-8");
 
     assert!(stderr.contains("main.tua:2:20 error TL1003"));
-    assert!(stderr.contains("type mismatch: expected number, found string"));
+    assert!(stderr.contains("type mismatch at hp: expected number, found string"));
     assert!(!temp.path().join("build/main.lua").exists());
 }
 

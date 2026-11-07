@@ -4653,7 +4653,7 @@ dynamic = "allowed"
     assert!(diagnostics.iter().any(|diagnostic| {
         diagnostic
             .message
-            .contains("type mismatch: expected number, found string")
+            .contains("type mismatch at value: expected number, found string")
     }));
     assert!(diagnostics.iter().any(|diagnostic| {
         diagnostic

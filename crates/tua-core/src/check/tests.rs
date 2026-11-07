@@ -1365,7 +1365,7 @@ local player: Player = { hp = "low" }
 
     assert_single_mismatch(
         &diagnostics,
-        "type mismatch at hp: expected number, found string",
+        "type mismatch at player.hp: expected number, found string",
     );
 }
 
@@ -5528,4 +5528,56 @@ fn void_love_method_results_cannot_receive_chained_calls() {
         "local function good(data: ImageData): number return data:clone():getWidth() end",
     )
     .unwrap();
+}
+
+#[test]
+fn assignment_mismatches_identify_each_return_slot_and_destination() {
+    let source = "local function values(): (number, string, nil)\n  return 1, 'bad', nil\nend\nlocal first, second, third = 0, 0, 0\nfirst, second, third = values()\n";
+    let diagnostics = check_tua_source("src/slots.tua", source).unwrap_err();
+    let errors = diagnostics
+        .iter()
+        .filter(|d| d.code == Some(DiagnosticCode::TYPE_MISMATCH))
+        .collect::<Vec<_>>();
+    assert_eq!(errors.len(), 2, "{diagnostics:#?}");
+    for (error, name, slot, found, column) in [
+        (errors[0], "second", 2, "string", 8),
+        (errors[1], "third", 3, "nil", 16),
+    ] {
+        assert_eq!(error.message, format!("type mismatch at {name}: expected number, found {found} (return value {slot} of `values`)"));
+        assert_eq!(
+            (error.line, error.column, error.end_line, error.end_column),
+            (5, column, 5, column + name.len())
+        );
+    }
+}
+
+#[test]
+fn annotated_local_mismatch_identifies_return_slot() {
+    let diagnostics = check_tua_source("src/local.tua", "local function values(): (number, string) return 1, 'bad' end\nlocal first: number, second: number = values()\n").unwrap_err();
+    assert_single_mismatch(
+        &diagnostics,
+        "type mismatch at second: expected number, found string (return value 2 of `values`)",
+    );
+}
+
+#[test]
+fn missing_assignment_value_names_destination_and_lua_nil_padding() {
+    let diagnostics = check_tua_source(
+        "src/padding.tua",
+        "local first, second = 0, 0\nfirst, second = 1\n",
+    )
+    .unwrap_err();
+    assert_single_mismatch(&diagnostics, "type mismatch at second: expected number, found nil (no corresponding value; Lua supplies nil)");
+}
+
+#[test]
+fn chained_call_assignment_does_not_misname_the_returning_function() {
+    let diagnostics = check_tua_source("src/chain.tua", "local function factory() return { value = function(): string return 'bad' end } end\nlocal count = 0\ncount = factory().value()\n").unwrap_err();
+    assert_single_mismatch(
+        &diagnostics,
+        "type mismatch at count: expected number, found string (return value 1)",
+    );
+    assert!(!diagnostics
+        .iter()
+        .any(|d| d.message.contains("of `factory`")));
 }

@@ -149,7 +149,7 @@ fn lsp_initializes_and_publishes_open_and_change_diagnostics() {
     assert!(open_diagnostics[0]["message"]
         .as_str()
         .expect("diagnostic message should be a string")
-        .contains("type mismatch: expected number, found string"));
+        .contains("type mismatch at hp: expected number, found string"));
 
     let change_diagnostics = publications[1]["params"]["diagnostics"]
         .as_array()
