@@ -246,7 +246,7 @@ function Vector.__div(v1, op)
     if op == 0 then error("Cannot divide a vector by zero", 2) end
     return Vector(v1.x / op, v1.y / op)
   elseif type(op) == VECTORTYPE then
-    if op.x * op.y == 0 then error("Cannot divide a vector by a vector with a zero component", 2) end
+    if op.x == 0 or op.y == 0 then error("Cannot divide a vector by a vector with a zero component", 2) end
     return Vector(v1.x / op.x, v1.y / op.y)
   else
     error("Cannot divide a vector by a " .. type(op) .. " value", 2)
