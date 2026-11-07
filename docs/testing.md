@@ -63,9 +63,17 @@ source = "tests"
 In VS Code, right-click inside a function in a saved `.tua` file and choose
 **Tua: Create Unit Test for Function**. Tua creates a matching
 `*_spec` file under `[test].source`, preserving the source file's
-subdirectory, opens it, and adds a pending Busted example with the module import
-ready to extend. If no test source is configured, the project source directory
+subdirectory, opens it, and adds a pending Busted example with a commented module
+import ready to extend. If no test source is configured, the project source directory
 is used. Existing specs are opened instead of overwritten.
+
+The generated placeholder does not load the module. It should report one
+pending test until you arrange dependencies, enable the import, and replace
+`pending(...)` with assertions. Module imports can execute code immediately:
+a LOVE asset loader at module scope needs LOVE even when the test body is
+pending. Set up LOVE or dependency test doubles **before** `require`, and restore
+changed globals/module-cache entries after the test. To exercise real graphics,
+use a test running inside LOVE; `tua test` does not provide a LOVE runtime.
 
 Then create a spec ending in `_spec.tua`:
 

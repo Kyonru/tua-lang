@@ -6,6 +6,12 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+### Fixed
+
+- Generated pending unit tests leave the subject import commented until runtime
+  dependencies are arranged, preventing LOVE module-load failures before the
+  placeholder test can be reported as pending.
+
 ## [0.6.1] - 2026-11-08
 
 ### Release summary

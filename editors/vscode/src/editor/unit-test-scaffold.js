@@ -106,10 +106,10 @@ async function exists(uri) {
 function scaffoldSource(moduleName, functionName) {
   const qualifiedName = `${moduleName}.${functionName}`;
   return [
-    `local _subject = require(${luaString(moduleName)})`,
-    "",
     `describe(${luaString(qualifiedName)}, function()`,
     `  it(${luaString(`handles ${functionName}`)}, function()`,
+    "    -- Arrange dependencies (including LOVE test doubles) before loading the module.",
+    `    -- local subject = require(${luaString(moduleName)})`,
     `    pending(${luaString(`Add inputs and assertions for ${functionName}.`)})`,
     "  end)",
     "end)",
