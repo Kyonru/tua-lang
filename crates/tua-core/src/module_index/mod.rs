@@ -1303,6 +1303,10 @@ fn resolve_export_aliases_inner(
                     .collect()
             });
 
+            let overloads = function.overloads.iter().map(|overload| {
+                let Type::Function(overload) = resolve_export_aliases_inner(environment, &Type::Function(overload.clone()), false, visiting) else { unreachable!() };
+                overload
+            }).collect::<Vec<_>>();
             Type::Function(
                 FunctionType::new_signature(
                     parameters,
@@ -1310,7 +1314,7 @@ fn resolve_export_aliases_inner(
                     vararg_type,
                     return_types,
                 )
-                .with_guarded_return_types(guarded),
+                .with_guarded_return_types(guarded).with_overloads(overloads),
             )
         }
         Type::Table(table) => {
@@ -1602,7 +1606,8 @@ fn typed_function_type(function: &TypedFunction) -> Type {
             function.vararg_type.clone(),
             function.return_types_or_any(),
         )
-        .with_guarded_return_types(function.guarded_return_types.clone()),
+        .with_guarded_return_types(function.guarded_return_types.clone())
+        .with_overloads(function.overloads.iter().map(crate::types::TypedFunctionOverload::as_function_type)),
     )
 }
 

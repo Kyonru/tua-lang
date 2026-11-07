@@ -3246,36 +3246,49 @@ fn typed_function_from_vector_constructor() -> TypedFunction {
     }
 }
 
-fn typed_function_from_function_type(
+pub(crate) fn typed_function_from_function_type(
     name: Option<String>,
     function: FunctionType,
 ) -> TypedFunction {
     let return_types = function.return_types_or_any().to_vec();
     let parameter_count = function.parameters.len();
-    let required_parameter_count = function.required_parameter_count;
-    let vararg_type = function.vararg_type.map(|ty| *ty);
-    let has_varargs = vararg_type.is_some();
-
+    let overloads = function.overloads.into_iter().map(|overload| {
+        let typed = typed_function_from_function_type(None, overload);
+        crate::types::TypedFunctionOverload {
+            parameters: typed.parameters,
+            has_varargs: typed.has_varargs,
+            vararg_type: typed.vararg_type,
+            return_types: typed.return_types,
+            documentation: typed.documentation,
+        }
+    }).collect();
     TypedFunction {
         name,
-        parameters: function
-            .parameters
-            .into_iter()
-            .map(|parameter| TypedParameter {
-                name: parameter.name.unwrap_or_default(),
-                ty: parameter.ty,
-                documentation: None,
-            })
-            .collect(),
+        parameters: function.parameters.into_iter().map(|parameter| TypedParameter {
+            name: parameter.name.unwrap_or_default(), ty: parameter.ty, documentation: None,
+        }).collect(),
         parameter_count,
-        required_parameter_count,
-        has_varargs,
-        vararg_type,
+        required_parameter_count: function.required_parameter_count,
+        has_varargs: function.vararg_type.is_some(),
+        vararg_type: function.vararg_type.map(|ty| *ty),
         return_type: return_types.first().cloned(),
-        guarded_return_types: None,
+        guarded_return_types: function.guarded_return_types,
         return_types,
         documentation: None,
-        overloads: Vec::new(),
+        overloads,
+    }
+}
+
+fn contextual_callback_path(expression: &Expression, body_span: SourceSpan) -> Option<(&ast::FunctionBody, Vec<String>)> {
+    match expression {
+        Expression::Function(function) if node_span(function.body()) == Some(body_span) => Some((function.body(), Vec::new())),
+        Expression::TableConstructor(table) => table.fields().iter().find_map(|field| {
+            let Field::NameKey { key, value, .. } = field else { return None; };
+            let (body, mut fields) = contextual_callback_path(value, body_span)?;
+            fields.insert(0, token_text(key));
+            Some((body, fields))
+        }),
+        _ => None,
     }
 }
 
@@ -3283,45 +3296,16 @@ fn typed_function_from_module_export(
     name: Option<String>,
     export: ModuleExportField,
 ) -> Option<TypedFunction> {
-    let Type::Function(function) = export.ty else {
-        return None;
-    };
-
-    let return_types = function.return_types_or_any().to_vec();
-    let parameter_count = function.parameters.len();
-    let required_parameter_count = function.required_parameter_count;
-    let vararg_type = function.vararg_type.map(|ty| *ty);
-    let has_varargs = vararg_type.is_some();
-    let parameters = function
-        .parameters
-        .into_iter()
-        .enumerate()
-        .map(|(index, parameter)| TypedParameter {
-            name: parameter.name.unwrap_or_else(|| {
-                export
-                    .parameter_names
-                    .get(index)
-                    .cloned()
-                    .unwrap_or_default()
-            }),
-            ty: parameter.ty,
-            documentation: export.parameter_documentation.get(index).cloned().flatten(),
-        })
-        .collect();
-
-    Some(TypedFunction {
-        name,
-        parameters,
-        parameter_count,
-        required_parameter_count,
-        has_varargs,
-        vararg_type,
-        return_type: return_types.first().cloned(),
-        guarded_return_types: None,
-        return_types,
-        documentation: export.documentation,
-        overloads: Vec::new(),
-    })
+    let Type::Function(function) = export.ty else { return None; };
+    let mut function = typed_function_from_function_type(name, function);
+    for (index, parameter) in function.parameters.iter_mut().enumerate() {
+        if parameter.name.is_empty() {
+            parameter.name = export.parameter_names.get(index).cloned().unwrap_or_default();
+        }
+        parameter.documentation = export.parameter_documentation.get(index).cloned().flatten();
+    }
+    function.documentation = export.documentation;
+    Some(function)
 }
 
 pub(crate) fn typed_function_from_lua_item(item: LuaItem) -> Option<TypedFunction> {

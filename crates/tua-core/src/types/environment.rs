@@ -608,6 +608,10 @@ impl AliasResolutionContext {
                         .map(|ty| self.resolve(environment, ty))
                         .collect()
                 });
+                let overloads = function.overloads.iter().map(|overload| {
+                    let Type::Function(overload) = self.resolve(environment, &Type::Function(overload.clone())) else { unreachable!() };
+                    overload
+                }).collect::<Vec<_>>();
                 Type::Function(
                     FunctionType::new_signature(
                         parameters,
@@ -615,7 +619,7 @@ impl AliasResolutionContext {
                         vararg_type,
                         return_types,
                     )
-                    .with_guarded_return_types(guarded),
+                    .with_guarded_return_types(guarded).with_overloads(overloads),
                 )
             }
             Type::Table(table) => {
@@ -690,7 +694,8 @@ impl TypedFunction {
                     self.vararg_type.clone(),
                     self.return_types_or_any(),
                 )
-                .with_guarded_return_types(self.guarded_return_types.clone()),
+                .with_guarded_return_types(self.guarded_return_types.clone())
+                .with_overloads(self.overloads.iter().map(TypedFunctionOverload::as_function_type)),
             )
         })
     }
@@ -2949,7 +2954,8 @@ fn function_types_by_name(
                         function.vararg_type.clone(),
                         return_types,
                     )
-                    .with_guarded_return_types(guarded),
+                    .with_guarded_return_types(guarded)
+                    .with_overloads(function.overloads.iter().map(TypedFunctionOverload::as_function_type)),
                 ),
             ))
         })

@@ -181,6 +181,7 @@ impl fmt::Display for FunctionParameter {
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct FunctionType {
+    pub overloads: Vec<FunctionType>,
     pub parameters: Vec<FunctionParameter>,
     pub required_parameter_count: usize,
     pub vararg_type: Option<Box<Type>>,
@@ -235,6 +236,7 @@ impl FunctionType {
         let required_parameter_count = required_parameter_count.min(parameters.len());
 
         Self {
+            overloads: Vec::new(),
             parameters,
             required_parameter_count,
             vararg_type: vararg_type.map(Box::new),
@@ -242,6 +244,11 @@ impl FunctionType {
             return_types,
             guarded_return_types: None,
         }
+    }
+
+    pub fn with_overloads(mut self, overloads: impl IntoIterator<Item = FunctionType>) -> Self {
+        self.overloads = overloads.into_iter().collect();
+        self
     }
 
     pub fn with_guarded_return_types(mut self, guarded: Option<Vec<Type>>) -> Self {

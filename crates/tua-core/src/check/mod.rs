@@ -1893,7 +1893,11 @@ impl<'a> Checker<'a> {
                 .check_external_argument_list(suffix, arguments, &function)
                 .into_iter()
                 .next(),
-            Some(Callable::TypedFunction(_)) | Some(Callable::Any) | None => {
+            Some(Callable::TypedFunction(function)) => {
+                if let Some(receiver) = receiver { arguments.insert(0, CallArgument::Inferred(receiver)); }
+                self.check_typed_argument_list(suffix, arguments, &function).into_iter().next()
+            }
+            Some(Callable::Any) | None => {
                 for argument in arguments {
                     if let CallArgument::Expression(expression) = argument {
                         self.infer_expression(expression);
@@ -2833,6 +2837,15 @@ impl<'a> Checker<'a> {
         function: &TypedFunction,
     ) -> Vec<Type> {
         let arguments = self.call_arguments_for_function(function_call);
+        self.check_typed_argument_list(function_call, arguments, function)
+    }
+
+    fn check_typed_argument_list(
+        &mut self,
+        node: &impl Node,
+        arguments: Vec<CallArgument<'_>>,
+        function: &TypedFunction,
+    ) -> Vec<Type> {
         let arguments = self.expand_final_call_argument(arguments);
         // Delay anonymous body checking until overload selection supplies its
         // contextual parameter and return contracts.
@@ -2867,7 +2880,7 @@ impl<'a> Checker<'a> {
 
         if let Some(candidate) = best_candidate {
             self.check_contextual_callback_arguments(&arguments, candidate);
-            self.report_typed_call_mismatch(function_call, &arguments, &argument_types, candidate);
+            self.report_typed_call_mismatch(node, &arguments, &argument_types, candidate);
 
             return candidate.return_types.clone();
         }
@@ -3011,7 +3024,7 @@ impl<'a> Checker<'a> {
 
     fn report_typed_call_mismatch(
         &mut self,
-        function_call: &FunctionCall,
+        function_call: &impl Node,
         arguments: &[CallArgument<'_>],
         argument_types: &[Option<Type>],
         candidate: &TypedCallCandidate,
@@ -4601,6 +4614,9 @@ fn type_from_type_label(label: &str) -> Option<Type> {
 fn callable_from_type(ty: &Type, environment: &TypeEnvironment) -> Option<Callable> {
     match resolve_aliases(ty, environment, 0) {
         Type::Any => Some(Callable::Any),
+        Type::Function(function) if !function.overloads.is_empty() => Some(Callable::TypedFunction(Box::new(
+            crate::semantic::typed_function_from_function_type(None, function)
+        ))),
         Type::Function(function) => Some(Callable::Function(function)),
         Type::Table(table) => table
             .metatable_facts()

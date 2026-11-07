@@ -183,7 +183,10 @@ pub(crate) fn widen_inferred_type(ty: &Type) -> Type {
                     .guarded_return_types
                     .as_ref()
                     .map(|types| types.iter().map(widen_inferred_type).collect()),
-            ),
+            ).with_overloads(function.overloads.iter().map(|overload| {
+                let Type::Function(overload) = widen_inferred_type(&Type::Function(overload.clone())) else { unreachable!() };
+                overload
+            })),
         ),
         Type::Table(table) => {
             let mut widened = TableShape::from_fields(table.fields().map(|(name, field)| {

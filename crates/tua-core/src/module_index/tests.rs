@@ -768,3 +768,19 @@ return {returned}
         assert_eq!(damped.return_types_or_any(), vec![Type::number()]);
     }
 }
+
+#[test]
+fn imported_lua_overloads_preserve_all_call_contracts() {
+    let project = TempProject::new("overloads");
+    project.write("tua.toml", "source = \"src\"\n");
+    project.write("src/legacy.lua", "---@overload fun(value: string): string\n---@overload fun(value: number): number\nlocal function identity(value) return value end\nreturn {identity=identity}\n");
+    let path = project.path.join("src/main.tua");
+    let source = "local Legacy = require('legacy')\nlocal value = Legacy.identity(true)\nprint(value)\n";
+    project.write("src/main.tua", source);
+    let parsed = parse_tua_source(&path, source).unwrap();
+    let exports = required_module_exports_for_receiver(&parsed, "Legacy").unwrap();
+    let Type::Function(function) = exports.field("identity").unwrap() else { panic!("function"); };
+    assert_eq!(function.overloads.len(), 2);
+    assert!(crate::check_tua_source(&path, source).unwrap_err().iter().any(|d| d.code == Some(crate::DiagnosticCode::TYPE_MISMATCH)));
+    crate::check_tua_source(&path, source.replace("true", "42")).unwrap();
+}
