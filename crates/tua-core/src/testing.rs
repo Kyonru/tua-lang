@@ -12,6 +12,22 @@ pub struct TestCase {
     pub line: usize,
     pub column: usize,
     pub pending: bool,
+    pub suite: Option<String>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, serde::Serialize)]
+pub struct TestSuite {
+    pub name: String,
+    pub full_name: String,
+    pub parent: Option<String>,
+    pub line: usize,
+    pub column: usize,
+}
+
+#[derive(Default)]
+pub struct TestDiscovery {
+    pub cases: Vec<TestCase>,
+    pub suites: Vec<TestSuite>,
 }
 
 struct Registration {
@@ -24,6 +40,11 @@ struct Registration {
 /// Literal, unshadowed `describe`/`context` and `it`/`pending` registrations.
 /// Dynamic registrations remain runnable at file level.
 pub fn discover_test_cases(parsed: &ParsedSource) -> Vec<TestCase> {
+    discover_tests(parsed).cases
+}
+
+/// Discover suite and case locations together from the same registration tree.
+pub fn discover_tests(parsed: &ParsedSource) -> TestDiscovery {
     struct Calls<'a> {
         parsed: &'a ParsedSource,
         scope: crate::ScopeMap,
@@ -90,7 +111,7 @@ pub fn discover_test_cases(parsed: &ParsedSource) -> Vec<TestCase> {
     let key = |p: SourcePosition| (p.line, p.column);
     calls.registrations.sort_by_key(|entry| key(entry.start));
     let mut parents: Vec<&Registration> = Vec::new();
-    let mut cases = Vec::new();
+    let mut discovery = TestDiscovery::default();
     for entry in &calls.registrations {
         while parents
             .last()
@@ -98,28 +119,41 @@ pub fn discover_test_cases(parsed: &ParsedSource) -> Vec<TestCase> {
         {
             parents.pop();
         }
-        if matches!(entry.kind.as_str(), "describe" | "context") {
-            parents.push(entry);
-            continue;
-        }
-        let Some(name) = &entry.name else { continue };
-        let Some(mut names) = parents
+        let names = parents
             .iter()
             .map(|parent| parent.name.as_deref())
-            .collect::<Option<Vec<_>>>()
-        else {
-            continue;
-        };
-        names.push(name);
-        cases.push(TestCase {
-            name: name.clone(),
-            full_name: names.join(" "),
-            line: entry.start.line,
-            column: entry.start.column,
-            pending: entry.kind == "pending",
-        });
+            .collect::<Option<Vec<_>>>();
+        let is_suite = matches!(entry.kind.as_str(), "describe" | "context");
+        if let (Some(name), Some(mut names)) = (&entry.name, names) {
+            let parent = (!names.is_empty()).then(|| names.join(" "));
+            names.push(name);
+            let full_name = names.join(" ");
+            if is_suite {
+                discovery.suites.push(TestSuite {
+                    name: name.clone(),
+                    full_name,
+                    parent,
+                    line: entry.start.line,
+                    column: entry.start.column,
+                });
+            } else {
+                discovery.cases.push(TestCase {
+                    name: name.clone(),
+                    full_name,
+                    line: entry.start.line,
+                    column: entry.start.column,
+                    pending: entry.kind == "pending",
+                    suite: parent,
+                });
+            }
+        }
+        // Unknown suite names must still hide descendants whose runtime full
+        // names cannot be established without executing the spec.
+        if is_suite {
+            parents.push(entry);
+        }
     }
-    cases
+    discovery
 }
 
 #[cfg(test)]
@@ -142,6 +176,46 @@ it('shadow', function() end)
         assert_eq!(cases[0].full_name, "math #unit positive works [1]");
         assert_eq!(cases[0].line, 3);
         assert!(cases[1].pending);
+    }
+
+    #[test]
+    fn discovers_suite_tree_locations_and_keeps_dynamic_children_runnable_by_suite() {
+        let source = r#"describe("outer [x]", function()
+  context("nested", function()
+    it("literal", function() end)
+    it(dynamic_name, function() end)
+  end)
+end)
+describe("empty", function() end)
+describe(dynamic_name, function()
+  describe("unknown parent", function() end)
+end)
+local describe = function(...) end
+describe("shadowed", function() end)
+"#;
+        for lua in [false, true] {
+            let parsed = if lua {
+                crate::parse_lua_source("spec.lua", source)
+            } else {
+                crate::parse_tua_source("spec.tua", source)
+            }
+            .unwrap();
+            let discovery = super::discover_tests(&parsed);
+            assert_eq!(discovery.suites.len(), 3);
+            assert_eq!(discovery.suites[0].full_name, "outer [x]");
+            assert_eq!(discovery.suites[0].parent, None);
+            assert_eq!(discovery.suites[0].line, 1);
+            assert_eq!(discovery.suites[1].parent.as_deref(), Some("outer [x]"));
+            assert_eq!(discovery.suites[1].line, 2);
+            assert_eq!(discovery.suites[1].column, 3);
+            assert_eq!(discovery.suites[2].full_name, "empty");
+            assert_eq!(discovery.cases.len(), 1);
+            assert_eq!(
+                discovery.cases[0].suite.as_deref(),
+                Some("outer [x] nested")
+            );
+            assert_eq!(discovery.cases[0].line, 3);
+        }
     }
 
     #[test]

@@ -24,7 +24,11 @@ fresh directory under `.tua/`, leaves `build/` untouched, and cleans its tempora
 output on normal completion. `tua check` and the editor use the listed diagnostic
 globals; `tua test` also supplies Busted globals to its build automatically.
 
-Use **Tua: Run Unit Tests** in VS Code, or see
+Open `tests/counter_spec.tua` in a trusted VS Code workspace to see gutter play
+buttons beside `describe` and each `it`. The suite button runs both Counter
+tests; each case button runs only that named test. Discovery does not run tests.
+
+Use **Tua: Run Unit Tests** for the whole project, or see
 [Testing Tua](../../docs/testing.md) for setup, executable selection, and limits.
 
 The dedicated `tests/` directory is included in checking and formatting, receives

@@ -39,6 +39,7 @@ function testArguments(job, reportPath, settings, coveragePath) {
   const args = ["test"];
   if (job.selector) args.push(job.selector);
   if (job.caseName !== undefined) args.push("--filter", exactPattern(job.caseName));
+  else if (job.suiteName !== undefined) args.push("--filter", `${exactPattern(job.suiteName).slice(0, -1)} `);
   args.push("--report", reportPath);
   if (coveragePath) args.push("--coverage", coveragePath);
   for (const [setting, flag] of [["test.bustedPath", "--busted"], ["test.luaPath", "--lua"]]) {

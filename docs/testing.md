@@ -140,10 +140,11 @@ tua test --report test-results.json
 ```
 
 `--list` returns versioned JSON with absolute file paths, source-root-relative
-selectors, parse errors and statically discovered cases. It does not compile,
+selectors, parse errors, statically discovered cases and nested suites. It does not compile,
 run Busted, execute specs or create test output. Literal, unshadowed
 `describe`/`context` and `it`/`pending` registrations include full names and
-one-based source positions. Dynamic names, escaped names and aliased registration
+one-based source positions. Escaped literal names use Lua string decoding. Dynamic
+names and aliased registration
 functions remain runnable at file level; discovery does not claim they are absent.
 
 `--report PATH` preserves terminal output and writes JSON containing completion
@@ -183,14 +184,21 @@ loaded; each run uses isolated statistics and removes them after reporting.
 
 ## Run In VS Code Or CI
 
-Save your files, then open VS Code's **Testing** view. Tua discovers configured
-projects lazily using `tua test --list`; use **Tua: Refresh Unit Tests** to refresh
-manually. Run a project, spec file, or literal named case from the tree or its
-gutter icon. Dynamic registrations remain runnable through their spec file;
-executed cases also appear in the results. Literal static names use Lua's string
-escape decoding, so the displayed case name and filter match what Busted runs.
-Tests with the same full name in one file run together because Busted filters by
-name.
+Open a saved Tua or Lua file in a trusted project. Tua automatically discovers
+configured tests using `tua test --list`, without running test code or requiring
+you to open the Testing view first. The editor gutter (left of the line numbers)
+shows VS Code's native play buttons beside literal `it`/`pending` cases and
+`describe`/`context` suites. Click a case's button to run that case; click a suite's
+button to run its descendants, including dynamically registered descendants.
+If gutter buttons are hidden, enable VS Code's **Testing: Gutter Enabled** setting.
+
+The **Testing** view also supports project, file, suite and case runs. Use
+**Tua: Refresh Unit Tests** to refresh manually. Dynamic registrations remain
+runnable through their spec file; executed cases also appear in the results.
+Literal names use Lua's string escape decoding, so filters match Busted's runtime
+names. Busted filters by full name: tests or suites sharing a full name in one
+file run together. Suite runs use a space-delimited full-name prefix, so `math`
+does not select a neighboring `mathematics` suite.
 
 The **Run with Busted** profile supports **continuous run**: opt in through the
 Testing view to rerun the selected tests after saved source/config/asset changes.

@@ -8,6 +8,8 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Added
 
+- Native editor gutter run buttons for discovered Busted suites and cases, with
+  automatic read-only discovery when opening Tua/Lua files in trusted projects.
 - Test sources receive built-in Busted and LuaAssert types for checking and
   editor support, including signatures, hover, completion, and common helpers.
 - VS Code can scaffold a pending Busted unit test for the function under the

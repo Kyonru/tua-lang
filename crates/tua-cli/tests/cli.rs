@@ -5357,6 +5357,12 @@ fn unit_test_discovery_is_static_and_reports_invalid_files() {
     assert!(files
         .iter()
         .any(|file| file["cases"][0]["full_name"] == "suite case"));
+    let suite_file = files
+        .iter()
+        .find(|file| file["suites"][0]["full_name"] == "suite")
+        .unwrap();
+    assert_eq!(suite_file["suites"][0]["line"], 2);
+    assert_eq!(suite_file["cases"][0]["suite"], "suite");
     assert!(!temp.path().join(".tua").exists());
 }
 

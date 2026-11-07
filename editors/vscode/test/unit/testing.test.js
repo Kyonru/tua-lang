@@ -34,7 +34,21 @@ test("test selection deduplicates ancestors and respects excluded files/cases", 
   assert.deepEqual(planRuns([project], { exclude: [two] }, data).map(job => job.item.id), ["one"]);
   assert.deepEqual(planRuns([project], { include: [one], exclude: [file] }, data), []);
   assert.equal(exactPattern("math (1) + 2? %"), "^math %(1%) %+ 2%? %%$");
+  assert.deepEqual(testArguments({ selector: "a.tua", suiteName: "math [x]." }, "/tmp/report.json", { get: () => "" }), ["test", "a.tua", "--filter", "^math %[x%]%. ", "--report", "/tmp/report.json"]);
   assert.deepEqual(testArguments({ selector: "a spec.tua", caseName: "[x]" }, "/tmp/report.json", { get: () => "" }), ["test", "a spec.tua", "--filter", "^%[x%]$", "--report", "/tmp/report.json"]);
+});
+
+test("suite selections deduplicate descendants and preserve excluded nested cases", () => {
+  const project = item("project"), file = item("file"), suite = item("suite"), nested = item("nested");
+  const one = item("one"), two = item("two");
+  project.children.add(file); file.children.add(suite); suite.children.add(nested);
+  nested.children.add(one); nested.children.add(two);
+  const data = new WeakMap([[project, {}], [file, { selector: "spec.tua" }],
+    [suite, { suiteName: "math" }], [nested, { suiteName: "math positive" }],
+    [one, { caseName: "math positive one" }], [two, { caseName: "math positive two" }]]);
+  assert.deepEqual(planRuns([project], { include: [suite, one] }, data).map(job => job.item.id), ["suite"]);
+  assert.deepEqual(planRuns([project], { include: [suite], exclude: [two] }, data).map(job => job.item.id), ["one"]);
+  assert.deepEqual(planRuns([project], { include: [one], exclude: [suite] }, data), []);
 });
 
 test("test process runner preserves Unicode and supports cancellation without a shell", async () => {
@@ -46,11 +60,11 @@ test("test process runner preserves Unicode and supports cancellation without a 
   assert.equal((await pending).cancelled, true);
 });
 
-test("Test Explorer discovers lazily, runs selected cases, and watches only on explicit request", async () => {
+test("Opening a test document discovers gutter cases and suites without running tests", async () => {
   const root = "/tmp/tua-testing-project";
   const source = `${root}/tests/math_spec.tua`;
   const commands = new Map(), calls = [], runs = [], watchers = [];
-  let profile, coverageProfile;
+  let profile, coverageProfile, openDocument;
   const controller = {
     items: collection(),
     createTestItem: item,
@@ -79,6 +93,7 @@ test("Test Explorer discovers lazily, runs selected cases, and watches only on e
       isTrusted: true,
       workspaceFolders: [{ uri: { fsPath: root } }],
       findFiles: async () => [{ fsPath: `${root}/tua.toml` }],
+      onDidOpenTextDocument(handler) { openDocument = handler; return { dispose() {} }; },
       getConfiguration: () => ({ get: () => "" }),
       createFileSystemWatcher() {
         const watcher = { dispose() {}, onDidCreate() { return { dispose() {} }; }, onDidDelete() { return { dispose() {} }; }, onDidChange(handler) { this.change = handler; return { dispose() {} }; } };
@@ -96,10 +111,10 @@ test("Test Explorer discovers lazily, runs selected cases, and watches only on e
   let outcome = "passed";
   const execute = async (_command, args) => {
     calls.push(args);
-    if (args.includes("--list")) return { code: 0, stdout: JSON.stringify({ version: 1, source_roots: [`${root}/src`, `${root}/tests`], output_root: `${root}/generated`, files: [{ path: source, selector: "math_spec.tua", cases: [{ full_name: "math works [1]", line: 2, column: 1 }] }] }) };
+    if (args.includes("--list")) return { code: 0, stdout: JSON.stringify({ version: 1, root: `/canonical${root}`, source_roots: [`/canonical${root}/src`, `/canonical${root}/tests`], output_root: `/canonical${root}/generated`, files: [{ path: `/canonical${source}`, selector: "math_spec.tua", suites: [{ name: "math", full_name: "math", line: 1, column: 1 }], cases: [{ full_name: "math works [1]", suite: "math", line: 2, column: 1 }] }] }) };
     if (args.includes("--coverage")) await fs.writeFile(args[args.indexOf("--coverage") + 1], JSON.stringify({ version: 1, completed: true, files: [{path: source, lines: [{line: 2, hits: 3}, {line: 3, hits: 0}]}] }));
     const report = args[args.indexOf("--report") + 1];
-    await fs.writeFile(report, JSON.stringify({ version: 1, completed: true, success: outcome === "passed", tests: [{ name: "math works [1]", status: outcome, message: "assertion", file: source, line: 3 }] }));
+    await fs.writeFile(report, JSON.stringify({ version: 1, completed: true, success: outcome === "passed", tests: [{ name: "math works [1]", status: outcome, message: "assertion", file: `/canonical${source}`, line: 3 }] }));
     return { code: outcome === "passed" ? 0 : 1, stdout: "test output\n", stderr: "" };
   };
   const disposable = registerTesting({ getServerCommand: () => "tua", execute });
@@ -108,11 +123,22 @@ test("Test Explorer discovers lazily, runs selected cases, and watches only on e
     vscode.workspace.isTrusted = false;
     await controller.resolveHandler();
     assert.equal(calls.length, 0);
+    const document = { uri: { fsPath: source, scheme: "file" }, languageId: "tua" };
+    openDocument(document);
+    assert.equal(calls.length, 0, "untrusted editors must not trigger discovery");
     vscode.workspace.isTrusted = true;
-    await controller.resolveHandler();
+    openDocument({ ...document, uri: { fsPath: "/outside/spec.tua", scheme: "file" } });
+    assert.equal(calls.length, 0, "documents outside the workspace must not trigger discovery");
+    openDocument(document);
+    await new Promise(resolve => setTimeout(resolve, 350));
+    assert.equal(calls.length, 1, "opening a spec should discover without opening Testing");
+    assert.equal(runs.length, 0, "automatic discovery must not execute tests");
     const project = controller.items.get(root);
     const file = project.children.get(`file://${source}`);
-    const selected = file.children.get(`file://${source}::math works [1]`);
+    const suite = file.children.get(`file://${source}::suite::math`);
+    const selected = suite.children.get(`file://${source}::case::math works [1]`);
+    assert.deepEqual(suite.range.values, [0, 0, 0, 0]);
+    assert.deepEqual(selected.range.values, [1, 0, 1, 0]);
     await profile.handler({ include: [selected] }, cancellation());
     assert.ok(calls[1].includes("^math works %[1%]$"));
     assert.ok(runs[0].events.some(event => event[0] === "passed" && event[1] === selected.id));
@@ -144,6 +170,10 @@ test("Test Explorer discovers lazily, runs selected cases, and watches only on e
     watchers[0].change({ fsPath: `${root}/.tua/test-1/spec.lua` });
     await new Promise(resolve => setTimeout(resolve, 350));
     assert.equal(runs.length, baseline + 2);
+    await profile.handler({ include: [suite] }, cancellation());
+    assert.ok(calls.at(-1).includes("^math "), "suite gutter runs include all descendants by prefix");
+    assert.equal(suite.children.size, 1, "run results should reuse the nested case item");
+    assert.equal(file.children.size, 1, "run results must not duplicate nested cases at file level");
   } finally { disposable.dispose(); }
 });
 

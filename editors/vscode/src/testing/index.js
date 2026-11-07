@@ -11,7 +11,9 @@ const { descendants, planRuns, testArguments } = require("./model");
 function registerTesting({ getServerCommand, execute = runProcess }) {
   const controller = vscode.tests.createTestController("tua.busted", "Tua Unit Tests");
   const data = new WeakMap();
+  const caseItems = new WeakMap();
   const coverageDetails = new WeakMap();
+  const projectPaths = new WeakMap();
   const continuous = new Set();
   const cancellations = new Set();
   let watchedRoots = [], outputRoots = [], configPaths = [];
@@ -34,11 +36,14 @@ function registerTesting({ getServerCommand, execute = runProcess }) {
   const roots = () => { const items = []; controller.items.forEach(item => items.push(item)); return items; };
   const children = item => { const result = []; item.children.forEach(child => result.push(child)); return result; };
   const sourceRange = (line = 1, column = 1) => new vscode.Range(Math.max(0, line - 1), Math.max(0, column - 1), Math.max(0, line - 1), Math.max(0, column - 1));
-  const caseItem = (file, name, line, column, preserveRange = false) => {
-    const id = `${file.id}::${name}`;
-    const item = file.children.get(id) || controller.createTestItem(id, name || "(unnamed test)", file.uri);
+  const caseItem = (file, name, line, column, preserveRange = false, parent) => {
+    const id = `${file.id}::case::${name}`;
+    const known = caseItems.get(file) || new Map();
+    caseItems.set(file, known);
+    const item = known.get(id) || controller.createTestItem(id, name || "(unnamed test)", file.uri);
     if (!preserveRange || !item.range) item.range = sourceRange(line, column);
-    file.children.add(item);
+    known.set(id, item);
+    (parent || item.parent || file).children.add(item);
     data.set(item, { ...data.get(file), caseName: name, expandOnly: false });
     return item;
   };
@@ -62,16 +67,40 @@ function registerTesting({ getServerCommand, execute = runProcess }) {
         if (result.code !== 0) throw new Error(result.stderr || result.stdout);
         const inventory = JSON.parse(result.stdout);
         if (inventory.version !== 1 || !Array.isArray(inventory.files)) throw new Error("The selected Tua server does not support test discovery version 1");
-        watchedRoots.push(...(inventory.source_roots || []));
-        if (inventory.output_root) outputRoots.push(inventory.output_root);
+        // CLI discovery canonicalizes roots; retain the URI spelling used by
+        // the editor so native gutter locations also match symlinked workspaces.
+        const editorPath = file => inventory.root && within(file, inventory.root)
+          ? path.join(root, path.relative(inventory.root, file)) : file;
+        projectPaths.set(project, editorPath);
+        watchedRoots.push(...(inventory.source_roots || []).map(editorPath));
+        if (inventory.output_root) outputRoots.push(editorPath(inventory.output_root));
         const files = [];
         for (const entry of inventory.files) {
-          const uri = vscode.Uri.file(entry.path);
+          const uri = vscode.Uri.file(editorPath(entry.path));
           const file = project.children.get(uri.toString()) || controller.createTestItem(uri.toString(), entry.selector, uri);
           file.error = entry.error || undefined;
           data.set(file, { root, project, selector: entry.selector });
-          const cases = entry.cases.map(test => caseItem(file, test.full_name, test.line, test.column));
-          file.children.replace([...new Set(cases)]);
+          const previous = new Map(descendants(file).map(item => [item.id, item]));
+          const suites = new Map(), nextChildren = new Map([[file, []]]);
+          for (const suite of entry.suites || []) {
+            if (suites.has(suite.full_name)) continue;
+            const id = `${file.id}::suite::${suite.full_name}`;
+            const item = previous.get(id) || controller.createTestItem(id, suite.name, uri);
+            item.range = sourceRange(suite.line, suite.column);
+            data.set(item, { ...data.get(file), suiteName: suite.full_name });
+            const parent = suites.get(suite.parent) || file;
+            nextChildren.get(parent).push(item);
+            nextChildren.set(item, []);
+            suites.set(suite.full_name, item);
+          }
+          for (const test of entry.cases) {
+            const parent = suites.get(test.suite) || file;
+            const item = caseItem(file, test.full_name, test.line, test.column, false, parent);
+            item.label = test.name || test.full_name;
+            nextChildren.get(parent).push(item);
+          }
+          for (const [parent, items] of nextChildren) parent.children.replace([...new Set(items)]);
+          caseItems.set(file, new Map(descendants(file).filter(item => data.get(item)?.caseName !== undefined).map(item => [item.id, item])));
           files.push(file);
         }
         project.error = undefined;
@@ -93,7 +122,7 @@ function registerTesting({ getServerCommand, execute = runProcess }) {
     try {
       for (const job of jobs) {
         if (token?.isCancellationRequested) break;
-        const expected = [job.item, ...descendants(job.item)];
+        const expected = [job.item, ...descendants(job.item).filter(item => data.get(item)?.caseName !== undefined)];
         expected.forEach(item => run.enqueued(item));
         run.started(job.item);
         const temporary = await fs.mkdtemp(path.join(os.tmpdir(), "tua-test-explorer-"));
@@ -112,7 +141,8 @@ function registerTesting({ getServerCommand, execute = runProcess }) {
           const observed = new Set();
           const failed = new Set();
           for (const result of report.tests) {
-            const filePath = result.file ? path.resolve(job.root, result.file) : undefined;
+            const resolvedPath = result.file ? path.resolve(job.root, result.file) : undefined;
+            const filePath = resolvedPath && (projectPaths.get(job.project)?.(resolvedPath) || resolvedPath);
             let file = children(job.project).find(file => file.uri?.fsPath === filePath);
             if (!file) {
               const uri = vscode.Uri.file(filePath || path.join(job.root, "tua.toml"));
@@ -147,8 +177,8 @@ function registerTesting({ getServerCommand, execute = runProcess }) {
     }
   }
 
-  const schedule = () => {
-    if (!initialized || disposed) return;
+  const schedule = (allowInitialize = false) => {
+    if ((!initialized && !allowInitialize) || disposed) return;
     clearTimeout(timer);
     timer = setTimeout(() => {
       if (refreshQueued) return;
@@ -191,7 +221,21 @@ function registerTesting({ getServerCommand, execute = runProcess }) {
     };
     watchers.push(watcher, watcher.onDidCreate(changed), watcher.onDidChange(changed), watcher.onDidDelete(changed));
   }
-  return vscode.Disposable.from(controller, profile, coverageProfile, ...watchers,
+  // Opening a source file should reveal native Testing gutter actions without
+  // first opening the Testing view. Discovery never executes spec code.
+  const discoverForDocument = document => {
+    if (initialized || !vscode.workspace.isTrusted || document?.uri?.scheme !== "file") return;
+    if (!["tua", "lua"].includes(document.languageId) && !/\.(tua|lua)$/.test(document.uri.fsPath)) return;
+    if (!(vscode.workspace.workspaceFolders || []).some(folder => within(document.uri.fsPath, folder.uri.fsPath))) return;
+    schedule(true);
+  };
+  const editorListeners = [
+    vscode.workspace.onDidOpenTextDocument?.(discoverForDocument),
+    vscode.window.onDidChangeActiveTextEditor?.(editor => discoverForDocument(editor?.document)),
+    vscode.workspace.onDidGrantWorkspaceTrust?.(() => discoverForDocument(vscode.window.activeTextEditor?.document)),
+  ].filter(Boolean);
+  discoverForDocument(vscode.window.activeTextEditor?.document);
+  return vscode.Disposable.from(controller, profile, coverageProfile, ...watchers, ...editorListeners,
     vscode.commands.registerCommand("tua.tests.refresh", () => enqueue(() => refresh())),
     { dispose() { disposed = true; clearTimeout(timer); for (const session of continuous) session.subscription.dispose(); continuous.clear(); [...cancellations].forEach(cancel => cancel()); cancellations.clear(); } });
 }

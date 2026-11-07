@@ -11,11 +11,11 @@ pub(super) fn list(workspace: &ProjectWorkspace, paths: &[&Path]) -> serde_json:
                 tua_core::parse_lua_source(path, source)
             } else { tua_core::parse_tua_source(path, source) }
         });
-        let (cases, error) = match parsed {
-            Ok(parsed) => (tua_core::testing::discover_test_cases(&parsed), None),
-            Err(diagnostics) => (Vec::new(), Some(tua_core::format_diagnostics_for_cli(&diagnostics))),
+        let (discovery, error) = match parsed {
+            Ok(parsed) => (tua_core::testing::discover_tests(&parsed), None),
+            Err(diagnostics) => (tua_core::testing::TestDiscovery::default(), Some(tua_core::format_diagnostics_for_cli(&diagnostics))),
         };
-        serde_json::json!({"path": path, "selector": path.strip_prefix(&root).unwrap_or(path), "cases": cases, "error": error})
+        serde_json::json!({"path": path, "selector": path.strip_prefix(&root).unwrap_or(path), "cases": discovery.cases, "suites": discovery.suites, "error": error})
     }).collect::<Vec<_>>();
     serde_json::json!({"version": 1, "root": workspace.root(), "test_root": root, "source_roots": workspace.source_roots(), "output_root": workspace.primary_output_root(), "files": files})
 }
