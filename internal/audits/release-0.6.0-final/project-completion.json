@@ -1,0 +1,73 @@
+[
+  {
+    "phase": "initialize",
+    "ms": 733
+  },
+  {
+    "expression": "love.gr",
+    "ms": 224,
+    "labels": [
+      "graphics"
+    ]
+  },
+  {
+    "expression": "lo",
+    "ms": 337,
+    "labels": [
+      "local",
+      "local function",
+      "load",
+      "loadfile",
+      "loadstring",
+      "love",
+      "loadBackground",
+      "Dialogue"
+    ]
+  },
+  {
+    "expression": "love.g",
+    "ms": 4,
+    "labels": [
+      "getVersion",
+      "gamepadaxis",
+      "gamepadpressed",
+      "gamepadreleased",
+      "graphics",
+      "image"
+    ]
+  },
+  {
+    "expression": "love.gr",
+    "ms": 3,
+    "labels": [
+      "graphics"
+    ]
+  },
+  {
+    "expression": "player:",
+    "ms": 1,
+    "labels": [
+      "get",
+      "set",
+      "subscribe",
+      "update",
+      "watch"
+    ]
+  },
+  {
+    "expression": "player:get().",
+    "ms": 161,
+    "labels": [
+      "pointing",
+      "aiming",
+      "gunPosition"
+    ]
+  },
+  {
+    "expression": "player:get().ai",
+    "ms": 317,
+    "labels": [
+      "aiming"
+    ]
+  }
+]
