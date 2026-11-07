@@ -6,6 +6,60 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-07
+
+### Release summary
+
+Tua 0.6.0 improves everyday editing, cross-file types, Lua output, and testing for
+Lua and LOVE projects. It also includes the feature-audit fixes across game
+runtimes, build ownership, formatting, and editor assistance. The CLI, language
+server, and VS Code extension share this version.
+
+#### Highlights
+
+- Run typed and Lua specs with Busted, including native editor gutter buttons,
+  dedicated test roots, mapped results, cancellation, and optional LuaCov coverage.
+- Get consistent assistance for imported classes, chained expressions, callbacks,
+  event payloads, declaration overlays, and literal overloads.
+- Preserve Unicode edits, lexical symbol identity, module isolation, typed-header
+  comments, and constructor identity through Lua emission and hot reload.
+- Protect handwritten build outputs and preserve literal whitespace and adjacent
+  statements during formatting and safe quick fixes.
+- Repair reentrant game helpers, animation durations, audio timing, camera bounds,
+  and vector arithmetic; refresh workspace sidebars as project files change.
+- Browse LOVE and annotation documentation offline, with extension dependency
+  security updates and expanded language, migration, and testing guides.
+
+#### Upgrade notes
+
+Update the extension and any custom CLI/server together. Busted must be installed
+in the selected Lua environment; coverage also requires LuaCov. Production builds
+exclude dedicated test roots and `_spec` files by default; use
+`test.exclude_specs = false` for intentional production spec filenames.
+
+Optional record reads and potentially absent ECS components retain `nil`.
+Initialize required state and guard delayed resources or missing components.
+Stricter default, callback, and call checking can reveal previously missed errors.
+`TL4077` warns about field defaults after direct assignments in `init`; class
+initialization order is unchanged. Explicit import organization/removal may change
+initialization effects or order and remains excluded from safe fix-all. Review
+project diagnostics before applying automated edits.
+
+### Added
+
+- Contextual types for ECS system and LOVE callbacks, literal-aware overload
+  selection in signature help, and precise LuaDoc callable-field overloads.
+- Workspace sidebar refresh for edits and file/document lifecycle changes,
+  including Lua sources in Project files.
+- Native editor gutter run buttons for discovered Busted suites and cases, with
+  automatic read-only discovery when opening Tua/Lua files in trusted projects.
+- Test sources receive built-in Busted and LuaAssert types for checking and
+  editor support, including signatures, hover, completion, and common helpers.
+- VS Code can scaffold a pending Busted unit test for the function under the
+  cursor, in the configured test source tree, without replacing an existing spec.
+- `math.round` and `love.math.round` accept an optional decimal-place precision;
+  the default remains integer rounding, with half values rounded away from zero.
+
 ### Fixed
 
 - Protect handwritten files during build cleanup and asset-pipeline output-root
@@ -28,74 +82,6 @@ language or editor behavior, and migration notes call out those changes.
   project refresh revisions and unsaved diagnostics; follow changed hot-reload
   output roots and newly created entry files.
 - Remove unintended LOVE document-handler claims from fused macOS applications.
-
-### Added
-
-- Contextual types for ECS system and LOVE callbacks, literal-aware overload
-  selection in signature help, and precise LuaDoc callable-field overloads.
-- Workspace sidebar refresh for edits and file/document lifecycle changes,
-  including Lua sources in Project files.
-
-### Upgrade notes
-
-Optional record reads now retain `nil`; initialize required module state or guard
-delayed resources before use. ECS `get` and `remove` include `nil` when a component
-can be absent. Check or
-assert that a component exists before reading its fields. Stricter checking can
-expose previously accepted invalid defaults, callbacks and calls. Explicit import
-organization/removal can change runtime initialization effects or order; these
-remain excluded from safe fix-all.
-
-## [0.6.0] - 2026-11-07
-
-### Release summary
-
-Tua 0.6.0 focuses on everyday editing, stronger cross-file type information, and
-unit testing for Lua and LOVE projects. The CLI, language server, and VS Code
-extension ship together, with fixes to source positions, module isolation,
-completion, and generated Lua. Documentation now includes focused guides for
-annotations, class imports, migration, testing, and upgrades.
-
-#### Highlights
-
-- Run typed and Lua specs with `tua test` using Busted. Dedicated test roots,
-  structured results, source-mapped failures, and optional LuaCov coverage support
-  local development and CI.
-- Run individual tests or nested suites from native editor gutter buttons. The
-  Testing view adds cancellation, opt-in continuous runs, and coverage results;
-  opening a saved source file discovers tests without executing them.
-- Get more consistent assistance for indexed and chained expressions, imported
-  class instances, callbacks, nullable values, and cross-file event payloads.
-  Shared inference and deferred checking reduce repeated editor work.
-- Preserve Unicode edits and lexical symbol identity across navigation and rename,
-  isolate multi-root module resolution, and retain typed-header comments during
-  Lua emission.
-- Browse bundled LOVE API and annotation documentation offline. Updated extension
-  dependencies address security advisories while preserving language-client filters.
-
-#### Upgrade notes
-
-Update the extension and any custom CLI/server together. Busted must be installed
-in the selected Lua environment; coverage additionally requires LuaCov. Production
-builds exclude dedicated test roots and `_spec` files by default; use
-`test.exclude_specs = false` for intentional production spec filenames. More
-precise checking can expose previously missed errors. `TL4077` warns about class
-field defaults following direct assignments in `init`; initialization order itself
-has not changed. Review project diagnostics before applying automated edits.
-
-### Added
-
-- Native editor gutter run buttons for discovered Busted suites and cases, with
-  automatic read-only discovery when opening Tua/Lua files in trusted projects.
-- Test sources receive built-in Busted and LuaAssert types for checking and
-  editor support, including signatures, hover, completion, and common helpers.
-- VS Code can scaffold a pending Busted unit test for the function under the
-  cursor, in the configured test source tree, without replacing an existing spec.
-- `math.round` and `love.math.round` accept an optional decimal-place precision;
-  the default remains integer rounding, with half values rounded away from zero.
-
-### Fixed
-
 - Update VSCE, Azure Identity, `qs`, and `follow-redirects` to address npm
   advisories. Use patched `minimatch` for packaging and a tested, unaffected
   compatibility version for language-client file filters.
