@@ -814,27 +814,33 @@ impl<'a> Checker<'a> {
     }
 
     fn check_assignment(&mut self, assignment: &ast::Assignment) {
-        for (variable, expression) in assignment.variables().iter().zip(assignment.expressions()) {
+        let expressions = assignment.expressions().iter().collect::<Vec<_>>();
+        for (index, variable) in assignment.variables().iter().enumerate() {
+            let slot = assignment_expression_for_local(&expressions, index);
+            let expression = slot.filter(|(_, index)| *index == 0).map(|(expr, _)| expr);
             if let Some(name) = directly_assigned_name(variable) {
-                self.record_shader_local(name, Some(expression));
+                self.record_shader_local(name, expression);
             }
-            let source = self.infer_expression(expression);
+            let source = Some(match slot {
+                Some((expr, index)) => self
+                    .infer_expression_return(expr, index)
+                    .unwrap_or_else(|| if index > 0 { Type::nil() } else { Type::Any }),
+                None => Type::nil(),
+            });
             let target = self.infer_var_assignment_target(variable);
-
             if target.is_none() {
                 self.check_unknown_class_assignment_member(variable);
             }
-
             if let (Some(source), Some(target)) = (&source, &target) {
-                if !love_conf::is_window_disabled_by_literal_false(
-                    self.parsed,
-                    variable,
-                    expression,
-                ) {
-                    self.check_inferred_expression_assignable_at(expression, source, target, None);
+                if let Some((expr, _)) = slot {
+                    if !love_conf::is_window_disabled_by_literal_false(self.parsed, variable, expr)
+                    {
+                        self.check_inferred_expression_assignable_at(expr, source, target, None);
+                    }
+                } else {
+                    self.check_type_assignable(variable, source, target);
                 }
             }
-
             self.record_assignment_type(variable, source, target, expression);
         }
     }
@@ -871,7 +877,7 @@ impl<'a> Checker<'a> {
             (Some(function), Some(target)) => Some(metamethod_return_or(function, target.clone())),
             _ => source,
         };
-        self.record_assignment_type(assignment.lhs(), result, target, assignment.rhs());
+        self.record_assignment_type(assignment.lhs(), result, target, Some(assignment.rhs()));
     }
 
     fn record_assignment_type(
@@ -879,7 +885,7 @@ impl<'a> Checker<'a> {
         variable: &Var,
         ty: Option<Type>,
         target: Option<Type>,
-        expression: &Expression,
+        expression: Option<&Expression>,
     ) {
         if self.record_table_field_assignment_type(variable, ty.clone(), expression) {
             return;
@@ -1073,7 +1079,7 @@ impl<'a> Checker<'a> {
         &mut self,
         variable: &Var,
         ty: Option<Type>,
-        expression: &Expression,
+        expression: Option<&Expression>,
     ) -> bool {
         let Some(parts) = plain_field_chain_from_var(variable) else {
             return false;
@@ -1082,7 +1088,8 @@ impl<'a> Checker<'a> {
             return false;
         };
 
-        let is_self_index = field == "__index" && expression_is_name(expression, root);
+        let is_self_index = field == "__index"
+            && expression.is_some_and(|expression| expression_is_name(expression, root));
         let Some(ty) = ty else {
             return true;
         };

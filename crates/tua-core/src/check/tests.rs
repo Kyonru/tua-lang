@@ -5417,3 +5417,17 @@ fn dictionary_dot_and_bracket_writes_share_contracts() {
         .unwrap();
     }
 }
+
+#[test]
+fn reassignment_checks_nil_padding_and_expanded_returns() {
+    for rhs in ["2", "(pair())"] {
+        let source = format!("local function pair(): (number, string) return 2, 'yes' end\nlocal n: number = 1\nlocal s: string = 's'\nn,s = {rhs}\n");
+        assert!(check_tua_source("slots.tua", source).is_err(), "{rhs}");
+    }
+    check_tua_source("slots.tua", "local function pair(): (number, string) return 2, 'yes' end\nlocal n: number = 1\nlocal s: string = 's'\nn,s = pair()\n").unwrap();
+    assert!(check_tua_source(
+        "slots.tua",
+        "local record: {n: number, s: string} = {n=1,s='s'}\nrecord.n,record.s = 2\n"
+    )
+    .is_err());
+}
