@@ -342,3 +342,51 @@ return {
         "player name"
     );
 }
+
+#[test]
+fn imported_signature_keeps_aliases_and_docs_after_unsaved_dependency_edits() {
+    let temp = TempProject::new("signature-import-edits");
+    let source = "local Player = require('player')\nlocal player = Player.makePlayer(\n";
+    let provider = r#"type Player = { name: string }
+---@param name string player name
+---@return Player created player
+local function makePlayer(name)
+  return { name = name }
+end
+return { makePlayer = makePlayer }
+"#;
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/main.tua", source);
+    temp.write("src/player.tua", provider);
+    let uri = temp.uri_for("src/main.tua");
+    let provider_uri = temp.uri_for("src/player.tua");
+    let edited = provider.replace("player name", "display name");
+    // Dispatch each request before the next edit: the stream scheduler may
+    // prioritize later didChange notifications over queued signature requests.
+    let mut server = LspServer::default();
+    let output: Vec<_> = vec![
+        initialize_with_root(1, temp.uri_for("")),
+        did_open(&uri, source),
+        did_open(&provider_uri, provider),
+        signature_help_request(2, &uri, source, "Player.makePlayer("),
+        did_change(&provider_uri, &edited, 2),
+        signature_help_request(3, &uri, source, "Player.makePlayer("),
+        did_change(&provider_uri, provider, 3),
+        signature_help_request(4, &uri, source, "Player.makePlayer("),
+    ]
+    .into_iter()
+    .flat_map(|message| server.handle_message(message).unwrap_or_default())
+    .collect();
+    for (id, documentation) in [(2, "player name"), (3, "display name"), (4, "player name")] {
+        assert_signature_label(
+            &output,
+            id,
+            "function Player.makePlayer(name: string): Player",
+        );
+        let response = response_with_id(&output, id);
+        assert_eq!(
+            response["result"]["signatures"][0]["parameters"][0]["documentation"]["value"],
+            documentation
+        );
+    }
+}
