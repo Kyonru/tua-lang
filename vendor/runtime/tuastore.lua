@@ -107,7 +107,7 @@ function Store:set(nextState)
 
   self._state = nextState
   notifyStore(self, previous, listeners, watchers)
-  return self._state
+  return nextState
 end
 
 function Store:update(mutator)

@@ -209,3 +209,12 @@ end
 if failures > 0 then
   os.exit(1)
 end
+
+-- The return value identifies this set even when subscribers replace it again.
+do
+  local initial, first, second = {}, {}, {}
+  local store = runtime(initial)
+  store:subscribe(function(current) if current == first then store:set(second) end end)
+  assert(store:set(first) == first)
+  assert(store:get() == second)
+end
