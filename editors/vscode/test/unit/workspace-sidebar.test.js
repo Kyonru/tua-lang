@@ -64,3 +64,16 @@ test("workspace sidebar invalidates edited and externally changed sources and di
   registration.dispose();
   assert.deepEqual(Object.keys(events), []);
 });
+
+
+test("project files include Lua interop while retaining generated-directory exclusions", async () => {
+  vscode.FileType = { File: 1, Directory: 2, SymbolicLink: 64 };
+  vscode.Uri.joinPath = (uri, name) => ({ toString: () => `file://${uri.fsPath}/${name}` });
+  vscode.workspace.fs = { readDirectory: async () => [
+    ["main.tua", 1], ["interop.lua", 1], ["tua.toml", 1],
+    ["build", 2], ["target", 2], ["node_modules", 2], ["linked.lua", 65],
+  ] };
+  const tree = new WorkspaceTree(() => undefined);
+  const children = await tree.getChildren({ kind: "directory", uri: "file:///game" });
+  assert.deepEqual(children.map(child => child.label), ["interop.lua", "main.tua", "tua.toml"]);
+});

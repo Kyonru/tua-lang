@@ -80,7 +80,7 @@ class WorkspaceTree {
       if (node.kind === "directory") {
         const entries = await vscode.workspace.fs.readDirectory(vscode.Uri.parse(node.uri));
         return entries.filter(([name, type]) => !(type & vscode.FileType.SymbolicLink) && !name.startsWith(".") &&
-          !["node_modules", "build", "dist", "target"].includes(name) && (type === vscode.FileType.Directory || /\.(tua|toml)$/i.test(name)))
+          !["node_modules", "build", "dist", "target"].includes(name) && (type === vscode.FileType.Directory || /\.(tua|lua|toml)$/i.test(name)))
           .sort((a, b) => (b[1] === vscode.FileType.Directory) - (a[1] === vscode.FileType.Directory) || a[0].localeCompare(b[0], undefined, { numeric: true }))
           .map(([name, type]) => {
             const uri = vscode.Uri.joinPath(vscode.Uri.parse(node.uri), name).toString();
