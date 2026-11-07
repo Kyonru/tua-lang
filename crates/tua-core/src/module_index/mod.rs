@@ -552,18 +552,15 @@ impl<'a> ExportInferer<'a> {
             }
             ast::Stmt::LocalAssignment(local) => {
                 for (name, expression) in local.names().iter().zip(local.expressions()) {
+                    let explicit_contract = node_span(name).is_some_and(|span| self.environment
+                        .is_some_and(|environment| environment.has_local_contract_at(span.start)));
                     let name = token_text(name);
                     self.update_local_alias(&name, expression);
-                    if self
-                        .environment
-                        .is_some_and(|environment| environment.local(&name).is_some())
-                    {
-                        continue;
-                    }
-
+                    if explicit_contract { continue; }
                     let inferred = self.infer_expression(expression);
-
-                    self.locals.entry(name).or_insert(inferred);
+                    if inferred != Type::Any {
+                        self.locals.entry(name).or_insert(inferred);
+                    }
                 }
             }
             ast::Stmt::LocalFunction(function) => {

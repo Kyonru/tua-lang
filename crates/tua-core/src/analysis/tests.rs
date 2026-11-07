@@ -8488,3 +8488,24 @@ unrelated:emit("score", "other")
     let references = snapshot.references("src/main.tua", fixture.position("usage"), true);
     assert_eq!(references.len(), 2, "{references:?}");
 }
+
+#[test]
+fn imported_ecs_component_retains_its_payload_schema() {
+    let fixture = Fixture::parse(r#"-- file: src/components.tua
+local Position = ecs.component("Position", {x="number"})
+return {Position=Position}
+-- file: src/main.tua
+local C = require("components")
+local world = ecs.world()
+local entity = world:create()
+world:add(entity, C.Position, {x=1})
+local p = world:get(entity, C.Position)
+print(<|payload|>p)
+"#);
+    let mut host = AnalysisHost::new();
+    for file in fixture.files() { host.set_file(&file.path, &file.source); }
+    let snapshot = host.snapshot();
+    let hover = snapshot.hover("src/main.tua", fixture.position("payload")).unwrap();
+    assert!(hover.contents.contains("x: number"), "{}", hover.contents);
+    assert!(hover.contents.contains("nil"), "{}", hover.contents);
+}
