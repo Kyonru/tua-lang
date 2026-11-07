@@ -112,8 +112,8 @@ local removed = world:remove(entity, Position)
             ": EcsWorld",
             ": EcsEntityId",
             ": { x: number, y: number }",
-            ": { x: number, y: number }",
-            ": { x: number, y: number }",
+            ": { x: number, y: number } | nil",
+            ": { x: number, y: number } | nil",
         ]
     );
 }

@@ -4697,7 +4697,7 @@ return {
     );
     assert_eq!(
         position_hover.contents,
-        "local position: { x: number, y: number }"
+        "local position: { x: number, y: number } | nil"
     );
     let hint_labels = snapshot
         .inlay_hints("src/main.tua")
@@ -4717,7 +4717,7 @@ return {
         "{hint_labels:?}"
     );
     assert!(
-        hint_labels.contains(&": { x: number, y: number }".to_owned()),
+        hint_labels.contains(&": { x: number, y: number } | nil".to_owned()),
         "{hint_labels:?}"
     );
     let diagnostics = snapshot.diagnostics("src/main.tua");
@@ -8462,4 +8462,29 @@ fn workspace_declaration_overlays_keep_project_ownership() {
             .iter()
             .all(|diagnostic| diagnostic.code != Some(DiagnosticCode::TYPE_MISMATCH)));
     }
+}
+
+#[test]
+fn directly_returned_signal_buses_preserve_navigation_through_reexports() {
+    let fixture = Fixture::parse(r#"-- file: src/events.tua
+local bus = signal()
+bus:declare("<|declaration|>score", function(value: number) end)
+return bus
+-- file: src/relay.tua
+local bus = require("events")
+return bus
+-- file: src/main.tua
+local bus = require("relay")
+bus:emit("<|usage|>score", 1)
+local unrelated = signal()
+unrelated:emit("score", "other")
+"#);
+    let mut host = AnalysisHost::new();
+    for file in fixture.files() { host.set_file(&file.path, &file.source); }
+    let snapshot = host.snapshot();
+    let definition = snapshot.definition("src/main.tua", fixture.position("usage")).unwrap();
+    assert_eq!(definition.path, PathBuf::from("src/events.tua"));
+    assert_eq!(definition.span.start, fixture.position("declaration"));
+    let references = snapshot.references("src/main.tua", fixture.position("usage"), true);
+    assert_eq!(references.len(), 2, "{references:?}");
 }
