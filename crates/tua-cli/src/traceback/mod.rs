@@ -80,14 +80,31 @@ fn remap_traceback_line(line: &str, maps: &[TracebackSourceMap]) -> String {
             continue;
         }
 
-        let path_start = traceback_path_start(line, lua_start);
-        let generated_path = &line[path_start..path_end];
+        let mut path_start = traceback_path_start(line, lua_start);
         let Some(generated_line) = line[line_start..line_end].parse::<usize>().ok() else {
             output.push_str(&line[cursor..line_end]);
             cursor = line_end;
             continue;
         };
 
+        // A Lua path is unquoted and may contain spaces. Prefer the longest
+        // candidate supported by a source map, retaining prefixes such as Error:.
+        for start in
+            std::iter::once(cursor).chain(line[cursor..lua_start].char_indices().filter_map(
+                |(offset, character)| {
+                    is_traceback_path_boundary(character)
+                        .then_some(cursor + offset + character.len_utf8())
+                },
+            ))
+        {
+            if start <= path_start
+                && lookup_source_location(maps, &line[start..path_end], generated_line).is_some()
+            {
+                path_start = start;
+                break;
+            }
+        }
+        let generated_path = &line[path_start..path_end];
         if let Some((source_path, source_line)) =
             lookup_source_location(maps, generated_path, generated_line)
         {

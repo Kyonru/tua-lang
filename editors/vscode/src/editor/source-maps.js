@@ -166,9 +166,16 @@ function tracebackLocations(line, maps) {
       continue;
     }
 
-    const pathStart = tracebackPathStart(line, luaStart);
-    const generatedPath = line.slice(pathStart, pathEnd);
+    let pathStart = tracebackPathStart(line, luaStart);
     const generatedLine = Number.parseInt(line.slice(lineStart, lineEnd), 10);
+    for (let start = cursor; start <= pathStart; start += 1) {
+      if (start !== cursor && !isTracebackPathBoundary(line[start - 1])) continue;
+      if (lookupSourceLocation(maps, line.slice(start, pathEnd), generatedLine)) {
+        pathStart = start;
+        break;
+      }
+    }
+    const generatedPath = line.slice(pathStart, pathEnd);
     const location = lookupSourceLocation(maps, generatedPath, generatedLine);
 
     if (location) {

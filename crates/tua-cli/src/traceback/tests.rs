@@ -40,3 +40,16 @@ fn leaves_ambiguous_basename_only_tracebacks_unchanged() {
         "main.lua:4: boom\n"
     );
 }
+
+#[test]
+fn remaps_unquoted_paths_with_spaces_and_preserves_prefix() {
+    let maps = vec![TracebackSourceMap {
+        generated: "build/nested dir/crash.lua".into(),
+        source: "src/nested dir/crash.tua".into(),
+        lines: BTreeMap::from([(17, 7)]),
+    }];
+    assert_eq!(
+        remap_traceback_text("Error: build/nested dir/crash.lua:17: boom", &maps),
+        "Error: src/nested dir/crash.tua:7 (generated build/nested dir/crash.lua:17): boom"
+    );
+}
