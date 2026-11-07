@@ -462,7 +462,7 @@ fn collect_narrowed_type_at_position(
                 lookup,
                 narrowed,
             ),
-            ast::Stmt::While(while_stmt) => {
+            ast::Stmt::While(while_stmt)
                 if node_span(while_stmt.do_token())
                     .zip(node_start(while_stmt.end_token()))
                     .is_some_and(|(start, end)| {
@@ -473,18 +473,17 @@ fn collect_narrowed_type_at_position(
                             },
                             position,
                         )
-                    })
-                {
-                    collect_if_branch_narrowing(
-                        while_stmt.condition(),
-                        while_stmt.block(),
-                        aliases,
-                        name,
-                        position,
-                        lookup,
-                        narrowed,
-                    );
-                }
+                    }) =>
+            {
+                collect_if_branch_narrowing(
+                    while_stmt.condition(),
+                    while_stmt.block(),
+                    aliases,
+                    name,
+                    position,
+                    lookup,
+                    narrowed,
+                );
             }
             _ => {}
         }
