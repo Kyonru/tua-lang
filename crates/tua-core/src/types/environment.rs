@@ -711,6 +711,12 @@ pub struct TypedFunctionOverload {
 }
 
 impl TypedFunctionOverload {
+    pub(crate) fn as_function_type(&self) -> FunctionType {
+        FunctionType::new_signature(
+            self.parameters.iter().map(|p| FunctionParameter::named(&p.name, p.ty.clone())),
+            self.parameters.len(), self.vararg_type.clone(), self.return_types_or_any())
+    }
+
     pub fn return_types_or_any(&self) -> Vec<Type> {
         if self.return_types.is_empty() {
             return vec![Type::Any];
