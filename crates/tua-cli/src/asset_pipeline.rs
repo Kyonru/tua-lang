@@ -77,6 +77,8 @@ struct ImportDiagnostic {
 #[serde(deny_unknown_fields)]
 struct MaterializedState {
     #[serde(default)]
+    output_root: Option<PathBuf>,
+    #[serde(default)]
     outputs: Vec<String>,
 }
 
@@ -1414,10 +1416,15 @@ fn materialize_outputs(
         .parent()
         .expect("cache entry should have parent")
         .join("materialized.json");
-    let previous = fs::read_to_string(&state_path)
+    let mut previous = fs::read_to_string(&state_path)
         .ok()
         .and_then(|source| serde_json::from_str::<MaterializedState>(&source).ok())
         .unwrap_or_default();
+    // Relative filenames confer ownership only within their original root.
+    // Legacy state has no root identity and must not authorize replacement.
+    if previous.output_root.as_ref() != Some(&output_root) {
+        previous.outputs.clear();
+    }
     let current = manifest.outputs.iter().cloned().collect::<BTreeSet<_>>();
     let previously_owned = previous.outputs.iter().cloned().collect::<BTreeSet<_>>();
     let mut diagnostics = Vec::new();
@@ -1490,6 +1497,7 @@ fn materialize_outputs(
 
     if diagnostics.is_empty() {
         let state = MaterializedState {
+            output_root: Some(output_root),
             outputs: manifest.outputs.clone(),
         };
         if let Some(parent) = state_path.parent() {
@@ -1834,6 +1842,28 @@ fn display_path(path: &Path) -> String {
 mod tests {
     use super::*;
 
+    #[test]
+    fn changed_output_root_does_not_transfer_ownership() {
+        let project = temp_dir("root-ownership");
+        let cache = project.join(".tua/cache/asset-pipelines/audio/key");
+        fs::create_dir_all(cache.join("files")).unwrap();
+        fs::write(cache.join("files/data.txt"), "generated").unwrap();
+        let manifest = ImportManifest {
+            version: MANIFEST_VERSION,
+            outputs: vec!["data.txt".into()],
+            diagnostics: vec![],
+        };
+        materialize_outputs(&project, &test_pipeline("src/a"), &cache, &manifest).unwrap();
+        fs::create_dir_all(project.join("src/b")).unwrap();
+        fs::write(project.join("src/b/data.txt"), "user").unwrap();
+        assert!(materialize_outputs(&project, &test_pipeline("src/b"), &cache, &manifest).is_err());
+        assert_eq!(
+            fs::read_to_string(project.join("src/b/data.txt")).unwrap(),
+            "user"
+        );
+        fs::remove_dir_all(project).unwrap();
+    }
+
     #[cfg(unix)]
     #[test]
     fn stale_outputs_are_not_deleted_through_symlinks() {
@@ -1849,7 +1879,11 @@ mod tests {
         fs::write(outside.join("victim.txt"), "keep me").unwrap();
         fs::write(
             cache_entry.parent().unwrap().join("materialized.json"),
-            r#"{"outputs":["victim.txt"]}"#,
+            serde_json::to_string(&MaterializedState {
+                output_root: Some(output_root.clone()),
+                outputs: vec!["victim.txt".into()],
+            })
+            .unwrap(),
         )
         .unwrap();
         let pipeline = test_pipeline("src/generated/audio");
