@@ -295,7 +295,9 @@ function connectionGeometry(edge, route, source, target, layout, canvas, config)
     labelX = (start.x + end.x) / 2;
     labelY = corridorY;
   } else if (route.kind === "backward") {
-    const corridorY = canvas.height - 24 - route.lane * config.routeGap;
+    // CSS may stretch the canvas beyond the graph. Keep return routes in
+    // the reserved layout corridor rather than below the visible graph.
+    const corridorY = Math.min(layout.height, canvas.height) - 24 - route.lane * config.routeGap;
     const start = { x: source.left, y: source.centerY + anchorOffset };
     const end = { x: target.right, y: target.centerY + anchorOffset };
     points = [

@@ -33,3 +33,29 @@ test("minified graph webviews preserve helper closure dependencies", () => {
   assert.equal(result.hue, 210); assert.equal(result.selection, "machine");
   assert.match(result.path, /^M /);
 });
+
+
+test("backward transitions remain inside the layout when the canvas stretches", () => {
+  const { stateLayout, connectionGeometry, GRAPH_LAYOUT: config } = bundled("state-machines/template.js");
+  const machine = {initial: "title", states: [{name: "title"}, {name: "playing"}, {name: "over"}]};
+  const edges = [
+    {source: "title", target: "playing", transition: {event: "play"}},
+    {source: "playing", target: "over", transition: {event: "crash"}},
+    {source: "over", target: "playing", transition: {event: "play"}},
+  ];
+  const layout = stateLayout(machine, edges, config);
+  const rect = name => {
+    const state = layout.states.find(state => state.name === name);
+    return {left: state.x, right: state.x + config.nodeWidth, top: state.y,
+      bottom: state.y + config.nodeHeight, centerY: state.y + config.nodeHeight / 2};
+  };
+  const geometry = height => connectionGeometry(edges[2], layout.routes[2],
+    rect("over"), rect("playing"), layout, {height, width: layout.width}, config);
+  const normal = geometry(layout.height);
+  const stretched = geometry(layout.height + 800);
+  assert.equal(layout.routes[2].kind, "backward");
+  assert.equal(stretched.pathData, normal.pathData);
+  assert.equal(stretched.labelY, normal.labelY);
+  assert.ok(stretched.labelY > rect("over").bottom);
+  assert.ok(stretched.points.every(point => point.y >= 0 && point.y < layout.height));
+});

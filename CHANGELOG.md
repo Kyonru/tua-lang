@@ -62,6 +62,9 @@ project diagnostics before applying automated edits.
 
 ### Fixed
 
+- Keep state-machine backward transitions and their labels within the graph
+  layout when the editor stretches the preview canvas.
+
 - Restore typing completion in projects with nested imports by reusing module
   analysis with validated dependency contents and resolution paths, preventing
   repeated import expansion from blocking other open files.
