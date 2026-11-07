@@ -22,12 +22,18 @@ function registerWorkspaceSidebar({ getClient }) {
   };
   const watcher = vscode.workspace.createFileSystemWatcher("**/*.{tua,lua,toml}");
   return vscode.Disposable.from(provider, view, watcher,
-    new vscode.Disposable(() => clearTimeout(refreshTimer)),
+    { dispose: () => clearTimeout(refreshTimer) },
     watcher.onDidCreate(scheduleRefresh),
     watcher.onDidChange(scheduleRefresh),
     watcher.onDidDelete(scheduleRefresh),
     vscode.workspace.onDidChangeTextDocument(event => {
       if (/\.(tua|lua|toml)$/i.test(event.document.uri.path)) scheduleRefresh();
+    }),
+    vscode.workspace.onDidOpenTextDocument(document => {
+      if (/\.(tua|lua|toml)$/i.test(document.uri.path)) scheduleRefresh();
+    }),
+    vscode.workspace.onDidCloseTextDocument(document => {
+      if (/\.(tua|lua|toml)$/i.test(document.uri.path)) scheduleRefresh();
     }),
     vscode.commands.registerCommand("tua.workspace.open", () => vscode.commands.executeCommand("workbench.view.extension.tua")),
     vscode.commands.registerCommand("tua.workspace.refresh", refresh),

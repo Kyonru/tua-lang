@@ -243,8 +243,8 @@ async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
 
     assert.strictEqual(
       state.documentChangeListeners.length,
-      3,
-      "activation should observe edits for inline-model cancellation, live state-machine previews, and shader overlays",
+      4,
+      "activation should observe edits for inline-model cancellation, live state-machine previews, shader overlays, and workspace graphs",
     );
 
     assert.strictEqual(

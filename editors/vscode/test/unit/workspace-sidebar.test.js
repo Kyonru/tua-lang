@@ -47,7 +47,8 @@ test("workspace sidebar invalidates edited and externally changed sources and di
   vscode.commands = { registerCommand: () => ({ dispose() {} }) };
   vscode.workspace = {
     createFileSystemWatcher: () => ({ onDidCreate: listen("create"), onDidChange: listen("change"), onDidDelete: listen("delete"), dispose() {} }),
-    onDidChangeTextDocument: listen("edit"), onDidSaveTextDocument: listen("save"), onDidChangeWorkspaceFolders: listen("folders"),
+    onDidChangeTextDocument: listen("edit"), onDidOpenTextDocument: listen("open"), onDidCloseTextDocument: listen("close"),
+    onDidSaveTextDocument: listen("save"), onDidChangeWorkspaceFolders: listen("folders"),
   };
   let calls = 0;
   const registration = registerWorkspaceSidebar({ getClient: () => client });
@@ -59,7 +60,12 @@ test("workspace sidebar invalidates edited and externally changed sources and di
     await new Promise(resolve => setTimeout(resolve, 180));
     await provider.getChildren(node);
   }
-  assert.equal(calls, 5);
+  for (const event of ["open", "close"]) {
+    events[event]({ uri: { path: "/game/main.lua" } });
+    await new Promise(resolve => setTimeout(resolve, 180));
+    await provider.getChildren(node);
+  }
+  assert.equal(calls, 7);
   events.edit({ document: { uri: { path: "/game/main.tua" } } });
   registration.dispose();
   assert.deepEqual(Object.keys(events), []);
