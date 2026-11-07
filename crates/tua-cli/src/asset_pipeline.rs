@@ -1109,6 +1109,7 @@ fn execute_importer(
             let _ = fs::remove_dir_all(&staging);
             return Err(vec![diagnostic]);
         }
+        write_cache_fingerprints(&staging, &manifest).map_err(|error| vec![error])?;
         if cache_entry.exists() {
             let _ = fs::remove_dir_all(&staging);
             return read_manifest(
@@ -1207,6 +1208,7 @@ fn execute_importer(
         return Err(vec![diagnostic]);
     }
 
+    write_cache_fingerprints(&staging, &manifest).map_err(|error| vec![error])?;
     if cache_entry.exists() {
         let _ = fs::remove_dir_all(&staging);
         return read_manifest(
@@ -1298,6 +1300,32 @@ fn read_bounded(mut reader: impl Read, limit: usize) -> (Vec<u8>, bool) {
     (captured, truncated)
 }
 
+fn cache_fingerprints(
+    entry: &Path,
+    manifest: &ImportManifest,
+) -> Result<BTreeMap<String, String>, Diagnostic> {
+    let mut fingerprints = BTreeMap::new();
+    for output in &manifest.outputs {
+        let relative = safe_relative_path(output)
+            .map_err(|message| io_diagnostic(entry, io::Error::other(message)))?;
+        let path = entry.join("files").join(relative);
+        let mut hash = StableHash::new();
+        hash_file_into(&path, &mut hash).map_err(|error| io_diagnostic(&path, error))?;
+        fingerprints.insert(output.clone(), hash.finish());
+    }
+    Ok(fingerprints)
+}
+
+fn write_cache_fingerprints(entry: &Path, manifest: &ImportManifest) -> Result<(), Diagnostic> {
+    let path = entry.join("fingerprints.json");
+    let fingerprints = cache_fingerprints(entry, manifest)?;
+    fs::write(
+        &path,
+        serde_json::to_vec(&fingerprints).expect("fingerprints serialize"),
+    )
+    .map_err(|error| io_diagnostic(&path, error))
+}
+
 fn read_valid_cached_manifest(
     cache_entry: &Path,
     max_manifest_bytes: u64,
@@ -1319,6 +1347,21 @@ fn read_valid_cached_manifest(
         {
             return Ok(None);
         }
+    }
+    let fingerprint_path = cache_entry.join("fingerprints.json");
+    let bytes = match fs::File::open(&fingerprint_path)
+        .map(|file| read_bounded(file, max_manifest_bytes.saturating_mul(4) as usize))
+    {
+        Ok((bytes, false)) => bytes,
+        Ok((_, true)) => return Ok(None),
+        Err(_) => return Ok(None),
+    };
+    let expected: BTreeMap<String, String> = match serde_json::from_slice(&bytes) {
+        Ok(value) => value,
+        Err(_) => return Ok(None),
+    };
+    if cache_fingerprints(cache_entry, &manifest)? != expected {
+        return Ok(None);
     }
     Ok(Some(manifest))
 }
@@ -1841,6 +1884,28 @@ fn display_path(path: &Path) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn cached_output_fingerprints_detect_corruption() {
+        let entry = temp_dir("cache-integrity");
+        fs::create_dir_all(entry.join("files")).unwrap();
+        fs::write(entry.join("files/data.txt"), "good").unwrap();
+        let manifest = ImportManifest {
+            version: MANIFEST_VERSION,
+            outputs: vec!["data.txt".into()],
+            diagnostics: vec![],
+        };
+        fs::write(
+            entry.join("manifest.json"),
+            serde_json::to_vec(&manifest).unwrap(),
+        )
+        .unwrap();
+        write_cache_fingerprints(&entry, &manifest).unwrap();
+        assert!(read_valid_cached_manifest(&entry, 10000).unwrap().is_some());
+        fs::write(entry.join("files/data.txt"), "evil").unwrap();
+        assert!(read_valid_cached_manifest(&entry, 10000).unwrap().is_none());
+        fs::remove_dir_all(entry).unwrap();
+    }
 
     #[test]
     fn changed_output_root_does_not_transfer_ownership() {
