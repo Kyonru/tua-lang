@@ -21,6 +21,7 @@ pub(crate) struct FileUsageIndex {
     member_lines: BTreeMap<String, Vec<usize>>,
     signal_events: Vec<(SignalEventMention, SignalEventMention)>,
     require_bindings: BTreeMap<(usize, usize), String>,
+    returned_receiver: Option<SignalEventMention>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -73,6 +74,23 @@ impl FileUsageIndex {
                     Some((mention, resolved))
                 })
                 .collect();
+            if let Some(scope) = scope {
+                use full_moon::{ast::LastStmt, node::Node};
+                index.returned_receiver = (|| {
+                    let LastStmt::Return(statement) = parsed.ast.nodes().last_stmt()? else { return None; };
+                    let expression = statement.returns().iter().next()?;
+                    let receiver_parts = crate::ast_utils::plain_field_chain_from_expression(expression)?;
+                    let (start, end) = expression.range()?;
+                    let span = crate::SourceSpan::from_range(start, end);
+                    let mention = SignalEventMention {
+                        name: String::new(), receiver_parts, root_definition: None,
+                        method: String::new(), position: span.start, span, name_span: span,
+                        call_span: span, source_order: 0, payload: None,
+                        inferred_emit_payload: None, confirmed_bus: false,
+                    };
+                    crate::signal::canonical_receiver(parsed, &semantic, scope, &mention)
+                })();
+            }
             index.require_bindings = scope
                 .into_iter()
                 .flat_map(|scope| scope.declarations())
@@ -215,7 +233,12 @@ impl ProjectUsageIndex {
         };
         let mut signal_events = Vec::new();
 
-        for (path, file) in files {
+        let files = files.into_iter().map(|(path, file)| (normalize_path(path), file)).collect::<BTreeMap<_, _>>();
+        let confirmed_buses = files.iter().flat_map(|(path, file)| {
+            file.signal_events.iter().filter(|(mention, _)| mention.confirmed_bus)
+                .map(|(_, resolved)| signal_bus_identity(path, file, resolved, module_graph, &files, 0))
+        }).collect::<std::collections::BTreeSet<_>>();
+        for (path, file) in &files {
             merge_counts(&mut index.member_counts, &file.member_counts);
             merge_counts(&mut index.call_counts, &file.call_counts);
 
@@ -231,13 +254,14 @@ impl ProjectUsageIndex {
 
             let path = normalize_path(path);
             for (mention, resolved) in &file.signal_events {
+                let identity = signal_bus_identity(&path, file, resolved, module_graph, &files, 0);
                 if !mention.confirmed_bus
+                    && !confirmed_buses.contains(&identity)
                     && !project_receiver_is_signal_bus(&path, resolved, module_graph, type_database)
                 {
                     continue;
                 }
 
-                let identity = signal_bus_identity(&path, file, resolved, module_graph);
                 index.signal_bus_identities.insert(
                     (path.clone(), mention.receiver_parts.clone()),
                     identity.clone(),
@@ -405,7 +429,10 @@ fn signal_bus_identity(
     file: &FileUsageIndex,
     mention: &SignalEventMention,
     module_graph: &ModuleGraph,
+    files: &BTreeMap<PathBuf, &Arc<FileUsageIndex>>,
+    depth: usize,
 ) -> SignalBusIdentity {
+    if depth >= 32 { return local_signal_bus_identity(path, mention); }
     let binding = mention
         .root_definition
         .map(|span| (span.start.line, span.start.column));
@@ -437,6 +464,13 @@ fn signal_bus_identity(
             )),
             receiver_parts: mention.receiver_parts.iter().skip(2).cloned().collect(),
         };
+    }
+    if let Some(provider) = files.get(&normalize_path(&origin)) {
+        if let Some(returned) = &provider.returned_receiver {
+            let mut returned = returned.clone();
+            returned.receiver_parts.extend(mention.receiver_parts.iter().skip(1).cloned());
+            return signal_bus_identity(&origin, provider, &returned, module_graph, files, depth + 1);
+        }
     }
     SignalBusIdentity {
         origin: normalize_path(origin),
