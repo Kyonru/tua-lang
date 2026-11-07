@@ -26,6 +26,16 @@ use crate::{parse_lua_source, parse_tua_source, ParsedSource, SourceSpan};
 thread_local! {
     static REQUIRED_MODULE_EXPORT_CACHE: RefCell<BTreeMap<PathBuf, CachedRequiredModuleExports>> =
         const { RefCell::new(BTreeMap::new()) };
+    static RESOLVING_MODULE_EXPORTS: RefCell<std::collections::BTreeSet<PathBuf>> =
+        const { RefCell::new(std::collections::BTreeSet::new()) };
+}
+
+struct ModuleExportResolutionGuard(PathBuf);
+
+impl Drop for ModuleExportResolutionGuard {
+    fn drop(&mut self) {
+        RESOLVING_MODULE_EXPORTS.with(|paths| { paths.borrow_mut().remove(&self.0); });
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -239,24 +249,34 @@ fn parse_module_source(
 }
 
 pub(crate) fn required_module_exports_for_path(path: &Path) -> Option<ModuleExports> {
-    let path = path.to_path_buf();
+    let path = crate::vfs::normalize_path(path);
     let source = crate::input_limits::read_source(&path).ok()?;
+    // The filesystem fallback has no dependency fingerprints. Retain only
+    // self-contained exports; snapshots own dependency-aware project caching.
+    let cacheable = crate::module_link::module_specifier_literals(&source).is_empty();
 
     if let Some(cached) = REQUIRED_MODULE_EXPORT_CACHE.with(|cache| {
         cache
             .borrow()
             .get(&path)
-            .filter(|cached| cached.source == source)
+            .filter(|cached| cacheable && cached.source == source)
             .cloned()
     }) {
         return cached.exports;
     }
 
+    let entered = RESOLVING_MODULE_EXPORTS.with(|paths| {
+        let mut paths = paths.borrow_mut();
+        paths.len() < 32 && paths.insert(path.clone())
+    });
+    if !entered { return None; }
+    let _guard = ModuleExportResolutionGuard(path.clone());
+
     let exports = parse_module_source(&path, source.clone())
         .ok()
         .and_then(|parsed| infer_module_exports(&parsed));
 
-    REQUIRED_MODULE_EXPORT_CACHE.with(|cache| {
+    if cacheable { REQUIRED_MODULE_EXPORT_CACHE.with(|cache| {
         let mut cache = cache.borrow_mut();
         if cache.len() >= 128 {
             cache.clear();
@@ -268,7 +288,7 @@ pub(crate) fn required_module_exports_for_path(path: &Path) -> Option<ModuleExpo
                 exports: exports.clone(),
             },
         );
-    });
+    }); }
 
     exports
 }
