@@ -1149,30 +1149,38 @@ fn duplicate_background_requests_share_one_worker_job() {
 #[test]
 fn a_new_duplicate_does_not_join_a_cancelled_worker_job() {
     let uri = "file:///tmp/retry-cancelled-background.tua";
-    let output = run_chunked_messages(vec![
-        (
-            Duration::ZERO,
-            vec![
-                json!({ "jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {} }),
-                did_open(uri, "local value = 1\n"),
-                slow_background_request(2, Some(uri), 100),
-            ],
-        ),
-        (
-            Duration::from_millis(20),
-            vec![
-                json!({
-                    "jsonrpc": "2.0",
-                    "method": "$/cancelRequest",
-                    "params": { "id": 2 }
-                }),
-                slow_background_request(3, Some(uri), 100),
-            ],
-        ),
-    ]);
+    let mut server = LspServer::default();
+    let (event_tx, event_rx) = std::sync::mpsc::sync_channel(EVENT_QUEUE_CAPACITY);
+    let mut scheduler = RequestScheduler::new(event_tx, SharedReceivedInputState::default());
+    let _ = server.handle_message(did_open(uri, "local value = 1\n"));
 
+    assert!(scheduler
+        .dispatch(&mut server, slow_background_request(2, Some(uri), 0), None)
+        .is_empty());
+    // Keep worker results queued until cancellation and redispatch have run.
+    // Sleeping between protocol chunks lets a busy host complete the first
+    // request before it reads cancellation, which is a valid but unrelated case.
+    let mut output = scheduler.cancel(&json!(2));
     assert_eq!(response_with_id(&output, 2)["error"]["code"], -32800);
+    assert!(scheduler
+        .dispatch(&mut server, slow_background_request(3, Some(uri), 0), None)
+        .is_empty());
+    assert_eq!(scheduler.in_flight_count(), 2, "retry needs its own job");
+
+    for _ in 0..2 {
+        let ServerEvent::RequestFinished(result) = event_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("both worker jobs should finish")
+        else {
+            panic!("expected a worker result");
+        };
+        output.extend(scheduler.finish(&mut server, *result));
+    }
     assert_eq!(response_with_id(&output, 3)["result"]["slow"], true);
+    assert_eq!(
+        output.iter().filter(|message| message["id"] == 2).count(),
+        1
+    );
 }
 #[test]
 fn active_typing_backlog_uses_fast_background_responses() {
