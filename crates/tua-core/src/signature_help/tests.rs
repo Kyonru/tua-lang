@@ -413,7 +413,7 @@ world:add(entity, Position,
 
     assert_eq!(
         component.signatures[0].label,
-        "function ecs.component(name: string, schema: {  }): EcsComponent"
+        "function ecs.component(name: string, schema?: {  }): EcsComponent"
     );
     assert_eq!(
         add.signatures[0].label,

@@ -322,15 +322,19 @@ pub(crate) fn typed_module_function(name: &str) -> Option<TypedFunction> {
             Type::alias(WORLD_TYPE),
             "Create an empty ECS world that owns entities and component storage.",
         )),
-        "component" => Some(typed_function(
+        "component" => {
+            let mut function = typed_function(
             name,
             [
                 parameter("name", Type::string()),
                 parameter("schema", Type::empty_table()),
             ],
             Type::alias(COMPONENT_TYPE),
-            "Declare a reusable component and its editor-checked data schema.",
-        )),
+            "Declare a reusable component and its optional editor-checked data schema.",
+            );
+            function.required_parameter_count = 1;
+            Some(function)
+        },
         "system" => Some(typed_function(
             name,
             [
@@ -780,6 +784,15 @@ mod tests {
         );
 
         diagnostics(&parsed, &environment)
+    }
+
+    #[test]
+    fn component_schema_is_optional() {
+        let parsed = parse_tua_source("src/main.tua", "local _Marker = ecs.component(\"Marker\")\n").unwrap();
+        crate::check::check_parsed_source_with_asset_roots_diagnostics_jit_and_ecs_config(
+            &parsed, &[], &crate::DiagnosticsConfig::default(), &crate::JitConfig::default(),
+            &crate::EcsConfig { enabled: true, ..crate::EcsConfig::default() },
+        ).expect("component schema may be omitted");
     }
 
     #[test]
