@@ -178,6 +178,21 @@ impl TypeContext {
                 result
             }
             (_, Type::Alias(name)) if self.alias(name).is_some() => {
+                // Resolving a nominal alias to its structural shape must not erase
+                // the requirement that the source was constructed with that identity.
+                if self.is_nominal_alias_type(name) {
+                    return match source {
+                        Type::Union(sources) => sources.iter().try_for_each(|source| {
+                            self.check_assignable_inner(source, target, depth + 1, resolving)
+                        }),
+                        Type::Table(source_table) => match self.alias(name) {
+                            Some(Type::Table(target_table)) if target_table.nominal_identity().is_some() =>
+                                self.check_table_assignable(source_table, target_table, depth + 1, resolving),
+                            _ => Err(AssignabilityFailure::type_mismatch(source, target)),
+                        },
+                        _ => Err(AssignabilityFailure::type_mismatch(source, target)),
+                    };
+                }
                 let key = (false, name.clone());
                 if !resolving.insert(key.clone()) {
                     return Ok(());
