@@ -299,7 +299,8 @@ fn fuse_macos(
 fn game_info_plist(plist: &str, name: &str, identifier: &str) -> String {
     let plist = replace_plist_string(plist, "CFBundleName", &xml_escape(name));
     let plist = replace_plist_string(&plist, "CFBundleIdentifier", &xml_escape(identifier));
-    remove_plist_key(&plist, "UTExportedTypeDeclarations")
+    let plist = remove_plist_key(&plist, "UTExportedTypeDeclarations");
+    remove_plist_key(&plist, "CFBundleDocumentTypes")
 }
 
 fn replace_plist_string(plist: &str, key: &str, value: &str) -> String {
@@ -531,6 +532,8 @@ mod tests {
 	<string>org.love2d.love</string>
 	<key>CFBundleName</key>
 	<string>LÖVE</string>
+	<key>CFBundleDocumentTypes</key>
+	<array><dict><key>LSHandlerRank</key><string>Owner</string></dict></array>
 	<key>UTExportedTypeDeclarations</key>
 	<array>
 		<dict>
@@ -559,6 +562,8 @@ mod tests {
         );
         assert!(!plist.contains("UTExportedTypeDeclarations"), "{plist}");
         assert!(!plist.contains("UTTypeTagSpecification"), "{plist}");
+        assert!(!plist.contains("CFBundleDocumentTypes"), "{plist}");
+        assert!(!plist.contains("LSHandlerRank"), "{plist}");
         assert!(
             plist.contains("<key>NSHighResolutionCapable</key>"),
             "{plist}"
