@@ -59,3 +59,22 @@ near(tween.easing.quadin(0.5), 0.25)
 assert(not pcall(function()
   tween.to({ x = 0 }, 1, { x = 1 }):ease("bounce")
 end))
+
+-- Stopping from callbacks is safe and never completes a cancelled tween.
+for _, event in ipairs({'onstart', 'onupdate'}) do
+  local g, object, completed = tween.group(), {x=0}, false
+  local t = g:to(object, 1, {x=10})
+  t[event](t, function() t:stop() end)
+  t:oncomplete(function() completed=true end)
+  g:update(1)
+  assert(not completed and #g == 0)
+  if event == 'onstart' then assert(object.x == 0) end
+end
+-- Removing a sibling does not visit a shifted slot twice.
+do
+  local g, visits = tween.group(), 0
+  local a = g:to({x=0}, 1, {x=1}):onupdate(function() visits=visits+1 end)
+  g:to({x=0}, 1, {x=1}):onstart(function() a:stop() end)
+  g:update(.5)
+  assert(visits == 0)
+end

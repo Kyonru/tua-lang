@@ -196,33 +196,46 @@ function flux:to(obj, time, vars)
 end
 
 
+local function active(group, t)
+  return group[t.obj] and group[t.obj][t]
+end
+
 function flux:update(deltatime)
-  for i = #self, 1, -1 do
-    local t = self[i]
-    if t._delay > 0 then
-      t._delay = t._delay - deltatime
-    else
-      if not t.inited then
-        flux.clear(self, t.obj, t.vars)
-        t:init()
-      end
-      if t._onstart then
-        t._onstart()
-        t._onstart = nil
-      end
-      t.progress = t.progress + t.rate * deltatime
-      local p = t.progress
-      local x = p >= 1 and 1 or flux.easing[t._ease](p)
-      for k, v in pairs(t.vars) do
-        t.obj[k] = v.start + x * v.diff
-      end
-      if t._onupdate then t._onupdate() end
-      if p >= 1 then
-        flux.remove(self, i)
-        if t._oncomplete then t._oncomplete() end
+  -- Callbacks may stop any tween or add successors. Visit the starting set once.
+  local pending = self._pending or {}
+  self._pending = nil
+  for i = 1, #self do pending[i] = self[i] end
+  for i = #pending, 1, -1 do
+    local t = pending[i]
+    if active(self, t) then
+      if t._delay > 0 then
+        t._delay = t._delay - deltatime
+      else
+        if not t.inited then
+          flux.clear(self, t.obj, t.vars)
+          t:init()
+        end
+        if t._onstart then
+          local onstart = t._onstart
+          t._onstart = nil
+          onstart()
+        end
+        if active(self, t) then
+          t.progress = t.progress + t.rate * deltatime
+          local p = t.progress
+          local x = p >= 1 and 1 or flux.easing[t._ease](p)
+          for k, v in pairs(t.vars) do t.obj[k] = v.start + x * v.diff end
+          if t._onupdate then t._onupdate() end
+          if p >= 1 and active(self, t) then
+            flux.remove(self, t)
+            if t._oncomplete then t._oncomplete() end
+          end
+        end
       end
     end
   end
+  for i = #pending, 1, -1 do pending[i] = nil end
+  self._pending = pending
 end
 
 
