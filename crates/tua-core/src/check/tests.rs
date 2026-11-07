@@ -5463,3 +5463,9 @@ fn defaults_are_checked_in_parameter_scope() {
     }
     check_tua_source("defaults.tua", "local function f(x: number, y: number = x): number return y end\nprint(f(2))").unwrap();
 }
+
+#[test]
+fn nil_arguments_trigger_defaults_without_weakening_body_types() {
+    check_tua_source("defaults.tua", "local function f(x: number = 7): number return x + 1 end\nlocal maybe: number | nil = nil\nprint(f(), f(nil), f(maybe), f(0))\nlocal g = function(x: number = 3): number return x + 1 end\nprint(g(nil))").unwrap();
+    assert!(check_tua_source("defaults.tua", "local function f(x: number): number return x end\nprint(f(nil))").is_err());
+}

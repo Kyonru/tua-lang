@@ -2863,14 +2863,15 @@ impl<'a> Checker<'a> {
                 .map(|parameter| (&parameter.ty, parameter.name.as_deref()))
                 .or_else(|| function.vararg_type.as_deref().map(|ty| (ty, Some("..."))))
                 .expect("argument count was validated");
+            let target = call_argument_contract(parameter.0, index, function.required_parameter_count, function.parameters.len());
 
             match argument {
                 CallArgument::Expression(argument) => {
-                    self.check_expression_assignable_at(argument, parameter.0, parameter.1);
+                    self.check_expression_assignable_at(argument, &target, parameter.1);
                 }
                 CallArgument::Inferred(argument_type) => {
                     if let Some(failure) =
-                        self.diagnostic_assignability_failure(&argument_type, parameter.0)
+                        self.diagnostic_assignability_failure(&argument_type, &target)
                     {
                         self.diagnostics.push(mismatch_diagnostic(
                             &self.parsed.path,
@@ -3100,8 +3101,9 @@ impl<'a> Checker<'a> {
                 continue;
             };
 
+            let parameter_type = call_argument_contract(parameter_type, index, candidate.required_parameter_count, candidate.parameters.len());
             let Some(failure) =
-                self.diagnostic_assignability_failure(argument_type, parameter_type)
+                self.diagnostic_assignability_failure(argument_type, &parameter_type)
             else {
                 continue;
             };
@@ -4074,8 +4076,14 @@ fn typed_call_candidate_matches(
                 return true;
             };
 
-            checker.context.is_assignable(argument_type, parameter_type)
+            checker.context.is_assignable(argument_type, &call_argument_contract(parameter_type, index, candidate.required_parameter_count, candidate.parameters.len()))
         })
+}
+
+// In Lua an explicit nil at an omittable fixed argument is equivalent to
+// omission. Keep this call contract separate from post-default body bindings.
+fn call_argument_contract(parameter: &Type, index: usize, required: usize, fixed: usize) -> Type {
+    if index >= required && index < fixed { Type::union([parameter.clone(), Type::nil()]) } else { parameter.clone() }
 }
 
 fn expected_typed_argument_count(candidate: &TypedCallCandidate, actual: usize) -> Option<usize> {
