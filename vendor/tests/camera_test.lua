@@ -114,3 +114,15 @@ do
     assert(x >= -1e-6 and y >= -1e-6 and x+w <= 2000+1e-6 and y+h <= 2000+1e-6)
   end
 end
+
+-- Odd pixel-perfect viewports use the same center in drawing and conversions.
+do
+  local c = camera.new({pixelPerfect=true, viewport={x=0,y=0,w=401,h=301}})
+  local x,y = c:toScreen(0,0)
+  assert(x == 201 and y == 151)
+  local wx,wy = c:toWorld(x,y)
+  assert(wx == 0 and wy == 0)
+  local before = #calls
+  c:attach(); c:detach()
+  assert(calls[before+2] == 'translate 201 151')
+end

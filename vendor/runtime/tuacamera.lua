@@ -275,6 +275,13 @@ function Camera:viewCenter()
   return x, y
 end
 
+local function screenCenter(self)
+  local vx, vy, w, h = self:viewportRect()
+  local cx, cy = vx + w / 2, vy + h / 2
+  if self.pixelPerfect then cx, cy = round(cx), round(cy) end
+  return cx, cy
+end
+
 function Camera:attach()
   local vx, vy, w, h = self:viewportRect()
   local x, y = self:viewCenter()
@@ -283,10 +290,7 @@ function Camera:attach()
     self.previousScissor = { love.graphics.getScissor() }
     love.graphics.intersectScissor(vx, vy, w, h)
   end
-  local cx, cy = vx + w / 2, vy + h / 2
-  if self.pixelPerfect then
-    cx, cy = round(cx), round(cy)
-  end
+  local cx, cy = screenCenter(self)
   love.graphics.translate(cx, cy)
   love.graphics.scale(self.zoom)
   love.graphics.rotate(-self.rotation)
@@ -311,20 +315,20 @@ function Camera:draw(draw)
 end
 
 function Camera:toWorld(sx, sy)
-  local vx, vy, w, h = self:viewportRect()
+  local cx, cy = screenCenter(self)
   local x, y = self:viewCenter()
-  local dx, dy = (sx - vx - w / 2) / self.zoom, (sy - vy - h / 2) / self.zoom
+  local dx, dy = (sx - cx) / self.zoom, (sy - cy) / self.zoom
   local cos, sin = math.cos(self.rotation), math.sin(self.rotation)
   return x + dx * cos - dy * sin, y + dx * sin + dy * cos
 end
 
 function Camera:toScreen(wx, wy)
-  local vx, vy, w, h = self:viewportRect()
+  local cx, cy = screenCenter(self)
   local x, y = self:viewCenter()
   local dx, dy = wx - x, wy - y
   local cos, sin = math.cos(-self.rotation), math.sin(-self.rotation)
-  return vx + w / 2 + (dx * cos - dy * sin) * self.zoom,
-    vy + h / 2 + (dx * sin + dy * cos) * self.zoom
+  return cx + (dx * cos - dy * sin) * self.zoom,
+    cy + (dx * sin + dy * cos) * self.zoom
 end
 
 function Camera:mousePosition()
