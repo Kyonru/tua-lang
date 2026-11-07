@@ -6,15 +6,38 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-11-08
+
+### Release summary
+
+Tua 0.6.1 makes type errors easier to locate and understand, and fixes false nil
+errors caused by incomplete multi-return inference. The CLI, language server,
+and VS Code extension share this version.
+
+#### Highlights
+
+- Identify assignment destinations, function return slots, and invalid parameter
+  defaults with more precise editor highlights.
+- See missing required parameter names, excess argument counts, and explanations
+  for functions that can finish without returning a required value.
+- Preserve known return types and positions when another expression cannot be
+  inferred, avoiding false nil assignment errors.
+- Make the editor setup test wait for configuration updates while still detecting
+  failed restores and preserving manual settings changes.
+
+#### Upgrade notes
+
+No syntax or configuration migration is required. Diagnostic codes remain
+unchanged. Update any custom CLI/server alongside the extension to use matching
+types and diagnostic messages.
+
 ### Fixed
 
 - Function contract diagnostics identify return slots and named functions,
   explain missing return paths, name invalid parameter defaults, and list
   missing required parameters or excess arguments with navigable call ranges.
-
 - Stabilize extension setup verification by waiting for configuration snapshots
   after preset changes, while continuing to reject failed restores.
-
 - Assignment type errors identify the destination and call return position,
   with separate highlights for failing multi-return destinations and explicit
   context for missing assignment values.
