@@ -123,7 +123,26 @@ pub(crate) fn initial_parameter_type_at_position(
         ) {
             return None;
         }
-        return Some(completion_config_type());
+        let Type::Table(mut config) = completion_config_type() else {
+            unreachable!()
+        };
+        let Type::Table(mut window) = window_type() else {
+            unreachable!()
+        };
+        // LOVE supplies these defaults; writes and arbitrary calls invalidate
+        // each fact independently from the window table's own identity.
+        for field in ["width", "height"] {
+            if !crate::narrowing::member_path_effect_before(
+                function.body().block(),
+                &format!("{path}.{field}"),
+                position,
+                true,
+            ) {
+                window.insert(field, TableField::required(Type::number()));
+            }
+        }
+        config.insert("window", TableField::required(Type::Table(window)));
+        return Some(Type::Table(config));
     }
     None
 }

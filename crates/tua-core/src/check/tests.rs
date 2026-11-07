@@ -1318,7 +1318,7 @@ end
     )
     .expect_err("love.conf config field assignment mismatch should be reported");
 
-    assert_single_mismatch(&diagnostics, "expected number, found string");
+    assert_single_mismatch(&diagnostics, "expected number | nil, found string");
 }
 
 #[test]
@@ -1345,7 +1345,7 @@ end
 
     assert_single_mismatch(
         &diagnostics,
-        r#"expected "desktop" | "exclusive", found "borderless""#,
+        r#"expected "desktop" | "exclusive" | nil, found "borderless""#,
     );
 }
 
@@ -3994,7 +3994,7 @@ fn assert_single_mismatch(diagnostics: &[Diagnostic], message: &str) {
         diagnostics[0].code.unwrap().category(),
         crate::DiagnosticCategory::Type
     );
-    assert!(diagnostics[0].message.contains(message));
+    assert!(diagnostics[0].message.contains(message), "{diagnostics:#?}");
     assert!(diagnostics[0].format_cli().contains("error TL1003"));
 }
 
@@ -5294,8 +5294,20 @@ fn custom_asset_loader_bindings_do_not_validate_paths_or_shaders() {
 
 #[test]
 fn love_conf_initial_window_read_state_preserves_nullable_writes() {
-    check_tua_source("conf.tua", "function love.conf(t)\n local before: number = t.window.width\n t.window.width = before + 10\n local after: number = t.window.width\n t.window = nil\nend\n").expect("initial window and nullable assignment");
-    check_tua_source("conf.tua", "local mutate: any = function(value) end\nfunction love.conf(t)\n mutate(t)\n if t.window then local width: number = t.window.width end\nend\n").expect("explicit guard restores nullable window access");
+    check_tua_source("conf.tua", "function love.conf(t)\n local before: number = t.window.width\n t.window.width = before + 10\n local after: number? = t.window.width\n t.window = nil\nend\n").expect("initial window and nullable assignment");
+    check_tua_source("conf.tua", "local mutate: any = function(value) end\nfunction love.conf(t)\n mutate(t)\n if t.window then local width: number? = t.window.width end\nend\n").expect("explicit guard restores nullable window access");
+    for statement in [
+        "t.window.width = nil",
+        "local alias = t.window; alias.width = nil",
+    ] {
+        let source = format!(
+            "function love.conf(t)\n {statement}\n local width: number = t.window.width\nend\n"
+        );
+        assert!(
+            check_tua_source("conf.tua", source).is_err(),
+            "deleted width must remain nullable"
+        );
+    }
     for statement in [
         "t.window = nil",
         "mutate(t)",
@@ -5435,18 +5447,40 @@ fn reassignment_checks_nil_padding_and_expanded_returns() {
 #[test]
 fn optional_record_fields_accept_nil_but_reject_wrong_values() {
     for field in ["row.value", "row['value']"] {
-        check_tua_source("optional.tua", format!("local row: {{value?: number}} = {{value=nil}}\n{field} = nil\n")).unwrap();
-        assert!(check_tua_source("optional.tua", format!("local row: {{value?: number}} = {{}}\n{field} = 'wrong'\n")).is_err());
+        check_tua_source(
+            "optional.tua",
+            format!("local row: {{value?: number}} = {{value=nil}}\n{field} = nil\n"),
+        )
+        .unwrap();
+        assert!(check_tua_source(
+            "optional.tua",
+            format!("local row: {{value?: number}} = {{}}\n{field} = 'wrong'\n")
+        )
+        .is_err());
     }
-    assert!(check_tua_source("optional.tua", "local row: {value: number} = {value=1}\nrow.value=nil").is_err());
+    assert!(check_tua_source(
+        "optional.tua",
+        "local row: {value: number} = {value=1}\nrow.value=nil"
+    )
+    .is_err());
 }
 
 #[test]
 fn return_expressions_validate_calls_without_result_contracts() {
     let function = "local function takes(n: number): number return n end\n";
-    for body in ["return takes('bad')", "local function f(): number return 1, takes('bad') end"] {
+    for body in [
+        "return takes('bad')",
+        "local function f(): number return 1, takes('bad') end",
+    ] {
         let diagnostics = check_tua_source("returns.tua", format!("{function}{body}")).unwrap_err();
-        assert_eq!(diagnostics.iter().filter(|d| d.code == Some(DiagnosticCode::TYPE_MISMATCH)).count(), 1, "{diagnostics:?}");
+        assert_eq!(
+            diagnostics
+                .iter()
+                .filter(|d| d.code == Some(DiagnosticCode::TYPE_MISMATCH))
+                .count(),
+            1,
+            "{diagnostics:?}"
+        );
     }
     check_tua_source("returns.tua", format!("{function}return takes(2)")).unwrap();
 }
@@ -5461,18 +5495,37 @@ fn defaults_are_checked_in_parameter_scope() {
         let errors = check_tua_source("defaults.tua", source).unwrap_err();
         assert!(errors.iter().any(|d| d.code == Some(DiagnosticCode::TYPE_MISMATCH)), "{errors:?}");
     }
-    check_tua_source("defaults.tua", "local function f(x: number, y: number = x): number return y end\nprint(f(2))").unwrap();
+    check_tua_source(
+        "defaults.tua",
+        "local function f(x: number, y: number = x): number return y end\nprint(f(2))",
+    )
+    .unwrap();
 }
 
 #[test]
 fn nil_arguments_trigger_defaults_without_weakening_body_types() {
     check_tua_source("defaults.tua", "local function f(x: number = 7): number return x + 1 end\nlocal maybe: number | nil = nil\nprint(f(), f(nil), f(maybe), f(0))\nlocal g = function(x: number = 3): number return x + 1 end\nprint(g(nil))").unwrap();
-    assert!(check_tua_source("defaults.tua", "local function f(x: number): number return x end\nprint(f(nil))").is_err());
+    assert!(check_tua_source(
+        "defaults.tua",
+        "local function f(x: number): number return x end\nprint(f(nil))"
+    )
+    .is_err());
 }
 
 #[test]
 fn void_love_method_results_cannot_receive_chained_calls() {
-    let errors = check_tua_source("void.tua", "local function bad(text: Text) print(text:set('hello'):getWidth()) end").unwrap_err();
-    assert!(errors.iter().any(|d| d.message.contains("nil")), "{errors:?}");
-    check_tua_source("chain.tua", "local function good(data: ImageData): number return data:clone():getWidth() end").unwrap();
+    let errors = check_tua_source(
+        "void.tua",
+        "local function bad(text: Text) print(text:set('hello'):getWidth()) end",
+    )
+    .unwrap_err();
+    assert!(
+        errors.iter().any(|d| d.message.contains("nil")),
+        "{errors:?}"
+    );
+    check_tua_source(
+        "chain.tua",
+        "local function good(data: ImageData): number return data:clone():getWidth() end",
+    )
+    .unwrap();
 }
