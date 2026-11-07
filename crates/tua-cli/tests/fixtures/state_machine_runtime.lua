@@ -133,17 +133,25 @@ do
   })
   assert(machine:pause() and machine:resume())
 
+  local function transition_pairs()
+    for _ = 1, 10000 do
+      machine:pause()
+      machine:resume()
+    end
+  end
+  -- Warm the same loop before measuring steady-state runtime allocation.
+  -- One transition pair fills name caches but does not compile LuaJIT traces.
+  transition_pairs()
+  assert(entered == 10001 and machine.current == "playing")
+  entered = 0
   collectgarbage("collect")
   collectgarbage("stop")
   local before = collectgarbage("count")
-  for _ = 1, 10000 do
-    machine:pause()
-    machine:resume()
-  end
+  transition_pairs()
   local allocatedKb = collectgarbage("count") - before
   collectgarbage("restart")
 
-  assert(entered == 10001 and machine.current == "playing")
+  assert(entered == 10000 and machine.current == "playing")
   assert(allocatedKb < 32, string.format(
     "10,000 valid transition pairs should allocate under 32 KB (got %.1f KB)", allocatedKb))
 end
