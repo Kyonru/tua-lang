@@ -461,6 +461,12 @@ Quick fixes and source actions include:
 Tua only offers a transformation when the compiler can establish a safe source
 range and identity. Dynamic cases remain unchanged.
 
+Import organization and removal are explicit source actions, excluded from safe
+fix-all. Removing an unused runtime `require` can remove module initialization
+side effects; sorting imports can change their initialization order. Keep imports
+whose order or initialization matters, or review the proposed edits before
+applying these actions.
+
 ### Editing `tua.toml`
 
 The VS Code client sends `tua.toml` documents to the same server. Configuration
