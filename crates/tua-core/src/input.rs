@@ -38,6 +38,7 @@ const METHOD_NAMES: &[&str] = &[
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub(crate) struct InputSpec {
+    pub(crate) exact: bool,
     pub(crate) controls: Vec<String>,
     pub(crate) pairs: Vec<String>,
 }
@@ -321,14 +322,14 @@ fn base_input_type() -> Type {
 }
 
 fn input_type(spec: &InputSpec) -> Type {
-    let exact = !spec.controls.is_empty() || !spec.pairs.is_empty();
-    let name_type = literal_union_or_string(
+    let exact = spec.exact;
+    let name_type = literal_union_for_names(
         &spec
             .controls
             .iter()
             .chain(&spec.pairs)
             .cloned()
-            .collect::<Vec<_>>(),
+            .collect::<Vec<_>>(), exact,
     );
     let second_number = if exact && spec.pairs.is_empty() {
         None
@@ -447,7 +448,7 @@ fn typed_member_for_spec(member: &str, spec: &InputSpec, exact: bool) -> Option<
         .chain(&spec.pairs)
         .cloned()
         .collect::<Vec<_>>();
-    let name_type = literal_union_or_string(&all_names);
+    let name_type = literal_union_for_names(&all_names, exact);
     let self_parameter = parameter("self", Type::Any);
 
     match member {
@@ -482,7 +483,7 @@ fn typed_member_for_spec(member: &str, spec: &InputSpec, exact: bool) -> Option<
 
             Some(TypedFunction {
                 name: Some(format!("Input:{member}")),
-                parameters: vec![parameter("self", Type::Any), parameter("name", Type::Any)],
+                parameters: vec![parameter("self", Type::Any), parameter("name", name_type.clone())],
                 parameter_count: 2,
                 required_parameter_count: 2,
                 has_varargs: false,
@@ -510,7 +511,7 @@ fn typed_member_for_spec(member: &str, spec: &InputSpec, exact: bool) -> Option<
         )),
         "down" | "pressed" | "released" if exact => Some(TypedFunction {
             name: Some(format!("Input:{member}")),
-            parameters: vec![parameter("self", Type::Any), parameter("name", Type::Any)],
+            parameters: vec![parameter("self", Type::Any), parameter("name", name_type.clone())],
             parameter_count: 2,
             required_parameter_count: 2,
             has_varargs: false,
@@ -650,6 +651,7 @@ fn spec_from_input_table(
 
     (
         InputSpec {
+            exact: controls.is_some(),
             controls: controls.map(field_names).unwrap_or_default(),
             pairs: pairs.map(field_names).unwrap_or_default(),
         },
@@ -676,6 +678,7 @@ fn spec_from_direct_input_table(table: &crate::TableShape) -> (InputSpec, bool) 
 
     (
         InputSpec {
+            exact: controls.is_some(),
             controls: controls.map(field_names).unwrap_or_default(),
             pairs: pairs.map(field_names).unwrap_or_default(),
         },
@@ -704,6 +707,10 @@ fn table_from_type<'a>(
 
 fn field_names(table: &crate::TableShape) -> Vec<String> {
     table.fields().map(|(name, _)| name.to_owned()).collect()
+}
+
+fn literal_union_for_names(values: &[String], exact: bool) -> Type {
+    if exact && values.is_empty() { Type::union([]) } else { literal_union_or_string(values) }
 }
 
 fn literal_union_or_string(values: &[String]) -> Type {
@@ -943,6 +950,7 @@ fn declaration_from_call(call: &FunctionCall) -> Option<InputDeclaration> {
 
 fn spec_from_config(config: &TableConstructor) -> InputSpec {
     InputSpec {
+        exact: config_has_static_names(config),
         controls: named_field(config, "controls")
             .and_then(table_expression)
             .map(static_field_names)
@@ -1436,6 +1444,15 @@ local controls = input({
         for (literal, invalid) in [("-0.25", true), ("0x2", true), ("1.25", true), ("0", false), ("0x1", false)] {
             let parsed = crate::parse_tua_source("input.tua", format!("local c = input({{controls={{}}, deadzone={literal}}})")).unwrap();
             assert_eq!(!config_diagnostics(&parsed).is_empty(), invalid, "{literal}");
+        }
+    }
+
+    #[test]
+    fn empty_static_controls_have_no_callable_names() {
+        let spec = InputSpec { exact: true, ..InputSpec::default() };
+        for method in ["get", "getRaw", "down", "pressed", "released"] {
+            let function = typed_member_for_spec(method, &spec, true).unwrap();
+            assert!(!crate::types::is_assignable(&Type::string_literal("missing"), &function.parameters[1].ty), "{method}");
         }
     }
 
