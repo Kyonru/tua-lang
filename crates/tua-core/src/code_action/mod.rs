@@ -2228,14 +2228,18 @@ fn remove_single_line_stmt_edit(parsed: &ParsedSource, stmt: &ast::Stmt) -> Opti
         return None;
     }
 
-    Some(TextEdit {
-        path: parsed.path.clone(),
-        span: line_removal_span(&parsed.source, span.start.line),
-        new_text: String::new(),
-    })
+    Some(remove_statement_span_edit(parsed, span))
 }
 
-fn remove_statement_span_edit(parsed: &ParsedSource, span: SourceSpan) -> TextEdit {
+fn remove_statement_span_edit(parsed: &ParsedSource, mut span: SourceSpan) -> TextEdit {
+    if let Some(line) = line_at(&parsed.source, span.end.line) {
+        let byte = crate::source_text::byte_for_column(line, span.end.column).min(line.len());
+        let suffix = &line[byte..];
+        let trimmed = suffix.trim_start();
+        if trimmed.starts_with(';') {
+            span.end.column += suffix[..suffix.len() - trimmed.len()].chars().count() + 1;
+        }
+    }
     let starts_line = line_at(&parsed.source, span.start.line).is_some_and(|line| {
         let byte = crate::source_text::byte_for_column(line, span.start.column);
         line[..byte.min(line.len())].trim().is_empty()
