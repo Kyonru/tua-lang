@@ -81,9 +81,6 @@ results.
 
 ### Unit testing follow-ups
 
-- Add test-scoped Busted declarations for the DSL, hooks, assertions, spies,
-  mocks, stubs, and matchers. Verify that test symbols have useful signatures
-  in `.lua` and `.tua` specs without leaking into ordinary project files.
 - Design an explicit LOVE runtime test mode with clear discovery, launch,
   cancellation, exit-status, and result-reporting behavior. The Busted backend
   currently tests headless Lua logic and needs doubles for LOVE-dependent code.
@@ -92,11 +89,6 @@ results.
   confirmed selected-spec execution and cancellation; continuous-run
   interaction and coverage UI remain open. LuaCov installation could not
   reach the configured LuaRocks mirrors in the audit environment.
-- Provide typed Busted declarations through the shared semantic environment
-  for configured test-source files. Cover the DSL, hooks, assertions, spies,
-  mocks, stubs, and matchers in `.lua` and `.tua` specs, with hover, completion,
-  signatures, and checking; keep ordinary files unchanged and preserve source
-  positions rather than rewriting user buffers to inject declarations.
 
 ## Next
 
