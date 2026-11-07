@@ -508,7 +508,7 @@ function Audio:_updateMusic()
   runtime.beat = math.max(runtime.beat, beat)
   if self._pendingMusic then
     local pending = self._pendingMusic
-    local boundary = beat > pending.afterBeat and (pending.quantize == "beat" or (pending.quantize == "bar" and beat % (signature[1] or 4) == 0))
+    local boundary = beat > pending.afterBeat and (pending.quantize == "beat" or (pending.quantize == "bar" and math.floor(beat / (signature[1] or 4)) > math.floor(pending.afterBeat / (signature[1] or 4))))
     if boundary then self:_startScene(pending.name, pending.transition) end
   end
   if leader and leader.tell then

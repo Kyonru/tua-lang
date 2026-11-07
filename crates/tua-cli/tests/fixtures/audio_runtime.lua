@@ -141,3 +141,14 @@ do
   assert(voice and result == 'stolen' and system:_activeCount('high') == 1)
   assert(high:status() == 'released' and low:status() ~= 'released')
 end
+
+-- Quantized transitions observe crossed boundaries, not just the final beat.
+do
+  local system = audioSystem({music={one={bpm=60,layers={main={source=source}}},
+    two={bpm=120,layers={main={source=source}}}}})
+  system:setMusicState('one'); system:update(0)
+  assert(system:setMusicState('two',{quantize='bar'}) == 'scheduled')
+  system._musicRuntime.layers.main._record.source.position = 5.1
+  system:update(5.1)
+  assert(system:snapshot().music.state == 'two')
+end
