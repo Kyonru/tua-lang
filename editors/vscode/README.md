@@ -644,6 +644,10 @@ VS Code profile. To use VSCodium, set `VSCODE_EXECUTABLE_PATH` to its executable
 These tests use a loopback debugging port, a valid PNG fixture, and a controlled
 animation clock so desktop occlusion does not affect playback assertions.
 
+The Tua workspace sidebar refreshes after source edits, saves, and external file
+changes. Graph requests remain lazy until you expand their section; the Refresh
+command is available for an immediate update.
+
 ## Workspace integration verification
 
 Run `TUA_TEST_SUITE=workspace-ui npm run test:vscode` to exercise the native Tua

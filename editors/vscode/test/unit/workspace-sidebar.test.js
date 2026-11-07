@@ -8,7 +8,7 @@ const vscode = {
 };
 const original = Module._load;
 Module._load = function(id, ...args) { return id === "vscode" ? vscode : original.call(this, id, ...args); };
-const { WorkspaceTree, graphNodes } = require("../../src/workspace/sidebar");
+const { WorkspaceTree, graphNodes, registerWorkspaceSidebar } = require("../../src/workspace/sidebar");
 Module._load = original;
 
 test("workspace graphs retain declaration locations and stable identities", () => {
@@ -35,4 +35,32 @@ test("workspace requests are lazy and invalidate on refresh or server change", a
   client = { ...client };
   await tree.getChildren(node);
   assert.equal(calls, 3);
+});
+
+
+test("workspace sidebar invalidates edited and externally changed sources and disposes timers", async () => {
+  const events = {};
+  const listen = name => callback => { events[name] = callback; return { dispose() { delete events[name]; } }; };
+  vscode.Disposable = class { constructor(fn) { this.dispose = fn; } static from(...items) { return new this(() => items.forEach(item => item.dispose())); } };
+  let provider;
+  vscode.window = { createTreeView: (_, options) => { provider = options.treeDataProvider; return { dispose() {} }; } };
+  vscode.commands = { registerCommand: () => ({ dispose() {} }) };
+  vscode.workspace = {
+    createFileSystemWatcher: () => ({ onDidCreate: listen("create"), onDidChange: listen("change"), onDidDelete: listen("delete"), dispose() {} }),
+    onDidChangeTextDocument: listen("edit"), onDidSaveTextDocument: listen("save"), onDidChangeWorkspaceFolders: listen("folders"),
+  };
+  let calls = 0;
+  const registration = registerWorkspaceSidebar({ getClient: () => client });
+  const client = { sendRequest: async () => { calls++; return { events: [] }; } };
+  const node = { id: "signals", kind: "signals", request: "tua/signalGraph" };
+  await provider.getChildren(node);
+  for (const event of ["edit", "create", "change", "delete"]) {
+    events[event]({ document: { uri: { path: "/game/main.tua" } } });
+    await new Promise(resolve => setTimeout(resolve, 180));
+    await provider.getChildren(node);
+  }
+  assert.equal(calls, 5);
+  events.edit({ document: { uri: { path: "/game/main.tua" } } });
+  registration.dispose();
+  assert.deepEqual(Object.keys(events), []);
 });

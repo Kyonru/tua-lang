@@ -14,8 +14,21 @@ const SECTIONS = [
 function registerWorkspaceSidebar({ getClient }) {
   const provider = new WorkspaceTree(getClient);
   const view = vscode.window.createTreeView("tua.workspace", { treeDataProvider: provider, showCollapseAll: true });
-  const refresh = () => provider.refresh();
-  return vscode.Disposable.from(provider, view,
+  let refreshTimer;
+  const refresh = () => { clearTimeout(refreshTimer); provider.refresh(); };
+  const scheduleRefresh = () => {
+    clearTimeout(refreshTimer);
+    refreshTimer = setTimeout(refresh, 150);
+  };
+  const watcher = vscode.workspace.createFileSystemWatcher("**/*.{tua,lua,toml}");
+  return vscode.Disposable.from(provider, view, watcher,
+    new vscode.Disposable(() => clearTimeout(refreshTimer)),
+    watcher.onDidCreate(scheduleRefresh),
+    watcher.onDidChange(scheduleRefresh),
+    watcher.onDidDelete(scheduleRefresh),
+    vscode.workspace.onDidChangeTextDocument(event => {
+      if (/\.(tua|lua|toml)$/i.test(event.document.uri.path)) scheduleRefresh();
+    }),
     vscode.commands.registerCommand("tua.workspace.open", () => vscode.commands.executeCommand("workbench.view.extension.tua")),
     vscode.commands.registerCommand("tua.workspace.refresh", refresh),
     vscode.commands.registerCommand("tua.workspace.graph", node => node?.graphCommand && vscode.commands.executeCommand(node.graphCommand)),
