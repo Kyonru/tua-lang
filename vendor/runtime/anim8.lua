@@ -153,6 +153,11 @@ local function parseDurations(durations, frameCount)
     error("The durations table has length of " .. tostring(#result) .. ", but it should be >= " .. tostring(frameCount))
   end
 
+  for i=1,frameCount do
+    local duration = result[i]
+    assert(type(duration) == "number" and duration > 0 and duration < math.huge,
+      "Frame durations must be finite positive numbers")
+  end
   return result
 end
 
