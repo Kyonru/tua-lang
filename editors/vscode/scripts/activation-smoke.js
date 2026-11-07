@@ -1468,8 +1468,8 @@ async function smokeDebugLspLogging(mockServer, workspace) {
 
     assert.strictEqual(
       state.documentChangeListeners.length,
-      3,
-      "debug logging should retain inline-model, state-machine, and shader listeners",
+      4,
+      "debug logging should retain inline-model, state-machine, shader, and workspace graph listeners",
     );
 
     await extension.deactivate();
