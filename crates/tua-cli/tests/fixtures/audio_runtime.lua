@@ -177,3 +177,11 @@ do
   leader.position=2.1; system:update(2.1)
   assert(leader.position == 1 and system:snapshot().music.position == 1)
 end
+
+-- Snapshot analysis status is detached just like buses and music.
+do
+  local system = audioSystem({})
+  local snapshot = system:snapshot()
+  snapshot.analysis.fake = 'corrupted'
+  assert(system:snapshot().analysis.fake == nil)
+end

@@ -603,7 +603,7 @@ function Audio:snapshot()
   return {
     activeVoices = self._activeVoiceCount, pooledVoices = #self._pool,
     started = self._stats.started, stolen = self._stats.stolen, rejected = self._stats.rejected,
-    buses = buses, music = music, analysis = self._analysisStatus,
+    buses = buses, music = music, analysis = copy(self._analysisStatus),
   }
 end
 
