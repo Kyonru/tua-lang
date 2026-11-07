@@ -772,7 +772,10 @@ replace the dot with `:`.
 The editor can also help with common LOVE declarations and helpers. Completion
 after `function love.` can insert callback snippets such as `love.update(dt)`,
 `love.draw()`, and `love.conf(t)`, with generated callback and parameter
-documentation. Callback declarations may omit unused Lua parameters, but close
+documentation. In `function love.<callback>(...)` declarations, unannotated
+parameters inherit catalog types, so `dt` in `love.update(dt)` is a number.
+Explicit annotations remain authoritative, and a local `love` table keeps its
+own types. Callback declarations may omit unused Lua parameters, but close
 name typos, required extra parameters, and explicitly incompatible parameter
 types report `TL5006`. Code actions can rename close callback typos, apply the
 TL4018 colon-call fix, and rewrite obvious constructors such as

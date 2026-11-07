@@ -125,7 +125,15 @@ impl TypeEnvironment {
         let parameter = annotation
             .parameters
             .iter()
-            .find(|parameter| parameter.name == name)?;
+            .find(|parameter| parameter.name == name);
+        if parameter.is_none() {
+            let function_name = annotation.name.as_deref()?;
+            if function_name.starts_with("love.") {
+                return self.function(function_name)?.parameters.iter()
+                    .find(|parameter| parameter.name == name).map(|parameter| parameter.ty.clone());
+            }
+        }
+        let parameter = parameter?;
         // Native methods already have resolved scoped Self contracts. Reuse
         // those facts rather than rebuilding an alias environment per lookup.
         if let Some(function_name) = annotation.name.as_deref() {
@@ -853,6 +861,22 @@ pub(crate) fn build_type_environment_with_domain_registry(
         diagnostics: &mut diagnostics,
     };
     lower_lua_doc_annotations_into_environment(parsed, &alias_names, &mut lua_doc_state);
+
+    // Contextual LOVE declarations reuse the generated catalog, while explicit
+    // native/LuaDoc contracts and locally shadowed love tables remain authoritative.
+    for (annotation, function) in parsed.function_annotations.iter().zip(functions.iter_mut()) {
+        let Some(label) = annotation.name.as_deref().and_then(|name| name.strip_prefix("love.")) else { continue; };
+        if annotation.name_span.is_some_and(|span| local_contracts.scope.as_ref()
+            .is_some_and(|scope| scope.has_non_builtin_binding_at("love", span.start))) { continue; }
+        let Some(expected) = lua::love_callback_item(label).and_then(crate::semantic::typed_function_from_lua_item) else { continue; };
+        for (index, parameter) in annotation.signature_parameters.iter().enumerate() {
+            if parameter.ty.is_some() || function.parameters.iter().any(|typed| typed.name == parameter.name) { continue; }
+            if let Some(context) = expected.parameters.get(index) {
+                function.parameters.push(TypedParameter { name: parameter.name.clone(), ty: context.ty.clone(), documentation: context.documentation.clone() });
+            }
+        }
+        function.parameters.sort_by_key(|typed| annotation.signature_parameters.iter().position(|parameter| parameter.name == typed.name));
+    }
 
     let inference_locals = locals
         .iter()
@@ -5082,5 +5106,23 @@ mod sharing_tests {
         assert_eq!(changed.alias("ProjectOnly"), Some(&Type::number()));
         assert!(second.alias("ProjectOnly").is_none());
         assert!(!Arc::ptr_eq(&changed.aliases, &second.aliases));
+    }
+}
+
+#[cfg(test)]
+mod love_context_tests {
+    #[test]
+    fn love_callback_parameters_use_catalog_without_overriding_annotations() {
+        let source = "function love.update(dt)\n  local wrong: string = dt\nend\n";
+        let errors = crate::check_tua_source("src/main.tua", source).expect_err("dt is numeric");
+        assert!(errors.iter().any(|error| error.message.contains("number") && error.message.contains("string")), "{errors:?}");
+        let hover = crate::hover_tua_source("src/main.tua", source, crate::SourcePosition {line:2,column:25}).unwrap().unwrap();
+        assert!(hover.contents.contains("number"), "{}", hover.contents);
+        let shadowed = "local love = {}\nfunction love.update(dt)\n  local _value: string = dt\nend\n";
+        crate::check_tua_source("src/main.tua", shadowed).expect("local love has no catalog context");
+        let explicit = "function love.update(dt: string)\n  print(dt)\nend\n";
+        let hover = crate::hover_tua_source("src/main.tua", explicit, crate::SourcePosition {line:2,column:9}).unwrap().unwrap();
+        assert!(hover.contents.contains("string"), "{}", hover.contents);
+
     }
 }

@@ -3324,7 +3324,7 @@ fn typed_function_from_module_export(
     })
 }
 
-fn typed_function_from_lua_item(item: LuaItem) -> Option<TypedFunction> {
+pub(crate) fn typed_function_from_lua_item(item: LuaItem) -> Option<TypedFunction> {
     let parameters = parameters_from_function_detail(item.detail)?;
     let mut return_types = return_types_from_function_detail(item.detail);
 
