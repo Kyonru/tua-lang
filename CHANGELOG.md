@@ -6,12 +6,6 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
-### Fixed
-
-- Generated pending unit tests leave the subject import commented until runtime
-  dependencies are arranged, preventing LOVE module-load failures before the
-  placeholder test can be reported as pending.
-
 ## [0.6.1] - 2026-11-08
 
 ### Release summary
@@ -30,6 +24,8 @@ and VS Code extension share this version.
   inferred, avoiding false nil assignment errors.
 - Make the editor setup test wait for configuration updates while still detecting
   failed restores and preserving manual settings changes.
+- Keep generated unit tests pending until dependencies are arranged, without
+  eagerly loading LOVE modules.
 
 #### Upgrade notes
 
@@ -39,6 +35,9 @@ types and diagnostic messages.
 
 ### Fixed
 
+- Generated pending unit tests leave the subject import commented until runtime
+  dependencies are arranged, preventing LOVE module-load failures before the
+  placeholder test can be reported as pending.
 - Function contract diagnostics identify return slots and named functions,
   explain missing return paths, name invalid parameter defaults, and list
   missing required parameters or excess arguments with navigable call ranges.
