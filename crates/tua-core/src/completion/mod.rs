@@ -2065,7 +2065,11 @@ fn complete_string_argument_values(
         }
     }
 
-    if let Some(function) = semantic.function_type_for_call_parts(callee_parts, position) {
+    let function = semantic.typed_function_for_call_parts(callee_parts, position)
+        .and_then(|function| function.as_type())
+        .and_then(|ty| if let Type::Function(function) = ty { Some(function) } else { None })
+        .or_else(|| semantic.function_type_for_call_parts(callee_parts, position));
+    if let Some(function) = function {
         let receiver = callee_parts.split_last().and_then(|(_, parts)|
             semantic.type_of_field_chain(parts, position));
         let implicit_self = is_method_call && function.parameters.first().is_some_and(|first| {

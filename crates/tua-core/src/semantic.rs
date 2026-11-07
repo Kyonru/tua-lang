@@ -435,9 +435,14 @@ impl<'a> SemanticModel<'a> {
             }
         }
 
-        if let Some(domain) =
-            domains.imported_constructor_domain_from_bindings(self.runtime_imports(), &parts)
-        {
+        let constructor_domain = domains.imported_constructor_domain_from_bindings(self.runtime_imports(), &parts)
+            .or_else(|| {
+                let [name] = parts.as_slice() else { return None; };
+                (self.environment.local(name).is_none() && self.environment.function(name).is_none())
+                    .then(|| domains.constructor_domain(name)).flatten()
+            });
+        if let Some(domain) = constructor_domain {
+
             let argument = first_parenthesized_call_argument(function_call).and_then(|argument| {
                 self.type_of_expression_return_at_depth(argument, position, 0, 1)
             });
@@ -896,27 +901,7 @@ impl<'a> SemanticModel<'a> {
             let receiver_parts = parts.get(..parts.len().saturating_sub(1))?;
             let receiver_type = self.type_of_field_chain(receiver_parts, position)?;
 
-            if let Some(function) = ecs::typed_member(self.environment, &receiver_type, method) {
-                return Some(function);
-            }
-
-            if let Some(function) =
-                object_pool::typed_member(self.environment, &receiver_type, method)
-            {
-                return Some(function);
-            }
-
-            if let Some(function) =
-                state_machine::typed_member(self.environment, &receiver_type, method)
-            {
-                return Some(function);
-            }
-
-            if let Some(function) = store::typed_member(self.environment, &receiver_type, method) {
-                return Some(function);
-            }
-
-            if let Some(function) = input::typed_member(self.environment, &receiver_type, method) {
+            if let Some(function) = domains.typed_member(self.environment, &receiver_type, method) {
                 return Some(function);
             }
 
