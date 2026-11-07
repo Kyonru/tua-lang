@@ -13,6 +13,7 @@ local function objectPool(options)
   local availableCount = 0
   local activeCount = 0
   local capacity = 0
+  local resetting = {}
 
   local function createObject()
     local object = create()
@@ -46,9 +47,17 @@ local function objectPool(options)
       return false
     end
 
+    local ownerState = state
+    state[object] = resetting
     if reset then
-      reset(object)
+      local ok, err = pcall(reset, object)
+      if not ok then
+        if state == ownerState then state[object] = true end
+        error(err, 0)
+      end
     end
+    -- A reset may clear the pool; that object no longer belongs here.
+    if state ~= ownerState then return false end
 
     state[object] = false
     activeCount = activeCount - 1
@@ -73,17 +82,15 @@ local function objectPool(options)
   end
 
   function pool:clear()
-    if dispose then
-      for object in pairs(state) do
-        dispose(object)
-      end
-    end
-
+    local previous = state
     available = {}
     state = {}
     availableCount = 0
     activeCount = 0
     capacity = 0
+    if dispose then
+      for object in pairs(previous) do dispose(object) end
+    end
   end
 
   function pool:owns(object)

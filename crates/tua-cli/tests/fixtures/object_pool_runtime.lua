@@ -82,3 +82,22 @@ do
   assert(allocatedKb < 32, string.format(
     "10,000 object-pool cycles should allocate under 32 KB (got %.1f KB)", allocatedKb))
 end
+
+-- Reentrant reset never makes the same object available twice.
+do
+  local pool
+  pool = objectPool({create=function() return {} end,
+    reset=function(object) assert(not pool:release(object)) end})
+  local object = pool:acquire()
+  assert(pool:release(object))
+  assert(pool:activeCount() == 0 and pool:availableCount() == 1)
+  assert(pool:acquire() ~= pool:acquire())
+end
+-- Clearing during reset invalidates the old release, without resurrecting it.
+do
+  local pool
+  pool = objectPool({create=function() return {} end, reset=function() pool:clear() end})
+  local object = pool:acquire()
+  assert(not pool:release(object))
+  assert(not pool:owns(object) and pool:capacity() == 0 and pool:activeCount() == 0)
+end
