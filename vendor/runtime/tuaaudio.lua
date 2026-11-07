@@ -498,6 +498,11 @@ function Audio:_updateMusic()
       runtime.bar = -1
     end
   end
+  if runtime.position and position < runtime.position then
+    -- A looping Source clock is per-cycle; event cursors must follow it.
+    runtime.beat, runtime.bar = -1, -1
+    if self._pendingMusic then self._pendingMusic.afterBeat = -1 end
+  end
   local beat = math.floor(math.max(0, position - offset) * bpm / 60)
   local signature = runtime.scene.signature or { 4, 4 }
   for index = runtime.beat + 1, beat do

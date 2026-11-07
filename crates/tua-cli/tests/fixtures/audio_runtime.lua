@@ -152,3 +152,19 @@ do
   system:update(5.1)
   assert(system:snapshot().music.state == 'two')
 end
+
+-- Natural Source clock wraps continue beat delivery on every cycle.
+do
+  local system = audioSystem({music={one={bpm=60,layers={main={source=source}}}}})
+  local beats = 0
+  system:on('beat',function() beats=beats+1 end)
+  system:setMusicState('one')
+  local leader = system._musicRuntime.layers.main._record.source
+  leader.position=3.9; system:update(3.9)
+  assert(beats == 4)
+  leader.position=.1; system:update(.2)
+  leader.position=1.1; system:update(1)
+  assert(beats == 6)
+  leader.position=.1; system:update(3)
+  assert(beats == 7)
+end
