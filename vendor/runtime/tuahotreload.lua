@@ -238,7 +238,7 @@ local function poll()
   if not forced then return end
 
   for path, source in pairs(entry_sources) do
-    if read(path) ~= source or forced[path] then
+    if (read(path) or false) ~= source or forced[path] then
       print("[tua dev] " .. path .. " changed; restarting")
       love.event.quit("restart")
       return
@@ -349,8 +349,8 @@ function M.install()
     return
   end
   installed = true
-  entry_sources["main.lua"] = read("main.lua")
-  entry_sources["conf.lua"] = read("conf.lua")
+  entry_sources["main.lua"] = read("main.lua") or false
+  entry_sources["conf.lua"] = read("conf.lua") or false
   generation = read(SIGNAL)
   for path in pairs(shader_dependencies(generation)) do shader_sources[path] = read(path) end
   track_loaded_modules()

@@ -158,6 +158,14 @@ tick()
 assert(restarted, "entry shader changes restart after successful preflight")
 restarted = false
 
+-- Missing entry files are tracked so creation also restarts.
+files["conf.lua"] = "-- newly configured"
+files[".tuahotreload"] = "created-conf\n"
+tick()
+assert(restarted, "creating conf.lua restarts the game")
+restarted = false
+files["conf.lua"] = nil
+
 -- A changed entry point restarts the game.
 files["main.lua"] = "-- main v2"
 files[".tuahotreload"] = "5\n"
