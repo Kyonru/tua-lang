@@ -408,7 +408,7 @@ end
     assert!(diagnostics[0]["message"]
         .as_str()
         .expect("diagnostic message should be a string")
-        .contains("type mismatch: expected number, found string"));
+        .contains("type mismatch: expected number | nil, found string"));
 }
 #[test]
 fn did_open_publishes_love_asset_path_diagnostics() {
