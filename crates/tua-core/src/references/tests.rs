@@ -67,6 +67,55 @@ end
 }
 
 #[test]
+fn class_generic_parameter_references_follow_binder_identity() {
+    let source = r#"
+type T = string
+
+final class Box<T> {
+  value: T
+
+  init(value: T) {
+    self.value = value
+  }
+
+  get(): T {
+    local function identity<T>(value: T): T return value end
+    return self.value
+  }
+}
+
+final class Other<T> {
+  value: T
+}
+
+local outside: T = "text"
+"#;
+    let mut position = position_at(source, "class Box<T>");
+    position.column += "class Box<".len();
+    let references = references_tua_source("src/generic_class.tua", source, position, true)
+        .expect("source should parse");
+
+    assert_eq!(
+        texts(source, &references),
+        ["T", "T", "T", "T"],
+        "{references:#?}"
+    );
+    assert!(references
+        .iter()
+        .all(|reference| reference.kind == ReferenceKind::TypeParameter));
+    let uses = references_tua_source("src/generic_class.tua", source, position, false)
+        .expect("source should parse");
+    assert_eq!(texts(source, &uses), ["T", "T", "T"]);
+
+    let mut other_position = position_at(source, "class Other<T>");
+    other_position.column += "class Other<".len();
+    let other_references =
+        references_tua_source("src/generic_class.tua", source, other_position, true)
+            .expect("source should parse");
+    assert_eq!(texts(source, &other_references), ["T", "T"]);
+}
+
+#[test]
 fn function_references_include_declaration_and_calls() {
     let references = references_at("damage(player", 0, true);
 

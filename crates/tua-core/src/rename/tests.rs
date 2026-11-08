@@ -93,6 +93,37 @@ fn renaming_parameter_updates_only_its_attached_param_tags_and_keeps_prose() {
 }
 
 #[test]
+fn renames_class_generic_parameters_without_touching_value_identifiers() {
+    let source = r#"final class Box<T> {
+  value: T
+
+  get(): T {
+    local T = self.value
+    return T
+  }
+}
+"#;
+    let mut binder_position = position_at(source, "class Box<T>");
+    binder_position.column += "class Box<".len();
+    let target = prepare_rename_tua_source("src/generic_class.tua", source, binder_position)
+        .expect("source should parse")
+        .expect("class generic binder should support prepare rename");
+    assert_eq!(target.kind, RenameKind::TypeParameter);
+    assert_eq!(target.placeholder, "T");
+
+    let edit = rename_tua_source("src/generic_class.tua", source, binder_position, "Item")
+        .expect("source should parse")
+        .expect("class generic binder should rename");
+    assert_eq!(edit_texts(&edit), ["Item", "Item", "Item"]);
+    let renamed = apply_edit(source, &edit);
+    assert!(renamed.contains("class Box<Item>"));
+    assert!(renamed.contains("value: Item"));
+    assert!(renamed.contains("get(): Item"));
+    assert!(renamed.contains("local T = self.value"));
+    assert!(renamed.contains("return T"));
+}
+
+#[test]
 fn renames_resolved_table_fields_and_rejects_unknowns_and_invalid_names() {
     let target = prepare_at("target.hp", "target.".len()).expect("field should be renameable");
     let edit = rename_at("target.hp", "target.".len(), "health").expect("field should rename");

@@ -86,7 +86,7 @@ pub fn references_to_definition_parsed_source_with_artifacts(
             return Ok(Vec::new());
         }
         let Some(parameter) =
-            crate::analysis::generic_function_parameter_at_position(parsed, target.span.start)
+            crate::analysis::generic_type_parameter_at_position(parsed, target.span.start)
         else {
             return Ok(Vec::new());
         };
@@ -108,7 +108,7 @@ pub fn references_to_definition_parsed_source_with_artifacts(
         let mut references = identifiers
             .into_iter()
             .filter_map(|identifier| {
-                let resolved = crate::analysis::generic_function_parameter_at_position(
+                let resolved = crate::analysis::generic_type_parameter_at_position(
                     parsed,
                     identifier.span.start,
                 )?;
@@ -129,6 +129,9 @@ pub fn references_to_definition_parsed_source_with_artifacts(
                 span: target.span,
                 kind: ReferenceKind::TypeParameter,
             });
+        }
+        if !include_declaration {
+            references.retain(|reference| reference.span != target.span);
         }
         references.sort_by_key(|reference| position_key(reference.span.start));
         return Ok(references);

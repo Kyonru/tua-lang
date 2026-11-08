@@ -1068,7 +1068,7 @@ fn is_type_reference_position(parsed: &ParsedSource, position: SourcePosition) -
     }
 }
 
-pub(crate) fn generic_function_parameter_at_position(
+pub(crate) fn generic_type_parameter_at_position(
     parsed: &ParsedSource,
     position: SourcePosition,
 ) -> Option<crate::parser::GenericParameter> {
@@ -1087,7 +1087,12 @@ pub(crate) fn generic_function_parameter_at_position(
         .iter()
         .flat_map(|function| &function.generic_parameters)
         .any(|parameter| span_contains_position(parameter.name_span, parser_position));
-    if !is_binder && lua_doc_parameter.is_none() && !is_type_reference_position(parsed, position) {
+    let class_parameter = generic_class_parameter_at_position(parsed, position, &identifier.text);
+    if !is_binder
+        && lua_doc_parameter.is_none()
+        && class_parameter.is_none()
+        && !is_type_reference_position(parsed, position)
+    {
         return None;
     }
 
@@ -1119,7 +1124,102 @@ pub(crate) fn generic_function_parameter_at_position(
         }
     }
 
-    lua_doc_parameter
+    lua_doc_parameter.or(class_parameter)
+}
+
+fn generic_class_parameter_at_position(
+    parsed: &ParsedSource,
+    position: SourcePosition,
+    identifier: &str,
+) -> Option<crate::parser::GenericParameter> {
+    let mut classes = parsed
+        .class_declarations
+        .iter()
+        .filter(|class| span_contains_position(class.span, position))
+        .collect::<Vec<_>>();
+    classes.sort_by_key(|class| {
+        (
+            class.span.end.line.saturating_sub(class.span.start.line),
+            class
+                .span
+                .end
+                .column
+                .saturating_sub(class.span.start.column),
+        )
+    });
+
+    for class in classes {
+        let Some(parameter) = class
+            .generic_parameters
+            .iter()
+            .find(|parameter| parameter.name == identifier)
+        else {
+            return None;
+        };
+        if span_contains_position(parameter.name_span, position)
+            || class.fields.iter().any(|field| {
+                span_contains_position(field.span, position)
+                    && is_type_reference_position(parsed, position)
+                    && tua_type_contains_parameter(&field.parsed_ty, &parameter.id)
+            })
+            || class.methods.iter().chain(class.init.iter()).any(|method| {
+                (span_contains_position(method.parameters_span, position)
+                    || (method.return_type.is_some()
+                        && position_key(method.parameters_span.end) <= position_key(position)
+                        && position_key(position) <= position_key(method.body_span.start)))
+                    && is_type_reference_position(parsed, position)
+            })
+            || class
+                .parent_application
+                .as_ref()
+                .is_some_and(|application| {
+                    application.arguments.iter().any(|argument| {
+                        span_contains_position(argument.span, position)
+                            && tua_type_contains_parameter(&argument.ty, &parameter.id)
+                    })
+                })
+        {
+            return Some(parameter.clone());
+        }
+    }
+
+    None
+}
+
+fn tua_type_contains_parameter(
+    ty: &crate::parser::TuaType,
+    type_parameter: &crate::parser::TypeParameterId,
+) -> bool {
+    use crate::parser::TuaType;
+
+    match ty {
+        TuaType::Parameter { id, .. } => id == type_parameter,
+        TuaType::Applied { arguments, .. }
+        | TuaType::Union(arguments)
+        | TuaType::Tuple(arguments) => arguments
+            .iter()
+            .any(|argument| tua_type_contains_parameter(argument, type_parameter)),
+        TuaType::Table(fields) => fields
+            .iter()
+            .any(|field| tua_type_contains_parameter(&field.ty, type_parameter)),
+        TuaType::Array(item) => tua_type_contains_parameter(item, type_parameter),
+        TuaType::Dictionary { key, value } => {
+            tua_type_contains_parameter(key, type_parameter)
+                || tua_type_contains_parameter(value, type_parameter)
+        }
+        TuaType::Function {
+            parameters,
+            returns,
+        } => {
+            parameters
+                .iter()
+                .any(|item| tua_type_contains_parameter(&item.ty, type_parameter))
+                || returns
+                    .iter()
+                    .any(|ty| tua_type_contains_parameter(ty, type_parameter))
+        }
+        TuaType::Named(_) | TuaType::StringLiteral(_) => false,
+    }
 }
 
 fn lua_doc_generic_function_parameter_at_position(

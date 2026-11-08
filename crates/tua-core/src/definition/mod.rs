@@ -71,20 +71,18 @@ pub fn definition_parsed_source_with_hir(
     hir: Option<&HirModule>,
     position: SourcePosition,
 ) -> Result<Option<Definition>, Vec<Diagnostic>> {
-    if !parsed.class_declarations.is_empty() {
-        let scope = crate::scope_map_parsed_source(parsed);
-        if let Some(definition) = native_class_lexical_definition(parsed, &scope, position) {
-            return Ok(Some(definition));
-        }
-    }
-    if let Some(parameter) =
-        crate::analysis::generic_function_parameter_at_position(parsed, position)
-    {
+    if let Some(parameter) = crate::analysis::generic_type_parameter_at_position(parsed, position) {
         return Ok(Some(Definition {
             path: parsed.path.clone(),
             span: parameter.name_span,
             kind: DefinitionKind::TypeParameter,
         }));
+    }
+    if !parsed.class_declarations.is_empty() {
+        let scope = crate::scope_map_parsed_source(parsed);
+        if let Some(definition) = native_class_lexical_definition(parsed, &scope, position) {
+            return Ok(Some(definition));
+        }
     }
     let resolver = DefinitionResolver { parsed, hir };
 

@@ -71,6 +71,66 @@ fn resolves_function_call() {
 }
 
 #[test]
+fn resolves_class_generic_parameter_uses_and_parent_arguments() {
+    let source = r#"
+type U = string
+
+open class Base<T> {
+  value: T
+}
+
+final class Child<U> extends Base<U> {
+  get(): U {
+    local function identity<U>(value: U): U return value end
+    return self.value
+  }
+}
+
+local outside: U = "text"
+"#;
+    let mut declaration = position_at(source, "class Child<U>");
+    declaration.column += "class Child<".len();
+    let binder = definition_tua_source("src/generic_class.tua", source, declaration)
+        .expect("source should parse")
+        .expect("class type parameter binder should navigate to itself");
+    assert_eq!(binder.kind, DefinitionKind::TypeParameter);
+    assert_eq!(source_text_from(source, binder.span), "U");
+
+    let mut parent_argument = position_at(source, "Base<U>");
+    parent_argument.column += "Base<".len();
+    let definition = definition_tua_source("src/generic_class.tua", source, parent_argument)
+        .expect("source should parse")
+        .expect("parent application argument should navigate to class binder");
+    assert_eq!(definition.kind, DefinitionKind::TypeParameter);
+    assert_eq!(definition.span, binder.span);
+
+    let mut method_return = position_at(source, "get(): U");
+    method_return.column += "get(): ".len();
+    let definition = definition_tua_source("src/generic_class.tua", source, method_return)
+        .expect("source should parse")
+        .expect("method type should navigate to class binder");
+    assert_eq!(definition.kind, DefinitionKind::TypeParameter);
+    assert_eq!(definition.span, binder.span);
+
+    let mut nested_function_use = position_at(source, "value: U");
+    nested_function_use.column += "value: ".len();
+    let nested_definition =
+        definition_tua_source("src/generic_class.tua", source, nested_function_use)
+            .expect("source should parse")
+            .expect("nested function binder should shadow the class binder");
+    assert_eq!(nested_definition.kind, DefinitionKind::TypeParameter);
+    assert_ne!(nested_definition.span, binder.span);
+
+    let mut alias_use = position_at(source, "outside: U");
+    alias_use.column += "outside: ".len();
+    let alias_definition = definition_tua_source("src/generic_class.tua", source, alias_use)
+        .expect("source should parse")
+        .expect("class binder should not capture an unrelated alias use");
+    assert_eq!(alias_definition.kind, DefinitionKind::TypeAlias);
+    assert_eq!(source_text_from(source, alias_definition.span), "U");
+}
+
+#[test]
 fn resolves_global_function_call() {
     let source = r#"function test(a: boolean)
   return ""
