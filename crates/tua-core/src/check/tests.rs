@@ -2357,6 +2357,73 @@ end
 }
 
 #[test]
+fn checks_explicit_protocol_conformance_and_accepts_inherited_methods() {
+    check_tua_source(
+        "src/protocols.tua",
+        r#"
+protocol Updatable {
+  update(dt: number): nil
+}
+
+open class Actor implements Updatable {
+  update(dt: number): nil {
+  }
+}
+
+final class Panel extends Actor implements Updatable {
+}
+"#,
+    )
+    .expect("a class and its subclass should satisfy the protocol through inherited methods");
+}
+
+#[test]
+fn reports_missing_protocol_methods_at_the_implementing_class() {
+    let diagnostics = check_tua_source(
+        "src/protocols.tua",
+        r#"
+protocol Updatable {
+  update(dt: number): nil
+}
+final class Panel implements Updatable {
+}
+"#,
+    )
+    .expect_err("explicit protocol conformance requires every method");
+    assert!(diagnostics.iter().any(|diagnostic| {
+        diagnostic
+            .message
+            .contains("does not implement protocol `Updatable`")
+            && diagnostic.message.contains("missing method `update`")
+            && diagnostic.line == 5
+    }));
+}
+
+#[test]
+fn rejects_protocol_methods_with_unsafe_parameter_types() {
+    let diagnostics = check_tua_source(
+        "src/protocols.tua",
+        r#"
+protocol Updatable {
+  update(dt: number): nil
+}
+final class Panel implements Updatable {
+  update(dt: string): nil {
+  }
+}
+"#,
+    )
+    .expect_err("a string-only method cannot implement a number-based contract");
+    assert!(diagnostics.iter().any(|diagnostic| {
+        diagnostic
+            .message
+            .contains("does not satisfy protocol `Updatable.update`")
+            && diagnostic.message.contains("expected")
+            && diagnostic.message.contains("found")
+    }));
+}
+
+#[test]
 fn rejects_values_that_do_not_match_a_native_array_item_type() {
     let diagnostics = check_tua_source(
         "src/actors.tua",

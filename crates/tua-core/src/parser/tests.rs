@@ -409,6 +409,25 @@ fn class_headers_preserve_explicit_protocol_conformance_and_erase_it_from_lua() 
 }
 
 #[test]
+fn protocol_declarations_preserve_method_contracts_and_erase_from_lua() {
+    let source = r#"protocol Updatable {
+  update(dt: number): nil
+}
+"#;
+    let parsed = parse_tua_source("src/updatable.tua", source)
+        .expect("method-only protocol declarations should parse");
+    assert_eq!(parsed.protocol_declarations.len(), 1);
+    let protocol = &parsed.protocol_declarations[0];
+    assert_eq!(protocol.name, "Updatable");
+    assert_eq!(protocol.methods[0].name, "update");
+    assert_eq!(protocol.methods[0].parameters, "dt: number");
+    assert_eq!(protocol.methods[0].return_type, "nil");
+    let lua = crate::emit::emit_lua(&parsed).expect("protocols are erased before emission");
+    assert!(!lua.contains("protocol"));
+    assert!(!lua.contains("Updatable"));
+}
+
+#[test]
 fn class_array_fields_parse_after_lowering() {
     let source = r#"final class BeatManager {
   steps: number[]

@@ -179,6 +179,8 @@ pub fn extract_tua_source_model(
         let _profile = crate::profile::span("parse.tua.class_model");
         classes::parse_class_declarations(&raw.path, &raw.source)
     };
+    let (protocol_declarations, protocol_diagnostics) =
+        classes::parse_protocol_declarations(&raw.path, &raw.source);
     let (sprite_declarations, sprite_diagnostics) = {
         let _profile = crate::profile::span("parse.tua.sprite_model");
         crate::sprite::parse_sprite_declarations(&raw.ast)
@@ -193,6 +195,7 @@ pub fn extract_tua_source_model(
     };
 
     let mut diagnostics = class_diagnostics;
+    diagnostics.extend(protocol_diagnostics);
     diagnostics.extend(sprite_diagnostics);
     diagnostics.extend(syntax.diagnostics);
     diagnostics.extend(declaration_file_diagnostics(raw));
@@ -212,6 +215,7 @@ pub fn extract_tua_source_model(
         parameter_default_references: syntax.parameter_default_references,
         sprite_declarations,
         class_declarations,
+        protocol_declarations,
     })
 }
 

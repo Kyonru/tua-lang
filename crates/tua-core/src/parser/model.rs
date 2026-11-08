@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use full_moon::tokenizer::Position;
 
-use crate::classes::ClassDeclaration;
+use crate::classes::{ClassDeclaration, ProtocolDeclaration};
 use crate::sprite::SpriteDeclaration;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -80,6 +80,7 @@ pub struct ParsedSource {
     pub(crate) parameter_default_references: Vec<ParameterDefaultReference>,
     pub(crate) sprite_declarations: Vec<SpriteDeclaration>,
     pub(crate) class_declarations: Vec<ClassDeclaration>,
+    pub(crate) protocol_declarations: Vec<ProtocolDeclaration>,
 }
 
 impl ParsedSource {
@@ -99,6 +100,7 @@ impl ParsedSource {
             parameter_default_references: typed.parameter_default_references.clone(),
             sprite_declarations: typed.sprite_declarations.clone(),
             class_declarations: typed.class_declarations.clone(),
+            protocol_declarations: typed.protocol_declarations.clone(),
             raw,
             typed,
         }
@@ -149,6 +151,7 @@ pub struct TypedSourceModel {
     pub(crate) parameter_default_references: Vec<ParameterDefaultReference>,
     pub(crate) sprite_declarations: Vec<SpriteDeclaration>,
     pub(crate) class_declarations: Vec<ClassDeclaration>,
+    pub(crate) protocol_declarations: Vec<ProtocolDeclaration>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

@@ -13,7 +13,7 @@ use crate::parser::{
 };
 use crate::scope::{scope_map_parsed_source, ScopeDeclarationKind, ScopeSymbolId};
 use crate::source_text::SourcePositionIndex;
-use crate::types::{Type, TypeEnvironment};
+use crate::types::{Type, TypeEnvironment, TypedFunction};
 use crate::{Diagnostic, DiagnosticCode};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -55,6 +55,23 @@ pub(crate) struct ClassMethod {
     pub name_span: SourceSpan,
     pub parameters_span: SourceSpan,
     pub body_span: SourceSpan,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct ProtocolDeclaration {
+    pub name: String,
+    pub methods: Vec<ProtocolMethod>,
+    pub span: SourceSpan,
+    pub name_span: SourceSpan,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct ProtocolMethod {
+    pub name: String,
+    pub parameters: String,
+    pub return_type: String,
+    pub span: SourceSpan,
+    pub name_span: SourceSpan,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -228,12 +245,148 @@ pub(crate) fn parse_class_declarations(
     (declarations, diagnostics)
 }
 
+pub(crate) fn parse_protocol_declarations(
+    path: &Path,
+    source: &str,
+) -> (Vec<ProtocolDeclaration>, Vec<Diagnostic>) {
+    let mut declarations = Vec::new();
+    let mut diagnostics = Vec::new();
+    let positions = SourcePositionIndex::new(source);
+    let mut index = 0;
+    while index < source.len() {
+        if source[index..].starts_with("--") {
+            index = consume_comment(source, index);
+            continue;
+        }
+        if let Some(end) = consume_string_literal(source, index) {
+            index = end;
+            continue;
+        }
+        if !starts_keyword(source, index, "protocol") {
+            index += next_char_len(source, index);
+            continue;
+        }
+        let start = index;
+        let mut cursor = skip_whitespace(source, index + "protocol".len());
+        let Some((name, name_start, name_end)) = take_identifier(source, cursor) else {
+            index += "protocol".len();
+            continue;
+        };
+        cursor = skip_whitespace(source, name_end);
+        if !source[cursor..].starts_with('{') {
+            index = cursor;
+            continue;
+        }
+        let Some(body_end) = find_matching_brace(source, cursor) else {
+            diagnostics.push(class_diagnostic(
+                path,
+                positions.position(start),
+                format!("unclosed protocol `{name}`"),
+            ));
+            break;
+        };
+        let mut methods = Vec::new();
+        let mut body_cursor = cursor + 1;
+        while body_cursor < body_end {
+            body_cursor = skip_body_ws_and_comments(source, body_cursor);
+            if body_cursor >= body_end {
+                break;
+            }
+            let line_end = source[body_cursor..body_end]
+                .find('\n')
+                .map_or(body_end, |n| body_cursor + n);
+            let line = source[body_cursor..line_end].trim();
+            if line == "}" {
+                break;
+            }
+            let (method_name, method_params, method_return) = parse_protocol_method_line(line);
+            if let (Some(method_name), Some(parameters), Some(return_type)) =
+                (method_name, method_params, method_return)
+            {
+                let method_start = body_cursor
+                    + source[body_cursor..line_end]
+                        .find(method_name.as_str())
+                        .unwrap_or(0);
+                methods.push(ProtocolMethod {
+                    name: method_name.clone(),
+                    parameters,
+                    return_type,
+                    span: SourceSpan {
+                        start: positions.position(method_start),
+                        end: positions.position(line_end),
+                    },
+                    name_span: SourceSpan {
+                        start: positions.position(method_start),
+                        end: positions.position(method_start + method_name.len()),
+                    },
+                });
+            } else {
+                diagnostics.push(class_diagnostic(path, positions.position(body_cursor), format!("invalid protocol member in `{name}`; expected `method(parameters): ReturnType`")));
+            }
+            body_cursor = if line_end < body_end {
+                line_end + 1
+            } else {
+                body_end
+            };
+        }
+        if declarations
+            .iter()
+            .any(|protocol: &ProtocolDeclaration| protocol.name == name)
+        {
+            diagnostics.push(class_diagnostic(
+                path,
+                positions.position(name_start),
+                format!("duplicate protocol `{name}`"),
+            ));
+        }
+        declarations.push(ProtocolDeclaration {
+            name,
+            methods,
+            span: SourceSpan {
+                start: positions.position(start),
+                end: positions.position(body_end + 1),
+            },
+            name_span: SourceSpan {
+                start: positions.position(name_start),
+                end: positions.position(name_end),
+            },
+        });
+        index = body_end + 1;
+    }
+    (declarations, diagnostics)
+}
+
+fn parse_protocol_method_line(line: &str) -> (Option<String>, Option<String>, Option<String>) {
+    let (name, _, name_end) = match take_identifier(line, 0) {
+        Some(parts) => parts,
+        None => return (None, None, None),
+    };
+    let open = skip_whitespace(line, name_end);
+    if !line[open..].starts_with('(') {
+        return (None, None, None);
+    }
+    let close = match find_matching_paren(line, open) {
+        Some(close) => close,
+        None => return (None, None, None),
+    };
+    let colon = skip_whitespace(line, close + 1);
+    if !line[colon..].starts_with(':') {
+        return (None, None, None);
+    }
+    let parameters = line[open + 1..close].trim().to_owned();
+    let return_type = line[colon + 1..]
+        .trim()
+        .trim_end_matches(',')
+        .trim()
+        .to_owned();
+    if return_type.is_empty() || return_type.contains('{') {
+        return (None, None, None);
+    }
+    (Some(name), Some(parameters), Some(return_type))
+}
+
 pub(crate) fn class_lowering_edits(source: &str) -> Vec<ClassLoweringEdit> {
     let blocks = class_blocks(source);
-
-    if blocks.is_empty() {
-        return Vec::new();
-    }
 
     let mut declarations = blocks
         .iter()
@@ -266,7 +419,7 @@ pub(crate) fn class_lowering_edits(source: &str) -> Vec<ClassLoweringEdit> {
         .map(|declaration| format!("local {} = {{}}\n", declaration.name))
         .collect::<String>();
 
-    blocks
+    let mut edits = blocks
         .into_iter()
         .zip(declarations.iter())
         .enumerate()
@@ -295,7 +448,38 @@ pub(crate) fn class_lowering_edits(source: &str) -> Vec<ClassLoweringEdit> {
                 parser_provenance,
             }
         })
-        .collect()
+        .collect::<Vec<_>>();
+    let (protocols, _) = parse_protocol_declarations(Path::new("<protocol>"), source);
+    for protocol in protocols {
+        let Some(start) = crate::source_text::byte_for_position(source, protocol.span.start) else {
+            continue;
+        };
+        let Some(end) = crate::source_text::byte_for_position(source, protocol.span.end) else {
+            continue;
+        };
+        let original = &source[start..end];
+        let replacement = original
+            .chars()
+            .map(|c| if c == '\n' || c == '\r' { c } else { ' ' })
+            .collect::<String>();
+        let provenance = replacement
+            .split_inclusive('\n')
+            .map(|_| ParserLineProvenance {
+                source_fragment: None,
+                source_span: protocol.span,
+                parser_start_column: 1,
+                class_generated: true,
+            })
+            .collect();
+        edits.push(ClassLoweringEdit {
+            range: start..end,
+            replacement,
+            source_span: protocol.span,
+            parser_provenance: provenance,
+        });
+    }
+    edits.sort_by_key(|edit| edit.range.start);
+    edits
 }
 
 fn class_parser_line_provenance(
@@ -1366,6 +1550,87 @@ pub(crate) fn class_contract_diagnostics(
     let mut diagnostics = Vec::new();
     let context = environment.to_type_context();
     let mut initialization = ClassInitializationAnalysis::new(parsed);
+
+    for class in &parsed.class_declarations {
+        for (protocol_name, protocol_span) in &class.implemented_protocols {
+            let Some(protocol) = parsed
+                .protocol_declarations
+                .iter()
+                .find(|protocol| protocol.name == *protocol_name)
+            else {
+                diagnostics.push(class_diagnostic(
+                    &parsed.path,
+                    protocol_span.start,
+                    format!(
+                        "unknown protocol `{protocol_name}` implemented by `{}`",
+                        class.name
+                    ),
+                ));
+                continue;
+            };
+            for requirement in &protocol.methods {
+                if class_method_declaration(
+                    &parsed.class_declarations,
+                    &class.name,
+                    &requirement.name,
+                )
+                .is_none()
+                {
+                    diagnostics.push(class_diagnostic(
+                        &parsed.path,
+                        class.name_span.start,
+                        format!(
+                            "class `{}` does not implement protocol `{}`: missing method `{}`",
+                            class.name, protocol.name, requirement.name
+                        ),
+                    ));
+                    continue;
+                }
+                let (implementation_class, implementation) = class_method_declaration(
+                    &parsed.class_declarations,
+                    &class.name,
+                    &requirement.name,
+                )
+                .expect("method existence was checked above");
+                let actual = environment.function(&format!(
+                    "{}_{}",
+                    implementation_class.name, requirement.name
+                ));
+                let expected = parse_tua_type_text(&format!(
+                    "({}) -> {}",
+                    requirement.parameters, requirement.return_type
+                ));
+                let Some(actual) = actual.and_then(TypedFunction::as_type) else {
+                    continue;
+                };
+                let expected = crate::types::type_from_tua_type(&expected);
+                let actual = match actual {
+                    Type::Function(mut function) => {
+                        // Class methods carry an implicit receiver. Protocol requirements
+                        // describe only the explicit arguments, so compare those slots.
+                        if !function.parameters.is_empty() {
+                            function.parameters.remove(0);
+                            function.required_parameter_count =
+                                function.required_parameter_count.saturating_sub(1);
+                        }
+                        Type::Function(function)
+                    }
+                    other => other,
+                };
+                if !context.is_assignable(&actual, &expected) {
+                    diagnostics.push(class_diagnostic(
+                        &parsed.path,
+                        implementation.name_span.start,
+                        format!(
+                            "method `{}.{}` does not satisfy protocol `{}.{}`: expected `{}`, found `{}`",
+                            class.name, requirement.name, protocol.name, requirement.name,
+                            expected, actual
+                        ),
+                    ));
+                }
+            }
+        }
+    }
 
     for class in &parsed.class_declarations {
         for field in &class.fields {
