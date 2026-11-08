@@ -109,7 +109,8 @@ must satisfy each contract's signature.
 Method compatibility follows function variance: an implementation must accept
 every argument allowed by the protocol and may return a narrower type. A
 method that accepts only a subset of protocol inputs or may return an extra
-type is rejected.
+type is rejected. A signature mismatch diagnostic names the incompatible
+parameter or return slot and shows its expected and actual types.
 
 Protocols can be exported and consumed as type-only imports; those imports and
 the protocol declaration are erased from Lua. Project diagnostics validate

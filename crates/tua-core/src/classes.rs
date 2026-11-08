@@ -13,7 +13,9 @@ use crate::parser::{
 };
 use crate::scope::{scope_map_parsed_source, ScopeDeclarationKind, ScopeSymbolId};
 use crate::source_text::SourcePositionIndex;
-use crate::types::{Type, TypeEnvironment, TypedFunction};
+use crate::types::{
+    AssignabilityFailure, AssignabilityPathSegment, Type, TypeEnvironment, TypedFunction,
+};
 use crate::{Diagnostic, DiagnosticCode};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -1667,11 +1669,12 @@ pub(crate) fn class_contract_diagnostics(
                     }
                     other => other,
                 };
-                if !context.is_assignable(&actual, &expected) {
+                if let Some(failure) = context.assignability_failure(&actual, &expected) {
+                    let detail = protocol_method_failure_detail(&failure);
                     diagnostics.push(class_diagnostic(
                         &parsed.path,
                         implementation.name_span.start,
-                        format!("method `{}.{}` does not satisfy protocol `{}.{}`: expected `{}`, found `{}`", class.name, requirement_name, protocol_name, requirement_name, expected, actual),
+                        format!("method `{}.{}` does not satisfy protocol `{}.{}`: expected `{}`, found `{}`{detail}", class.name, requirement_name, protocol_name, requirement_name, expected, actual),
                     ));
                 }
             }
@@ -1754,6 +1757,34 @@ pub(crate) fn class_contract_diagnostics(
     }
 
     diagnostics
+}
+
+fn protocol_method_failure_detail(failure: &AssignabilityFailure) -> String {
+    let Some(segment) = failure.path.first() else {
+        return String::new();
+    };
+
+    match segment {
+        AssignabilityPathSegment::FunctionParameter { index, name } => {
+            let parameter = name
+                .as_deref()
+                .map(|name| format!(" `{name}`"))
+                .unwrap_or_default();
+            format!(
+                "; incompatible parameter{parameter} {}: expected `{}`, found `{}`",
+                index + 1,
+                failure.expected,
+                failure.found
+            )
+        }
+        AssignabilityPathSegment::FunctionReturn(index) => format!(
+            "; incompatible return value {}: expected `{}`, found `{}`",
+            index + 1,
+            failure.expected,
+            failure.found
+        ),
+        _ => String::new(),
+    }
 }
 
 pub(crate) fn class_lint_facts(

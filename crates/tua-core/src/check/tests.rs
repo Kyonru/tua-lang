@@ -2570,6 +2570,9 @@ final class NarrowInput implements Visitor {
         diagnostic
             .message
             .contains("does not satisfy protocol `Visitor.visit`")
+            && diagnostic.message.contains(
+                "incompatible parameter `value` 1: expected `number | string`, found `number`",
+            )
     }));
 
     let broad_return = check_tua_source(
@@ -2586,11 +2589,17 @@ final class BroadReturn implements Visitor {
 "#,
     )
     .expect_err("an implementation cannot return values outside the protocol result type");
-    assert!(broad_return.iter().any(|diagnostic| {
-        diagnostic
-            .message
-            .contains("does not satisfy protocol `Visitor.visit`")
-    }));
+    assert!(
+        broad_return.iter().any(|diagnostic| {
+            diagnostic
+                .message
+                .contains("does not satisfy protocol `Visitor.visit`")
+                && diagnostic
+                    .message
+                    .contains("incompatible return value 1: expected `number`, found `string`")
+        }),
+        "{broad_return:#?}"
+    );
 }
 
 #[test]

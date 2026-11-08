@@ -34,6 +34,8 @@ language or editor behavior, and migration notes call out those changes.
   protocol method calls keep their method token class.
 - Do not report a protocol type import as unused when a class uses it in an
   `implements` clause.
+- Identify the incompatible parameter or return slot in protocol method
+  conformance diagnostics.
 
 ## [0.6.1] - 2026-11-08
 
