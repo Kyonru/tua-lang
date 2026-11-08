@@ -7,15 +7,15 @@ use full_moon::visitors::Visitor;
 use crate::ast_utils::field_chain_before_first_call;
 use crate::lua::{self, LuaItem, LuaItemKind};
 use crate::module_index::required_module_export_for_fields;
-use crate::semantic::{SemanticModel, resolve_aliases, resolve_field_chain_type};
+use crate::semantic::{resolve_aliases, resolve_field_chain_type, SemanticModel};
 use crate::signal::{self, SignalEventIndex};
 use crate::source_text::{byte_for_column, is_identifier_continue, is_identifier_start};
 use crate::types::{
-    FunctionType, Type, TypeEnvironment, TypedFunction, TypedFunctionOverload, TypedParameter,
-    build_type_environment_with_diagnostics, instantiate_generic_function,
+    build_type_environment_with_diagnostics, instantiate_generic_function, FunctionType, Type,
+    TypeEnvironment, TypedFunction, TypedFunctionOverload, TypedParameter,
 };
-use crate::{Diagnostic, ParsedSource, SourcePosition, parse_tua_source};
 use crate::{ecs, input, object_pool, state_machine, store};
+use crate::{parse_tua_source, Diagnostic, ParsedSource, SourcePosition};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SignatureHelp {

@@ -67,12 +67,10 @@ fn bare_parent_headers_keep_the_legacy_parent_and_record_empty_application() {
             .map(|application| application.arguments.len()),
         Some(0)
     );
-    assert!(
-        classes[1]
-            .parent_application
-            .as_ref()
-            .is_some_and(|application| application.arguments.is_empty())
-    );
+    assert!(classes[1]
+        .parent_application
+        .as_ref()
+        .is_some_and(|application| application.arguments.is_empty()));
 }
 
 #[test]

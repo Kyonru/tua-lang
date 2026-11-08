@@ -8,11 +8,11 @@ use full_moon::visitors::{Visit, Visitor};
 
 use crate::ast_utils::{field_chain_before_first_call, plain_field_chain_from_var, token_text};
 use crate::parser::{
-    GenericDeclarationId, GenericDeclarationKind, GenericParameter, ParsedSource,
-    ParserLineProvenance, RawParsedSource, SourcePosition, SourceSpan, TuaType, TypeParameterId,
-    TypedSourceModel, parse_raw_tua_source, parse_tua_type_text,
+    parse_raw_tua_source, parse_tua_type_text, GenericDeclarationId, GenericDeclarationKind,
+    GenericParameter, ParsedSource, ParserLineProvenance, RawParsedSource, SourcePosition,
+    SourceSpan, TuaType, TypeParameterId, TypedSourceModel,
 };
-use crate::scope::{ScopeDeclarationKind, ScopeSymbolId, scope_map_parsed_source};
+use crate::scope::{scope_map_parsed_source, ScopeDeclarationKind, ScopeSymbolId};
 use crate::source_text::SourcePositionIndex;
 use crate::types::{
     AssignabilityFailure, AssignabilityPathSegment, Type, TypeEnvironment, TypedFunction,
