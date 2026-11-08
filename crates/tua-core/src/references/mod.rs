@@ -85,15 +85,27 @@ pub fn references_to_definition_parsed_source_with_artifacts(
         if target.path != parsed.path {
             return Ok(Vec::new());
         }
-        let parameter = parsed
-            .function_annotations
-            .iter()
-            .flat_map(|function| &function.generic_parameters)
-            .find(|parameter| parameter.name_span == target.span);
-        let Some(parameter) = parameter else {
+        let Some(parameter) =
+            crate::analysis::generic_function_parameter_at_position(parsed, target.span.start)
+        else {
             return Ok(Vec::new());
         };
-        let mut references = source_identifiers(&parsed.source)
+        let mut identifiers = source_identifiers(&parsed.source);
+        for annotation in &parsed.lua_doc_annotations {
+            if let crate::LuaDocAnnotationKind::Generic(generic) = &annotation.kind {
+                identifiers.extend(generic.parameters.iter().flat_map(|parameter| {
+                    identifiers_in_span(&parsed.source, parameter.name_span)
+                }));
+            }
+            identifiers.extend(
+                crate::analysis::lua_doc_annotation_type_spans(annotation)
+                    .flat_map(|span| identifiers_in_span(&parsed.source, span)),
+            );
+        }
+        identifiers.sort_by_key(|identifier| position_key(identifier.span.start));
+        identifiers.dedup_by_key(|identifier| identifier.span);
+
+        let mut references = identifiers
             .into_iter()
             .filter_map(|identifier| {
                 let resolved = crate::analysis::generic_function_parameter_at_position(
@@ -161,6 +173,52 @@ pub fn references_to_definition_parsed_source_with_artifacts(
     });
 
     Ok(references)
+}
+
+fn identifiers_in_span(source: &str, span: SourceSpan) -> Vec<SourceIdentifier> {
+    if span.start.line != span.end.line {
+        return Vec::new();
+    }
+    let Some(line) = line_at(source, span.start.line) else {
+        return Vec::new();
+    };
+    let start = span.start.column.saturating_sub(1);
+    let end = span.end.column.saturating_sub(1).min(line.len());
+    let Some(text) = line.get(start..end) else {
+        return Vec::new();
+    };
+
+    let bytes = text.as_bytes();
+    let mut identifiers = Vec::new();
+    let mut index = 0;
+    while index < bytes.len() {
+        if !crate::source_text::is_identifier_start(bytes[index]) {
+            index += 1;
+            continue;
+        }
+        let local_start = index;
+        index += 1;
+        while index < bytes.len() && crate::source_text::is_identifier_continue(bytes[index]) {
+            index += 1;
+        }
+        let name = &text[local_start..index];
+        let absolute_start = start + local_start;
+        let absolute_end = start + index;
+        identifiers.push(SourceIdentifier {
+            text: name.to_owned(),
+            span: SourceSpan {
+                start: SourcePosition {
+                    line: span.start.line,
+                    column: absolute_start + 1,
+                },
+                end: SourcePosition {
+                    line: span.start.line,
+                    column: absolute_end + 1,
+                },
+            },
+        });
+    }
+    identifiers
 }
 
 fn scope_references_to_definition(

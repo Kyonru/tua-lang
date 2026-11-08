@@ -1079,12 +1079,14 @@ pub(crate) fn generic_function_parameter_at_position(
         .parts
         .into_iter()
         .last()?;
+    let lua_doc_parameter =
+        lua_doc_generic_function_parameter_at_position(parsed, parser_position, &identifier.text);
     let is_binder = parsed
         .function_annotations
         .iter()
         .flat_map(|function| &function.generic_parameters)
         .any(|parameter| span_contains_position(parameter.name_span, parser_position));
-    if !is_binder && !is_type_reference_position(parsed, position) {
+    if !is_binder && lua_doc_parameter.is_none() && !is_type_reference_position(parsed, position) {
         return None;
     }
 
@@ -1116,7 +1118,192 @@ pub(crate) fn generic_function_parameter_at_position(
         }
     }
 
+    lua_doc_parameter
+}
+
+fn lua_doc_generic_function_parameter_at_position(
+    parsed: &ParsedSource,
+    position: SourcePosition,
+    identifier: &str,
+) -> Option<crate::parser::GenericParameter> {
+    use crate::parser::{
+        GenericDeclarationId, GenericDeclarationKind, GenericParameter, TypeParameterId,
+    };
+
+    let is_generic_binder = parsed.lua_doc_annotations.iter().any(|annotation| {
+        let crate::LuaDocAnnotationKind::Generic(generic) = &annotation.kind else {
+            return false;
+        };
+        generic
+            .parameters
+            .iter()
+            .any(|parameter| span_contains_position(parameter.name_span, position))
+    });
+    if !is_generic_binder
+        && crate::source_text::doc_type_chain_at_position(parsed, position).is_none()
+    {
+        return None;
+    }
+
+    let groups = lua_doc_function_annotation_groups(parsed);
+
+    for group in groups {
+        let Some(generic_annotation) = group
+            .annotations
+            .iter()
+            .find(|annotation| matches!(annotation.kind, crate::LuaDocAnnotationKind::Generic(_)))
+        else {
+            continue;
+        };
+        let generic_name_span = group.annotations.iter().any(|annotation| {
+            let crate::LuaDocAnnotationKind::Generic(generic) = &annotation.kind else {
+                return false;
+            };
+            generic
+                .parameters
+                .iter()
+                .any(|parameter| span_contains_position(parameter.name_span, position))
+        });
+        let annotation_type_match = group.annotations.iter().any(|annotation| {
+            lua_doc_annotation_type_spans(annotation)
+                .any(|span| span_contains_position(span, position))
+        });
+        if !generic_name_span && !annotation_type_match {
+            continue;
+        }
+
+        let mut ordinal = 0;
+        let mut names = BTreeSet::new();
+        for annotation in &group.annotations {
+            let crate::LuaDocAnnotationKind::Generic(generic) = &annotation.kind else {
+                continue;
+            };
+            for parameter in &generic.parameters {
+                if !names.insert(parameter.name.clone()) {
+                    continue;
+                }
+                if parameter.name == identifier {
+                    return Some(GenericParameter {
+                        id: TypeParameterId {
+                            declaration: GenericDeclarationId {
+                                module: crate::vfs::normalize_path(&parsed.path),
+                                kind: GenericDeclarationKind::Function,
+                                name: group.name.clone(),
+                                declaration: generic_annotation.span,
+                            },
+                            ordinal,
+                        },
+                        name: parameter.name.clone(),
+                        name_span: parameter.name_span,
+                    });
+                }
+                ordinal += 1;
+            }
+        }
+    }
+
     None
+}
+
+struct LuaDocFunctionAnnotationGroup<'a> {
+    name: String,
+    annotations: Vec<&'a crate::LuaDocAnnotation>,
+}
+
+fn lua_doc_function_annotation_groups(
+    parsed: &ParsedSource,
+) -> Vec<LuaDocFunctionAnnotationGroup<'_>> {
+    let mut annotations_by_line = BTreeMap::new();
+    for annotation in &parsed.lua_doc_annotations {
+        annotations_by_line.insert(annotation.span.start.line, annotation);
+    }
+
+    let mut groups = Vec::new();
+    let mut pending = Vec::new();
+    for (index, line) in parsed.source.lines().enumerate() {
+        let line_number = index + 1;
+        if let Some(annotation) = annotations_by_line.get(&line_number) {
+            pending.push(*annotation);
+            continue;
+        }
+
+        let trimmed = line.trim_start();
+        if trimmed.is_empty() {
+            continue;
+        }
+        if trimmed.starts_with("--") {
+            pending.clear();
+            continue;
+        }
+        if !pending.is_empty() {
+            if pending.iter().any(|annotation| {
+                matches!(annotation.kind, crate::LuaDocAnnotationKind::Generic(_))
+            }) {
+                if let Some(name) = lua_doc_annotated_function_name(trimmed) {
+                    groups.push(LuaDocFunctionAnnotationGroup {
+                        name,
+                        annotations: std::mem::take(&mut pending),
+                    });
+                }
+            }
+            pending.clear();
+        }
+    }
+    groups
+}
+
+fn lua_doc_annotated_function_name(code: &str) -> Option<String> {
+    let code = code.trim_start();
+    let name = if let Some(rest) = code.strip_prefix("local function ") {
+        rest
+    } else if let Some(rest) = code.strip_prefix("function ") {
+        rest
+    } else if let Some(rest) = code.strip_prefix("local ") {
+        let (name, value) = rest.split_once('=')?;
+        if !value.trim_start().starts_with("function") {
+            return None;
+        }
+        return Some(name.trim().to_owned());
+    } else {
+        let (name, value) = code.split_once('=')?;
+        if !value.trim_start().starts_with("function") {
+            return None;
+        }
+        return Some(name.trim().to_owned());
+    };
+
+    let end = name
+        .char_indices()
+        .find_map(|(index, character)| {
+            (!character.is_ascii_alphanumeric() && character != '_' && character != '.')
+                .then_some(index)
+        })
+        .unwrap_or(name.len());
+    (end > 0).then(|| name[..end].to_owned())
+}
+
+pub(crate) fn lua_doc_annotation_type_spans(
+    annotation: &crate::LuaDocAnnotation,
+) -> impl Iterator<Item = SourceSpan> + '_ {
+    use crate::LuaDocAnnotationKind as Kind;
+    let spans: Vec<SourceSpan> = match &annotation.kind {
+        Kind::Class(class) => class.extends_span.into_iter().collect(),
+        Kind::Field(field) => vec![field.type_span],
+        Kind::Alias(alias) => vec![alias.type_span],
+        Kind::Type(value) => vec![value.type_span],
+        Kind::Param(param) => vec![param.type_span],
+        Kind::Return(value) => value.returns.iter().map(|ret| ret.type_span).collect(),
+        Kind::Generic(value) => value
+            .parameters
+            .iter()
+            .filter_map(|parameter| parameter.bound_span)
+            .collect(),
+        Kind::As(value) => vec![value.type_span],
+        Kind::Overload(value) => vec![value.type_span],
+        Kind::Vararg(value) => vec![value.type_span],
+        _ => Vec::new(),
+    };
+    spans.into_iter()
 }
 
 fn is_type_definition_kind(definition: &Definition) -> bool {

@@ -77,6 +77,15 @@ pub fn definition_parsed_source_with_hir(
             return Ok(Some(definition));
         }
     }
+    if let Some(parameter) =
+        crate::analysis::generic_function_parameter_at_position(parsed, position)
+    {
+        return Ok(Some(Definition {
+            path: parsed.path.clone(),
+            span: parameter.name_span,
+            kind: DefinitionKind::TypeParameter,
+        }));
+    }
     let resolver = DefinitionResolver { parsed, hir };
 
     Ok(resolver.definition(position))

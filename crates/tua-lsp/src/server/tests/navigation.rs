@@ -306,6 +306,95 @@ end
 }
 
 #[test]
+fn lua_doc_generic_function_binders_support_navigation_references_and_rename() {
+    let uri = "file:///tmp/lua-doc-generic-binder-navigation.lua";
+    let source = r#"---@generic T
+---@param value T
+---@return T
+local function identity(value)
+  return value
+end
+local _text = identity("text")
+
+---@generic T
+---@param value T
+---@return T
+local function wrap(value)
+  return value
+end
+"#;
+    let output = run_messages(vec![
+        did_open(uri, source),
+        definition_request(
+            2,
+            uri,
+            source,
+            "---@param value T",
+            "---@param value ".len(),
+        ),
+        references_request(3, uri, source, "---@return T", "---@return ".len(), true),
+        prepare_rename_request(4, uri, source, "---@return T", "---@return ".len()),
+        definition_request_at(
+            6,
+            uri,
+            SourcePosition {
+                line: 9,
+                column: 13,
+            },
+        ),
+        json!({
+            "jsonrpc": "2.0",
+            "id": 7,
+            "method": "textDocument/references",
+            "params": {
+                "textDocument": { "uri": uri },
+                "position": lsp_position(SourcePosition { line: 11, column: 12 }),
+                "context": { "includeDeclaration": true }
+            }
+        }),
+        rename_request(
+            5,
+            uri,
+            source,
+            "---@param value T",
+            "---@param value ".len(),
+            "Item",
+        ),
+    ]);
+
+    assert_definition_text(&output, 2, uri, source, "T");
+    let definition = response_with_id(&output, 2)["result"].clone();
+    assert_eq!(definition["range"]["start"]["line"], 0);
+
+    let references = response_with_id(&output, 3)["result"]
+        .as_array()
+        .expect("LuaDoc generic references should be returned");
+    let mut reference_lines = references
+        .iter()
+        .map(|reference| reference["range"]["start"]["line"].as_u64().unwrap())
+        .collect::<Vec<_>>();
+    reference_lines.sort_unstable();
+    assert_eq!(reference_lines, [0, 1, 2]);
+
+    let prepare = response_with_id(&output, 4)["result"].clone();
+    assert_eq!(prepare["placeholder"], "T");
+    assert_rename_edit_texts(&output, 5, uri, source, ["T", "T", "T"], "Item");
+
+    assert_definition_text(&output, 6, uri, source, "T");
+    let shadowed_definition = response_with_id(&output, 6)["result"].clone();
+    assert_eq!(shadowed_definition["range"]["start"]["line"], 8);
+    let shadowed_references = response_with_id(&output, 7)["result"]
+        .as_array()
+        .expect("shadowed LuaDoc generic references should be returned");
+    let mut shadowed_reference_lines = shadowed_references
+        .iter()
+        .map(|reference| reference["range"]["start"]["line"].as_u64().unwrap())
+        .collect::<Vec<_>>();
+    shadowed_reference_lines.sort_unstable();
+    assert_eq!(shadowed_reference_lines, [8, 9, 10]);
+}
+
+#[test]
 fn definition_and_references_resolve_inferred_local_table_fields() {
     let uri = "file:///tmp/inferred-table-field.tua";
     let source = r#"local lookupObject = {

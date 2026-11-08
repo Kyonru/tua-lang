@@ -144,15 +144,6 @@ impl AnalysisSnapshot {
         }) {
             return Some(definition);
         }
-        if let Some(parameter) =
-            crate::analysis::generic_function_parameter_at_position(parsed, position)
-        {
-            return Some(Definition {
-                path: parsed.path.clone(),
-                span: parameter.name_span,
-                kind: DefinitionKind::TypeParameter,
-            });
-        }
         if let Some(definition) = self
             .type_database
             .protocol_method_definition_at_position(&parsed.path, position)

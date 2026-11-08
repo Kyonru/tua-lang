@@ -47,6 +47,26 @@ fn alias_references_can_exclude_declaration() {
 }
 
 #[test]
+fn lua_doc_generic_parameter_references_include_binder_and_type_tags() {
+    let source = r#"---@generic T
+---@param value T
+---@return T
+local function identity(value)
+  return value
+end
+"#;
+    let mut position = position_at(source, "---@return T");
+    position.column += "---@return ".len();
+
+    let references = references_tua_source("src/generic.lua", source, position, true)
+        .expect("LuaDoc generic function should parse");
+    assert_eq!(texts(source, &references), ["T", "T", "T"]);
+    assert!(references
+        .iter()
+        .all(|reference| reference.kind == ReferenceKind::TypeParameter));
+}
+
+#[test]
 fn function_references_include_declaration_and_calls() {
     let references = references_at("damage(player", 0, true);
 
