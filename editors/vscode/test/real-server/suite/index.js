@@ -43,6 +43,60 @@ async function run() {
   );
   assert.match(hoverText(genericFieldHover), /number/);
 
+  const importedGenericPosition = positionAfter(
+    document,
+    'Generic.identity("ready")',
+    "Generic.identity",
+  );
+  const importedGenericHover = await retry(
+    () =>
+      vscode.commands.executeCommand(
+        "vscode.executeHoverProvider",
+        document.uri,
+        importedGenericPosition,
+      ),
+    (result) => hoverText(result).includes("identity<T>"),
+    "imported generic function hover",
+  );
+  assert.match(hoverText(importedGenericHover), /identity<T>\(value: T\): T/);
+
+  const importedGenericSignaturePosition = positionAfter(
+    document,
+    'Generic.identity("ready")',
+    'Generic.identity("ready"',
+  );
+  const importedGenericSignature = await retry(
+    () =>
+      vscode.commands.executeCommand(
+        "vscode.executeSignatureHelpProvider",
+        document.uri,
+        importedGenericSignaturePosition,
+        "(",
+      ),
+    (result) => result?.signatures?.length > 0,
+    "imported generic function signature help",
+  );
+  assert.match(
+    importedGenericSignature.signatures[0].label,
+    /Generic\.identity\(value: string\): string/,
+  );
+  const importedGenericResultPosition = positionAfter(
+    document,
+    "generic_text = generic_text",
+    "generic_text = ",
+  );
+  const importedGenericResultHover = await retry(
+    () =>
+      vscode.commands.executeCommand(
+        "vscode.executeHoverProvider",
+        document.uri,
+        importedGenericResultPosition,
+      ),
+    (result) => hoverText(result).includes("string"),
+    "imported generic call result hover",
+  );
+  assert.match(hoverText(importedGenericResultHover), /local generic_text: string/);
+
   const genericTypePosition = positionAfter(document, "Box<number>", "Box");
   const genericDefinitions = await retry(
     () =>
@@ -171,6 +225,9 @@ async function run() {
       formattingEdits: formatting.length,
       hover: "Player",
       genericAliasHover: "Box<number>.value: number",
+      importedGenericFunctionHover: hoverText(importedGenericHover),
+      importedGenericFunctionSignature: importedGenericSignature.signatures[0].label,
+      importedGenericResultHover: hoverText(importedGenericResultHover),
       genericAliasDefinition: genericDefinitions.some(
         (location) => location.uri.fsPath === fixtures.contractsPath,
       ),

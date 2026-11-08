@@ -86,6 +86,7 @@ function createProject(workspacePath) {
   const helperPath = path.join(sourcePath, "helper.lua");
   const contractsPath = path.join(sourcePath, "contracts.tua");
   const actorsPath = path.join(sourcePath, "actors.tua");
+  const genericPath = path.join(sourcePath, "generic.tua");
   const configPath = path.join(workspacePath, "tua.toml");
 
   fs.mkdirSync(sourcePath, { recursive: true });
@@ -131,9 +132,21 @@ function createProject(workspacePath) {
     ].join("\n"),
   );
   fs.writeFileSync(
+    genericPath,
+    [
+      "local function identity<T>(value: T): T",
+      "  return value",
+      "end",
+      "",
+      "return { identity = identity }",
+      "",
+    ].join("\n"),
+  );
+  fs.writeFileSync(
     mainPath,
     [
       'import type { Box, Updatable } from "./contracts"',
+      'local Generic = require("generic")',
       "type Player = {",
       "  health: number,",
       "  name: string,",
@@ -147,6 +160,7 @@ function createProject(workspacePath) {
       "local screen_width = love.graphics.getWidth()",
       "local score: Box<number> = { value = 4 }",
       "local score_value = score.value",
+      'local generic_text = Generic.identity("ready")',
       "",
       "local function tick(value: Updatable, dt: number)",
       "  value:update(dt)",
@@ -157,6 +171,7 @@ function createProject(workspacePath) {
       "  uppercase_name = uppercase_name,",
       "  greeting = greeting,",
       "  screen_width = screen_width,",
+      "  generic_text = generic_text,",
       "}",
       "",
     ].join("\n"),
@@ -166,6 +181,7 @@ function createProject(workspacePath) {
     actorsPath,
     configPath,
     contractsPath,
+    genericPath,
     helperPath,
     mainPath,
     serverPath: process.env.TUA_REAL_SERVER_PATH,
