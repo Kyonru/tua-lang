@@ -2536,6 +2536,64 @@ final class Panel implements Updatable {
 }
 
 #[test]
+fn checks_protocol_method_parameter_and_return_variance() {
+    check_tua_source(
+        "src/protocol_variance.tua",
+        r#"
+protocol NumericVisitor {
+  visit(value: number): number | string
+}
+final class BroadInputNarrowOutput implements NumericVisitor {
+  visit(value: number | string): number {
+    return 1
+  }
+}
+"#,
+    )
+    .expect("implementations may accept broader inputs and return narrower outputs");
+
+    let narrow_input = check_tua_source(
+        "src/protocol_variance.tua",
+        r#"
+protocol Visitor {
+  visit(value: number | string): number
+}
+final class NarrowInput implements Visitor {
+  visit(value: number): number {
+    return value
+  }
+}
+"#,
+    )
+    .expect_err("an implementation cannot reject values accepted by the protocol");
+    assert!(narrow_input.iter().any(|diagnostic| {
+        diagnostic
+            .message
+            .contains("does not satisfy protocol `Visitor.visit`")
+    }));
+
+    let broad_return = check_tua_source(
+        "src/protocol_variance.tua",
+        r#"
+protocol Visitor {
+  visit(value: number): number
+}
+final class BroadReturn implements Visitor {
+  visit(value: number): number | string {
+    return value
+  }
+}
+"#,
+    )
+    .expect_err("an implementation cannot return values outside the protocol result type");
+    assert!(broad_return.iter().any(|diagnostic| {
+        diagnostic
+            .message
+            .contains("does not satisfy protocol `Visitor.visit`")
+    }));
+}
+
+#[test]
 fn protocol_assignability_requires_explicit_class_conformance() {
     let diagnostics = check_tua_source(
         "src/protocols.tua",

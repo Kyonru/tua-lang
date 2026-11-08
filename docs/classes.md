@@ -106,6 +106,10 @@ from a base class can satisfy a protocol requirement, and a subclass inherits
 the base class's conformance. A class can list multiple protocols after
 `implements`; every requirement is checked, including same-named methods that
 must satisfy each contract's signature.
+Method compatibility follows function variance: an implementation must accept
+every argument allowed by the protocol and may return a narrower type. A
+method that accepts only a subset of protocol inputs or may return an extra
+type is rejected.
 
 Protocols can be exported and consumed as type-only imports; those imports and
 the protocol declaration are erased from Lua. Project diagnostics validate
