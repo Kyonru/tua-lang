@@ -27,6 +27,12 @@ open class Entity extends BaseEntity {
   }
 }
 
+open class GenericBase<T> {
+}
+
+final class GenericChild<U> extends GenericBase<U> {
+}
+
 final class ProtocolActor implements Contracts.Updatable, Drawable {
 }
 

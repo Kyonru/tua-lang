@@ -167,7 +167,7 @@
       "patterns": [
         {
           "name": "meta.class.tua",
-          "begin": "^\\s*(?:(open|final)\\s+)?(class)\\s+([A-Za-z_][A-Za-z0-9_]*)(?:\\s+(extends)\\s+([A-Za-z_][A-Za-z0-9_]*))?(?:\\s+(implements)\\s+((?:[A-Za-z_][A-Za-z0-9_]*\\.)*[A-Za-z_][A-Za-z0-9_]*(?:\\s*,\\s*(?:[A-Za-z_][A-Za-z0-9_]*\\.)*[A-Za-z_][A-Za-z0-9_]*)*))?\\s*(\\{)",
+          "begin": "^\\s*(?:(open|final)\\s+)?(class)\\s+([A-Za-z_][A-Za-z0-9_]*)(?:\\s*(<)([A-Za-z_][A-Za-z0-9_]*(?:\\s*,\\s*[A-Za-z_][A-Za-z0-9_]*)*)(>))?(?:\\s+(extends)\\s+([A-Za-z_][A-Za-z0-9_]*)(?:\\s*(<)((?:[^<>]|<[^<>]*>)*)>)?)?(?:\\s+(implements)\\s+((?:[A-Za-z_][A-Za-z0-9_]*\\.)*[A-Za-z_][A-Za-z0-9_]*(?:\\s*,\\s*(?:[A-Za-z_][A-Za-z0-9_]*\\.)*[A-Za-z_][A-Za-z0-9_]*)*))?\\s*(\\{)",
           "beginCaptures": {
             "1": {
               "name": "storage.modifier.class.tua"
@@ -179,18 +179,33 @@
               "name": "entity.name.type.class.tua"
             },
             "4": {
-              "name": "storage.modifier.extends.tua"
+              "name": "punctuation.definition.generic.begin.tua"
             },
             "5": {
-              "name": "entity.other.inherited-class.tua"
+              "name": "entity.name.type.tua"
             },
             "6": {
-              "name": "storage.modifier.implements.tua"
+              "name": "punctuation.definition.generic.end.tua"
             },
             "7": {
-              "name": "entity.other.inherited-class.tua"
+              "name": "storage.modifier.extends.tua"
             },
             "8": {
+              "name": "entity.other.inherited-class.tua"
+            },
+            "9": {
+              "name": "punctuation.definition.generic.begin.tua"
+            },
+            "10": {
+              "name": "meta.type.arguments.tua"
+            },
+            "11": {
+              "name": "storage.modifier.implements.tua"
+            },
+            "12": {
+              "name": "entity.other.inherited-class.tua"
+            },
+            "13": {
               "name": "punctuation.section.class.begin.tua"
             }
           },

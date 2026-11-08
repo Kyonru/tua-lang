@@ -64,6 +64,20 @@ end
 }
 
 #[test]
+fn formats_generic_class_headers_and_applied_parent_without_erasure() {
+    let source =
+        "open class Base<T> {\n  value: T\n}\nfinal class Child<U> extends Base<Box<U[]>> {\n}\n";
+    let output = format(source);
+
+    assert!(output.contains("open class Base < T > {"), "{output}");
+    assert!(
+        output.contains("final class Child < U > extends Base < Box < U[] > > {"),
+        "{output}"
+    );
+    assert_eq!(format(&output), output);
+}
+
+#[test]
 fn formats_local_function_blocks() {
     let source = r#"local function makePlayer(name:string):Player
 return {name=name,hp=100}

@@ -61,6 +61,20 @@ async function main() {
   assertScope(tokenizedLines, '  "idle"', "idle", "variable.other.enummember.tua");
   assertScope(tokenizedLines, "open class Entity", "Entity", "entity.name.type.class.tua");
   assertScope(tokenizedLines, "open class Entity", "BaseEntity", "entity.other.inherited-class.tua");
+  assertScope(tokenizedLines, "open class GenericBase<T>", "T", "entity.name.type.tua");
+  assertScope(
+    tokenizedLines,
+    "GenericChild<U> extends GenericBase<U>",
+    "GenericBase",
+    "entity.other.inherited-class.tua",
+  );
+  assertScope(
+    tokenizedLines,
+    "GenericChild<U> extends GenericBase<U>",
+    "U",
+    "meta.type.arguments.tua",
+    1,
+  );
   assertScope(tokenizedLines, "class ProtocolActor", "implements", "storage.modifier.implements.tua");
   assertScope(tokenizedLines, "Contracts.Updatable", "Contracts.Updatable", "entity.other.inherited-class.tua");
   assertScope(tokenizedLines, "  x: number", "x", "variable.other.property.declaration.tua");
@@ -87,11 +101,17 @@ async function main() {
   console.log(`validated Tua TextMate scopes (${tokenizedLines.length} fixture lines)`);
 }
 
-function assertScope(tokenizedLines, lineFragment, tokenText, expectedScope) {
+function assertScope(tokenizedLines, lineFragment, tokenText, expectedScope, occurrence = 0) {
   const lineEntry = tokenizedLines.find(({ line }) => line.includes(lineFragment));
   assert(lineEntry, `missing fixture line containing ${JSON.stringify(lineFragment)}`);
 
-  const start = lineEntry.line.indexOf(tokenText);
+  let start = -1;
+  let searchFrom = 0;
+  for (let index = 0; index <= occurrence; index += 1) {
+    start = lineEntry.line.indexOf(tokenText, searchFrom);
+    if (start < 0) break;
+    searchFrom = start + tokenText.length;
+  }
   assert(start >= 0, `missing ${JSON.stringify(tokenText)} in ${JSON.stringify(lineEntry.line)}`);
 
   const token = lineEntry.tokens.find(

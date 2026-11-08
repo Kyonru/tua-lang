@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::ops::Range;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use full_moon::ast::{self, LastStmt};
 use full_moon::node::Node;
@@ -8,10 +8,11 @@ use full_moon::visitors::{Visit, Visitor};
 
 use crate::ast_utils::{field_chain_before_first_call, plain_field_chain_from_var, token_text};
 use crate::parser::{
-    parse_raw_tua_source, parse_tua_type_text, ParsedSource, ParserLineProvenance, RawParsedSource,
-    SourcePosition, SourceSpan, TuaType, TypedSourceModel,
+    GenericDeclarationId, GenericDeclarationKind, GenericParameter, ParsedSource,
+    ParserLineProvenance, RawParsedSource, SourcePosition, SourceSpan, TuaType, TypeParameterId,
+    TypedSourceModel, parse_raw_tua_source, parse_tua_type_text,
 };
-use crate::scope::{scope_map_parsed_source, ScopeDeclarationKind, ScopeSymbolId};
+use crate::scope::{ScopeDeclarationKind, ScopeSymbolId, scope_map_parsed_source};
 use crate::source_text::SourcePositionIndex;
 use crate::types::{
     AssignabilityFailure, AssignabilityPathSegment, Type, TypeEnvironment, TypedFunction,
@@ -21,8 +22,12 @@ use crate::{Diagnostic, DiagnosticCode};
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct ClassDeclaration {
     pub name: String,
+    pub generic_parameters: Vec<GenericParameter>,
     pub parent: Option<String>,
     pub parent_span: Option<SourceSpan>,
+    /// Parsed parent type application. The legacy `parent` field remains the
+    /// bare class name used by existing inheritance and lowering paths.
+    pub parent_application: Option<ClassTypeApplication>,
     pub implemented_protocols: Vec<(String, SourceSpan)>,
     pub is_open: bool,
     pub is_final: bool,
@@ -33,6 +38,20 @@ pub(crate) struct ClassDeclaration {
     pub span: SourceSpan,
     pub name_span: SourceSpan,
     pub type_id: usize,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct ClassTypeApplication {
+    pub name: String,
+    pub name_span: SourceSpan,
+    pub arguments: Vec<ClassTypeArgument>,
+    pub span: SourceSpan,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct ClassTypeArgument {
+    pub ty: TuaType,
+    pub span: SourceSpan,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -134,8 +153,10 @@ pub(crate) struct ClassLoweringEdit {
 #[derive(Clone, Debug)]
 struct ClassHeader {
     name: String,
+    generic_parameters: Vec<GenericParameter>,
     parent: Option<String>,
     parent_span: Option<SourceSpan>,
+    parent_application: Option<ClassTypeApplication>,
     implemented_protocols: Vec<(String, SourceSpan)>,
     is_open: bool,
     is_final: bool,
@@ -243,6 +264,27 @@ pub(crate) fn parse_class_declarations(
 
     for (index, declaration) in declarations.iter_mut().enumerate() {
         declaration.type_id = index + 1;
+        for parameter in &mut declaration.generic_parameters {
+            parameter.id.declaration.module = crate::vfs::normalize_path(path);
+        }
+        if let Some(application) = &mut declaration.parent_application {
+            for argument in &mut application.arguments {
+                argument.ty = bind_class_type_parameters(
+                    argument.ty.clone(),
+                    &declaration.generic_parameters,
+                );
+            }
+        }
+        let mut names = BTreeSet::new();
+        for parameter in &declaration.generic_parameters {
+            if !names.insert(parameter.name.clone()) {
+                diagnostics.push(class_diagnostic(
+                    path,
+                    parameter.name_span.start,
+                    format!("duplicate generic class parameter `{}`", parameter.name),
+                ));
+            }
+        }
     }
 
     (declarations, diagnostics)
@@ -812,19 +854,54 @@ fn parse_class_header(
     let (name, name_start, name_end) = take_identifier(source, cursor)?;
     cursor = skip_whitespace(source, name_end);
 
-    let (parent, parent_span) = if starts_keyword(source, cursor, "extends") {
+    let generic_parameters = if source[cursor..].starts_with('<') {
+        let (parameters, close) = parse_class_generic_parameters(
+            source,
+            cursor,
+            positions,
+            &name,
+            SourceSpan {
+                start: positions.position(name_start),
+                end: positions.position(name_end),
+            },
+        )?;
+        cursor = skip_whitespace(source, close);
+        parameters
+    } else {
+        Vec::new()
+    };
+
+    let (parent, parent_span, parent_application) = if starts_keyword(source, cursor, "extends") {
         cursor = skip_whitespace(source, cursor + "extends".len());
         let (parent, parent_start, parent_end) = take_identifier(source, cursor)?;
         cursor = skip_whitespace(source, parent_end);
+        let name_span = SourceSpan {
+            start: positions.position(parent_start),
+            end: positions.position(parent_end),
+        };
+        let (arguments, application_end) = if source[cursor..].starts_with('<') {
+            let (arguments, close) = parse_class_type_arguments(source, cursor, positions)?;
+            (arguments, close)
+        } else {
+            (Vec::new(), parent_end)
+        };
+        let application_span = SourceSpan {
+            start: positions.position(parent_start),
+            end: positions.position(application_end),
+        };
+        cursor = skip_whitespace(source, application_end);
         (
-            Some(parent),
-            Some(SourceSpan {
-                start: positions.position(parent_start),
-                end: positions.position(parent_end),
+            Some(parent.clone()),
+            Some(name_span),
+            Some(ClassTypeApplication {
+                name: parent,
+                name_span,
+                arguments,
+                span: application_span,
             }),
         )
     } else {
-        (None, None)
+        (None, None, None)
     };
 
     let mut implemented_protocols = Vec::new();
@@ -865,8 +942,10 @@ fn parse_class_header(
 
     Some(ClassHeader {
         name,
+        generic_parameters,
         parent,
         parent_span,
+        parent_application,
         implemented_protocols,
         is_open,
         is_final: is_final || !is_open,
@@ -878,6 +957,233 @@ fn parse_class_header(
         body_start: cursor + 1,
         body_open: cursor,
     })
+}
+
+fn parse_class_generic_parameters(
+    source: &str,
+    open: usize,
+    positions: &SourcePositionIndex,
+    class_name: &str,
+    class_name_span: SourceSpan,
+) -> Option<(Vec<GenericParameter>, usize)> {
+    let (parts, close) = split_angle_arguments(source, open)?;
+    let mut parameters = Vec::with_capacity(parts.len());
+    for (ordinal, range) in parts.into_iter().enumerate() {
+        let start = skip_whitespace(source, range.start);
+        let end = trim_end_whitespace(source, start, range.end);
+        let (name, name_start, name_end) = take_identifier(source, start)?;
+        if name_end != end {
+            return None;
+        }
+        let name_span = SourceSpan {
+            start: positions.position(name_start),
+            end: positions.position(name_end),
+        };
+        parameters.push(GenericParameter {
+            id: TypeParameterId {
+                declaration: GenericDeclarationId {
+                    // The parser-only class scan also runs during normalization,
+                    // where no source path is available. `parse_class_declarations`
+                    // fills the normalized module path before exposing this AST.
+                    module: PathBuf::new(),
+                    kind: GenericDeclarationKind::Class,
+                    name: class_name.to_owned(),
+                    declaration: class_name_span,
+                },
+                ordinal,
+            },
+            name,
+            name_span,
+        });
+    }
+    Some((parameters, close + 1))
+}
+
+fn parse_class_type_arguments(
+    source: &str,
+    open: usize,
+    positions: &SourcePositionIndex,
+) -> Option<(Vec<ClassTypeArgument>, usize)> {
+    let (parts, close) = split_angle_arguments(source, open)?;
+    let arguments = parts
+        .into_iter()
+        .map(|range| {
+            let start = skip_whitespace(source, range.start);
+            let end = trim_end_whitespace(source, start, range.end);
+            let text = source.get(start..end)?;
+            Some(ClassTypeArgument {
+                ty: parse_tua_type_text(text),
+                span: SourceSpan {
+                    start: positions.position(start),
+                    end: positions.position(end),
+                },
+            })
+        })
+        .collect::<Option<Vec<_>>>()?;
+    Some((arguments, close + 1))
+}
+
+fn split_angle_arguments(source: &str, open: usize) -> Option<(Vec<Range<usize>>, usize)> {
+    if !source.get(open..)?.starts_with('<') {
+        return None;
+    }
+
+    let close = matching_angle_close(source, open)?;
+    let content_start = open + 1;
+    if content_start == close {
+        return None;
+    }
+
+    let mut parts = Vec::new();
+    let mut start = content_start;
+    let mut angle_depth = 0usize;
+    let mut paren_depth = 0usize;
+    let mut bracket_depth = 0usize;
+    let mut brace_depth = 0usize;
+    let mut index = content_start;
+    while index < close {
+        if let Some(end) = consume_string_literal(source, index) {
+            index = end.min(close);
+            continue;
+        }
+        let character = source[index..].chars().next()?;
+        match character {
+            '<' => angle_depth += 1,
+            '>' if angle_depth > 0 && !source[..index].ends_with('-') => angle_depth -= 1,
+            '(' => paren_depth += 1,
+            ')' => paren_depth = paren_depth.saturating_sub(1),
+            '[' => bracket_depth += 1,
+            ']' => bracket_depth = bracket_depth.saturating_sub(1),
+            '{' => brace_depth += 1,
+            '}' => brace_depth = brace_depth.saturating_sub(1),
+            ',' if angle_depth == 0
+                && paren_depth == 0
+                && bracket_depth == 0
+                && brace_depth == 0 =>
+            {
+                parts.push(start..index);
+                start = index + character.len_utf8();
+            }
+            _ => {}
+        }
+        index += character.len_utf8();
+    }
+    parts.push(start..close);
+    if parts.iter().any(|range| {
+        trim_end_whitespace(source, skip_whitespace(source, range.start), range.end)
+            == skip_whitespace(source, range.start)
+    }) {
+        return None;
+    }
+    Some((parts, close))
+}
+
+fn matching_angle_close(source: &str, open: usize) -> Option<usize> {
+    let mut depth = 0usize;
+    let mut index = open;
+    while index < source.len() {
+        if let Some(end) = consume_string_literal(source, index) {
+            index = end;
+            continue;
+        }
+        let character = source[index..].chars().next()?;
+        match character {
+            '<' => depth += 1,
+            '>' if depth > 0 && !source[..index].ends_with('-') => {
+                depth -= 1;
+                if depth == 0 {
+                    return Some(index);
+                }
+            }
+            '\n' if depth > 0 => return None,
+            _ => {}
+        }
+        index += character.len_utf8();
+    }
+    None
+}
+
+fn trim_end_whitespace(source: &str, start: usize, mut end: usize) -> usize {
+    while end > start {
+        let character = source[..end].chars().next_back().expect("nonempty range");
+        if !character.is_whitespace() {
+            break;
+        }
+        end -= character.len_utf8();
+    }
+    end
+}
+
+fn bind_class_type_parameters(ty: TuaType, parameters: &[GenericParameter]) -> TuaType {
+    match ty {
+        TuaType::Named(name) => parameters
+            .iter()
+            .find(|parameter| parameter.name == name)
+            .map(|parameter| TuaType::Parameter {
+                id: parameter.id.clone(),
+                name: name.clone(),
+            })
+            .unwrap_or(TuaType::Named(name)),
+        TuaType::Applied {
+            name,
+            arguments,
+            name_span,
+            span,
+        } => TuaType::Applied {
+            name,
+            arguments: arguments
+                .into_iter()
+                .map(|argument| bind_class_type_parameters(argument, parameters))
+                .collect(),
+            name_span,
+            span,
+        },
+        TuaType::Union(types) => TuaType::Union(
+            types
+                .into_iter()
+                .map(|ty| bind_class_type_parameters(ty, parameters))
+                .collect(),
+        ),
+        TuaType::Table(fields) => TuaType::Table(
+            fields
+                .into_iter()
+                .map(|mut field| {
+                    field.ty = bind_class_type_parameters(field.ty, parameters);
+                    field
+                })
+                .collect(),
+        ),
+        TuaType::Array(item) => {
+            TuaType::Array(Box::new(bind_class_type_parameters(*item, parameters)))
+        }
+        TuaType::Tuple(types) => TuaType::Tuple(
+            types
+                .into_iter()
+                .map(|ty| bind_class_type_parameters(ty, parameters))
+                .collect(),
+        ),
+        TuaType::Dictionary { key, value } => TuaType::Dictionary {
+            key: Box::new(bind_class_type_parameters(*key, parameters)),
+            value: Box::new(bind_class_type_parameters(*value, parameters)),
+        },
+        TuaType::Function {
+            parameters: args,
+            returns,
+        } => TuaType::Function {
+            parameters: args
+                .into_iter()
+                .map(|mut parameter| {
+                    parameter.ty = bind_class_type_parameters(parameter.ty, parameters);
+                    parameter
+                })
+                .collect(),
+            returns: returns
+                .into_iter()
+                .map(|ty| bind_class_type_parameters(ty, parameters))
+                .collect(),
+        },
+        other => other,
+    }
 }
 
 fn parse_class_body(
@@ -934,8 +1240,10 @@ fn parse_class_body(
     (
         ClassDeclaration {
             name: header.name,
+            generic_parameters: header.generic_parameters,
             parent: header.parent,
             parent_span: header.parent_span,
+            parent_application: header.parent_application,
             implemented_protocols: header.implemented_protocols,
             is_open: header.is_open,
             is_final: header.is_final,
@@ -2598,6 +2906,9 @@ fn class_diagnostic(
     Diagnostic::error(path, position.line, position.column, message)
         .with_code(DiagnosticCode::TYPE_CLASS)
 }
+
+#[cfg(test)]
+mod tests;
 
 fn comma_prefixed(value: &str) -> String {
     let value = value.trim();
