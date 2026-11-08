@@ -133,7 +133,7 @@ function createProject(workspacePath) {
   fs.writeFileSync(
     mainPath,
     [
-      'import type { Updatable } from "./contracts"',
+      'import type { Box, Updatable } from "./contracts"',
       "type Player = {",
       "  health: number,",
       "  name: string,",
