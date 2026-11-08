@@ -683,6 +683,15 @@ pub(super) fn referenced_type_names(parsed: &ParsedSource) -> BTreeSet<String> {
         collect(ty, &mut names);
     }
 
+    for class in &parsed.class_declarations {
+        names.extend(
+            class
+                .implemented_protocols
+                .iter()
+                .map(|(name, _)| name.trim().to_owned()),
+        );
+    }
+
     let mut collector = ReferencedAnonymousFunctionCollector::default();
     collector.visit_ast(&parsed.ast);
     for body in collector.bodies {

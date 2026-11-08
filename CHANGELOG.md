@@ -13,6 +13,11 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Resolve protocol imports referenced only by a class `implements` clause, so
+  project diagnostics validate cross-file missing and incompatible methods and
+  refresh those checks when the protocol changes.
+- Preserve imported protocol members for completion while an edited consumer
+  file temporarily has syntax errors.
 - Do not report a protocol type import as unused when a class uses it in an
   `implements` clause.
 

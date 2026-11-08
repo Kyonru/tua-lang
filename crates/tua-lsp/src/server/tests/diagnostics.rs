@@ -103,6 +103,61 @@ fn did_open_publishes_matching_core_diagnostics() {
 }
 
 #[test]
+fn imported_protocol_conformance_diagnostics_are_published_in_implementing_file() {
+    let temp = TempProject::new("cross-file-protocol-conformance");
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write(
+        "src/contracts.tua",
+        "export protocol Updatable {\n  update(dt: number): nil\n}\n",
+    );
+    let actors = r#"import type { Updatable } from "./contracts"
+final class Valid implements Updatable {
+  update(dt: number): nil {
+  }
+}
+final class Missing implements Updatable {
+}
+final class Bad implements Updatable {
+  update(dt: string): nil {
+  }
+}
+"#;
+    let contracts_uri = temp.uri_for("src/contracts.tua");
+    let actors_uri = temp.uri_for("src/actors.tua");
+    let output = run_messages(vec![
+        initialize_with_root(1, temp.uri()),
+        did_open(
+            &contracts_uri,
+            "export protocol Updatable {\n  update(dt: number): nil\n}\n",
+        ),
+        did_open(&actors_uri, actors),
+    ]);
+    let diagnostics = last_published_diagnostics(&output, &actors_uri);
+
+    assert!(
+        diagnostics.iter().any(|diagnostic| {
+            diagnostic["message"].as_str().is_some_and(|message| {
+                message.contains("Missing") && message.contains("missing method `update`")
+            })
+        }),
+        "missing protocol method should be published on the implementing file: {diagnostics:#?}"
+    );
+    assert!(diagnostics.iter().any(|diagnostic| {
+        diagnostic["message"].as_str().is_some_and(|message| {
+            message.contains("Bad.update") && message.contains("does not satisfy protocol")
+        })
+    }), "incompatible protocol signature should be published on the implementing file: {diagnostics:#?}");
+    assert!(
+        !diagnostics.iter().any(|diagnostic| {
+            diagnostic["message"].as_str().is_some_and(|message| {
+                message.contains("Valid") && message.contains("does not satisfy protocol")
+            })
+        }),
+        "valid protocol conformance should remain accepted: {diagnostics:#?}"
+    );
+}
+
+#[test]
 fn class_method_diagnostics_point_to_the_original_error_expression() {
     let uri = "file:///tmp/class-method-diagnostic.tua";
     let source = r#"final class Counter {

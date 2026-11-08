@@ -29,8 +29,11 @@ completion claim. The detailed contributor plan is kept locally in
 2. **Ship complete protocol editor support.** Completion, hover, signature help,
    inlay hints, definition, references, rename, and implementation navigation
    must agree on protocol and concrete member identity, including unsaved edits
-   and incomplete declarations. Use the shared model rather than feature-local
-   conformance checks.
+   and incomplete declarations. Core/LSP request coverage now exercises
+   completion, hover, signature help, definition, and implementation navigation
+   across type-only imports; protocol documentation propagation, inlays,
+   references/rename, tokens, type explanations, and installed VS Code remain
+   unverified. Use the shared model rather than feature-local conformance checks.
 3. **Add scoped generic aliases and functions.** Introduce declaration-owned
    type parameters and shared substitution/inference; preserve return tuples,
    callback signatures, imports, and declaration identity. Make unsupported

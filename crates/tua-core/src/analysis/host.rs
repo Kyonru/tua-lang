@@ -542,64 +542,107 @@ impl AnalysisHost {
                 })
                 .collect::<BTreeMap<_, _>>()
         };
-        let module_graph =
-            {
-                let _profile = profile::span("analysis.index.module_graph");
-                let _trace =
-                    profile::diagnostics_span(profile::DiagnosticsTraceCategory::ModuleGraph);
+        let last_good_files = self.last_good_files.borrow();
+        let module_graph = {
+            let _profile = profile::span("analysis.index.module_graph");
+            let _trace = profile::diagnostics_span(profile::DiagnosticsTraceCategory::ModuleGraph);
 
-                ModuleGraph::build_with_workspaces(
-                    files.iter().map(|(path, file)| ModuleGraphInput {
-                        path,
-                        parsed: file.parsed.as_ref().ok().map(Arc::as_ref).or_else(|| {
-                            file.degraded_semantics.as_ref().map(|facts| &facts.parsed)
+            ModuleGraph::build_with_workspaces(
+                files.iter().map(|(path, file)| ModuleGraphInput {
+                    path,
+                    parsed: file
+                        .parsed
+                        .as_ref()
+                        .ok()
+                        .map(Arc::as_ref)
+                        .or_else(|| file.degraded_semantics.as_ref().map(|facts| &facts.parsed))
+                        .or_else(|| {
+                            last_good_files
+                                .get(path)
+                                .and_then(|last_good| last_good.parsed.as_ref().ok())
+                                .map(Arc::as_ref)
                         }),
-                        hir: file
-                            .hir()
-                            .or_else(|| file.degraded_semantics.as_ref().map(|facts| &facts.hir)),
-                        exports: file.exports.as_ref(),
-                        source_kind: file.kind,
+                    hir: file
+                        .hir()
+                        .or_else(|| file.degraded_semantics.as_ref().map(|facts| &facts.hir))
+                        .or_else(|| last_good_files.get(path).and_then(AnalysisFile::hir)),
+                    exports: file.exports.as_ref().or_else(|| {
+                        last_good_files
+                            .get(path)
+                            .and_then(|last_good| last_good.exports.as_ref())
                     }),
-                    ModuleGraphOptions {
-                        source_roots: vfs.source_roots().to_vec(),
-                        output_roots: vfs.options().output_roots.clone(),
-                        extension: self.config.extension.clone(),
-                        require_path_separator: self.require_path_separator,
-                        declaration_modules: crate::module_graph::declaration_modules(
-                            files.iter().filter_map(|(path, file)| {
-                                Some((path.as_path(), file.parsed.as_ref().ok()?.as_ref()))
-                            }),
-                            &self.type_libraries,
-                        ),
-                    },
-                    &self.module_path_workspaces,
-                )
-            };
-        let type_database =
-            {
-                let _profile = profile::span("analysis.index.type_database");
-                let _trace =
-                    profile::diagnostics_span(profile::DiagnosticsTraceCategory::TypeEnvironment);
+                    source_kind: file.kind,
+                }),
+                ModuleGraphOptions {
+                    source_roots: vfs.source_roots().to_vec(),
+                    output_roots: vfs.options().output_roots.clone(),
+                    extension: self.config.extension.clone(),
+                    require_path_separator: self.require_path_separator,
+                    declaration_modules: crate::module_graph::declaration_modules(
+                        files.iter().filter_map(|(path, file)| {
+                            let parsed = file
+                                .parsed
+                                .as_ref()
+                                .ok()
+                                .map(Arc::as_ref)
+                                .or_else(|| {
+                                    file.degraded_semantics.as_ref().map(|facts| &facts.parsed)
+                                })
+                                .or_else(|| {
+                                    last_good_files
+                                        .get(path)
+                                        .and_then(|last_good| last_good.parsed.as_ref().ok())
+                                        .map(Arc::as_ref)
+                                })?;
+                            Some((path.as_path(), parsed))
+                        }),
+                        &self.type_libraries,
+                    ),
+                },
+                &self.module_path_workspaces,
+            )
+        };
+        let type_database = {
+            let _profile = profile::span("analysis.index.type_database");
+            let _trace =
+                profile::diagnostics_span(profile::DiagnosticsTraceCategory::TypeEnvironment);
 
-                ProjectTypeDatabase::build(
-                    files.iter().map(|(path, file)| ProjectTypeDatabaseInput {
-                        path,
-                        source_kind: file.kind,
-                        environment: file.environment().or_else(|| {
+            ProjectTypeDatabase::build(
+                files.iter().map(|(path, file)| ProjectTypeDatabaseInput {
+                    path,
+                    source_kind: file.kind,
+                    environment: file
+                        .environment()
+                        .or_else(|| {
                             file.degraded_semantics
                                 .as_ref()
                                 .map(|facts| &facts.environment)
+                        })
+                        .or_else(|| {
+                            last_good_files
+                                .get(path)
+                                .and_then(AnalysisFile::environment)
                         }),
-                        scope: file
-                            .scope()
-                            .or_else(|| file.degraded_semantics.as_ref().map(|facts| &facts.scope)),
-                        parsed: file.parsed.as_ref().ok().map(Arc::as_ref).or_else(|| {
-                            file.degraded_semantics.as_ref().map(|facts| &facts.parsed)
+                    scope: file
+                        .scope()
+                        .or_else(|| file.degraded_semantics.as_ref().map(|facts| &facts.scope))
+                        .or_else(|| last_good_files.get(path).and_then(AnalysisFile::scope)),
+                    parsed: file
+                        .parsed
+                        .as_ref()
+                        .ok()
+                        .map(Arc::as_ref)
+                        .or_else(|| file.degraded_semantics.as_ref().map(|facts| &facts.parsed))
+                        .or_else(|| {
+                            last_good_files
+                                .get(path)
+                                .and_then(|last_good| last_good.parsed.as_ref().ok())
+                                .map(Arc::as_ref)
                         }),
-                    }),
-                    &module_graph,
-                )
-            };
+                }),
+                &module_graph,
+            )
+        };
         let symbol_index = {
             let _profile = profile::span("analysis.index.symbol_index");
 
@@ -676,6 +719,7 @@ impl AnalysisHost {
 
             (symbols, calls)
         };
+        drop(last_good_files);
         self.refresh_last_good_files(&files);
 
         let snapshot = AnalysisSnapshot {
@@ -1171,6 +1215,10 @@ impl AnalysisHost {
             Err(_) => self
                 .cached_last_good_semantic_facts(path)
                 .and_then(|facts| {
+                    if !facts.parsed.type_imports.is_empty() {
+                        return None;
+                    }
+
                     complete_current_file_field_access_with_environment_and_ranking_inputs(
                         &file.source,
                         &facts.parsed,

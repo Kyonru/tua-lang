@@ -323,7 +323,8 @@ not receive their initial contents.
 Classes are closed by default. Write `open class Entity` only when another
 class needs to extend it; subclasses use `extends`, `override`, and
 `super(...)`. See [Classes](classes.md) for inheritance and runtime
-`is` checks.
+`is` checks. For a shared method contract that unrelated classes can implement
+without inheritance, see [Protocol Contracts](classes.md#protocol-contracts).
 
 ## 6. Check, Build, And Inspect
 

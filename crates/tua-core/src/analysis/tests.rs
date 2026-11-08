@@ -5832,6 +5832,142 @@ end
 }
 
 #[test]
+fn imported_protocol_methods_are_available_to_completion_and_hover() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/contracts.tua
+export protocol Updatable {
+  update(dt: number): nil
+}
+-- file: src/main.tua
+import type { Updatable } from "./contracts"
+local function tick(value: Updatable, dt: number)
+  value:up<|complete|>date(dt)
+  value:<|use|>update(dt)
+end
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+    let snapshot = host.snapshot();
+
+    let hover = snapshot.hover("src/main.tua", fixture.position("use"));
+    let completions =
+        completion_labels(&snapshot.completion("src/main.tua", fixture.position("complete")));
+    assert_eq!(completions, ["update"]);
+    let hover = hover.expect("protocol method should have a hover");
+    assert!(hover.contents.contains("update"), "{hover:#?}");
+    assert!(hover.contents.contains("number"), "{hover:#?}");
+}
+
+#[test]
+fn imported_protocol_completion_survives_incomplete_method_edit() {
+    let valid = r#"import type { Updatable } from "./contracts"
+local function tick(value: Updatable, dt: number)
+  value:update(dt)
+end
+"#;
+    let fixture = Fixture::parse(&valid.replace("value:update(dt)", "value:up<|complete|>"));
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    host.set_file(
+        "src/contracts.tua",
+        "export protocol Updatable {\n  update(dt: number): nil\n}\n",
+    );
+    let path = PathBuf::from("src/main.tua");
+    host.open_document(&path, valid);
+    let _ = host.snapshot();
+    host.update_open_document(&path, fixture.source("src/main.tua"));
+    let snapshot = host.snapshot();
+    let (path, file) = snapshot
+        .files
+        .iter()
+        .find(|(path, _)| path.ends_with("src/main.tua"))
+        .expect("main file should be in the snapshot");
+    assert!(file.parsed.is_err(), "the incomplete edit should not parse");
+    let degraded = snapshot
+        .degraded_semantic_facts(path, file)
+        .expect("last-good semantic facts should be reused");
+    assert!(
+        snapshot
+            .type_database
+            .resolve_type_name(&snapshot.module_graph, &degraded.parsed.path, "Updatable")
+            .is_some(),
+        "the imported protocol binding should survive an incomplete edit"
+    );
+    let completions =
+        completion_labels(&snapshot.completion("src/main.tua", fixture.position("complete")));
+    assert_eq!(completions, ["update"]);
+}
+
+#[test]
+fn imported_protocol_conformance_is_checked_in_the_implementing_module() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/contracts.tua
+export protocol Updatable {
+  update(dt: number): nil
+}
+-- file: src/actors.tua
+import type { Updatable } from "./contracts"
+final class Valid implements Updatable {
+  update(dt: number): nil {
+  }
+}
+final class Missing implements Updatable {
+}
+final class Bad implements Updatable {
+  update(dt: string): nil {
+  }
+}
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+
+    let snapshot = host.snapshot();
+    let diagnostics = snapshot.diagnostics("src/actors.tua");
+    assert!(
+        diagnostics.iter().any(|diagnostic| {
+            diagnostic.message.contains("Missing")
+                && diagnostic.message.contains("missing method `update`")
+        }),
+        "project analysis should report a missing protocol method in the implementing module: {diagnostics:#?}"
+    );
+    assert!(
+        diagnostics.iter().any(|diagnostic| {
+            diagnostic.message.contains("Bad.update")
+                && diagnostic.message.contains("does not satisfy protocol")
+        }),
+        "project analysis should report an incompatible protocol method in the implementing module: {diagnostics:#?}"
+    );
+    assert!(
+        !diagnostics.iter().any(|diagnostic| {
+            diagnostic.message.contains("Valid")
+                && diagnostic.message.contains("does not satisfy protocol")
+        }),
+        "valid conformance should remain accepted: {diagnostics:#?}"
+    );
+
+    host.set_file(
+        "src/contracts.tua",
+        "export protocol Updatable {\n  update(dt: string): nil\n}\n",
+    );
+    let changed = host.snapshot().diagnostics("src/actors.tua");
+    assert!(
+        changed.iter().any(|diagnostic| {
+            diagnostic.message.contains("Valid.update")
+                && diagnostic.message.contains("does not satisfy protocol")
+        }),
+        "editing an imported protocol should refresh conformance diagnostics: {changed:#?}"
+    );
+}
+
+#[test]
 fn snapshot_recovers_imported_return_alias_field_completion_while_typing() {
     let fixture = Fixture::parse(
         r#"-- file: src/main.tua

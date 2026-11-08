@@ -3,10 +3,11 @@
 Status: active implementation plan, updated November 8, 2026. The initial
 method-only protocol slice now parses, checks local and imported class
 conformance, supports protocol-typed values, and erases contracts from Lua.
-Protocol-specific IDE completion/navigation and full runtime/editor
-qualification are still in progress. Native generic syntax and inference are
-not implemented. Existing single inheritance is retained. This document is not
-a release announcement.
+Protocol-specific IDE completion, hover, signature help, and navigation now
+have core/LSP request coverage; references/rename, documentation propagation,
+remaining semantic surfaces, and full runtime/editor qualification are still
+in progress. Native generic syntax and inference are not implemented. Existing
+single inheritance is retained. This document is not a release announcement.
 
 ## 1. Outcomes and release boundaries
 
@@ -48,13 +49,20 @@ parameter packs, specialization/monomorphization, and a new runtime.
   copy that rule into mutable generic containers without a soundness decision.
 - `classes.rs`: protocol declarations and class `implements` clauses now retain
   source spans and erase through class lowering. Local and imported
-  method-contract checks are implemented; the protocol IDE slice is incomplete.
+  method-contract checks are implemented; protocol completion, hover,
+  signature-help, and navigation have initial cross-file core/LSP coverage, but
+  the protocol IDE slice is incomplete.
+- `crates/tua-core/src/analysis/host.rs`: project module/type indexes reuse
+  last-good parsed and semantic facts when an open source file becomes invalid,
+  so type-only protocol imports stay available during edits.
 - LSP already advertises implementation navigation. Extend its shared query;
   do not add a second unrelated implementation lookup.
 
-Evidence as of this update: protocol parser/checker/import regressions pass in
-`cargo test -p tua-core protocol`; the full core suite passed with the
-stack-sensitive serial settings recorded in
+Evidence as of this update: `cargo test -p tua-core protocol` passes all 12
+protocol-filtered tests. Core and LSP editor requests cover imported protocol
+completion, hover, signature help, definition, and implementation navigation;
+the incomplete-edit completion case first establishes last-good project facts.
+Both full package suites pass with stack-sensitive serial settings recorded in
 `internal/audits/devex-space-invaders-0.7.0/REPORT.md`. That report contains a
 five-module game exercise, generated-Lua smoke test, exact limitations, and
 remaining verification gaps. No native generic alias, function, or class
@@ -277,8 +285,8 @@ from the tests and current documentation that prove it.
 | P0 | Contract and baseline; first | Settle syntax/semantics, diagnostic locations, namespace and receiver rules. Add positive/negative fixture specifications and characterize mutable-container risk. Existing inheritance regression stays green. | Partial: method-only protocols, explicit nominal conformance, colon dispatch, and no-runtime-erasure rules are in code. Receiver edge cases and mutable-container interactions still need characterization. | M |
 | P1 | Protocol syntax and identities; P0 | Parse declarations/conformance clauses, scope type names/members, preserve docs and spans, recover edits, format and erase safely. Unsupported use must never be silently accepted. | Partial: local and exported protocol declarations, class clauses, spans, type identities, and erasure work. Documentation comments, malformed-edit recovery, and formatter behavior need dedicated coverage. | L |
 | P2 | Local conformance and dispatch; P1 | Share method compatibility, inherited methods and conformances, multiple obligations, protocol assignments/calls, and structured errors. Invalid signatures fail at the correct span. | Partial: local/imported conformance, protocol-typed values, inherited method satisfaction, and missing/incompatible method tests pass. Multiple obligations, inherited conformance edge cases, variance and exact diagnostic slots need broader verification. | L |
-| P3 | Modules and invalidation; P2 | Type imports, exports/re-exports, declaration-file contracts, cycles and missing modules. Unsaved contract/member edits refresh dependents without transient false errors. | Partial: exported protocols, named type-only imports, and project diagnostics for missing/incompatible imported methods work. Re-exports, declaration modules, cycle behavior, and saved/unsaved invalidation remain open. | L |
-| P4 | Complete protocol IDE slice; P3 | Member completion, hover/docs, signatures, inlays, definitions, implementations, references/rename, tokens, type explanations, actionable diagnostics. Verify real LSP responses and installed VS Code. | Partial: definition and implementation navigation now have core and LSP request tests across type-only imports, using a snapshot-owned reverse conformance index. Protocol-aware references/rename, tokens, explanations, verification of completion/hover/signature/inlay behavior, and installed VS Code qualification remain open. | L |
+| P3 | Modules and invalidation; P2 | Type imports, exports/re-exports, declaration-file contracts, cycles and missing modules. Unsaved contract/member edits refresh dependents without transient false errors. | Partial: exported protocols, named type-only imports, and project diagnostics for missing/incompatible imported methods in a separate implementing file work, including when `implements` is the import's only use. A saved contract edit refreshes those diagnostics. Re-exports, declaration modules, cycles, and unsaved dependency-edit freshness remain open. | L |
+| P4 | Complete protocol IDE slice; P3 | Member completion, hover/docs, signatures, inlays, definitions, implementations, references/rename, tokens, type explanations, actionable diagnostics. Verify real LSP responses and installed VS Code. | Partial: core and in-process LSP requests cover completion after a typed method prefix, incomplete edits with last-good project facts, hover signatures, signature help, definition, and implementation navigation across type-only imports. A real `tua lsp` process probe still returned no protocol completion after the incomplete edit; this needs an integration regression and cause analysis. The fast editor path preserves last-good parsed/type inputs when rebuilding project indexes after invalid edits. Protocol requirement comments are not attached to method facts, so hover does not show custom protocol docs. Protocol-aware references/rename, tokens, inlays, explanations, installed VS Code and runtime qualification remain open. | L |
 | P5 | Usable protocol examples/docs; P4 | Add runnable game/UI and negative examples, runtime/source-map/hot-reload qualification; preserve adapters for Lua interop. | Partial: class/typing/module docs and a feature-tour sample now explain the shipped slice; an audit game build ran under system Lua with a LOVE shim. LOVE/LuaJIT, source maps, hot reload, editor UX, and visual behavior remain unverified. | M |
 | G0 | Binder/substitution design; after P5 | Specify generic inference, recursive types, variance, first-class functions, contextual typing, limits and error policy; reuse protocol bounds. No unused framework-only abstraction. | Decisions recorded above: native alias syntax, binder identity, substitution semantics, arity/error behavior, inference boundaries, erasure, mutability variance, and resource limits. G1 implementation remains open. | M |
 | G1 | Generic aliases; G0 | Scoped binder IDs, arity checks, type applications, bounded capture-avoiding substitution, recursion/occurs handling, imports and IDE display. Connect machinery to its first consumer. | Open. | L |
@@ -480,8 +488,8 @@ Before calling 0.7.0 ready:
 
 The first local protocol batch and an exported-protocol cross-file batch are
 landed. Keep the actor/panel, inherited-method, incompatible-signature, and
-cross-file fixtures as regression anchors. Continue with P3 freshness tests for
-saved and unsaved edits, then P4 protocol-specific LSP/editor behavior and P5
-runtime/source-map/hot-reload qualification. Begin G0 only after the protocol
-acceptance gates are complete; do not treat this partial protocol implementation
-as completion of the 0.7.0 plan.
+cross-file fixtures as regression anchors. G0's binder and substitution
+decisions are recorded above; G1 alias implementation remains open. Continue
+with P3 freshness tests for saved and unsaved edits, then the remaining P4
+protocol IDE surfaces and P5 runtime/source-map/hot-reload qualification. Do
+not treat this partial protocol implementation as completion of the 0.7.0 plan.

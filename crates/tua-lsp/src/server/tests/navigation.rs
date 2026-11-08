@@ -1018,6 +1018,80 @@ end
 }
 
 #[test]
+fn protocol_method_completion_hover_and_signature_cross_type_imports() {
+    let temp = TempProject::new("protocol-editor-surfaces");
+    let contracts = r#"export protocol Updatable {
+  update(dt: number): nil
+}
+"#;
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/contracts.tua", contracts);
+    let main_uri = temp.uri_for("src/main.tua");
+    let valid_completion_source = r#"import type { Updatable } from "./contracts"
+local function tick(value: Updatable, dt: number)
+  value:update(dt)
+end
+"#;
+    let incomplete_completion_source =
+        valid_completion_source.replace("value:update(dt)", "value:up");
+    temp.write("src/main.tua", valid_completion_source);
+    let mut completion_server = TestServer::new();
+    completion_server.send(initialize_with_root(1, temp.uri()));
+    completion_server.send(did_open(&main_uri, valid_completion_source));
+    completion_server.send(completion_request(
+        2,
+        &main_uri,
+        valid_completion_source,
+        "value:up",
+    ));
+    completion_server.send(did_change(&main_uri, &incomplete_completion_source, 2));
+    completion_server.send(completion_request(
+        3,
+        &main_uri,
+        &incomplete_completion_source,
+        "value:up",
+    ));
+    let completion_output = completion_server.output().to_vec();
+    let hover_source = r#"import type { Updatable } from "./contracts"
+local function tick(value: Updatable, dt: number)
+  value:update(dt)
+end
+"#;
+    temp.write("src/main.tua", hover_source);
+    let hover_output = run_messages(vec![
+        initialize_with_root(1, temp.uri()),
+        did_open(&main_uri, hover_source),
+        hover_request(2, &main_uri, hover_source, "update(dt)"),
+    ]);
+    let valid_signature_source = r#"import type { Updatable } from "./contracts"
+local function tick(value: Updatable, dt: number)
+  value:update(dt)
+end
+"#;
+    let signature_source = valid_signature_source.replace("value:update(dt)", "value:update(");
+    temp.write("src/main.tua", valid_signature_source);
+    let signature_output = run_messages(vec![
+        initialize_with_root(1, temp.uri()),
+        did_open(&main_uri, valid_signature_source),
+        did_change(&main_uri, &signature_source, 2),
+        signature_help_request(2, &main_uri, &signature_source, "value:update("),
+    ]);
+
+    assert_completion_labels(&completion_output, 2, ["update"]);
+    assert_completion_labels(&completion_output, 3, ["update"]);
+    assert_hover_contains(
+        &hover_output,
+        2,
+        "(field) update: (self: any, dt: number) -> nil",
+    );
+    assert_signature_label(
+        &signature_output,
+        2,
+        "function value:update(dt: number): nil",
+    );
+}
+
+#[test]
 fn call_hierarchy_returns_same_file_and_cross_file_callers() {
     let temp = TempProject::new("call-hierarchy-modules");
     let player = r#"type Player = { name: string }

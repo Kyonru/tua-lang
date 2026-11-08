@@ -105,14 +105,18 @@ because a class happens to have a method with the same name. A method inherited
 from a base class can satisfy a protocol requirement.
 
 Protocols can be exported and consumed as type-only imports; those imports and
-the protocol declaration are erased from Lua. See [Sharing Types Between
-Modules](modules.md#share-types-without-loading-code) for module boundaries.
+the protocol declaration are erased from Lua. Project diagnostics validate
+classes against imported contracts even when `implements` is the only use of
+the imported type. See [Sharing Types Between Modules](modules.md#share-types-without-loading-code)
+for module boundaries.
 Protocol bodies currently describe methods only. They do not declare fields,
 default implementations, or protocol inheritance. From a protocol-typed
-method call, go to definition opens the requirement and go to implementation
+method call, completion, hover signatures, and signature help use the declared
+requirement. Go to definition opens the requirement and go to implementation
 lists the statically known conforming methods in the workspace, including
-methods found through type-only imports. Protocol method references and rename
-are not yet linked across requirements and implementations. The
+methods found through type-only imports. Comments on protocol requirements are
+not yet propagated into hover documentation, and protocol method references
+and rename are not yet linked across requirements and implementations. The
 [feature-tour example](https://github.com/Kyonru/tua-lang/blob/main/examples/features/src/protocols.tua)
 exercises this language feature.
 
