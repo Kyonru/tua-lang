@@ -169,7 +169,8 @@ fn initialize_returns_server_capabilities() {
             "namespace",
             "event",
             "label",
-            "decorator"
+            "decorator",
+            "interface"
         ])
     );
     assert_eq!(

@@ -10,6 +10,8 @@ language or editor behavior, and migration notes call out those changes.
 
 - Method-only protocols with explicit class conformance, protocol-typed
   parameters and arrays, exported protocol types, and erased type-only imports.
+- Semantic tokens identify protocol declarations and type uses with the LSP
+  interface token class.
 
 ### Fixed
 
@@ -26,6 +28,8 @@ language or editor behavior, and migration notes call out those changes.
   file temporarily has syntax errors.
 - Adopt valid worker snapshots as coordinator last-good facts before edits, so
   invoked completion keeps imported protocol members after syntax errors.
+- Classify colon-called members before type annotations in semantic tokens, so
+  protocol method calls keep their method token class.
 - Do not report a protocol type import as unused when a class uses it in an
   `implements` clause.
 

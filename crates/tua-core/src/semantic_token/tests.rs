@@ -48,6 +48,55 @@ fn classifies_aliases_functions_variables_parameters_and_properties() {
 }
 
 #[test]
+fn classifies_protocol_declarations_requirements_and_type_uses() {
+    let source = r#"protocol Updatable {
+  update(dt: number): nil
+}
+
+final class Particle implements Updatable {
+  update(dt: number): nil {}
+}
+
+local function tick(value: Updatable)
+  value:update(0.1)
+end
+"#;
+    let tokens = semantic_tokens_tua_source("src/protocols.tua", source)
+        .expect("protocol declarations should tokenize");
+
+    assert_token_in_source(
+        &tokens,
+        source,
+        "Updatable",
+        SemanticTokenKind::Protocol,
+        true,
+    );
+    assert_token_in_source(
+        &tokens,
+        source,
+        "Updatable",
+        SemanticTokenKind::Protocol,
+        false,
+    );
+    assert_token_at_source_line(
+        &tokens,
+        source,
+        "update",
+        2,
+        SemanticTokenKind::Method,
+        true,
+    );
+    assert_token_at_source_line(
+        &tokens,
+        source,
+        "update",
+        10,
+        SemanticTokenKind::Method,
+        false,
+    );
+}
+
+#[test]
 fn classifies_object_pool_as_a_builtin_function() {
     let source = r#"local pool = objectPool({
   create = function()

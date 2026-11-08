@@ -40,6 +40,7 @@ pub enum SemanticTokenKind {
     Global,
     Module,
     Method,
+    Protocol,
     AnnotationTag,
     Class,
     Enum,
@@ -183,14 +184,14 @@ fn semantic_token_for_identifier(
         return Some(token);
     }
 
-    if is_type_reference(&parsed.source, span.start) {
-        let kind = declarations
-            .type_kind(&text)
-            .unwrap_or_else(|| type_reference_kind(&text));
+    if let Some(kind) = member_kind(tokens, index) {
         let mut modifiers = semantic_modifiers_for_name(&text, false);
 
-        if kind == SemanticTokenKind::BuiltinType {
+        if member_uses_builtin_namespace(tokens, index) {
             modifiers.push(SemanticTokenModifier::DefaultLibrary);
+        }
+        if is_modification_reference(tokens, index) {
+            modifiers.push(SemanticTokenModifier::Modification);
         }
 
         return Some(SemanticToken {
@@ -200,14 +201,14 @@ fn semantic_token_for_identifier(
         });
     }
 
-    if let Some(kind) = member_kind(tokens, index) {
+    if is_type_reference(&parsed.source, span.start) {
+        let kind = declarations
+            .type_kind(&text)
+            .unwrap_or_else(|| type_reference_kind(&text));
         let mut modifiers = semantic_modifiers_for_name(&text, false);
 
-        if member_uses_builtin_namespace(tokens, index) {
+        if kind == SemanticTokenKind::BuiltinType {
             modifiers.push(SemanticTokenModifier::DefaultLibrary);
-        }
-        if is_modification_reference(tokens, index) {
-            modifiers.push(SemanticTokenModifier::Modification);
         }
 
         return Some(SemanticToken {
@@ -672,6 +673,7 @@ impl DeclarationIndex {
 
         collect_block_declarations(parsed.ast.nodes(), &mut index);
         collect_class_declarations(parsed, tokens, &mut index);
+        collect_protocol_declarations(parsed, &mut index);
         mark_deprecated_declarations(parsed, &mut index);
 
         index
@@ -692,7 +694,10 @@ impl DeclarationIndex {
 
         if matches!(
             kind,
-            SemanticTokenKind::TypeAlias | SemanticTokenKind::Class | SemanticTokenKind::Enum
+            SemanticTokenKind::TypeAlias
+                | SemanticTokenKind::Class
+                | SemanticTokenKind::Enum
+                | SemanticTokenKind::Protocol
         ) {
             self.types.insert(name.to_owned(), kind);
         }
@@ -839,6 +844,20 @@ fn collect_class_declarations(
         for method in class.init.iter().chain(class.methods.iter()) {
             index.insert_method(method.name_span, &method.name, true);
             collect_class_parameter_declarations(tokens, method.parameters_span, index);
+        }
+    }
+}
+
+fn collect_protocol_declarations(parsed: &ParsedSource, index: &mut DeclarationIndex) {
+    for protocol in &parsed.protocol_declarations {
+        index.insert_declaration(
+            protocol.name_span,
+            &protocol.name,
+            SemanticTokenKind::Protocol,
+        );
+
+        for method in &protocol.methods {
+            index.insert_method(method.name_span, &method.name, true);
         }
     }
 }

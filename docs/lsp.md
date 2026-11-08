@@ -693,6 +693,8 @@ indexed `.lua`, assets, and `tua.toml` when supported.
 
 Folding ranges include multiline functions, `if`/loop/`do` blocks, table
 constructors, multiline type aliases, and adjacent comment blocks.
+Semantic tokens classify protocol declarations and their type references as
+interfaces, and protocol requirements and calls as methods.
 
 ### Tua Extension Requests
 

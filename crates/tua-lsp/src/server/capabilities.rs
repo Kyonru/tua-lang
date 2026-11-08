@@ -3,7 +3,7 @@ use tua_core::project_description;
 
 pub(super) const SERVER_NAME: &str = "tua-lsp";
 
-pub(super) const SEMANTIC_TOKEN_TYPES: [&str; 13] = [
+pub(super) const SEMANTIC_TOKEN_TYPES: [&str; 14] = [
     "type",
     "function",
     "variable",
@@ -17,6 +17,7 @@ pub(super) const SEMANTIC_TOKEN_TYPES: [&str; 13] = [
     "event",
     "label",
     "decorator",
+    "interface",
 ];
 
 pub(super) const SEMANTIC_TOKEN_MODIFIERS: [&str; 9] = [

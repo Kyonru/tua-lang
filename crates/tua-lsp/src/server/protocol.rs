@@ -1496,6 +1496,7 @@ fn semantic_token_type_index(kind: SemanticTokenKind) -> usize {
         SemanticTokenKind::Event => 10,
         SemanticTokenKind::Label => 11,
         SemanticTokenKind::AnnotationTag => 12,
+        SemanticTokenKind::Protocol => 13,
     }
 }
 

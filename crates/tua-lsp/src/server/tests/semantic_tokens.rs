@@ -77,6 +77,33 @@ return {
         .iter()
         .any(|token| token.text == "hp" && token.token_type == 4 && token.modification));
 }
+
+#[test]
+fn semantic_tokens_classify_protocol_contracts_as_interfaces() {
+    let uri = "file:///tmp/semantic-protocol.tua";
+    let source = r#"protocol Updatable {
+  update(dt: number): nil
+}
+
+final class Particle implements Updatable {
+  update(dt: number): nil {}
+}
+
+local function tick(value: Updatable)
+  value:update(0.1)
+end
+"#;
+    let output = run_messages(vec![did_open(uri, source), semantic_tokens_request(2, uri)]);
+    let response = response_with_id(&output, 2);
+    let tokens = decoded_semantic_tokens(source, response);
+
+    assert_semantic_token(&tokens, "Updatable", 13, true);
+    assert!(tokens
+        .iter()
+        .any(|token| token.text == "Updatable" && token.token_type == 13 && !token.declaration));
+    assert_semantic_token(&tokens, "update", 5, true);
+    assert_semantic_token(&tokens, "update", 5, false);
+}
 #[test]
 fn semantic_tokens_range_filters_to_requested_span() {
     let uri = "file:///tmp/semantic-token-range.tua";
