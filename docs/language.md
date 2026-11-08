@@ -378,6 +378,24 @@ type Node = {
 }
 ```
 
+Type aliases can declare ordered, required, unbounded type parameters and use
+them in their type body:
+
+```tua
+type Box<T> = { value: T }
+type Result<T, E> = { value: T | nil, error: E | nil }
+local box: Box<number> = { value = 4 }
+```
+
+Write every type argument explicitly. Applications can be nested in supported
+type forms such as records, arrays, unions, dictionaries, and function types.
+Generic alias arguments substitute through the declared shape; Tua does not
+infer them. Generic functions and classes, protocol bounds, defaults, packs,
+and variadic generic parameters are not supported. Generic declarations and
+applications erase from Lua output. Recursive expansion is bounded; changing
+the arguments on each recursive step may leave an unresolved application and
+does not currently produce a dedicated recursion diagnostic.
+
 ## Table Shapes
 
 ```tua
@@ -418,7 +436,8 @@ truly delayed resources optional and guard their use until initialization.
 
 ## Arrays, Dictionaries, And LuaDoc Tuples
 
-Use `T[]` for arrays. Tua does not require or provide a `Table<T>` generic:
+Use `T[]` for arrays. Tua has no built-in `Table<T>` collection type; user
+defined type aliases may declare generic parameters:
 
 ```tua
 local steps: number[] = {}
@@ -627,8 +646,10 @@ LuaDoc/LuaCATS function types such as
 When `annotation_mode = "luacats"` is enabled, native callback aliases emit
 compatible `---@alias ... fun(...)` annotations.
 
-Generics are not part of Tua. Arrays, dictionaries, concrete aliases, and
-gradual `any` cover the supported container and dynamic boundaries.
+Generic parameters are currently supported on type aliases only. Generic
+functions and classes, and inferred type arguments, are not part of the native
+type syntax. LuaDoc `---@generic` remains metadata and does not enable generic
+function inference.
 
 ## LOVE Assets And Callbacks
 

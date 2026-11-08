@@ -734,9 +734,11 @@ replace Tua's `-- tua-ignore-*` directives.
 
 !!! note "Recognition does not imply full LuaLS semantics"
     Tua implements the practical annotation subset needed for typed Lua
-    boundaries. `---@generic` is metadata only because Tua has no generic
-    solver, and advanced LuaLS annotation behavior degrades conservatively
-    instead of making valid Lua fail.
+    boundaries. LuaDoc `---@generic` remains metadata only and does not provide
+    generic function inference. This is separate from native generic type
+    aliases, which support explicit applications such as `Box<number>`; Tua
+    does not yet support generic classes or functions. Advanced LuaLS annotation
+    behavior degrades conservatively instead of making valid Lua fail.
 
 Malformed supported annotations can report diagnostics when enabled:
 

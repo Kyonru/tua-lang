@@ -10,6 +10,8 @@ language or editor behavior, and migration notes call out those changes.
 
 - Method-only protocols with explicit class conformance, protocol-typed
   parameters and arrays, exported protocol types, and erased type-only imports.
+- Generic type aliases with explicit type applications, exact arity diagnostics,
+  structured substitution, and named/namespace import and re-export support.
 - Namespace type imports can qualify protocols in `implements` clauses.
 - Semantic tokens identify protocol declarations and type uses with the LSP
   interface token class.
@@ -37,6 +39,9 @@ language or editor behavior, and migration notes call out those changes.
   `implements` clause.
 - Identify the incompatible parameter or return slot in protocol method
   conformance diagnostics.
+- Reject widening a mutable concrete class array to a protocol array, while
+  keeping contextually typed protocol-array literals and existing class-to-base
+  array compatibility.
 
 ## [0.6.1] - 2026-11-08
 

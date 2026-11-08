@@ -119,6 +119,11 @@ the imported type. See [Sharing Types Between Modules](modules.md#share-types-wi
 for module boundaries. Namespace type imports qualify the contract in the class
 header, for example `import type Contracts from "./contracts"` followed by
 `final class Actor implements Contracts.Updatable`.
+Protocol arrays can be initialized with values from unrelated conforming
+classes. Tua rejects assigning an existing concrete class array to a protocol
+array because writes through that mutable view could put a different
+conforming class into the original concrete array; create a fresh
+protocol-typed array literal instead.
 Protocol bodies currently describe methods only. They do not declare fields,
 default implementations, or protocol inheritance. From a protocol-typed
 method call, completion, hover signatures, and signature help use the declared

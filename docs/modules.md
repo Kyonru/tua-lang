@@ -98,6 +98,7 @@ Use a `.d.tua` file when the whole module is a type contract:
 
 ```tua title="src/events.d.tua"
 export type Damage = { target: string, amount: number }
+export type Box<T> = { value: T }
 ```
 
 Only explicitly exported aliases and protocols are public. A protocol can
@@ -106,6 +107,10 @@ also be declared next to runtime classes using `export protocol Name { ... }`.
 declaration-only module. Named imports, renaming imports, namespace imports,
 and type re-exports are covered in
 [Sharing Types](typing.md#sharing-types-between-modules).
+Generic aliases use the same export and import rules. For example,
+`import type { Box } from "./events"` permits `Box<number>` in a type
+annotation; namespace imports use `Events.Box<number>`. Type arguments and the
+alias declaration are erased and add no runtime module load.
 
 For a method contract shared by runtime modules, export the protocol from a
 regular `.tua` module and import it only where the class needs its type:

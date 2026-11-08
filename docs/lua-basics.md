@@ -153,7 +153,9 @@ end
 Native Tua class bodies use braces, but their nested Lua functions and
 control-flow blocks still use `end`. Tua uses `protocol` for explicit,
 method-only class contracts; it does not support JavaScript imports or
-`interface`, `async`, optional chaining, Luau casts, or generic `<T>` syntax.
+`interface`, `async`, optional chaining, or Luau casts. Generic type parameters
+are available on type aliases (`type Box<T> = ...`); generic functions and
+classes are not supported.
 
 Continue with [Learn Tua](learn.md), [Modules And Imports](modules.md), or
 [Typing In Tua](typing.md). Types improve static feedback; they do not validate

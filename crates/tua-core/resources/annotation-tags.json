@@ -63,7 +63,7 @@
     "name": "generic",
     "detail": "generic annotation",
     "syntax": "---@generic T",
-    "description": "Metadata only. Does not provide generic type inference or generic classes."
+    "description": "Metadata only. It does not add generic function inference or generic classes. Native Tua type aliases may use `type Box<T> = ...`; see Generic Type Aliases in the Typing In Tua guide."
   },
   {
     "name": "version",

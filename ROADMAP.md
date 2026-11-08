@@ -12,11 +12,11 @@ workflow pages under `docs/`. Completed work belongs in
 
 ### 0.7.0: Protocol Contracts First, Then Generics
 
-The primary 0.7.0 goal is stronger polymorphism and generics. The initial
-method-only protocol syntax, explicit class conformance, basic checking, and
-cross-module type imports are implemented. The complete protocol editor and
-qualification slice and all native generics remain open; this is not a release
-completion claim. The detailed contributor plan is kept locally in
+The primary 0.7.0 goal is stronger polymorphism and generics. Method-only
+protocols, explicit class conformance, cross-module type imports, and generic
+type aliases are implemented. Generic functions, generic classes, the complete
+protocol editor slice, and release qualification remain open; this is not a
+release completion claim. The detailed contributor plan is kept locally in
 `internal/generics-polymorphism-0.7.0.md`.
 
 1. **Complete protocol semantics and module freshness.** The compiler now
@@ -40,11 +40,12 @@ completion claim. The detailed contributor plan is kept locally in
    completion, documentation hover, and definition navigation. Cross-platform
    editor and broader module-freshness qualification remain open. Use the shared
    model rather than feature-local checks.
-3. **Add scoped generic aliases and functions.** Introduce declaration-owned
-   type parameters and shared substitution/inference; preserve return tuples,
-   callback signatures, imports, and declaration identity. Make unsupported
-   forms explicit instead of silently degrading to `any`. Route LuaDoc generic
-   annotations through the same semantics when their contracts are supported.
+3. **Add generic functions.** Generic aliases now use declaration-owned type
+   parameters, explicit applications, shared substitution, and named/namespace
+   imports. Introduce per-call inference for functions while preserving return
+   tuples, callback signatures, imports, and declaration identity. Make
+   unsupported forms explicit instead of silently degrading to `any`; LuaDoc
+   `---@generic` remains metadata-only until its supported semantics are defined.
 4. **Add generic classes and protocol constraints.** Reuse the same substitution
    model for construction, inherited members, `Self`, and protocol bounds.
    Decide mutable-container variance before accepting generic widening; current

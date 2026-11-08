@@ -3,6 +3,7 @@
 ---@field hp number
 type Callback = (player: Player, amount: number) -> boolean
 type Box<T> = { value: T }
+local boxed: Box<number> = { value = 4 }
 
 enum PlayerState
   "idle"

@@ -102,8 +102,10 @@ Never answer with TypeScript, JavaScript, Luau, Python, or Markdown.
 
 - Primitive types are `number`, `string`, `boolean`, `nil`, and `any`.
   Annotations use `name: Type`; function returns use `): Type`.
-- `type Name = ...` declares an erased alias; `Self` refers to the supported
-  current alias or receiver.
+- `type Name = ...` declares an erased alias; `type Box<T> = ...` declares a
+  generic alias. Apply aliases explicitly in type positions, such as
+  `Box<number>`; named and namespace type imports and type re-exports preserve
+  the alias. Generic arguments and declarations erase from Lua.
 - Shapes use `{ field: Type, optional?: Type }`; arrays use `T[]`;
   dictionaries use `{ [Key]: Value }`; native fixed-length positional table
   types are not supported (`[First, Second]` is LuaCATS-only); unions use
@@ -114,8 +116,10 @@ Never answer with TypeScript, JavaScript, Luau, Python, or Markdown.
   multiple returns. Declarations support typed `...: Type`, optional trailing
   `mode?: string`, and defaults such as `amount: number = 5`.
 - `value is Type` performs supported runtime identity checks and branch
-  narrowing. Tua has no generics; use concrete aliases and containers or
-  gradual `any`, never `<T>` or `Table<T>`.
+  narrowing. Generic parameters currently belong to type aliases only; generic
+  functions, classes, inferred arguments, and LuaDoc `---@generic` inference
+  are not supported. Tua has no built-in `Table<T>` container; use `T[]` or
+  `{ [Key]: Value }` for collections.
 - Ordinary functions remain Lua:
   `function name(args): Return ... end` and
   `local function name(args): Return ... end`.

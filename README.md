@@ -37,7 +37,9 @@ extension, documentation site, and bundled example projects.
 
 ## What Tua Provides
 
-- Erased local, function, alias, table-shape, optional-field, and union types.
+- Erased local, function, generic type-alias, table-shape, optional-field, and
+  union types. Generic arguments are explicit; generic functions and classes
+  are not yet supported.
 - Single-inheritance classes lower to Lua tables/metatables; method-only
   protocol contracts are checked and erased while normal Lua dispatch remains.
 - Readable Lua 5.1-compatible output for LuaJIT and LOVE 11.x.

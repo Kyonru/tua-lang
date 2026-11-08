@@ -103,7 +103,7 @@ Reports TL4068 for a direct call statement that discards the resolved function r
 ---@generic T
 ```
 
-Metadata only. Does not provide generic type inference or generic classes.
+Metadata only. It does not add generic function inference or generic classes. Native Tua type aliases may use `type Box<T> = ...`; see Generic Type Aliases in the Typing In Tua guide.
 
 ## @version
 

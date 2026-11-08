@@ -107,11 +107,13 @@ See [Classes](classes.md) for imports, inheritance, and editor support.
 | Map a declaration library to runtime modules | Configured `type_libraries` and `---@meta`. |
 | Suppress a Tua diagnostic | `-- tua-ignore-line TLxxxx`, `-- tua-ignore-next-line TLxxxx`, or `-- tua-ignore-file TLxxxx`. |
 
-`---@class` describes a type; it does not construct a runtime class. Likewise,
-`---@generic` does not add generics to Tua. Tags including `@generic`, `@cast`,
-`@as`, and `@diagnostic` are recognized metadata without their full LuaLS type
-checking behavior. In particular, use Tua's ignore directives instead of
-expecting `---@diagnostic disable` to suppress a Tua diagnostic.
+`---@class` describes a type; it does not construct a runtime class. LuaDoc
+`---@generic` remains metadata-only and does not add generic function inference;
+native generic parameters are currently supported on Tua type aliases. Tags
+including `@generic`, `@cast`, `@as`, and `@diagnostic` are recognized metadata
+without their full LuaLS type checking behavior. In particular, use Tua's ignore
+directives instead of expecting `---@diagnostic disable` to suppress a Tua
+diagnostic.
 
 The [LuaDoc reference](lua-interop.md#luadoc-support) owns the complete supported
 tag list and type forms. [Typing In Tua](typing.md) explains native annotations.

@@ -41,11 +41,18 @@ parameter packs, specialization/monomorphization, and a new runtime.
   and the initial method-only protocol contract.
 - `examples/features/src/polymorphism.tua`: base-typed actor arrays and explicit
   receiver-binding adapters for unrelated UI/gameplay objects.
-- `parser/dialect.rs`: native generic declarations/applications are rejected.
+- `parser/dialect.rs`: generic parameters/applications are accepted for type
+  aliases only; generic function and class declarations remain rejected.
 - `parser/model.rs` and `parser/doc.rs`: LuaDoc generic metadata exists;
   `docs/annotations.md` correctly says it does not provide generic inference.
-- `types/model.rs`: types and aliases currently have no declaration-owned
-  generic binder/instantiation representation.
+- `types/model.rs` and `types/environment.rs`: type aliases have declaration-
+  owned binder identities and structured applications, with simultaneous
+  substitution through supported structured type positions. Expansion keeps
+  recursive edges symbolic and bounds changing-argument recursion.
+- `type_database/mod.rs` and project queries: named and namespace imports,
+  named re-exports, and declaration identities are preserved across modules.
+- `parser/doc.rs`: generic alias applications in LuaDoc type text are parsed
+  structurally for shared validation; LuaDoc `---@generic` remains metadata-only.
 - `types/assignability.rs`: function variance and structured failure paths
   exist; mutable arrays currently compare element types covariantly. Do not
   copy that rule into mutable generic containers without a soundness decision.
@@ -60,15 +67,18 @@ parameter packs, specialization/monomorphization, and a new runtime.
 - LSP already advertises implementation navigation. Extend its shared query;
   do not add a second unrelated implementation lookup.
 
-Evidence as of this update: `cargo test -p tua-core protocol` passes all 12
-protocol-filtered tests. Core and LSP editor requests cover imported protocol
+Evidence as of this update: `cargo test -p tua-core protocol` passes all 25
+protocol-filtered tests and `cargo test -p tua-core generic_alias` passes all 13
+generic-alias-filtered tests. `cargo check -p tua-core` passes. Core and LSP editor requests cover imported protocol
 completion, hover, signature help, definition, and implementation navigation;
 the incomplete-edit completion case first establishes last-good project facts.
 Both full package suites pass with stack-sensitive serial settings recorded in
 `internal/audits/devex-space-invaders-0.7.0/REPORT.md`. That report contains a
 five-module game exercise, generated-Lua smoke test, exact limitations, and
-remaining verification gaps. No native generic alias, function, or class
-implementation has landed.
+remaining verification gaps. Generic aliases are implemented; generic function
+and class implementations have not landed. The real-server extension suite now
+contains a generic alias completion/hover/definition case, but package and
+installed-editor qualification remains part of the release gate.
 
 ## 3. Language contract and remaining decisions
 
@@ -290,8 +300,8 @@ from the tests and current documentation that prove it.
 | P3 | Modules and invalidation; P2 | Type imports, exports/re-exports, declaration-file contracts, cycles and missing modules. Unsaved contract/member edits refresh dependents without transient false errors. | Partial: exported protocols, named type-only imports, and project diagnostics for missing/incompatible imported methods in a separate implementing file work, including when `implements` is the import's only use. Saved and unsaved contract edits refresh those diagnostics. A VS Code/LSP diagnostic regression now verifies conformance through a named re-export chain whose source is a `.d.tua` declaration module. Namespace re-exports, cyclic protocol graphs, and broader dependency-edit freshness remain open. | L |
 | P4 | Complete protocol IDE slice; P3 | Member completion, hover/docs, signatures, inlays, definitions, implementations, references/rename, tokens, type explanations, actionable diagnostics. Verify real LSP responses and installed VS Code. | Partial: core and in-process LSP requests cover completion after a typed method prefix, incomplete edits with last-good project facts, hover signatures and protocol requirement comments (with the implicit receiver hidden for colon calls), signature help, definition, implementation navigation, references, and rename across type-only imports. A real `tua lsp` process probe confirms invoked completion after an incomplete imported-protocol edit. Semantic tokens classify protocol types as interfaces and requirements/calls as methods. Inlay hints and type explanations preserve imported protocol member types. The VS Code real-server host now verifies imported protocol completion, documented hover, and definition navigation. Cross-platform editor and runtime qualification remain open. | L |
 | P5 | Usable protocol examples/docs; P4 | Add runnable game/UI and negative examples, runtime/source-map/hot-reload qualification; preserve adapters for Lua interop. | Partial: class/typing/module docs and a feature-tour sample now explain the shipped slice; an audit game build ran under system Lua with a LOVE shim. LOVE/LuaJIT, source maps, hot reload, editor UX, and visual behavior remain unverified. | M |
-| G0 | Binder/substitution design; after P5 | Specify generic inference, recursive types, variance, first-class functions, contextual typing, limits and error policy; reuse protocol bounds. No unused framework-only abstraction. | Decisions recorded above: native alias syntax, binder identity, substitution semantics, arity/error behavior, inference boundaries, erasure, mutability variance, and resource limits. G1 implementation remains open. | M |
-| G1 | Generic aliases; G0 | Scoped binder IDs, arity checks, type applications, bounded capture-avoiding substitution, recursion/occurs handling, imports and IDE display. Connect machinery to its first consumer. | Open. | L |
+| G0 | Binder/substitution design; after P5 | Specify generic inference, recursive types, variance, first-class functions, contextual typing, limits and error policy; reuse protocol bounds. No unused framework-only abstraction. | Decisions recorded above: native alias syntax, binder identity, substitution semantics, arity/error behavior, inference boundaries, erasure, mutability variance, and resource limits. | M |
+| G1 | Generic aliases; G0 | Scoped binder IDs, arity checks, type applications, bounded capture-avoiding substitution, recursion/occurs handling, imports and IDE display. Connect machinery to its first consumer. | Implemented: exact-arity and unknown-name diagnostics, structured substitution, named/namespace imports, named re-exports, shared protocol and class signatures, LuaDoc type-text parsing, formatter/emission erasure, and core editor queries. Same-argument recursive edges remain named; changing-argument recursion stops at a 128 active-instantiation limit and leaves an unresolved application without a dedicated diagnostic. Focused core tests pass; real VS Code and broad release qualification remain open. | L |
 | G2 | Generic functions; G1 | Universally checked bodies, per-call inference, returns/callbacks, independent instantiations, navigation and actionable failures; align supported LuaDoc forms. | Open. | L |
 | G3 | Generic classes and bounds; G2 | Constructor inference, instance members, inherited substitutions, `Self`, invariant mutable containers and protocol constraints. Retain runtime/class identity and editor parity. | Open. | L |
 | R0 | Qualification; P5 and selected complete G milestones | Docs/examples, performance, cross-platform CI, installed-editor tests and package smoke; publish honest release scope and migration notes. | Open. | L |
@@ -488,11 +498,10 @@ Before calling 0.7.0 ready:
 
 ## 11. Next implementation batch
 
-The first local protocol batch and an exported-protocol cross-file batch are
-landed. Keep the actor/panel, inherited-method, incompatible-signature, and
-cross-file fixtures as regression anchors. P3 now also verifies named
-re-exports backed by a `.d.tua` declaration module; namespace re-exports,
-cyclic protocol graphs, and wider dependency invalidation still need tests.
-G0's binder and substitution decisions are recorded above; G1 alias
-implementation remains open and is the next major language milestone. Do not
-treat this partial protocol implementation as completion of the 0.7.0 plan.
+The protocol and G1 generic-alias slices are implemented. Keep the actor/panel,
+inherited-method, incompatible-signature, cross-file, and generic alias fixtures
+as regression anchors. G2 generic functions are the next implementation
+milestone; G3 generic classes and protocol bounds follow. Namespace re-exports,
+cyclic protocol graphs, broad dependency invalidation, real installed VS Code,
+runtime, and cross-platform qualification remain open. Do not treat G1 as
+completion of the full 0.7.0 plan.

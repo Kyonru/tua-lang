@@ -55,6 +55,8 @@ async function main() {
   assertScope(tokenizedLines, "type Callback", "Callback", "entity.name.type.alias.tua");
   assertScope(tokenizedLines, "type Box<T>", "Box", "entity.name.type.alias.tua");
   assertScope(tokenizedLines, "type Box<T>", "T", "entity.name.type.tua");
+  assertScope(tokenizedLines, "local boxed: Box<number>", "Box", "entity.name.type.tua");
+  assertScope(tokenizedLines, "local boxed: Box<number>", "number", "support.type.primitive.tua");
   assertScope(tokenizedLines, "enum PlayerState", "PlayerState", "entity.name.type.enum.tua");
   assertScope(tokenizedLines, '  "idle"', "idle", "variable.other.enummember.tua");
   assertScope(tokenizedLines, "open class Entity", "Entity", "entity.name.type.class.tua");

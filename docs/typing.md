@@ -94,6 +94,36 @@ type Node = {
 }
 ```
 
+### Generic Type Aliases
+
+Type aliases may declare required, unbounded type parameters. Supply every
+argument explicitly when using the alias:
+
+```tua
+type Box<T> = { value: T }
+type Result<T, E> = { value: T | nil, error: E | nil }
+
+local box: Box<number> = { value = 4 }
+local result: Result<string, string> = { value = "ready" }
+```
+
+Applications can be nested in records, arrays, unions, dictionaries, and
+function types, and can be written in supported LuaDoc type annotations.
+Generic alias arguments are substituted through the declared type shape; Tua
+does not infer them from an initializer or function call. A
+generic alias used without all its arguments, or with the wrong number of
+arguments, reports `TL1004`. An unknown generic alias reports `TL1001`.
+In VS Code, member completion and hover use the instantiated field types, and
+Go to Definition on an imported generic alias navigates to its declaration.
+
+Generic parameters are currently supported only on type aliases. Generic
+functions, generic classes, protocol bounds, and LuaDoc `---@generic` inference
+are not supported. Generic alias declarations and applications are erased, so
+they add no runtime values or Lua syntax. Recursive aliases are bounded during
+resolution: same-argument recursive edges remain named, while a recursion that
+keeps changing arguments stops at the expansion limit and may leave an
+unresolved application without a dedicated diagnostic.
+
 ### Protocol Contracts
 
 Classes can opt in to a method-only [protocol contract](classes.md#protocol-contracts).
@@ -120,6 +150,19 @@ positions have meaning, or `number[]` when the length is intentionally dynamic.
 An empty table is a valid initializer when an array or dictionary annotation
 provides its element types. Array element types flow through supported indexed
 reads and writes, `table.insert`, `ipairs`, and common loop patterns.
+
+Protocol arrays are mutable too, so assigning an existing concrete class array
+to a protocol array would let writes through the protocol view put a different
+conforming class into the original concrete array. Tua rejects that widening;
+initialize the protocol view directly from its conformers instead:
+
+```tua
+local readable: Readable[] = { FileReader.new(), MemoryReader.new() }
+```
+
+This restriction applies to class-to-protocol array widening. Existing
+class-to-base-class array compatibility is unchanged; use a fresh protocol
+array literal when code needs a writable shared protocol collection.
 
 Dictionary reads (`scores[key]` and `scores.name`) return `Value | nil`, because
 a key may be absent. Store the result in a local and guard it, or provide a
@@ -275,10 +318,11 @@ type Logger = (prefix: string, ...string) -> nil
 The tail annotation is checked at calls too: `logAll("items", 1)` is an
 error because each extra argument must be a string.
 
-Generic type parameters and generic classes are not currently part of Tua.
-Protocols provide explicit method contracts, not generic constraints. Use
-arrays, dictionaries, concrete aliases, and `any` at genuinely dynamic
-boundaries.
+Generic type parameters are supported on type aliases only. Generic functions,
+generic classes, inferred generic arguments, and protocol bounds are not
+currently supported. Protocols provide explicit method contracts. Arrays and
+dictionaries remain the built-in collection forms; use `any` at genuinely
+dynamic boundaries.
 
 ## Inference And Assignment
 
@@ -497,13 +541,18 @@ export type Room = {
   spawn: { x: number, y: number },
 }
 
+export type Box<T> = { value: T }
+
 type InternalScratch = { id: number }
 ```
 
 ```tua title="src/world.tua"
-import type { Player, Room as LevelRoom } from "./types"
+import type { Player, Room as LevelRoom, Box } from "./types"
+import type Shared from "./types"
 
 local current: LevelRoom | nil = nil
+local box: Box<number> = { value = 4 }
+local namespacedBox: Shared.Box<string> = { value = "Mina" }
 
 local function enter(player: Player, room: LevelRoom)
   current = room
@@ -528,7 +577,7 @@ an equivalent module specifier.
 Build public facades with type re-exports:
 
 ```tua title="src/game_types.d.tua"
-export type { Player, Room as LevelRoom } from "./types"
+export type { Player, Room as LevelRoom, Box } from "./types"
 ```
 
 Only aliases marked `export type` cross a Tua module boundary. This rule is the
