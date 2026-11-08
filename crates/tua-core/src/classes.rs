@@ -267,6 +267,12 @@ pub(crate) fn parse_class_declarations(
         for parameter in &mut declaration.generic_parameters {
             parameter.id.declaration.module = crate::vfs::normalize_path(path);
         }
+        for field in &mut declaration.fields {
+            field.parsed_ty = bind_class_type_parameters(
+                field.parsed_ty.clone(),
+                &declaration.generic_parameters,
+            );
+        }
         if let Some(application) = &mut declaration.parent_application {
             for argument in &mut application.arguments {
                 argument.ty = bind_class_type_parameters(
@@ -1114,7 +1120,7 @@ fn trim_end_whitespace(source: &str, start: usize, mut end: usize) -> usize {
     end
 }
 
-fn bind_class_type_parameters(ty: TuaType, parameters: &[GenericParameter]) -> TuaType {
+pub(crate) fn bind_class_type_parameters(ty: TuaType, parameters: &[GenericParameter]) -> TuaType {
     match ty {
         TuaType::Named(name) => parameters
             .iter()

@@ -376,6 +376,28 @@ local added = manager.add(manager, 1)
 }
 
 #[test]
+fn resolves_generic_class_method_call_to_declaration() {
+    let source = r#"
+final class Box<T> {
+  value: T
+
+  init(value: T) {
+    self.value = value
+  }
+
+  get(): T {
+    return self.value
+  }
+}
+
+local box = Box.new(3)
+local value = box:get()
+"#;
+
+    assert_definition_in_source(source, "box:get()", 5, DefinitionKind::Function, "get");
+}
+
+#[test]
 fn unknown_symbols_and_any_fields_have_no_definition() {
     assert_no_definition("missing.value", 0);
     assert_no_definition("payload.value", "payload.".len());

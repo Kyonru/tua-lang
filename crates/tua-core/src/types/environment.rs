@@ -30,8 +30,8 @@ use crate::source_text::function_name_table_field;
 use crate::{asset, lua, Diagnostic, DiagnosticCode};
 
 use super::model::{
-    FunctionType, GenericAliasDefinition, GenericAliasReference, MetatableFacts, TableField, Type,
-    TypeAlias,
+    FunctionType, GenericAliasDefinition, GenericAliasReference, GenericClassDefinition,
+    MetatableFacts, TableField, Type, TypeAlias,
 };
 use super::{
     deduplicate_inferred_types, function_type_from_tua_signature, has_leading_lua_doc_type,
@@ -44,6 +44,7 @@ pub struct TypeEnvironment {
     aliases: Arc<BTreeMap<String, Type>>,
     generic_aliases: Arc<HashMap<crate::parser::TypeAliasId, GenericAliasDefinition>>,
     generic_alias_bindings: Arc<HashMap<(PathBuf, String), crate::parser::TypeAliasId>>,
+    generic_classes: Arc<HashMap<GenericDeclarationId, GenericClassDefinition>>,
     alias_docs: BTreeMap<String, String>,
     class_names: BTreeSet<String>,
     class_parents: BTreeMap<String, String>,
@@ -368,6 +369,34 @@ impl TypeEnvironment {
 
         let mut context = AliasResolutionContext::default();
         context.resolve(self, ty)
+    }
+
+    /// Projects the substituted instance members for a nominal generic class
+    /// application. This is intentionally separate from `resolve_aliases`:
+    /// expression and assignment types must retain their class identity.
+    pub(crate) fn generic_class_members(&self, ty: &Type) -> Option<Type> {
+        let Type::GenericClassApplication {
+            identity,
+            arguments,
+            ..
+        } = ty
+        else {
+            return None;
+        };
+        let definition = self.generic_classes.get(identity)?;
+        if definition.parameters.len() != arguments.len() {
+            return None;
+        }
+        let substitutions = definition
+            .parameters
+            .iter()
+            .cloned()
+            .zip(arguments.iter().cloned())
+            .collect::<HashMap<_, _>>();
+        Some(self.resolve_aliases(&substitute_type_parameters(
+            &definition.body,
+            &substitutions,
+        )))
     }
 
     /// Returns the value produced by a checked raw lookup. Ordinary `T[]`
@@ -754,6 +783,20 @@ impl GenericAliasExpansionContext {
         }
         self.work += 1;
         match ty {
+            Type::GenericClassApplication {
+                identity,
+                name,
+                arguments,
+                span,
+            } => Type::GenericClassApplication {
+                identity: identity.clone(),
+                name: name.clone(),
+                arguments: arguments
+                    .iter()
+                    .map(|argument| self.resolve(environment, argument))
+                    .collect(),
+                span: *span,
+            },
             Type::GenericAliasApplication {
                 reference,
                 arguments,
@@ -916,6 +959,9 @@ fn type_contains_generic_alias_application(ty: &Type, depth: usize) -> bool {
     }
     match ty {
         Type::GenericAliasApplication { .. } => true,
+        Type::GenericClassApplication { arguments, .. } => arguments
+            .iter()
+            .any(|ty| type_contains_generic_alias_application(ty, depth + 1)),
         Type::Union(types) | Type::Tuple(types) => types
             .iter()
             .any(|ty| type_contains_generic_alias_application(ty, depth + 1)),
@@ -1054,6 +1100,20 @@ pub(crate) fn substitute_type_parameters(
                 .collect(),
             span: *span,
         },
+        Type::GenericClassApplication {
+            identity,
+            name,
+            arguments,
+            span,
+        } => Type::GenericClassApplication {
+            identity: identity.clone(),
+            name: name.clone(),
+            arguments: arguments
+                .iter()
+                .map(|ty| substitute_type_parameters(ty, substitutions))
+                .collect(),
+            span: *span,
+        },
         Type::Alias(_) | Type::Primitive(_) | Type::Any | Type::StringLiteral(_) => ty.clone(),
     }
 }
@@ -1134,7 +1194,8 @@ fn type_contains_alias_cycle(
         | Type::Any
         | Type::StringLiteral(_)
         | Type::GenericParameter { .. }
-        | Type::GenericAliasApplication { .. } => false,
+        | Type::GenericAliasApplication { .. }
+        | Type::GenericClassApplication { .. } => false,
     }
 }
 
@@ -1242,7 +1303,8 @@ impl AliasResolutionContext {
             | Type::Any
             | Type::StringLiteral(_)
             | Type::GenericParameter { .. }
-            | Type::GenericAliasApplication { .. } => ty.clone(),
+            | Type::GenericAliasApplication { .. }
+            | Type::GenericClassApplication { .. } => ty.clone(),
         };
         self.depth -= 1;
         resolved
@@ -1556,6 +1618,7 @@ pub(crate) fn build_type_environment_with_domain_registry(
             local.span,
             &alias_names,
             &mut diagnostics,
+            &parsed.class_declarations,
         );
         if let Some(span) = local.name_span {
             local_contracts
@@ -1582,6 +1645,7 @@ pub(crate) fn build_type_environment_with_domain_registry(
             function,
             &alias_names,
             &class_names,
+            &parsed.class_declarations,
             &mut diagnostics,
         ));
     }
@@ -1680,6 +1744,7 @@ pub(crate) fn build_type_environment_with_domain_registry(
 
     register_class_constructor_types(parsed, &mut functions);
     register_class_method_types(parsed, &mut aliases, &functions);
+    let generic_classes = generic_class_definitions(parsed, &aliases);
 
     let shared_aliases = domains.shared_builtin_aliases();
     let aliases = if aliases == *shared_aliases {
@@ -1708,6 +1773,7 @@ pub(crate) fn build_type_environment_with_domain_registry(
         aliases,
         generic_aliases: Arc::new(generic_aliases),
         generic_alias_bindings: Arc::new(generic_alias_bindings),
+        generic_classes: Arc::new(generic_classes),
         alias_docs,
         class_names,
         class_parents: parsed
@@ -1768,6 +1834,34 @@ pub(crate) fn build_type_environment_with_domain_registry(
     (environment, diagnostics)
 }
 
+fn generic_class_definitions(
+    parsed: &ParsedSource,
+    aliases: &BTreeMap<String, Type>,
+) -> HashMap<GenericDeclarationId, GenericClassDefinition> {
+    parsed
+        .class_declarations
+        .iter()
+        .filter_map(|class| {
+            let Type::Table(body) = aliases.get(&class.name)?.clone() else {
+                return None;
+            };
+            let id = generic_class_identity(&parsed.path, class);
+            Some((
+                id.clone(),
+                GenericClassDefinition {
+                    id,
+                    parameters: class
+                        .generic_parameters
+                        .iter()
+                        .map(|parameter| parameter.id.clone())
+                        .collect(),
+                    body: Box::new(Type::Table(body)),
+                },
+            ))
+        })
+        .collect()
+}
+
 fn register_class_constructor_types(parsed: &ParsedSource, functions: &mut [TypedFunction]) {
     for class in &parsed.class_declarations {
         let constructor_name = format!("{}_new", class.name);
@@ -1777,7 +1871,25 @@ fn register_class_constructor_types(parsed: &ParsedSource, functions: &mut [Type
         else {
             continue;
         };
-        let instance_type = Type::alias(class.name.clone());
+        let instance_type = if class.generic_parameters.is_empty() {
+            Type::alias(class.name.clone())
+        } else {
+            let identity = generic_class_identity(&parsed.path, class);
+            constructor.generic_parameters = class.generic_parameters.clone();
+            Type::GenericClassApplication {
+                identity,
+                name: class.name.clone(),
+                arguments: class
+                    .generic_parameters
+                    .iter()
+                    .map(|parameter| Type::GenericParameter {
+                        id: parameter.id.clone(),
+                        name: parameter.name.clone(),
+                    })
+                    .collect(),
+                span: Some(class.name_span),
+            }
+        };
 
         constructor.return_type = Some(instance_type.clone());
         constructor.return_types = vec![instance_type];
@@ -1862,7 +1974,14 @@ fn class_alias_type(
     alias_names: &BTreeSet<String>,
     diagnostics: &mut Vec<Diagnostic>,
 ) -> Type {
-    let context = TypeResolutionContext::with_self_type(Type::alias(class_name.to_owned()));
+    let Some(class) = parsed
+        .class_declarations
+        .iter()
+        .find(|class| class.name == class_name)
+    else {
+        return Type::Any;
+    };
+    let context = TypeResolutionContext::for_class(&parsed.path, &parsed.class_declarations, class);
     let mut fields = BTreeMap::new();
     collect_class_alias_fields(
         parsed,
@@ -1993,20 +2112,28 @@ fn resolve_function_annotation(
     function: &ParsedFunctionAnnotation,
     alias_names: &BTreeSet<String>,
     class_names: &BTreeSet<String>,
+    class_declarations: &[crate::classes::ClassDeclaration],
     diagnostics: &mut Vec<Diagnostic>,
 ) -> TypedFunction {
     let implicit_self_type = function
         .name
         .as_deref()
         .and_then(|name| function_self_type(name, alias_names));
-    let context_self_type = implicit_self_type.clone().or_else(|| {
-        function
-            .name
-            .as_deref()
-            .and_then(|name| generated_class_function_owner(name, class_names))
-            .map(Type::alias)
-    });
-    let context = TypeResolutionContext::from_self_type(context_self_type);
+    let class_owner = function
+        .name
+        .as_deref()
+        .and_then(|name| generated_class_function_owner(name, class_names));
+    let context = class_owner
+        .as_deref()
+        .and_then(|owner| class_declarations.iter().find(|class| class.name == owner))
+        .map(|class| TypeResolutionContext::for_class(path, class_declarations, class))
+        .unwrap_or_else(|| {
+            TypeResolutionContext::from_self_type(
+                implicit_self_type
+                    .clone()
+                    .or_else(|| class_owner.clone().map(Type::alias)),
+            )
+        });
     let mut parameters = function
         .parameters
         .iter()
@@ -2023,6 +2150,15 @@ fn resolve_function_annotation(
             documentation: None,
         })
         .collect::<Vec<_>>();
+    if class_owner.is_some()
+        && parameters
+            .first()
+            .is_some_and(|parameter| parameter.name == "self")
+    {
+        if let Some(self_type) = &context.self_type {
+            parameters[0].ty = self_type.clone();
+        }
+    }
     let mut parameter_count = function.parameter_count;
     let mut required_parameter_count = function.required_parameter_count;
 
@@ -2605,6 +2741,7 @@ fn lua_doc_local_for_code_line(
         Some(type_annotation.1.type_span),
         alias_names,
         diagnostics,
+        &parsed.class_declarations,
     );
 
     Some((name, ty, type_annotation.0.documentation.clone()))
@@ -2832,6 +2969,7 @@ fn lua_doc_local_for_stmt(
         Some(type_annotation.1.type_span),
         alias_names,
         diagnostics,
+        &parsed.class_declarations,
     );
 
     Some((name, ty, type_annotation.0.documentation.clone()))
@@ -4181,7 +4319,8 @@ fn type_is_always_truthy(ty: &Type, aliases: &BTreeMap<String, Type>, depth: usi
         | Type::Tuple(_)
         | Type::Dictionary { .. }
         | Type::GenericParameter { .. }
-        | Type::GenericAliasApplication { .. } => true,
+        | Type::GenericAliasApplication { .. }
+        | Type::GenericClassApplication { .. } => true,
     }
 }
 
@@ -5349,7 +5488,8 @@ fn function_return_types(aliases: &BTreeMap<String, Type>, ty: &Type) -> Vec<Typ
         | Type::Tuple(_)
         | Type::Dictionary { .. }
         | Type::GenericParameter { .. }
-        | Type::GenericAliasApplication { .. } => Vec::new(),
+        | Type::GenericAliasApplication { .. }
+        | Type::GenericClassApplication { .. } => Vec::new(),
     }
 }
 
@@ -5384,7 +5524,8 @@ fn love_object_method_return_types(
         | Type::Tuple(_)
         | Type::Dictionary { .. }
         | Type::GenericParameter { .. }
-        | Type::GenericAliasApplication { .. } => Vec::new(),
+        | Type::GenericAliasApplication { .. }
+        | Type::GenericClassApplication { .. } => Vec::new(),
     }
 }
 
@@ -5703,7 +5844,8 @@ fn resolve_index_type_from_map(
         | Type::Primitive(_)
         | Type::StringLiteral(_)
         | Type::GenericParameter { .. }
-        | Type::GenericAliasApplication { .. } => None,
+        | Type::GenericAliasApplication { .. }
+        | Type::GenericClassApplication { .. } => None,
     }
 }
 
@@ -5960,22 +6102,81 @@ fn unquote_string(value: &str) -> String {
 #[derive(Clone, Debug, Default)]
 struct TypeResolutionContext {
     self_type: Option<Type>,
+    class_bindings: BTreeMap<String, GenericDeclarationId>,
+    generic_parameters: Vec<GenericParameter>,
 }
 
 impl TypeResolutionContext {
     fn from_self_type(self_type: Option<Type>) -> Self {
-        Self { self_type }
+        Self {
+            self_type,
+            ..Self::default()
+        }
     }
 
     fn with_self_type(self_type: Type) -> Self {
         Self {
             self_type: Some(self_type),
+            ..Self::default()
         }
+    }
+
+    fn with_classes(path: &Path, classes: &[crate::classes::ClassDeclaration]) -> Self {
+        let mut context = Self::default();
+        for class in classes {
+            context
+                .class_bindings
+                .insert(class.name.clone(), generic_class_identity(path, class));
+        }
+        context
+    }
+
+    fn for_class(
+        path: &Path,
+        classes: &[crate::classes::ClassDeclaration],
+        class: &crate::classes::ClassDeclaration,
+    ) -> Self {
+        let mut context = Self::with_classes(path, classes);
+        context.generic_parameters = class.generic_parameters.clone();
+        context.self_type = if class.generic_parameters.is_empty() {
+            Some(Type::alias(class.name.clone()))
+        } else {
+            Some(Type::GenericClassApplication {
+                identity: generic_class_identity(path, class),
+                name: class.name.clone(),
+                arguments: class
+                    .generic_parameters
+                    .iter()
+                    .map(|parameter| Type::GenericParameter {
+                        id: parameter.id.clone(),
+                        name: parameter.name.clone(),
+                    })
+                    .collect(),
+                span: Some(class.name_span),
+            })
+        };
+        context
     }
 
     fn self_type(&self) -> Option<&Type> {
         self.self_type.as_ref()
     }
+}
+
+fn generic_class_identity(
+    path: &Path,
+    class: &crate::classes::ClassDeclaration,
+) -> GenericDeclarationId {
+    class
+        .generic_parameters
+        .first()
+        .map(|parameter| parameter.id.declaration.clone())
+        .unwrap_or_else(|| GenericDeclarationId {
+            module: crate::vfs::normalize_path(path),
+            kind: GenericDeclarationKind::Class,
+            name: class.name.clone(),
+            declaration: class.name_span,
+        })
 }
 
 fn resolve_tua_type(
@@ -5984,8 +6185,9 @@ fn resolve_tua_type(
     span: Option<SourceSpan>,
     alias_names: &BTreeSet<String>,
     diagnostics: &mut Vec<Diagnostic>,
+    class_declarations: &[crate::classes::ClassDeclaration],
 ) -> Type {
-    let context = TypeResolutionContext::default();
+    let context = TypeResolutionContext::with_classes(path, class_declarations);
 
     resolve_tua_type_with_context(path, ty, span, alias_names, diagnostics, &context)
 }
@@ -6011,13 +6213,8 @@ fn resolve_tua_type_with_context(
             arguments,
             name_span,
             span: application_span,
-        } => Type::GenericAliasApplication {
-            reference: GenericAliasReference::Imported {
-                source_module: crate::vfs::normalize_path(path),
-                name: name.clone(),
-                span: name_span.or(*application_span).or(span),
-            },
-            arguments: arguments
+        } => {
+            let arguments = arguments
                 .iter()
                 .map(|argument| {
                     resolve_tua_type_with_context(
@@ -6029,9 +6226,26 @@ fn resolve_tua_type_with_context(
                         context,
                     )
                 })
-                .collect(),
-            span: *application_span,
-        },
+                .collect::<Vec<_>>();
+            if let Some(identity) = context.class_bindings.get(name) {
+                Type::GenericClassApplication {
+                    identity: identity.clone(),
+                    name: name.clone(),
+                    arguments,
+                    span: *application_span,
+                }
+            } else {
+                Type::GenericAliasApplication {
+                    reference: GenericAliasReference::Imported {
+                        source_module: crate::vfs::normalize_path(path),
+                        name: name.clone(),
+                        span: name_span.or(*application_span).or(span),
+                    },
+                    arguments,
+                    span: *application_span,
+                }
+            }
+        }
         TuaType::StringLiteral(value) => Type::string_literal(value),
         TuaType::Union(types) => Type::union(types.iter().map(|ty| {
             resolve_tua_type_with_context(path, ty, span, alias_names, diagnostics, context)
@@ -6114,6 +6328,21 @@ fn resolve_named_type(
         "nil" => Type::nil(),
         "any" => Type::Any,
         "identifier" => Type::string(),
+        _ if context
+            .generic_parameters
+            .iter()
+            .any(|parameter| parameter.name == name) =>
+        {
+            let parameter = context
+                .generic_parameters
+                .iter()
+                .find(|parameter| parameter.name == name)
+                .expect("the generic parameter was just found");
+            Type::GenericParameter {
+                id: parameter.id.clone(),
+                name: parameter.name.clone(),
+            }
+        }
         "Self" => context.self_type().cloned().unwrap_or_else(|| {
             if alias_names.contains(name) {
                 Type::alias(name)
@@ -6276,7 +6505,52 @@ fn validate_generic_alias_type(
                 );
             }
         }
+        Type::GenericClassApplication {
+            identity,
+            name,
+            arguments,
+            span,
+        } => {
+            if let Some(definition) = environment.generic_classes.get(identity) {
+                if definition.parameters.len() != arguments.len() {
+                    push(
+                        *span,
+                        format!(
+                            "generic class `{name}` expects {} type argument(s), found {}",
+                            definition.parameters.len(),
+                            arguments.len()
+                        ),
+                        DiagnosticCode::TYPE_ARGUMENT_COUNT,
+                    );
+                }
+            }
+            for argument in arguments {
+                validate_generic_alias_type(
+                    environment,
+                    argument,
+                    fallback_span,
+                    parsed,
+                    diagnostics,
+                    emitted,
+                );
+            }
+        }
         Type::Alias(name) => {
+            let module = crate::vfs::normalize_path(&environment.path);
+            if let Some(definition) = environment.generic_classes.values().find(|definition| {
+                !definition.parameters.is_empty()
+                    && definition.id.module == module
+                    && definition.id.name == *name
+            }) {
+                push(
+                    fallback_span,
+                    format!(
+                        "generic class `{name}` expects {} type argument(s), found 0",
+                        definition.parameters.len()
+                    ),
+                    DiagnosticCode::TYPE_ARGUMENT_COUNT,
+                );
+            }
             if let Some(id) = environment
                 .generic_alias_bindings
                 .get(&(crate::vfs::normalize_path(&environment.path), name.clone()))

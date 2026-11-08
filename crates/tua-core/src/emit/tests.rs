@@ -425,6 +425,47 @@ end
 }
 
 #[test]
+fn generic_class_types_erase_and_preserve_constructor_argument_order() {
+    let emitted = emit_tua_source(
+        "src/generic_box.tua",
+        r#"
+final class Box<T> {
+  value: T
+
+  init(value: T, marker: number) {
+    self.value = value
+  }
+}
+
+local function next_number(): number
+  return 3
+end
+
+local function next_marker(): number
+  return 7
+end
+
+local box: Box<number> = Box.new(next_number(), next_marker())
+"#,
+    )
+    .expect("generic class type arguments should erase before Lua emission");
+
+    assert!(!emitted.contains("Box<T>"));
+    assert!(!emitted.contains("Box<number>"));
+    assert!(
+        emitted.contains("local box = Box.new(next_number(), next_marker())"),
+        "unexpected emitted Lua:\n{emitted}"
+    );
+    assert_eq!(
+        emitted
+            .matches("Box.new(next_number(), next_marker())")
+            .count(),
+        1,
+        "constructor invocation and argument order should be preserved once"
+    );
+}
+
+#[test]
 fn optimized_class_constructors_apply_field_defaults_after_init_assignments() {
     let emitted = emit_tua_source(
         "src/classes.tua",

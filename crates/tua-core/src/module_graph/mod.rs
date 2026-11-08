@@ -1291,7 +1291,8 @@ fn forwarded_nested_type(ty: &crate::Type, fields: &[String]) -> Option<crate::T
             | crate::Type::Tuple(_)
             | crate::Type::Dictionary { .. }
             | crate::Type::GenericParameter { .. }
-            | crate::Type::GenericAliasApplication { .. } => return None,
+            | crate::Type::GenericAliasApplication { .. }
+            | crate::Type::GenericClassApplication { .. } => return None,
         };
     }
     Some(current)

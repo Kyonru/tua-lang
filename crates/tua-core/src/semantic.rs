@@ -594,6 +594,32 @@ impl<'a> SemanticModel<'a> {
             }
         }
 
+        if parts.len() == 2 && parts[1] == "new" {
+            if let Some(function) = self.class_constructor_at_source_position(&parts[0], position) {
+                if !function.generic_parameters.is_empty() {
+                    if let Some(Type::Function(scheme)) = function.as_type() {
+                        let arguments = function_call_expression_arguments(function_call)
+                            .map(|argument| {
+                                self.type_of_expression_return_at_depth(
+                                    argument,
+                                    position,
+                                    0,
+                                    depth + 1,
+                                )
+                            })
+                            .collect::<Vec<_>>();
+                        if let Ok(instantiated) = crate::types::instantiate_generic_function(
+                            &scheme,
+                            &arguments,
+                            &self.environment.to_type_context(),
+                        ) {
+                            return instantiated.return_types_or_any().to_vec();
+                        }
+                    }
+                }
+            }
+        }
+
         if let Some(function) = self.typed_function_for_call_parts(&parts, position) {
             if !function.overloads.is_empty() {
                 let mut arguments = function_call_expression_arguments(function_call)
@@ -2594,6 +2620,14 @@ pub(crate) fn resolve_table_field_type(
 ) -> Option<Type> {
     match resolve_aliases(environment, ty, 0) {
         Type::Table(table) => table.semantic_field(field).map(|field| field.value_type()),
+        application @ Type::GenericClassApplication { .. } => {
+            let Type::Table(members) = environment.generic_class_members(&application)? else {
+                return None;
+            };
+            members
+                .semantic_field(field)
+                .map(|field| field.value_type())
+        }
         Type::Dictionary { key, value } => key_accepts_index(&key, &Type::string_literal(field))
             .then(|| Type::union([*value, Type::nil()])),
         Type::Union(types) => resolve_union_operation(types, |ty| {
@@ -2644,7 +2678,8 @@ pub(crate) fn resolve_index_type(
         | Type::Primitive(_)
         | Type::StringLiteral(_)
         | Type::GenericParameter { .. }
-        | Type::GenericAliasApplication { .. } => None,
+        | Type::GenericAliasApplication { .. }
+        | Type::GenericClassApplication { .. } => None,
     }
 }
 
@@ -2683,7 +2718,8 @@ fn array_element_type(environment: &TypeEnvironment, ty: &Type) -> Option<Type> 
         | Type::StringLiteral(_)
         | Type::Table(_)
         | Type::GenericParameter { .. }
-        | Type::GenericAliasApplication { .. } => None,
+        | Type::GenericAliasApplication { .. }
+        | Type::GenericClassApplication { .. } => None,
     }
 }
 
@@ -2725,7 +2761,8 @@ fn pair_key_value_types(environment: &TypeEnvironment, ty: &Type) -> Option<(Typ
         | Type::Primitive(_)
         | Type::StringLiteral(_)
         | Type::GenericParameter { .. }
-        | Type::GenericAliasApplication { .. } => None,
+        | Type::GenericAliasApplication { .. }
+        | Type::GenericClassApplication { .. } => None,
     }
 }
 
@@ -2761,7 +2798,8 @@ fn iterator_metamethod_pair_types(
         | Type::StringLiteral(_)
         | Type::Tuple(_)
         | Type::GenericParameter { .. }
-        | Type::GenericAliasApplication { .. } => None,
+        | Type::GenericAliasApplication { .. }
+        | Type::GenericClassApplication { .. } => None,
     }
 }
 
@@ -3353,7 +3391,8 @@ fn lua_type_field_item(environment: &TypeEnvironment, ty: &Type, field: &str) ->
         | Type::Tuple(_)
         | Type::Dictionary { .. }
         | Type::GenericParameter { .. }
-        | Type::GenericAliasApplication { .. } => None,
+        | Type::GenericAliasApplication { .. }
+        | Type::GenericClassApplication { .. } => None,
     }
 }
 
@@ -3785,7 +3824,8 @@ fn call_metamethod_function(environment: &TypeEnvironment, ty: &Type) -> Option<
         | Type::Tuple(_)
         | Type::Dictionary { .. }
         | Type::GenericParameter { .. }
-        | Type::GenericAliasApplication { .. } => None,
+        | Type::GenericAliasApplication { .. }
+        | Type::GenericClassApplication { .. } => None,
     }
 }
 

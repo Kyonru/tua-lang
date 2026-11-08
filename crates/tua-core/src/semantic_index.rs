@@ -496,7 +496,8 @@ fn field_target(
         | Type::Tuple(_)
         | Type::Dictionary { .. }
         | Type::GenericParameter { .. }
-        | Type::GenericAliasApplication { .. } => None,
+        | Type::GenericAliasApplication { .. }
+        | Type::GenericClassApplication { .. } => None,
     }
 }
 

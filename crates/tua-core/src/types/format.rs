@@ -79,7 +79,9 @@ fn type_doc(ty: &Type, depth: usize) -> TypeDoc {
         Type::Any => text("any"),
         Type::Alias(name) => text(name),
         Type::GenericParameter { name, .. } => text(name),
-        Type::GenericAliasApplication { .. } => text(ty.to_string()),
+        Type::GenericAliasApplication { .. } | Type::GenericClassApplication { .. } => {
+            text(ty.to_string())
+        }
         Type::StringLiteral(value) => text(format!("{value:?}")),
         Type::Union(types) => union_doc(types, depth + 1),
         Type::Function(function) => {

@@ -421,7 +421,8 @@ impl<'a> DefinitionResolver<'a> {
             | Type::Tuple(_)
             | Type::Dictionary { .. }
             | Type::GenericParameter { .. }
-            | Type::GenericAliasApplication { .. } => None,
+            | Type::GenericAliasApplication { .. }
+            | Type::GenericClassApplication { .. } => None,
         }
     }
 
@@ -992,7 +993,8 @@ impl<'a> ModuleDefinitionIndex<'a> {
             | Type::Tuple(_)
             | Type::Dictionary { .. }
             | Type::GenericParameter { .. }
-            | Type::GenericAliasApplication { .. } => None,
+            | Type::GenericAliasApplication { .. }
+            | Type::GenericClassApplication { .. } => None,
         }
     }
 }

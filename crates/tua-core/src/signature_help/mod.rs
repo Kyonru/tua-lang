@@ -233,8 +233,20 @@ impl<'a> SignatureResolver<'a> {
             .raw
             .parser_position_for_source(context.position)
             .unwrap_or(context.position);
+        let generated_class_constructor = match context.callee_parts.as_slice() {
+            [class_name, method]
+                if method == "new"
+                    && self.parsed.class_declarations.iter().any(|class| {
+                        class.name == *class_name && !class.generic_parameters.is_empty()
+                    }) =>
+            {
+                Some(format!("{class_name}_new"))
+            }
+            _ => None,
+        };
         let mut finder = FunctionCallAtPosition {
             parts: &context.callee_parts,
+            generated_class_constructor,
             position,
             found: None,
         };
@@ -575,13 +587,24 @@ impl<'a> SignatureResolver<'a> {
 
 struct FunctionCallAtPosition<'a> {
     parts: &'a [String],
+    generated_class_constructor: Option<String>,
     position: SourcePosition,
     found: Option<((usize, usize), FunctionCall)>,
 }
 
 impl Visitor for FunctionCallAtPosition<'_> {
     fn visit_function_call(&mut self, call: &FunctionCall) {
-        if field_chain_before_first_call(call).as_deref() != Some(self.parts) {
+        let call_parts = field_chain_before_first_call(call);
+        let matches_source = call_parts.as_deref() == Some(self.parts);
+        let matches_generated_class_constructor = self
+            .generated_class_constructor
+            .as_ref()
+            .is_some_and(|constructor| {
+                call_parts
+                    .as_ref()
+                    .is_some_and(|parts| parts.len() == 1 && parts[0] == *constructor)
+            });
+        if !matches_source && !matches_generated_class_constructor {
             return;
         }
         let Some((start, end)) = call.range() else {
@@ -1120,7 +1143,8 @@ fn signature_from_type(
         | Type::Tuple(_)
         | Type::Dictionary { .. }
         | Type::GenericParameter { .. }
-        | Type::GenericAliasApplication { .. } => None,
+        | Type::GenericAliasApplication { .. }
+        | Type::GenericClassApplication { .. } => None,
     }
 }
 

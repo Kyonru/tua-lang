@@ -50,9 +50,42 @@ particle:update(0.016)
 
 `class` is final by default; `open class` is required for inheritance.
 `final class` may be written explicitly. Instance fields, `init`, methods,
-`override`, `final` methods, and `super(...)` are supported. Static members,
-private members, getters/setters, generic classes, mixins, and multiple
-inheritance are not currently supported.
+`override`, `final` methods, and `super(...)` are supported. Generic classes can
+be declared and used within the same module; their constructor arguments infer
+the instance type, and fields and methods substitute the class parameters.
+Static members, private members, getters/setters, mixins, and multiple
+inheritance are not currently supported. Generic class imports, generic parent
+substitution, and protocol bounds remain in progress.
+
+### Generic Classes
+
+Use class parameters when fields and methods share a type that varies by
+instance:
+
+```tua
+final class Box<T> {
+  value: T
+
+  init(value: T) {
+    self.value = value
+  }
+
+  get(): T {
+    return self.value
+  }
+}
+
+local box = Box.new(42)
+local value: number = box:get()
+```
+
+The constructor infers `T` from its arguments. Hover and completion show
+instantiated member types, and `Box<number>` cannot be assigned to
+`Box<string>` because class parameters are invariant for mutable instances.
+Generic class declarations and applications erase before Lua emission: the
+runtime class remains the ordinary table and metatable generated for `Box`.
+This first support is local to one module; imported generic classes and
+substitutions through `extends` are not yet supported.
 
 For a runnable cross-module example, see
 [`polymorphism.tua`](https://github.com/Kyonru/tua-lang/blob/main/examples/features/src/polymorphism.tua)

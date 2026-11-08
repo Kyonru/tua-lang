@@ -1563,8 +1563,44 @@ impl<'a> Checker<'a> {
                 None if return_index > 0 => Type::nil(),
                 None => Type::Any,
             };
+            let source = self.generic_class_constructor_return(&source, target);
 
             self.check_inferred_expression_assignable_at(expression, &source, target, Some(&root));
+        }
+    }
+
+    /// The lowered constructor for `class Box<T>` returns a Lua table with
+    /// `Box` as its metatable. At runtime that is the current instantiation
+    /// supplied to the generated constructor scheme, so retain its nominal
+    /// `Box<T>` type while checking that generated return.
+    fn generic_class_constructor_return(&self, source: &Type, target: &Type) -> Type {
+        let Some(function_name) = self.active_function_name.as_deref() else {
+            return source.clone();
+        };
+        let Some(class_name) = function_name.strip_suffix("_new") else {
+            return source.clone();
+        };
+        let Some(class) = self
+            .parsed
+            .class_declarations
+            .iter()
+            .find(|class| class.name == class_name && !class.generic_parameters.is_empty())
+        else {
+            return source.clone();
+        };
+        let Type::Alias(source_class) = source else {
+            return source.clone();
+        };
+        let Type::GenericClassApplication {
+            name: target_class, ..
+        } = target
+        else {
+            return source.clone();
+        };
+        if source_class == &class.name && target_class == &class.name {
+            target.clone()
+        } else {
+            source.clone()
         }
     }
 
@@ -4598,7 +4634,8 @@ fn lua_type_field_item(
         | Type::Tuple(_)
         | Type::Dictionary { .. }
         | Type::GenericParameter { .. }
-        | Type::GenericAliasApplication { .. } => None,
+        | Type::GenericAliasApplication { .. }
+        | Type::GenericClassApplication { .. } => None,
     }
 }
 
@@ -5137,7 +5174,8 @@ fn array_element_type(environment: &TypeEnvironment, ty: &Type) -> Option<Type> 
         | Type::StringLiteral(_)
         | Type::Table(_)
         | Type::GenericParameter { .. }
-        | Type::GenericAliasApplication { .. } => None,
+        | Type::GenericAliasApplication { .. }
+        | Type::GenericClassApplication { .. } => None,
     }
 }
 
@@ -5179,7 +5217,8 @@ fn pair_key_value_types(environment: &TypeEnvironment, ty: &Type) -> Option<(Typ
         | Type::Primitive(_)
         | Type::StringLiteral(_)
         | Type::GenericParameter { .. }
-        | Type::GenericAliasApplication { .. } => None,
+        | Type::GenericAliasApplication { .. }
+        | Type::GenericClassApplication { .. } => None,
     }
 }
 
@@ -5215,7 +5254,8 @@ fn iterator_metamethod_pair_types(
         | Type::StringLiteral(_)
         | Type::Tuple(_)
         | Type::GenericParameter { .. }
-        | Type::GenericAliasApplication { .. } => None,
+        | Type::GenericAliasApplication { .. }
+        | Type::GenericClassApplication { .. } => None,
     }
 }
 
@@ -5598,7 +5638,8 @@ fn collect_unresolved_aliases(
         | Type::Primitive(_)
         | Type::StringLiteral(_)
         | Type::GenericParameter { .. }
-        | Type::GenericAliasApplication { .. } => {}
+        | Type::GenericAliasApplication { .. }
+        | Type::GenericClassApplication { .. } => {}
     }
 }
 
@@ -5633,7 +5674,8 @@ fn type_contains_any_alias(ty: &Type, aliases: &BTreeSet<String>) -> bool {
         | Type::Primitive(_)
         | Type::StringLiteral(_)
         | Type::GenericParameter { .. }
-        | Type::GenericAliasApplication { .. } => false,
+        | Type::GenericAliasApplication { .. }
+        | Type::GenericClassApplication { .. } => false,
     }
 }
 
@@ -5667,7 +5709,8 @@ fn type_contains_string_literal(ty: &Type) -> bool {
         | Type::Any
         | Type::Alias(_)
         | Type::GenericParameter { .. }
-        | Type::GenericAliasApplication { .. } => false,
+        | Type::GenericAliasApplication { .. }
+        | Type::GenericClassApplication { .. } => false,
     }
 }
 
@@ -5711,7 +5754,8 @@ fn type_contains_lua_enum_alias(ty: &Type) -> bool {
         | Type::Any
         | Type::StringLiteral(_)
         | Type::GenericParameter { .. }
-        | Type::GenericAliasApplication { .. } => false,
+        | Type::GenericAliasApplication { .. }
+        | Type::GenericClassApplication { .. } => false,
     }
 }
 

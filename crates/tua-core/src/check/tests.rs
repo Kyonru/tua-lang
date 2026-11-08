@@ -4054,6 +4054,118 @@ local first: Step = manager.steps[1]
 }
 
 #[test]
+fn generic_class_constructor_projects_members_and_keeps_nominal_invariance() {
+    let diagnostics = check_tua_source(
+        "src/generic_class_box.tua",
+        r#"
+final class Box<T> {
+  value: T
+
+  init(value: T) {
+    self.value = value
+  }
+
+  get(): T {
+    return self.value
+  }
+}
+
+local box = Box.new(3)
+local number_value: number = box.value
+local method_value: number = box:get()
+local wrong_box: Box<string> = box
+"#,
+    )
+    .expect_err("Box<number> must not be assignable to Box<string>");
+    assert!(
+        diagnostics.len() == 1
+            && diagnostics.iter().any(|diagnostic| {
+                diagnostic.code == Some(DiagnosticCode::TYPE_MISMATCH)
+                    && diagnostic.message.contains("generic argument 1")
+                    && diagnostic.message.contains("expected string, found number")
+            }),
+        "expected only the invariant generic argument mismatch, got {diagnostics:#?}"
+    );
+}
+
+#[test]
+fn generic_pair_class_infers_each_constructor_parameter_independently() {
+    let diagnostics = check_tua_source(
+        "src/generic_pair.tua",
+        r#"
+final class Pair<K, V> {
+  first: K
+  second: V
+
+  init(first: K, second: V) {
+    self.first = first
+    self.second = second
+  }
+}
+
+local pair = Pair.new(3, "ready")
+local first: number = pair.first
+local second: string = pair.second
+local swapped: Pair<string, number> = pair
+"#,
+    )
+    .expect_err("a pair's two mutable class parameters must remain distinct");
+    assert!(
+        diagnostics.len() == 1
+            && diagnostics.iter().any(|diagnostic| {
+                diagnostic.code == Some(DiagnosticCode::TYPE_MISMATCH)
+                    && diagnostic.message.contains("generic argument 1")
+                    && diagnostic.message.contains("expected string, found number")
+            }),
+        "expected the first invariant Pair argument to reject swapping, got {diagnostics:#?}"
+    );
+}
+
+#[test]
+fn generic_class_applications_require_exact_type_argument_counts() {
+    for (annotation, expected_count) in [
+        ("Box", "found 0"),
+        ("Box<>", "found 0"),
+        ("Box<number, string>", "found 2"),
+    ] {
+        let source = format!(
+            r#"
+final class Box<T> {{
+  value: T
+  init(value: T) {{ self.value = value }}
+}}
+
+local box: {annotation} = Box.new(3)
+"#
+        );
+        let diagnostics = check_tua_source("src/generic_class_arity.tua", source)
+            .expect_err("generic class applications with missing or extra arguments must fail");
+        assert!(
+            diagnostics.iter().any(|diagnostic| {
+                diagnostic.code == Some(DiagnosticCode::TYPE_ARGUMENT_COUNT)
+                    && diagnostic.message.contains("generic class `Box`")
+                    && diagnostic.message.contains(expected_count)
+            }),
+            "expected a class arity diagnostic for {annotation}, got {diagnostics:#?}"
+        );
+    }
+
+    let nongeneric = check_tua_source(
+        "src/non_generic_class_application.tua",
+        "final class Counter {\n  value: number\n}\nlocal counter: Counter<number> = Counter.new()\n",
+    )
+    .expect_err("a nongeneric class cannot accept type arguments");
+    assert!(
+        nongeneric.iter().any(|diagnostic| {
+            diagnostic.code == Some(DiagnosticCode::TYPE_ARGUMENT_COUNT)
+                && diagnostic.message
+                    == "generic class `Counter` expects 0 type argument(s), found 1"
+        }),
+        "expected a targeted nongeneric class application diagnostic, got {nongeneric:#?}"
+    );
+}
+
+#[test]
 fn checks_class_method_parameter_and_return_types() {
     let diagnostics = check_tua_source(
         "src/classes.tua",

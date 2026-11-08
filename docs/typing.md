@@ -139,6 +139,32 @@ recursive edges remain named, while a recursion that keeps changing arguments
 stops at the expansion limit and may leave an unresolved application without a
 dedicated diagnostic.
 
+Generic class parameters are supported for classes declared and used in one
+module:
+
+```tua
+final class Pair<K, V> {
+  first: K
+  second: V
+
+  init(first: K, second: V) {
+    self.first = first
+    self.second = second
+  }
+}
+
+local pair = Pair.new(3, "ready")
+local count: number = pair.first
+local label: string = pair.second
+```
+
+The constructor infers each class parameter independently. Hover and completion
+show the substituted member types, and class parameters are invariant because
+instances are mutable. A bare generic class or an application with the wrong
+number of arguments reports `TL1004`. Generic class types are erased from Lua;
+the generated class remains an ordinary table and metatable. Generic class
+imports and substitutions through `extends` are not yet supported.
+
 ### Protocol Contracts
 
 Classes can opt in to a method-only [protocol contract](classes.md#protocol-contracts).
@@ -339,9 +365,11 @@ type Logger = (prefix: string, ...string) -> nil
 The tail annotation is checked at calls too: `logAll("items", 1)` is an
 error because each extra argument must be a string.
 
-Generic type parameters are supported on aliases and free functions; functions
-infer binders from direct call arguments. Generic classes and protocol bounds
-are not currently supported. Protocols provide explicit method contracts.
+Generic type parameters are supported on aliases, free functions, and
+same-module classes; functions and class constructors infer binders from direct
+call arguments. Imported generic classes, generic inheritance, and protocol
+bounds are not currently supported. Protocols provide explicit method
+contracts.
 Arrays and dictionaries remain the built-in collection forms; use `any` at
 genuinely dynamic boundaries.
 

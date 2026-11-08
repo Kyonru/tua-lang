@@ -368,6 +368,30 @@ fn collect_constraints(
                 )?;
             }
         }
+        (
+            Type::GenericClassApplication {
+                identity: pattern_identity,
+                arguments: patterns,
+                ..
+            },
+            Type::GenericClassApplication {
+                identity: actual_identity,
+                arguments: actuals,
+                ..
+            },
+        ) if pattern_identity == actual_identity && patterns.len() == actuals.len() => {
+            for (pattern, actual) in patterns.iter().zip(actuals) {
+                collect_constraints(
+                    context,
+                    pattern,
+                    actual,
+                    binders,
+                    invariant_binders,
+                    substitutions,
+                    depth + 1,
+                )?;
+            }
+        }
         _ => {}
     }
     Ok(())
@@ -424,6 +448,9 @@ fn collect_invariant_parameters(
                 collect_invariant_parameters(context, argument, binders, found, depth + 1);
             }
         }
+        Type::GenericClassApplication { arguments, .. } => {
+            collect_generic_parameters_from_class_arguments(arguments, binders, found, depth + 1);
+        }
         Type::GenericParameter { .. }
         | Type::Alias(_)
         | Type::Primitive(_)
@@ -462,6 +489,9 @@ fn contains_any_parameter(ty: &Type, binders: &HashSet<TypeParameterId>, depth: 
         Type::GenericAliasApplication { arguments, .. } => arguments
             .iter()
             .any(|ty| contains_any_parameter(ty, binders, depth + 1)),
+        Type::GenericClassApplication { arguments, .. } => arguments
+            .iter()
+            .any(|ty| contains_any_parameter(ty, binders, depth + 1)),
         Type::Alias(_) | Type::Primitive(_) | Type::Any | Type::StringLiteral(_) => false,
     }
 }
@@ -492,6 +522,9 @@ fn contains_parameter(ty: &Type, parameter: &TypeParameterId, depth: usize) -> b
                 || contains_parameter(value, parameter, depth + 1)
         }
         Type::GenericAliasApplication { arguments, .. } => arguments
+            .iter()
+            .any(|ty| contains_parameter(ty, parameter, depth + 1)),
+        Type::GenericClassApplication { arguments, .. } => arguments
             .iter()
             .any(|ty| contains_parameter(ty, parameter, depth + 1)),
         Type::Alias(_) | Type::Primitive(_) | Type::Any | Type::StringLiteral(_) => false,
@@ -539,11 +572,25 @@ fn collect_generic_parameters(
                 collect_generic_parameters(ty, binders, found, depth + 1);
             }
         }
+        Type::GenericClassApplication { arguments, .. } => {
+            collect_generic_parameters_from_class_arguments(arguments, binders, found, depth + 1);
+        }
         Type::GenericParameter { .. }
         | Type::Alias(_)
         | Type::Primitive(_)
         | Type::Any
         | Type::StringLiteral(_) => {}
+    }
+}
+
+fn collect_generic_parameters_from_class_arguments(
+    arguments: &[Type],
+    binders: &HashSet<TypeParameterId>,
+    found: &mut HashSet<TypeParameterId>,
+    depth: usize,
+) {
+    for argument in arguments {
+        collect_generic_parameters(argument, binders, found, depth + 1);
     }
 }
 

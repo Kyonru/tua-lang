@@ -123,6 +123,9 @@ fn assignability_path_label(
                 }
                 label.push_str(&format!("[{}]", index + 1));
             }
+            AssignabilityPathSegment::GenericArgument(index) => {
+                label.push_str(&format!(" generic argument {}", index + 1));
+            }
             AssignabilityPathSegment::DictionaryKey(name) => {
                 if let Some(name) = name {
                     append_field_path(&mut label, name);
@@ -203,6 +206,7 @@ fn expression_at_assignability_path<'a>(
             AssignabilityPathSegment::ArrayElement
             | AssignabilityPathSegment::DictionaryKey(_)
             | AssignabilityPathSegment::DictionaryValue
+            | AssignabilityPathSegment::GenericArgument(_)
             | AssignabilityPathSegment::FunctionParameter { .. }
             | AssignabilityPathSegment::FunctionReturn(_) => None,
         };

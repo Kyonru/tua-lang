@@ -230,7 +230,8 @@ pub(crate) fn widen_inferred_type(ty: &Type) -> Type {
         | Type::Any
         | Type::Alias(_)
         | Type::GenericParameter { .. }
-        | Type::GenericAliasApplication { .. } => ty.clone(),
+        | Type::GenericAliasApplication { .. }
+        | Type::GenericClassApplication { .. } => ty.clone(),
     }
 }
 

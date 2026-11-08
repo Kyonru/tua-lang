@@ -3,7 +3,9 @@ use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
 
-use crate::parser::{GenericParameter, SourceSpan, TypeAliasId, TypeParameterId};
+use crate::parser::{
+    GenericDeclarationId, GenericParameter, SourceSpan, TypeAliasId, TypeParameterId,
+};
 
 const MAX_METATABLE_FIELD_DEPTH: usize = 16;
 
@@ -18,6 +20,15 @@ pub enum Type {
     },
     GenericAliasApplication {
         reference: GenericAliasReference,
+        arguments: Vec<Type>,
+        span: Option<SourceSpan>,
+    },
+    /// An instance of a nominal generic class. Unlike generic aliases, class
+    /// applications retain their runtime class identity and are invariant in
+    /// every argument because instances are mutable.
+    GenericClassApplication {
+        identity: GenericDeclarationId,
+        name: String,
         arguments: Vec<Type>,
         span: Option<SourceSpan>,
     },
@@ -46,6 +57,13 @@ pub enum GenericAliasReference {
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct GenericAliasDefinition {
     pub id: TypeAliasId,
+    pub parameters: Vec<TypeParameterId>,
+    pub body: Box<Type>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct GenericClassDefinition {
+    pub id: GenericDeclarationId,
     pub parameters: Vec<TypeParameterId>,
     pub body: Box<Type>,
 }
@@ -767,6 +785,18 @@ fn fmt_type(ty: &Type, formatter: &mut fmt::Formatter<'_>, depth: usize) -> fmt:
                 GenericAliasReference::Declaration(id) => id.name.as_str(),
                 GenericAliasReference::Imported { name, .. } => name.as_str(),
             };
+            write!(formatter, "{name}<")?;
+            for (index, argument) in arguments.iter().enumerate() {
+                if index > 0 {
+                    write!(formatter, ", ")?;
+                }
+                fmt_type(argument, formatter, depth + 1)?;
+            }
+            write!(formatter, ">")
+        }
+        Type::GenericClassApplication {
+            name, arguments, ..
+        } => {
             write!(formatter, "{name}<")?;
             for (index, argument) in arguments.iter().enumerate() {
                 if index > 0 {

@@ -1366,7 +1366,9 @@ fn table_indexer_issue(
 ) -> Option<TableIndexerIssue> {
     match environment.resolve_aliases(ty) {
         Type::Any | Type::Union(_) => None,
-        Type::GenericParameter { .. } | Type::GenericAliasApplication { .. } => None,
+        Type::GenericParameter { .. }
+        | Type::GenericAliasApplication { .. }
+        | Type::GenericClassApplication { .. } => None,
         Type::Array(_) | Type::Tuple(_) => None,
         Type::Dictionary { key, .. } => match dictionary_key_kind(environment, &key) {
             DictionaryKeyKind::Number | DictionaryKeyKind::Unknown => None,
@@ -1397,9 +1399,9 @@ fn dictionary_key_kind(environment: &TypeEnvironment, ty: &Type) -> DictionaryKe
             DictionaryKeyKind::String
         }
         Type::Any | Type::Alias(_) => DictionaryKeyKind::Unknown,
-        Type::GenericParameter { .. } | Type::GenericAliasApplication { .. } => {
-            DictionaryKeyKind::Unknown
-        }
+        Type::GenericParameter { .. }
+        | Type::GenericAliasApplication { .. }
+        | Type::GenericClassApplication { .. } => DictionaryKeyKind::Unknown,
         Type::Union(types) => {
             let mut kinds = types.iter().map(|ty| dictionary_key_kind(environment, ty));
             let Some(first) = kinds.next() else {

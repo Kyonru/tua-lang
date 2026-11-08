@@ -299,7 +299,8 @@ fn export_table_field_type(ty: &Type, field: &str) -> Option<Type> {
         | Type::Tuple(_)
         | Type::Dictionary { .. }
         | Type::GenericParameter { .. }
-        | Type::GenericAliasApplication { .. } => None,
+        | Type::GenericAliasApplication { .. }
+        | Type::GenericClassApplication { .. } => None,
     }
 }
 
@@ -1288,7 +1289,8 @@ fn collect_table_fields(ty: &Type, fields: &mut BTreeMap<String, ModuleExportFie
         | Type::Tuple(_)
         | Type::Dictionary { .. }
         | Type::GenericParameter { .. }
-        | Type::GenericAliasApplication { .. } => {}
+        | Type::GenericAliasApplication { .. }
+        | Type::GenericClassApplication { .. } => {}
     }
 }
 
@@ -1546,7 +1548,8 @@ fn resolve_export_aliases_inner(
         | Type::Primitive(_)
         | Type::StringLiteral(_)
         | Type::GenericParameter { .. }
-        | Type::GenericAliasApplication { .. } => ty.clone(),
+        | Type::GenericAliasApplication { .. }
+        | Type::GenericClassApplication { .. } => ty.clone(),
     }
 }
 

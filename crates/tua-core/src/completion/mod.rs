@@ -2522,7 +2522,8 @@ fn collect_love_object_fields(
         | Type::Tuple(_)
         | Type::Dictionary { .. }
         | Type::GenericParameter { .. }
-        | Type::GenericAliasApplication { .. } => {}
+        | Type::GenericAliasApplication { .. }
+        | Type::GenericClassApplication { .. } => {}
     }
 }
 
@@ -2553,6 +2554,11 @@ fn collect_table_fields_inner(
 
     match resolve_aliases(environment, ty, 0) {
         Type::Table(table) => collect_shape_fields(environment, &table, fields),
+        application @ Type::GenericClassApplication { .. } => {
+            if let Some(Type::Table(table)) = environment.generic_class_members(&application) {
+                collect_shape_fields(environment, &table, fields);
+            }
+        }
         Type::Union(types) => {
             let union = Type::Union(types.clone());
             let mut candidates = BTreeMap::new();
@@ -2710,7 +2716,8 @@ fn collect_export_fields(ty: &Type, fields: &mut BTreeMap<String, Type>) {
         | Type::Tuple(_)
         | Type::Dictionary { .. }
         | Type::GenericParameter { .. }
-        | Type::GenericAliasApplication { .. } => {}
+        | Type::GenericAliasApplication { .. }
+        | Type::GenericClassApplication { .. } => {}
     }
 }
 
@@ -2966,7 +2973,8 @@ fn field_chain_type(mut ty: Type, fields: &[String]) -> Option<Type> {
             | Type::Tuple(_)
             | Type::Dictionary { .. }
             | Type::GenericParameter { .. }
-            | Type::GenericAliasApplication { .. } => return None,
+            | Type::GenericAliasApplication { .. }
+            | Type::GenericClassApplication { .. } => return None,
         };
     }
 

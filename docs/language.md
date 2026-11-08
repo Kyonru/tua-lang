@@ -407,11 +407,13 @@ symbolic binders. Dotted free functions such as
 `function Module.identity<T>(value: T): T ... end` are also supported;
 generic colon methods, explicit call-site type arguments, and return-only or
 callback-only inference are not. These ambiguous calls report `TL1015` rather
-than silently widening to `any`. Generic functions and aliases erase from Lua
-output. Defaults, packs, generic classes, and protocol bounds remain
-unsupported. Recursive alias expansion is bounded; changing the arguments on
-each recursive step may leave an unresolved application without a dedicated
-recursion diagnostic.
+than silently widening to `any`. Generic functions, aliases, and local generic
+class applications erase from Lua output. Generic class constructors infer
+their parameters from supplied arguments, and fields and methods expose
+substituted types. Generic class imports, generic inheritance, generic
+protocols, defaults, packs, and protocol bounds remain unsupported. Recursive
+alias expansion is bounded; changing the arguments on each recursive step may
+leave an unresolved application without a dedicated recursion diagnostic.
 
 ## Table Shapes
 
@@ -665,8 +667,10 @@ compatible `---@alias ... fun(...)` annotations.
 
 Generic functions infer type arguments from direct calls; see the generic
 function section above. LuaDoc also supports unbounded `---@generic T` on
-documented functions. Generic classes, generic methods, explicit call-site
-type arguments, and advanced LuaCATS generic features are not supported.
+documented functions. Same-module generic classes substitute class parameters
+through fields and methods; generic classes across imports, generic inheritance,
+independently generic methods, explicit call-site type arguments, and advanced
+LuaCATS generic features are not supported.
 
 ## LOVE Assets And Callbacks
 

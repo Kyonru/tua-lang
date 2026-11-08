@@ -741,9 +741,10 @@ fn method_hover_presentation(name: &str, ty: &Type, is_colon_access: bool) -> (S
     let Type::Function(function) = ty else {
         return (format!("(field) {name}: "), ty.clone());
     };
-    let has_implicit_receiver = function.parameters.first().is_some_and(|parameter| {
-        parameter.name.as_deref() == Some("self") && parameter.ty == Type::Any
-    });
+    let has_implicit_receiver = function
+        .parameters
+        .first()
+        .is_some_and(|parameter| parameter.name.as_deref() == Some("self"));
     if !is_colon_access || !has_implicit_receiver {
         return (format!("(field) {name}: "), ty.clone());
     }
@@ -973,7 +974,8 @@ fn lua_type_field_item(environment: &TypeEnvironment, ty: &Type, field: &str) ->
         | Type::Tuple(_)
         | Type::Dictionary { .. }
         | Type::GenericParameter { .. }
-        | Type::GenericAliasApplication { .. } => None,
+        | Type::GenericAliasApplication { .. }
+        | Type::GenericClassApplication { .. } => None,
     }
 }
 

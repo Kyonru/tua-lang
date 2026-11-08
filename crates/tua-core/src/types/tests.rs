@@ -2,6 +2,32 @@ use super::*;
 use crate::{parse_lua_source, parse_tua_source, DiagnosticCode};
 
 #[test]
+fn generic_classes_with_same_name_in_different_modules_have_distinct_identity() {
+    fn class_identity(path: &str) -> crate::parser::GenericDeclarationId {
+        let parsed = parse_tua_source(
+            path,
+            "final class Box<T> {\n  value: T\n  init(value: T) { self.value = value }\n}\n",
+        )
+        .expect("generic class should parse");
+        let environment = build_type_environment(&parsed).expect("class should type-check");
+        let Type::GenericClassApplication { identity, .. } = environment
+            .class_constructor("Box")
+            .and_then(|constructor| constructor.return_type.as_ref())
+            .expect("generic class constructor should retain its application")
+        else {
+            panic!("expected a nominal generic class application");
+        };
+        identity.clone()
+    }
+
+    assert_ne!(
+        class_identity("src/left.tua"),
+        class_identity("src/right.tua"),
+        "same-named classes in separate modules must not share nominal identity"
+    );
+}
+
+#[test]
 fn inferred_dictionary_reads_include_nil_for_editor_queries() {
     let parsed = parse_tua_source("dictionary.tua", "local scores: { [string]: number } = {}\nlocal bracket = scores['missing']\nlocal dotted = scores.missing\n").unwrap();
     let environment = build_type_environment(&parsed).unwrap();
@@ -1601,6 +1627,7 @@ return {}
             Type::Table(table) => table.fields().any(|(_, field)| contains_any(&field.ty)),
             Type::Array(item) => contains_any(item),
             Type::Dictionary { key, value } => contains_any(key) || contains_any(value),
+            Type::GenericClassApplication { arguments, .. } => arguments.iter().any(contains_any),
             Type::Primitive(_)
             | Type::Alias(_)
             | Type::StringLiteral(_)
@@ -1621,7 +1648,8 @@ return {}
             | Type::Alias(_)
             | Type::StringLiteral(_)
             | Type::GenericParameter { .. }
-            | Type::GenericAliasApplication { .. } => false,
+            | Type::GenericAliasApplication { .. }
+            | Type::GenericClassApplication { .. } => false,
         }
     }
 

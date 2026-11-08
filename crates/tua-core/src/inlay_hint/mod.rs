@@ -381,7 +381,8 @@ fn type_is_reasonably_shallow(ty: &Type, depth: usize) -> bool {
         | Type::Alias(_)
         | Type::StringLiteral(_)
         | Type::GenericParameter { .. }
-        | Type::GenericAliasApplication { .. } => true,
+        | Type::GenericAliasApplication { .. }
+        | Type::GenericClassApplication { .. } => true,
     }
 }
 

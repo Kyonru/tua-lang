@@ -975,7 +975,8 @@ fn project_table_field_type(ty: &Type, field: &str) -> Option<Type> {
         | Type::Tuple(_)
         | Type::Dictionary { .. }
         | Type::GenericParameter { .. }
-        | Type::GenericAliasApplication { .. } => None,
+        | Type::GenericAliasApplication { .. }
+        | Type::GenericClassApplication { .. } => None,
     }
 }
 
@@ -1391,6 +1392,7 @@ fn parameter_type_before_position(
 fn receiver_alias_name(ty: &Type) -> Option<String> {
     match ty {
         Type::Alias(name) => Some(name.clone()),
+        Type::GenericClassApplication { name, .. } => Some(name.clone()),
         Type::Union(types) => {
             let mut aliases = types
                 .iter()
@@ -1568,7 +1570,8 @@ fn collect_type_fields(ty: &Type, fields: &mut BTreeMap<String, Type>) {
         | Type::Tuple(_)
         | Type::Dictionary { .. }
         | Type::GenericParameter { .. }
-        | Type::GenericAliasApplication { .. } => {}
+        | Type::GenericAliasApplication { .. }
+        | Type::GenericClassApplication { .. } => {}
     }
 }
 
@@ -2032,7 +2035,8 @@ fn collect_function_parameter_types(ty: &Type, index: usize, types: &mut Vec<Typ
         | Type::Tuple(_)
         | Type::Dictionary { .. }
         | Type::GenericParameter { .. }
-        | Type::GenericAliasApplication { .. } => {}
+        | Type::GenericAliasApplication { .. }
+        | Type::GenericClassApplication { .. } => {}
     }
 }
 
@@ -2086,7 +2090,8 @@ fn collect_string_literal_values(ty: &Type, values: &mut BTreeSet<String>) {
         | Type::Tuple(_)
         | Type::Dictionary { .. }
         | Type::GenericParameter { .. }
-        | Type::GenericAliasApplication { .. } => {}
+        | Type::GenericAliasApplication { .. }
+        | Type::GenericClassApplication { .. } => {}
     }
 }
 
@@ -2105,7 +2110,8 @@ fn type_contains_string_literal(ty: &Type, literal: &str) -> bool {
         | Type::Tuple(_)
         | Type::Dictionary { .. }
         | Type::GenericParameter { .. }
-        | Type::GenericAliasApplication { .. } => false,
+        | Type::GenericAliasApplication { .. }
+        | Type::GenericClassApplication { .. } => false,
     }
 }
 

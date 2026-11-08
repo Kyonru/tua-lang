@@ -1102,7 +1102,8 @@ fn type_contains_primitive(ty: &Type, primitive: PrimitiveType) -> bool {
         | Type::Tuple(_)
         | Type::Dictionary { .. }
         | Type::GenericParameter { .. }
-        | Type::GenericAliasApplication { .. } => false,
+        | Type::GenericAliasApplication { .. }
+        | Type::GenericClassApplication { .. } => false,
     }
 }
 

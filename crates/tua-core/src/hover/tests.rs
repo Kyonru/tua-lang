@@ -763,6 +763,50 @@ local value = counter.add(1)
 }
 
 #[test]
+fn hovers_instantiated_generic_class_fields() {
+    let source = r#"
+final class Box<T> {
+  value: T
+
+  init(value: T) {
+    self.value = value
+  }
+
+  get(): T {
+    return self.value
+  }
+}
+
+local box = Box.new(3)
+local value = box.value
+"#;
+
+    assert_hover_in_source(source, "box.value", 5, "(field) value: number");
+}
+
+#[test]
+fn hovers_instantiated_generic_class_methods() {
+    let source = r#"
+final class Box<T> {
+  value: T
+
+  init(value: T) {
+    self.value = value
+  }
+
+  get(): T {
+    return self.value
+  }
+}
+
+local box = Box.new(3)
+local method_value = box:get()
+"#;
+
+    assert_hover_in_source(source, "box:get()", 5, "(method) get: () -> number");
+}
+
+#[test]
 fn hovers_self_fields_inside_native_classes() {
     let source = r#"
 final class Counter {

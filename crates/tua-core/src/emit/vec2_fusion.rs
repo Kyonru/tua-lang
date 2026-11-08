@@ -183,7 +183,8 @@ fn type_mentions_vec2(
         | Type::Any
         | Type::StringLiteral(_)
         | Type::GenericParameter { .. }
-        | Type::GenericAliasApplication { .. } => false,
+        | Type::GenericAliasApplication { .. }
+        | Type::GenericClassApplication { .. } => false,
     }
 }
 

@@ -163,7 +163,8 @@ fn inline_aliases(ty: &Type, environment: &TypeEnvironment, visiting: &mut Vec<S
         | Type::Any
         | Type::StringLiteral(_)
         | Type::GenericParameter { .. }
-        | Type::GenericAliasApplication { .. } => ty.clone(),
+        | Type::GenericAliasApplication { .. }
+        | Type::GenericClassApplication { .. } => ty.clone(),
     }
 }
 

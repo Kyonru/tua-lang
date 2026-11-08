@@ -2060,7 +2060,9 @@ impl AnalysisSnapshot {
                 | Type::Primitive(_)
                 | Type::StringLiteral(_)
                 | Type::Table(_) => None,
-                Type::GenericParameter { .. } | Type::GenericAliasApplication { .. } => None,
+                Type::GenericParameter { .. }
+                | Type::GenericAliasApplication { .. }
+                | Type::GenericClassApplication { .. } => None,
             },
         }
     }
@@ -2111,7 +2113,8 @@ impl AnalysisSnapshot {
             | Type::Tuple(_)
             | Type::Dictionary { .. }
             | Type::GenericParameter { .. }
-            | Type::GenericAliasApplication { .. } => None,
+            | Type::GenericAliasApplication { .. }
+            | Type::GenericClassApplication { .. } => None,
         }
     }
 
@@ -2175,7 +2178,8 @@ impl AnalysisSnapshot {
             | Type::Tuple(_)
             | Type::Dictionary { .. }
             | Type::GenericParameter { .. }
-            | Type::GenericAliasApplication { .. } => Vec::new(),
+            | Type::GenericAliasApplication { .. }
+            | Type::GenericClassApplication { .. } => Vec::new(),
         }
     }
 
@@ -2651,7 +2655,8 @@ fn unresolved_expected_table_field(ty: &Type, field: &str) -> Option<TableField>
         | Type::Tuple(_)
         | Type::Dictionary { .. }
         | Type::GenericParameter { .. }
-        | Type::GenericAliasApplication { .. } => None,
+        | Type::GenericAliasApplication { .. }
+        | Type::GenericClassApplication { .. } => None,
     }
 }
 
@@ -2671,7 +2676,8 @@ fn dictionary_key_accepts_field(ty: &Type, field: &str) -> bool {
         | Type::Tuple(_)
         | Type::Dictionary { .. }
         | Type::GenericParameter { .. }
-        | Type::GenericAliasApplication { .. } => false,
+        | Type::GenericAliasApplication { .. }
+        | Type::GenericClassApplication { .. } => false,
     }
 }
 

@@ -435,6 +435,22 @@ impl ProjectTypeDatabase {
         }
         context.work += 1;
         match ty {
+            Type::GenericClassApplication {
+                identity,
+                name,
+                arguments,
+                span,
+            } => Type::GenericClassApplication {
+                identity: identity.clone(),
+                name: name.clone(),
+                arguments: arguments
+                    .iter()
+                    .map(|argument| {
+                        self.resolve_type_inner(module_graph, source_path, argument, context)
+                    })
+                    .collect(),
+                span: *span,
+            },
             Type::GenericAliasApplication {
                 reference,
                 arguments,
@@ -927,6 +943,12 @@ impl ProjectTypeDatabase {
                     }
                 }
                 Type::Alias(_) => self.resolve_type(module_graph, module_path, &current),
+                // Generic class member projection is currently local to the
+                // owning TypeEnvironment. Do not retry general project type
+                // resolution here: it deliberately preserves the nominal
+                // application, which would otherwise leave this field walk
+                // stuck on the same receiver.
+                Type::GenericClassApplication { .. } => return None,
                 Type::Any
                 | Type::Function(_)
                 | Type::Primitive(_)

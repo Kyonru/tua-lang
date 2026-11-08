@@ -4313,7 +4313,8 @@ fn type_is_dynamic(ty: &Type, context: &TypeContext) -> bool {
         Type::Primitive(_)
         | Type::StringLiteral(_)
         | Type::GenericParameter { .. }
-        | Type::GenericAliasApplication { .. } => false,
+        | Type::GenericAliasApplication { .. }
+        | Type::GenericClassApplication { .. } => false,
     }
 }
 

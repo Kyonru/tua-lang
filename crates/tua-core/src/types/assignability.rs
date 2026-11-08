@@ -17,6 +17,7 @@ pub enum AssignabilityPathSegment {
     DictionaryValue,
     FunctionParameter { index: usize, name: Option<String> },
     FunctionReturn(usize),
+    GenericArgument(usize),
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -218,6 +219,43 @@ impl TypeContext {
                             &Type::Alias(target.clone()),
                         )
                     })
+            }
+            (
+                Type::GenericClassApplication {
+                    identity: source_identity,
+                    arguments: source_arguments,
+                    ..
+                },
+                Type::GenericClassApplication {
+                    identity: target_identity,
+                    arguments: target_arguments,
+                    ..
+                },
+            ) if source_identity == target_identity
+                && source_arguments.len() == target_arguments.len() =>
+            {
+                for (index, (source_argument, target_argument)) in
+                    source_arguments.iter().zip(target_arguments).enumerate()
+                {
+                    self.check_assignable_inner(
+                        source_argument,
+                        target_argument,
+                        depth + 1,
+                        resolving,
+                    )
+                    .and_then(|()| {
+                        self.check_assignable_inner(
+                            target_argument,
+                            source_argument,
+                            depth + 1,
+                            resolving,
+                        )
+                    })
+                    .map_err(|failure| {
+                        failure.at(AssignabilityPathSegment::GenericArgument(index))
+                    })?;
+                }
+                Ok(())
             }
             (Type::Alias(name), _) if self.alias(name).is_some() => {
                 let key = (true, name.clone());

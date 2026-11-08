@@ -1354,7 +1354,8 @@ fn luacats_export_type(ty: &Type) -> Option<String> {
         | Type::Tuple(_)
         | Type::Dictionary { .. }
         | Type::GenericParameter { .. }
-        | Type::GenericAliasApplication { .. } => Some(luacats_type_from_type(ty)),
+        | Type::GenericAliasApplication { .. }
+        | Type::GenericClassApplication { .. } => Some(luacats_type_from_type(ty)),
         Type::Function(function) => {
             let parameters = function
                 .parameters
@@ -1402,7 +1403,8 @@ fn luacats_type_from_type(ty: &Type) -> String {
         | Type::Alias(_)
         | Type::StringLiteral(_)
         | Type::GenericParameter { .. }
-        | Type::GenericAliasApplication { .. } => ty.to_string(),
+        | Type::GenericAliasApplication { .. }
+        | Type::GenericClassApplication { .. } => ty.to_string(),
         Type::Union(types) => types
             .iter()
             .map(luacats_type_from_type)

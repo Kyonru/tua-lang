@@ -171,6 +171,46 @@ counter.ad
 }
 
 #[test]
+fn completes_generic_class_members_with_instantiated_details() {
+    let source = r#"
+final class Box<T> {
+  value: T
+
+  init(value: T) {
+    self.value = value
+  }
+
+  get(): T {
+    return self.value
+  }
+}
+
+local box = Box.new(3)
+box.
+"#;
+    let completions = complete_tua_source(
+        "src/generic_box.tua",
+        source,
+        position_after(source, "box."),
+    )
+    .expect("generic class member completion should succeed");
+    let value = completions
+        .iter()
+        .find(|completion| completion.label == "value")
+        .expect("field completion should be present");
+    let get = completions
+        .iter()
+        .find(|completion| completion.label == "get")
+        .expect("method completion should be present");
+
+    assert_eq!(value.detail.as_deref(), Some("field: number"));
+    assert_eq!(
+        get.detail.as_deref(),
+        Some("field: (self: Box<number>) -> number")
+    );
+}
+
+#[test]
 fn completes_self_fields_and_methods_inside_native_classes() {
     let source = r#"
 open class Entity {

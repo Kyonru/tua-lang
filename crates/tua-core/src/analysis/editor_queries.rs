@@ -365,7 +365,8 @@ impl AnalysisSnapshot {
             | Type::Tuple(_)
             | Type::Dictionary { .. }
             | Type::GenericParameter { .. }
-            | Type::GenericAliasApplication { .. } => None,
+            | Type::GenericAliasApplication { .. }
+            | Type::GenericClassApplication { .. } => None,
         }
     }
 

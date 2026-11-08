@@ -111,6 +111,10 @@ Generic aliases use the same export and import rules. For example,
 `import type { Box } from "./events"` permits `Box<number>` in a type
 annotation; namespace imports use `Events.Box<number>`. Type arguments and the
 alias declaration are erased and add no runtime module load.
+Generic classes currently have local, same-module semantics only. Importing a
+generic class and substituting its parameters across a module boundary is not
+supported yet; export and import a nongeneric instance alias only when its
+underlying class is nongeneric.
 
 For a method contract shared by runtime modules, export the protocol from a
 regular `.tua` module and import it only where the class needs its type:

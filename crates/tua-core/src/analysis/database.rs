@@ -743,6 +743,16 @@ fn collect_runtime_type_names(ty: &Type, names: &mut BTreeSet<String>) {
                 collect_runtime_type_names(argument, names);
             }
         }
+        Type::GenericClassApplication {
+            identity,
+            arguments,
+            ..
+        } => {
+            names.insert(identity.name.clone());
+            for argument in arguments {
+                collect_runtime_type_names(argument, names);
+            }
+        }
         Type::GenericParameter { .. } => {}
         Type::Union(types) | Type::Tuple(types) => {
             for ty in types {

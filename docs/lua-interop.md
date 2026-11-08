@@ -738,9 +738,10 @@ replace Tua's `-- tua-ignore-*` directives.
     `---@param`, `---@vararg`, and `---@return` types and participates in
     first-order call inference. Bounded LuaDoc generic parameters and generic
     methods are unsupported. This covers a narrow LuaCATS form, not every
-    advanced LuaLS generic feature. Tua does not yet support generic classes;
-    advanced annotation behavior degrades conservatively instead of making
-    valid Lua fail.
+    advanced LuaLS generic feature. Tua's custom generic classes are available
+    only in `.tua` source and do not add generic class semantics to Lua or
+    LuaCATS declarations; advanced annotation behavior degrades conservatively
+    instead of making valid Lua fail.
 
 Malformed supported annotations can report diagnostics when enabled:
 

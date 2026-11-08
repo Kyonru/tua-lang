@@ -974,6 +974,29 @@ counter:add(
 }
 
 #[test]
+fn specializes_generic_class_constructor_signature_from_prior_arguments() {
+    let source = r#"
+final class Box<T> {
+  value: T
+
+  init(value: T) {
+    self.value = value
+  }
+}
+
+local box = Box.new(3)
+"#;
+    let help = signature_at(source, "Box.new(3")
+        .expect("generic class constructor should provide signature help");
+
+    assert_eq!(
+        help.signatures[0].label,
+        "function Box.new(value: number): Box<number>"
+    );
+    assert_eq!(help.active_parameter, 0);
+}
+
+#[test]
 fn returns_independent_subclass_constructor_signatures() {
     let source = r#"
 open class Base {
