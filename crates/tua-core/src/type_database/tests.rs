@@ -176,6 +176,75 @@ type PrivateState = { debug: boolean }
 }
 
 #[test]
+fn exported_protocols_resolve_through_type_only_imports() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+import type { Updatable } from "./actor"
+local function _tick(value: Updatable, dt: number)
+  value:update(dt)
+end
+final class Panel implements Updatable {
+  update(dt: number): nil {
+  }
+}
+local _panel: Updatable = Panel.new()
+final class BrokenPanel implements Updatable {
+}
+final class BadPanel implements Updatable {
+  update(dt: string): nil {
+  }
+}
+-- file: src/actor.tua
+export protocol Updatable {
+  update(dt: number): nil
+}
+"#,
+    );
+    let host = host_from_fixture(&fixture);
+    let snapshot = host.snapshot();
+    let binding = snapshot
+        .type_database()
+        .resolve_type_name(snapshot.module_graph(), "src/main.tua", "Updatable")
+        .expect("exported protocol should be available to type-only imports");
+    assert_eq!(binding.name, "Updatable");
+    assert_eq!(binding.module_path, PathBuf::from("src/actor.tua"));
+    assert!(matches!(binding.ty, Type::Table(_)));
+    assert!(
+        snapshot
+            .diagnostics("src/main.tua")
+            .iter()
+            .any(|diagnostic| {
+                diagnostic.message.contains("BrokenPanel")
+                    && diagnostic.message.contains("missing method `update`")
+            }),
+        "project analysis should validate imported protocol implementations: {:#?}",
+        snapshot.diagnostics("src/main.tua")
+    );
+    assert!(
+        snapshot
+            .diagnostics("src/main.tua")
+            .iter()
+            .any(|diagnostic| {
+                diagnostic.message.contains("BadPanel.update")
+                    && diagnostic.message.contains("does not satisfy protocol")
+            }),
+        "project analysis should validate imported protocol signatures: {:#?}",
+        snapshot.diagnostics("src/main.tua")
+    );
+    assert!(
+        !snapshot
+            .diagnostics("src/main.tua")
+            .iter()
+            .any(|diagnostic| {
+                diagnostic.message.contains("class `Panel`")
+                    && diagnostic.message.contains("does not implement protocol")
+            }),
+        "the valid implementation should remain accepted: {:#?}",
+        snapshot.diagnostics("src/main.tua")
+    );
+}
+
+#[test]
 fn declaration_modules_support_named_imports_aliases_and_reexports() {
     let fixture = Fixture::parse(
         r#"-- file: src/main.tua

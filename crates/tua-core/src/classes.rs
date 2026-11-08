@@ -60,6 +60,7 @@ pub(crate) struct ClassMethod {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct ProtocolDeclaration {
     pub name: String,
+    pub exported: bool,
     pub methods: Vec<ProtocolMethod>,
     pub span: SourceSpan,
     pub name_span: SourceSpan,
@@ -262,12 +263,18 @@ pub(crate) fn parse_protocol_declarations(
             index = end;
             continue;
         }
-        if !starts_keyword(source, index, "protocol") {
+        let exported = starts_keyword(source, index, "export");
+        let protocol_start = if exported {
+            skip_whitespace(source, index + "export".len())
+        } else {
+            index
+        };
+        if !starts_keyword(source, protocol_start, "protocol") {
             index += next_char_len(source, index);
             continue;
         }
         let start = index;
-        let mut cursor = skip_whitespace(source, index + "protocol".len());
+        let mut cursor = skip_whitespace(source, protocol_start + "protocol".len());
         let Some((name, name_start, name_end)) = take_identifier(source, cursor) else {
             index += "protocol".len();
             continue;
@@ -341,6 +348,7 @@ pub(crate) fn parse_protocol_declarations(
         }
         declarations.push(ProtocolDeclaration {
             name,
+            exported,
             methods,
             span: SourceSpan {
                 start: positions.position(start),
@@ -1553,62 +1561,104 @@ pub(crate) fn class_contract_diagnostics(
 
     for class in &parsed.class_declarations {
         for (protocol_name, protocol_span) in &class.implemented_protocols {
-            let Some(protocol) = parsed
+            let local_protocol = parsed
                 .protocol_declarations
                 .iter()
-                .find(|protocol| protocol.name == *protocol_name)
-            else {
-                diagnostics.push(class_diagnostic(
-                    &parsed.path,
-                    protocol_span.start,
-                    format!(
-                        "unknown protocol `{protocol_name}` implemented by `{}`",
-                        class.name
-                    ),
-                ));
-                continue;
+                .find(|protocol| protocol.name == *protocol_name);
+            let requirements = if let Some(protocol) = local_protocol {
+                protocol
+                    .methods
+                    .iter()
+                    .map(|method| {
+                        (
+                            method.name.clone(),
+                            crate::types::type_from_tua_type(&parse_tua_type_text(&format!(
+                                "({}) -> {}",
+                                method.parameters, method.return_type
+                            ))),
+                            false,
+                        )
+                    })
+                    .collect::<Vec<_>>()
+            } else {
+                match environment.alias(protocol_name) {
+                    Some(Type::Table(table))
+                        if table.fields().next().is_some()
+                            && table
+                                .fields()
+                                .all(|(_, field)| matches!(field.ty, Type::Function(_))) =>
+                    {
+                        table
+                            .fields()
+                            .map(|(name, field)| (name.to_owned(), field.ty.clone(), true))
+                            .collect()
+                    }
+                    _ => {
+                        let is_imported_type = parsed.type_imports.iter().any(|import| {
+                            import
+                                .bindings
+                                .iter()
+                                .any(|binding| binding.local == *protocol_name)
+                                || (!import.namespace.is_empty()
+                                    && protocol_name.starts_with(&format!("{}.", import.namespace)))
+                        });
+                        if is_imported_type {
+                            // Project analysis resolves imported method contracts
+                            // through ProjectTypeDatabase. The fast file-only
+                            // checker deliberately defers this cross-file fact.
+                            continue;
+                        }
+                        diagnostics.push(class_diagnostic(
+                            &parsed.path,
+                            protocol_span.start,
+                            format!(
+                                "unknown protocol `{protocol_name}` implemented by `{}`",
+                                class.name
+                            ),
+                        ));
+                        continue;
+                    }
+                }
             };
-            for requirement in &protocol.methods {
-                if class_method_declaration(
+            for (requirement_name, expected, expected_has_receiver) in requirements {
+                let Some((implementation_class, implementation)) = class_method_declaration(
                     &parsed.class_declarations,
                     &class.name,
-                    &requirement.name,
-                )
-                .is_none()
-                {
+                    &requirement_name,
+                ) else {
                     diagnostics.push(class_diagnostic(
                         &parsed.path,
                         class.name_span.start,
                         format!(
                             "class `{}` does not implement protocol `{}`: missing method `{}`",
-                            class.name, protocol.name, requirement.name
+                            class.name, protocol_name, requirement_name
                         ),
                     ));
                     continue;
-                }
-                let (implementation_class, implementation) = class_method_declaration(
-                    &parsed.class_declarations,
-                    &class.name,
-                    &requirement.name,
-                )
-                .expect("method existence was checked above");
-                let actual = environment.function(&format!(
-                    "{}_{}",
-                    implementation_class.name, requirement.name
-                ));
-                let expected = parse_tua_type_text(&format!(
-                    "({}) -> {}",
-                    requirement.parameters, requirement.return_type
-                ));
-                let Some(actual) = actual.and_then(TypedFunction::as_type) else {
+                };
+                let actual = environment
+                    .function(&format!(
+                        "{}_{}",
+                        implementation_class.name, requirement_name
+                    ))
+                    .and_then(TypedFunction::as_type);
+                let Some(actual) = actual else {
                     continue;
                 };
-                let expected = crate::types::type_from_tua_type(&expected);
                 let actual = match actual {
                     Type::Function(mut function) => {
-                        // Class methods carry an implicit receiver. Protocol requirements
-                        // describe only the explicit arguments, so compare those slots.
                         if !function.parameters.is_empty() {
+                            function.parameters.remove(0);
+                            function.required_parameter_count =
+                                function.required_parameter_count.saturating_sub(1);
+                        }
+                        Type::Function(function)
+                    }
+                    other => other,
+                };
+                let expected = match expected {
+                    Type::Function(mut function) => {
+                        if expected_has_receiver && !function.parameters.is_empty() {
                             function.parameters.remove(0);
                             function.required_parameter_count =
                                 function.required_parameter_count.saturating_sub(1);
@@ -1621,11 +1671,7 @@ pub(crate) fn class_contract_diagnostics(
                     diagnostics.push(class_diagnostic(
                         &parsed.path,
                         implementation.name_span.start,
-                        format!(
-                            "method `{}.{}` does not satisfy protocol `{}.{}`: expected `{}`, found `{}`",
-                            class.name, requirement.name, protocol.name, requirement.name,
-                            expected, actual
-                        ),
+                        format!("method `{}.{}` does not satisfy protocol `{}.{}`: expected `{}`, found `{}`", class.name, requirement_name, protocol_name, requirement_name, expected, actual),
                     ));
                 }
             }

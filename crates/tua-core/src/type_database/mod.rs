@@ -114,6 +114,14 @@ impl ProjectTypeDatabase {
                     .flat_map(|parsed| &parsed.type_aliases)
                     .filter(|alias| alias.exported)
                     .map(|alias| alias.name.clone())
+                    .chain(
+                        input
+                            .parsed
+                            .into_iter()
+                            .flat_map(|parsed| &parsed.protocol_declarations)
+                            .filter(|protocol| protocol.exported)
+                            .map(|protocol| protocol.name.clone()),
+                    )
                     .collect(),
             };
 

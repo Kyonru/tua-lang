@@ -410,7 +410,7 @@ fn class_headers_preserve_explicit_protocol_conformance_and_erase_it_from_lua() 
 
 #[test]
 fn protocol_declarations_preserve_method_contracts_and_erase_from_lua() {
-    let source = r#"protocol Updatable {
+    let source = r#"export protocol Updatable {
   update(dt: number): nil
 }
 "#;
@@ -419,6 +419,7 @@ fn protocol_declarations_preserve_method_contracts_and_erase_from_lua() {
     assert_eq!(parsed.protocol_declarations.len(), 1);
     let protocol = &parsed.protocol_declarations[0];
     assert_eq!(protocol.name, "Updatable");
+    assert!(protocol.exported);
     assert_eq!(protocol.methods[0].name, "update");
     assert_eq!(protocol.methods[0].parameters, "dt: number");
     assert_eq!(protocol.methods[0].return_type, "nil");
