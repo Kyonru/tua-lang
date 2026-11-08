@@ -144,6 +144,12 @@ impl AnalysisSnapshot {
         }) {
             return Some(definition);
         }
+        if let Some(definition) = self
+            .type_database
+            .protocol_method_definition_at_position(&parsed.path, position)
+        {
+            return Some(definition);
+        }
         for import in parsed.type_imports.iter().filter(|import| !import.reexport) {
             for binding in &import.bindings {
                 if span_contains_position(binding.imported_span, position)
@@ -1082,17 +1088,37 @@ impl AnalysisSnapshot {
             return references;
         }
 
-        if let Some(references) =
-            self.scope_references_at_position(path, position, include_declaration)
+        let Some(target) = self.definition(path, position) else {
+            return self
+                .scope_references_at_position(path, position, include_declaration)
+                .unwrap_or_default();
+        };
+
+        if let Some(definitions) = self
+            .type_database
+            .protocol_related_method_definitions(&target)
         {
+            let index = self.reverse_reference_index();
+            let mut references = definitions
+                .iter()
+                .flat_map(|definition| {
+                    index
+                        .references(definition, include_declaration)
+                        .filter(|references| !references.is_empty())
+                        .unwrap_or_else(|| self.references_by_scan(definition, include_declaration))
+                })
+                .collect::<Vec<_>>();
+            sort_and_dedup_references(&mut references);
             return references;
         }
 
-        let Some(target) = self.definition(path, position) else {
-            return Vec::new();
-        };
-
         if let Some(references) = self.parameter_scope_references(&target, include_declaration) {
+            return references;
+        }
+
+        if let Some(references) =
+            self.scope_references_at_position(path, position, include_declaration)
+        {
             return references;
         }
 

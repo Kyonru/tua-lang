@@ -120,6 +120,24 @@ impl ProjectProtocolIndex {
         self.methods.get(identity)?.get(method)
     }
 
+    pub(super) fn method_definition_at_position(
+        &self,
+        path: &Path,
+        position: crate::SourcePosition,
+    ) -> Option<Definition> {
+        let path = normalize_path(path);
+        self.methods
+            .values()
+            .flat_map(BTreeMap::values)
+            .find(|definition| {
+                definition.path == path
+                    && definition.span.start.line == position.line
+                    && position.column >= definition.span.start.column
+                    && position.column <= definition.span.end.column
+            })
+            .cloned()
+    }
+
     pub(super) fn method_implementations(
         &self,
         identity: &ProtocolIdentity,
@@ -132,6 +150,66 @@ impl ProjectProtocolIndex {
                 .map(Vec::as_slice)
                 .unwrap_or_default(),
         )
+    }
+
+    pub(super) fn related_method_definitions(
+        &self,
+        target: &Definition,
+    ) -> Option<Vec<Definition>> {
+        let target_path = normalize_path(&target.path);
+        let mut identities = BTreeSet::<ProtocolMethodIdentity>::new();
+
+        for (identity, methods) in &self.methods {
+            for (method, definition) in methods {
+                if definition.path == target_path && definition.span == target.span {
+                    identities.insert((identity.0.clone(), identity.1.clone(), method.clone()));
+                }
+            }
+        }
+
+        for (identity, implementations) in &self.implementations {
+            if implementations
+                .iter()
+                .any(|definition| definition.path == target_path && definition.span == target.span)
+            {
+                identities.insert(identity.clone());
+            }
+        }
+
+        if identities.is_empty() {
+            return None;
+        }
+
+        let mut pending = identities.clone();
+        while let Some(identity) = pending.iter().next().cloned() {
+            pending.remove(&identity);
+            let Some(implementations) = self.implementations.get(&identity) else {
+                continue;
+            };
+            for implementation in implementations {
+                for (other_identity, other_implementations) in &self.implementations {
+                    if other_implementations.contains(implementation)
+                        && identities.insert(other_identity.clone())
+                    {
+                        pending.insert(other_identity.clone());
+                    }
+                }
+            }
+        }
+
+        let mut definitions = Vec::new();
+        for (path, protocol, method) in identities {
+            let identity = (path.clone(), protocol.clone());
+            if let Some(definition) = self.method_definition(&identity, &method) {
+                definitions.push(definition.clone());
+            }
+            if let Some(implementations) = self.method_implementations(&identity, &method) {
+                definitions.extend(implementations.iter().cloned());
+            }
+        }
+        definitions.sort_by_key(definition_sort_key);
+        definitions.dedup();
+        Some(definitions)
     }
 }
 

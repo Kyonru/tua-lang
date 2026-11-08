@@ -238,6 +238,22 @@ impl ProjectTypeDatabase {
             .map(<[Definition]>::to_vec)
     }
 
+    pub(crate) fn protocol_related_method_definitions(
+        &self,
+        target: &Definition,
+    ) -> Option<Vec<Definition>> {
+        self.protocols.related_method_definitions(target)
+    }
+
+    pub(crate) fn protocol_method_definition_at_position(
+        &self,
+        path: impl AsRef<Path>,
+        position: crate::SourcePosition,
+    ) -> Option<Definition> {
+        self.protocols
+            .method_definition_at_position(path.as_ref(), position)
+    }
+
     fn protocol_identity(
         &self,
         module_graph: &ModuleGraph,

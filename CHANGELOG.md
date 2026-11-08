@@ -18,6 +18,8 @@ language or editor behavior, and migration notes call out those changes.
   refresh those checks when the protocol changes.
 - Hide the synthetic receiver parameter from hover on colon-called protocol
   methods, matching signature help.
+- Connect protocol method references and rename across requirements,
+  implementations, and protocol-typed calls.
 - Preserve imported protocol members for completion while an edited consumer
   file temporarily has syntax errors.
 - Do not report a protocol type import as unused when a class uses it in an

@@ -983,6 +983,8 @@ end
     let output = run_messages(vec![
         initialize_with_root(1, temp.uri()),
         did_open(&main_uri, main),
+        did_open(&contracts_uri, contracts),
+        did_open(&actors_uri, actors),
         definition_request(2, &main_uri, main, "value:update", "value:".len()),
         json!({
             "jsonrpc": "2.0",
@@ -994,6 +996,9 @@ end
             }
         }),
         definition_request(4, &main_uri, main, "value: Updatable", "value: ".len()),
+        references_request(5, &contracts_uri, contracts, "update", 2, true),
+        rename_request(6, &contracts_uri, contracts, "update", 2, "step"),
+        rename_request(7, &actors_uri, actors, "update(dt: number): nil", 0, "step"),
     ]);
 
     assert_definition_text(&output, 2, &contracts_uri, contracts, "update");
@@ -1015,6 +1020,37 @@ end
         .collect::<Vec<_>>();
     assert_eq!(implementation_lines, [2, 5]);
     assert_definition_text(&output, 4, &contracts_uri, contracts, "Updatable");
+
+    let references = response_with_id(&output, 5)["result"]
+        .as_array()
+        .expect("protocol references should be an array");
+    assert_eq!(references.len(), 4, "{references:#?}");
+    assert!(references
+        .iter()
+        .any(|reference| reference["uri"] == contracts_uri));
+    assert!(
+        references
+            .iter()
+            .filter(|reference| reference["uri"] == actors_uri)
+            .count()
+            == 2
+    );
+    assert!(references
+        .iter()
+        .any(|reference| reference["uri"] == main_uri));
+
+    for id in [6, 7] {
+        let changes = response_with_id(&output, id)["result"]["changes"]
+            .as_object()
+            .expect("protocol rename should return workspace edits");
+        let edits = changes
+            .values()
+            .filter_map(Value::as_array)
+            .flatten()
+            .collect::<Vec<_>>();
+        assert_eq!(edits.len(), 4, "rename request {id}: {changes:#?}");
+        assert!(edits.iter().all(|edit| edit["newText"] == "step"));
+    }
 }
 
 #[test]

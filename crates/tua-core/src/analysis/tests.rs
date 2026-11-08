@@ -5783,9 +5783,12 @@ fn protocol_method_navigation_resolves_requirement_and_all_implementations() {
 export protocol <|protocol_name|>Updatable<|/protocol_name|> {
   <|requirement|>update<|/requirement|>(dt: number): nil
 }
+export protocol Schedulable {
+  update(dt: number): nil
+}
 -- file: src/actors.tua
-import type { Updatable } from "./contracts"
-final class Particle implements Updatable {
+import type { Updatable, Schedulable } from "./contracts"
+final class Particle implements Updatable, Schedulable {
   <|particle|>update<|/particle|>(dt: number): nil {
   }
 }
@@ -5794,9 +5797,12 @@ final class Clock implements Updatable {
   }
 }
 -- file: src/main.tua
-import type { Updatable } from "./contracts"
+import type { Updatable, Schedulable } from "./contracts"
 local function tick(value: <|type_use|>Updatable, dt: number)
   value:<|use|>update(dt)
+end
+local function schedule(value: Schedulable, dt: number)
+  value:update(dt)
 end
 "#,
     );
@@ -5829,6 +5835,35 @@ end
         definition.path == PathBuf::from("src/actors.tua")
             && definition.span == fixture.range("clock")
     }));
+
+    let references =
+        snapshot.references("src/contracts.tua", fixture.position("requirement"), true);
+    assert_eq!(references.len(), 6, "{references:#?}");
+    assert!(references.iter().any(|reference| {
+        reference.path == PathBuf::from("src/actors.tua")
+            && reference.span == fixture.range("particle")
+    }));
+    assert!(references.iter().any(|reference| {
+        reference.path == PathBuf::from("src/actors.tua")
+            && reference.span == fixture.range("clock")
+    }));
+    assert!(references.iter().any(|reference| {
+        reference.path == PathBuf::from("src/main.tua")
+            && reference.span.start == fixture.position("use")
+    }));
+
+    let rename = snapshot
+        .rename("src/contracts.tua", fixture.position("requirement"), "step")
+        .expect("renaming a protocol requirement should include its implementations");
+    assert_eq!(rename.edits.len(), 6, "{rename:#?}");
+    let implementation_rename = snapshot
+        .rename("src/actors.tua", fixture.position("particle"), "step")
+        .expect("renaming an implementation should include its protocol contract");
+    assert_eq!(
+        implementation_rename.edits.len(),
+        6,
+        "{implementation_rename:#?}"
+    );
 }
 
 #[test]

@@ -722,10 +722,9 @@ fn method_hover_presentation(name: &str, ty: &Type, is_colon_access: bool) -> (S
     let Type::Function(function) = ty else {
         return (format!("(field) {name}: "), ty.clone());
     };
-    let has_implicit_receiver = function
-        .parameters
-        .first()
-        .is_some_and(|parameter| parameter.name.as_deref() == Some("self"));
+    let has_implicit_receiver = function.parameters.first().is_some_and(|parameter| {
+        parameter.name.as_deref() == Some("self") && parameter.ty == Type::Any
+    });
     if !is_colon_access || !has_implicit_receiver {
         return (format!("(field) {name}: "), ty.clone());
     }
