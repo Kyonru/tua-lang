@@ -22,6 +22,29 @@ damage(player, 2)
 "#;
 
 #[test]
+fn generic_signature_help_shows_binders_and_infers_available_call_arguments() {
+    let declaration = r#"local function identity<T>(value: T): T return value end
+identity("text")
+"#;
+    let help = signature_at(declaration, "identity(\"text\"")
+        .expect("generic identity should provide signature help");
+    assert_eq!(
+        help.signatures[0].label,
+        "function identity(value: string): string"
+    );
+
+    let unresolved = r#"local function pair<T, U>(first: T, second: U): T return first end
+pair(1, 2)
+"#;
+    let help = signature_at(unresolved, "pair(1, ")
+        .expect("partially supplied generic call should provide signature help");
+    assert_eq!(
+        help.signatures[0].label,
+        "function pair<T, U>(first: T, second: U): T"
+    );
+}
+
+#[test]
 fn returns_known_function_signature_and_active_parameter() {
     let first = signature_at_last(SOURCE, "damage(").expect("first parameter should have help");
     let second =

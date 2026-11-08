@@ -279,6 +279,16 @@ fn hovers_known_function_signature() {
 }
 
 #[test]
+fn hovers_generic_function_binders() {
+    let source = "local function identity<T>(value: T): T return value end\nidentity(1)\n";
+    let hover = hover_tua_source("src/main.tua", source, position_at(source, "identity<T>"))
+        .expect("generic source should parse")
+        .expect("generic function should hover");
+
+    assert_eq!(hover.contents, "function identity<T>(value: T): T");
+}
+
+#[test]
 fn hovers_annotated_function_docs_and_declaration_context() {
     let source = r#"type Player = { hp: number }
 

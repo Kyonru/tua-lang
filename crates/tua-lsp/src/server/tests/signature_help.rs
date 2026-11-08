@@ -47,6 +47,32 @@ damage(player,
 }
 
 #[test]
+fn signature_help_displays_generic_binders_and_instantiated_call_types() {
+    let uri = "file:///tmp/signature-help-generic.tua";
+    let source = r#"local function identity<T>(value: T): T return value end
+local function pair<T, U>(first: T, second: U): T return first end
+pair(1, 2)
+identity("text")
+"#;
+    let output = run_messages(vec![
+        did_open(uri, source),
+        signature_help_request(2, uri, source, "pair("),
+        signature_help_request(3, uri, source, "identity(\"text\""),
+    ]);
+
+    let generic = response_with_id(&output, 2);
+    assert_eq!(
+        generic["result"]["signatures"][0]["label"],
+        "function pair<T, U>(first: T, second: U): T"
+    );
+    let instantiated = response_with_id(&output, 3);
+    assert_eq!(
+        instantiated["result"]["signatures"][0]["label"],
+        "function identity(value: string): string"
+    );
+}
+
+#[test]
 fn signature_help_returns_native_function_alias_names_and_typed_varargs() {
     let uri = "file:///tmp/native-function-type-signature-help.tua";
     let source = r#"type Handler = (value: number, ...string) -> string

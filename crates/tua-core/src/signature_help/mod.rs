@@ -1,16 +1,21 @@
 use std::path::Path;
 
+use full_moon::ast::{Call, Expression, FunctionArgs, FunctionCall, Suffix};
+use full_moon::node::Node;
+use full_moon::visitors::Visitor;
+
+use crate::ast_utils::field_chain_before_first_call;
 use crate::lua::{self, LuaItem, LuaItemKind};
 use crate::module_index::required_module_export_for_fields;
-use crate::semantic::{resolve_aliases, resolve_field_chain_type, SemanticModel};
+use crate::semantic::{SemanticModel, resolve_aliases, resolve_field_chain_type};
 use crate::signal::{self, SignalEventIndex};
 use crate::source_text::{byte_for_column, is_identifier_continue, is_identifier_start};
 use crate::types::{
-    build_type_environment_with_diagnostics, FunctionType, Type, TypeEnvironment, TypedFunction,
-    TypedFunctionOverload, TypedParameter,
+    FunctionType, Type, TypeEnvironment, TypedFunction, TypedFunctionOverload, TypedParameter,
+    build_type_environment_with_diagnostics, instantiate_generic_function,
 };
+use crate::{Diagnostic, ParsedSource, SourcePosition, parse_tua_source};
 use crate::{ecs, input, object_pool, state_machine, store};
-use crate::{parse_tua_source, Diagnostic, ParsedSource, SourcePosition};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SignatureHelp {
@@ -170,6 +175,110 @@ struct SignatureResolver<'a> {
 }
 
 impl<'a> SignatureResolver<'a> {
+    fn signatures_for_typed_function(
+        &self,
+        function: &TypedFunction,
+        name: Option<&str>,
+        context: &CallContext,
+    ) -> Vec<SignatureInformation> {
+        let specialized = self.specialize_generic_function(function, context);
+        signatures_from_typed_function(&specialized, name)
+    }
+
+    fn specialize_generic_function(
+        &self,
+        function: &TypedFunction,
+        context: &CallContext,
+    ) -> TypedFunction {
+        if function.generic_parameters.is_empty() || context.is_method_call {
+            return function.clone();
+        }
+        let Some(Type::Function(scheme)) = function.as_type() else {
+            return function.clone();
+        };
+        let Some(arguments) = self.generic_call_arguments(context) else {
+            return function.clone();
+        };
+        let Ok(instantiated) =
+            instantiate_generic_function(&scheme, &arguments, &self.environment.to_type_context())
+        else {
+            return function.clone();
+        };
+        if instantiated.generic_parameters.len() == scheme.generic_parameters.len() {
+            return function.clone();
+        }
+
+        let mut specialized = function.clone();
+        specialized.generic_parameters = instantiated.generic_parameters.clone();
+        for (parameter, inferred) in specialized
+            .parameters
+            .iter_mut()
+            .zip(&instantiated.parameters)
+        {
+            parameter.ty = inferred.ty.clone();
+        }
+        specialized.vararg_type = instantiated.vararg_type.as_deref().cloned();
+        specialized.return_types = instantiated.return_types_or_any().to_vec();
+        specialized.return_type = specialized.return_types.first().cloned();
+        specialized.guarded_return_types = instantiated.guarded_return_types.clone();
+        specialized
+    }
+
+    fn generic_call_arguments(&self, context: &CallContext) -> Option<Vec<Option<Type>>> {
+        if context.expression_receiver.is_some() {
+            return None;
+        }
+        let position = self
+            .parsed
+            .raw
+            .parser_position_for_source(context.position)
+            .unwrap_or(context.position);
+        let mut finder = FunctionCallAtPosition {
+            parts: &context.callee_parts,
+            position,
+            found: None,
+        };
+        finder.visit_ast(&self.parsed.ast);
+        let (_, call) = finder.found?;
+        let mut arguments = function_call_arguments(&call)?;
+        let mut types = Vec::with_capacity(arguments.len());
+        for argument in arguments.drain(..) {
+            let ended_before_cursor = argument
+                .range()
+                .map(|(_, end)| crate::parser::SourcePosition::from_full_moon(end))
+                .is_some_and(|end| position_key(end) <= position_key(position));
+            types.push(
+                ended_before_cursor
+                    .then(|| {
+                        self.semantic
+                            .type_of_expression_return(&argument, context.position, 0)
+                    })
+                    .flatten(),
+            );
+        }
+        Some(types)
+    }
+
+    fn signature_for_type(
+        &self,
+        name: &str,
+        ty: &Type,
+        context: &CallContext,
+    ) -> Option<SignatureInformation> {
+        match resolve_aliases(self.environment, ty, 0) {
+            Type::Function(function) if !function.generic_parameters.is_empty() => {
+                let typed = crate::semantic::typed_function_from_function_type(
+                    Some(name.to_owned()),
+                    function,
+                );
+                self.signatures_for_typed_function(&typed, Some(name), context)
+                    .into_iter()
+                    .next()
+            }
+            resolved => signature_from_type(name, &resolved, self.environment),
+        }
+    }
+
     fn signatures_for_context(&self, context: &CallContext) -> Option<Vec<SignatureInformation>> {
         if let Some(expression) = &context.expression_receiver {
             let receiver = self
@@ -185,7 +294,8 @@ impl<'a> SignatureResolver<'a> {
             }
             let ty =
                 crate::semantic::resolve_table_field_type(self.environment, &receiver, member)?;
-            return signature_from_type(&label, &ty, self.environment)
+            return self
+                .signature_for_type(&label, &ty, context)
                 .map(|signature| vec![signature]);
         }
         self.signatures_for_parts(context)
@@ -214,9 +324,10 @@ impl<'a> SignatureResolver<'a> {
         let qualified_name = parts.join(".");
 
         if let Some(function) = self.semantic.project_module_signature(parts, position) {
-            return Some(signatures_from_typed_function(
+            return Some(self.signatures_for_typed_function(
                 function,
                 Some(&qualified_name),
+                context,
             ));
         }
 
@@ -229,15 +340,17 @@ impl<'a> SignatureResolver<'a> {
             let function = self
                 .semantic
                 .typed_function_for_call_parts(parts, position)?;
-            return Some(signatures_from_typed_function(
+            return Some(self.signatures_for_typed_function(
                 &function,
                 Some(&qualified_name),
+                context,
             ));
         }
 
         if fields.is_empty() {
             if let Some(ty) = self.environment.local(root) {
-                return signature_from_type(root, ty, self.environment)
+                return self
+                    .signature_for_type(root, ty, context)
                     .map(|signature| vec![signature]);
             }
 
@@ -245,7 +358,7 @@ impl<'a> SignatureResolver<'a> {
                 .semantic
                 .function_at_source_position(root, context.position)
             {
-                return Some(signatures_from_typed_function(function, Some(root)));
+                return Some(self.signatures_for_typed_function(function, Some(root), context));
             }
 
             if self.environment.has_busted_globals() {
@@ -261,7 +374,7 @@ impl<'a> SignatureResolver<'a> {
         if !fields.is_empty() {
             if let Some(export) = required_module_export_for_fields(self.parsed, root, fields) {
                 if let Some(mut signature) =
-                    signature_from_type(&qualified_name, &export.ty, self.environment)
+                    self.signature_for_type(&qualified_name, &export.ty, context)
                 {
                     if signature.documentation.is_none() {
                         signature.documentation = export.documentation;
@@ -273,37 +386,42 @@ impl<'a> SignatureResolver<'a> {
             }
 
             if let Some(function) = self.signal_emit_payload_function(context) {
-                return Some(signatures_from_typed_function(
+                return Some(self.signatures_for_typed_function(
                     &function,
                     Some(&qualified_name),
+                    context,
                 ));
             }
 
             if let Some(function) = self.object_pool_typed_function(parts, position) {
-                return Some(signatures_from_typed_function(
+                return Some(self.signatures_for_typed_function(
                     &function,
                     Some(&qualified_name),
+                    context,
                 ));
             }
 
             if let Some(function) = self.state_machine_typed_function(parts, position) {
-                return Some(signatures_from_typed_function(
+                return Some(self.signatures_for_typed_function(
                     &function,
                     Some(&qualified_name),
+                    context,
                 ));
             }
 
             if let Some(function) = self.store_typed_function(parts, position) {
-                return Some(signatures_from_typed_function(
+                return Some(self.signatures_for_typed_function(
                     &function,
                     Some(&qualified_name),
+                    context,
                 ));
             }
 
             if let Some(function) = self.input_typed_function(parts, position) {
-                return Some(signatures_from_typed_function(
+                return Some(self.signatures_for_typed_function(
                     &function,
                     Some(&qualified_name),
+                    context,
                 ));
             }
 
@@ -315,15 +433,15 @@ impl<'a> SignatureResolver<'a> {
             }
 
             if let Some(function) = self.semantic.typed_function_for_call_parts(parts, position) {
-                return Some(signatures_from_typed_function(
+                return Some(self.signatures_for_typed_function(
                     &function,
                     Some(&qualified_name),
+                    context,
                 ));
             }
 
             if let Some(ty) = resolve_field_chain_type(self.environment, parts) {
-                if let Some(signature) = signature_from_type(&qualified_name, &ty, self.environment)
-                {
+                if let Some(signature) = self.signature_for_type(&qualified_name, &ty, context) {
                     return Some(vec![signature]);
                 }
             }
@@ -339,7 +457,9 @@ impl<'a> SignatureResolver<'a> {
 
         self.semantic
             .typed_function_for_call_parts(parts, position)
-            .map(|function| signatures_from_typed_function(&function, Some(&qualified_name)))
+            .map(|function| {
+                self.signatures_for_typed_function(&function, Some(&qualified_name), context)
+            })
     }
 
     fn signal_emit_payload_function(&self, context: &CallContext) -> Option<TypedFunction> {
@@ -451,6 +571,73 @@ impl<'a> SignatureResolver<'a> {
 
         input::typed_member(self.environment, &receiver_type, method)
     }
+}
+
+struct FunctionCallAtPosition<'a> {
+    parts: &'a [String],
+    position: SourcePosition,
+    found: Option<((usize, usize), FunctionCall)>,
+}
+
+impl Visitor for FunctionCallAtPosition<'_> {
+    fn visit_function_call(&mut self, call: &FunctionCall) {
+        if field_chain_before_first_call(call).as_deref() != Some(self.parts) {
+            return;
+        }
+        let Some((start, end)) = call.range() else {
+            return;
+        };
+        let start = SourcePosition::from_full_moon(start);
+        let end = SourcePosition::from_full_moon(end);
+        if position_key(start) > position_key(self.position)
+            || position_key(self.position) > position_key(end)
+        {
+            return;
+        }
+        let span_size = (
+            end.line - start.line,
+            end.column.saturating_sub(start.column),
+        );
+        if self
+            .found
+            .as_ref()
+            .is_none_or(|(current_size, _)| span_size < *current_size)
+        {
+            self.found = Some((span_size, call.clone()));
+        }
+    }
+}
+
+fn function_call_arguments(call: &FunctionCall) -> Option<Vec<Expression>> {
+    let suffix = call.suffixes().find_map(|suffix| match suffix {
+        Suffix::Call(call) => Some(call),
+        _ => None,
+    })?;
+    let arguments = match suffix {
+        Call::AnonymousCall(FunctionArgs::Parentheses { arguments, .. }) => {
+            arguments.iter().cloned().collect()
+        }
+        Call::AnonymousCall(FunctionArgs::String(value)) => {
+            vec![Expression::String(value.clone())]
+        }
+        Call::AnonymousCall(FunctionArgs::TableConstructor(value)) => {
+            vec![Expression::TableConstructor(value.clone())]
+        }
+        Call::MethodCall(method) => match method.args() {
+            FunctionArgs::Parentheses { arguments, .. } => arguments.iter().cloned().collect(),
+            FunctionArgs::String(value) => vec![Expression::String(value.clone())],
+            FunctionArgs::TableConstructor(value) => {
+                vec![Expression::TableConstructor(value.clone())]
+            }
+            _ => return None,
+        },
+        _ => return None,
+    };
+    Some(arguments)
+}
+
+fn position_key(position: SourcePosition) -> (usize, usize) {
+    (position.line, position.column)
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -701,7 +888,11 @@ fn signature_from_typed_function(
     function: &TypedFunction,
     name: Option<&str>,
 ) -> SignatureInformation {
-    let name = name.or(function.name.as_deref()).unwrap_or("<anonymous>");
+    let name = format!(
+        "{}{}",
+        name.or(function.name.as_deref()).unwrap_or("<anonymous>"),
+        generic_parameter_suffix(&function.generic_parameters)
+    );
     let mut parameter_labels = function
         .parameters
         .iter()
@@ -742,6 +933,21 @@ fn signature_from_typed_function(
             format_type_list(&function.return_types_or_any())
         ),
         function.documentation.clone(),
+    )
+}
+
+fn generic_parameter_suffix(parameters: &[crate::parser::GenericParameter]) -> String {
+    if parameters.is_empty() {
+        return String::new();
+    }
+
+    format!(
+        "<{}>",
+        parameters
+            .iter()
+            .map(|parameter| parameter.name.as_str())
+            .collect::<Vec<_>>()
+            .join(", ")
     )
 }
 
@@ -930,7 +1136,8 @@ fn signature_from_function_type(name: &str, function: &FunctionType) -> Signatur
 
     signature_from_parts(
         format!(
-            "function {name}({}): {}",
+            "function {name}{}({}): {}",
+            generic_parameter_suffix(&function.generic_parameters),
             parameters.join(", "),
             format_type_list(function.return_types_or_any())
         ),

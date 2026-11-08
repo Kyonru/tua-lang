@@ -40,6 +40,20 @@ player.hp = player.hp - 1
 }
 
 #[test]
+fn hover_displays_generic_function_binders() {
+    let uri = "file:///tmp/hover-generic-function.tua";
+    let source = r#"local function identity<T>(value: T): T return value end
+identity("text")
+"#;
+    let output = run_messages(vec![
+        did_open(uri, source),
+        hover_request(2, uri, source, "identity<T>"),
+    ]);
+
+    assert_hover_contains(&output, 2, "function identity<T>(value: T): T");
+}
+
+#[test]
 fn hover_preserves_pretty_printed_multiline_types_in_markdown() {
     let uri = "file:///tmp/pretty-hover.tua";
     let source = r#"type Feedback = {

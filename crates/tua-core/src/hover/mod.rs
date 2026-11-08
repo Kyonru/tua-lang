@@ -9,17 +9,17 @@ use crate::module_index::{
 };
 use crate::module_link::module_specifier_at_position;
 use crate::narrowing::narrowed_type_at_position;
-use crate::semantic::{resolve_aliases, SemanticModel};
+use crate::semantic::{SemanticModel, resolve_aliases};
 use crate::source_text::{
     doc_type_chain_at_position, dotted_chain_at_position, leading_doc_comment, line_at,
 };
 use crate::types::{
-    build_type_environment, format_named_function_pretty, format_type_with_prefix,
     FunctionParameter, FunctionType, Type, TypeEnvironment, TypedFunction, TypedFunctionOverload,
+    build_type_environment, format_named_function_pretty, format_type_with_prefix,
 };
 use crate::{
-    definition_parsed_source, ecs, input, object_pool, parse_tua_source, state_machine, store,
     Definition, DefinitionKind, Diagnostic, ParsedSource, SourcePosition, SourceSpan,
+    definition_parsed_source, ecs, input, object_pool, parse_tua_source, state_machine, store,
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -664,6 +664,10 @@ fn lua_item_hover(item: LuaItem, span: Option<SourceSpan>) -> Hover {
 
 fn format_function_signature(function: &TypedFunction) -> String {
     let name = function.name.as_deref().unwrap_or("<anonymous>");
+    let name = format!(
+        "{name}{}",
+        generic_parameter_suffix(&function.generic_parameters)
+    );
     let parameter_start = usize::from(
         name.contains(':')
             && function
@@ -692,7 +696,7 @@ fn format_function_signature(function: &TypedFunction) -> String {
             })
             .collect::<Vec<_>>();
         signatures.push(format_named_function_pretty(
-            name,
+            &name,
             &parameters,
             function.has_varargs,
             function.vararg_type.as_ref(),
@@ -704,10 +708,25 @@ fn format_function_signature(function: &TypedFunction) -> String {
         function
             .overloads
             .iter()
-            .map(|overload| format_function_overload_signature(name, overload)),
+            .map(|overload| format_function_overload_signature(&name, overload)),
     );
 
     signatures.join("\n")
+}
+
+fn generic_parameter_suffix(parameters: &[crate::parser::GenericParameter]) -> String {
+    if parameters.is_empty() {
+        return String::new();
+    }
+
+    format!(
+        "<{}>",
+        parameters
+            .iter()
+            .map(|parameter| parameter.name.as_str())
+            .collect::<Vec<_>>()
+            .join(", ")
+    )
 }
 
 fn member_access_separator(source: &str, position: SourcePosition) -> Option<u8> {
