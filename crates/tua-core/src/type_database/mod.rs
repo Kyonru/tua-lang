@@ -5,16 +5,16 @@ use crate::audio;
 use crate::ecs;
 use crate::input;
 use crate::module_graph::{ModuleExportOrigin, ModuleGraph, RequireResolution};
+use crate::parser::TypeAliasId;
 use crate::sprite;
 use crate::store;
+use crate::types::{GenericAliasDefinition, GenericAliasReference};
 use crate::vector;
 use crate::vfs::normalize_path;
-use crate::types::{GenericAliasDefinition, GenericAliasReference};
 use crate::{
     AnalysisSourceKind, Definition, FunctionType, ModuleExportField, ParsedSource,
     ScopeDeclarationKind, ScopeMap, Type, TypeEnvironment, TypedFunction,
 };
-use crate::parser::TypeAliasId;
 
 mod protocol_index;
 
@@ -79,7 +79,6 @@ pub struct ProjectTypeDatabaseInput<'a> {
     pub scope: Option<&'a ScopeMap>,
     pub parsed: Option<&'a ParsedSource>,
 }
-
 
 const MAX_PROJECT_TYPE_RESOLUTION_WORK: usize = 8192;
 const MAX_GENERIC_ALIAS_INSTANTIATION_DEPTH: usize = 128;
@@ -148,10 +147,9 @@ impl ProjectTypeDatabase {
 
             if let Some(environment) = input.environment {
                 for definition in environment.generic_alias_definitions() {
-                    module.generic_aliases.insert(
-                        definition.id.name.clone(),
-                        definition.clone(),
-                    );
+                    module
+                        .generic_aliases
+                        .insert(definition.id.name.clone(), definition.clone());
                 }
 
                 for (name, ty) in environment.aliases() {
@@ -277,6 +275,16 @@ impl ProjectTypeDatabase {
             .is_some()
     }
 
+    pub(crate) fn class_protocol_conformances(
+        &self,
+        class_identity: &str,
+    ) -> Vec<(PathBuf, String)> {
+        self.protocols
+            .class_conformances(class_identity)
+            .cloned()
+            .collect()
+    }
+
     pub(crate) fn protocol_method_definition_at_position(
         &self,
         path: impl AsRef<Path>,
@@ -360,12 +368,7 @@ impl ProjectTypeDatabase {
     ) -> Type {
         let mut context = ProjectTypeResolutionContext::default();
 
-        self.resolve_type_inner(
-            module_graph,
-            &normalize_path(source_path),
-            ty,
-            &mut context,
-        )
+        self.resolve_type_inner(module_graph, &normalize_path(source_path), ty, &mut context)
     }
 
     pub(crate) fn generic_alias_definition(
@@ -443,7 +446,10 @@ impl ProjectTypeDatabase {
                 let lookup_path = match reference {
                     GenericAliasReference::Declaration(id) => normalize_path(&id.module),
                     GenericAliasReference::Imported { source_module, .. }
-                        if !source_module.as_os_str().is_empty() => normalize_path(source_module),
+                        if !source_module.as_os_str().is_empty() =>
+                    {
+                        normalize_path(source_module)
+                    }
                     GenericAliasReference::Imported { .. } => normalize_path(source_path),
                 };
                 let arguments = arguments
@@ -502,14 +508,11 @@ impl ProjectTypeDatabase {
                     .cloned()
                     .zip(arguments)
                     .collect::<std::collections::HashMap<_, _>>();
-                let body = crate::types::substitute_type_parameters(&definition.body, &substitutions);
+                let body =
+                    crate::types::substitute_type_parameters(&definition.body, &substitutions);
                 context.generic_aliases.push(key);
-                let resolved = self.resolve_type_inner(
-                    module_graph,
-                    &definition.id.module,
-                    &body,
-                    context,
-                );
+                let resolved =
+                    self.resolve_type_inner(module_graph, &definition.id.module, &body, context);
                 context.generic_aliases.pop();
                 resolved
             }
@@ -642,10 +645,9 @@ impl ProjectTypeDatabase {
                 self.resolve_type_inner(module_graph, source_path, value, context),
             ),
             Type::Primitive(_)
-        | Type::Any
-        | Type::StringLiteral(_)
-        | Type::GenericParameter { .. }
-        => ty.clone(),
+            | Type::Any
+            | Type::StringLiteral(_)
+            | Type::GenericParameter { .. } => ty.clone(),
         }
     }
 
@@ -664,12 +666,8 @@ impl ProjectTypeDatabase {
 
         if let Some((alias, member)) = name.split_once('.') {
             let target = self.module_path_for_alias(module_graph, &source_path, alias.trim())?;
-            let result = self.resolve_exported_generic_alias(
-                module_graph,
-                &target,
-                member.trim(),
-                visiting,
-            );
+            let result =
+                self.resolve_exported_generic_alias(module_graph, &target, member.trim(), visiting);
             visiting.remove(&(source_path, name.to_owned()));
             return result;
         }
@@ -680,7 +678,8 @@ impl ProjectTypeDatabase {
         }
 
         let imported = module.named_type_imports.get(name)?;
-        let target = self.module_path_for_specifier(module_graph, &source_path, &imported.module)?;
+        let target =
+            self.module_path_for_specifier(module_graph, &source_path, &imported.module)?;
         let result = self.resolve_exported_generic_alias(
             module_graph,
             &target,
@@ -705,13 +704,11 @@ impl ProjectTypeDatabase {
         let module = self.module(&module_path)?;
         if let Some(definition) = module.generic_aliases.get(name) {
             visiting.remove(&(module_path, name.to_owned()));
-            return module
-                .exported_aliases
-                .contains(name)
-                .then_some(definition);
+            return module.exported_aliases.contains(name).then_some(definition);
         }
         let reexport = module.reexported_aliases.get(name)?;
-        let target = self.module_path_for_specifier(module_graph, &module_path, &reexport.module)?;
+        let target =
+            self.module_path_for_specifier(module_graph, &module_path, &reexport.module)?;
         let result = self.resolve_exported_generic_alias(
             module_graph,
             &target,
@@ -730,12 +727,9 @@ impl ProjectTypeDatabase {
     ) -> Option<ProjectTypeBinding> {
         let name = name.trim();
 
-        if let Some(definition) = self.resolve_generic_alias_name(
-            module_graph,
-            source_path,
-            name,
-            &mut BTreeSet::new(),
-        ) {
+        if let Some(definition) =
+            self.resolve_generic_alias_name(module_graph, source_path, name, &mut BTreeSet::new())
+        {
             return Some(ProjectTypeBinding {
                 module_path: definition.id.module.clone(),
                 name: definition.id.name.clone(),
@@ -939,8 +933,8 @@ impl ProjectTypeDatabase {
                 | Type::Array(_)
                 | Type::Tuple(_)
                 | Type::Dictionary { .. }
-            | Type::GenericParameter { .. }
-            | Type::GenericAliasApplication { .. } => return None,
+                | Type::GenericParameter { .. }
+                | Type::GenericAliasApplication { .. } => return None,
             };
         }
 

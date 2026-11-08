@@ -15,8 +15,9 @@ use crate::classes::nominal_class_identity;
 use crate::deprecation::Deprecation;
 use crate::module_index::required_module_export_type_for_fields;
 use crate::narrowing::{
-    ReturnGuard, directly_assigned_name, extend_with_return_guards, forget_return_guards,
+    directly_assigned_name, extend_with_return_guards, forget_return_guards,
     narrowed_locals_after_false_condition, narrowed_locals_for_condition, return_guards_for_names,
+    ReturnGuard,
 };
 use crate::parser::{
     FunctionAnnotation as ParsedFunctionAnnotation, FunctionTypeParameter, LuaDocAnnotation,
@@ -25,15 +26,15 @@ use crate::parser::{
 };
 use crate::semantic_domains::{BuiltinDomain, BuiltinDomainRegistry};
 use crate::source_text::function_name_table_field;
-use crate::{Diagnostic, DiagnosticCode, asset, lua};
+use crate::{asset, lua, Diagnostic, DiagnosticCode};
 
 use super::model::{
     FunctionType, GenericAliasDefinition, GenericAliasReference, MetatableFacts, TableField, Type,
     TypeAlias,
 };
 use super::{
-    FunctionParameter, TypeContext, deduplicate_inferred_types, function_type_from_tua_signature,
-    has_leading_lua_doc_type, widen_inferred_type,
+    deduplicate_inferred_types, function_type_from_tua_signature, has_leading_lua_doc_type,
+    widen_inferred_type, FunctionParameter, TypeContext,
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -240,11 +241,12 @@ impl TypeEnvironment {
                 );
             }
             for method in class.init.iter().chain(class.methods.iter()) {
-                let signature = super::type_from_tua_type(&crate::parser::parse_tua_type_text(&format!(
-                    "({}) -> {}",
-                    method.parameters,
-                    method.return_type.as_deref().unwrap_or("any")
-                )));
+                let signature =
+                    super::type_from_tua_type(&crate::parser::parse_tua_type_text(&format!(
+                        "({}) -> {}",
+                        method.parameters,
+                        method.return_type.as_deref().unwrap_or("any")
+                    )));
                 validate_generic_alias_type(
                     self,
                     &signature,
@@ -257,10 +259,9 @@ impl TypeEnvironment {
         }
         for protocol in &parsed.protocol_declarations {
             for method in &protocol.methods {
-                let signature = super::type_from_tua_type(&crate::parser::parse_tua_type_text(&format!(
-                    "({}) -> {}",
-                    method.parameters, method.return_type
-                )));
+                let signature = super::type_from_tua_type(&crate::parser::parse_tua_type_text(
+                    &format!("({}) -> {}", method.parameters, method.return_type),
+                ));
                 validate_generic_alias_type(
                     self,
                     &signature,
@@ -315,23 +316,15 @@ impl TypeEnvironment {
                 LuaDocAnnotationKind::Alias(alias) => check(&alias.ty, alias.type_span),
                 LuaDocAnnotationKind::Field(field) => check(&field.ty, field.type_span),
                 LuaDocAnnotationKind::Type(ty) => check(&ty.ty, ty.type_span),
-                LuaDocAnnotationKind::Param(parameter) => {
-                    check(&parameter.ty, parameter.type_span)
-                }
+                LuaDocAnnotationKind::Param(parameter) => check(&parameter.ty, parameter.type_span),
                 LuaDocAnnotationKind::Return(returns) => {
                     for result in &returns.returns {
                         check(&result.ty, result.type_span);
                     }
                 }
-                LuaDocAnnotationKind::As(annotation) => {
-                    check(&annotation.ty, annotation.type_span)
-                }
-                LuaDocAnnotationKind::Overload(overload) => {
-                    check(&overload.ty, overload.type_span)
-                }
-                LuaDocAnnotationKind::Vararg(vararg) => {
-                    check(&vararg.ty, vararg.type_span)
-                }
+                LuaDocAnnotationKind::As(annotation) => check(&annotation.ty, annotation.type_span),
+                LuaDocAnnotationKind::Overload(overload) => check(&overload.ty, overload.type_span),
+                LuaDocAnnotationKind::Vararg(vararg) => check(&vararg.ty, vararg.type_span),
                 _ => {}
             }
         }
@@ -673,6 +666,19 @@ impl TypeEnvironment {
         self
     }
 
+    pub(crate) fn with_class_protocol_conformances(
+        mut self,
+        conformances: impl IntoIterator<Item = (String, String)>,
+    ) -> Self {
+        for (class, protocol) in conformances {
+            let protocols = self.class_protocols.entry(class).or_default();
+            if !protocols.contains(&protocol) {
+                protocols.push(protocol);
+            }
+        }
+        self
+    }
+
     pub(crate) fn with_deprecated_accesses(
         mut self,
         accesses: impl IntoIterator<Item = (Vec<String>, Deprecation)>,
@@ -757,9 +763,7 @@ impl GenericAliasExpansionContext {
                     .map(|argument| self.resolve(environment, argument))
                     .collect::<Vec<_>>();
                 let definition = match reference {
-                    GenericAliasReference::Declaration(id) => {
-                        environment.generic_aliases.get(id)
-                    }
+                    GenericAliasReference::Declaration(id) => environment.generic_aliases.get(id),
                     GenericAliasReference::Imported {
                         source_module,
                         name,
@@ -828,11 +832,7 @@ impl GenericAliasExpansionContext {
                 };
                 self.aliases.resolve(environment, alias)
             }
-            Type::Union(types) => Type::union(
-                types
-                    .iter()
-                    .map(|ty| self.resolve(environment, ty)),
-            ),
+            Type::Union(types) => Type::union(types.iter().map(|ty| self.resolve(environment, ty))),
             Type::Function(function) => {
                 let parameters = function
                     .parameters
@@ -852,16 +852,18 @@ impl GenericAliasExpansionContext {
                     .map(|ty| self.resolve(environment, ty))
                     .collect::<Vec<_>>();
                 let guarded = function.guarded_return_types.as_ref().map(|types| {
-                    types.iter().map(|ty| self.resolve(environment, ty)).collect()
+                    types
+                        .iter()
+                        .map(|ty| self.resolve(environment, ty))
+                        .collect()
                 });
                 let overloads: Vec<FunctionType> = function
                     .overloads
                     .iter()
                     .map(|overload| {
-                        let Type::Function(overload) = self.resolve(
-                            environment,
-                            &Type::Function(overload.clone()),
-                        ) else {
+                        let Type::Function(overload) =
+                            self.resolve(environment, &Type::Function(overload.clone()))
+                        else {
                             unreachable!()
                         };
                         overload
@@ -879,24 +881,21 @@ impl GenericAliasExpansionContext {
                 )
             }
             Type::Table(table) => {
-                let mut resolved = super::TableShape::from_fields(table.fields().map(|(name, field)| {
-                    (
-                        name.to_owned(),
-                        TableField {
-                            ty: self.resolve(environment, &field.ty),
-                            optional: field.optional,
-                        },
-                    )
-                }));
+                let mut resolved =
+                    super::TableShape::from_fields(table.fields().map(|(name, field)| {
+                        (
+                            name.to_owned(),
+                            TableField {
+                                ty: self.resolve(environment, &field.ty),
+                                optional: field.optional,
+                            },
+                        )
+                    }));
                 resolved.copy_semantic_metadata_from(table);
                 Type::Table(resolved)
             }
             Type::Array(item) => Type::array(self.resolve(environment, item)),
-            Type::Tuple(items) => Type::tuple(
-                items
-                    .iter()
-                    .map(|ty| self.resolve(environment, ty)),
-            ),
+            Type::Tuple(items) => Type::tuple(items.iter().map(|ty| self.resolve(environment, ty))),
             Type::Dictionary { key, value } => Type::dictionary(
                 self.resolve(environment, key),
                 self.resolve(environment, value),
@@ -953,20 +952,22 @@ pub(crate) fn substitute_type_parameters(
     substitutions: &HashMap<crate::parser::TypeParameterId, Type>,
 ) -> Type {
     match ty {
-        Type::GenericParameter { id, .. } => substitutions
-            .get(id)
-            .cloned()
-            .unwrap_or_else(|| ty.clone()),
+        Type::GenericParameter { id, .. } => {
+            substitutions.get(id).cloned().unwrap_or_else(|| ty.clone())
+        }
         Type::Union(types) => Type::union(
             types
                 .iter()
                 .map(|ty| substitute_type_parameters(ty, substitutions)),
         ),
         Type::Function(function) => {
-            let parameters = function.parameters.iter().map(|parameter| FunctionParameter {
-                name: parameter.name.clone(),
-                ty: substitute_type_parameters(&parameter.ty, substitutions),
-            });
+            let parameters = function
+                .parameters
+                .iter()
+                .map(|parameter| FunctionParameter {
+                    name: parameter.name.clone(),
+                    ty: substitute_type_parameters(&parameter.ty, substitutions),
+                });
             let vararg = function
                 .vararg_type
                 .as_deref()
@@ -1037,10 +1038,7 @@ pub(crate) fn substitute_type_parameters(
                 .collect(),
             span: *span,
         },
-        Type::Alias(_)
-        | Type::Primitive(_)
-        | Type::Any
-        | Type::StringLiteral(_) => ty.clone(),
+        Type::Alias(_) | Type::Primitive(_) | Type::Any | Type::StringLiteral(_) => ty.clone(),
     }
 }
 
@@ -1225,10 +1223,10 @@ impl AliasResolutionContext {
                 self.resolve(environment, value),
             ),
             Type::Primitive(_)
-        | Type::Any
-        | Type::StringLiteral(_)
-        | Type::GenericParameter { .. }
-        | Type::GenericAliasApplication { .. } => ty.clone(),
+            | Type::Any
+            | Type::StringLiteral(_)
+            | Type::GenericParameter { .. }
+            | Type::GenericAliasApplication { .. } => ty.clone(),
         };
         self.depth -= 1;
         resolved
@@ -1679,66 +1677,66 @@ pub(crate) fn build_type_environment_with_domain_registry(
     };
 
     let environment = TypeEnvironment {
-            path: parsed.path.clone(),
-            aliases,
-            generic_aliases: Arc::new(generic_aliases),
-            generic_alias_bindings: Arc::new(generic_alias_bindings),
-            alias_docs,
-            class_names,
-            class_parents: parsed
-                .class_declarations
-                .iter()
-                .filter_map(|class| {
+        path: parsed.path.clone(),
+        aliases,
+        generic_aliases: Arc::new(generic_aliases),
+        generic_alias_bindings: Arc::new(generic_alias_bindings),
+        alias_docs,
+        class_names,
+        class_parents: parsed
+            .class_declarations
+            .iter()
+            .filter_map(|class| {
+                class
+                    .parent
+                    .as_ref()
+                    .map(|parent| (class.name.clone(), parent.clone()))
+            })
+            .collect(),
+        class_protocols: parsed
+            .class_declarations
+            .iter()
+            .map(|class| {
+                (
+                    class.name.clone(),
                     class
-                        .parent
-                        .as_ref()
-                        .map(|parent| (class.name.clone(), parent.clone()))
-                })
-                .collect(),
-            class_protocols: parsed
-                .class_declarations
-                .iter()
-                .map(|class| {
-                    (
-                        class.name.clone(),
-                        class
-                            .implemented_protocols
-                            .iter()
-                            .map(|(name, _)| name.clone())
-                            .collect(),
-                    )
-                })
-                .collect(),
-            protocol_names: parsed
-                .protocol_declarations
-                .iter()
-                .map(|protocol| protocol.name.clone())
-                .collect(),
-            locals,
-            local_docs,
-            local_contracts,
-            function_declarations: function_origins
-                .iter()
-                .enumerate()
-                .filter_map(|(index, origin)| {
-                    origin
-                        .name_span
-                        .map(|span| ((span.start.line, span.start.column), index))
-                })
-                .collect(),
-            functions,
-            deprecated_accesses: BTreeMap::new(),
-            must_use_accesses: BTreeSet::new(),
-            exact_module_bindings: BTreeMap::new(),
-            project_module_signatures: BTreeMap::new(),
-            required_module_types: None,
-            table_remove_overridden: lua::table_remove_is_overridden(parsed),
-            assert_overridden: lua::global_name_is_assigned(parsed, "assert"),
-            table_insert_overridden: lua::table_member_is_overridden(parsed, "insert"),
-            table_sort_overridden: lua::table_member_is_overridden(parsed, "sort"),
-            project_module_globals: BTreeSet::new(),
-            busted_globals: None,
-        };
+                        .implemented_protocols
+                        .iter()
+                        .map(|(name, _)| name.clone())
+                        .collect(),
+                )
+            })
+            .collect(),
+        protocol_names: parsed
+            .protocol_declarations
+            .iter()
+            .map(|protocol| protocol.name.clone())
+            .collect(),
+        locals,
+        local_docs,
+        local_contracts,
+        function_declarations: function_origins
+            .iter()
+            .enumerate()
+            .filter_map(|(index, origin)| {
+                origin
+                    .name_span
+                    .map(|span| ((span.start.line, span.start.column), index))
+            })
+            .collect(),
+        functions,
+        deprecated_accesses: BTreeMap::new(),
+        must_use_accesses: BTreeSet::new(),
+        exact_module_bindings: BTreeMap::new(),
+        project_module_signatures: BTreeMap::new(),
+        required_module_types: None,
+        table_remove_overridden: lua::table_remove_is_overridden(parsed),
+        assert_overridden: lua::global_name_is_assigned(parsed, "assert"),
+        table_insert_overridden: lua::table_member_is_overridden(parsed, "insert"),
+        table_sort_overridden: lua::table_member_is_overridden(parsed, "sort"),
+        project_module_globals: BTreeSet::new(),
+        busted_globals: None,
+    };
     diagnostics.extend(environment.generic_alias_diagnostics(parsed));
     (environment, diagnostics)
 }
@@ -5901,8 +5899,8 @@ fn type_diagnostic(
         .map(|span| span.start)
         .unwrap_or(crate::SourcePosition { line: 1, column: 1 });
 
-    let mut diagnostic = Diagnostic::error(path, position.line, position.column, message)
-        .with_code(code);
+    let mut diagnostic =
+        Diagnostic::error(path, position.line, position.column, message).with_code(code);
     if let Some(span) = span {
         diagnostic = diagnostic.with_range(
             span.start.line,
@@ -5957,8 +5955,7 @@ fn validate_generic_alias_type(
                     .and_then(|id| environment.generic_aliases.get(id))
                     .or_else(|| {
                         environment.generic_aliases.values().find(|definition| {
-                            definition.id.module == *source_module
-                                && definition.id.name == *name
+                            definition.id.module == *source_module && definition.id.name == *name
                         })
                     }),
             };
@@ -5978,9 +5975,7 @@ fn validate_generic_alias_type(
             } else {
                 let (name, name_span) = match reference {
                     GenericAliasReference::Declaration(id) => (id.name.as_str(), None),
-                    GenericAliasReference::Imported { name, span, .. } => {
-                        (name.as_str(), *span)
-                    }
+                    GenericAliasReference::Imported { name, span, .. } => (name.as_str(), *span),
                 };
                 let imported_here = parsed.type_imports.iter().any(|import| {
                     import.namespace == name
@@ -6113,10 +6108,8 @@ fn validate_generic_alias_type(
                 emitted,
             );
         }
-        Type::GenericParameter { .. }
-        | Type::Primitive(_)
-        | Type::Any
-        | Type::StringLiteral(_) => {}
+        Type::GenericParameter { .. } | Type::Primitive(_) | Type::Any | Type::StringLiteral(_) => {
+        }
     }
 }
 #[cfg(test)]

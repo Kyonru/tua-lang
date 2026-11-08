@@ -6084,6 +6084,79 @@ final class Bad implements Updatable {
 }
 
 #[test]
+fn imported_class_instances_keep_protocol_conformance_across_modules() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/contracts.d.tua
+export protocol Readable {
+  read(): number
+}
+-- file: src/entity.tua
+import type { Readable } from "./contracts"
+open class Entity implements Readable {
+  read(): number {
+    return 1
+  }
+}
+final class Child extends Entity {
+}
+export type EntityInstance = Entity
+export type ChildInstance = Child
+return { Entity = Entity, Child = Child }
+-- file: src/main.tua
+import type { EntityInstance } from "./entity"
+import type { ChildInstance } from "./entity"
+import type { Readable } from "./contracts"
+local Entities = require("entity")
+local entity: EntityInstance = Entities.Entity.new()
+local readable: Readable = entity
+local child: ChildInstance = Entities.Child.new()
+local inheritedReadable: Readable = child
+local <|hover|>result = readable:read()
+final class SameShape {
+  read(): number {
+    return 2
+  }
+}
+local rejected: Readable = SameShape.new()
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+
+    let snapshot = host.snapshot();
+    let diagnostics = snapshot.diagnostics("src/main.tua");
+    let mismatches = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::TYPE_MISMATCH))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        mismatches.len(),
+        1,
+        "only the same-shaped class without explicit conformance should fail: {diagnostics:#?}"
+    );
+    assert!(
+        mismatches[0].message.contains("expected Readable")
+            && mismatches[0].message.contains("found SameShape"),
+        "the nonconforming class should retain its concrete type in the diagnostic: {mismatches:#?}"
+    );
+    assert_eq!(mismatches[0].line, 15);
+    assert!(
+        !diagnostics.iter().any(|diagnostic| {
+            diagnostic.message.contains("expected Readable")
+                && diagnostic.message.contains("found EntityInstance")
+        }),
+        "an exported instance whose class explicitly implements the imported protocol should be accepted: {diagnostics:#?}"
+    );
+    let hover = snapshot
+        .hover("src/main.tua", fixture.position("hover"))
+        .expect("the result of the imported protocol call should hover");
+    assert_eq!(hover.contents, "local result: number");
+}
+
+#[test]
 fn namespace_imported_protocol_conformance_uses_declaration_contracts() {
     let fixture = Fixture::parse(
         r#"-- file: src/contracts.d.tua

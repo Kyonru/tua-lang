@@ -10,6 +10,7 @@ use crate::{Definition, DefinitionKind, ParsedSource, ProjectTypeDatabase};
 pub(super) struct ProjectProtocolIndex {
     methods: BTreeMap<ProtocolIdentity, BTreeMap<String, Definition>>,
     implementations: BTreeMap<ProtocolMethodIdentity, Vec<Definition>>,
+    class_conformances: BTreeMap<String, BTreeSet<ProtocolIdentity>>,
 }
 
 type ProtocolIdentity = (PathBuf, String);
@@ -62,6 +63,11 @@ impl ProjectProtocolIndex {
                     let Some(requirements) = index.methods.get(&protocol_identity) else {
                         continue;
                     };
+                    index
+                        .class_conformances
+                        .entry(crate::classes::nominal_class_identity(path, &class.name))
+                        .or_default()
+                        .insert(protocol_identity.clone());
 
                     for method_name in requirements.keys() {
                         let Some(owner) = class_method_owner(classes, &class.name, method_name)
@@ -110,6 +116,16 @@ impl ProjectProtocolIndex {
     pub(super) fn contains_protocol(&self, path: &Path, name: &str) -> bool {
         self.methods
             .contains_key(&(normalize_path(path), name.to_owned()))
+    }
+
+    pub(super) fn class_conformances(
+        &self,
+        class_identity: &str,
+    ) -> impl Iterator<Item = &(PathBuf, String)> {
+        self.class_conformances
+            .get(class_identity)
+            .into_iter()
+            .flat_map(BTreeSet::iter)
     }
 
     pub(super) fn method_definition(

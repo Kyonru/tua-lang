@@ -535,6 +535,9 @@ impl AnalysisSnapshot {
                 &self.module_graph,
                 &self.type_database,
             ))
+            .with_class_protocol_conformances(
+                self.project_imported_class_protocol_conformances(parsed),
+            )
             .with_local_types(self.project_module_binding_types(parsed))
             .with_required_module_types(
                 self.module_graph
@@ -587,8 +590,7 @@ impl AnalysisSnapshot {
             if import.namespace.is_empty() {
                 continue;
             }
-            let Some(module_path) =
-                self.indexed_module_path_for_specifier(parsed, &import.module)
+            let Some(module_path) = self.indexed_module_path_for_specifier(parsed, &import.module)
             else {
                 continue;
             };
@@ -611,6 +613,51 @@ impl AnalysisSnapshot {
             }
         }
         bindings
+    }
+
+    fn project_imported_class_protocol_conformances(
+        &self,
+        parsed: &ParsedSource,
+    ) -> Vec<(String, String)> {
+        let names = database::referenced_type_names(parsed);
+        let mut visible_type_names = BTreeMap::<(PathBuf, String), Vec<String>>::new();
+        let mut class_types = Vec::new();
+        for name in names {
+            let Some(binding) =
+                self.type_database
+                    .resolve_type_name(&self.module_graph, &parsed.path, &name)
+            else {
+                continue;
+            };
+            visible_type_names
+                .entry((binding.module_path.clone(), binding.name.clone()))
+                .or_default()
+                .push(name.clone());
+            if let Type::Table(class_type) = &binding.ty {
+                if let Some(class_identity) = class_type.nominal_identity() {
+                    class_types.push((name, class_identity.to_owned()));
+                }
+            }
+        }
+
+        let mut conformances = BTreeSet::new();
+
+        for (class_type_name, class_identity) in class_types {
+            for (protocol_module, protocol_name) in self
+                .type_database
+                .class_protocol_conformances(&class_identity)
+            {
+                if let Some(protocol_names) =
+                    visible_type_names.get(&(protocol_module, protocol_name))
+                {
+                    for protocol_name in protocol_names {
+                        conformances.insert((class_type_name.clone(), protocol_name.clone()));
+                    }
+                }
+            }
+        }
+
+        conformances.into_iter().collect()
     }
 
     pub(super) fn project_module_binding_types(
@@ -2063,8 +2110,8 @@ impl AnalysisSnapshot {
             | Type::Array(_)
             | Type::Tuple(_)
             | Type::Dictionary { .. }
-        | Type::GenericParameter { .. }
-        | Type::GenericAliasApplication { .. } => None,
+            | Type::GenericParameter { .. }
+            | Type::GenericAliasApplication { .. } => None,
         }
     }
 
@@ -2127,8 +2174,8 @@ impl AnalysisSnapshot {
             | Type::Array(_)
             | Type::Tuple(_)
             | Type::Dictionary { .. }
-        | Type::GenericParameter { .. }
-        | Type::GenericAliasApplication { .. } => Vec::new(),
+            | Type::GenericParameter { .. }
+            | Type::GenericAliasApplication { .. } => Vec::new(),
         }
     }
 
@@ -2719,13 +2766,11 @@ mod declaration_overlay_tests {
                 signature.signatures[0].label.contains("value: string"),
                 "{signature:?}"
             );
-            assert!(
-                snapshot
-                    .hover(&main, fixture.position("hover"))
-                    .unwrap()
-                    .contents
-                    .contains("result: string")
-            );
+            assert!(snapshot
+                .hover(&main, fixture.position("hover"))
+                .unwrap()
+                .contents
+                .contains("result: string"));
         }
         host.set_file(&main, "local F=require(\"lib.feel\")\nF.echo(42)\n");
         assert!(
