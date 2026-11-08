@@ -888,6 +888,23 @@ fn duplicate_generic_function_binder_has_one_actionable_diagnostic() {
 }
 
 #[test]
+fn dotted_free_function_can_be_generic_without_implicit_receiver() {
+    let parsed = parse_tua_source(
+        "src/module.tua",
+        "function Module.identity<T>(value: T): T return value end",
+    )
+    .expect("dotted free functions should support generic binders");
+    let function = parsed
+        .function_annotations
+        .iter()
+        .find(|function| function.name.as_deref() == Some("Module.identity"))
+        .expect("dotted declaration annotation");
+    assert_eq!(function.generic_parameters.len(), 1);
+    assert_eq!(function.parameters.len(), 1);
+    assert_eq!(function.parameters[0].name, "value");
+}
+
+#[test]
 fn parses_optional_field_syntax_from_spec() {
     let parsed = parse_tua_source(
         "src/save_slot.tua",
@@ -1390,7 +1407,7 @@ fn parses_luahelper_doc_annotations_into_source_model() {
 ---@field name? string optional display name
 ---@alias PlayerId string|number identifier
 ---@type { hp: number, alive?: boolean }
----@generic T:Player, U
+---@generic T : Player, U
 ---@version JIT
 ---@param player Player target player
 ---@param amount? number optional amount
@@ -1952,11 +1969,6 @@ fn rejects_luau_only_forms_at_the_tua_parse_boundary() {
             "function attribute",
             "@native local function run() end\n",
             "attributes",
-        ),
-        (
-            "generic declaration",
-            "local function identity<T>(value: T): T return value end\n",
-            "generic declarations",
         ),
         (
             "intersection type",

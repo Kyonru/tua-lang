@@ -2010,6 +2010,85 @@ log("hello", 10)
 }
 
 #[test]
+fn lua_doc_generic_function_binds_parameters_and_returns() {
+    check_tua_source(
+        "src/identity.tua",
+        r#"
+---@generic T
+---@param value T
+---@return T
+local function identity(value)
+  return value
+end
+
+local _number: number = identity(1)
+local _text: string = identity("hello")
+
+---@generic T
+---@vararg T
+---@return T
+local function first(...)
+  return ...
+end
+
+local _vararg_text: string = first("vararg")
+"#,
+    )
+    .expect("unbounded LuaDoc generics should bind params and returns per call");
+}
+
+#[test]
+fn lua_doc_generic_bounds_are_rejected_explicitly() {
+    let diagnostics = check_tua_source(
+        "src/bounded.tua",
+        r#"
+---@generic T : number
+---@param value T
+---@return T
+local function identity(value)
+  return value
+end
+"#,
+    )
+    .expect_err("generic bounds are outside the supported LuaDoc subset");
+    assert!(
+        diagnostics.iter().any(|diagnostic| {
+            diagnostic
+                .message
+                .contains("LuaDoc generic bounds are not supported yet")
+                && diagnostic.code == Some(DiagnosticCode::SYNTAX_DOC_ANNOTATION)
+        }),
+        "{diagnostics:#?}"
+    );
+}
+
+#[test]
+fn lua_doc_generic_methods_are_rejected_explicitly() {
+    let diagnostics = check_tua_source(
+        "src/method.tua",
+        r#"
+local Object = {}
+---@generic T
+---@param value T
+---@return T
+function Object:identity(value)
+  return value
+end
+"#,
+    )
+    .expect_err("LuaDoc generic methods are outside the supported function subset");
+    assert!(
+        diagnostics.iter().any(|diagnostic| {
+            diagnostic
+                .message
+                .contains("LuaDoc generic methods are not supported")
+                && diagnostic.code == Some(DiagnosticCode::SYNTAX_DOC_ANNOTATION)
+        }),
+        "{diagnostics:#?}"
+    );
+}
+
+#[test]
 fn checks_native_function_alias_callbacks_and_typed_varargs() {
     check_tua_source(
         "src/callbacks.tua",
@@ -6035,4 +6114,253 @@ fn excess_arguments_explain_signature_limit_and_varargs_stay_valid() {
         "local function draw(width: number, ...: number) end\ndraw(12, 3)\n",
     )
     .expect("variadic arguments are allowed");
+}
+
+#[test]
+fn generic_function_body_is_checked_for_all_type_arguments() {
+    check_tua_source(
+        "src/generic_function.tua",
+        "local function identity<T>(value: T): T return value end\n",
+    )
+    .expect("returning the symbolic input should satisfy every T");
+
+    let diagnostics = check_tua_source(
+        "src/generic_function.tua",
+        "local function invalid<T>(value: T): T return 1 end\n",
+    )
+    .expect_err("a concrete number cannot satisfy an arbitrary T");
+    assert_single_mismatch(
+        &diagnostics,
+        "type mismatch at return value 1 of `invalid`: expected T, found number",
+    );
+}
+
+#[test]
+fn generic_function_body_local_annotations_use_the_declaration_binder() {
+    check_tua_source(
+        "src/generic_local.tua",
+        "local function identity<T>(value: T): T\n  local copy: T = value\n  return copy\nend\nlocal _text: string = identity('text')\n",
+    )
+    .expect("local annotations inside a generic function should see its binder");
+}
+
+#[test]
+fn generic_function_calls_infer_independent_type_arguments() {
+    check_tua_source(
+        "src/generic_calls.tua",
+        "local function identity<T>(value: T): T return value end\nlocal number_value: number = identity(3)\nlocal text_value: string = identity('hello')\n",
+    )
+    .expect("each call should instantiate the generic function independently");
+
+    check_tua_source(
+        "src/generic_calls.tua",
+        "local function identity<T>(value: T): T return value end\nlocal copy = identity\nlocal text_value: string = copy('hello')\nlocal number_value: number = copy(4)\n",
+    )
+    .expect("assigning a generic function should preserve its declaration scheme");
+
+    let diagnostics = check_tua_source(
+        "src/generic_calls.tua",
+        "local function identity<T>(value: T): T return value end\nlocal number_value: number = identity('hello')\n",
+    )
+    .expect_err("the result type should follow the actual call argument");
+    assert_single_mismatch(
+        &diagnostics,
+        "type mismatch at number_value: expected number, found string",
+    );
+}
+
+#[test]
+fn generic_function_calls_report_conflicts_and_ambiguous_binders() {
+    let conflict = check_tua_source(
+        "src/generic_calls.tua",
+        "local function pair<T>(first: T, second: T): T return first end\npair(1, 'text')\n",
+    )
+    .expect_err("incompatible repeated constraints should be rejected");
+    assert!(conflict.iter().any(|diagnostic| {
+        diagnostic.code == Some(DiagnosticCode::TYPE_GENERIC_INFERENCE)
+            && diagnostic
+                .message
+                .contains("conflicting arguments for generic type parameter `T`")
+    }));
+    let inference_error = conflict
+        .iter()
+        .find(|diagnostic| diagnostic.code == Some(DiagnosticCode::TYPE_GENERIC_INFERENCE))
+        .expect("the generic conflict should have a dedicated diagnostic");
+    assert_eq!(
+        (
+            inference_error.line,
+            inference_error.column,
+            inference_error.end_line,
+            inference_error.end_column,
+        ),
+        (2, 6, 2, 7),
+        "TL1015 should highlight the first argument that introduces the conflicting inference",
+    );
+
+    let return_only = check_tua_source(
+        "src/generic_calls.tua",
+        "local function make<T>(source: any): T return source end\nmake(1)\n",
+    )
+    .expect_err("a return-only generic type must not silently become any");
+    assert!(return_only.iter().any(|diagnostic| {
+        diagnostic.code == Some(DiagnosticCode::TYPE_GENERIC_INFERENCE)
+            && diagnostic
+                .message
+                .contains("cannot infer generic type parameter `T` from the return type alone")
+    }));
+
+    let missing_argument = check_tua_source(
+        "src/generic_calls.tua",
+        "local function get<T>(value: T): T return value end\nget()\n",
+    )
+    .expect_err("missing required arguments should be diagnosed before inference");
+    assert!(missing_argument.iter().any(|diagnostic| {
+        diagnostic.code == Some(DiagnosticCode::TYPE_ARGUMENT_COUNT)
+            && diagnostic.message.contains("expected 1, found 0")
+    }));
+    assert!(!missing_argument
+        .iter()
+        .any(|diagnostic| diagnostic.code == Some(DiagnosticCode::TYPE_GENERIC_INFERENCE)));
+
+    let excess_argument = check_tua_source(
+        "src/generic_calls.tua",
+        "local function identity<T>(value: T): T return value end\nidentity(1, 2)\n",
+    )
+    .expect_err("generic inference must not hide excess arguments");
+    assert!(
+        excess_argument.iter().any(|diagnostic| {
+            diagnostic.code == Some(DiagnosticCode::TYPE_ARGUMENT_COUNT)
+                && diagnostic.message.contains("expected 1, found 2")
+        }),
+        "{excess_argument:#?}"
+    );
+    assert!(!excess_argument
+        .iter()
+        .any(|diagnostic| diagnostic.code == Some(DiagnosticCode::TYPE_GENERIC_INFERENCE)));
+}
+
+#[test]
+fn generic_inference_handles_nil_unions_any_and_empty_tables() {
+    check_tua_source(
+        "src/generic_unions.tua",
+        "local function preserve<T>(value: T | nil): T | nil return value end\nlocal maybe: number | nil = 4\nlocal result: number | nil = preserve(maybe)\nlocal explicit_any: any = nil\nlocal any_result = preserve(explicit_any)\n",
+    )
+    .expect("a nullable union should infer T from its non-nil branch and any stays dynamic");
+
+    let nil_only = check_tua_source(
+        "src/generic_unions.tua",
+        "local function preserve<T>(value: T | nil): T | nil return value end\npreserve(nil)\n",
+    )
+    .expect_err("nil alone cannot determine the non-nil T branch");
+    assert!(nil_only.iter().any(|diagnostic| {
+        diagnostic.code == Some(DiagnosticCode::TYPE_GENERIC_INFERENCE)
+            && diagnostic
+                .message
+                .contains("cannot infer generic type parameter `T`")
+    }));
+
+    let empty_array = check_tua_source(
+        "src/generic_unions.tua",
+        "local function first<T>(values: T[]): T return values[1] end\nfirst({})\n",
+    )
+    .expect_err("an empty table cannot determine an array element type");
+    assert!(empty_array.iter().any(|diagnostic| {
+        diagnostic.code == Some(DiagnosticCode::TYPE_GENERIC_INFERENCE)
+            && diagnostic
+                .message
+                .contains("cannot infer generic type parameter `T`")
+    }));
+}
+
+#[test]
+fn generic_callback_inference_is_explicit_and_wrong_callback_arguments_are_type_errors() {
+    let ambiguous = check_tua_source(
+        "src/generic_callback.tua",
+        "local function use<T>(callback: (T) -> nil): nil return nil end\nuse(function(value) return nil end)\n",
+    )
+    .expect_err("callback-only inference is not supported in this slice");
+    assert!(ambiguous.iter().any(|diagnostic| {
+        diagnostic.code == Some(DiagnosticCode::TYPE_GENERIC_INFERENCE)
+            && diagnostic.message.contains("from a callback argument")
+    }));
+
+    let wrong_kind = check_tua_source(
+        "src/generic_callback.tua",
+        "local function use<T>(callback: (T) -> nil): nil return nil end\nuse(42)\n",
+    )
+    .expect_err("a number is not a callback");
+    assert!(wrong_kind.iter().any(|diagnostic| {
+        diagnostic.code == Some(DiagnosticCode::TYPE_MISMATCH)
+            && diagnostic
+                .message
+                .contains("expected (T) -> nil, found number")
+    }));
+    assert!(!wrong_kind
+        .iter()
+        .any(|diagnostic| diagnostic.code == Some(DiagnosticCode::TYPE_GENERIC_INFERENCE)));
+}
+
+#[test]
+fn nested_generic_function_binders_do_not_capture_outer_binders() {
+    check_tua_source(
+        "src/nested_generics.tua",
+        "local function outer<T>(value: T): T\n local function inner<T>(value: T): T return value end\n return inner(value)\nend\nlocal n: number = outer(3)\nlocal s: string = outer('s')\n",
+    )
+    .expect("same-spelled nested binders must remain independent");
+}
+
+#[test]
+fn generic_function_infers_through_generic_alias_applications() {
+    let parsed = crate::parse_tua_source(
+        "src/generic_alias_call.tua",
+        "type Box<T> = { value: T }\nlocal function unbox<T>(box: Box<T>): T return box.value end\nlocal number_value: number = unbox({ value = 3 })\n",
+    )
+    .unwrap();
+    let environment = crate::types::build_type_environment(&parsed).unwrap();
+    let function = environment.function("unbox").unwrap();
+    let parameter_type = &function.parameters[0].ty;
+    let resolved_parameter = environment.resolve_aliases(parameter_type);
+    assert!(
+        matches!(&resolved_parameter, Type::Table(table) if matches!(table.field("value").map(|field| &field.ty), Some(Type::GenericParameter { id, .. }) if id == &function.generic_parameters[0].id)),
+        "resolved parameter was {resolved_parameter:?}"
+    );
+    let scheme = match function.as_type().unwrap() {
+        Type::Function(scheme) => scheme,
+        other => panic!("expected function scheme, got {other:?}"),
+    };
+    let value = Type::table([("value", crate::types::TableField::required(Type::number()))]);
+    let instantiated = crate::types::instantiate_generic_function(
+        &scheme,
+        &[Some(value.clone())],
+        &environment.to_type_context(),
+    )
+    .unwrap();
+    assert_eq!(instantiated.return_types_or_any(), &[Type::number()]);
+    assert!(environment
+        .to_type_context()
+        .is_assignable(&value, &instantiated.parameters[0].ty));
+
+    check_tua_source(
+        "src/generic_alias_call.tua",
+        "type Box<T> = { value: T }\nlocal function unbox<T>(box: Box<T>): T return box.value end\nlocal number_value: number = unbox({ value = 3 })\n",
+    )
+    .expect("generic alias fields and call arguments should preserve the T relationship");
+}
+
+#[test]
+fn generic_function_varargs_bind_and_infer_their_type_parameter() {
+    check_tua_source(
+        "src/generic_vararg.tua",
+        "local function first<T>(prefix: number, ...: T): T return ... end\nlocal text: string = first(0, 'hello')\n",
+    )
+    .expect("generic vararg annotations should bind and infer T");
+}
+
+#[test]
+fn generic_function_inference_matches_lua_string_and_table_call_sugar() {
+    check_tua_source(
+        "src/generic_call_sugar.tua",
+        "local function identity<T>(value: T): T return value end\nlocal text = identity 'hello'\nlocal text_check: string = text\nlocal record = identity { value = 3 }\nlocal number_check: number = record.value\n",
+    )
+    .expect("string and table call sugar should participate in generic inference");
 }

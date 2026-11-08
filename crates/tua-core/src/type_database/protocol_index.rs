@@ -266,6 +266,7 @@ fn definition_sort_key(definition: &Definition) -> (PathBuf, usize, usize, usize
     let kind = match definition.kind {
         DefinitionKind::Function => 0,
         DefinitionKind::TypeAlias => 1,
+        DefinitionKind::TypeParameter => 2,
         DefinitionKind::TableField => 2,
         DefinitionKind::Local => 3,
         DefinitionKind::Parameter => 4,

@@ -54,6 +54,7 @@ pub(crate) fn constructor_type() -> FunctionType {
 
 pub(crate) fn constructor_typed_function() -> TypedFunction {
     TypedFunction {
+        generic_parameters: Vec::new(),
         name: Some(CONSTRUCTOR_NAME.to_owned()),
         parameters: Vec::new(),
         parameter_count: 0,
@@ -85,6 +86,7 @@ pub(crate) fn typed_method(method: &str) -> Option<TypedFunction> {
             };
             let required_parameter_count = if method == "declare" { 2 } else { 3 };
             Some(TypedFunction {
+                generic_parameters: Vec::new(),
                 name: Some(method.to_owned()),
                 parameters: vec![
                     typed_parameter("self", signal_bus),
@@ -109,6 +111,7 @@ pub(crate) fn typed_method(method: &str) -> Option<TypedFunction> {
                 "name"
             };
             Some(TypedFunction {
+                generic_parameters: Vec::new(),
                 name: Some(method.to_owned()),
                 parameters: vec![
                     typed_parameter("self", signal_bus),
@@ -127,6 +130,7 @@ pub(crate) fn typed_method(method: &str) -> Option<TypedFunction> {
             })
         }
         "emit" | "emitPattern" => Some(TypedFunction {
+            generic_parameters: Vec::new(),
             name: Some(method.to_owned()),
             parameters: vec![
                 typed_parameter("self", signal_bus),
@@ -143,6 +147,7 @@ pub(crate) fn typed_method(method: &str) -> Option<TypedFunction> {
             overloads: Vec::new(),
         }),
         "clear" => Some(TypedFunction {
+            generic_parameters: Vec::new(),
             name: Some(method.to_owned()),
             parameters: vec![
                 typed_parameter("self", signal_bus),
@@ -159,6 +164,7 @@ pub(crate) fn typed_method(method: &str) -> Option<TypedFunction> {
             overloads: Vec::new(),
         }),
         "clearPattern" => Some(TypedFunction {
+            generic_parameters: Vec::new(),
             name: Some(method.to_owned()),
             parameters: vec![
                 typed_parameter("self", signal_bus),
@@ -175,6 +181,7 @@ pub(crate) fn typed_method(method: &str) -> Option<TypedFunction> {
             overloads: Vec::new(),
         }),
         "has" => Some(TypedFunction {
+            generic_parameters: Vec::new(),
             name: Some(method.to_owned()),
             parameters: vec![
                 typed_parameter("self", signal_bus),
@@ -191,6 +198,7 @@ pub(crate) fn typed_method(method: &str) -> Option<TypedFunction> {
             overloads: Vec::new(),
         }),
         "listeners" => Some(TypedFunction {
+            generic_parameters: Vec::new(),
             name: Some(method.to_owned()),
             parameters: vec![
                 typed_parameter("self", signal_bus),
@@ -1023,6 +1031,7 @@ pub(crate) fn event_emit_typed_function(name: &str, payload: &[TypedParameter]) 
     parameters.extend(payload.iter().cloned());
 
     TypedFunction {
+        generic_parameters: Vec::new(),
         name: Some("emit".to_owned()),
         parameter_count: parameters.len(),
         required_parameter_count: parameters.len(),

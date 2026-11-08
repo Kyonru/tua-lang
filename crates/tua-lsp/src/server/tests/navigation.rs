@@ -239,6 +239,72 @@ player.hp = player.hp - 1
     assert_definition_text(&output, 4, uri, source, "player");
     assert_definition_text(&output, 5, uri, source, "hp");
 }
+
+#[test]
+fn generic_function_parameter_type_navigates_to_its_binder() {
+    let uri = "file:///tmp/generic-binder-definition.tua";
+    let source = r#"local function identity<T>(value: T): T
+  return value
+end
+local _text: string = identity("text")
+"#;
+    let output = run_messages(vec![
+        did_open(uri, source),
+        definition_request(2, uri, source, "value: T", "value: ".len()),
+    ]);
+
+    let definition = response_with_id(&output, 2)["result"].clone();
+    assert_eq!(definition["uri"], uri);
+    assert_eq!(range_text(source, &definition["range"]), "T");
+    assert_eq!(definition["range"]["start"]["line"], 0);
+}
+
+#[test]
+fn generic_function_type_parameter_navigation_respects_shadowing_and_rename() {
+    let uri = "file:///tmp/generic-binder-shadowing.tua";
+    let source = r#"local function outer<T>(value: T): T
+  local function inner<T>(inner_value: T): T
+    return inner_value
+  end
+  local copy: T = value
+  return copy
+end
+"#;
+    let output = run_messages(vec![
+        did_open(uri, source),
+        definition_request(2, uri, source, "inner_value: T", "inner_value: ".len()),
+        definition_request(3, uri, source, "local copy: T", "local copy: ".len()),
+        references_request(4, uri, source, "local copy: T", "local copy: ".len(), true),
+        prepare_rename_request(5, uri, source, "local copy: T", "local copy: ".len()),
+        rename_request(
+            6,
+            uri,
+            source,
+            "local copy: T",
+            "local copy: ".len(),
+            "OuterValue",
+        ),
+    ]);
+
+    assert_definition_text(&output, 2, uri, source, "T");
+    let inner_definition = response_with_id(&output, 2)["result"].clone();
+    assert_eq!(inner_definition["range"]["start"]["line"], 1);
+    assert_definition_text(&output, 3, uri, source, "T");
+    let outer_definition = response_with_id(&output, 3)["result"].clone();
+    assert_eq!(outer_definition["range"]["start"]["line"], 0);
+
+    let references = response_with_id(&output, 4)["result"]
+        .as_array()
+        .expect("references should be returned")
+        .iter()
+        .map(|reference| range_text(source, &reference["range"]))
+        .collect::<Vec<_>>();
+    assert_eq!(references, ["T", "T", "T", "T"]);
+    let prepare = response_with_id(&output, 5)["result"].clone();
+    assert_eq!(prepare["placeholder"], "T");
+    assert_rename_edit_texts(&output, 6, uri, source, ["T", "T", "T", "T"], "OuterValue");
+}
+
 #[test]
 fn definition_and_references_resolve_inferred_local_table_fields() {
     let uri = "file:///tmp/inferred-table-field.tua";

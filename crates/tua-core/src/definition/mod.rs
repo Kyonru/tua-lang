@@ -39,6 +39,7 @@ pub enum DefinitionKind {
     Local,
     Function,
     Parameter,
+    TypeParameter,
     TableField,
 }
 

@@ -1502,7 +1502,8 @@ fn resolve_export_aliases_inner(
                     return_types,
                 )
                 .with_guarded_return_types(guarded)
-                .with_overloads(overloads),
+                .with_overloads(overloads)
+                .with_generic_parameters(function.generic_parameters.clone()),
             )
         }
         Type::Table(table) => {
@@ -1806,7 +1807,8 @@ fn typed_function_type(function: &TypedFunction) -> Type {
                 .overloads
                 .iter()
                 .map(crate::types::TypedFunctionOverload::as_function_type),
-        ),
+        )
+        .with_generic_parameters(function.generic_parameters.clone()),
     )
 }
 

@@ -4592,6 +4592,52 @@ return {
 }
 
 #[test]
+fn generic_function_schemes_survive_imports_and_reexports() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+local api = require("api")
+local relay = require("relay")
+local _number_value: number = api.identity(5)
+local _text_value: string = api.identity("text")
+local copied = api.identity
+local _copied_value: string = copied("copied")
+local _hovered: string = copied(<|hover_arg|>"hover")
+local _relayed: number = relay.identity(7)
+local _signature = relay.identity(<|signature|>7)
+-- file: src/api.tua
+local Module = {}
+function Module.identity<T>(value: T): T return value end
+return Module
+-- file: src/relay.tua
+local api = require("api")
+return { identity = api.identity }
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+    let snapshot = host.snapshot();
+    let diagnostics = snapshot.pipeline_diagnostics("src/main.tua");
+    assert!(diagnostics.is_empty(), "{diagnostics:#?}");
+
+    let hover = snapshot
+        .hover("src/main.tua", fixture.position("hover_arg"))
+        .expect("the call result should retain its generic instantiation");
+    assert!(hover.contents.contains("string"), "{hover:?}");
+
+    let signature = snapshot
+        .signature_help("src/main.tua", fixture.position("signature"))
+        .expect("imported generic function should provide signature help");
+    assert!(
+        signature.signatures[0].label.contains("<T>")
+            || signature.signatures[0].label.contains("value: number"),
+        "{signature:?}"
+    );
+}
+
+#[test]
 fn snapshot_infers_richer_unannotated_lua_module_surfaces() {
     let fixture = Fixture::parse(
         r#"-- file: src/main.tua

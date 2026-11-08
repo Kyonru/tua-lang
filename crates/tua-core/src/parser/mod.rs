@@ -1018,7 +1018,10 @@ fn type_alias_from_declaration(
     }
 }
 
-fn bind_generic_parameter_references(ty: &TuaType, parameters: &[GenericParameter]) -> TuaType {
+pub(crate) fn bind_generic_parameter_references(
+    ty: &TuaType,
+    parameters: &[GenericParameter],
+) -> TuaType {
     match ty {
         TuaType::Named(name) => parameters
             .iter()
@@ -1481,8 +1484,12 @@ fn function_annotation(
             .find_map(|(parameter, specifier)| {
                 matches!(parameter, ast::Parameter::Ellipsis(_))
                     .then(|| {
-                        specifier
-                            .map(|s| tua_type_from_type_info_with_source(s.type_info(), source))
+                        specifier.map(|s| {
+                            bind_generic_parameter_references(
+                                &tua_type_from_type_info_with_source(s.type_info(), source),
+                                &generic_parameters,
+                            )
+                        })
                     })
                     .flatten()
             }),

@@ -739,10 +739,11 @@ fn reference_kind_key(kind: crate::ReferenceKind) -> u8 {
         crate::ReferenceKind::Asset => 1,
         crate::ReferenceKind::SignalEvent => 2,
         crate::ReferenceKind::TypeAlias => 3,
-        crate::ReferenceKind::Local => 4,
-        crate::ReferenceKind::Function => 5,
-        crate::ReferenceKind::Parameter => 6,
-        crate::ReferenceKind::TableField => 7,
+        crate::ReferenceKind::TypeParameter => 4,
+        crate::ReferenceKind::Local => 5,
+        crate::ReferenceKind::Function => 6,
+        crate::ReferenceKind::Parameter => 7,
+        crate::ReferenceKind::TableField => 8,
     }
 }
 
@@ -874,10 +875,11 @@ fn definition_kind_key(kind: DefinitionKind) -> u8 {
         DefinitionKind::Asset => 2,
         DefinitionKind::SignalEvent => 3,
         DefinitionKind::TypeAlias => 4,
-        DefinitionKind::Local => 5,
-        DefinitionKind::Function => 6,
-        DefinitionKind::Parameter => 7,
-        DefinitionKind::TableField => 8,
+        DefinitionKind::TypeParameter => 5,
+        DefinitionKind::Local => 6,
+        DefinitionKind::Function => 7,
+        DefinitionKind::Parameter => 8,
+        DefinitionKind::TableField => 9,
     }
 }
 
@@ -888,6 +890,7 @@ fn reference_kind_for_definition(kind: DefinitionKind) -> ReferenceKind {
         DefinitionKind::Asset => ReferenceKind::Asset,
         DefinitionKind::SignalEvent => ReferenceKind::SignalEvent,
         DefinitionKind::TypeAlias => ReferenceKind::TypeAlias,
+        DefinitionKind::TypeParameter => ReferenceKind::TypeParameter,
         DefinitionKind::Local => ReferenceKind::Local,
         DefinitionKind::Function => ReferenceKind::Function,
         DefinitionKind::Parameter => ReferenceKind::Parameter,
@@ -1064,10 +1067,63 @@ fn is_type_reference_position(parsed: &ParsedSource, position: SourcePosition) -
     }
 }
 
+pub(crate) fn generic_function_parameter_at_position(
+    parsed: &ParsedSource,
+    position: SourcePosition,
+) -> Option<crate::parser::GenericParameter> {
+    let parser_position = parsed
+        .raw
+        .parser_position_for_source(position)
+        .unwrap_or(position);
+    let identifier = crate::source_text::dotted_chain_at_position(&parsed.source, position)?
+        .parts
+        .into_iter()
+        .last()?;
+    let is_binder = parsed
+        .function_annotations
+        .iter()
+        .flat_map(|function| &function.generic_parameters)
+        .any(|parameter| span_contains_position(parameter.name_span, parser_position));
+    if !is_binder && !is_type_reference_position(parsed, position) {
+        return None;
+    }
+
+    let mut functions = parsed
+        .function_annotations
+        .iter()
+        .filter(|function| {
+            function
+                .span
+                .is_some_and(|span| span_contains_position(span, parser_position))
+        })
+        .collect::<Vec<_>>();
+    functions.sort_by_key(|function| {
+        function.span.map_or((usize::MAX, usize::MAX), |span| {
+            (
+                span.end.line.saturating_sub(span.start.line),
+                span.end.column.saturating_sub(span.start.column),
+            )
+        })
+    });
+
+    for function in functions {
+        if let Some(parameter) = function
+            .generic_parameters
+            .iter()
+            .find(|parameter| parameter.name == identifier.text)
+        {
+            return Some(parameter.clone());
+        }
+    }
+
+    None
+}
+
 fn is_type_definition_kind(definition: &Definition) -> bool {
     matches!(
         definition.kind,
         DefinitionKind::TypeAlias
+            | DefinitionKind::TypeParameter
             | DefinitionKind::TableField
             | DefinitionKind::Builtin
             | DefinitionKind::Module
@@ -2379,13 +2435,28 @@ fn module_file_definition(path: &Path, span: SourceSpan) -> Definition {
 
 fn format_module_export_hover(name: &str, ty: &Type) -> String {
     match ty {
-        Type::Function(function) => format_named_function_pretty(
-            name,
-            &function.parameters,
-            function.vararg_type.is_some(),
-            function.vararg_type.as_deref(),
-            function.return_types_or_any(),
-        ),
+        Type::Function(function) => {
+            let name = if function.generic_parameters.is_empty() {
+                name.to_owned()
+            } else {
+                format!(
+                    "{name}<{}>",
+                    function
+                        .generic_parameters
+                        .iter()
+                        .map(|parameter| parameter.name.as_str())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            };
+            format_named_function_pretty(
+                &name,
+                &function.parameters,
+                function.vararg_type.is_some(),
+                function.vararg_type.as_deref(),
+                function.return_types_or_any(),
+            )
+        }
         _ => format_type_with_prefix(format!("(field) {name}: "), ty),
     }
 }

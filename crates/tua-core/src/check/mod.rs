@@ -36,9 +36,9 @@ use crate::semantic::{resolve_index_type, resolve_table_field_type, SemanticMode
 use crate::semantic_domains::{BuiltinConstructor, BuiltinDomain, BuiltinDomainRegistry};
 use crate::types::{
     build_type_environment_with_domain_registry, deduplicate_inferred_types,
-    has_leading_lua_doc_type, widen_inferred_type, AssignabilityFailure, AssignabilityFailureKind,
-    FunctionType, IndexFallback, MetatableFacts, TableField, Type, TypeContext, TypeEnvironment,
-    TypedFunction,
+    has_leading_lua_doc_type, instantiate_generic_function, widen_inferred_type,
+    AssignabilityFailure, AssignabilityFailureKind, FunctionParameter, FunctionType, IndexFallback,
+    MetatableFacts, TableField, Type, TypeContext, TypeEnvironment, TypedFunction,
 };
 use crate::{asset, love_callback, lua, signal, sprite, state_machine};
 use crate::{Diagnostic, DiagnosticCode, DiagnosticSeverity};
@@ -3123,12 +3123,51 @@ impl<'a> Checker<'a> {
             })
             .collect::<Vec<_>>();
         let candidates = typed_call_candidates(function);
+        let mut inference_failure = None;
 
         for candidate in &candidates {
-            if typed_call_candidate_matches(self, &argument_types, candidate) {
-                self.check_contextual_callback_arguments(&arguments, candidate);
+            if expected_typed_argument_count(candidate, argument_types.len()).is_some() {
+                continue;
+            }
+            let candidate = match instantiate_typed_call_candidate(self, candidate, &argument_types)
+            {
+                Ok(candidate) => candidate,
+                Err(failure) => {
+                    inference_failure.get_or_insert(failure.message());
+                    continue;
+                }
+            };
+            if typed_call_candidate_matches(self, &argument_types, &candidate) {
+                self.check_contextual_callback_arguments(&arguments, &candidate);
                 return candidate.return_types.clone();
             }
+        }
+
+        if let Some(message) = inference_failure {
+            let span = arguments
+                .iter()
+                .find_map(|argument| match argument {
+                    CallArgument::Expression(expression) => node_span(expression),
+                    CallArgument::Inferred(_) => None,
+                })
+                .or_else(|| node_span(node));
+            let position = span.map_or_else(|| node_position(node), |span| span.start);
+            let mut diagnostic =
+                Diagnostic::error(&self.parsed.path, position.line, position.column, message)
+                    .with_code(DiagnosticCode::TYPE_GENERIC_INFERENCE);
+            if let Some(span) = span {
+                diagnostic = diagnostic.with_range(
+                    span.start.line,
+                    span.start.column,
+                    span.end.line,
+                    span.end.column,
+                );
+            }
+            self.diagnostics.push(diagnostic);
+            return candidates
+                .first()
+                .map(|candidate| candidate.return_types.clone())
+                .unwrap_or_else(|| vec![Type::Any]);
         }
 
         let best_candidate = candidates
@@ -3360,6 +3399,17 @@ impl<'a> Checker<'a> {
         function_call: &'b FunctionCall,
     ) -> Vec<CallArgument<'b>> {
         let mut arguments = call_arguments(function_call).unwrap_or_default();
+
+        if let Some(Suffix::Call(Call::AnonymousCall(FunctionArgs::TableConstructor(table)))) =
+            function_call
+                .suffixes()
+                .find(|suffix| matches!(suffix, Suffix::Call(_)))
+        {
+            let expression = Expression::TableConstructor(table.clone());
+            if let Some(ty) = self.infer_expression(&expression) {
+                arguments = vec![CallArgument::Inferred(ty)];
+            }
+        }
 
         if !is_method_call(function_call) {
             if let Some(receiver_type) = self.class_dot_call_receiver_type(function_call) {
@@ -4205,6 +4255,7 @@ struct ExternalParameter {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct TypedCallCandidate {
+    generic_parameters: Vec<crate::parser::GenericParameter>,
     parameters: Vec<Type>,
     parameter_names: Vec<Option<String>>,
     required_parameter_count: usize,
@@ -4231,6 +4282,7 @@ fn typed_call_candidates(function: &TypedFunction) -> Vec<TypedCallCandidate> {
         .overloads
         .iter()
         .map(|overload| TypedCallCandidate {
+            generic_parameters: Vec::new(),
             parameters: overload
                 .parameters
                 .iter()
@@ -4259,6 +4311,7 @@ fn typed_call_candidates(function: &TypedFunction) -> Vec<TypedCallCandidate> {
         || (function.has_fully_annotated_parameters() && primary_has_typed_parameters)
     {
         candidates.push(TypedCallCandidate {
+            generic_parameters: function.generic_parameters.clone(),
             parameters: function
                 .parameters
                 .iter()
@@ -4277,6 +4330,47 @@ fn typed_call_candidates(function: &TypedFunction) -> Vec<TypedCallCandidate> {
     }
 
     candidates
+}
+
+fn instantiate_typed_call_candidate(
+    checker: &Checker<'_>,
+    candidate: &TypedCallCandidate,
+    argument_types: &[Option<Type>],
+) -> Result<TypedCallCandidate, crate::types::GenericInferenceFailure> {
+    let scheme = FunctionType::new_signature(
+        candidate.parameters.iter().enumerate().map(|(index, ty)| {
+            FunctionParameter::named(
+                candidate
+                    .parameter_names
+                    .get(index)
+                    .and_then(Option::as_deref)
+                    .unwrap_or(""),
+                ty.clone(),
+            )
+        }),
+        candidate.required_parameter_count,
+        candidate.vararg_type.clone(),
+        candidate.return_types.clone(),
+    )
+    .with_generic_parameters(candidate.generic_parameters.clone());
+    let instantiated = instantiate_generic_function(&scheme, argument_types, &checker.context)?;
+    Ok(TypedCallCandidate {
+        generic_parameters: instantiated.generic_parameters.clone(),
+        parameters: instantiated
+            .parameters
+            .iter()
+            .map(|parameter| parameter.ty.clone())
+            .collect(),
+        parameter_names: instantiated
+            .parameters
+            .iter()
+            .map(|parameter| parameter.name.clone())
+            .collect(),
+        required_parameter_count: instantiated.required_parameter_count,
+        has_varargs: instantiated.vararg_type.is_some(),
+        vararg_type: instantiated.vararg_type.as_deref().cloned(),
+        return_types: instantiated.return_types_or_any().to_vec(),
+    })
 }
 
 fn typed_call_candidate_matches(
@@ -4918,7 +5012,9 @@ fn type_from_type_label(label: &str) -> Option<Type> {
 fn callable_from_type(ty: &Type, environment: &TypeEnvironment) -> Option<Callable> {
     match resolve_aliases(ty, environment, 0) {
         Type::Any => Some(Callable::Any),
-        Type::Function(function) if !function.overloads.is_empty() => {
+        Type::Function(function)
+            if !function.overloads.is_empty() || !function.generic_parameters.is_empty() =>
+        {
             Some(Callable::TypedFunction(Box::new(
                 crate::semantic::typed_function_from_function_type(None, function),
             )))

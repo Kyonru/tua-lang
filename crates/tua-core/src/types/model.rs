@@ -3,7 +3,7 @@ use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
 
-use crate::parser::{SourceSpan, TypeAliasId, TypeParameterId};
+use crate::parser::{GenericParameter, SourceSpan, TypeAliasId, TypeParameterId};
 
 const MAX_METATABLE_FIELD_DEPTH: usize = 16;
 
@@ -213,6 +213,7 @@ impl fmt::Display for FunctionParameter {
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct FunctionType {
+    pub generic_parameters: Vec<GenericParameter>,
     pub overloads: Vec<FunctionType>,
     pub parameters: Vec<FunctionParameter>,
     pub required_parameter_count: usize,
@@ -268,6 +269,7 @@ impl FunctionType {
         let required_parameter_count = required_parameter_count.min(parameters.len());
 
         Self {
+            generic_parameters: Vec::new(),
             overloads: Vec::new(),
             parameters,
             required_parameter_count,
@@ -276,6 +278,14 @@ impl FunctionType {
             return_types,
             guarded_return_types: None,
         }
+    }
+
+    pub fn with_generic_parameters(
+        mut self,
+        parameters: impl IntoIterator<Item = GenericParameter>,
+    ) -> Self {
+        self.generic_parameters = parameters.into_iter().collect();
+        self
     }
 
     pub fn with_overloads(mut self, overloads: impl IntoIterator<Item = FunctionType>) -> Self {

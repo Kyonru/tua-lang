@@ -1079,6 +1079,7 @@ pub(crate) fn typed_member(
     };
 
     Some(crate::TypedFunction {
+        generic_parameters: Vec::new(),
         name: Some(format!("{PLAYER_TYPE_NAME}:{member}")),
         parameters: function
             .parameters
@@ -1176,6 +1177,7 @@ fn string_literal_values(ty: &Type) -> Vec<String> {
 
 pub(crate) fn typed_function() -> crate::TypedFunction {
     crate::TypedFunction {
+        generic_parameters: Vec::new(),
         name: Some(HELPER_NAME.to_owned()),
         parameters: vec![TypedParameter {
             name: "config".to_owned(),

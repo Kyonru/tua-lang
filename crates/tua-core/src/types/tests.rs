@@ -2269,3 +2269,140 @@ fn generic_alias_arity_is_checked_in_luadoc_type_tags() {
         "LuaDoc generic applications should use the same arity validation: {diagnostics:#?}"
     );
 }
+
+fn test_generic_parameter(name: &str, ordinal: usize) -> crate::parser::GenericParameter {
+    let span = crate::parser::SourceSpan {
+        start: crate::SourcePosition { line: 1, column: 1 },
+        end: crate::SourcePosition { line: 1, column: 2 },
+    };
+    crate::parser::GenericParameter {
+        id: crate::parser::TypeParameterId {
+            declaration: crate::parser::GenericDeclarationId {
+                module: std::path::PathBuf::from("src/generic.tua"),
+                kind: crate::parser::GenericDeclarationKind::Function,
+                name: "generic".to_owned(),
+                declaration: span,
+            },
+            ordinal,
+        },
+        name: name.to_owned(),
+        name_span: span,
+    }
+}
+
+#[test]
+fn generic_function_instantiation_is_fresh_and_handles_union_any_and_ambiguity() {
+    let binder = test_generic_parameter("T", 0);
+    let generic = Type::GenericParameter {
+        id: binder.id.clone(),
+        name: binder.name.clone(),
+    };
+    let scheme = FunctionType::new_signature(
+        [FunctionParameter::named("value", generic.clone())],
+        1,
+        None,
+        [generic.clone()],
+    )
+    .with_generic_parameters([binder.clone()]);
+    let context = TypeContext::new();
+
+    let number = instantiate_generic_function(&scheme, &[Some(Type::number())], &context)
+        .expect("T should instantiate as number");
+    let string = instantiate_generic_function(&scheme, &[Some(Type::string())], &context)
+        .expect("the next call should independently instantiate T as string");
+    assert_eq!(number.return_types_or_any(), &[Type::number()]);
+    assert_eq!(string.return_types_or_any(), &[Type::string()]);
+    assert_eq!(scheme.return_types_or_any(), &[generic.clone()]);
+    assert_eq!(scheme.generic_parameters, vec![binder.clone()]);
+
+    let nullable = Type::union([generic.clone(), Type::nil()]);
+    let nullable_scheme = FunctionType::new_signature(
+        [FunctionParameter::named("value", nullable.clone())],
+        1,
+        None,
+        [nullable.clone()],
+    )
+    .with_generic_parameters([binder.clone()]);
+    let maybe_number = instantiate_generic_function(
+        &nullable_scheme,
+        &[Some(Type::union([Type::number(), Type::nil()]))],
+        &context,
+    )
+    .expect("the non-nil branch should infer T");
+    assert_eq!(
+        maybe_number.return_types_or_any(),
+        &[Type::union([Type::number(), Type::nil()])]
+    );
+    assert!(
+        instantiate_generic_function(&nullable_scheme, &[Some(Type::nil())], &context)
+            .unwrap_err()
+            .message()
+            .contains("cannot infer generic type parameter `T`")
+    );
+
+    let any = instantiate_generic_function(&nullable_scheme, &[Some(Type::Any)], &context)
+        .expect("explicit any should remain a valid gradual boundary");
+    assert_eq!(
+        any.return_types_or_any(),
+        &[Type::union([Type::Any, Type::nil()])]
+    );
+
+    let empty_array_scheme = FunctionType::new_signature(
+        [FunctionParameter::named("values", Type::array(generic))],
+        1,
+        None,
+        [Type::nil()],
+    )
+    .with_generic_parameters([binder]);
+    assert!(instantiate_generic_function(
+        &empty_array_scheme,
+        &[Some(Type::empty_table())],
+        &context
+    )
+    .unwrap_err()
+    .message()
+    .contains("cannot infer generic type parameter `T`"));
+}
+
+#[test]
+fn generic_substitution_preserves_nested_function_binders() {
+    let outer = test_generic_parameter("T", 0);
+    let mut inner = test_generic_parameter("T", 0);
+    inner.id.declaration.kind = crate::parser::GenericDeclarationKind::Function;
+    inner.id.declaration.name = "nested".to_owned();
+    inner.id.declaration.declaration.end.column = 3;
+    let outer_type = Type::GenericParameter {
+        id: outer.id.clone(),
+        name: outer.name.clone(),
+    };
+    let inner_type = Type::GenericParameter {
+        id: inner.id.clone(),
+        name: inner.name.clone(),
+    };
+    let nested = FunctionType::new_signature(
+        [FunctionParameter::named("inner", inner_type.clone())],
+        1,
+        None,
+        [inner_type.clone()],
+    )
+    .with_generic_parameters([inner.clone()]);
+    let outer_function = FunctionType::new_signature(
+        [FunctionParameter::named("outer", outer_type.clone())],
+        1,
+        None,
+        [Type::Function(nested.clone())],
+    )
+    .with_generic_parameters([outer.clone()]);
+    let substituted = substitute_type_parameters(
+        &Type::Function(outer_function),
+        &std::collections::HashMap::from([(outer.id, Type::number())]),
+    );
+    let Type::Function(substituted) = substituted else {
+        panic!("the substituted type remains a function");
+    };
+    let Type::Function(nested) = &*substituted.return_type else {
+        panic!("the nested scheme remains a function");
+    };
+    assert_eq!(nested.generic_parameters, vec![inner]);
+    assert_eq!(nested.return_types_or_any(), &[inner_type]);
+}

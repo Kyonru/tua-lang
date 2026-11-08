@@ -141,7 +141,7 @@ impl Visitor for TuaDialectValidator<'_> {
 
     fn visit_function_declaration(&mut self, function: &full_moon::ast::FunctionDeclaration) {
         let name = function.name().to_string();
-        if !name.contains(['.', ':']) {
+        if !name.contains(':') {
             self.allow_generic_function(function.body());
         }
     }

@@ -609,7 +609,8 @@ impl ProjectTypeDatabase {
                         return_types,
                     )
                     .with_guarded_return_types(guarded)
-                    .with_overloads(overloads),
+                    .with_overloads(overloads)
+                    .with_generic_parameters(function.generic_parameters.clone()),
                 )
             }
             Type::Table(table) => {
@@ -1059,6 +1060,7 @@ fn builtin_type(name: &str) -> Option<Type> {
 fn typed_function_from_export(name: &str, field: &ModuleExportField) -> TypedFunction {
     match &field.ty {
         Type::Function(function) => TypedFunction {
+            generic_parameters: function.generic_parameters.clone(),
             name: Some(name.to_owned()),
             parameters: function
                 .parameters
@@ -1088,6 +1090,7 @@ fn typed_function_from_export(name: &str, field: &ModuleExportField) -> TypedFun
                 .overloads,
         },
         _ => TypedFunction {
+            generic_parameters: Vec::new(),
             name: Some(name.to_owned()),
             parameters: Vec::new(),
             parameter_count: 0,

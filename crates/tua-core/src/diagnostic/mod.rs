@@ -52,6 +52,7 @@ impl DiagnosticCode {
     pub const TYPE_UNKNOWN_MODULE_EXPORT: Self = Self(1012);
     pub const TYPE_UNPARSED_MODULE: Self = Self(1013);
     pub const TYPE_GENERIC_ALIAS_RECURSION: Self = Self(1014);
+    pub const TYPE_GENERIC_INFERENCE: Self = Self(1015);
     pub const LOWERING_COMPOUND_ASSIGNMENT: Self = Self(2001);
     pub const EMIT_IO: Self = Self(2002);
     pub const EMIT_OUTPUT_COLLISION: Self = Self(2003);
@@ -197,6 +198,7 @@ impl DiagnosticCode {
                 | Self::TYPE_UNKNOWN_MODULE_EXPORT
                 | Self::TYPE_UNPARSED_MODULE
                 | Self::TYPE_GENERIC_ALIAS_RECURSION
+                | Self::TYPE_GENERIC_INFERENCE
                 | Self::LOWERING_COMPOUND_ASSIGNMENT
                 | Self::EMIT_IO
                 | Self::EMIT_OUTPUT_COLLISION

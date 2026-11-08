@@ -3389,6 +3389,7 @@ fn typed_function_from_asset_loader(kind: AssetLoaderKind) -> TypedFunction {
     let parameter_names = kind.parameter_names();
 
     TypedFunction {
+        generic_parameters: Vec::new(),
         name: Some(kind.name().to_owned()),
         parameters: parameter_types
             .into_iter()
@@ -3415,6 +3416,7 @@ fn typed_function_from_vector_constructor() -> TypedFunction {
     let return_type = Type::alias(vector::TYPE_NAME);
 
     TypedFunction {
+        generic_parameters: Vec::new(),
         name: Some(vector::CONSTRUCTOR_NAME.to_owned()),
         parameters: vec![
             TypedParameter {
@@ -3445,6 +3447,7 @@ pub(crate) fn typed_function_from_function_type(
     function: FunctionType,
 ) -> TypedFunction {
     let return_types = function.return_types_or_any().to_vec();
+    let generic_parameters = function.generic_parameters.clone();
     let parameter_count = function.parameters.len();
     let overloads = function
         .overloads
@@ -3461,6 +3464,7 @@ pub(crate) fn typed_function_from_function_type(
         })
         .collect();
     TypedFunction {
+        generic_parameters,
         name,
         parameters: function
             .parameters
@@ -3534,6 +3538,7 @@ pub(crate) fn typed_function_from_lua_item(item: LuaItem) -> Option<TypedFunctio
     }
 
     Some(TypedFunction {
+        generic_parameters: Vec::new(),
         name: Some(item.label.to_owned()),
         parameters,
         parameter_count: 0,

@@ -18,6 +18,7 @@ pub struct RenameTarget {
 pub enum RenameKind {
     SignalEvent,
     TypeAlias,
+    TypeParameter,
     Local,
     Function,
     Parameter,
@@ -200,6 +201,7 @@ pub fn rename_kind_for_definition(kind: DefinitionKind) -> Option<RenameKind> {
         DefinitionKind::Asset => None,
         DefinitionKind::SignalEvent => Some(RenameKind::SignalEvent),
         DefinitionKind::TypeAlias => Some(RenameKind::TypeAlias),
+        DefinitionKind::TypeParameter => Some(RenameKind::TypeParameter),
         DefinitionKind::Local => Some(RenameKind::Local),
         DefinitionKind::Function => Some(RenameKind::Function),
         DefinitionKind::Parameter => Some(RenameKind::Parameter),
@@ -211,6 +213,7 @@ pub fn reference_kind_for_rename(kind: RenameKind) -> ReferenceKind {
     match kind {
         RenameKind::SignalEvent => ReferenceKind::SignalEvent,
         RenameKind::TypeAlias => ReferenceKind::TypeAlias,
+        RenameKind::TypeParameter => ReferenceKind::TypeParameter,
         RenameKind::Local => ReferenceKind::Local,
         RenameKind::Function => ReferenceKind::Function,
         RenameKind::Parameter => ReferenceKind::Parameter,

@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use full_moon::ast::{
-    self, Call, Expression, Field, FunctionCall, Index, LastStmt, Prefix, Suffix, Var,
+    self, Call, Expression, Field, FunctionArgs, FunctionCall, Index, LastStmt, Prefix, Suffix, Var,
 };
 use full_moon::node::Node;
 
@@ -20,9 +20,10 @@ use crate::narrowing::{
     ReturnGuard,
 };
 use crate::parser::{
-    FunctionAnnotation as ParsedFunctionAnnotation, FunctionTypeParameter, LuaDocAnnotation,
-    LuaDocAnnotationKind, LuaDocParam, LuaDocReturnType, ParsedLanguage, ParsedSource, SourceSpan,
-    TableFieldType as ParsedTableFieldType, TuaType,
+    FunctionAnnotation as ParsedFunctionAnnotation, FunctionTypeParameter, GenericDeclarationId,
+    GenericDeclarationKind, GenericParameter, LuaDocAnnotation, LuaDocAnnotationKind, LuaDocParam,
+    LuaDocReturnType, ParsedLanguage, ParsedSource, SourceSpan,
+    TableFieldType as ParsedTableFieldType, TuaType, TypeParameterId,
 };
 use crate::semantic_domains::{BuiltinDomain, BuiltinDomainRegistry};
 use crate::source_text::function_name_table_field;
@@ -34,7 +35,7 @@ use super::model::{
 };
 use super::{
     deduplicate_inferred_types, function_type_from_tua_signature, has_leading_lua_doc_type,
-    widen_inferred_type, FunctionParameter, TypeContext,
+    instantiate_generic_function, widen_inferred_type, FunctionParameter, TypeContext,
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -876,6 +877,7 @@ impl GenericAliasExpansionContext {
                         vararg_type,
                         returns,
                     )
+                    .with_generic_parameters(function.generic_parameters.clone())
                     .with_guarded_return_types(guarded)
                     .with_overloads(overloads),
                 )
@@ -961,6 +963,19 @@ pub(crate) fn substitute_type_parameters(
                 .map(|ty| substitute_type_parameters(ty, substitutions)),
         ),
         Type::Function(function) => {
+            // A nested scheme owns its binders. Keep them bound even when an
+            // enclosing generic alias or call is being instantiated.
+            let nested_substitutions = substitutions
+                .iter()
+                .filter(|(id, _)| {
+                    !function
+                        .generic_parameters
+                        .iter()
+                        .any(|parameter| &parameter.id == *id)
+                })
+                .map(|(id, ty)| (id.clone(), ty.clone()))
+                .collect::<HashMap<_, _>>();
+            let substitutions = &nested_substitutions;
             let parameters = function
                 .parameters
                 .iter()
@@ -981,7 +996,8 @@ pub(crate) fn substitute_type_parameters(
                 function.required_parameter_count,
                 vararg,
                 returns,
-            );
+            )
+            .with_generic_parameters(function.generic_parameters.clone());
             result.guarded_return_types = function.guarded_return_types.as_ref().map(|types| {
                 types
                     .iter()
@@ -1236,6 +1252,7 @@ impl AliasResolutionContext {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TypedFunction {
     pub name: Option<String>,
+    pub generic_parameters: Vec<crate::parser::GenericParameter>,
     pub parameters: Vec<TypedParameter>,
     pub parameter_count: usize,
     pub required_parameter_count: usize,
@@ -1278,6 +1295,7 @@ impl TypedFunction {
                     self.vararg_type.clone(),
                     self.return_types_or_any(),
                 )
+                .with_generic_parameters(self.generic_parameters.clone())
                 .with_guarded_return_types(self.guarded_return_types.clone())
                 .with_overloads(
                     self.overloads
@@ -1523,9 +1541,18 @@ pub(crate) fn build_type_environment_with_domain_registry(
 
     let mut local_contracts = LocalContracts::default();
     for local in &parsed.local_annotations {
+        let local_type = local.type_span.map_or_else(
+            || local.ty.clone(),
+            |span| {
+                crate::parser::bind_generic_parameter_references(
+                    &local.ty,
+                    &generic_parameters_visible_at(parsed, span.start),
+                )
+            },
+        );
         let ty = resolve_tua_type(
             &parsed.path,
-            &local.ty,
+            &local_type,
             local.span,
             &alias_names,
             &mut diagnostics,
@@ -2040,6 +2067,7 @@ fn resolve_function_annotation(
 
     TypedFunction {
         name: function.name.clone(),
+        generic_parameters: function.generic_parameters.clone(),
         parameters,
         parameter_count,
         required_parameter_count,
@@ -2408,6 +2436,96 @@ struct LuaDocGroup<'a> {
     span: SourceSpan,
 }
 
+fn lua_doc_generic_parameters(
+    parsed: &ParsedSource,
+    name: &str,
+    annotations: &[&LuaDocAnnotation],
+    declaration: SourceSpan,
+    diagnostics: &mut Vec<Diagnostic>,
+) -> Vec<GenericParameter> {
+    // Both AST-backed and line-based LuaDoc lowering see the same source
+    // annotations. Anchor binder identity to the generic tag so merging those
+    // independently built views does not report `T` as conflicting with itself.
+    let declaration = annotations
+        .iter()
+        .find(|annotation| matches!(annotation.kind, LuaDocAnnotationKind::Generic(_)))
+        .map(|annotation| annotation.span)
+        .unwrap_or(declaration);
+    let declaration_id = GenericDeclarationId {
+        module: crate::vfs::normalize_path(&parsed.path),
+        kind: GenericDeclarationKind::Function,
+        name: name.to_owned(),
+        declaration,
+    };
+    let mut parameters = Vec::new();
+    let mut names = BTreeSet::new();
+    let has_generic_tag = annotations
+        .iter()
+        .any(|annotation| matches!(annotation.kind, LuaDocAnnotationKind::Generic(_)));
+    if has_generic_tag && name.contains(':') {
+        let span = annotations
+            .iter()
+            .find(|annotation| matches!(annotation.kind, LuaDocAnnotationKind::Generic(_)))
+            .map(|annotation| annotation.span)
+            .unwrap_or(declaration);
+        let diagnostic = Diagnostic::error(
+            &parsed.path,
+            span.start.line,
+            span.start.column,
+            "LuaDoc generic methods are not supported; use a generic free function",
+        )
+        .with_code(DiagnosticCode::SYNTAX_DOC_ANNOTATION);
+        if !diagnostics.contains(&diagnostic) {
+            diagnostics.push(diagnostic);
+        }
+    }
+    for generic in annotations
+        .iter()
+        .filter_map(|annotation| match &annotation.kind {
+            LuaDocAnnotationKind::Generic(generic) => Some(generic),
+            _ => None,
+        })
+    {
+        for parameter in &generic.parameters {
+            if let Some(bound_span) = parameter.bound_span {
+                let diagnostic = Diagnostic::error(
+                        &parsed.path,
+                        bound_span.start.line,
+                        bound_span.start.column,
+                        "LuaDoc generic bounds are not supported yet; use an unbounded `---@generic T` parameter",
+                    )
+                    .with_code(DiagnosticCode::SYNTAX_DOC_ANNOTATION);
+                if !diagnostics.contains(&diagnostic) {
+                    diagnostics.push(diagnostic);
+                }
+            }
+            if !names.insert(parameter.name.clone()) {
+                let diagnostic = Diagnostic::error(
+                    &parsed.path,
+                    parameter.name_span.start.line,
+                    parameter.name_span.start.column,
+                    format!("duplicate LuaDoc generic parameter `{}`", parameter.name),
+                )
+                .with_code(DiagnosticCode::SYNTAX_DOC_ANNOTATION);
+                if !diagnostics.contains(&diagnostic) {
+                    diagnostics.push(diagnostic);
+                }
+                continue;
+            }
+            let ordinal = parameters.len();
+            parameters.push(GenericParameter {
+                id: TypeParameterId {
+                    declaration: declaration_id.clone(),
+                    ordinal,
+                },
+                name: parameter.name.clone(),
+                name_span: parameter.name_span,
+            });
+        }
+    }
+    parameters
+}
+
 fn lua_doc_groups(parsed: &ParsedSource) -> Vec<LuaDocGroup<'_>> {
     let mut by_line = BTreeMap::new();
 
@@ -2512,6 +2630,15 @@ fn lua_doc_function_for_code_line(
 
     let name = annotated_function_name(group.code)?;
     let context = TypeResolutionContext::from_self_type(function_self_type(&name, alias_names));
+    let declaration = SourceSpan {
+        start: group.code_position,
+        end: crate::SourcePosition {
+            line: group.code_position.line,
+            column: group.code_position.column + group.code.len(),
+        },
+    };
+    let generic_parameters =
+        lua_doc_generic_parameters(parsed, &name, &group.annotations, declaration, diagnostics);
     let parameter_names = group
         .annotations
         .iter()
@@ -2527,9 +2654,13 @@ fn lua_doc_function_for_code_line(
             let doc = param_annotations.get(&name);
             let ty = doc
                 .map(|annotation| {
+                    let ty = crate::parser::bind_generic_parameter_references(
+                        &annotation.0.ty,
+                        &generic_parameters,
+                    );
                     resolve_tua_type_with_context(
                         &parsed.path,
-                        &annotation.0.ty,
+                        &ty,
                         Some(annotation.0.type_span),
                         alias_names,
                         diagnostics,
@@ -2553,10 +2684,17 @@ fn lua_doc_function_for_code_line(
                 return_annotation
                     .returns
                     .iter()
-                    .map(|ty| {
+                    .map(|return_type| {
+                        let bound_type = crate::parser::bind_generic_parameter_references(
+                            &return_type.ty,
+                            &generic_parameters,
+                        );
                         resolve_lua_doc_return_type(
                             &parsed.path,
-                            ty,
+                            &LuaDocReturnType {
+                                ty: bound_type,
+                                type_span: return_type.type_span,
+                            },
                             alias_names,
                             diagnostics,
                             &context,
@@ -2572,14 +2710,20 @@ fn lua_doc_function_for_code_line(
         .annotations
         .iter()
         .find_map(|annotation| match &annotation.kind {
-            LuaDocAnnotationKind::Vararg(vararg) => Some(resolve_tua_type_with_context(
-                &parsed.path,
-                &vararg.ty,
-                Some(vararg.type_span),
-                alias_names,
-                diagnostics,
-                &context,
-            )),
+            LuaDocAnnotationKind::Vararg(vararg) => {
+                let ty = crate::parser::bind_generic_parameter_references(
+                    &vararg.ty,
+                    &generic_parameters,
+                );
+                Some(resolve_tua_type_with_context(
+                    &parsed.path,
+                    &ty,
+                    Some(vararg.type_span),
+                    alias_names,
+                    diagnostics,
+                    &context,
+                ))
+            }
             _ => None,
         });
 
@@ -2591,6 +2735,7 @@ fn lua_doc_function_for_code_line(
 
     Some(TypedFunction {
         name: Some(name),
+        generic_parameters,
         parameter_count: parameters.len(),
         required_parameter_count,
         parameters,
@@ -2799,6 +2944,20 @@ pub(crate) fn typed_function_from_lua_doc_body(
         name.as_deref()
             .and_then(|name| function_self_type(name, alias_names)),
     );
+    let generic_name = name.as_deref().unwrap_or("<anonymous-function>");
+    let declaration = node_span(body).unwrap_or_else(|| {
+        docs.iter()
+            .find_map(|annotation| match annotation.kind {
+                LuaDocAnnotationKind::Generic(_) => Some(annotation.span),
+                _ => None,
+            })
+            .unwrap_or(SourceSpan {
+                start: crate::SourcePosition { line: 1, column: 1 },
+                end: crate::SourcePosition { line: 1, column: 1 },
+            })
+    });
+    let generic_parameters =
+        lua_doc_generic_parameters(parsed, generic_name, docs, declaration, diagnostics);
     let parameter_count = body
         .parameters()
         .iter()
@@ -2809,9 +2968,10 @@ pub(crate) fn typed_function_from_lua_doc_body(
         .iter()
         .any(|parameter| matches!(parameter, ast::Parameter::Ellipsis(_)));
     let vararg_type = vararg_annotation.map(|(_, vararg)| {
+        let ty = crate::parser::bind_generic_parameter_references(&vararg.ty, &generic_parameters);
         resolve_tua_type_with_context(
             &parsed.path,
-            &vararg.ty,
+            &ty,
             Some(vararg.type_span),
             alias_names,
             diagnostics,
@@ -2829,9 +2989,13 @@ pub(crate) fn typed_function_from_lua_doc_body(
             let doc = param_annotations.get(&name);
             let ty = doc
                 .map(|annotation| {
+                    let ty = crate::parser::bind_generic_parameter_references(
+                        &annotation.0.ty,
+                        &generic_parameters,
+                    );
                     resolve_tua_type_with_context(
                         &parsed.path,
-                        &annotation.0.ty,
+                        &ty,
                         Some(annotation.0.type_span),
                         alias_names,
                         diagnostics,
@@ -2852,10 +3016,17 @@ pub(crate) fn typed_function_from_lua_doc_body(
             annotation
                 .returns
                 .iter()
-                .map(|ty| {
+                .map(|return_type| {
+                    let ty = crate::parser::bind_generic_parameter_references(
+                        &return_type.ty,
+                        &generic_parameters,
+                    );
                     resolve_lua_doc_return_type(
                         &parsed.path,
-                        ty,
+                        &LuaDocReturnType {
+                            ty,
+                            type_span: return_type.type_span,
+                        },
                         alias_names,
                         diagnostics,
                         &context,
@@ -2874,6 +3045,7 @@ pub(crate) fn typed_function_from_lua_doc_body(
 
     Some(TypedFunction {
         name,
+        generic_parameters,
         parameters,
         parameter_count,
         required_parameter_count,
@@ -3020,6 +3192,35 @@ fn overload_from_tua_type(
     })
 }
 
+fn generic_parameters_visible_at(
+    parsed: &ParsedSource,
+    position: crate::SourcePosition,
+) -> Vec<GenericParameter> {
+    let mut functions = parsed
+        .function_annotations
+        .iter()
+        .filter(|function| {
+            function.span.is_some_and(|span| {
+                (position.line, position.column) >= (span.start.line, span.start.column)
+                    && (position.line, position.column) <= (span.end.line, span.end.column)
+            })
+        })
+        .collect::<Vec<_>>();
+    functions.sort_by_key(|function| {
+        function.span.map_or((usize::MAX, usize::MAX), |span| {
+            (
+                span.end.line.saturating_sub(span.start.line),
+                span.end.column.saturating_sub(span.start.column),
+            )
+        })
+    });
+
+    functions
+        .into_iter()
+        .flat_map(|function| function.generic_parameters.iter().cloned())
+        .collect()
+}
+
 fn function_type_parameter_is_vararg(parameter: &FunctionTypeParameter) -> bool {
     parameter.variadic
         || parameter.name.as_deref() == Some("...")
@@ -3124,6 +3325,21 @@ fn merge_doc_function(
                 &parsed.path,
                 span,
                 format!("conflicting annotations for `{name}`: parameter count differs"),
+            ),
+        );
+    }
+
+    if existing.generic_parameters.is_empty() {
+        existing.generic_parameters = function.generic_parameters.clone();
+    } else if !function.generic_parameters.is_empty()
+        && existing.generic_parameters != function.generic_parameters
+    {
+        push_doc_conflict(
+            state.diagnostics,
+            doc_conflict_diagnostic(
+                &parsed.path,
+                span,
+                format!("conflicting generic binders for `{name}`"),
             ),
         );
     }
@@ -3709,6 +3925,7 @@ fn function_types_by_name(
                         function.vararg_type.clone(),
                         return_types,
                     )
+                    .with_generic_parameters(function.generic_parameters.clone())
                     .with_guarded_return_types(guarded)
                     .with_overloads(
                         function
@@ -4864,7 +5081,7 @@ fn infer_first_function_call_return_types(
             });
 
         return function_type
-            .map(|ty| function_return_types(query.context.aliases, &ty))
+            .map(|ty| instantiated_call_return_types(query, function_call, ty))
             .unwrap_or_default();
     }
 
@@ -4908,7 +5125,7 @@ fn infer_first_function_call_return_types(
         query.locals,
         &parts,
     )
-    .map(|ty| function_return_types(query.context.aliases, &ty))
+    .map(|ty| instantiated_call_return_types(query, function_call, ty))
     .or_else(|| {
         let root = parts.first()?;
         if query.locals.contains_key(root) || query.context.function_types.contains_key(root) {
@@ -4919,6 +5136,56 @@ fn infer_first_function_call_return_types(
             .map(|item| return_types_from_lua_function_detail(item.detail))
     })
     .unwrap_or_default()
+}
+
+fn instantiated_call_return_types(
+    query: ExpressionInferenceQuery<'_, '_>,
+    function_call: &FunctionCall,
+    ty: Type,
+) -> Vec<Type> {
+    let Type::Function(function) = resolve_aliases_from_map(query.context.aliases, &ty, 0) else {
+        return Vec::new();
+    };
+    if function.generic_parameters.is_empty() {
+        return function_return_types(query.context.aliases, &Type::Function(function));
+    }
+
+    let context = query
+        .context
+        .aliases
+        .iter()
+        .fold(TypeContext::new(), |context, (name, ty)| {
+            context.with_alias(crate::types::TypeAlias::new(name.clone(), ty.clone()))
+        });
+    let arguments = function_call_argument_types(query, function_call);
+    instantiate_generic_function(&function, &arguments, &context)
+        .map(|function| function.return_types_or_any().to_vec())
+        .unwrap_or_else(|_| function.return_types_or_any().to_vec())
+}
+
+fn function_call_argument_types(
+    query: ExpressionInferenceQuery<'_, '_>,
+    call: &FunctionCall,
+) -> Vec<Option<Type>> {
+    let Some(arguments) = call.suffixes().find_map(|suffix| match suffix {
+        Suffix::Call(Call::AnonymousCall(args)) => Some(args),
+        Suffix::Call(Call::MethodCall(method)) => Some(method.args()),
+        _ => None,
+    }) else {
+        return Vec::new();
+    };
+    match arguments {
+        FunctionArgs::Parentheses { arguments, .. } => arguments
+            .iter()
+            .map(|expression| query.type_of(expression))
+            .collect(),
+        FunctionArgs::String(_) => vec![Some(Type::string())],
+        FunctionArgs::TableConstructor(table) => {
+            let expression = Expression::TableConstructor(table.clone());
+            vec![query.type_of(&expression)]
+        }
+        _ => Vec::new(),
+    }
 }
 
 fn optional_index_value_type(collection: Type) -> Option<Type> {

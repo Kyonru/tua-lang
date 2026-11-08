@@ -451,6 +451,18 @@ impl TypeContext {
         ))
     }
 
+    pub(crate) fn expand_generic_alias_application(&self, ty: &Type) -> Option<Type> {
+        let Type::GenericAliasApplication {
+            reference,
+            arguments,
+            ..
+        } = ty
+        else {
+            return None;
+        };
+        self.expand_generic_alias(reference, arguments)
+    }
+
     fn is_nominal_subtype(&self, source: &str, target: &str, depth: usize) -> bool {
         if source == target {
             return true;

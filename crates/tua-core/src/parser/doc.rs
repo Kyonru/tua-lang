@@ -377,27 +377,52 @@ fn parse_generic(
 
     while cursor < line.len() {
         cursor = skip_spaces_and_commas(line, cursor);
-
         if cursor >= line.len() {
             break;
         }
 
-        let Some((name, name_span, next)) = take_generic_token_at(line, line_number, cursor) else {
-            break;
-        };
-        let (name, bound, bound_span) = match name.split_once(':') {
-            Some((raw_name, raw_bound))
-                if !raw_name.trim().is_empty() && !raw_bound.trim().is_empty() =>
-            {
-                let bound_start = cursor + raw_name.len() + 1;
-                (
-                    raw_name.trim().to_owned(),
-                    Some(parse_type_text(raw_bound)),
-                    Some(line_span(line_number, bound_start, cursor + name.len())),
-                )
+        let name_start = cursor;
+        let name_end = line[cursor..]
+            .char_indices()
+            .find_map(|(offset, ch)| {
+                (!ch.is_ascii_alphanumeric() && ch != '_').then_some(cursor + offset)
+            })
+            .unwrap_or(line.len());
+        if name_end == name_start {
+            return Err("expected generic parameter name".to_owned());
+        }
+        let name = line[name_start..name_end].to_owned();
+        let name_span = line_span(line_number, name_start, name_end);
+        let colon_at = skip_spaces(line, name_end);
+        let (bound, bound_span, next) = if line[colon_at..].starts_with(':') {
+            let bound_start = skip_spaces(line, colon_at + 1);
+            let bound_parts = split_top_level(&line[bound_start..], ',');
+            let raw_bound = bound_parts.first().copied().unwrap_or_default();
+            let trimmed_bound = raw_bound.trim();
+            if trimmed_bound.is_empty() {
+                return Err("expected generic bound after `:`".to_owned());
             }
-            Some(_) => return Err("expected generic bound after `:`".to_owned()),
-            None => (name, None, None),
+            let leading = raw_bound.len() - raw_bound.trim_start().len();
+            let span_start = bound_start + leading;
+            let span_end = span_start + trimmed_bound.len();
+            let bound_end = bound_start + raw_bound.len();
+            let next = if line[bound_end..].starts_with(',') {
+                bound_end + 1
+            } else {
+                bound_end
+            };
+            (
+                Some(parse_type_text(trimmed_bound)),
+                Some(line_span(line_number, span_start, span_end)),
+                next,
+            )
+        } else {
+            let next = if line[colon_at..].starts_with(',') {
+                colon_at + 1
+            } else {
+                colon_at
+            };
+            (None, None, next)
         };
 
         parameters.push(LuaDocGenericParameter {
@@ -406,12 +431,7 @@ fn parse_generic(
             bound,
             bound_span,
         });
-
         cursor = next;
-
-        if !line[cursor..].trim_start().starts_with(',') {
-            break;
-        }
     }
 
     if parameters.is_empty() {
@@ -1175,29 +1195,6 @@ fn take_token_at(
     let end = line[cursor..]
         .char_indices()
         .find_map(|(offset, ch)| ch.is_whitespace().then_some(cursor + offset))
-        .unwrap_or(line.len());
-
-    (end > cursor).then(|| {
-        (
-            line[cursor..end].to_owned(),
-            line_span(line_number, cursor, end),
-            end,
-        )
-    })
-}
-
-fn take_generic_token_at(
-    line: &str,
-    line_number: usize,
-    cursor: usize,
-) -> Option<(String, SourceSpan, usize)> {
-    if cursor >= line.len() {
-        return None;
-    }
-
-    let end = line[cursor..]
-        .char_indices()
-        .find_map(|(offset, ch)| (ch.is_whitespace() || ch == ',').then_some(cursor + offset))
         .unwrap_or(line.len());
 
     (end > cursor).then(|| {

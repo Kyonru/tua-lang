@@ -1,6 +1,7 @@
 mod assignability;
 mod environment;
 mod format;
+mod inference;
 mod model;
 
 use std::collections::{BTreeMap, HashMap};
@@ -20,6 +21,7 @@ pub(crate) use environment::{
     resolve_chained_call_returns, substitute_type_parameters,
 };
 pub(crate) use format::{format_named_function_pretty, format_type_with_prefix};
+pub(crate) use inference::{instantiate_generic_function, GenericInferenceFailure};
 pub use model::{
     FunctionParameter, FunctionType, GenericAliasDefinition, GenericAliasReference, IndexFallback,
     MetatableFacts, NewIndexRule, PrimitiveType, TableField, TableShape, Type, TypeAlias,
@@ -180,6 +182,7 @@ pub(crate) fn widen_inferred_type(ty: &Type) -> Type {
                     .iter()
                     .map(widen_inferred_type),
             )
+            .with_generic_parameters(function.generic_parameters.clone())
             .with_guarded_return_types(
                 function
                     .guarded_return_types

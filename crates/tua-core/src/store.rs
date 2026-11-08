@@ -199,6 +199,7 @@ fn typed_watch_method(environment: &TypeEnvironment, state_type: Type) -> TypedF
     }
 
     TypedFunction {
+        generic_parameters: Vec::new(),
         name: Some(format!("{TYPE_NAME}:watch")),
         parameters: vec![
             parameter("self", Type::Any),
@@ -259,6 +260,7 @@ fn typed_function(
     let parameters = parameters.into_iter().collect::<Vec<_>>();
 
     TypedFunction {
+        generic_parameters: Vec::new(),
         name: Some(name.to_owned()),
         parameter_count: parameters.len(),
         required_parameter_count: parameters.len(),

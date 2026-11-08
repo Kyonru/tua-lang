@@ -24,6 +24,7 @@ pub enum ReferenceKind {
     Asset,
     SignalEvent,
     TypeAlias,
+    TypeParameter,
     Local,
     Function,
     Parameter,
@@ -78,6 +79,47 @@ pub fn references_to_definition_parsed_source_with_artifacts(
 ) -> Result<Vec<Reference>, Vec<Diagnostic>> {
     if target.kind == DefinitionKind::Builtin {
         return Ok(Vec::new());
+    }
+
+    if target.kind == DefinitionKind::TypeParameter {
+        if target.path != parsed.path {
+            return Ok(Vec::new());
+        }
+        let parameter = parsed
+            .function_annotations
+            .iter()
+            .flat_map(|function| &function.generic_parameters)
+            .find(|parameter| parameter.name_span == target.span);
+        let Some(parameter) = parameter else {
+            return Ok(Vec::new());
+        };
+        let mut references = source_identifiers(&parsed.source)
+            .into_iter()
+            .filter_map(|identifier| {
+                let resolved = crate::analysis::generic_function_parameter_at_position(
+                    parsed,
+                    identifier.span.start,
+                )?;
+                (resolved.id == parameter.id).then_some(Reference {
+                    path: parsed.path.clone(),
+                    span: identifier.span,
+                    kind: ReferenceKind::TypeParameter,
+                })
+            })
+            .collect::<Vec<_>>();
+        if include_declaration
+            && !references
+                .iter()
+                .any(|reference| reference.span == target.span)
+        {
+            references.push(Reference {
+                path: parsed.path.clone(),
+                span: target.span,
+                kind: ReferenceKind::TypeParameter,
+            });
+        }
+        references.sort_by_key(|reference| position_key(reference.span.start));
+        return Ok(references);
     }
 
     if let Some(references) =
@@ -253,6 +295,7 @@ fn scope_kind_for_definition(kind: DefinitionKind) -> Option<ScopeDeclarationKin
         | DefinitionKind::Asset
         | DefinitionKind::SignalEvent
         | DefinitionKind::TypeAlias
+        | DefinitionKind::TypeParameter
         | DefinitionKind::TableField => None,
     }
 }
@@ -517,6 +560,7 @@ fn reference_kind(kind: DefinitionKind) -> ReferenceKind {
         DefinitionKind::Asset => ReferenceKind::Asset,
         DefinitionKind::SignalEvent => ReferenceKind::SignalEvent,
         DefinitionKind::TypeAlias => ReferenceKind::TypeAlias,
+        DefinitionKind::TypeParameter => ReferenceKind::TypeParameter,
         DefinitionKind::Local => ReferenceKind::Local,
         DefinitionKind::Function => ReferenceKind::Function,
         DefinitionKind::Parameter => ReferenceKind::Parameter,

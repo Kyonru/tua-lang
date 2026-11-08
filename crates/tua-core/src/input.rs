@@ -483,6 +483,7 @@ fn typed_member_for_spec(member: &str, spec: &InputSpec, exact: bool) -> Option<
             }
 
             Some(TypedFunction {
+                generic_parameters: Vec::new(),
                 name: Some(format!("Input:{member}")),
                 parameters: vec![
                     parameter("self", Type::Any),
@@ -514,6 +515,7 @@ fn typed_member_for_spec(member: &str, spec: &InputSpec, exact: bool) -> Option<
             },
         )),
         "down" | "pressed" | "released" if exact => Some(TypedFunction {
+            generic_parameters: Vec::new(),
             name: Some(format!("Input:{member}")),
             parameters: vec![
                 parameter("self", Type::Any),
@@ -742,6 +744,7 @@ fn typed_function(
     let returns = returns.into_iter().collect::<Vec<_>>();
 
     TypedFunction {
+        generic_parameters: Vec::new(),
         name: Some(name.to_owned()),
         parameter_count: parameters.len(),
         required_parameter_count: parameters.len(),

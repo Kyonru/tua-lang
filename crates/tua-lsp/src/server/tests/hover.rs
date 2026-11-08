@@ -298,6 +298,51 @@ return {
 }
 
 #[test]
+fn imported_generic_function_hover_and_signature_keep_the_scheme() {
+    let temp = TempProject::new("imported-generic-function-editor");
+    let source = r#"local Generic = require("generic")
+local generic_text = Generic.identity("ready")
+"#;
+    let generic = r#"local function identity<T>(value: T): T
+  return value
+end
+return { identity = identity }
+"#;
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/main.tua", source);
+    temp.write("src/generic.tua", generic);
+
+    let parsed_generic = tua_core::parse_tua_source("src/generic.tua", generic).unwrap();
+    let exports = tua_core::module_index::infer_module_exports(&parsed_generic)
+        .expect("generic module should export its returned table");
+    let Some(tua_core::Type::Function(exported_identity)) =
+        exports.fields.get("identity").map(|field| &field.ty)
+    else {
+        panic!("identity export should retain its function type: {exports:#?}");
+    };
+    assert_eq!(
+        exported_identity.generic_parameters.len(),
+        1,
+        "{exports:#?}"
+    );
+
+    let uri = temp.uri_for("src/main.tua");
+    let output = run_messages(vec![
+        initialize_with_root(1, temp.uri()),
+        did_open(&uri, source),
+        hover_request(2, &uri, source, "identity(\"ready\""),
+        signature_help_request(3, &uri, source, "identity(\"ready\""),
+    ]);
+
+    assert_hover_contains(&output, 2, "function Generic.identity<T>(value: T): T");
+    assert_signature_label(
+        &output,
+        3,
+        "function Generic.identity(value: string): string",
+    );
+}
+
+#[test]
 fn hover_preserves_inferred_ecs_types_from_required_module_exports() {
     let temp = TempProject::new("required-ecs-module-hover");
     let source = r#"local ECS = require("ecs_state")

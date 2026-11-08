@@ -699,6 +699,7 @@ fn typed_function_from_type(
         .collect::<Vec<_>>();
 
     TypedFunction {
+        generic_parameters: Vec::new(),
         name: Some(name.to_owned()),
         parameter_count: parameters.len(),
         required_parameter_count: function.required_parameter_count,

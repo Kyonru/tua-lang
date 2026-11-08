@@ -9,17 +9,17 @@ use crate::module_index::{
 };
 use crate::module_link::module_specifier_at_position;
 use crate::narrowing::narrowed_type_at_position;
-use crate::semantic::{SemanticModel, resolve_aliases};
+use crate::semantic::{resolve_aliases, SemanticModel};
 use crate::source_text::{
     doc_type_chain_at_position, dotted_chain_at_position, leading_doc_comment, line_at,
 };
 use crate::types::{
-    FunctionParameter, FunctionType, Type, TypeEnvironment, TypedFunction, TypedFunctionOverload,
     build_type_environment, format_named_function_pretty, format_type_with_prefix,
+    FunctionParameter, FunctionType, Type, TypeEnvironment, TypedFunction, TypedFunctionOverload,
 };
 use crate::{
-    Definition, DefinitionKind, Diagnostic, ParsedSource, SourcePosition, SourceSpan,
     definition_parsed_source, ecs, input, object_pool, parse_tua_source, state_machine, store,
+    Definition, DefinitionKind, Diagnostic, ParsedSource, SourcePosition, SourceSpan,
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -876,6 +876,7 @@ fn definition_kind_label(kind: DefinitionKind) -> &'static str {
         DefinitionKind::Asset => "asset",
         DefinitionKind::SignalEvent => "signal event",
         DefinitionKind::TypeAlias => "type alias",
+        DefinitionKind::TypeParameter => "type parameter",
         DefinitionKind::Local => "local",
         DefinitionKind::Function => "function",
         DefinitionKind::Parameter => "parameter",
@@ -900,8 +901,12 @@ fn format_export_hover(parts: &[String], ty: &Type) -> String {
 }
 
 fn format_export_function(name: &str, function: &FunctionType) -> String {
+    let name = format!(
+        "{name}{}",
+        generic_parameter_suffix(&function.generic_parameters)
+    );
     format_named_function_pretty(
-        name,
+        &name,
         &function.parameters,
         function.vararg_type.is_some(),
         function.vararg_type.as_deref(),
