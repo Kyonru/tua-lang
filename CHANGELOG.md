@@ -12,6 +12,8 @@ language or editor behavior, and migration notes call out those changes.
   parameters and arrays, exported protocol types, and erased type-only imports.
 - Semantic tokens identify protocol declarations and type uses with the LSP
   interface token class.
+- Imported protocol member types remain visible in inlay hints and type
+  explanations.
 
 ### Fixed
 

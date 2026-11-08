@@ -32,9 +32,10 @@ completion claim. The detailed contributor plan is kept locally in
    and incomplete declarations. Core/LSP request coverage exercises completion,
    hover, signature help, definition, implementation navigation, references,
    rename, and semantic tokens across type-only imports; a real-process probe
-   confirms completion after an incomplete imported-protocol edit. Inlays,
-   type explanations, installed VS Code, and full module-freshness qualification
-   remain open. Use the shared model rather than feature-local checks.
+   confirms completion after an incomplete imported-protocol edit. Inlay hints
+   and type explanations also preserve protocol members through core/LSP
+   requests. Installed VS Code and full module-freshness qualification remain
+   open. Use the shared model rather than feature-local checks.
 3. **Add scoped generic aliases and functions.** Introduce declaration-owned
    type parameters and shared substitution/inference; preserve return tuples,
    callback signatures, imports, and declaration identity. Make unsupported

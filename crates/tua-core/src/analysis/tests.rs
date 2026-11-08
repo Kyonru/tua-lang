@@ -5910,6 +5910,46 @@ end
 }
 
 #[test]
+fn protocol_types_flow_through_inlays_and_type_explanations() {
+    let fixture = Fixture::parse(
+        r#"protocol Updatable {
+  update(dt: number): nil
+}
+
+local function tick(value: Updatable, dt: number)
+  local current = value
+  current:<|call|>update(dt)
+end
+"#,
+    );
+    let path = PathBuf::from("src/main.tua");
+    let mut host = AnalysisHost::new();
+    host.set_file(&path, fixture.source("src/main.tua"));
+    let snapshot = host.snapshot();
+
+    let hints = snapshot.inlay_hints(&path);
+    assert!(
+        hints.iter().any(|hint| hint.label.contains("Updatable")),
+        "inferred local hints should preserve the protocol type: {hints:#?}"
+    );
+
+    let explanation = snapshot
+        .explain_type(&path, fixture.position("call"))
+        .expect("protocol method should have a type explanation");
+    assert!(
+        explanation.ty.to_string().contains("number"),
+        "protocol method explanation should retain its signature: {explanation:#?}"
+    );
+    assert!(
+        explanation
+            .steps
+            .iter()
+            .any(|step| step.ty.as_ref().is_some_and(|ty| ty.to_string().contains("number"))),
+        "the explanation path should identify the protocol method's typed receiver: {explanation:#?}"
+    );
+}
+
+#[test]
 fn imported_protocol_completion_survives_incomplete_method_edit() {
     let valid = r#"import type { Updatable } from "./contracts"
 local function tick(value: Updatable, dt: number)
