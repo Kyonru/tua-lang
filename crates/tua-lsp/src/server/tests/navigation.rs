@@ -1079,11 +1079,7 @@ end
 
     assert_completion_labels(&completion_output, 2, ["update"]);
     assert_completion_labels(&completion_output, 3, ["update"]);
-    assert_hover_contains(
-        &hover_output,
-        2,
-        "(field) update: (self: any, dt: number) -> nil",
-    );
+    assert_hover_contains(&hover_output, 2, "(method) update: (dt: number) -> nil");
     assert_signature_label(
         &signature_output,
         2,

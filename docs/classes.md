@@ -112,7 +112,8 @@ for module boundaries.
 Protocol bodies currently describe methods only. They do not declare fields,
 default implementations, or protocol inheritance. From a protocol-typed
 method call, completion, hover signatures, and signature help use the declared
-requirement. Go to definition opens the requirement and go to implementation
+requirement; method hover and signature help omit the implicit receiver. Go to
+definition opens the requirement and go to implementation
 lists the statically known conforming methods in the workspace, including
 methods found through type-only imports. Comments on protocol requirements are
 not yet propagated into hover documentation, and protocol method references

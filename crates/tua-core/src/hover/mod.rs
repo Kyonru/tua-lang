@@ -258,8 +258,12 @@ impl<'a> HoverResolver<'a> {
             }
 
             if let Some(ty) = self.semantic.type_of_field_chain(&field_parts, position) {
+                let method = member_access_separator(&self.parsed.source, current_part.span.start)
+                    == Some(b':');
+                let (prefix, display_type) =
+                    method_hover_presentation(&current_part.text, &ty, method);
                 let mut result = hover(
-                    format_type_with_prefix(format!("(field) {}: ", current_part.text), &ty),
+                    format_type_with_prefix(prefix, &display_type),
                     Some(current_part.span),
                 );
                 let definition = definition_parsed_source(self.parsed, position)
@@ -704,6 +708,32 @@ fn format_function_signature(function: &TypedFunction) -> String {
     );
 
     signatures.join("\n")
+}
+
+fn member_access_separator(source: &str, position: SourcePosition) -> Option<u8> {
+    let line = line_at(source, position.line)?;
+    let byte = crate::source_text::byte_for_column(line, position.column);
+    byte.checked_sub(1)
+        .and_then(|separator| line.as_bytes().get(separator).copied())
+        .filter(|separator| matches!(separator, b'.' | b':'))
+}
+
+fn method_hover_presentation(name: &str, ty: &Type, is_colon_access: bool) -> (String, Type) {
+    let Type::Function(function) = ty else {
+        return (format!("(field) {name}: "), ty.clone());
+    };
+    let has_implicit_receiver = function
+        .parameters
+        .first()
+        .is_some_and(|parameter| parameter.name.as_deref() == Some("self"));
+    if !is_colon_access || !has_implicit_receiver {
+        return (format!("(field) {name}: "), ty.clone());
+    }
+
+    let mut function = function.clone();
+    function.parameters.remove(0);
+    function.required_parameter_count = function.required_parameter_count.saturating_sub(1);
+    (format!("(method) {name}: "), Type::Function(function))
 }
 
 fn should_show_primary_typed_signature(function: &TypedFunction) -> bool {

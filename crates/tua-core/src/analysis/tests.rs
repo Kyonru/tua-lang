@@ -5860,6 +5860,8 @@ end
     let hover = hover.expect("protocol method should have a hover");
     assert!(hover.contents.contains("update"), "{hover:#?}");
     assert!(hover.contents.contains("number"), "{hover:#?}");
+    assert!(hover.contents.contains("(method)"), "{hover:#?}");
+    assert!(!hover.contents.contains("self: any"), "{hover:#?}");
 }
 
 #[test]
