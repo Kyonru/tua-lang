@@ -183,6 +183,62 @@ end
 - Reuse shared binder/substitution machinery for supported LuaDoc `@generic`
   forms; unsupported annotation forms must remain clearly documented.
 
+### Generic design decisions (G0)
+
+The first native generic release uses a narrow, type-only surface:
+
+```tua
+type Box<T> = { value: T }
+type Result<T, E> = { value: T | nil, error: E | nil }
+local box: Box<number> = { value = 4 }
+```
+
+- Only type aliases accept generic parameters in G1. Parameters are ordered,
+  required, unbounded, and non-variadic. Generic classes and function
+  declarations remain rejected until their own milestones land.
+- Applications use `Name<Arg, ...>` only in type positions. Explicit call-site
+  type arguments are excluded from the initial function inference design, so
+  `f<T>(x)` cannot be mistaken for a comparison expression. Defaults, packs,
+  higher-kinded types, variance annotations, and generic protocols are deferred.
+- Each parameter has a stable identity derived from its owning type declaration
+  identity and ordinal. Type resolution binds by identity, never by the printed
+  spelling alone; a parameter named `T` shadows an outer/imported alias `T`
+  within its declaration body. Navigation retains each declaration span.
+- The parser model stores declaration binders and a structured type application
+  node with source spans. The semantic type model preserves an instantiated
+  alias reference (declaration identity plus arguments) until resolution; it
+  must not eagerly stringify or globally mutate the generic declaration.
+- Alias expansion uses simultaneous substitution over the complete type tree.
+  A substitution value is inserted as-is rather than recursively substituted
+  again, which prevents capture and order-dependent replacement. Recursive
+  aliases are allowed when their instantiated expansion revisits the same
+  declaration with compatible arguments; expansion depth and work are bounded.
+- Generic alias arity is exact. Bare uses of a generic alias, extra or missing
+  arguments, and unknown generic names are errors at the smallest relevant
+  type span. They never silently become `any`. G1 does not infer arguments.
+- Generic alias declarations and applications erase completely. Runtime
+  expressions, evaluation order, module loading, and emitted Lua are unchanged.
+  Formatter round-trips preserve syntax; Lua 5.1 output contains no type syntax.
+- G2 introduces first-order generic function binders and call inference using
+  the same IDs and substitution engine. Its solver begins with constraints from
+  declared argument/expected parameter pairs, uses assignability constraints
+  for repeated occurrences, and reports unresolved required variables rather
+  than widening them to `any`. A body must type-check under symbolic binders
+  before any call is considered. Callback context and return-only variables
+  require explicit ambiguity diagnostics until a sound inference rule is
+  implemented.
+- G3 generic class parameters are invariant because instances are mutable.
+  Subtyping does not widen `Pool<Derived>` to `Pool<Base>`. Protocol bounds are
+  checked through existing conformance facts, while the constructed value keeps
+  its concrete class identity and substituted inherited members.
+- Initial implementation limits will be explicit constants with boundary
+  tests: maximum type nesting, recursive alias expansion work, per-request type
+  instantiations, and retained memoized instances. Cancellation and caches must
+  include source/module revision plus declaration identity and arguments.
+- LuaCATS `@generic` is not enabled by G1. The G2 parity gate must name each
+  accepted LuaCATS form and normalize it to the same binder model; unsupported
+  LuaCATS forms remain diagnosed or documented as unsupported.
+
 ## 4. Shared architecture and implementation boundaries
 
 Paths below are relative to `crates/tua-core/src` unless stated otherwise.
@@ -224,7 +280,7 @@ from the tests and current documentation that prove it.
 | P3 | Modules and invalidation; P2 | Type imports, exports/re-exports, declaration-file contracts, cycles and missing modules. Unsaved contract/member edits refresh dependents without transient false errors. | Partial: exported protocols, named type-only imports, and project diagnostics for missing/incompatible imported methods work. Re-exports, declaration modules, cycle behavior, and saved/unsaved invalidation remain open. | L |
 | P4 | Complete protocol IDE slice; P3 | Member completion, hover/docs, signatures, inlays, definitions, implementations, references/rename, tokens, type explanations, actionable diagnostics. Verify real LSP responses and installed VS Code. | Partial: definition and implementation navigation now have core and LSP request tests across type-only imports, using a snapshot-owned reverse conformance index. Protocol-aware references/rename, tokens, explanations, verification of completion/hover/signature/inlay behavior, and installed VS Code qualification remain open. | L |
 | P5 | Usable protocol examples/docs; P4 | Add runnable game/UI and negative examples, runtime/source-map/hot-reload qualification; preserve adapters for Lua interop. | Partial: class/typing/module docs and a feature-tour sample now explain the shipped slice; an audit game build ran under system Lua with a LOVE shim. LOVE/LuaJIT, source maps, hot reload, editor UX, and visual behavior remain unverified. | M |
-| G0 | Binder/substitution design; after P5 | Specify generic inference, recursive types, variance, first-class functions, contextual typing, limits and error policy; reuse protocol bounds. No unused framework-only abstraction. | Open: no generic syntax or binder design implementation. | M |
+| G0 | Binder/substitution design; after P5 | Specify generic inference, recursive types, variance, first-class functions, contextual typing, limits and error policy; reuse protocol bounds. No unused framework-only abstraction. | Decisions recorded above: native alias syntax, binder identity, substitution semantics, arity/error behavior, inference boundaries, erasure, mutability variance, and resource limits. G1 implementation remains open. | M |
 | G1 | Generic aliases; G0 | Scoped binder IDs, arity checks, type applications, bounded capture-avoiding substitution, recursion/occurs handling, imports and IDE display. Connect machinery to its first consumer. | Open. | L |
 | G2 | Generic functions; G1 | Universally checked bodies, per-call inference, returns/callbacks, independent instantiations, navigation and actionable failures; align supported LuaDoc forms. | Open. | L |
 | G3 | Generic classes and bounds; G2 | Constructor inference, instance members, inherited substitutions, `Self`, invariant mutable containers and protocol constraints. Retain runtime/class identity and editor parity. | Open. | L |
