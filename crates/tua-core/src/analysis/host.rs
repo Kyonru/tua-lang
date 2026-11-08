@@ -1956,12 +1956,18 @@ impl AnalysisHost {
             return;
         };
         let mut cache = self.cache.borrow_mut();
+        let mut last_good_files = self.last_good_files.borrow_mut();
         for (path, file) in &snapshot.snapshot.files {
-            if cache.files.contains_key(path)
-                || snapshot.snapshot.vfs.source_version(path) != self.vfs.source_version(path)
+            if snapshot.snapshot.vfs.source_version(path) != self.vfs.source_version(path)
                 || self.vfs.source(path) != Some(file.source.as_str())
                 || self.vfs.kind(path).map(analysis_source_kind) != Some(file.kind)
             {
+                continue;
+            }
+            if file.parsed.is_ok() {
+                last_good_files.insert(path.clone(), file.clone());
+            }
+            if cache.files.contains_key(path) {
                 continue;
             }
             cache.update_dependencies(path, file);

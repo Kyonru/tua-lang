@@ -122,6 +122,9 @@ protocol-typed calls across the workspace. The [feature-tour
 example](https://github.com/Kyonru/tua-lang/blob/main/examples/features/src/protocols.tua)
 exercises this language feature.
 
+While editing a protocol-typed method call, invoked completion keeps using the
+last valid project types until the incomplete edit is repaired.
+
 Conformance does not add a wrapper, proxy, or generated interface table. The
 class still lowers to its normal Lua table and metatable, and a call through a
 protocol-typed value remains a virtual colon call. For example:

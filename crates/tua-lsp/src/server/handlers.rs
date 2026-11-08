@@ -1417,14 +1417,16 @@ impl LspServer {
             .analysis
             .fast_field_completion_for_uri(request.uri, position)
         {
-            return lsp_completion_array(
-                request.uri,
-                position,
-                source,
-                completions,
-                self.client_completion_label_details,
-                self.client_completion_snippets,
-            );
+            if !completions.is_empty() {
+                return lsp_completion_array(
+                    request.uri,
+                    position,
+                    source,
+                    completions,
+                    self.client_completion_label_details,
+                    self.client_completion_snippets,
+                );
+            }
         }
         if completion_request_is_invoked(message) {
             if let Some((position, mut completions)) = self

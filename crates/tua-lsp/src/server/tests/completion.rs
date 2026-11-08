@@ -547,6 +547,37 @@ fn triggered_field_completion_uses_open_document_fast_path() {
         "known current-file receivers should parse only the active document"
     );
 }
+
+#[test]
+fn invoked_protocol_completion_falls_back_after_incomplete_import_edit() {
+    let temp = TempProject::new("protocol-incomplete-invoked-completion");
+    let main_uri = temp.uri_for("src/main.tua");
+    let contracts = "export protocol Updatable {\n  update(dt: number): nil\n}\n";
+    let valid = r#"import type { Updatable } from "./contracts"
+local function tick(value: Updatable, dt: number)
+  value:update(dt)
+end
+"#;
+    let incomplete = valid.replace("value:update(dt)", "value:up");
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/contracts.tua", contracts);
+
+    let mut server = TestServer::new();
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&main_uri, valid));
+    server.send(invoked_completion_request(2, &main_uri, valid, "value:up"));
+    server.send(did_change(&main_uri, &incomplete, 2));
+    server.send(invoked_completion_request(
+        3,
+        &main_uri,
+        &incomplete,
+        "value:up",
+    ));
+    server.send(completion_request(4, &main_uri, &incomplete, "value:up"));
+
+    assert_completion_labels(server.output(), 4, ["update"]);
+    assert_completion_labels(server.output(), 3, ["update"]);
+}
 #[test]
 fn completion_survives_incomplete_colon_after_valid_open() {
     let uri = "file:///tmp/recovered-completion.tua";

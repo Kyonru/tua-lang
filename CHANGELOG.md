@@ -24,6 +24,8 @@ language or editor behavior, and migration notes call out those changes.
   the contract is imported from another file.
 - Preserve imported protocol members for completion while an edited consumer
   file temporarily has syntax errors.
+- Adopt valid worker snapshots as coordinator last-good facts before edits, so
+  invoked completion keeps imported protocol members after syntax errors.
 - Do not report a protocol type import as unused when a class uses it in an
   `implements` clause.
 

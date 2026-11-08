@@ -292,6 +292,14 @@ impl AnalysisHost {
 
         identifier_prefix_at(source, position)?;
 
+        // Field completion has its own fast path above this one. If that path
+        // cannot answer (for example, a member comes from a type-only import
+        // while the current edit is incomplete), let the full project query
+        // resolve it instead of returning an empty identifier list.
+        if is_member_access_completion_prefix(source, position) {
+            return None;
+        }
+
         if position_is_inside_open_table(source, position) {
             return None;
         }
@@ -1085,6 +1093,26 @@ fn identifier_completion_position(source: &str, position: SourcePosition) -> Sou
         line: position.line,
         column: column_for_byte(line, end),
     }
+}
+
+fn is_member_access_completion_prefix(source: &str, position: SourcePosition) -> bool {
+    let Some(line) = source_line_at(source, position.line) else {
+        return false;
+    };
+    let cursor = byte_for_column(line, position.column).min(line.len());
+    let bytes = line.as_bytes();
+    let mut prefix_start = cursor;
+
+    while prefix_start > 0 && is_identifier_continue_byte(bytes[prefix_start - 1]) {
+        prefix_start -= 1;
+    }
+
+    let mut previous = prefix_start;
+    while previous > 0 && bytes[previous - 1].is_ascii_whitespace() {
+        previous -= 1;
+    }
+
+    previous > 0 && matches!(bytes[previous - 1], b'.' | b':')
 }
 
 fn source_line_at(source: &str, line: usize) -> Option<&str> {

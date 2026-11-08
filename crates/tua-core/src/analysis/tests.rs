@@ -5950,6 +5950,35 @@ end
 }
 
 #[test]
+fn worker_snapshot_supplies_last_good_import_facts_to_coordinator_edits() {
+    let valid = r#"import type { Updatable } from "./contracts"
+local function tick(value: Updatable, dt: number)
+  value:update(dt)
+end
+"#;
+    let invalid = Fixture::parse(&valid.replace("value:update(dt)", "value:up<|complete|>"));
+    let main_path = PathBuf::from("src/main.tua");
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    host.set_file(
+        "src/contracts.tua",
+        "export protocol Updatable {\n  update(dt: number): nil\n}\n",
+    );
+    host.set_file(&main_path, valid);
+
+    // LSP request workers analyze a clone. Its cached snapshot is shared with
+    // the coordinator, while its local last-good map is not.
+    let worker = host.clone();
+    let _ = worker.snapshot();
+    host.update_open_document(&main_path, invalid.source("src/main.tua"));
+
+    let snapshot = host.snapshot();
+    let completions =
+        completion_labels(&snapshot.completion(&main_path, invalid.position("complete")));
+    assert_eq!(completions, ["update"]);
+}
+
+#[test]
 fn imported_protocol_conformance_is_checked_in_the_implementing_module() {
     let fixture = Fixture::parse(
         r#"-- file: src/contracts.tua
