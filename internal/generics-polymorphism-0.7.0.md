@@ -41,10 +41,12 @@ parameter packs, specialization/monomorphization, and a new runtime.
   and the initial method-only protocol contract.
 - `examples/features/src/polymorphism.tua`: base-typed actor arrays and explicit
   receiver-binding adapters for unrelated UI/gameplay objects.
-- `parser/dialect.rs`: generic parameters/applications are accepted for type
-  aliases only; generic function and class declarations remain rejected.
-- `parser/model.rs` and `parser/doc.rs`: LuaDoc generic metadata exists;
-  `docs/annotations.md` correctly says it does not provide generic inference.
+- `parser/dialect.rs`: generic parameters are accepted for type aliases and
+  free functions; generic class headers and parent applications are parsed,
+  while generic class semantics remain in G3.
+- `parser/model.rs`, `parser/doc.rs`, and the shared type scheme model: generic
+  function binders retain declaration identity through checking, imports,
+  re-exports, hover, signatures, definition, references, and rename.
 - `types/model.rs` and `types/environment.rs`: type aliases have declaration-
   owned binder identities and structured applications, with simultaneous
   substitution through supported structured type positions. Expansion keeps
@@ -67,18 +69,19 @@ parameter packs, specialization/monomorphization, and a new runtime.
 - LSP already advertises implementation navigation. Extend its shared query;
   do not add a second unrelated implementation lookup.
 
-Evidence as of this update: `cargo test -p tua-core protocol` passes all 25
-protocol-filtered tests and `cargo test -p tua-core generic_alias` passes all 13
-generic-alias-filtered tests. `cargo check -p tua-core` passes. Core and LSP editor requests cover imported protocol
+Evidence as of this update: the full core suite passes (1802 passed, 1
+ignored), the full LSP suite passes (406), and the CLI suite passes across its
+unit, CLI, gameplay, LOVE example, LSP, and Lua-syntax targets. Core and LSP editor requests cover imported protocol
 completion, hover, signature help, definition, and implementation navigation;
 the incomplete-edit completion case first establishes last-good project facts.
 Both full package suites pass with stack-sensitive serial settings recorded in
 `internal/audits/devex-space-invaders-0.7.0/REPORT.md`. That report contains a
 five-module game exercise, generated-Lua smoke test, exact limitations, and
-remaining verification gaps. Generic aliases are implemented; generic function
-and class implementations have not landed. The real-server extension suite now
-contains a generic alias completion/hover/definition case, but package and
-installed-editor qualification remains part of the release gate.
+remaining verification gaps. Generic aliases and the G2 generic free-function
+slice are implemented. The real-server extension suite contains an imported
+generic function hover/signature case; direct LSP requests pass, while the
+Electron host aborts before startup in this environment. Generic class
+semantics have not landed; only their parser representation is present.
 
 ## 3. Language contract and remaining decisions
 
@@ -213,9 +216,9 @@ type Result<T, E> = { value: T | nil, error: E | nil }
 local box: Box<number> = { value = 4 }
 ```
 
-- Only type aliases accept generic parameters in G1. Parameters are ordered,
-  required, unbounded, and non-variadic. Generic classes and function
-  declarations remain rejected until their own milestones land.
+- G1 aliases and G2 free functions accept ordered, required, unbounded,
+  non-variadic binders. Generic class headers/parent applications parse, but
+  class type application and substitution semantics remain deferred to G3.
 - Applications use `Name<Arg, ...>` only in type positions. Explicit call-site
   type arguments are excluded from the initial function inference design, so
   `f<T>(x)` cannot be mistaken for a comparison expression. Defaults, packs,
@@ -239,14 +242,16 @@ local box: Box<number> = { value = 4 }
 - Generic alias declarations and applications erase completely. Runtime
   expressions, evaluation order, module loading, and emitted Lua are unchanged.
   Formatter round-trips preserve syntax; Lua 5.1 output contains no type syntax.
-- G2 introduces first-order generic function binders and call inference using
-  the same IDs and substitution engine. Its solver begins with constraints from
-  declared argument/expected parameter pairs, uses assignability constraints
-  for repeated occurrences, and reports unresolved required variables rather
-  than widening them to `any`. A body must type-check under symbolic binders
-  before any call is considered. Callback context and return-only variables
-  require explicit ambiguity diagnostics until a sound inference rule is
-  implemented.
+- G2 implements first-order inference for direct calls and function values,
+  independent per-call instantiation, imported/re-exported schemes, variadic
+  arguments, and universally checked bodies. The shared solver reports
+  conflicts and unresolved binders rather than widening them to `any`. Callback
+  and return-only inference remain explicitly ambiguous; generic methods and
+  explicit call-site type arguments remain unsupported. LuaDoc supports
+  unbounded `---@generic T` on free functions and binds it through `---@param`,
+  `---@vararg`, and `---@return`; bounds and generic methods produce targeted
+  diagnostics. Generic binder definition, references, and rename work in one
+  file, including nested shadowing.
 - G3 generic class parameters are invariant because instances are mutable.
   Subtyping does not widen `Pool<Derived>` to `Pool<Base>`. Protocol bounds are
   checked through existing conformance facts, while the constructed value keeps
@@ -302,8 +307,8 @@ from the tests and current documentation that prove it.
 | P5 | Usable protocol examples/docs; P4 | Add runnable game/UI and negative examples, runtime/source-map/hot-reload qualification; preserve adapters for Lua interop. | Partial: class/typing/module docs and a feature-tour sample now explain the shipped slice; an audit game build ran under system Lua with a LOVE shim. LOVE/LuaJIT, source maps, hot reload, editor UX, and visual behavior remain unverified. | M |
 | G0 | Binder/substitution design; after P5 | Specify generic inference, recursive types, variance, first-class functions, contextual typing, limits and error policy; reuse protocol bounds. No unused framework-only abstraction. | Decisions recorded above: native alias syntax, binder identity, substitution semantics, arity/error behavior, inference boundaries, erasure, mutability variance, and resource limits. | M |
 | G1 | Generic aliases; G0 | Scoped binder IDs, arity checks, type applications, bounded capture-avoiding substitution, recursion/occurs handling, imports and IDE display. Connect machinery to its first consumer. | Implemented: exact-arity and unknown-name diagnostics, structured substitution, named/namespace imports, named re-exports, shared protocol and class signatures, LuaDoc type-text parsing, formatter/emission erasure, and core editor queries. Same-argument recursive edges remain named; changing-argument recursion stops at a 128 active-instantiation limit and leaves an unresolved application without a dedicated diagnostic. Focused core tests pass; real VS Code and broad release qualification remain open. | L |
-| G2 | Generic functions; G1 | Universally checked bodies, per-call inference, returns/callbacks, independent instantiations, navigation and actionable failures; align supported LuaDoc forms. | Open. | L |
-| G3 | Generic classes and bounds; G2 | Constructor inference, instance members, inherited substitutions, `Self`, invariant mutable containers and protocol constraints. Retain runtime/class identity and editor parity. | Open. | L |
+| G2 | Generic functions; G1 | Universally checked bodies, per-call inference, returns/callbacks, independent instantiations, navigation and actionable failures; align supported LuaDoc forms. | Implemented for generic free functions, direct/assigned/local/imported/re-exported calls, varargs and unbounded LuaDoc tags. Callback/return-only inference, methods, and explicit call-site arguments are diagnosed or unsupported by design. Core/LSP/CLI suites and docs build pass; installed VS Code host is blocked by pre-test Electron SIGABRT. | L |
+| G3 | Generic classes and bounds; G2 | Constructor inference, instance members, inherited substitutions, `Self`, invariant mutable containers and protocol constraints. Retain runtime/class identity and editor parity. | In progress: class generic header and parent-application syntax has a parser representation and focused tests. Class instantiation, member substitution, bounds, assignability, and editor support remain open. | L |
 | R0 | Qualification; P5 and selected complete G milestones | Docs/examples, performance, cross-platform CI, installed-editor tests and package smoke; publish honest release scope and migration notes. | Open. | L |
 
 Commit convention: one coherent implementation/fix with its regression tests
@@ -498,10 +503,10 @@ Before calling 0.7.0 ready:
 
 ## 11. Next implementation batch
 
-The protocol and G1 generic-alias slices are implemented. Keep the actor/panel,
+The protocol, G1 generic-alias, and G2 generic free-function slices are
+implemented. Keep the actor/panel,
 inherited-method, incompatible-signature, cross-file, and generic alias fixtures
-as regression anchors. G2 generic functions are the next implementation
-milestone; G3 generic classes and protocol bounds follow. Namespace re-exports,
+as regression anchors. G3 generic classes and protocol bounds follow. Namespace re-exports,
 cyclic protocol graphs, broad dependency invalidation, real installed VS Code,
 runtime, and cross-platform qualification remain open. Do not treat G1 as
 completion of the full 0.7.0 plan.

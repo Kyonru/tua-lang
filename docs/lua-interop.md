@@ -734,11 +734,13 @@ replace Tua's `-- tua-ignore-*` directives.
 
 !!! note "Recognition does not imply full LuaLS semantics"
     Tua implements the practical annotation subset needed for typed Lua
-    boundaries. LuaDoc `---@generic` remains metadata only and does not provide
-    generic function inference. This is separate from native generic type
-    aliases, which support explicit applications such as `Box<number>`; Tua
-    does not yet support generic classes or functions. Advanced LuaLS annotation
-    behavior degrades conservatively instead of making valid Lua fail.
+    boundaries. Unbounded `---@generic T` binds documented function
+    `---@param`, `---@vararg`, and `---@return` types and participates in
+    first-order call inference. Bounded LuaDoc generic parameters and generic
+    methods are unsupported. This covers a narrow LuaCATS form, not every
+    advanced LuaLS generic feature. Tua does not yet support generic classes;
+    advanced annotation behavior degrades conservatively instead of making
+    valid Lua fail.
 
 Malformed supported annotations can report diagnostics when enabled:
 

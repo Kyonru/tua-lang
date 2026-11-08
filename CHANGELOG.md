@@ -12,6 +12,11 @@ language or editor behavior, and migration notes call out those changes.
   parameters and arrays, exported protocol types, and erased type-only imports.
 - Generic type aliases with explicit type applications, exact arity diagnostics,
   structured substitution, and named/namespace import and re-export support.
+- Generic free functions with symbolic body checking, independent call-site
+  inference, imported/re-exported schemes, and `TL1015` diagnostics for
+  conflicting or unsupported inference.
+- Unbounded LuaDoc `---@generic T` function binders across parameter, vararg,
+  and return annotations.
 - Namespace type imports can qualify protocols in `implements` clauses.
 - Semantic tokens identify protocol declarations and type uses with the LSP
   interface token class.

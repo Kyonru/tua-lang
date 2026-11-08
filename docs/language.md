@@ -390,11 +390,28 @@ local box: Box<number> = { value = 4 }
 Write every type argument explicitly. Applications can be nested in supported
 type forms such as records, arrays, unions, dictionaries, and function types.
 Generic alias arguments substitute through the declared shape; Tua does not
-infer them. Generic functions and classes, protocol bounds, defaults, packs,
-and variadic generic parameters are not supported. Generic declarations and
-applications erase from Lua output. Recursive expansion is bounded; changing
-the arguments on each recursive step may leave an unresolved application and
-does not currently produce a dedicated recursion diagnostic.
+infer alias arguments. Free functions can declare generic binders and infer
+them from direct calls:
+
+```tua
+local function identity<T>(value: T): T
+  return value
+end
+
+local number_value: number = identity(42)
+local text_value: string = identity("ready")
+```
+
+Inference is independent at each call and generic bodies are checked with
+symbolic binders. Dotted free functions such as
+`function Module.identity<T>(value: T): T ... end` are also supported;
+generic colon methods, explicit call-site type arguments, and return-only or
+callback-only inference are not. These ambiguous calls report `TL1015` rather
+than silently widening to `any`. Generic functions and aliases erase from Lua
+output. Defaults, packs, generic classes, and protocol bounds remain
+unsupported. Recursive alias expansion is bounded; changing the arguments on
+each recursive step may leave an unresolved application without a dedicated
+recursion diagnostic.
 
 ## Table Shapes
 
@@ -646,10 +663,10 @@ LuaDoc/LuaCATS function types such as
 When `annotation_mode = "luacats"` is enabled, native callback aliases emit
 compatible `---@alias ... fun(...)` annotations.
 
-Generic parameters are currently supported on type aliases only. Generic
-functions and classes, and inferred type arguments, are not part of the native
-type syntax. LuaDoc `---@generic` remains metadata and does not enable generic
-function inference.
+Generic functions infer type arguments from direct calls; see the generic
+function section above. LuaDoc also supports unbounded `---@generic T` on
+documented functions. Generic classes, generic methods, explicit call-site
+type arguments, and advanced LuaCATS generic features are not supported.
 
 ## LOVE Assets And Callbacks
 

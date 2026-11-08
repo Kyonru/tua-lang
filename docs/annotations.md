@@ -101,9 +101,19 @@ Reports TL4068 for a direct call statement that discards the resolved function r
 
 ```lua
 ---@generic T
+---@param value T
+---@return T
+local function identity(value)
+  return value
+end
 ```
 
-Metadata only. It does not add generic function inference or generic classes. Native Tua type aliases may use `type Box<T> = ...`; see Generic Type Aliases in the Typing In Tua guide.
+An unbounded `---@generic T` on a documented function binds `T` in its
+`---@param`, `---@vararg`, and `---@return` types. Calls infer independent
+arguments, like native `function identity<T>(value: T): T ... end` functions.
+Bounded forms such as `---@generic T: number` are diagnosed as unsupported.
+LuaDoc generic methods are not supported. See [generic types and functions](typing.md#generic-type-aliases)
+for inference limits and native syntax.
 
 ## @version
 

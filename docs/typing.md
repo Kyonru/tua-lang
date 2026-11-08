@@ -116,13 +116,20 @@ arguments, reports `TL1004`. An unknown generic alias reports `TL1001`.
 In VS Code, member completion and hover use the instantiated field types, and
 Go to Definition on an imported generic alias navigates to its declaration.
 
-Generic parameters are currently supported only on type aliases. Generic
-functions, generic classes, protocol bounds, and LuaDoc `---@generic` inference
-are not supported. Generic alias declarations and applications are erased, so
-they add no runtime values or Lua syntax. Recursive aliases are bounded during
-resolution: same-argument recursive edges remain named, while a recursion that
-keeps changing arguments stops at the expansion limit and may leave an
-unresolved application without a dedicated diagnostic.
+Generic functions use declaration binders and infer type arguments from direct
+call arguments. For example, `local function identity<T>(value: T): T return
+value end` can be called with numbers or strings independently. The same
+inference works for assigned function values, imported module functions, and
+the corresponding unbounded LuaDoc form. Function bodies are checked while
+their binders are symbolic. Inference that depends only on a return type or on
+the parameter types of a callback is rejected with `TL1015`; generic methods,
+explicit call-site type arguments, and bounded LuaDoc generic parameters are
+not supported. Generic functions and aliases erase from emitted Lua.
+
+Recursive generic aliases are bounded during resolution: same-argument
+recursive edges remain named, while a recursion that keeps changing arguments
+stops at the expansion limit and may leave an unresolved application without a
+dedicated diagnostic.
 
 ### Protocol Contracts
 
@@ -318,11 +325,11 @@ type Logger = (prefix: string, ...string) -> nil
 The tail annotation is checked at calls too: `logAll("items", 1)` is an
 error because each extra argument must be a string.
 
-Generic type parameters are supported on type aliases only. Generic functions,
-generic classes, inferred generic arguments, and protocol bounds are not
-currently supported. Protocols provide explicit method contracts. Arrays and
-dictionaries remain the built-in collection forms; use `any` at genuinely
-dynamic boundaries.
+Generic type parameters are supported on aliases and free functions; functions
+infer binders from direct call arguments. Generic classes and protocol bounds
+are not currently supported. Protocols provide explicit method contracts.
+Arrays and dictionaries remain the built-in collection forms; use `any` at
+genuinely dynamic boundaries.
 
 ## Inference And Assignment
 

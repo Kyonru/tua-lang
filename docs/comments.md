@@ -108,9 +108,11 @@ See [Classes](classes.md) for imports, inheritance, and editor support.
 | Suppress a Tua diagnostic | `-- tua-ignore-line TLxxxx`, `-- tua-ignore-next-line TLxxxx`, or `-- tua-ignore-file TLxxxx`. |
 
 `---@class` describes a type; it does not construct a runtime class. LuaDoc
-`---@generic` remains metadata-only and does not add generic function inference;
-native generic parameters are currently supported on Tua type aliases. Tags
-including `@generic`, `@cast`, `@as`, and `@diagnostic` are recognized metadata
+Unbounded `---@generic T` binds the parameter in documented function
+`---@param`, `---@vararg`, and `---@return` annotations. Bounded LuaDoc generic
+parameters and generic methods are diagnosed or unsupported; native generic
+functions and aliases use the same inference model. Tags including `@cast`,
+`@as`, and `@diagnostic` are recognized metadata
 without their full LuaLS type checking behavior. In particular, use Tua's ignore
 directives instead of expecting `---@diagnostic disable` to suppress a Tua
 diagnostic.

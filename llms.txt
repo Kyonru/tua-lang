@@ -116,10 +116,12 @@ Never answer with TypeScript, JavaScript, Luau, Python, or Markdown.
   multiple returns. Declarations support typed `...: Type`, optional trailing
   `mode?: string`, and defaults such as `amount: number = 5`.
 - `value is Type` performs supported runtime identity checks and branch
-  narrowing. Generic parameters currently belong to type aliases only; generic
-  functions, classes, inferred arguments, and LuaDoc `---@generic` inference
-  are not supported. Tua has no built-in `Table<T>` container; use `T[]` or
-  `{ [Key]: Value }` for collections.
+  narrowing. Generic aliases and free functions support binders; generic
+  functions infer arguments from direct calls. Unbounded LuaDoc
+  `---@generic T` binds documented function parameters and returns. Generic
+  classes/methods and explicit call-site arguments are not supported. Tua has
+  no built-in `Table<T>` container; use `T[]` or `{ [Key]: Value }` for
+  collections.
 - Ordinary functions remain Lua:
   `function name(args): Return ... end` and
   `local function name(args): Return ... end`.
