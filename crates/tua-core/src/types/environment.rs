@@ -41,6 +41,7 @@ pub struct TypeEnvironment {
     alias_docs: BTreeMap<String, String>,
     class_names: BTreeSet<String>,
     class_parents: BTreeMap<String, String>,
+    class_protocols: BTreeMap<String, Vec<String>>,
     locals: Arc<BTreeMap<String, Type>>,
     local_docs: BTreeMap<String, String>,
     local_contracts: LocalContracts,
@@ -378,6 +379,11 @@ impl TypeEnvironment {
         for class in &self.class_names {
             context.insert_nominal_alias(class);
         }
+        for protocols in self.class_protocols.values() {
+            for protocol in protocols {
+                context.insert_nominal_alias(protocol);
+            }
+        }
 
         // `Vec2` is a runtime BrineVector value, not merely any table with x
         // and y fields. Keeping the built-in alias nominal prevents a plain
@@ -390,6 +396,11 @@ impl TypeEnvironment {
 
         for (class, parent) in &self.class_parents {
             context.insert_nominal_alias_supertype(class, parent);
+        }
+        for (class, protocols) in &self.class_protocols {
+            for protocol in protocols {
+                context.insert_nominal_alias_supertype(class, protocol);
+            }
         }
 
         context
@@ -1110,6 +1121,20 @@ pub(crate) fn build_type_environment_with_domain_registry(
                         .parent
                         .as_ref()
                         .map(|parent| (class.name.clone(), parent.clone()))
+                })
+                .collect(),
+            class_protocols: parsed
+                .class_declarations
+                .iter()
+                .map(|class| {
+                    (
+                        class.name.clone(),
+                        class
+                            .implemented_protocols
+                            .iter()
+                            .map(|(name, _)| name.clone())
+                            .collect(),
+                    )
                 })
                 .collect(),
             locals,

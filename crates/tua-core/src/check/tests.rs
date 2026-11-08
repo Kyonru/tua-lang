@@ -2436,6 +2436,27 @@ final class Panel implements Updatable {
 }
 
 #[test]
+fn protocol_assignability_requires_explicit_class_conformance() {
+    let diagnostics = check_tua_source(
+        "src/protocols.tua",
+        r#"
+protocol Updatable {
+  update(dt: number): nil
+}
+final class Lookalike {
+  update(dt: number): nil {
+  }
+}
+local value: Updatable = Lookalike.new()
+"#,
+    )
+    .expect_err("matching method shape alone does not declare protocol conformance");
+    assert!(diagnostics
+        .iter()
+        .any(|diagnostic| { diagnostic.message.contains("expected Updatable") }));
+}
+
+#[test]
 fn rejects_values_that_do_not_match_a_native_array_item_type() {
     let diagnostics = check_tua_source(
         "src/actors.tua",
