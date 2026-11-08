@@ -163,6 +163,7 @@ fn unsaved_protocol_edit_refreshes_importing_class_diagnostics() {
     temp.write("tua.toml", "source = \"src\"\n");
     let contracts = "export protocol Updatable {\n  update(dt: number): nil\n}\n";
     let changed_contracts = "export protocol Updatable {\n  update(dt: string): nil\n}\n";
+    let incomplete_contracts = "export protocol Updatable {\n  update(dt: string):\n";
     temp.write("src/contracts.tua", contracts);
     let actors = r#"import type { Updatable } from "./contracts"
 final class Particle implements Updatable {
@@ -179,9 +180,17 @@ final class Particle implements Updatable {
     server.send(text_document_diagnostic_request(2, &actors_uri));
     assert!(document_diagnostic_items(server.output(), 2).is_empty());
 
-    server.send(did_change(&contracts_uri, changed_contracts, 2));
+    server.send(did_change(&contracts_uri, incomplete_contracts, 2));
     server.send(text_document_diagnostic_request(3, &actors_uri));
     let diagnostics = document_diagnostic_items(server.output(), 3);
+    assert!(
+        diagnostics.is_empty(),
+        "an incomplete contract edit should keep last-good requirements for dependent diagnostics: {diagnostics:#?}"
+    );
+
+    server.send(did_change(&contracts_uri, changed_contracts, 3));
+    server.send(text_document_diagnostic_request(4, &actors_uri));
+    let diagnostics = document_diagnostic_items(server.output(), 4);
     assert!(diagnostics.iter().any(|diagnostic| {
         diagnostic["message"].as_str().is_some_and(|message| {
             message.contains("Particle.update") && message.contains("does not satisfy protocol")
