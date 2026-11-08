@@ -484,8 +484,8 @@ impl AnalysisSnapshot {
             | Type::Array(_)
             | Type::Tuple(_)
             | Type::Dictionary { .. }
-        | Type::GenericParameter { .. }
-        | Type::GenericAliasApplication { .. } => None,
+            | Type::GenericParameter { .. }
+            | Type::GenericAliasApplication { .. } => None,
         }
     }
 
@@ -661,8 +661,8 @@ impl AnalysisSnapshot {
             | Type::Array(_)
             | Type::Tuple(_)
             | Type::Dictionary { .. }
-        | Type::GenericParameter { .. }
-        | Type::GenericAliasApplication { .. } => None,
+            | Type::GenericParameter { .. }
+            | Type::GenericAliasApplication { .. } => None,
         }
     }
 

@@ -2,8 +2,8 @@ use std::collections::BTreeMap;
 
 use super::context::is_identifier;
 use super::{Completion, CompletionKind};
-use crate::SourcePosition;
 use crate::source_text::{byte_for_column, is_identifier_continue, is_identifier_start};
+use crate::SourcePosition;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) struct LuaSymbol {

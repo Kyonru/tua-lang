@@ -9,11 +9,11 @@ use full_moon::visitors::{Visitor, VisitorMut};
 use crate::classes;
 use crate::runtime_type;
 use crate::semantic::SemanticModel;
-use crate::types::{TypeEnvironment, build_type_environment_with_diagnostics};
+use crate::types::{build_type_environment_with_diagnostics, TypeEnvironment};
 use crate::{
-    AnnotationMode, Diagnostic, DiagnosticCode, ParameterDefault, ParsedSource, ProjectWorkspace,
-    SourcePosition, SourceSpan, TuaType, Type, audio, ecs, game_math, infer_module_exports, input,
-    object_pool, parse_tua_source, signal, state_machine, store, vector,
+    audio, ecs, game_math, infer_module_exports, input, object_pool, parse_tua_source, signal,
+    state_machine, store, vector, AnnotationMode, Diagnostic, DiagnosticCode, ParameterDefault,
+    ParsedSource, ProjectWorkspace, SourcePosition, SourceSpan, TuaType, Type,
 };
 
 mod builtin_calls;
@@ -299,15 +299,13 @@ fn apply_lowering_operations(
             .span
             .map(|span| span.start)
             .unwrap_or(SourcePosition { line: 1, column: 1 });
-        vec![
-            Diagnostic::error(
-                parsed.path.clone(),
-                position.line,
-                position.column,
-                error.to_string(),
-            )
-            .with_code(DiagnosticCode::LOWERING_OPERATION),
-        ]
+        vec![Diagnostic::error(
+            parsed.path.clone(),
+            position.line,
+            position.column,
+            error.to_string(),
+        )
+        .with_code(DiagnosticCode::LOWERING_OPERATION)]
     })
 }
 
@@ -2360,29 +2358,25 @@ fn lower_default_parameter_operations_with_ancestors(
         }
     }
     let output_ast = full_moon::parse(&output).map_err(|errors| {
-        vec![
-            Diagnostic::error(
-                &parsed.path,
-                1,
-                1,
-                format!("cannot locate function bodies for default lowering: {errors:?}"),
-            )
-            .with_code(DiagnosticCode::LOWERING_OPERATION),
-        ]
+        vec![Diagnostic::error(
+            &parsed.path,
+            1,
+            1,
+            format!("cannot locate function bodies for default lowering: {errors:?}"),
+        )
+        .with_code(DiagnosticCode::LOWERING_OPERATION)]
     })?;
     let mut bodies = BodyOffsets(Vec::new());
     bodies.visit_ast(&output_ast);
     bodies.0.sort_unstable();
     if bodies.0.len() != parsed.function_annotations.len() {
-        return Err(vec![
-            Diagnostic::error(
-                &parsed.path,
-                1,
-                1,
-                "function body provenance changed during default lowering",
-            )
-            .with_code(DiagnosticCode::LOWERING_OPERATION),
-        ]);
+        return Err(vec![Diagnostic::error(
+            &parsed.path,
+            1,
+            1,
+            "function body provenance changed during default lowering",
+        )
+        .with_code(DiagnosticCode::LOWERING_OPERATION)]);
     }
     let mut operations = Vec::new();
     let mut outer_scope = None;
@@ -2462,15 +2456,13 @@ fn lower_generated_default_helpers_with_ancestors(
     ancestors: &[(&crate::scope::ScopeMap, SourcePosition)],
 ) -> Result<String, Vec<Diagnostic>> {
     if ancestors.len() >= 64 {
-        return Err(vec![
-            Diagnostic::error(
-                &parsed.path,
-                span.start.line,
-                span.start.column,
-                "nested parameter defaults exceed lowering depth limit",
-            )
-            .with_code(DiagnosticCode::LOWERING_OPERATION),
-        ]);
+        return Err(vec![Diagnostic::error(
+            &parsed.path,
+            span.start.line,
+            span.start.column,
+            "nested parameter defaults exceed lowering depth limit",
+        )
+        .with_code(DiagnosticCode::LOWERING_OPERATION)]);
     }
     let remap_diagnostics = |mut diagnostics: Vec<Diagnostic>| {
         let position = parsed

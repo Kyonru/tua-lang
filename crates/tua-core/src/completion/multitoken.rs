@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use crate::source_text::{byte_for_column, is_identifier_continue, is_identifier_start, line_at};
-use crate::{Completion, CompletionKind, SourcePosition, parse_tua_source};
+use crate::{parse_tua_source, Completion, CompletionKind, SourcePosition};
 
 const DEFAULT_MAX_SUGGESTIONS: usize = 2;
 

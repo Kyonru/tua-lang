@@ -17,17 +17,16 @@ use crate::ast_utils::{
     assignment_expression_for_local, field_chain_before_first_call, plain_field_chain_from_var,
 };
 use crate::classes::{
-    ClassMemberKind, class_member_target as class_member_source_target, nominal_class_identity,
+    class_member_target as class_member_source_target, nominal_class_identity, ClassMemberKind,
 };
 use crate::code_action::code_actions_parsed_source_with_kinds_and_diagnostics_config;
 use crate::completion::{
-    CompletionAdaptiveStats, CompletionMultiTokenConfig, CompletionRankingInputs,
-    CompletionSequenceRankingConfig,
     complete_current_file_field_access_with_environment_and_ranking_inputs,
     complete_current_file_lua_field_access,
     complete_field_access_in_source_with_environment_and_ranking_inputs,
     complete_indexed_module_paths, complete_source_with_parsed_environment_and_ranking_inputs,
-    filter_and_rank_completions, multitoken::complete_multi_token_source,
+    filter_and_rank_completions, multitoken::complete_multi_token_source, CompletionAdaptiveStats,
+    CompletionMultiTokenConfig, CompletionRankingInputs, CompletionSequenceRankingConfig,
 };
 use crate::folding_range::folding_ranges_source;
 use crate::hir::{HirExportValue, HirModule, HirRequireBinding, HirSymbol, HirSymbolKind};
@@ -40,20 +39,20 @@ use crate::inline_ignore::apply_inline_ignores;
 use crate::inspector::InspectorItem;
 use crate::module_index::infer_module_exports_with_optional_environment;
 use crate::module_link::{
-    ModuleSpecifierKind, module_specifier_at_position, module_specifier_literals,
+    module_specifier_at_position, module_specifier_literals, ModuleSpecifierKind,
 };
 use crate::module_path_index::{ModulePathIndex, ProjectModuleWorkspace};
 use crate::profile;
 use crate::scope::{ScopeDeclarationKind, ScopeGlobalKind, ScopeResolution};
 use crate::selection_range::selection_ranges_source;
-use crate::semantic::{SemanticModel, resolve_aliases};
+use crate::semantic::{resolve_aliases, SemanticModel};
 use crate::signal::{
-    SignalEventIndex, SignalGraph, SignalGraphEvent, bus_label, graph_call_from_mention,
-    graph_event_id, graph_schema_summary,
+    bus_label, graph_call_from_mention, graph_event_id, graph_schema_summary, SignalEventIndex,
+    SignalGraph, SignalGraphEvent,
 };
 use crate::source_text::{
-    SourceIdentifier, byte_for_column, dotted_chain_at_position, function_name_table_field,
-    line_at, source_identifiers,
+    byte_for_column, dotted_chain_at_position, function_name_table_field, line_at,
+    source_identifiers, SourceIdentifier,
 };
 use crate::text_match::text_matches;
 use crate::types::{
@@ -62,24 +61,12 @@ use crate::types::{
 };
 use crate::usage_index::{FileUsageIndex, ProjectUsageIndex};
 use crate::vfs::{
-    ModulePathSeparator, VfsSnapshot, VfsSourceKind, VirtualFileSystem, module_name_for_path,
-    module_path_without_runtime_suffix, normalize_path,
+    module_name_for_path, module_path_without_runtime_suffix, normalize_path, ModulePathSeparator,
+    VfsSnapshot, VfsSourceKind, VirtualFileSystem,
 };
 use crate::{
-    Assist, AssistKind, AssistRange, CallHierarchyCallSite, CallHierarchyCallTarget,
-    CallHierarchyIncomingCall, CallHierarchyOutgoingCall, CallHierarchySymbol,
-    CallHierarchySymbolTarget, CodeLens, CodeLensReferenceKind, CodeLensReferenceTarget,
-    CodeLensTarget, Completion, CompletionKind, Definition, DefinitionKind, Diagnostic,
-    DocumentHighlight, DocumentSymbol, FoldingRange, Hover, InlayHint, ModuleDependencyEdge,
-    ModuleDependencyExport, ModuleDependencyGraph, ModuleDependencyModule, ModuleExportField,
-    ModuleExports, ModuleGraph, ModuleGraphInput, ModuleGraphOptions, ModuleInclusionPath,
-    ModuleInclusionStep, ModuleLink, ParsedSource, ProjectConfig, ProjectTypeDatabase,
-    ProjectTypeDatabaseInput, ProjectTypeExport, ProjectTypeLibrary, Reference, ReferenceKind,
-    RenameEdit, RenameTarget, RequireResolution, ScopeMap, SelectionRange, SemanticIndex,
-    SemanticToken, SignatureHelp, SourcePosition, SourceSpan, SymbolIndex, TableField, TextEdit,
-    TuaType, Type, TypeEnvironment, TypeExplanation, TypeExplanationStep, TypeExplanationStepKind,
-    TypedFunction, WorkspaceSymbol, call_hierarchy_calls_parsed_source,
-    call_hierarchy_prepare_parsed_source, call_hierarchy_symbols_parsed_source,
+    call_hierarchy_calls_parsed_source, call_hierarchy_prepare_parsed_source,
+    call_hierarchy_symbols_parsed_source,
     check::{
         check_parsed_source_with_environment_and_ecs_config,
         check_parsed_source_with_environment_asset_roots_diagnostics_jit_config_and_asset_index,
@@ -93,7 +80,19 @@ use crate::{
     reference_kind_for_rename, references_to_definition_parsed_source_with_artifacts,
     rename_target_for_definition, require_bindings_for_parsed_source,
     semantic_tokens_parsed_source, semantic_tokens_tua_source, signature_help_tua_source,
-    type_alias_definition_count,
+    type_alias_definition_count, Assist, AssistKind, AssistRange, CallHierarchyCallSite,
+    CallHierarchyCallTarget, CallHierarchyIncomingCall, CallHierarchyOutgoingCall,
+    CallHierarchySymbol, CallHierarchySymbolTarget, CodeLens, CodeLensReferenceKind,
+    CodeLensReferenceTarget, CodeLensTarget, Completion, CompletionKind, Definition,
+    DefinitionKind, Diagnostic, DocumentHighlight, DocumentSymbol, FoldingRange, Hover, InlayHint,
+    ModuleDependencyEdge, ModuleDependencyExport, ModuleDependencyGraph, ModuleDependencyModule,
+    ModuleExportField, ModuleExports, ModuleGraph, ModuleGraphInput, ModuleGraphOptions,
+    ModuleInclusionPath, ModuleInclusionStep, ModuleLink, ParsedSource, ProjectConfig,
+    ProjectTypeDatabase, ProjectTypeDatabaseInput, ProjectTypeExport, ProjectTypeLibrary,
+    Reference, ReferenceKind, RenameEdit, RenameTarget, RequireResolution, ScopeMap,
+    SelectionRange, SemanticIndex, SemanticToken, SignatureHelp, SourcePosition, SourceSpan,
+    SymbolIndex, TableField, TextEdit, TuaType, Type, TypeEnvironment, TypeExplanation,
+    TypeExplanationStep, TypeExplanationStepKind, TypedFunction, WorkspaceSymbol,
 };
 use crate::{scope_map_parsed_source, scope_map_parsed_source_with_globals};
 

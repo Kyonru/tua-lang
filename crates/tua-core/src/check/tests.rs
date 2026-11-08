@@ -2604,18 +2604,20 @@ final class BroadReturn implements Visitor {
 
 #[test]
 fn rejects_mutable_concrete_array_widening_to_protocol_view() {
-    let parsed = crate::parse_tua_source("src/protocol_array_variance.tua", r#"
+    let parsed = crate::parse_tua_source(
+        "src/protocol_array_variance.tua",
+        r#"
 protocol Readable { read(): number }
 final class A implements Readable { read(): number { return 1 } }
 local concrete: A[] = { A.new() }
 local view: Readable[] = concrete
-"#).unwrap();
+"#,
+    )
+    .unwrap();
     let env = crate::types::build_type_environment(&parsed).unwrap();
     assert!(
-        !env.to_type_context().is_assignable(
-            env.local("concrete").unwrap(),
-            env.local("view").unwrap()
-        ),
+        !env.to_type_context()
+            .is_assignable(env.local("concrete").unwrap(), env.local("view").unwrap()),
         "the base TypeContext should reject this assignment too"
     );
     let diagnostics = check_tua_source(

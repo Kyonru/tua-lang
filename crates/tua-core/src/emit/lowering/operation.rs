@@ -1,10 +1,10 @@
 use std::fmt;
 use std::ops::Range;
 
-use crate::SourceSpan;
 use crate::parser::ParserLineProvenance;
+use crate::SourceSpan;
 
-use super::{LoweredLine, LoweringKind, split_lines};
+use super::{split_lines, LoweredLine, LoweringKind};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct LoweringOperation {

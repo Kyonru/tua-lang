@@ -51,7 +51,7 @@ use full_moon::visitors::{Visitor, VisitorMut};
 
 use crate::semantic::SemanticModel;
 use crate::types::TypeEnvironment;
-use crate::{ParsedLanguage, ParsedSource, SourcePosition, Type, vector};
+use crate::{vector, ParsedLanguage, ParsedSource, SourcePosition, Type};
 
 // Lua operator precedence, lowest to highest, for the operators fusion emits.
 const ADDITIVE: u8 = 5;

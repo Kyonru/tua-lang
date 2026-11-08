@@ -1,5 +1,5 @@
-use crate::SourcePosition;
 use crate::source_text::{byte_for_column, is_identifier_continue, is_identifier_start, line_at};
+use crate::SourcePosition;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum CompletionContext {

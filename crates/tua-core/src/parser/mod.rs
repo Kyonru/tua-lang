@@ -290,10 +290,13 @@ fn parse_raw_source(
             .into_iter()
             .map(|error| parser_error_to_diagnostic(&path, error))
             .collect()),
-        Err(_) => Err(vec![
-            Diagnostic::error(&path, 1, 1, "parser rejected an unsupported token sequence")
-                .with_code(DiagnosticCode::SYNTAX_PARSE),
-        ]),
+        Err(_) => Err(vec![Diagnostic::error(
+            &path,
+            1,
+            1,
+            "parser rejected an unsupported token sequence",
+        )
+        .with_code(DiagnosticCode::SYNTAX_PARSE)]),
     }
 }
 
@@ -1443,7 +1446,8 @@ fn function_annotation(
             .find_map(|(parameter, specifier)| {
                 matches!(parameter, ast::Parameter::Ellipsis(_))
                     .then(|| {
-                        specifier.map(|s| tua_type_from_type_info_with_source(s.type_info(), source))
+                        specifier
+                            .map(|s| tua_type_from_type_info_with_source(s.type_info(), source))
                     })
                     .flatten()
             }),
@@ -1451,9 +1455,7 @@ fn function_annotation(
         optional_parameters,
         return_type: body
             .return_type()
-            .map(|specifier| {
-                tua_type_from_type_info_with_source(specifier.type_info(), source)
-            }),
+            .map(|specifier| tua_type_from_type_info_with_source(specifier.type_info(), source)),
         span: node_span(body),
     }
 }
@@ -1971,7 +1973,9 @@ fn complete_generic_type_spans(ty: &mut TuaType, source: &str) {
             if let Some(name_span) = name_span {
                 if let Some(start_byte) = byte_for_source_position(source, name_span.end) {
                     let bytes = source.as_bytes();
-                    if let Some(open_relative) = bytes[start_byte..].iter().position(|byte| *byte == b'<') {
+                    if let Some(open_relative) =
+                        bytes[start_byte..].iter().position(|byte| *byte == b'<')
+                    {
                         let open = start_byte + open_relative;
                         let mut depth = 0usize;
                         let mut close = None;
@@ -2017,7 +2021,10 @@ fn complete_generic_type_spans(ty: &mut TuaType, source: &str) {
             complete_generic_type_spans(key, source);
             complete_generic_type_spans(value, source);
         }
-        TuaType::Function { parameters, returns } => {
+        TuaType::Function {
+            parameters,
+            returns,
+        } => {
             for parameter in parameters {
                 complete_generic_type_spans(&mut parameter.ty, source);
             }

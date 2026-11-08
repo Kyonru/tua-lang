@@ -12,7 +12,7 @@ use full_moon::tokenizer::{TokenReference, TokenType};
 use full_moon::visitors::Visitor;
 use std::collections::{BTreeMap, BTreeSet};
 
-use super::{DuplicateLocalKind, DuplicateLocalOrigin, duplicate_local_diagnostic};
+use super::{duplicate_local_diagnostic, DuplicateLocalKind, DuplicateLocalOrigin};
 use crate::ast_utils::field_chain_before_first_call;
 use crate::control_flow::{block_fallthrough_position, call_is_terminating_builtin};
 use crate::scope::{ScopeGlobalKind, ScopeMap, ScopeResolution};

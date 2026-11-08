@@ -1,8 +1,8 @@
 use crate::semantic_domains::BuiltinDomainRegistry;
 use crate::types::{Type, TypeEnvironment, TypedFunction};
-use crate::{ParsedSource, SourcePosition, input, sprite, state_machine};
+use crate::{input, sprite, state_machine, ParsedSource, SourcePosition};
 
-use super::{Completion, CompletionKind, completion_text_matches};
+use super::{completion_text_matches, Completion, CompletionKind};
 
 pub(super) struct CompletionDomainRegistry;
 

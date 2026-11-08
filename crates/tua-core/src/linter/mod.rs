@@ -16,17 +16,17 @@ use crate::ast_utils::{
 };
 use crate::config::{DiagnosticsConfig, JitConfig};
 use crate::control_flow::block_fallthrough_position;
-use crate::deprecation::{Deprecation, deprecated_api_uses};
+use crate::deprecation::{deprecated_api_uses, Deprecation};
 use crate::module_index::resolve_required_module;
 use crate::must_use::discarded_must_use_calls;
 use crate::profile::{self, DiagnosticsTraceCategory};
 use crate::runtime_type;
-use crate::scope::{ScopeGlobalKind, ScopeResolution, scope_map_parsed_source_with_globals};
+use crate::scope::{scope_map_parsed_source_with_globals, ScopeGlobalKind, ScopeResolution};
 use crate::semantic::SemanticModel;
 use crate::types::{Type, TypeContext, TypeEnvironment};
 use crate::{
-    Diagnostic, DiagnosticCode, DiagnosticSeverity, ParsedLanguage, ParsedSource, SourcePosition,
-    SourceSpan, TuaType, ecs, lua,
+    ecs, lua, Diagnostic, DiagnosticCode, DiagnosticSeverity, ParsedLanguage, ParsedSource,
+    SourcePosition, SourceSpan, TuaType,
 };
 
 mod class_rules;

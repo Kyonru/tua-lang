@@ -1,7 +1,7 @@
 use std::path::Path;
 
-use crate::hir::{HirExportValue, HirModule, HirSymbolId, HirSymbolKind, lower_parsed_source};
-use crate::{Diagnostic, ParsedSource, SourcePosition, SourceSpan, TuaType, parse_tua_source};
+use crate::hir::{lower_parsed_source, HirExportValue, HirModule, HirSymbolId, HirSymbolKind};
+use crate::{parse_tua_source, Diagnostic, ParsedSource, SourcePosition, SourceSpan, TuaType};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DocumentSymbol {

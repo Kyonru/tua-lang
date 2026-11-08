@@ -1,6 +1,6 @@
 use super::*;
-use crate::DiagnosticCode;
 use crate::types::build_type_environment_with_domain_registry;
+use crate::DiagnosticCode;
 
 impl AnalysisQueryCache {
     pub(super) fn cached_file(
@@ -726,7 +726,11 @@ fn collect_runtime_type_names(ty: &Type, names: &mut BTreeSet<String>) {
         Type::Alias(name) => {
             names.insert(name.clone());
         }
-        Type::GenericAliasApplication { reference, arguments, .. } => {
+        Type::GenericAliasApplication {
+            reference,
+            arguments,
+            ..
+        } => {
             match reference {
                 crate::types::GenericAliasReference::Declaration(identity) => {
                     names.insert(identity.name.clone());

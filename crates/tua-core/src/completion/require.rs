@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use super::{Completion, CompletionKind, completion_text_matches};
+use super::{completion_text_matches, Completion, CompletionKind};
 use crate::module_path_index::ModulePathIndex;
 use crate::vfs::module_path_without_runtime_suffix;
 

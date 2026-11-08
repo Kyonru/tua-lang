@@ -1,10 +1,10 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
-use crate::parser::TypeAliasId;
 use super::model::{
-    FunctionType, GenericAliasDefinition, GenericAliasReference, TableShape, Type, TypeAlias,
-    is_index_signature_field,
+    is_index_signature_field, FunctionType, GenericAliasDefinition, GenericAliasReference,
+    TableShape, Type, TypeAlias,
 };
+use crate::parser::TypeAliasId;
 
 const MAX_ASSIGNABILITY_DEPTH: usize = 64;
 
@@ -80,7 +80,8 @@ impl TypeContext {
     }
 
     pub(crate) fn insert_generic_alias(&mut self, definition: GenericAliasDefinition) {
-        self.generic_aliases.insert(definition.id.clone(), definition);
+        self.generic_aliases
+            .insert(definition.id.clone(), definition);
     }
 
     pub(crate) fn insert_generic_alias_binding(
@@ -89,8 +90,10 @@ impl TypeContext {
         local_name: String,
         definition: GenericAliasDefinition,
     ) {
-        self.generic_alias_bindings
-            .insert((crate::vfs::normalize_path(source_module), local_name), definition.id.clone());
+        self.generic_alias_bindings.insert(
+            (crate::vfs::normalize_path(source_module), local_name),
+            definition.id.clone(),
+        );
         self.insert_generic_alias(definition);
     }
 

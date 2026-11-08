@@ -141,15 +141,17 @@ export type Box<T> = { value: T }
     let application = environment
         .local("box")
         .expect("annotated local should retain its generic application");
-    let resolved = snapshot.type_database().resolve_type(
-        snapshot.module_graph(),
-        "src/main.tua",
-        application,
-    );
+    let resolved =
+        snapshot
+            .type_database()
+            .resolve_type(snapshot.module_graph(), "src/main.tua", application);
     let Type::Table(table) = resolved else {
         panic!("expected a record after generic import resolution, got {resolved}");
     };
-    assert_eq!(table.semantic_field("value").map(|field| &field.ty), Some(&Type::number()));
+    assert_eq!(
+        table.semantic_field("value").map(|field| &field.ty),
+        Some(&Type::number())
+    );
 }
 
 #[test]
@@ -182,8 +184,14 @@ export type Grow<T> = { next: Grow<T[]> }
             other => panic!("expected bounded unresolved project alias, got {other:?}"),
         }
     }
-    assert!(depth <= 128, "project expansion exceeded its depth guard: {depth}");
-    assert!(depth >= 64, "project expansion should preserve useful shape: {depth}");
+    assert!(
+        depth <= 128,
+        "project expansion exceeded its depth guard: {depth}"
+    );
+    assert!(
+        depth >= 64,
+        "project expansion should preserve useful shape: {depth}"
+    );
 }
 
 #[test]
@@ -354,7 +362,9 @@ export protocol Consumer {
         "generic alias in an imported protocol requirement must distinguish incompatible implementations: {diagnostics:#?}"
     );
     assert!(
-        !diagnostics.iter().any(|diagnostic| diagnostic.message.contains("GoodConsumer")),
+        !diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.message.contains("GoodConsumer")),
         "matching generic alias method signature should conform: {diagnostics:#?}"
     );
 }
@@ -388,14 +398,18 @@ export protocol Consumer {
     assert!(
         diagnostics.iter().any(|diagnostic| {
             diagnostic.code == Some(crate::DiagnosticCode::TYPE_ARGUMENT_COUNT)
-                && diagnostic.message.contains("expects 1 type argument(s), found 2")
+                && diagnostic
+                    .message
+                    .contains("expects 1 type argument(s), found 2")
         }),
         "wrong namespace generic arity should be diagnosed: {diagnostics:#?}"
     );
     assert!(
         diagnostics.iter().any(|diagnostic| {
             diagnostic.code == Some(crate::DiagnosticCode::TYPE_ARGUMENT_COUNT)
-                && diagnostic.message.contains("expects 1 type argument(s), found 0")
+                && diagnostic
+                    .message
+                    .contains("expects 1 type argument(s), found 0")
         }),
         "bare namespace generic alias should be diagnosed: {diagnostics:#?}"
     );

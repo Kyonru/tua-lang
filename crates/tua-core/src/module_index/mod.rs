@@ -9,7 +9,7 @@ use full_moon::ast::{
 use full_moon::node::Node;
 
 use crate::ast_utils::plain_field_chain_from_var;
-use crate::deprecation::{Deprecation, deprecated_declarations};
+use crate::deprecation::{deprecated_declarations, Deprecation};
 use crate::module_link::ModuleSpecifierKind;
 use crate::must_use::must_use_paths;
 use crate::parser::{LuaDocAnnotation, LuaDocAnnotationKind};
@@ -18,11 +18,11 @@ use crate::semantic::SemanticModel;
 use crate::semantic_domains::BuiltinDomainRegistry;
 use crate::source_text::function_name_table_field;
 use crate::types::{
-    FunctionParameter, FunctionType, TableField, Type, TypeEnvironment, TypedFunction,
     build_type_environment, deduplicate_inferred_types, function_type_from_tua_signature,
-    inferred_function_type_from_body,
+    inferred_function_type_from_body, FunctionParameter, FunctionType, TableField, Type,
+    TypeEnvironment, TypedFunction,
 };
-use crate::{ParsedSource, SourceSpan, parse_lua_source, parse_tua_source};
+use crate::{parse_lua_source, parse_tua_source, ParsedSource, SourceSpan};
 
 thread_local! {
     static REQUIRED_MODULE_EXPORT_CACHE: RefCell<BTreeMap<PathBuf, CachedRequiredModuleExports>> =

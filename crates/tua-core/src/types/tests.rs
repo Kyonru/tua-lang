@@ -1,5 +1,5 @@
 use super::*;
-use crate::{DiagnosticCode, parse_lua_source, parse_tua_source};
+use crate::{parse_lua_source, parse_tua_source, DiagnosticCode};
 
 #[test]
 fn inferred_dictionary_reads_include_nil_for_editor_queries() {
@@ -1425,11 +1425,9 @@ end
 
     assert_eq!(diagnostics.len(), 1);
     assert_eq!(diagnostics[0].code, Some(DiagnosticCode::TYPE_DOC_CONFLICT));
-    assert!(
-        diagnostics[0]
-            .message
-            .contains("conflicting annotations for `test` parameter `value`")
-    );
+    assert!(diagnostics[0]
+        .message
+        .contains("conflicting annotations for `test` parameter `value`"));
 }
 
 #[test]
@@ -1559,11 +1557,9 @@ type Player = {
             "duplicate type alias `Player`"
         ]
     );
-    assert!(
-        diagnostics
-            .iter()
-            .all(|diagnostic| diagnostic.code == Some(DiagnosticCode::TYPE_DUPLICATE_ALIAS))
-    );
+    assert!(diagnostics
+        .iter()
+        .all(|diagnostic| diagnostic.code == Some(DiagnosticCode::TYPE_DUPLICATE_ALIAS)));
     assert!(diagnostics[0].format_cli().contains("error TL1002"));
 }
 
@@ -1633,11 +1629,9 @@ return {}
         panic!("expected the outer sequence union to remain available");
     };
     assert!(contains_table(&resolved));
-    assert!(
-        sequence
-            .iter()
-            .any(|member| matches!(member, Type::Array(_)))
-    );
+    assert!(sequence
+        .iter()
+        .any(|member| matches!(member, Type::Array(_))));
     assert!(
         contains_any(&resolved),
         "the recursive edge should become any"
@@ -1719,11 +1713,9 @@ local invalid = text:set("Bye"):getWidth()
     let position = crate::SourcePosition { line: 8, column: 1 };
     assert_eq!(semantic.type_of_name("w", position), Some(Type::number()));
     assert_eq!(semantic.type_of_name("h", position), Some(Type::number()));
-    assert!(
-        semantic
-            .type_of_name("invalid", position)
-            .is_none_or(|ty| ty == Type::Any)
-    );
+    assert!(semantic
+        .type_of_name("invalid", position)
+        .is_none_or(|ty| ty == Type::Any));
 }
 
 #[test]
@@ -1801,12 +1793,10 @@ local unsafe: number = table.remove(numbers)
         .hover("src/main.tua", fixture.position("hover"))
         .unwrap();
     assert!(hover.contents.contains("nil"), "{}", hover.contents);
-    assert!(
-        snapshot
-            .completion("src/main.tua", fixture.position("member"))
-            .iter()
-            .any(|item| item.label == "health")
-    );
+    assert!(snapshot
+        .completion("src/main.tua", fixture.position("member"))
+        .iter()
+        .any(|item| item.label == "health"));
     let diagnostics = snapshot.diagnostics("src/main.tua");
     for line in [9, 10] {
         assert!(
@@ -2084,7 +2074,10 @@ fn generic_alias_application_substitutes_nested_record_field() {
     let Type::Table(table) = resolved else {
         panic!("expected Box<number> to resolve to its record body: {resolved}");
     };
-    assert_eq!(table.semantic_field("value").map(|field| &field.ty), Some(&Type::number()));
+    assert_eq!(
+        table.semantic_field("value").map(|field| &field.ty),
+        Some(&Type::number())
+    );
 }
 
 #[test]
@@ -2102,8 +2095,14 @@ fn generic_alias_substitution_reaches_every_structured_type_position() {
         panic!("expected a table alias instantiation");
     };
 
-    assert_eq!(table.semantic_field("list").map(|field| &field.ty), Some(&Type::array(Type::number())));
-    assert_eq!(table.semantic_field("maybe").map(|field| &field.ty), Some(&Type::union([Type::number(), Type::nil()])));
+    assert_eq!(
+        table.semantic_field("list").map(|field| &field.ty),
+        Some(&Type::array(Type::number()))
+    );
+    assert_eq!(
+        table.semantic_field("maybe").map(|field| &field.ty),
+        Some(&Type::union([Type::number(), Type::nil()]))
+    );
     assert_eq!(
         table.semantic_field("values").map(|field| &field.ty),
         Some(&Type::dictionary(Type::string(), Type::number()))
@@ -2116,7 +2115,10 @@ fn generic_alias_substitution_reaches_every_structured_type_position() {
     let Type::Table(nested) = &table.semantic_field("nested").unwrap().ty else {
         panic!("expected nested record");
     };
-    assert_eq!(nested.semantic_field("value").map(|field| &field.ty), Some(&Type::number()));
+    assert_eq!(
+        nested.semantic_field("value").map(|field| &field.ty),
+        Some(&Type::number())
+    );
 }
 
 #[test]
@@ -2126,16 +2128,22 @@ fn generic_alias_recursion_stabilizes_at_the_same_instantiation() {
         "type Node<T> = { value: T, next: Node<T> | nil }\nlocal node: Node<number>\n",
     )
     .expect("recursive generic alias should parse");
-    let environment = build_type_environment(&parsed).expect("recursive generic alias should resolve");
+    let environment =
+        build_type_environment(&parsed).expect("recursive generic alias should resolve");
     let node = environment.local("node").unwrap();
     let Type::Table(table) = environment.resolve_aliases(node) else {
         panic!("expected recursive alias outer record");
     };
-    assert_eq!(table.semantic_field("value").map(|field| &field.ty), Some(&Type::number()));
+    assert_eq!(
+        table.semantic_field("value").map(|field| &field.ty),
+        Some(&Type::number())
+    );
     let Type::Union(next) = &table.semantic_field("next").unwrap().ty else {
         panic!("expected recursive edge union");
     };
-    assert!(next.iter().any(|ty| matches!(ty, Type::GenericAliasApplication { .. })));
+    assert!(next
+        .iter()
+        .any(|ty| matches!(ty, Type::GenericAliasApplication { .. })));
 }
 
 #[test]
@@ -2162,8 +2170,14 @@ fn changing_argument_generic_alias_recursion_stops_at_the_depth_limit() {
             other => panic!("expected bounded unresolved alias application, got {other:?}"),
         }
     }
-    assert!(depth <= 128, "expansion exceeded the guarded depth: {depth}");
-    assert!(depth >= 64, "recursive type should retain useful outer shape: {depth}");
+    assert!(
+        depth <= 128,
+        "expansion exceeded the guarded depth: {depth}"
+    );
+    assert!(
+        depth >= 64,
+        "recursive type should retain useful outer shape: {depth}"
+    );
 }
 
 #[test]
@@ -2179,22 +2193,39 @@ fn generic_alias_reports_bare_wrong_arity_and_unknown_uses() {
         .iter()
         .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::TYPE_ARGUMENT_COUNT))
         .collect::<Vec<_>>();
-    assert_eq!(arity.len(), 2, "expected extra-argument and bare-use errors: {diagnostics:#?}");
-    assert!(arity.iter().any(|diagnostic| {
-        diagnostic.line == 3
-            && diagnostic.column == 15
-            && diagnostic.end_column == 34
-            && diagnostic.message.contains("expects 1 type argument(s), found 2")
-    }), "wrong-arity error should point at the full application: {arity:#?}");
-    assert!(arity.iter().any(|diagnostic| {
-        diagnostic.line == 4 && diagnostic.message.contains("found 0")
-    }), "bare alias use should report missing arguments: {arity:#?}");
-    assert!(diagnostics.iter().any(|diagnostic| {
-        diagnostic.code == Some(DiagnosticCode::TYPE_UNKNOWN_NAME)
-            && diagnostic.line == 5
-            && diagnostic.column == 17
-            && diagnostic.message.contains("unknown generic type alias `Missing`")
-    }), "unknown generic name should be reported at its identifier: {diagnostics:#?}");
+    assert_eq!(
+        arity.len(),
+        2,
+        "expected extra-argument and bare-use errors: {diagnostics:#?}"
+    );
+    assert!(
+        arity.iter().any(|diagnostic| {
+            diagnostic.line == 3
+                && diagnostic.column == 15
+                && diagnostic.end_column == 34
+                && diagnostic
+                    .message
+                    .contains("expects 1 type argument(s), found 2")
+        }),
+        "wrong-arity error should point at the full application: {arity:#?}"
+    );
+    assert!(
+        arity
+            .iter()
+            .any(|diagnostic| { diagnostic.line == 4 && diagnostic.message.contains("found 0") }),
+        "bare alias use should report missing arguments: {arity:#?}"
+    );
+    assert!(
+        diagnostics.iter().any(|diagnostic| {
+            diagnostic.code == Some(DiagnosticCode::TYPE_UNKNOWN_NAME)
+                && diagnostic.line == 5
+                && diagnostic.column == 17
+                && diagnostic
+                    .message
+                    .contains("unknown generic type alias `Missing`")
+        }),
+        "unknown generic name should be reported at its identifier: {diagnostics:#?}"
+    );
 }
 
 #[test]
@@ -2209,7 +2240,9 @@ fn generic_alias_wrong_arity_is_checked_in_class_field_types() {
         .iter()
         .filter(|diagnostic| {
             diagnostic.code == Some(DiagnosticCode::TYPE_ARGUMENT_COUNT)
-                && diagnostic.message.contains("expects 1 type argument(s), found 2")
+                && diagnostic
+                    .message
+                    .contains("expects 1 type argument(s), found 2")
         })
         .count();
     assert!(
@@ -2229,7 +2262,9 @@ fn generic_alias_arity_is_checked_in_luadoc_type_tags() {
     assert!(
         diagnostics.iter().any(|diagnostic| {
             diagnostic.code == Some(DiagnosticCode::TYPE_ARGUMENT_COUNT)
-                && diagnostic.message.contains("expects 1 type argument(s), found 2")
+                && diagnostic
+                    .message
+                    .contains("expects 1 type argument(s), found 2")
         }),
         "LuaDoc generic applications should use the same arity validation: {diagnostics:#?}"
     );

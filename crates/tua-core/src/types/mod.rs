@@ -8,11 +8,11 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 use std::path::PathBuf;
 
 pub use assignability::{
-    AssignabilityFailure, AssignabilityFailureKind, AssignabilityPathSegment, TypeContext,
-    is_assignable,
+    is_assignable, AssignabilityFailure, AssignabilityFailureKind, AssignabilityPathSegment,
+    TypeContext,
 };
 pub use environment::{
-    TypeEnvironment, TypedFunction, TypedFunctionOverload, TypedParameter, build_type_environment,
+    build_type_environment, TypeEnvironment, TypedFunction, TypedFunctionOverload, TypedParameter,
 };
 pub(crate) use environment::{
     build_type_environment_with_diagnostics, build_type_environment_with_domain_registry,
@@ -21,9 +21,8 @@ pub(crate) use environment::{
 };
 pub(crate) use format::{format_named_function_pretty, format_type_with_prefix};
 pub use model::{
-    FunctionParameter, FunctionType, GenericAliasDefinition, GenericAliasReference,
-    IndexFallback, MetatableFacts, NewIndexRule, PrimitiveType, TableField, TableShape, Type,
-    TypeAlias,
+    FunctionParameter, FunctionType, GenericAliasDefinition, GenericAliasReference, IndexFallback,
+    MetatableFacts, NewIndexRule, PrimitiveType, TableField, TableShape, Type, TypeAlias,
 };
 
 /// A callback may be optional, but competing callable contracts are ambiguous.

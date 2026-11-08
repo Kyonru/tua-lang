@@ -27,7 +27,10 @@ pub enum Type {
     Table(TableShape),
     Array(Box<Type>),
     Tuple(Vec<Type>),
-    Dictionary { key: Box<Type>, value: Box<Type> },
+    Dictionary {
+        key: Box<Type>,
+        value: Box<Type>,
+    },
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
