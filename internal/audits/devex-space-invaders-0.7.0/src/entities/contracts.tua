@@ -1,0 +1,11 @@
+export protocol Updatable {
+  update(dt: number): nil
+}
+
+export protocol InvaderBehavior {
+  wouldHitEdge(dt: number, direction: number): boolean
+  update(dt: number, direction: number): nil
+  draw(): nil
+  hit(x: number, y: number): boolean
+  isAlive(): boolean
+}
