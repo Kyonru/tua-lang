@@ -32,6 +32,41 @@ export type Room = { owner: Shared.Player }
 }
 
 #[test]
+fn protocols_erase_to_ordinary_classes_and_keep_virtual_colon_dispatch() {
+    let emitted = emit_tua_source(
+        "src/protocol_dispatch.tua",
+        r#"import type { Tickable } from "./contracts"
+
+final class Particle implements Tickable {
+  ticks: number = 0
+
+  tick(dt: number): nil {
+    self.ticks += dt
+  }
+}
+
+local function update(value: Tickable, dt: number): nil
+  value:tick(dt)
+end
+
+local particle = Particle.new()
+update(particle, 0.5)
+return particle
+"#,
+    )
+    .expect("protocol-based code should lower to ordinary Lua classes and calls");
+
+    assert!(!emitted.contains("import type"));
+    assert!(!emitted.contains("Tickable"));
+    assert!(!emitted.contains("implements"));
+    assert!(emitted.contains("local Particle = {}"));
+    assert!(emitted.contains("Particle.__index = Particle"));
+    assert!(emitted.contains("local function Particle_tick(self, dt)"));
+    assert!(emitted.contains("value:tick(dt)"));
+    assert!(emitted.contains("local function update(value, dt)"));
+}
+
+#[test]
 fn snapshot_enums_emit_no_runtime_code() {
     let emitted = emit_tua_source(
         "src/enums.tua",

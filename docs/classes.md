@@ -113,6 +113,31 @@ implementation navigation and refactoring are still being completed. The
 [feature-tour example](https://github.com/Kyonru/tua-lang/blob/main/examples/features/src/protocols.tua)
 exercises this language feature.
 
+Conformance does not add a wrapper, proxy, or generated interface table. The
+class still lowers to its normal Lua table and metatable, and a call through a
+protocol-typed value remains a virtual colon call. For example:
+
+```tua
+local function update(value: Updatable, dt: number): nil
+  value:update(dt)
+end
+```
+
+emits:
+
+```lua
+local function update(value, dt)
+  value:update(dt)
+end
+```
+
+The annotation and protocol name disappear; Lua's method lookup still selects
+the receiver's implementation and the colon call still passes `value` as
+`self`. A type-only protocol import adds no runtime `require`. The generated
+class remains an ordinary Tua class, including the usual constructor and
+runtime class metadata used by supported `is` checks; `implements` itself adds
+no runtime metadata.
+
 ## Fields And Method Syntax
 
 Class fields use the same native types as locals and aliases, including `T[]`,
