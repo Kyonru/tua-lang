@@ -250,6 +250,17 @@ fn unused_type_diagnostics(parsed: &ParsedSource) -> Vec<Diagnostic> {
         collect(ty, &mut live);
     }
 
+    // `implements` clauses are type-level references too. Keep imported
+    // protocols live even when the class never mentions the type in an
+    // annotation or expression.
+    live.extend(
+        parsed
+            .class_declarations
+            .iter()
+            .flat_map(|class| &class.implemented_protocols)
+            .map(|(protocol, _)| protocol.clone()),
+    );
+
     live.extend(
         parsed
             .type_aliases

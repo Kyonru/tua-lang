@@ -983,6 +983,26 @@ print(room)
 }
 
 #[test]
+fn imported_protocol_used_by_implements_is_not_reported_unused() {
+    let diagnostics = check_standard_rules_source(
+        r#"
+import type { Updatable } from "./contracts"
+final class Player implements Updatable {
+  update(dt: number): nil {}
+}
+"#,
+    );
+
+    assert!(
+        !diagnostics.iter().any(|diagnostic| {
+            diagnostic.code == Some(DiagnosticCode::LINT_UNUSED_IMPORT)
+                && diagnostic.message.contains("Updatable")
+        }),
+        "the conformance clause uses the imported type: {diagnostics:#?}"
+    );
+}
+
+#[test]
 fn unused_types_do_not_keep_their_import_dependencies_alive() {
     let diagnostics = check_standard_rules_source(
         r#"
