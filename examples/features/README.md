@@ -47,6 +47,8 @@ make build-features
   `super`, `Self`, typed array fields initialized with `{}`, constructor
   lowering, exact method contracts, final-method devirtualization, and class
   runtime `is` checks.
+- `src/protocols.tua` covers method-only protocols, explicit class conformance,
+  heterogeneous protocol-typed arrays, and checked method dispatch.
 - `src/polymorphism.tua` and `src/polymorphism/actors.tua` demonstrate imported
   instance types, base-typed collections, virtual dispatch, and explicit typed
   adapters for unrelated objects. After building, run their assertions without

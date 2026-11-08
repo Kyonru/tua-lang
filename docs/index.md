@@ -41,7 +41,7 @@ flowchart LR
 | Learn the language by building a small LOVE project | [Learn Tua](learn.md) |
 | Add Tua to an existing Lua codebase | [Lua Interoperability](lua-interop.md) and [Configuration](configuration.md) |
 | Model data and share type-safe module APIs | [Typing](typing.md) and [Modules And Imports](modules.md) |
-| Import classes, annotate instances, and use inheritance | [Classes](classes.md) |
+| Import classes, use inheritance, and share method contracts | [Classes](classes.md) |
 | Write API comments and understand annotations | [Comments And Documentation](comments.md) |
 | Fix missing suggestions, formatting, imports, or run failures | [Troubleshooting](troubleshooting.md) |
 | Run typed unit tests | [Testing Tua](testing.md) |

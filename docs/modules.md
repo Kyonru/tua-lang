@@ -15,6 +15,7 @@ when splitting a project into files.
 | A Lua or Tua module | `local Player = require("player")` | Loads the module through Lua's `require`. |
 | A statically checked project import | `local Player = import("./player")` | Lowers to `require` using the resolved project path. |
 | An exported type alias | `import type { Player } from "./types"` | Erased; loads nothing. |
+| An exported protocol | `import type { Updatable } from "./contracts"` | Erased; loads nothing. |
 | A group of type aliases | `import type Types from "./types"` | Erased; use names such as `Types.Player` in type positions. |
 
 Use runtime `import(...)` for supported static top-level local bindings. It is
@@ -99,10 +100,33 @@ Use a `.d.tua` file when the whole module is a type contract:
 export type Damage = { target: string, amount: number }
 ```
 
-Only explicitly exported aliases are public. `.d.tua` files do not emit Lua;
-do not use a runtime `require` for a declaration-only module. Named imports,
-renaming imports, namespace imports, and type re-exports are covered in
+Only explicitly exported aliases and protocols are public. A protocol can
+also be declared next to runtime classes using `export protocol Name { ... }`.
+`.d.tua` files do not emit Lua; do not use a runtime `require` for a
+declaration-only module. Named imports, renaming imports, namespace imports,
+and type re-exports are covered in
 [Sharing Types](typing.md#sharing-types-between-modules).
+
+For a method contract shared by runtime modules, export the protocol from a
+regular `.tua` module and import it only where the class needs its type:
+
+```tua title="src/contracts.tua"
+export protocol Updatable {
+  update(dt: number): nil
+}
+```
+
+```tua title="src/particle.tua"
+import type { Updatable } from "./contracts"
+
+final class Particle implements Updatable {
+  update(dt: number): nil {
+  }
+}
+```
+
+The type-only import does not load `contracts` at runtime. A class can also
+implement a protocol declared in its own source file.
 
 A class constructor is a runtime value; an instance annotation is a type.
 Export an alias such as `export type DialogueInstance = Dialogue` and import

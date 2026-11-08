@@ -12,41 +12,39 @@ workflow pages under `docs/`. Completed work belongs in
 
 ### 0.7.0: Protocol Contracts First, Then Generics
 
-The primary 0.7.0 goal is stronger polymorphism and generics. Protocol/interface
-contracts for unrelated classes come first; native generics follow. These are
-planned capabilities, not current syntax. The detailed contributor plan is kept
-locally in `internal/generics-polymorphism-0.7.0.md`.
+The primary 0.7.0 goal is stronger polymorphism and generics. The initial
+method-only protocol syntax, explicit class conformance, basic checking, and
+cross-module type imports are implemented. The complete protocol editor and
+qualification slice and all native generics remain open; this is not a release
+completion claim. The detailed contributor plan is kept locally in
+`internal/generics-polymorphism-0.7.0.md`.
 
-1. **Define method contracts and receiver semantics.** Specify a method-only
-   protocol declaration, explicit class conformance, inherited implementations,
-   and assignment to protocol-typed parameters and arrays. Preserve nominal
-   class identity and colon dispatch; do not implicitly bind methods or change
-   initialization order. Specify missing/incompatible-method diagnostics before
-   enabling syntax. Default methods, mutable protocol fields, abstract classes,
-   multiple inheritance, and runtime protocol tests are outside the first slice.
-2. **Implement one shared conformance model.** Keep declarations, source spans,
-   conformance, and method signatures in core analysis. Check implementations
-   with safe parameter/return variance and retain precise failing contract slots.
-   Cover inherited methods, unrelated implementers, cross-file exports, and
-   fast versus project diagnostics. Erase contracts without runtime wrappers.
-3. **Ship complete protocol editor support.** Completion, hover, signature help,
+1. **Complete protocol semantics and module freshness.** The compiler now
+   supports method-only declarations, explicit `implements`, protocol-typed
+   parameters/arrays, basic missing and incompatible method diagnostics,
+   inherited method satisfaction, and exported protocols through type-only
+   imports. Verify inherited conformance, multiple obligations, variance edge
+   cases, declaration-module contracts, re-exports, and unsaved dependency edits.
+   Keep class identity nominal and erase contracts without runtime wrappers.
+2. **Ship complete protocol editor support.** Completion, hover, signature help,
    inlay hints, definition, references, rename, and implementation navigation
    must agree on protocol and concrete member identity, including unsaved edits
    and incomplete declarations. Use the shared model rather than feature-local
    conformance checks.
-4. **Add scoped generic aliases and functions.** Introduce declaration-owned
+3. **Add scoped generic aliases and functions.** Introduce declaration-owned
    type parameters and shared substitution/inference; preserve return tuples,
    callback signatures, imports, and declaration identity. Make unsupported
    forms explicit instead of silently degrading to `any`. Route LuaDoc generic
    annotations through the same semantics when their contracts are supported.
-5. **Add generic classes and protocol constraints.** Reuse the same substitution
+4. **Add generic classes and protocol constraints.** Reuse the same substitution
    model for construction, inherited members, `Self`, and protocol bounds.
    Decide mutable-container variance before accepting generic widening; current
    array subtyping is not evidence that mutable generic containers are safe.
-6. **Qualify the release.** Add runnable game/UI protocol examples and negative
-   contracts, check emitted Lua/runtime dispatch, and repeat core, cross-file,
-   LSP, installed-editor, and responsiveness gates. Update public documentation
-   as each capability becomes available, with explicit migration notes.
+5. **Qualify the release.** A buildable protocol example and an audit-only game
+   fixture now exercise emitted Lua and dispatch; actual LOVE/LuaJIT behavior,
+   source maps, hot reload, cross-platform CI, LSP, installed-editor, and
+   responsiveness gates remain pending. Keep examples and public documentation
+   aligned as capabilities land, with explicit migration notes.
 
 Owner: core parser/semantic/checker/emitter and IDE queries; LSP and VS Code
 consume shared results. Each behavior lands with its own tests and documentation.

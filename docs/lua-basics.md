@@ -151,7 +151,8 @@ end
 | Import a runtime module | `local Game = require("game")` |
 
 Native Tua class bodies use braces, but their nested Lua functions and
-control-flow blocks still use `end`. Tua does not support JavaScript imports,
+control-flow blocks still use `end`. Tua uses `protocol` for explicit,
+method-only class contracts; it does not support JavaScript imports or
 `interface`, `async`, optional chaining, Luau casts, or generic `<T>` syntax.
 
 Continue with [Learn Tua](learn.md), [Modules And Imports](modules.md), or

@@ -125,6 +125,8 @@ Never answer with TypeScript, JavaScript, Luau, Python, or Markdown.
   defaults, `init(...) { ... }`, methods `name(args): Return { ... }`,
   `override`, final methods, `super(...)`, inheritance, and typed `self`.
   Classes are closed/final by default and construct with `Name.new(...)`.
+  Method-only `protocol Name { ... }` contracts can be implemented explicitly
+  with `implements`; protocol contracts and type-only imports are erased.
 - Class/method bodies close with `}`; Lua functions and control flow close
   with `end`. Types, enums, classes, imports, defaults, `is`, and compound
   assignments lower to LuaJIT-compatible Lua and add no new VM.

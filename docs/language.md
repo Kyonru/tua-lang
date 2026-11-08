@@ -534,9 +534,14 @@ metatables. Construct them with `Name.new(...)` and call instance methods with
 class and `extends` / `override` for inheritance.
 
 The [Classes guide](classes.md) covers constructors, imported instance types,
-polymorphism, documentation, and initialization order. Read the initialization
-section before combining field defaults with assignments in `init`: defaults
-run after that class's initializer and can overwrite those assignments.
+inheritance, protocol contracts, documentation, and initialization order.
+`protocol Name { method(args): ReturnType }` declares a compile-time,
+method-only contract; `class Name implements Protocol` opts a class into it.
+Use `export protocol` and `import type` to share a protocol across modules.
+Protocols and conformance clauses are erased from emitted Lua. Generic type
+parameters such as `<T>` are not supported. Read the initialization section
+before combining field defaults with assignments in `init`: defaults run after
+that class's initializer and can overwrite those assignments.
 
 ## Functions, Parameters, And Returns
 

@@ -39,11 +39,14 @@ The feature tour includes placeholder assets under `src/assets/` so static LOVE
 asset validation, asset-path completion, and asset metadata hovers can run
 without depending on real art or audio files.
 
-It also includes focused modules for the Baton-backed `input({...})` helper,
-state machines, stores, Signals, ECS, object pools, sprite sheets, vectors, and
-Lua interoperability. `src/polymorphism.tua` demonstrates cross-module native
-inheritance and typed adapters for unrelated gameplay and UI objects; it also
-serves as a runnable companion to the [migration guidance](lua-interop.md#migrate-singleton-tables-and-mixins).
+It also includes focused modules for native protocol contracts, the
+Baton-backed `input({...})` helper, state machines, stores, Signals, ECS,
+object pools, sprite sheets, vectors, and Lua interoperability.
+`src/protocols.tua` demonstrates unrelated classes implementing a shared
+method contract and dispatch through a protocol-typed array.
+`src/polymorphism.tua` demonstrates cross-module native inheritance and typed
+adapters for unrelated gameplay and UI objects; it also serves as a runnable
+companion to the [migration guidance](lua-interop.md#migrate-singleton-tables-and-mixins).
 
 `src/timer_services.tua` binds an existing handle-based timer to a typed service
 with cancellation closures. `examples/type-libraries/hump/timer.lua` is a

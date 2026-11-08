@@ -6,6 +6,16 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+### Added
+
+- Method-only protocols with explicit class conformance, protocol-typed
+  parameters and arrays, exported protocol types, and erased type-only imports.
+
+### Fixed
+
+- Do not report a protocol type import as unused when a class uses it in an
+  `implements` clause.
+
 ## [0.6.1] - 2026-11-08
 
 ### Release summary

@@ -58,9 +58,60 @@ For a runnable cross-module example, see
 [`polymorphism.tua`](https://github.com/Kyonru/tua-lang/blob/main/examples/features/src/polymorphism.tua)
 and its actor module. A base-typed array dispatches overridden methods to each
 subclass. Unrelated objects can join a shared loop through explicitly typed
-table/function adapters that bind their receivers. This does not make unrelated
-classes assignable to one another. Interfaces/protocols and abstract classes or
-methods are not implemented; adapters are an explicit option today.
+table/function adapters that bind their receivers. Tua also supports
+method-only [protocol contracts](#protocol-contracts) for explicitly conforming
+classes. Abstract classes and methods are not supported.
+
+## Protocol Contracts
+
+A protocol describes methods that a class promises to provide. Declare each
+method's parameter and return types, then list the protocol after `implements`:
+
+```tua
+protocol Updatable {
+  update(dt: number): nil
+}
+
+final class Particle implements Updatable {
+  elapsed: number = 0
+
+  update(dt: number): nil {
+    self.elapsed += dt
+  }
+}
+
+final class HudClock implements Updatable {
+  ticks: number = 0
+
+  update(dt: number): nil {
+    self.ticks += dt
+  }
+}
+
+local function updateAll(items: Updatable[], dt: number): nil
+  for _, item in ipairs(items) do
+    item:update(dt)
+  end
+end
+
+local items: Updatable[] = { Particle.new(), HudClock.new() }
+updateAll(items, 0.5)
+```
+
+The classes remain unrelated: each explicitly implements the contract, and
+calls through `Updatable[]` dispatch to the object's class method. The checker
+reports missing or incompatible methods and does not infer conformance merely
+because a class happens to have a method with the same name. A method inherited
+from a base class can satisfy a protocol requirement.
+
+Protocols can be exported and consumed as type-only imports; those imports and
+the protocol declaration are erased from Lua. See [Sharing Types Between
+Modules](modules.md#share-types-without-loading-code) for module boundaries.
+Protocol bodies currently describe methods only. They do not declare fields,
+default implementations, or protocol inheritance. Dedicated protocol
+implementation navigation and refactoring are still being completed. The
+[feature-tour example](https://github.com/Kyonru/tua-lang/blob/main/examples/features/src/protocols.tua)
+exercises this language feature.
 
 ## Fields And Method Syntax
 

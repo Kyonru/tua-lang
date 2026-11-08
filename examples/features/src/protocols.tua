@@ -1,0 +1,42 @@
+-- Method-only contracts let unrelated classes share a typed game update loop.
+protocol Updatable {
+  update(dt: number): nil
+  progress(): number
+}
+
+final class Particle implements Updatable {
+  elapsed: number = 0
+
+  update(dt: number): nil {
+    self.elapsed += dt
+  }
+
+  progress(): number {
+    return self.elapsed
+  }
+}
+
+final class HudClock implements Updatable {
+  ticks: number = 0
+
+  update(dt: number): nil {
+    self.ticks += dt
+  }
+
+  progress(): number {
+    return self.ticks
+  }
+}
+
+local function updateAll(items: Updatable[], dt: number): nil
+  for _, item in ipairs(items) do
+    item:update(dt)
+  end
+end
+
+local items: Updatable[] = { Particle.new(), HudClock.new() }
+updateAll(items, 0.5)
+assert(items[1]:progress() == 0.5)
+assert(items[2]:progress() == 0.5)
+
+return { items = items, updateAll = updateAll }

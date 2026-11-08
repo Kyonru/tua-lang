@@ -89,11 +89,12 @@ and would overwrite its assignment. See the [class initialization rules](classes
 
 Do not translate a mixin mechanically into inheritance. Keep independent
 behaviors as explicit collaborators, or adapt unrelated objects to a small
-record of typed functions. The runnable
-[polymorphism example](examples.md) shows native inheritance
-and typed adapters side by side. Tua does not currently have interfaces,
-protocols, or generic classes; the adapter's functions make receiver binding
-explicit without requiring those features.
+record of typed functions. Tua protocols describe method-only contracts for
+native Tua classes that declare `implements`; they do not add conformance to
+existing Lua tables or Lua classes automatically. The runnable feature tour
+shows explicit protocol conformance alongside typed adapters. Adapters remain
+useful for binding receivers when integrating plain Lua objects. Generic
+classes are not currently supported.
 
 Before changing a legacy game's runtime, preserve its LOVE version and dependency
 licenses, then compare the original and emitted application under the same

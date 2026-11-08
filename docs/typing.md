@@ -94,6 +94,14 @@ type Node = {
 }
 ```
 
+### Protocol Contracts
+
+Classes can opt in to a method-only [protocol contract](classes.md#protocol-contracts).
+Unlike structural table aliases, a class must declare `implements` before its
+instances can be assigned to that protocol type. Protocol-typed values expose
+the declared methods; they do not expose extra fields from a concrete class or
+support an implicit downcast.
+
 ### Arrays, Dictionaries, And LuaDoc Tuples
 
 Use `T[]` for an array and `{ [Key]: Value }` for a dictionary:
@@ -267,8 +275,10 @@ type Logger = (prefix: string, ...string) -> nil
 The tail annotation is checked at calls too: `logAll("items", 1)` is an
 error because each extra argument must be a string.
 
-Generics are not currently part of Tua. Use arrays, dictionaries, concrete
-aliases, and `any` at genuinely dynamic boundaries.
+Generic type parameters and generic classes are not currently part of Tua.
+Protocols provide explicit method contracts, not generic constraints. Use
+arrays, dictionaries, concrete aliases, and `any` at genuinely dynamic
+boundaries.
 
 ## Inference And Assignment
 
