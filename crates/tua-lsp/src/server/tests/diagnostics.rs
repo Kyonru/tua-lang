@@ -243,6 +243,46 @@ final class Broken implements Updatable {}
 }
 
 #[test]
+fn namespace_imported_protocol_conformance_diagnostics_resolve_from_declarations() {
+    let temp = TempProject::new("namespace-imported-protocol-diagnostic");
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write(
+        "src/contracts.d.tua",
+        "export protocol Updatable {\n  update(dt: number): nil\n}\n",
+    );
+    let actors = r#"import type Contracts from "./contracts"
+final class Valid implements Contracts.Updatable {
+  update(dt: number): nil {}
+}
+final class Missing implements Contracts.Updatable {}
+"#;
+    let actors_uri = temp.uri_for("src/actors.tua");
+    let mut server = TestServer::new();
+
+    server.send(initialize_with_pull_diagnostics(1, temp.uri(), true));
+    server.send(did_open(&actors_uri, actors));
+    server.send(text_document_diagnostic_request(2, &actors_uri));
+    let diagnostics = document_diagnostic_items(server.output(), 2);
+
+    assert!(
+        diagnostics.iter().any(|diagnostic| {
+            diagnostic["message"].as_str().is_some_and(|message| {
+                message.contains("Missing") && message.contains("missing method `update`")
+            })
+        }),
+        "a namespace-imported declaration protocol should diagnose missing methods: {diagnostics:#?}"
+    );
+    assert!(
+        !diagnostics.iter().any(|diagnostic| {
+            diagnostic["message"].as_str().is_some_and(|message| {
+                message.contains("Valid") && message.contains("does not satisfy protocol")
+            })
+        }),
+        "valid namespace-imported conformance should remain accepted: {diagnostics:#?}"
+    );
+}
+
+#[test]
 fn class_method_diagnostics_point_to_the_original_error_expression() {
     let uri = "file:///tmp/class-method-diagnostic.tua";
     let source = r#"final class Counter {

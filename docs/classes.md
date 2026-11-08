@@ -116,7 +116,9 @@ Protocols can be exported and consumed as type-only imports; those imports and
 the protocol declaration are erased from Lua. Project diagnostics validate
 classes against imported contracts even when `implements` is the only use of
 the imported type. See [Sharing Types Between Modules](modules.md#share-types-without-loading-code)
-for module boundaries.
+for module boundaries. Namespace type imports qualify the contract in the class
+header, for example `import type Contracts from "./contracts"` followed by
+`final class Actor implements Contracts.Updatable`.
 Protocol bodies currently describe methods only. They do not declare fields,
 default implementations, or protocol inheritance. From a protocol-typed
 method call, completion, hover signatures, and signature help use the declared

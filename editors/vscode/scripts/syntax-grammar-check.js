@@ -57,6 +57,8 @@ async function main() {
   assertScope(tokenizedLines, '  "idle"', "idle", "variable.other.enummember.tua");
   assertScope(tokenizedLines, "open class Entity", "Entity", "entity.name.type.class.tua");
   assertScope(tokenizedLines, "open class Entity", "BaseEntity", "entity.other.inherited-class.tua");
+  assertScope(tokenizedLines, "class ProtocolActor", "implements", "storage.modifier.implements.tua");
+  assertScope(tokenizedLines, "Contracts.Updatable", "Contracts.Updatable", "entity.other.inherited-class.tua");
   assertScope(tokenizedLines, "  x: number", "x", "variable.other.property.declaration.tua");
   assertScope(tokenizedLines, "  init(name: string)", "init", "entity.name.function.member.tua");
   assertScope(tokenizedLines, "  init(name: string)", "name", "variable.parameter.tua");

@@ -391,6 +391,8 @@ fn class_headers_preserve_explicit_protocol_conformance_and_erase_it_from_lua() 
   update(dt: number) {
   }
 }
+final class QualifiedPanel implements Contracts . Updatable {
+}
 "#;
     let parsed = parse_tua_source("src/panel.tua", source)
         .expect("conformance clauses should be preserved by class lowering");
@@ -402,6 +404,10 @@ fn class_headers_preserve_explicit_protocol_conformance_and_erase_it_from_lua() 
             .map(|(name, _)| name.as_str())
             .collect::<Vec<_>>(),
         vec!["Updatable", "Drawable"]
+    );
+    assert_eq!(
+        parsed.class_declarations[1].implemented_protocols[0].0,
+        "Contracts.Updatable"
     );
     let lua = crate::emit::emit_lua(&parsed).expect("protocol metadata is compile-time only");
     assert!(!lua.contains("implements"));

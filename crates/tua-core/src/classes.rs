@@ -831,7 +831,19 @@ fn parse_class_header(
     if starts_keyword(source, cursor, "implements") {
         cursor = skip_whitespace(source, cursor + "implements".len());
         loop {
-            let (protocol, start, end) = take_identifier(source, cursor)?;
+            let (mut protocol, start, mut end) = take_identifier(source, cursor)?;
+            loop {
+                let separator = skip_whitespace(source, end);
+                if !source[separator..].starts_with('.') {
+                    break;
+                }
+
+                let member_start = skip_whitespace(source, separator + 1);
+                let (member, _, member_end) = take_identifier(source, member_start)?;
+                protocol.push('.');
+                protocol.push_str(&member);
+                end = member_end;
+            }
             implemented_protocols.push((
                 protocol,
                 SourceSpan {

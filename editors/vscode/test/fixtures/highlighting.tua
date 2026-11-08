@@ -25,6 +25,9 @@ open class Entity extends BaseEntity {
   }
 }
 
+final class ProtocolActor implements Contracts.Updatable, Drawable {
+}
+
 local events = signal()
 local game = store({ score = 0 })
 local controls = input({ controls = { confirm = { "key:return" } } })
