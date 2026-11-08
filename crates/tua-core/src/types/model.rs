@@ -65,6 +65,7 @@ pub struct GenericAliasDefinition {
 pub(crate) struct GenericClassDefinition {
     pub id: GenericDeclarationId,
     pub parameters: Vec<TypeParameterId>,
+    pub parent: Option<Type>,
     pub body: Box<Type>,
 }
 

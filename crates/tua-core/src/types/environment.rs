@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -31,7 +31,7 @@ use crate::{asset, lua, Diagnostic, DiagnosticCode};
 
 use super::model::{
     FunctionType, GenericAliasDefinition, GenericAliasReference, GenericClassDefinition,
-    MetatableFacts, TableField, Type, TypeAlias,
+    MetatableFacts, TableField, TableShape, Type, TypeAlias,
 };
 use super::{
     deduplicate_inferred_types, function_type_from_tua_signature, has_leading_lua_doc_type,
@@ -231,6 +231,26 @@ impl TypeEnvironment {
             }
         }
         for class in &parsed.class_declarations {
+            if let Some(parent_application) = &class.parent_application {
+                let parent_type = self
+                    .generic_classes
+                    .values()
+                    .find(|definition| {
+                        definition.id.module == crate::vfs::normalize_path(&parsed.path)
+                            && definition.id.name == class.name
+                    })
+                    .and_then(|definition| definition.parent.as_ref());
+                if let Some(parent_type) = parent_type {
+                    validate_generic_alias_type(
+                        self,
+                        parent_type,
+                        Some(parent_application.span),
+                        parsed,
+                        &mut diagnostics,
+                        &mut emitted,
+                    );
+                }
+            }
             for field in &class.fields {
                 let ty = super::type_from_tua_type(&field.parsed_ty);
                 validate_generic_alias_type(
@@ -375,6 +395,18 @@ impl TypeEnvironment {
     /// application. This is intentionally separate from `resolve_aliases`:
     /// expression and assignment types must retain their class identity.
     pub(crate) fn generic_class_members(&self, ty: &Type) -> Option<Type> {
+        self.generic_class_members_inner(ty, &mut HashSet::new(), 0)
+    }
+
+    fn generic_class_members_inner(
+        &self,
+        ty: &Type,
+        visited: &mut HashSet<GenericDeclarationId>,
+        depth: usize,
+    ) -> Option<Type> {
+        if depth >= 64 {
+            return None;
+        }
         let Type::GenericClassApplication {
             identity,
             arguments,
@@ -384,6 +416,9 @@ impl TypeEnvironment {
             return None;
         };
         let definition = self.generic_classes.get(identity)?;
+        if !visited.insert(identity.clone()) {
+            return None;
+        }
         if definition.parameters.len() != arguments.len() {
             return None;
         }
@@ -393,10 +428,34 @@ impl TypeEnvironment {
             .cloned()
             .zip(arguments.iter().cloned())
             .collect::<HashMap<_, _>>();
-        Some(self.resolve_aliases(&substitute_type_parameters(
+        let mut members =
+            match definition.parent.as_ref().map(|parent| {
+                self.resolve_aliases(&substitute_type_parameters(parent, &substitutions))
+            }) {
+                Some(parent @ Type::GenericClassApplication { .. }) => {
+                    match self.generic_class_members_inner(&parent, visited, depth + 1) {
+                        Some(Type::Table(table)) => table,
+                        _ => TableShape::new(),
+                    }
+                }
+                Some(Type::Alias(parent_name)) => match self.alias(&parent_name) {
+                    Some(Type::Table(table)) => table.clone(),
+                    _ => TableShape::new(),
+                },
+                Some(Type::Table(table)) => table,
+                _ => TableShape::new(),
+            };
+        let Type::Table(body) = self.resolve_aliases(&substitute_type_parameters(
             &definition.body,
             &substitutions,
-        )))
+        )) else {
+            return Some(Type::Table(members));
+        };
+        for (name, field) in body.fields() {
+            members.insert(name.to_owned(), field.clone());
+        }
+        visited.remove(identity);
+        Some(Type::Table(members))
     }
 
     /// Returns the value produced by a checked raw lookup. Ordinary `T[]`
@@ -619,6 +678,9 @@ impl TypeEnvironment {
 
         for (class, parent) in &self.class_parents {
             context.insert_nominal_alias_supertype(class, parent);
+        }
+        for definition in self.generic_classes.values() {
+            context.insert_generic_class_definition(definition.clone());
         }
         for (class, protocols) in &self.class_protocols {
             for protocol in protocols {
@@ -1838,13 +1900,27 @@ fn generic_class_definitions(
     parsed: &ParsedSource,
     aliases: &BTreeMap<String, Type>,
 ) -> HashMap<GenericDeclarationId, GenericClassDefinition> {
+    let alias_names = aliases.keys().cloned().collect::<BTreeSet<_>>();
+    let class_context =
+        TypeResolutionContext::with_classes(&parsed.path, &parsed.class_declarations);
     parsed
         .class_declarations
         .iter()
         .filter_map(|class| {
-            let Type::Table(body) = aliases.get(&class.name)?.clone() else {
+            let Type::Table(full_body) = aliases.get(&class.name)?.clone() else {
                 return None;
             };
+            let declared_fields = class
+                .fields
+                .iter()
+                .map(|field| field.name.as_str())
+                .chain(class.methods.iter().map(|method| method.name.as_str()))
+                .collect::<BTreeSet<_>>();
+            let body = TableShape::from_fields(full_body.fields().filter_map(|(name, field)| {
+                declared_fields
+                    .contains(name)
+                    .then(|| (name.to_owned(), field.clone()))
+            }));
             let id = generic_class_identity(&parsed.path, class);
             Some((
                 id.clone(),
@@ -1855,6 +1931,38 @@ fn generic_class_definitions(
                         .iter()
                         .map(|parameter| parameter.id.clone())
                         .collect(),
+                    parent: class.parent_application.as_ref().map(|application| {
+                        let context = TypeResolutionContext::for_class(
+                            &parsed.path,
+                            &parsed.class_declarations,
+                            class,
+                        );
+                        if let Some(parent_identity) =
+                            class_context.class_bindings.get(&application.name)
+                        {
+                            Type::GenericClassApplication {
+                                identity: parent_identity.clone(),
+                                name: application.name.clone(),
+                                arguments: application
+                                    .arguments
+                                    .iter()
+                                    .map(|argument| {
+                                        resolve_tua_type_with_context(
+                                            &parsed.path,
+                                            &argument.ty,
+                                            Some(argument.span),
+                                            &alias_names,
+                                            &mut Vec::new(),
+                                            &context,
+                                        )
+                                    })
+                                    .collect(),
+                                span: Some(application.span),
+                            }
+                        } else {
+                            Type::Alias(application.name.clone())
+                        }
+                    }),
                     body: Box::new(Type::Table(body)),
                 },
             ))
@@ -2200,10 +2308,18 @@ fn resolve_function_annotation(
         None => Vec::new(),
     };
     let return_type = return_types.first().cloned();
+    let mut generic_parameters = function.generic_parameters.clone();
+    if let (Some(owner), Some(name)) = (class_owner.as_deref(), function.name.as_deref()) {
+        if name == format!("{owner}_init") {
+            if let Some(class) = class_declarations.iter().find(|class| class.name == owner) {
+                generic_parameters.extend(class.generic_parameters.iter().cloned());
+            }
+        }
+    }
 
     TypedFunction {
         name: function.name.clone(),
-        generic_parameters: function.generic_parameters.clone(),
+        generic_parameters,
         parameters,
         parameter_count,
         required_parameter_count,

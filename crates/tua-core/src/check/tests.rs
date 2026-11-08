@@ -4089,6 +4089,28 @@ local wrong_box: Box<string> = box
 }
 
 #[test]
+fn user_function_with_constructor_suffix_does_not_receive_generic_constructor_correction() {
+    let diagnostics = check_tua_source(
+        "src/generic_constructor_suffix.tua",
+        r#"
+final class Box<T> {}
+
+local function Box_new(): Box<number>
+  return setmetatable({}, Box)
+end
+"#,
+    )
+    .expect_err("a user function must not inherit generated constructor semantics by name");
+    assert!(
+        diagnostics.iter().any(|diagnostic| {
+            diagnostic.code == Some(DiagnosticCode::TYPE_MISMATCH)
+                && diagnostic.line == 5
+        }),
+        "expected the user return to be checked without constructor correction, got {diagnostics:#?}"
+    );
+}
+
+#[test]
 fn generic_pair_class_infers_each_constructor_parameter_independently() {
     let diagnostics = check_tua_source(
         "src/generic_pair.tua",
@@ -4162,6 +4184,144 @@ local box: {annotation} = Box.new(3)
                     == "generic class `Counter` expects 0 type argument(s), found 1"
         }),
         "expected a targeted nongeneric class application diagnostic, got {nongeneric:#?}"
+    );
+}
+
+#[test]
+fn generic_class_child_assigns_to_nongeneric_base() {
+    check_tua_source(
+        "src/generic_child_base.tua",
+        r#"
+open class Entity {}
+
+final class Child<T> extends Entity {
+  value: T
+
+  init(value: T) {
+    self.value = value
+  }
+}
+
+local child = Child.new(3)
+local entity: Entity = child
+"#,
+    )
+    .expect("generic subclasses must retain ordinary class-to-base assignability");
+}
+
+#[test]
+fn generic_class_parent_arguments_substitute_members_and_keep_invariance() {
+    let diagnostics = check_tua_source(
+        "src/generic_parent_application.tua",
+        r#"
+open class Base<T> {
+  value: T
+
+  init(value: T) {
+    self.value = value
+  }
+
+  get(): T {
+    return self.value
+  }
+}
+
+final class Child<U> extends Base<U> {
+  init(value: U) {
+    super(value)
+  }
+}
+
+local child = Child.new(3)
+local inherited_field: number = child.value
+local inherited_method: number = child:get()
+local base: Base<number> = child
+local wrong_base: Base<string> = child
+"#,
+    )
+    .expect_err("generic parent applications must preserve invariant arguments");
+    assert!(
+        diagnostics.len() == 1
+            && diagnostics.iter().any(|diagnostic| {
+                diagnostic.code == Some(DiagnosticCode::TYPE_MISMATCH)
+                    && diagnostic.message.contains("generic argument 1")
+                    && diagnostic.message.contains("expected string, found number")
+            }),
+        "expected only the inherited Base argument mismatch, got {diagnostics:#?}"
+    );
+}
+
+#[test]
+fn nested_generic_class_inheritance_substitutes_each_parent_application() {
+    let diagnostics = check_tua_source(
+        "src/nested_generic_parent.tua",
+        r#"
+open class Base<T> {
+  value: T
+  init(value: T) { self.value = value }
+}
+
+open class Middle<U> extends Base<U> {
+  init(value: U) { super(value) }
+}
+
+final class Leaf<V> extends Middle<V> {
+  init(value: V) { super(value) }
+}
+
+local leaf = Leaf.new(7)
+local value: number = leaf.value
+local base: Base<number> = leaf
+local wrong_base: Base<string> = leaf
+"#,
+    )
+    .expect_err("nested generic parents must carry the same invariant argument");
+    assert!(
+        diagnostics.len() == 1
+            && diagnostics.iter().any(|diagnostic| {
+                diagnostic.code == Some(DiagnosticCode::TYPE_MISMATCH)
+                    && diagnostic.message.contains("generic argument 1")
+                    && diagnostic.message.contains("expected string, found number")
+            }),
+        "expected only the final invariant Base mismatch, got {diagnostics:#?}"
+    );
+}
+
+#[test]
+fn generic_parent_applications_validate_exact_arity() {
+    for (parent, expected) in [("Base", "found 0"), ("Base<number, string>", "found 2")] {
+        let source = format!(
+            r#"
+open class Base<T> {{ value: T }}
+final class Child extends {parent} {{}}
+"#
+        );
+        let diagnostics = check_tua_source("src/generic_parent_arity.tua", source)
+            .expect_err("generic parent applications must have exact arity");
+        assert!(
+            diagnostics.iter().any(|diagnostic| {
+                diagnostic.code == Some(DiagnosticCode::TYPE_ARGUMENT_COUNT)
+                    && diagnostic.message.contains("generic class `Base`")
+                    && diagnostic.message.contains(expected)
+            }),
+            "expected parent arity diagnostic for {parent}, got {diagnostics:#?}"
+        );
+    }
+}
+
+#[test]
+fn nongeneric_class_rejects_applied_parent_arguments() {
+    let nongeneric = check_tua_source(
+        "src/non_generic_parent_arity.tua",
+        "open class Base {}\nfinal class Child extends Base<number> {}\n",
+    )
+    .expect_err("a nongeneric class cannot be applied as a generic parent");
+    assert!(
+        nongeneric.iter().any(|diagnostic| {
+            diagnostic.code == Some(DiagnosticCode::TYPE_ARGUMENT_COUNT)
+                && diagnostic.message == "generic class `Base` expects 0 type argument(s), found 1"
+        }),
+        "expected the exact nongeneric parent arity diagnostic, got {nongeneric:#?}"
     );
 }
 

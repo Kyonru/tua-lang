@@ -197,6 +197,7 @@ struct Checker<'a> {
     /// Locals declared with later values of a call, per block scope.
     scoped_return_guards: Vec<Vec<ReturnGuard>>,
     active_function_name: Option<String>,
+    active_generated_generic_constructor: Option<crate::parser::GenericDeclarationId>,
     stable_inferred_locals: bool,
     unresolved_project_aliases: BTreeSet<String>,
     asset_roots: Vec<PathBuf>,
@@ -286,6 +287,7 @@ impl<'a> Checker<'a> {
             scoped_locals: Vec::new(),
             scoped_local_contracts: Vec::new(),
             active_function_name: None,
+            active_generated_generic_constructor: None,
             scoped_return_guards: Vec::new(),
             stable_inferred_locals: parsed.raw.language == ParsedLanguage::Tua,
             unresolved_project_aliases: unresolved_project_aliases(parsed, environment),
@@ -1412,14 +1414,21 @@ impl<'a> Checker<'a> {
             .iter()
             .find(|function| function.span == Some(span))
             .and_then(|function| function.name.clone());
+        let generated_constructor =
+            self.generated_generic_constructor_identity(span, function_name.as_deref());
         let previous_function =
             std::mem::replace(&mut self.active_function_name, function_name.clone());
+        let previous_generated_constructor = std::mem::replace(
+            &mut self.active_generated_generic_constructor,
+            generated_constructor,
+        );
         let contracts = scoped_locals.clone();
         self.scoped_locals.push(scoped_locals);
         self.scoped_local_contracts.push(contracts);
         self.check_parameter_defaults(span);
         self.check_block(body.block(), return_types);
         self.active_function_name = previous_function;
+        self.active_generated_generic_constructor = previous_generated_constructor;
         self.scoped_locals.pop();
         self.scoped_local_contracts.pop();
 
@@ -1574,34 +1583,54 @@ impl<'a> Checker<'a> {
     /// supplied to the generated constructor scheme, so retain its nominal
     /// `Box<T>` type while checking that generated return.
     fn generic_class_constructor_return(&self, source: &Type, target: &Type) -> Type {
-        let Some(function_name) = self.active_function_name.as_deref() else {
-            return source.clone();
-        };
-        let Some(class_name) = function_name.strip_suffix("_new") else {
-            return source.clone();
-        };
-        let Some(class) = self
-            .parsed
-            .class_declarations
-            .iter()
-            .find(|class| class.name == class_name && !class.generic_parameters.is_empty())
-        else {
+        let Some(active_identity) = &self.active_generated_generic_constructor else {
             return source.clone();
         };
         let Type::Alias(source_class) = source else {
             return source.clone();
         };
         let Type::GenericClassApplication {
-            name: target_class, ..
+            identity: target_identity,
+            name: target_class,
+            ..
         } = target
         else {
             return source.clone();
         };
-        if source_class == &class.name && target_class == &class.name {
+        if source_class == &active_identity.name
+            && target_class == &active_identity.name
+            && target_identity == active_identity
+        {
             target.clone()
         } else {
             source.clone()
         }
+    }
+
+    fn generated_generic_constructor_identity(
+        &self,
+        body_span: crate::SourceSpan,
+        function_name: Option<&str>,
+    ) -> Option<crate::parser::GenericDeclarationId> {
+        let function_name = function_name?;
+        let origin = self.parsed.raw.parser_position_origin(body_span.start)?;
+        if !origin.class_generated {
+            return None;
+        }
+        let class = self.parsed.class_declarations.iter().find(|class| {
+            !class.generic_parameters.is_empty()
+                && function_name == format!("{}_new", class.name)
+                && origin.source_position.line >= class.span.start.line
+                && origin.source_position.line <= class.span.end.line
+                && (origin.source_position.line != class.span.start.line
+                    || origin.source_position.column >= class.span.start.column)
+                && (origin.source_position.line != class.span.end.line
+                    || origin.source_position.column <= class.span.end.column)
+        })?;
+        class
+            .generic_parameters
+            .first()
+            .map(|parameter| parameter.id.declaration.clone())
     }
 
     fn infer_expression(&mut self, expression: &Expression) -> Option<Type> {

@@ -17,7 +17,8 @@ language or editor behavior, and migration notes call out those changes.
   conflicting or unsupported inference.
 - Same-module generic classes with constructor inference, substituted field and
   method members, nominal invariant arguments, editor completion/navigation,
-  exact `TL1004` arity diagnostics, and erased Lua output.
+  applied generic-parent substitution, generic `super(...)` initializer
+  checking, exact `TL1004` arity diagnostics, and erased Lua output.
 - Generic function values specialize from known callback parameter and return
   signatures; callback-only inference for a generic callee stays ambiguous.
 - Unbounded LuaDoc `---@generic T` function binders across parameter, vararg,

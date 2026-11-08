@@ -162,8 +162,10 @@ The constructor infers each class parameter independently. Hover and completion
 show the substituted member types, and class parameters are invariant because
 instances are mutable. A bare generic class or an application with the wrong
 number of arguments reports `TL1004`. Generic class types are erased from Lua;
-the generated class remains an ordinary table and metatable. Generic class
-imports and substitutions through `extends` are not yet supported.
+the generated class remains an ordinary table and metatable. Local generic
+inheritance supports applied parents such as `Child<U> extends Base<U>`;
+inherited fields, methods, `super(...)` initializer calls, and base assignments
+keep the parent arguments. Imported generic classes are not yet supported.
 
 ### Protocol Contracts
 
@@ -367,9 +369,9 @@ error because each extra argument must be a string.
 
 Generic type parameters are supported on aliases, free functions, and
 same-module classes; functions and class constructors infer binders from direct
-call arguments. Imported generic classes, generic inheritance, and protocol
-bounds are not currently supported. Protocols provide explicit method
-contracts.
+call arguments. Same-module generic classes can extend an applied generic
+parent. Imported generic classes and protocol bounds are not currently
+supported. Protocols provide explicit method contracts.
 Arrays and dictionaries remain the built-in collection forms; use `any` at
 genuinely dynamic boundaries.
 

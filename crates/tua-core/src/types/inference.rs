@@ -392,6 +392,25 @@ fn collect_constraints(
                 )?;
             }
         }
+        (
+            pattern @ Type::GenericClassApplication {
+                identity: pattern_identity,
+                ..
+            },
+            actual @ Type::GenericClassApplication { .. },
+        ) => {
+            if let Some(projected) = context.generic_class_projection(actual, pattern_identity) {
+                collect_constraints(
+                    context,
+                    pattern,
+                    &projected,
+                    binders,
+                    invariant_binders,
+                    substitutions,
+                    depth + 1,
+                )?;
+            }
+        }
         _ => {}
     }
     Ok(())

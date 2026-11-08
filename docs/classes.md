@@ -84,8 +84,11 @@ instantiated member types, and `Box<number>` cannot be assigned to
 `Box<string>` because class parameters are invariant for mutable instances.
 Generic class declarations and applications erase before Lua emission: the
 runtime class remains the ordinary table and metatable generated for `Box`.
-This first support is local to one module; imported generic classes and
-substitutions through `extends` are not yet supported.
+In a local inheritance chain, a generic class can apply its parent parameters
+with `extends Base<T>`. Parent fields and methods use the applied types, and
+`super(...)` checks the parent initializer with those same types. Assigning a
+generic subclass to a base class preserves the inherited type arguments.
+Imported generic classes are not yet supported.
 
 For a runnable cross-module example, see
 [`polymorphism.tua`](https://github.com/Kyonru/tua-lang/blob/main/examples/features/src/polymorphism.tua)

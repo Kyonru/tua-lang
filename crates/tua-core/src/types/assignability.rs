@@ -1,8 +1,8 @@
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 use super::model::{
     is_index_signature_field, FunctionType, GenericAliasDefinition, GenericAliasReference,
-    TableShape, Type, TypeAlias,
+    GenericClassDefinition, TableShape, Type, TypeAlias,
 };
 use crate::parser::TypeAliasId;
 
@@ -60,6 +60,7 @@ pub struct TypeContext {
     aliases: BTreeMap<String, Type>,
     generic_aliases: HashMap<TypeAliasId, GenericAliasDefinition>,
     generic_alias_bindings: HashMap<(std::path::PathBuf, String), TypeAliasId>,
+    generic_classes: HashMap<crate::parser::GenericDeclarationId, GenericClassDefinition>,
     nominal_supertypes: BTreeMap<String, BTreeSet<String>>,
     nominal_aliases: BTreeSet<String>,
     nominal_alias_supertypes: BTreeMap<String, BTreeSet<String>>,
@@ -96,6 +97,39 @@ impl TypeContext {
             definition.id.clone(),
         );
         self.insert_generic_alias(definition);
+    }
+
+    pub(crate) fn insert_generic_class_definition(&mut self, definition: GenericClassDefinition) {
+        self.generic_classes
+            .insert(definition.id.clone(), definition);
+    }
+
+    pub(crate) fn generic_class_projection(
+        &self,
+        ty: &Type,
+        target: &crate::parser::GenericDeclarationId,
+    ) -> Option<Type> {
+        let mut current = ty.clone();
+        let mut visited = HashSet::new();
+        for _ in 0..MAX_ASSIGNABILITY_DEPTH {
+            let Type::GenericClassApplication {
+                identity,
+                arguments,
+                ..
+            } = &current
+            else {
+                return None;
+            };
+            if identity == target {
+                return Some(current);
+            }
+            if !visited.insert(identity.clone()) {
+                return None;
+            }
+            let definition = self.generic_classes.get(identity)?;
+            current = instantiate_class_parent(definition, arguments)?;
+        }
+        None
     }
 
     pub fn alias(&self, name: &str) -> Option<&Type> {
@@ -255,6 +289,31 @@ impl TypeContext {
                         failure.at(AssignabilityPathSegment::GenericArgument(index))
                     })?;
                 }
+                Ok(())
+            }
+            (
+                source @ Type::GenericClassApplication {
+                    identity,
+                    arguments,
+                    ..
+                },
+                target @ Type::GenericClassApplication { .. },
+            ) => {
+                let parent = self
+                    .generic_classes
+                    .get(identity)
+                    .and_then(|definition| instantiate_class_parent(definition, arguments));
+                parent
+                    .as_ref()
+                    .ok_or_else(|| AssignabilityFailure::type_mismatch(source, target))
+                    .and_then(|parent| {
+                        self.check_assignable_inner(parent, target, depth + 1, resolving)
+                    })
+            }
+            (Type::GenericClassApplication { identity, name, .. }, Type::Alias(target_name))
+                if self.generic_classes.contains_key(identity)
+                    && self.is_nominal_alias_subtype(name, target_name, depth + 1) =>
+            {
                 Ok(())
             }
             (Type::Alias(name), _) if self.alias(name).is_some() => {
@@ -735,6 +794,26 @@ impl TypeContext {
 
         Ok(())
     }
+}
+
+fn instantiate_class_parent(
+    definition: &GenericClassDefinition,
+    arguments: &[Type],
+) -> Option<Type> {
+    if definition.parameters.len() != arguments.len() {
+        return None;
+    }
+    let parent = definition.parent.as_ref()?;
+    let substitutions = definition
+        .parameters
+        .iter()
+        .cloned()
+        .zip(arguments.iter().cloned())
+        .collect::<HashMap<_, _>>();
+    Some(crate::types::substitute_type_parameters(
+        parent,
+        &substitutions,
+    ))
 }
 
 fn best_union_failure(
