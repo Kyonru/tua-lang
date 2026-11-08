@@ -544,6 +544,63 @@ fn function_types_are_contravariant_in_parameters_and_covariant_in_return() {
     assert!(!is_assignable(&any_to_string, &number_to_number));
 }
 
+// Concrete nominal types matter here: `any` is assignable in both directions
+// and cannot establish that function variance is implemented correctly.
+#[test]
+fn polymorphic_callbacks_accept_base_inputs_and_return_derived_outputs() {
+    let mut context = TypeContext::new()
+        .with_alias(TypeAlias::new("Actor", Type::empty_table()))
+        .with_alias(TypeAlias::new("Fighter", Type::empty_table()))
+        .with_alias(TypeAlias::new("Mage", Type::empty_table()));
+    context.insert_nominal_alias_supertype("Fighter", "Actor");
+    context.insert_nominal_alias_supertype("Mage", "Actor");
+
+    let handle_actor = Type::function([Type::alias("Actor")], Type::nil());
+    let handle_fighter = Type::function([Type::alias("Fighter")], Type::nil());
+    let handle_mage = Type::function([Type::alias("Mage")], Type::nil());
+    assert!(context.is_assignable(&handle_actor, &handle_fighter));
+    assert!(!context.is_assignable(&handle_fighter, &handle_actor));
+    assert!(!context.is_assignable(&handle_fighter, &handle_mage));
+
+    let actor_factory = Type::function([], Type::alias("Actor"));
+    let fighter_factory = Type::function([], Type::alias("Fighter"));
+    assert!(context.is_assignable(&fighter_factory, &actor_factory));
+    assert!(!context.is_assignable(&actor_factory, &fighter_factory));
+}
+
+#[test]
+fn polymorphic_callback_failures_identify_the_incompatible_contract_slot() {
+    let mut context = TypeContext::new()
+        .with_alias(TypeAlias::new("Actor", Type::empty_table()))
+        .with_alias(TypeAlias::new("Fighter", Type::empty_table()));
+    context.insert_nominal_alias_supertype("Fighter", "Actor");
+
+    let failure = context
+        .check_assignable(
+            &Type::function([Type::alias("Fighter")], Type::nil()),
+            &Type::function([Type::alias("Actor")], Type::nil()),
+        )
+        .expect_err("a Fighter-only handler cannot accept every Actor");
+    assert_eq!(
+        failure.path,
+        vec![AssignabilityPathSegment::FunctionParameter {
+            index: 0,
+            name: None,
+        }]
+    );
+
+    let failure = context
+        .check_assignable(
+            &Type::function_returns([], [Type::number(), Type::alias("Actor")]),
+            &Type::function_returns([], [Type::number(), Type::alias("Fighter")]),
+        )
+        .expect_err("the second result must preserve the promised subclass");
+    assert_eq!(
+        failure.path,
+        vec![AssignabilityPathSegment::FunctionReturn(1)]
+    );
+}
+
 #[test]
 fn string_literals_are_assignable_to_string_and_exact_literal_targets() {
     let mode = Type::union([
