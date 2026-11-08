@@ -744,7 +744,10 @@ local result: Result<string, number>
     let box_alias = &parsed.type_aliases[0];
     let value_parameter = &box_alias.generic_parameters[0];
     assert_eq!(value_parameter.name, "T");
-    assert_eq!(value_parameter.id.declaration, box_alias.id);
+    assert_eq!(
+        value_parameter.id.declaration,
+        GenericDeclarationId::from(&box_alias.id)
+    );
     assert_eq!(value_parameter.id.ordinal, 0);
     let TuaType::Table(fields) = &box_alias.ty else {
         panic!("Box should retain its record body");
@@ -797,6 +800,91 @@ local result: Result<string, number>
                     TuaType::Named("number".to_owned()),
                 ]
     ));
+}
+
+#[test]
+fn parses_generic_function_binders_with_distinct_declaration_identity() {
+    let parsed = parse_tua_source(
+        "src/generic_functions.tua",
+        "type Box<T> = { value: T }\nfunction Box<T>(value: T): T return value end\n",
+    )
+    .expect("generic free functions should parse");
+    let alias = &parsed.type_aliases[0];
+    let function = parsed
+        .function_annotations
+        .iter()
+        .find(|function| function.name.as_deref() == Some("Box"))
+        .expect("generic function annotation");
+    assert_eq!(function.generic_parameters.len(), 1);
+    assert_eq!(function.generic_parameters[0].name, "T");
+    assert_ne!(
+        function.generic_parameters[0].id, alias.generic_parameters[0].id,
+        "same-named function and alias binders must remain distinct"
+    );
+    assert_eq!(
+        function.generic_parameters[0].id.declaration.kind,
+        GenericDeclarationKind::Function
+    );
+    assert_eq!(
+        alias.generic_parameters[0].id.declaration.kind,
+        GenericDeclarationKind::Alias
+    );
+    let alias_owner = &alias.generic_parameters[0].id.declaration;
+    let same_name_and_span = |kind| GenericDeclarationId {
+        module: alias_owner.module.clone(),
+        kind,
+        name: alias_owner.name.clone(),
+        declaration: alias_owner.declaration,
+    };
+    assert_ne!(
+        same_name_and_span(GenericDeclarationKind::Alias),
+        same_name_and_span(GenericDeclarationKind::Function)
+    );
+    assert_ne!(
+        same_name_and_span(GenericDeclarationKind::Function),
+        same_name_and_span(GenericDeclarationKind::Class)
+    );
+    assert_eq!(
+        function.parameters[0].ty,
+        TuaType::Parameter {
+            id: function.generic_parameters[0].id.clone(),
+            name: "T".to_owned(),
+        }
+    );
+    assert_eq!(
+        function.return_type,
+        Some(TuaType::Parameter {
+            id: function.generic_parameters[0].id.clone(),
+            name: "T".to_owned(),
+        })
+    );
+}
+
+#[test]
+fn generic_function_header_rejects_unsupported_binders_and_methods() {
+    for source in [
+        "local function defaulted<T = number>(value: T): T return value end",
+        "local function packed<...T>(...: T): T return ... end",
+        "function object:method<T>(value: T): T return value end",
+    ] {
+        let diagnostics = parse_tua_source("src/unsupported_generic.tua", source)
+            .expect_err("unsupported generic function syntax should be rejected");
+        assert!(!diagnostics.is_empty());
+    }
+}
+
+#[test]
+fn duplicate_generic_function_binder_has_one_actionable_diagnostic() {
+    let diagnostics = parse_tua_source(
+        "src/duplicate_generic.tua",
+        "function duplicate<T, T>(value: T): T return value end",
+    )
+    .expect_err("duplicate generic binders should be rejected");
+
+    assert_eq!(diagnostics.len(), 1, "{diagnostics:#?}");
+    assert!(diagnostics[0]
+        .message
+        .contains("generic function parameters must be uniquely named"));
 }
 
 #[test]

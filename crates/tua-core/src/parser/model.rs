@@ -286,7 +286,7 @@ pub struct TypeAlias {
     pub id: TypeAliasId,
     pub name: String,
     pub ty: TuaType,
-    pub generic_parameters: Vec<TypeAliasParameter>,
+    pub generic_parameters: Vec<GenericParameter>,
     pub kind: TypeAliasKind,
     pub name_span: Option<SourceSpan>,
     pub span: Option<SourceSpan>,
@@ -300,12 +300,36 @@ pub struct TypeAliasId {
     pub declaration: SourceSpan,
 }
 
-/// A binder declared by one generic type alias.
-///
-/// The declaration key is the normalized module path plus alias name. The
-/// ordinal distinguishes binders even when their source spelling is equal.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum GenericDeclarationKind {
+    Alias,
+    Function,
+    Class,
+}
+
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct TypeAliasParameter {
+pub struct GenericDeclarationId {
+    pub module: PathBuf,
+    pub kind: GenericDeclarationKind,
+    pub name: String,
+    pub declaration: SourceSpan,
+}
+
+impl From<&TypeAliasId> for GenericDeclarationId {
+    fn from(alias: &TypeAliasId) -> Self {
+        Self {
+            module: alias.module.clone(),
+            kind: GenericDeclarationKind::Alias,
+            name: alias.name.clone(),
+            declaration: alias.declaration,
+        }
+    }
+}
+
+/// A binder declared by a generic alias, function, or class.
+/// The ordinal distinguishes binders even when their source spelling is equal.
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct GenericParameter {
     pub id: TypeParameterId,
     pub name: String,
     pub name_span: SourceSpan,
@@ -313,7 +337,7 @@ pub struct TypeAliasParameter {
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct TypeParameterId {
-    pub declaration: TypeAliasId,
+    pub declaration: GenericDeclarationId,
     pub ordinal: usize,
 }
 
@@ -364,6 +388,7 @@ pub struct FunctionAnnotation {
     pub default_parameters: Vec<ParameterDefault>,
     pub optional_parameters: Vec<ParameterOptional>,
     pub return_type: Option<TuaType>,
+    pub generic_parameters: Vec<GenericParameter>,
     pub span: Option<SourceSpan>,
 }
 

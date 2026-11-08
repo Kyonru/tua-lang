@@ -23,6 +23,7 @@ pub(super) fn validate_tua_dialect(raw: &RawParsedSource) -> Vec<Diagnostic> {
             .map(|syntax| (position_key(syntax.item_end), syntax.suffix_span))
             .collect(),
         generic_alias_declarations: BTreeSet::new(),
+        generic_function_declarations: BTreeSet::new(),
     };
     validator.visit_ast(&raw.ast);
     for parser_span in validator.native_array_types.values().copied() {
@@ -41,6 +42,7 @@ struct TuaDialectValidator<'a> {
     diagnostics: Vec<Diagnostic>,
     native_array_types: BTreeMap<(usize, usize), SourceSpan>,
     generic_alias_declarations: BTreeSet<(usize, usize)>,
+    generic_function_declarations: BTreeSet<(usize, usize)>,
 }
 
 impl TuaDialectValidator<'_> {
@@ -124,10 +126,24 @@ impl Visitor for TuaDialectValidator<'_> {
         if start.is_some_and(|start| {
             self.generic_alias_declarations
                 .contains(&position_key(start))
+                || self
+                    .generic_function_declarations
+                    .contains(&position_key(start))
         }) {
             return;
         }
         self.report(declaration, "generic declarations are not part of Tua");
+    }
+
+    fn visit_local_function(&mut self, function: &full_moon::ast::LocalFunction) {
+        self.allow_generic_function(function.body());
+    }
+
+    fn visit_function_declaration(&mut self, function: &full_moon::ast::FunctionDeclaration) {
+        let name = function.name().to_string();
+        if !name.contains(['.', ':']) {
+            self.allow_generic_function(function.body());
+        }
     }
 
     fn visit_type_info(&mut self, type_info: &TypeInfo) {
@@ -207,6 +223,32 @@ impl TuaDialectValidator<'_> {
         if let Some((start, _)) = generics.range() {
             self.generic_alias_declarations
                 .insert(position_key(SourcePosition::from_full_moon(start)));
+        }
+    }
+
+    fn allow_generic_function(&mut self, body: &full_moon::ast::FunctionBody) {
+        let Some(generics) = body.generics() else {
+            return;
+        };
+        if let Some((start, _)) = generics.range() {
+            self.generic_function_declarations
+                .insert(position_key(SourcePosition::from_full_moon(start)));
+        }
+        let mut names = BTreeSet::new();
+        if let Some(parameter) = generics.generics().iter().find(|parameter| {
+            if parameter.default_type().is_some() {
+                return true;
+            }
+            match parameter.parameter() {
+                GenericParameterInfo::Name(token) => !names.insert(token.to_string()),
+                GenericParameterInfo::Variadic { .. } => true,
+                _ => true,
+            }
+        }) {
+            self.report(
+                parameter,
+                "generic function parameters must be uniquely named, required, and non-variadic",
+            );
         }
     }
 }

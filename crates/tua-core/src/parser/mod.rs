@@ -22,15 +22,15 @@ pub(crate) use doc::parse_type_text as parse_tua_type_text;
 pub use doc::{parse_lua_doc_annotations, parse_lua_doc_annotations_with_options};
 pub use model::{
     CompoundAssignment, CompoundOperator, FunctionAnnotation, FunctionSignatureParameter,
-    FunctionTypeParameter, LocalAnnotation, LuaDocAlias, LuaDocAnnotation, LuaDocAnnotationKind,
-    LuaDocAs, LuaDocCast, LuaDocClass, LuaDocDeprecated, LuaDocDiagnostic, LuaDocEnum, LuaDocField,
-    LuaDocGeneric, LuaDocGenericParameter, LuaDocMeta, LuaDocModule, LuaDocNoDiscard,
-    LuaDocOverload, LuaDocParam, LuaDocParseOptions, LuaDocParseResult, LuaDocReturn,
-    LuaDocReturnType, LuaDocTypeAnnotation, LuaDocVararg, LuaDocVersion, NormalizedSource,
-    ParameterAnnotation, ParameterDefault, ParameterOptional, ParsedLanguage, ParsedSource,
-    RawParsedSource, SourcePosition, SourceSpan, TableFieldType, TuaType, TypeAlias, TypeAliasId,
-    TypeAliasKind, TypeAliasParameter, TypeImport, TypeImportBinding, TypeParameterId,
-    TypedSourceModel,
+    FunctionTypeParameter, GenericDeclarationId, GenericDeclarationKind, GenericParameter,
+    LocalAnnotation, LuaDocAlias, LuaDocAnnotation, LuaDocAnnotationKind, LuaDocAs, LuaDocCast,
+    LuaDocClass, LuaDocDeprecated, LuaDocDiagnostic, LuaDocEnum, LuaDocField, LuaDocGeneric,
+    LuaDocGenericParameter, LuaDocMeta, LuaDocModule, LuaDocNoDiscard, LuaDocOverload, LuaDocParam,
+    LuaDocParseOptions, LuaDocParseResult, LuaDocReturn, LuaDocReturnType, LuaDocTypeAnnotation,
+    LuaDocVararg, LuaDocVersion, NormalizedSource, ParameterAnnotation, ParameterDefault,
+    ParameterOptional, ParsedLanguage, ParsedSource, RawParsedSource, SourcePosition, SourceSpan,
+    TableFieldType, TuaType, TypeAlias, TypeAliasId, TypeAliasKind, TypeImport, TypeImportBinding,
+    TypeParameterId, TypedSourceModel,
 };
 pub(crate) use model::{NativeArrayTypeSyntax, ParserLineProvenance, ParserSourceFragment};
 use normalize::normalize_tua_source_for_luau_parser;
@@ -994,9 +994,9 @@ fn type_alias_from_declaration(
                 return None;
             };
             let name_span = node_span(token)?;
-            Some(TypeAliasParameter {
+            Some(GenericParameter {
                 id: TypeParameterId {
-                    declaration: identity.clone(),
+                    declaration: GenericDeclarationId::from(&identity),
                     ordinal,
                 },
                 name: token_text(token),
@@ -1018,7 +1018,7 @@ fn type_alias_from_declaration(
     }
 }
 
-fn bind_generic_parameter_references(ty: &TuaType, parameters: &[TypeAliasParameter]) -> TuaType {
+fn bind_generic_parameter_references(ty: &TuaType, parameters: &[GenericParameter]) -> TuaType {
     match ty {
         TuaType::Named(name) => parameters
             .iter()
@@ -1370,6 +1370,35 @@ fn function_annotation(
     body: &ast::FunctionBody,
     diagnostics: &mut Vec<Diagnostic>,
 ) -> FunctionAnnotation {
+    let generic_parameters = body
+        .generics()
+        .into_iter()
+        .flat_map(|generics| generics.generics())
+        .enumerate()
+        .filter_map(|(ordinal, parameter)| {
+            let full_moon::ast::luau::GenericParameterInfo::Name(token) = parameter.parameter()
+            else {
+                return None;
+            };
+            let name_span = node_span(token)?;
+            let declaration = GenericDeclarationId {
+                module: crate::vfs::normalize_path(path),
+                kind: GenericDeclarationKind::Function,
+                name: name
+                    .clone()
+                    .unwrap_or_else(|| "<anonymous-function>".to_owned()),
+                declaration: body.generics().and_then(node_span).unwrap_or(name_span),
+            };
+            Some(GenericParameter {
+                id: TypeParameterId {
+                    declaration,
+                    ordinal,
+                },
+                name: token_text(token),
+                name_span,
+            })
+        })
+        .collect::<Vec<_>>();
     let parameter_names = body
         .parameters()
         .iter()
@@ -1407,7 +1436,10 @@ fn function_annotation(
 
             Some(ParameterAnnotation {
                 name: token_text(name),
-                ty: tua_type_from_type_info_with_source(specifier.type_info(), source),
+                ty: bind_generic_parameter_references(
+                    &tua_type_from_type_info_with_source(specifier.type_info(), source),
+                    &generic_parameters,
+                ),
                 name_span: node_span(name),
                 span: node_span(specifier),
             })
@@ -1424,7 +1456,10 @@ fn function_annotation(
             Some(FunctionSignatureParameter {
                 name: token_text(name),
                 ty: specifier.map(|specifier| {
-                    tua_type_from_type_info_with_source(specifier.type_info(), source)
+                    bind_generic_parameter_references(
+                        &tua_type_from_type_info_with_source(specifier.type_info(), source),
+                        &generic_parameters,
+                    )
                 }),
                 name_span: node_span(name),
             })
@@ -1453,9 +1488,13 @@ fn function_annotation(
             }),
         default_parameters,
         optional_parameters,
-        return_type: body
-            .return_type()
-            .map(|specifier| tua_type_from_type_info_with_source(specifier.type_info(), source)),
+        return_type: body.return_type().map(|specifier| {
+            bind_generic_parameter_references(
+                &tua_type_from_type_info_with_source(specifier.type_info(), source),
+                &generic_parameters,
+            )
+        }),
+        generic_parameters,
         span: node_span(body),
     }
 }

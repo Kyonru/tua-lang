@@ -348,7 +348,7 @@ fn mutable_array_protocol_view_guard_expands_generic_alias_elements() {
         },
     };
     let parameter_id = crate::parser::TypeParameterId {
-        declaration: alias_id.clone(),
+        declaration: crate::parser::GenericDeclarationId::from(&alias_id),
         ordinal: 0,
     };
     let mut context = TypeContext::new();
