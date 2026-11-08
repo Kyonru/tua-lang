@@ -1093,6 +1093,17 @@ fn type_alias_definition_in_parsed(
             })
         })
         .or_else(|| {
+            parsed
+                .protocol_declarations
+                .iter()
+                .find(|protocol| protocol.name == name)
+                .map(|protocol| Definition {
+                    path: parsed.path.clone(),
+                    span: protocol.name_span,
+                    kind: DefinitionKind::TypeAlias,
+                })
+        })
+        .or_else(|| {
             parsed.lua_doc_annotations.iter().find_map(|annotation| {
                 use crate::LuaDocAnnotationKind as Kind;
 

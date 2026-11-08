@@ -303,6 +303,16 @@ impl AnalysisSnapshot {
                 let expression = crate::source_text::receiver_before(&parsed.source, separator)?;
                 semantic.type_of_receiver_expression(expression, position)
             })?;
+        if let Some(protocol) = receiver_alias_name(&receiver_type) {
+            if let Some(definition) = self.type_database.protocol_method_definition(
+                &self.module_graph,
+                &parsed.path,
+                &protocol,
+                member,
+            ) {
+                return Some(definition);
+            }
+        }
         self.class_member_definition_for_type(&parsed.path, &receiver_type, member, 0)
             .or_else(|| {
                 let item = semantic.lua_type_field_item(&receiver_type, member)?;
@@ -533,7 +543,7 @@ impl AnalysisSnapshot {
             return Vec::new();
         };
 
-        let definition = match &file.parsed {
+        match &file.parsed {
             Ok(parsed) => self.implementation_parsed_snapshot(parsed, file.hir(), position, None),
             Err(_) => {
                 let Some(facts) = self.degraded_semantic_facts(path, file) else {
@@ -547,9 +557,7 @@ impl AnalysisSnapshot {
                     Some(&facts),
                 )
             }
-        };
-
-        definition.into_iter().collect()
+        }
     }
 
     pub(super) fn implementation_parsed_snapshot(
@@ -558,37 +566,48 @@ impl AnalysisSnapshot {
         hir: Option<&HirModule>,
         position: SourcePosition,
         degraded_facts: Option<&DegradedSemanticFacts>,
-    ) -> Option<Definition> {
+    ) -> Vec<Definition> {
         let environment = self.semantic_query_environment(parsed, degraded_facts);
 
-        if let Some(definition) =
-            self.typed_receiver_method_implementation(parsed, &environment, position)
+        if let Some(implementations) =
+            self.typed_receiver_method_implementations(parsed, &environment, position)
         {
-            return Some(definition);
+            return implementations;
         }
 
         if let Some(definition) = self.module_export_definition_at_position(parsed, position) {
-            return (definition.kind == DefinitionKind::Function).then_some(definition);
+            return (definition.kind == DefinitionKind::Function)
+                .then_some(definition)
+                .into_iter()
+                .collect();
         }
 
-        let chain = dotted_chain_at_position(&parsed.source, position)?;
+        let Some(chain) = dotted_chain_at_position(&parsed.source, position) else {
+            return Vec::new();
+        };
 
         if chain.cursor_index > 0 {
-            return None;
+            return Vec::new();
         }
 
-        let definition =
-            self.definition_parsed_snapshot_with_facts(parsed, hir, position, degraded_facts)?;
+        let Some(definition) =
+            self.definition_parsed_snapshot_with_facts(parsed, hir, position, degraded_facts)
+        else {
+            return Vec::new();
+        };
 
         if definition.kind != DefinitionKind::Function {
-            return None;
+            return Vec::new();
         }
 
         if let Some(name) = global_function_name_for_definition(parsed, &definition) {
-            return (global_function_definition_count(parsed, &name) == 1).then_some(definition);
+            return (global_function_definition_count(parsed, &name) == 1)
+                .then_some(definition)
+                .into_iter()
+                .collect();
         }
 
-        Some(definition)
+        vec![definition]
     }
 
     pub(super) fn type_alias_definition_at_position(
@@ -666,12 +685,12 @@ impl AnalysisSnapshot {
         })
     }
 
-    pub(super) fn typed_receiver_method_implementation(
+    pub(super) fn typed_receiver_method_implementations(
         &self,
         parsed: &ParsedSource,
         environment: &TypeEnvironment,
         position: SourcePosition,
-    ) -> Option<Definition> {
+    ) -> Option<Vec<Definition>> {
         let chain = dotted_chain_at_position(&parsed.source, position)?;
 
         if chain.cursor_index == 0 {
@@ -688,7 +707,20 @@ impl AnalysisSnapshot {
         let receiver_type = self.type_for_parts(parsed, environment, &receiver_parts, position)?;
         let alias = receiver_alias_name(&receiver_type)?;
 
-        self.method_implementation_for_alias(parsed, &alias, method)
+        if let Some(implementations) = self.type_database.protocol_method_implementations(
+            &self.module_graph,
+            &parsed.path,
+            &alias,
+            method,
+        ) {
+            return Some(implementations);
+        }
+
+        Some(
+            self.method_implementation_for_alias(parsed, &alias, method)
+                .into_iter()
+                .collect(),
+        )
     }
 
     pub(super) fn method_implementation_for_alias(

@@ -1,0 +1,191 @@
+use std::collections::{BTreeMap, BTreeSet};
+use std::path::{Path, PathBuf};
+
+use crate::classes::{class_method_owner, ClassDeclaration};
+use crate::module_graph::ModuleGraph;
+use crate::vfs::normalize_path;
+use crate::{Definition, DefinitionKind, ParsedSource, ProjectTypeDatabase};
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub(super) struct ProjectProtocolIndex {
+    methods: BTreeMap<ProtocolIdentity, BTreeMap<String, Definition>>,
+    implementations: BTreeMap<ProtocolMethodIdentity, Vec<Definition>>,
+}
+
+type ProtocolIdentity = (PathBuf, String);
+type ProtocolMethodIdentity = (PathBuf, String, String);
+
+impl ProjectProtocolIndex {
+    pub(super) fn build<'a>(
+        sources: impl IntoIterator<Item = (PathBuf, &'a ParsedSource)>,
+        module_graph: &ModuleGraph,
+        type_database: &ProjectTypeDatabase,
+    ) -> Self {
+        let sources = sources
+            .into_iter()
+            .map(|(path, parsed)| (normalize_path(path), parsed))
+            .collect::<Vec<_>>();
+        let mut index = Self::default();
+
+        for (path, parsed) in &sources {
+            for protocol in &parsed.protocol_declarations {
+                let identity = (path.clone(), protocol.name.clone());
+                let methods = protocol
+                    .methods
+                    .iter()
+                    .map(|method| {
+                        (
+                            method.name.clone(),
+                            Definition {
+                                path: path.clone(),
+                                span: method.name_span,
+                                kind: DefinitionKind::Function,
+                            },
+                        )
+                    })
+                    .collect();
+                index.methods.insert(identity, methods);
+            }
+        }
+
+        for (path, parsed) in &sources {
+            let classes = &parsed.class_declarations;
+            for class in classes {
+                let protocols = implemented_protocol_names(class, classes);
+                for protocol_name in protocols {
+                    let Some(binding) =
+                        type_database.resolve_type_name(module_graph, path, &protocol_name)
+                    else {
+                        continue;
+                    };
+                    let protocol_identity = (binding.module_path, binding.name);
+                    let Some(requirements) = index.methods.get(&protocol_identity) else {
+                        continue;
+                    };
+
+                    for method_name in requirements.keys() {
+                        let Some(owner) = class_method_owner(classes, &class.name, method_name)
+                        else {
+                            continue;
+                        };
+                        let Some(method) = classes
+                            .iter()
+                            .find(|candidate| candidate.name == owner)
+                            .and_then(|owner| {
+                                owner
+                                    .methods
+                                    .iter()
+                                    .find(|candidate| candidate.name == *method_name)
+                            })
+                        else {
+                            continue;
+                        };
+                        let implementation = Definition {
+                            path: path.clone(),
+                            span: method.name_span,
+                            kind: DefinitionKind::Function,
+                        };
+                        index
+                            .implementations
+                            .entry((
+                                protocol_identity.0.clone(),
+                                protocol_identity.1.clone(),
+                                method_name.clone(),
+                            ))
+                            .or_default()
+                            .push(implementation);
+                    }
+                }
+            }
+        }
+
+        for implementations in index.implementations.values_mut() {
+            implementations.sort_by_key(definition_sort_key);
+            implementations.dedup();
+        }
+
+        index
+    }
+
+    pub(super) fn contains_protocol(&self, path: &Path, name: &str) -> bool {
+        self.methods
+            .contains_key(&(normalize_path(path), name.to_owned()))
+    }
+
+    pub(super) fn method_definition(
+        &self,
+        identity: &ProtocolIdentity,
+        method: &str,
+    ) -> Option<&Definition> {
+        self.methods.get(identity)?.get(method)
+    }
+
+    pub(super) fn method_implementations(
+        &self,
+        identity: &ProtocolIdentity,
+        method: &str,
+    ) -> Option<&[Definition]> {
+        self.methods.get(identity)?;
+        Some(
+            self.implementations
+                .get(&(identity.0.clone(), identity.1.clone(), method.to_owned()))
+                .map(Vec::as_slice)
+                .unwrap_or_default(),
+        )
+    }
+}
+
+fn implemented_protocol_names(
+    class: &ClassDeclaration,
+    classes: &[ClassDeclaration],
+) -> BTreeSet<String> {
+    fn visit(
+        class: &ClassDeclaration,
+        classes: &[ClassDeclaration],
+        visited: &mut BTreeSet<String>,
+        protocols: &mut BTreeSet<String>,
+    ) {
+        if !visited.insert(class.name.clone()) {
+            return;
+        }
+        if let Some(parent) = class
+            .parent
+            .as_deref()
+            .and_then(|parent| classes.iter().find(|candidate| candidate.name == parent))
+        {
+            visit(parent, classes, visited, protocols);
+        }
+        protocols.extend(
+            class
+                .implemented_protocols
+                .iter()
+                .map(|(name, _)| name.clone()),
+        );
+    }
+
+    let mut protocols = BTreeSet::new();
+    visit(class, classes, &mut BTreeSet::new(), &mut protocols);
+    protocols
+}
+
+fn definition_sort_key(definition: &Definition) -> (PathBuf, usize, usize, usize, usize, u8) {
+    let kind = match definition.kind {
+        DefinitionKind::Function => 0,
+        DefinitionKind::TypeAlias => 1,
+        DefinitionKind::TableField => 2,
+        DefinitionKind::Local => 3,
+        DefinitionKind::Parameter => 4,
+        DefinitionKind::Module => 5,
+        DefinitionKind::Builtin => 6,
+        DefinitionKind::Asset => 7,
+        DefinitionKind::SignalEvent => 8,
+    };
+    (
+        definition.path.clone(),
+        definition.span.start.line,
+        definition.span.start.column,
+        definition.span.end.line,
+        definition.span.end.column,
+        kind,
+    )
+}

@@ -5777,6 +5777,61 @@ return {
 }
 
 #[test]
+fn protocol_method_navigation_resolves_requirement_and_all_implementations() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/contracts.tua
+export protocol <|protocol_name|>Updatable<|/protocol_name|> {
+  <|requirement|>update<|/requirement|>(dt: number): nil
+}
+-- file: src/actors.tua
+import type { Updatable } from "./contracts"
+final class Particle implements Updatable {
+  <|particle|>update<|/particle|>(dt: number): nil {
+  }
+}
+final class Clock implements Updatable {
+  <|clock|>update<|/clock|>(dt: number): nil {
+  }
+}
+-- file: src/main.tua
+import type { Updatable } from "./contracts"
+local function tick(value: <|type_use|>Updatable, dt: number)
+  value:<|use|>update(dt)
+end
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+
+    let snapshot = host.snapshot();
+    let definition = snapshot
+        .definition("src/main.tua", fixture.position("use"))
+        .expect("a protocol method call should navigate to its requirement");
+    assert_eq!(definition.path, PathBuf::from("src/contracts.tua"));
+    assert_eq!(definition.span, fixture.range("requirement"));
+
+    let type_definition = snapshot
+        .definition("src/main.tua", fixture.position("type_use"))
+        .expect("a protocol type reference should navigate to its declaration");
+    assert_eq!(type_definition.path, PathBuf::from("src/contracts.tua"));
+    assert_eq!(type_definition.span, fixture.range("protocol_name"));
+
+    let implementations = snapshot.implementation("src/main.tua", fixture.position("use"));
+    assert_eq!(implementations.len(), 2, "{implementations:#?}");
+    assert!(implementations.iter().any(|definition| {
+        definition.path == PathBuf::from("src/actors.tua")
+            && definition.span == fixture.range("particle")
+    }));
+    assert!(implementations.iter().any(|definition| {
+        definition.path == PathBuf::from("src/actors.tua")
+            && definition.span == fixture.range("clock")
+    }));
+}
+
+#[test]
 fn snapshot_recovers_imported_return_alias_field_completion_while_typing() {
     let fixture = Fixture::parse(
         r#"-- file: src/main.tua

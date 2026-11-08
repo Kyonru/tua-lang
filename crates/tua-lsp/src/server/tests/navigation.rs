@@ -923,6 +923,7 @@ end
 return {
   makePlayer = makePlayer,
 }
+
 "#,
     );
     let temp = fixture
@@ -950,6 +951,72 @@ return {
     assert_empty_locations(&output, 6);
     assert_empty_locations(&output, 7);
 }
+
+#[test]
+fn protocol_method_navigation_crosses_type_imports() {
+    let temp = TempProject::new("protocol-navigation");
+    let contracts = r#"export protocol Updatable {
+  update(dt: number): nil
+}
+"#;
+    let actors = r#"import type { Updatable } from "./contracts"
+final class Particle implements Updatable {
+  update(dt: number): nil {}
+}
+final class Clock implements Updatable {
+  update(dt: number): nil {}
+}
+"#;
+    let main = r#"import type { Updatable } from "./contracts"
+local function tick(value: Updatable, dt: number)
+  value:update(dt)
+end
+"#;
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/contracts.tua", contracts);
+    temp.write("src/actors.tua", actors);
+    temp.write("src/main.tua", main);
+    let main_uri = temp.uri_for("src/main.tua");
+    let contracts_uri = temp.uri_for("src/contracts.tua");
+    let actors_uri = temp.uri_for("src/actors.tua");
+    let method_position = lsp_position_with_offset(main, "value:update", "value:".len());
+    let output = run_messages(vec![
+        initialize_with_root(1, temp.uri()),
+        did_open(&main_uri, main),
+        definition_request(2, &main_uri, main, "value:update", "value:".len()),
+        json!({
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "textDocument/implementation",
+            "params": {
+                "textDocument": { "uri": main_uri },
+                "position": method_position
+            }
+        }),
+        definition_request(4, &main_uri, main, "value: Updatable", "value: ".len()),
+    ]);
+
+    assert_definition_text(&output, 2, &contracts_uri, contracts, "update");
+    let implementations = response_with_id(&output, 3)["result"]
+        .as_array()
+        .expect("implementation result should be an array");
+    assert_eq!(implementations.len(), 2, "{implementations:#?}");
+    let implementation_texts = implementations
+        .iter()
+        .map(|location| range_text(actors, &location["range"]))
+        .collect::<Vec<_>>();
+    assert_eq!(implementation_texts, ["update", "update"]);
+    assert!(implementations
+        .iter()
+        .all(|location| location["uri"] == actors_uri));
+    let implementation_lines = implementations
+        .iter()
+        .map(|location| location["range"]["start"]["line"].as_u64().unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(implementation_lines, [2, 5]);
+    assert_definition_text(&output, 4, &contracts_uri, contracts, "Updatable");
+}
+
 #[test]
 fn call_hierarchy_returns_same_file_and_cross_file_callers() {
     let temp = TempProject::new("call-hierarchy-modules");

@@ -108,8 +108,11 @@ Protocols can be exported and consumed as type-only imports; those imports and
 the protocol declaration are erased from Lua. See [Sharing Types Between
 Modules](modules.md#share-types-without-loading-code) for module boundaries.
 Protocol bodies currently describe methods only. They do not declare fields,
-default implementations, or protocol inheritance. Dedicated protocol
-implementation navigation and refactoring are still being completed. The
+default implementations, or protocol inheritance. From a protocol-typed
+method call, go to definition opens the requirement and go to implementation
+lists the statically known conforming methods in the workspace, including
+methods found through type-only imports. Protocol method references and rename
+are not yet linked across requirements and implementations. The
 [feature-tour example](https://github.com/Kyonru/tua-lang/blob/main/examples/features/src/protocols.tua)
 exercises this language feature.
 

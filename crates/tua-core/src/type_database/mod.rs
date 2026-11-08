@@ -10,13 +10,18 @@ use crate::store;
 use crate::vector;
 use crate::vfs::normalize_path;
 use crate::{
-    AnalysisSourceKind, FunctionType, ModuleExportField, ParsedSource, ScopeDeclarationKind,
-    ScopeMap, Type, TypeEnvironment, TypedFunction,
+    AnalysisSourceKind, Definition, FunctionType, ModuleExportField, ParsedSource,
+    ScopeDeclarationKind, ScopeMap, Type, TypeEnvironment, TypedFunction,
 };
+
+mod protocol_index;
+
+use protocol_index::ProjectProtocolIndex;
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct ProjectTypeDatabase {
     modules: BTreeMap<PathBuf, ProjectTypeModule>,
+    protocols: ProjectProtocolIndex,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -78,8 +83,9 @@ impl ProjectTypeDatabase {
         module_graph: &ModuleGraph,
     ) -> Self {
         let mut database = Self::default();
+        let inputs = inputs.into_iter().collect::<Vec<_>>();
 
-        for input in inputs {
+        for input in &inputs {
             let path = normalize_path(input.path);
             let origin = origin_for_source_kind(input.source_kind);
             let mut module = ProjectTypeModule {
@@ -195,7 +201,53 @@ impl ProjectTypeDatabase {
             database.modules.insert(path, module);
         }
 
+        database.protocols = ProjectProtocolIndex::build(
+            inputs.iter().filter_map(|input| {
+                input
+                    .parsed
+                    .map(|parsed| (normalize_path(input.path), parsed))
+            }),
+            module_graph,
+            &database,
+        );
+
         database
+    }
+
+    pub(crate) fn protocol_method_definition(
+        &self,
+        module_graph: &ModuleGraph,
+        source_path: impl AsRef<Path>,
+        protocol_name: &str,
+        method: &str,
+    ) -> Option<Definition> {
+        let identity = self.protocol_identity(module_graph, source_path, protocol_name)?;
+        self.protocols.method_definition(&identity, method).cloned()
+    }
+
+    pub(crate) fn protocol_method_implementations(
+        &self,
+        module_graph: &ModuleGraph,
+        source_path: impl AsRef<Path>,
+        protocol_name: &str,
+        method: &str,
+    ) -> Option<Vec<Definition>> {
+        let identity = self.protocol_identity(module_graph, source_path, protocol_name)?;
+        self.protocols
+            .method_implementations(&identity, method)
+            .map(<[Definition]>::to_vec)
+    }
+
+    fn protocol_identity(
+        &self,
+        module_graph: &ModuleGraph,
+        source_path: impl AsRef<Path>,
+        protocol_name: &str,
+    ) -> Option<(PathBuf, String)> {
+        let binding = self.resolve_type_name(module_graph, source_path, protocol_name)?;
+        self.protocols
+            .contains_protocol(&binding.module_path, &binding.name)
+            .then_some((binding.module_path, binding.name))
     }
 
     pub fn module(&self, path: impl AsRef<Path>) -> Option<&ProjectTypeModule> {
