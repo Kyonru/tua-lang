@@ -6329,6 +6329,37 @@ fn generic_callback_inference_is_explicit_and_wrong_callback_arguments_are_type_
 }
 
 #[test]
+fn generic_function_values_specialize_from_callback_context() {
+    check_tua_source(
+        "src/generic_callback_context.tua",
+        r#"
+local function identity<T>(value: T): T return value end
+local function apply_number(callback: (number) -> number): number return callback(4) end
+local function apply_string(callback: (string) -> string): string return callback("ready") end
+local number_value: number = apply_number(identity)
+local string_value: string = apply_string(identity)
+"#,
+    )
+    .expect("known callback signatures should specialize generic function values");
+
+    let incompatible = check_tua_source(
+        "src/generic_callback_context.tua",
+        r#"
+local function identity<T>(value: T): T return value end
+local function apply(callback: (number) -> string): string return callback(4) end
+local value: string = apply(identity)
+"#,
+    )
+    .expect_err("one binder cannot satisfy inconsistent contextual parameter and return types");
+    assert!(
+        incompatible
+            .iter()
+            .any(|diagnostic| diagnostic.code == Some(DiagnosticCode::TYPE_MISMATCH)),
+        "{incompatible:#?}"
+    );
+}
+
+#[test]
 fn nested_generic_function_binders_do_not_capture_outer_binders() {
     check_tua_source(
         "src/nested_generics.tua",

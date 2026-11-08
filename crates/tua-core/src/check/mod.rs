@@ -35,10 +35,11 @@ use crate::scope::{
 use crate::semantic::{resolve_index_type, resolve_table_field_type, SemanticModel};
 use crate::semantic_domains::{BuiltinConstructor, BuiltinDomain, BuiltinDomainRegistry};
 use crate::types::{
-    build_type_environment_with_domain_registry, deduplicate_inferred_types,
-    has_leading_lua_doc_type, instantiate_generic_function, widen_inferred_type,
-    AssignabilityFailure, AssignabilityFailureKind, FunctionParameter, FunctionType, IndexFallback,
-    MetatableFacts, TableField, Type, TypeContext, TypeEnvironment, TypedFunction,
+    build_type_environment_with_domain_registry, contextual_function_type,
+    deduplicate_inferred_types, has_leading_lua_doc_type, instantiate_generic_function,
+    instantiate_generic_function_from_context, widen_inferred_type, AssignabilityFailure,
+    AssignabilityFailureKind, FunctionParameter, FunctionType, IndexFallback, MetatableFacts,
+    TableField, Type, TypeContext, TypeEnvironment, TypedFunction,
 };
 use crate::{asset, love_callback, lua, signal, sprite, state_machine};
 use crate::{Diagnostic, DiagnosticCode, DiagnosticSeverity};
@@ -1239,8 +1240,9 @@ impl<'a> Checker<'a> {
         let Some(source) = self.infer_expression(expression) else {
             return;
         };
-
-        self.check_inferred_expression_assignable_at(expression, &source, target, root);
+        let contextualized =
+            specialize_generic_function_value(&source, target, &self.context).unwrap_or(source);
+        self.check_inferred_expression_assignable_at(expression, &contextualized, target, root);
     }
 
     fn check_contextual_function(
@@ -4398,15 +4400,16 @@ fn typed_call_candidate_matches(
                 return true;
             };
 
-            checker.context.is_assignable(
-                argument_type,
-                &call_argument_contract(
-                    parameter_type,
-                    index,
-                    candidate.required_parameter_count,
-                    candidate.parameters.len(),
-                ),
-            )
+            let expected = call_argument_contract(
+                parameter_type,
+                index,
+                candidate.required_parameter_count,
+                candidate.parameters.len(),
+            );
+            let contextualized =
+                specialize_generic_function_value(argument_type, parameter_type, &checker.context)
+                    .unwrap_or_else(|| argument_type.clone());
+            checker.context.is_assignable(&contextualized, &expected)
         })
 }
 
@@ -4418,6 +4421,24 @@ fn call_argument_contract(parameter: &Type, index: usize, required: usize, fixed
     } else {
         parameter.clone()
     }
+}
+
+fn specialize_generic_function_value(
+    source: &Type,
+    target: &Type,
+    context: &TypeContext,
+) -> Option<Type> {
+    let (Type::Function(function), Some(expected)) =
+        (source, contextual_function_type(target.clone()))
+    else {
+        return None;
+    };
+    if function.generic_parameters.is_empty() {
+        return None;
+    }
+    instantiate_generic_function_from_context(function, &expected, context)
+        .ok()
+        .map(Type::Function)
 }
 
 fn expected_typed_argument_count(candidate: &TypedCallCandidate, actual: usize) -> Option<usize> {

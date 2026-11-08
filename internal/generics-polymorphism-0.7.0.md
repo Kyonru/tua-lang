@@ -47,6 +47,9 @@ parameter packs, specialization/monomorphization, and a new runtime.
 - `parser/model.rs`, `parser/doc.rs`, and the shared type scheme model: generic
   function binders retain declaration identity through checking, imports,
   re-exports, hover, signatures, definition, references, and rename.
+- `check/mod.rs`: generic function values specialize from known callback
+  parameter and return signatures; callback-only inference of a generic callee
+  remains ambiguous.
 - `types/model.rs` and `types/environment.rs`: type aliases have declaration-
   owned binder identities and structured applications, with simultaneous
   substitution through supported structured type positions. Expansion keeps
@@ -56,8 +59,9 @@ parameter packs, specialization/monomorphization, and a new runtime.
 - `parser/doc.rs`: generic alias applications in LuaDoc type text are parsed
   structurally for shared validation; LuaDoc `---@generic` remains metadata-only.
 - `types/assignability.rs`: function variance and structured failure paths
-  exist; mutable arrays currently compare element types covariantly. Do not
-  copy that rule into mutable generic containers without a soundness decision.
+  exist; mutable arrays currently compare element types covariantly. Generic
+  function inference separately treats binders inside mutable arrays,
+  dictionaries, and record fields as invariant.
 - `classes.rs`: protocol declarations and class `implements` clauses now retain
   source spans and erase through class lowering. Local and imported
   method-contract checks are implemented; protocol completion, hover,
@@ -199,10 +203,11 @@ end
 - Mutable generic class parameters are invariant initially. No user-declared
   variance until its soundness and editor behavior are specified. Protocol
   views expose method contracts only; no writable-field variance is implied.
-- Revisit mutable array/record widening independently: characterize existing
-  write-through-alias behavior, choose compatibility versus a checked read-only
-  view, and document the decision. Do not silently change old array code as a
-  side effect of introducing generic classes.
+- Generic function inference is invariant when a binder flows through a mutable
+  array, dictionary, or record position. Existing non-generic mutable-array
+  assignment compatibility remains unchanged and should be characterized
+  independently; do not silently change old array code as a side effect of
+  introducing generic classes.
 - Reuse shared binder/substitution machinery for supported LuaDoc `@generic`
   forms; unsupported annotation forms must remain clearly documented.
 
@@ -251,7 +256,11 @@ local box: Box<number> = { value = 4 }
   unbounded `---@generic T` on free functions and binds it through `---@param`,
   `---@vararg`, and `---@return`; bounds and generic methods produce targeted
   diagnostics. Generic binder definition, references, and rename work in one
-  file, including nested shadowing.
+  file, including nested shadowing. Binders inside mutable arrays, dictionaries,
+  and record fields are invariant across call arguments, preventing widened
+  writes into narrower caller-owned containers while retaining concrete types
+  for read-only generic uses. TL1015 highlights the conflicting actual, the
+  ambiguous callback argument, or the whole call for unresolved binders.
 - G3 generic class parameters are invariant because instances are mutable.
   Subtyping does not widen `Pool<Derived>` to `Pool<Base>`. Protocol bounds are
   checked through existing conformance facts, while the constructed value keeps
@@ -307,7 +316,7 @@ from the tests and current documentation that prove it.
 | P5 | Usable protocol examples/docs; P4 | Add runnable game/UI and negative examples, runtime/source-map/hot-reload qualification; preserve adapters for Lua interop. | Partial: class/typing/module docs and a feature-tour sample now explain the shipped slice; an audit game build ran under system Lua with a LOVE shim. LOVE/LuaJIT, source maps, hot reload, editor UX, and visual behavior remain unverified. | M |
 | G0 | Binder/substitution design; after P5 | Specify generic inference, recursive types, variance, first-class functions, contextual typing, limits and error policy; reuse protocol bounds. No unused framework-only abstraction. | Decisions recorded above: native alias syntax, binder identity, substitution semantics, arity/error behavior, inference boundaries, erasure, mutability variance, and resource limits. | M |
 | G1 | Generic aliases; G0 | Scoped binder IDs, arity checks, type applications, bounded capture-avoiding substitution, recursion/occurs handling, imports and IDE display. Connect machinery to its first consumer. | Implemented: exact-arity and unknown-name diagnostics, structured substitution, named/namespace imports, named re-exports, shared protocol and class signatures, LuaDoc type-text parsing, formatter/emission erasure, and core editor queries. Same-argument recursive edges remain named; changing-argument recursion stops at a 128 active-instantiation limit and leaves an unresolved application without a dedicated diagnostic. Focused core tests pass; real VS Code and broad release qualification remain open. | L |
-| G2 | Generic functions; G1 | Universally checked bodies, per-call inference, returns/callbacks, independent instantiations, navigation and actionable failures; align supported LuaDoc forms. | Implemented for generic free functions, direct/assigned/local/imported/re-exported calls, varargs and unbounded LuaDoc tags. Callback/return-only inference, methods, and explicit call-site arguments are diagnosed or unsupported by design. Core/LSP/CLI suites and docs build pass; installed VS Code host is blocked by pre-test Electron SIGABRT. | L |
+| G2 | Generic functions; G1 | Universally checked bodies, per-call inference, returns/callbacks, independent instantiations, navigation and actionable failures; align supported LuaDoc forms. | Implemented for generic free functions, direct/assigned/local/imported/re-exported calls, varargs and unbounded LuaDoc tags. Mutable container positions are invariant during inference. Callback-only/return-only inference, methods, and explicit call-site arguments remain diagnosed or unsupported. Focused core and CLI runtime tests pass; installed VS Code host is blocked by pre-test Electron SIGABRT. | L |
 | G3 | Generic classes and bounds; G2 | Constructor inference, instance members, inherited substitutions, `Self`, invariant mutable containers and protocol constraints. Retain runtime/class identity and editor parity. | In progress: class generic header and parent-application syntax has a parser representation and focused tests. Class instantiation, member substitution, bounds, assignability, and editor support remain open. | L |
 | R0 | Qualification; P5 and selected complete G milestones | Docs/examples, performance, cross-platform CI, installed-editor tests and package smoke; publish honest release scope and migration notes. | Open. | L |
 

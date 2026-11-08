@@ -126,6 +126,14 @@ the parameter types of a callback is rejected with `TL1015`; generic methods,
 explicit call-site type arguments, and bounded LuaDoc generic parameters are
 not supported. Generic functions and aliases erase from emitted Lua.
 
+When a generic parameter occurs inside a mutable array, dictionary, or record
+field in the function signature, inference keeps it invariant across all call
+arguments. For example, `overwrite(cats, animal)` is rejected when `cats` is a
+`Cat[]` and `animal` is only an `Animal`; otherwise the function could write
+that base value into the caller's narrower container. A read-only use such as
+`first(cats)` still infers `Cat`. This rule applies to generic call inference;
+existing assignment compatibility for non-generic arrays is unchanged.
+
 Recursive generic aliases are bounded during resolution: same-argument
 recursive edges remain named, while a recursion that keeps changing arguments
 stops at the expansion limit and may leave an unresolved application without a
@@ -138,6 +146,12 @@ Unlike structural table aliases, a class must declare `implements` before its
 instances can be assigned to that protocol type. Protocol-typed values expose
 the declared methods; they do not expose extra fields from a concrete class or
 support an implicit downcast.
+
+When a generic function value is passed to a parameter with a known callback
+signature, Tua specializes it from that expected parameter and return type. For
+example, `identity<T>` can satisfy both `(number) -> number` and
+`(string) -> string` contexts. This does not infer a generic callee's `T` from
+an untyped lambda argument; that callback-only inference remains ambiguous.
 
 ### Arrays, Dictionaries, And LuaDoc Tuples
 

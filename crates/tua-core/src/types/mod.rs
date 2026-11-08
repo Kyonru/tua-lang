@@ -21,7 +21,10 @@ pub(crate) use environment::{
     resolve_chained_call_returns, substitute_type_parameters,
 };
 pub(crate) use format::{format_named_function_pretty, format_type_with_prefix};
-pub(crate) use inference::{instantiate_generic_function, GenericInferenceFailure};
+pub(crate) use inference::{
+    instantiate_generic_function, instantiate_generic_function_from_context,
+    GenericInferenceFailure,
+};
 pub use model::{
     FunctionParameter, FunctionType, GenericAliasDefinition, GenericAliasReference, IndexFallback,
     MetatableFacts, NewIndexRule, PrimitiveType, TableField, TableShape, Type, TypeAlias,

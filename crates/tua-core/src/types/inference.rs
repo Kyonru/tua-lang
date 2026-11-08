@@ -546,3 +546,129 @@ fn collect_generic_parameters(
         | Type::StringLiteral(_) => {}
     }
 }
+
+/// Specialize a generic function value when its complete function type is
+/// known from a callback parameter. Unlike call inference, both parameter and
+/// return positions can constrain the declaration's binders here.
+pub(crate) fn instantiate_generic_function_from_context(
+    function: &FunctionType,
+    expected: &FunctionType,
+    context: &TypeContext,
+) -> Result<FunctionType, GenericInferenceFailure> {
+    if function.generic_parameters.is_empty() {
+        return Ok(function.clone());
+    }
+
+    let binders = function
+        .generic_parameters
+        .iter()
+        .map(|parameter| parameter.id.clone())
+        .collect::<HashSet<_>>();
+    let mut invariant_binders = HashSet::new();
+    for parameter in function
+        .parameters
+        .iter()
+        .map(|parameter| &parameter.ty)
+        .chain(function.vararg_type.as_deref())
+    {
+        collect_invariant_parameters(context, parameter, &binders, &mut invariant_binders, 0);
+    }
+
+    let mut substitutions = HashMap::new();
+    for (parameter, actual) in function.parameters.iter().zip(&expected.parameters) {
+        if let Err(failure) = collect_constraints(
+            context,
+            &parameter.ty,
+            &actual.ty,
+            &binders,
+            &invariant_binders,
+            &mut substitutions,
+            0,
+        ) {
+            return Err(failure);
+        }
+    }
+    if let (Some(pattern), Some(actual)) = (&function.vararg_type, &expected.vararg_type) {
+        collect_constraints(
+            context,
+            pattern,
+            actual,
+            &binders,
+            &invariant_binders,
+            &mut substitutions,
+            0,
+        )?;
+    }
+    for (pattern, actual) in function
+        .return_types_or_any()
+        .iter()
+        .zip(expected.return_types_or_any())
+    {
+        collect_constraints(
+            context,
+            pattern,
+            actual,
+            &binders,
+            &invariant_binders,
+            &mut substitutions,
+            0,
+        )?;
+    }
+
+    for parameter in &function.generic_parameters {
+        if !substitutions.contains_key(&parameter.id) {
+            let used_in_parameters = function
+                .parameters
+                .iter()
+                .any(|candidate| contains_parameter(&candidate.ty, &parameter.id, 0))
+                || function
+                    .vararg_type
+                    .as_deref()
+                    .is_some_and(|ty| contains_parameter(ty, &parameter.id, 0));
+            let kind = if !used_in_parameters
+                && function
+                    .return_types_or_any()
+                    .iter()
+                    .any(|ty| contains_parameter(ty, &parameter.id, 0))
+            {
+                GenericInferenceFailureKind::ReturnOnly
+            } else {
+                GenericInferenceFailureKind::Unresolved
+            };
+            return Err(GenericInferenceFailure {
+                parameter: parameter.name.clone(),
+                kind,
+                argument_index: None,
+            });
+        }
+    }
+
+    let substitute = |ty: &Type| substitute_type_parameters(ty, &substitutions);
+    let mut instantiated = FunctionType::new_signature(
+        function
+            .parameters
+            .iter()
+            .map(|parameter| FunctionParameter {
+                name: parameter.name.clone(),
+                ty: substitute(&parameter.ty),
+            }),
+        function.required_parameter_count,
+        function.vararg_type.as_deref().map(substitute),
+        function.return_types_or_any().iter().map(substitute),
+    )
+    .with_guarded_return_types(
+        function
+            .guarded_return_types
+            .as_ref()
+            .map(|types| types.iter().map(substitute).collect()),
+    );
+    instantiated.overloads = function
+        .overloads
+        .iter()
+        .map(|overload| {
+            instantiate_generic_function_from_context(overload, expected, context)
+                .unwrap_or_else(|_| overload.clone())
+        })
+        .collect();
+    Ok(instantiated)
+}
