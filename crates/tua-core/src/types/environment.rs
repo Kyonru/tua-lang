@@ -809,6 +809,19 @@ pub(crate) fn build_type_environment_with_domain_registry(
     let mut diagnostics = Vec::new();
     let mut alias_names = collect_alias_names(parsed, &mut diagnostics);
     collect_class_names(parsed, &mut alias_names);
+    for protocol in &parsed.protocol_declarations {
+        if !alias_names.insert(protocol.name.clone()) {
+            diagnostics.push(type_diagnostic(
+                &parsed.path,
+                Some(protocol.name_span),
+                format!(
+                    "protocol `{}` conflicts with an existing type name",
+                    protocol.name
+                ),
+                DiagnosticCode::TYPE_DUPLICATE_ALIAS,
+            ));
+        }
+    }
     let doc_aliases = lua_doc_alias_declarations(parsed, &alias_names, &mut diagnostics);
     let alias_names = alias_names
         .into_iter()
@@ -900,6 +913,26 @@ pub(crate) fn build_type_environment_with_domain_registry(
         if let Some(documentation) = &alias.documentation {
             alias_docs.insert(alias.name.clone(), documentation.clone());
         }
+    }
+
+    for protocol in &parsed.protocol_declarations {
+        let fields = protocol.methods.iter().map(|method| {
+            let signature = super::type_from_tua_type(&crate::parser::parse_tua_type_text(
+                &format!("({}) -> {}", method.parameters, method.return_type),
+            ));
+            let signature = match signature {
+                Type::Function(mut function) => {
+                    function
+                        .parameters
+                        .insert(0, super::FunctionParameter::named("self", Type::Any));
+                    function.required_parameter_count += 1;
+                    Type::Function(function)
+                }
+                other => other,
+            };
+            (method.name.clone(), TableField::required(signature))
+        });
+        aliases.insert(protocol.name.clone(), Type::table(fields));
     }
 
     for (name, ty) in builtin_aliases {

@@ -2372,6 +2372,18 @@ open class Actor implements Updatable {
 
 final class Panel extends Actor implements Updatable {
 }
+
+final class Dialog implements Updatable {
+  update(dt: number): nil {
+  }
+}
+
+local function tick(values: Updatable[], dt: number)
+  for _, value in ipairs(values) do
+    value:update(dt)
+  end
+end
+tick({ Actor.new(), Dialog.new() }, 0.016)
 "#,
     )
     .expect("a class and its subclass should satisfy the protocol through inherited methods");
