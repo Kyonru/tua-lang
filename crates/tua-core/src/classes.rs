@@ -21,6 +21,7 @@ pub(crate) struct ClassDeclaration {
     pub name: String,
     pub parent: Option<String>,
     pub parent_span: Option<SourceSpan>,
+    pub implemented_protocols: Vec<(String, SourceSpan)>,
     pub is_open: bool,
     pub is_final: bool,
     pub fields: Vec<ClassField>,
@@ -115,6 +116,7 @@ struct ClassHeader {
     name: String,
     parent: Option<String>,
     parent_span: Option<SourceSpan>,
+    implemented_protocols: Vec<(String, SourceSpan)>,
     is_open: bool,
     is_final: bool,
     name_span: SourceSpan,
@@ -631,6 +633,26 @@ fn parse_class_header(
         (None, None)
     };
 
+    let mut implemented_protocols = Vec::new();
+    if starts_keyword(source, cursor, "implements") {
+        cursor = skip_whitespace(source, cursor + "implements".len());
+        loop {
+            let (protocol, start, end) = take_identifier(source, cursor)?;
+            implemented_protocols.push((
+                protocol,
+                SourceSpan {
+                    start: positions.position(start),
+                    end: positions.position(end),
+                },
+            ));
+            cursor = skip_whitespace(source, end);
+            if !source[cursor..].starts_with(',') {
+                break;
+            }
+            cursor = skip_whitespace(source, cursor + 1);
+        }
+    }
+
     if !source[cursor..].starts_with('{') {
         return None;
     }
@@ -639,6 +661,7 @@ fn parse_class_header(
         name,
         parent,
         parent_span,
+        implemented_protocols,
         is_open,
         is_final: is_final || !is_open,
         name_span: SourceSpan {
@@ -707,6 +730,7 @@ fn parse_class_body(
             name: header.name,
             parent: header.parent,
             parent_span: header.parent_span,
+            implemented_protocols: header.implemented_protocols,
             is_open: header.is_open,
             is_final: header.is_final,
             fields,

@@ -73,8 +73,19 @@ pub(super) fn requires_tua_grammar(source: &str) -> bool {
         // grammar makes this classifier simple and correctness-first; large
         // generated data modules normally contain no executable declarations.
         if [
-            "class", "const", "continue", "enum", "export", "final", "function", "if", "is",
-            "open", "type",
+            "class",
+            "const",
+            "continue",
+            "enum",
+            "export",
+            "final",
+            "function",
+            "if",
+            "implements",
+            "is",
+            "open",
+            "protocol",
+            "type",
         ]
         .iter()
         .any(|keyword| starts_keyword(&chars, index, keyword))

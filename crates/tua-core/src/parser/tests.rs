@@ -386,6 +386,29 @@ final class Player extends Entity {
 }
 
 #[test]
+fn class_headers_preserve_explicit_protocol_conformance_and_erase_it_from_lua() {
+    let source = r#"final class Panel implements Updatable, Drawable {
+  update(dt: number) {
+  }
+}
+"#;
+    let parsed = parse_tua_source("src/panel.tua", source)
+        .expect("conformance clauses should be preserved by class lowering");
+    let class = &parsed.class_declarations[0];
+    assert_eq!(
+        class
+            .implemented_protocols
+            .iter()
+            .map(|(name, _)| name.as_str())
+            .collect::<Vec<_>>(),
+        vec!["Updatable", "Drawable"]
+    );
+    let lua = crate::emit::emit_lua(&parsed).expect("protocol metadata is compile-time only");
+    assert!(!lua.contains("implements"));
+    assert!(!lua.contains("Updatable"));
+}
+
+#[test]
 fn class_array_fields_parse_after_lowering() {
     let source = r#"final class BeatManager {
   steps: number[]
