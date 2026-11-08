@@ -24,7 +24,8 @@ completion claim. The detailed contributor plan is kept locally in
    parameters/arrays, basic missing and incompatible method diagnostics,
    inherited method satisfaction, and exported protocols through type-only
    imports. Verify inherited conformance, multiple obligations, variance edge
-   cases, declaration-module contracts, re-exports, and unsaved dependency edits.
+   cases, declaration-module contracts, and re-exports. Unsaved edits to an
+   imported protocol now refresh its implementing classes' diagnostics.
    Keep class identity nominal and erase contracts without runtime wrappers.
 2. **Ship complete protocol editor support.** Completion, hover, signature help,
    inlay hints, definition, references, rename, and implementation navigation

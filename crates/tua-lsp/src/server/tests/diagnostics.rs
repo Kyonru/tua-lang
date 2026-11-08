@@ -158,6 +158,38 @@ final class Bad implements Updatable {
 }
 
 #[test]
+fn unsaved_protocol_edit_refreshes_importing_class_diagnostics() {
+    let temp = TempProject::new("unsaved-protocol-conformance-refresh");
+    temp.write("tua.toml", "source = \"src\"\n");
+    let contracts = "export protocol Updatable {\n  update(dt: number): nil\n}\n";
+    let changed_contracts = "export protocol Updatable {\n  update(dt: string): nil\n}\n";
+    temp.write("src/contracts.tua", contracts);
+    let actors = r#"import type { Updatable } from "./contracts"
+final class Particle implements Updatable {
+  update(dt: number): nil {}
+}
+"#;
+    let contracts_uri = temp.uri_for("src/contracts.tua");
+    let actors_uri = temp.uri_for("src/actors.tua");
+    let mut server = TestServer::new();
+
+    server.send(initialize_with_pull_diagnostics(1, temp.uri(), true));
+    server.send(did_open(&contracts_uri, contracts));
+    server.send(did_open(&actors_uri, actors));
+    server.send(text_document_diagnostic_request(2, &actors_uri));
+    assert!(document_diagnostic_items(server.output(), 2).is_empty());
+
+    server.send(did_change(&contracts_uri, changed_contracts, 2));
+    server.send(text_document_diagnostic_request(3, &actors_uri));
+    let diagnostics = document_diagnostic_items(server.output(), 3);
+    assert!(diagnostics.iter().any(|diagnostic| {
+        diagnostic["message"].as_str().is_some_and(|message| {
+            message.contains("Particle.update") && message.contains("does not satisfy protocol")
+        })
+    }), "an unsaved requirement edit should update dependent conformance diagnostics: {diagnostics:#?}");
+}
+
+#[test]
 fn class_method_diagnostics_point_to_the_original_error_expression() {
     let uri = "file:///tmp/class-method-diagnostic.tua";
     let source = r#"final class Counter {

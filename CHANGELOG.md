@@ -19,7 +19,7 @@ language or editor behavior, and migration notes call out those changes.
 
 - Resolve protocol imports referenced only by a class `implements` clause, so
   project diagnostics validate cross-file missing and incompatible methods and
-  refresh those checks when the protocol changes.
+  refresh those checks when saved or unsaved protocol requirements change.
 - Hide the synthetic receiver parameter from hover on colon-called protocol
   methods, matching signature help.
 - Connect protocol method references and rename across requirements,
