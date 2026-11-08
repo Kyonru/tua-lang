@@ -6193,8 +6193,8 @@ fn generic_function_calls_report_conflicts_and_ambiguous_binders() {
             inference_error.end_line,
             inference_error.end_column,
         ),
-        (2, 6, 2, 7),
-        "TL1015 should highlight the first argument that introduces the conflicting inference",
+        (2, 9, 2, 15),
+        "TL1015 should highlight the actual argument that conflicts with the previous inference",
     );
 
     let return_only = check_tua_source(
@@ -6208,6 +6208,20 @@ fn generic_function_calls_report_conflicts_and_ambiguous_binders() {
                 .message
                 .contains("cannot infer generic type parameter `T` from the return type alone")
     }));
+    let return_only = return_only
+        .iter()
+        .find(|diagnostic| diagnostic.code == Some(DiagnosticCode::TYPE_GENERIC_INFERENCE))
+        .unwrap();
+    assert_eq!(
+        (
+            return_only.line,
+            return_only.column,
+            return_only.end_line,
+            return_only.end_column,
+        ),
+        (2, 1, 2, 8),
+        "an unconstrained return-only binder should highlight the call",
+    );
 
     let missing_argument = check_tua_source(
         "src/generic_calls.tua",
@@ -6283,6 +6297,20 @@ fn generic_callback_inference_is_explicit_and_wrong_callback_arguments_are_type_
         diagnostic.code == Some(DiagnosticCode::TYPE_GENERIC_INFERENCE)
             && diagnostic.message.contains("from a callback argument")
     }));
+    let callback = ambiguous
+        .iter()
+        .find(|diagnostic| diagnostic.code == Some(DiagnosticCode::TYPE_GENERIC_INFERENCE))
+        .unwrap();
+    assert_eq!(
+        (
+            callback.line,
+            callback.column,
+            callback.end_line,
+            callback.end_column,
+        ),
+        (2, 5, 2, 35),
+        "callback-only ambiguity should point to the callback argument",
+    );
 
     let wrong_kind = check_tua_source(
         "src/generic_callback.tua",
@@ -6345,6 +6373,128 @@ fn generic_function_infers_through_generic_alias_applications() {
         "type Box<T> = { value: T }\nlocal function unbox<T>(box: Box<T>): T return box.value end\nlocal number_value: number = unbox({ value = 3 })\n",
     )
     .expect("generic alias fields and call arguments should preserve the T relationship");
+}
+
+#[test]
+fn generic_mutable_array_and_record_binders_are_invariant() {
+    let declarations = r#"
+open class Animal {}
+final class Cat extends Animal {
+  meow(): string { return "meow" }
+}
+local cats: Cat[] = { Cat.new() }
+local cats_by_name: { [string]: Cat } = {}
+local animal: Animal = Animal.new()
+"#;
+
+    let array_write = check_tua_source(
+        "src/generic_mutable_array.tua",
+        &format!(
+            r#"{declarations}
+local function overwrite<T>(items: T[], value: T): nil
+  items[1] = value
+end
+overwrite(cats, animal)
+local cat: Cat = cats[1]
+cat:meow()
+"#
+        ),
+    )
+    .expect_err("a generic function must not widen Cat[] to accept an Animal");
+    assert!(
+        array_write.iter().any(|diagnostic| {
+            diagnostic.code == Some(DiagnosticCode::TYPE_GENERIC_INFERENCE)
+                && diagnostic
+                    .message
+                    .contains("conflicting arguments for generic type parameter `T`")
+        }),
+        "{array_write:#?}"
+    );
+    let reverse_order = check_tua_source(
+        "src/generic_mutable_array.tua",
+        &format!(
+            r#"{declarations}
+local function overwrite<T>(value: T, items: T[]): nil
+  items[1] = value
+end
+overwrite(animal, cats)
+"#
+        ),
+    )
+    .expect_err("invariance must not depend on the order of generic arguments");
+    assert!(
+        reverse_order.iter().any(|diagnostic| {
+            diagnostic.code == Some(DiagnosticCode::TYPE_GENERIC_INFERENCE)
+                && diagnostic
+                    .message
+                    .contains("conflicting arguments for generic type parameter `T`")
+        }),
+        "{reverse_order:#?}"
+    );
+
+    let record_write = check_tua_source(
+        "src/generic_mutable_record.tua",
+        &format!(
+            r#"{declarations}
+local cat_box: {{ value: Cat }} = {{ value = Cat.new() }}
+local function overwrite<T>(box: {{ value: T }}, value: T): nil
+  box.value = value
+end
+overwrite(cat_box, animal)
+local cat: Cat = cat_box.value
+cat:meow()
+"#
+        ),
+    )
+    .expect_err("a generic function must not widen a mutable record field");
+    assert!(
+        record_write.iter().any(|diagnostic| {
+            diagnostic.code == Some(DiagnosticCode::TYPE_GENERIC_INFERENCE)
+                && diagnostic
+                    .message
+                    .contains("conflicting arguments for generic type parameter `T`")
+        }),
+        "{record_write:#?}"
+    );
+
+    let dictionary_write = check_tua_source(
+        "src/generic_mutable_dictionary.tua",
+        &format!(
+            r#"{declarations}
+local function overwrite<T>(items: {{ [string]: T }}, value: T): nil
+  items["cat"] = value
+end
+overwrite(cats_by_name, animal)
+"#
+        ),
+    )
+    .expect_err("a generic function must not widen a mutable dictionary value");
+    assert!(
+        dictionary_write.iter().any(|diagnostic| {
+            diagnostic.code == Some(DiagnosticCode::TYPE_GENERIC_INFERENCE)
+                && diagnostic
+                    .message
+                    .contains("conflicting arguments for generic type parameter `T`")
+        }),
+        "{dictionary_write:#?}"
+    );
+
+    check_tua_source(
+        "src/generic_mutable_read.tua",
+        &format!(
+            r#"{declarations}
+local function first<T>(items: T[]): T return items[1] end
+local function unbox<T>(box: {{ value: T }}): T return box.value end
+local function lookup<T>(items: {{ [string]: T }}, key: string): T | nil return items[key] end
+local first_cat: Cat = first(cats)
+local boxed_cat: Cat = unbox({{ value = Cat.new() }})
+local maybe_cat: Cat | nil = lookup(cats_by_name, "cat")
+first_cat:meow()
+boxed_cat:meow()
+"#
+        ),
+    )
+    .expect("read-only generic uses still infer the concrete container element");
 }
 
 #[test]

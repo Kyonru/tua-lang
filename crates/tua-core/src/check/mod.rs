@@ -3133,7 +3133,7 @@ impl<'a> Checker<'a> {
             {
                 Ok(candidate) => candidate,
                 Err(failure) => {
-                    inference_failure.get_or_insert(failure.message());
+                    inference_failure.get_or_insert(failure);
                     continue;
                 }
             };
@@ -3143,18 +3143,23 @@ impl<'a> Checker<'a> {
             }
         }
 
-        if let Some(message) = inference_failure {
-            let span = arguments
-                .iter()
-                .find_map(|argument| match argument {
+        if let Some(failure) = inference_failure {
+            let span = failure
+                .argument_index
+                .and_then(|index| arguments.get(index))
+                .and_then(|argument| match argument {
                     CallArgument::Expression(expression) => node_span(expression),
                     CallArgument::Inferred(_) => None,
                 })
                 .or_else(|| node_span(node));
             let position = span.map_or_else(|| node_position(node), |span| span.start);
-            let mut diagnostic =
-                Diagnostic::error(&self.parsed.path, position.line, position.column, message)
-                    .with_code(DiagnosticCode::TYPE_GENERIC_INFERENCE);
+            let mut diagnostic = Diagnostic::error(
+                &self.parsed.path,
+                position.line,
+                position.column,
+                failure.message(),
+            )
+            .with_code(DiagnosticCode::TYPE_GENERIC_INFERENCE);
             if let Some(span) = span {
                 diagnostic = diagnostic.with_range(
                     span.start.line,

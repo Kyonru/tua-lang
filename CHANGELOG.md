@@ -25,6 +25,11 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Generic function inference keeps binders invariant when they occur inside
+  mutable arrays, dictionaries, or record fields, preventing widened values
+  from being written into narrower caller-owned containers. `TL1015` highlights
+  the conflicting actual argument, callback argument, or whole call according
+  to the inference failure.
 - Resolve protocol imports referenced only by a class `implements` clause, so
   project diagnostics validate cross-file missing and incompatible methods and
   refresh those checks when saved or unsaved protocol requirements change.

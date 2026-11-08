@@ -11,6 +11,7 @@ const MAX_GENERIC_CONSTRAINT_DEPTH: usize = 64;
 pub(crate) struct GenericInferenceFailure {
     pub parameter: String,
     pub kind: GenericInferenceFailureKind,
+    pub argument_index: Option<usize>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -61,8 +62,18 @@ pub(crate) fn instantiate_generic_function(
         .iter()
         .map(|parameter| parameter.id.clone())
         .collect::<HashSet<_>>();
+    let mut invariant_binders = HashSet::new();
+    for parameter in function
+        .parameters
+        .iter()
+        .map(|parameter| &parameter.ty)
+        .chain(function.vararg_type.as_deref())
+    {
+        collect_invariant_parameters(context, parameter, &binders, &mut invariant_binders, 0);
+    }
     let mut substitutions = HashMap::new();
     let mut callback_binders = HashSet::new();
+    let mut callback_argument_indices = HashMap::new();
     let mut incompatible_callback_binders = HashSet::new();
 
     for (index, actual) in arguments.iter().enumerate() {
@@ -84,16 +95,25 @@ pub(crate) fn instantiate_generic_function(
                 &mut incompatible_callback_binders
             };
             collect_generic_parameters(parameter_type, &binders, found, 0);
+            if matches!(actual, Type::Function(_)) {
+                for id in found.iter() {
+                    callback_argument_indices.entry(id.clone()).or_insert(index);
+                }
+            }
             continue;
         }
-        collect_constraints(
+        if let Err(mut failure) = collect_constraints(
             context,
             parameter_type,
             actual,
             &binders,
+            &invariant_binders,
             &mut substitutions,
             0,
-        )?;
+        ) {
+            failure.argument_index = Some(index);
+            return Err(failure);
+        }
     }
 
     for parameter in &function.generic_parameters {
@@ -125,6 +145,7 @@ pub(crate) fn instantiate_generic_function(
         return Err(GenericInferenceFailure {
             parameter: parameter.name.clone(),
             kind,
+            argument_index: callback_argument_indices.get(&parameter.id).copied(),
         });
     }
 
@@ -170,6 +191,7 @@ fn collect_constraints(
     pattern: &Type,
     actual: &Type,
     binders: &HashSet<TypeParameterId>,
+    invariant_binders: &HashSet<TypeParameterId>,
     substitutions: &mut HashMap<TypeParameterId, Type>,
     depth: usize,
 ) -> Result<(), GenericInferenceFailure> {
@@ -182,6 +204,7 @@ fn collect_constraints(
             &expanded,
             actual,
             binders,
+            invariant_binders,
             substitutions,
             depth + 1,
         );
@@ -192,6 +215,7 @@ fn collect_constraints(
             pattern,
             &expanded,
             binders,
+            invariant_binders,
             substitutions,
             depth + 1,
         );
@@ -199,10 +223,12 @@ fn collect_constraints(
     match (pattern, actual) {
         (Type::GenericParameter { id, name }, actual) if binders.contains(id) => {
             if let Some(previous) = substitutions.get(id) {
-                if context.is_assignable(actual, previous) {
+                if context.is_assignable(actual, previous)
+                    && context.is_assignable(previous, actual)
+                {
                     return Ok(());
                 }
-                if context.is_assignable(previous, actual) {
+                if !invariant_binders.contains(id) && context.is_assignable(previous, actual) {
                     substitutions.insert(id.clone(), actual.clone());
                     return Ok(());
                 }
@@ -212,16 +238,31 @@ fn collect_constraints(
                         previous: previous.clone(),
                         next: actual.clone(),
                     },
+                    argument_index: None,
                 });
             }
             substitutions.insert(id.clone(), actual.clone());
         }
-        (Type::Array(pattern), Type::Array(actual)) => {
-            collect_constraints(context, pattern, actual, binders, substitutions, depth + 1)?
-        }
+        (Type::Array(pattern), Type::Array(actual)) => collect_constraints(
+            context,
+            pattern,
+            actual,
+            binders,
+            invariant_binders,
+            substitutions,
+            depth + 1,
+        )?,
         (Type::Tuple(patterns), Type::Tuple(actuals)) if patterns.len() == actuals.len() => {
             for (pattern, actual) in patterns.iter().zip(actuals) {
-                collect_constraints(context, pattern, actual, binders, substitutions, depth + 1)?;
+                collect_constraints(
+                    context,
+                    pattern,
+                    actual,
+                    binders,
+                    invariant_binders,
+                    substitutions,
+                    depth + 1,
+                )?;
             }
         }
         (
@@ -239,6 +280,7 @@ fn collect_constraints(
                 pattern_key,
                 actual_key,
                 binders,
+                invariant_binders,
                 substitutions,
                 depth + 1,
             )?;
@@ -247,6 +289,7 @@ fn collect_constraints(
                 pattern_value,
                 actual_value,
                 binders,
+                invariant_binders,
                 substitutions,
                 depth + 1,
             )?;
@@ -259,6 +302,7 @@ fn collect_constraints(
                         &field.ty,
                         &actual_field.ty,
                         binders,
+                        invariant_binders,
                         substitutions,
                         depth + 1,
                     )?;
@@ -293,6 +337,7 @@ fn collect_constraints(
                         pattern,
                         actual,
                         binders,
+                        invariant_binders,
                         substitutions,
                         depth + 1,
                     )?;
@@ -312,12 +357,79 @@ fn collect_constraints(
             },
         ) if pattern_ref == actual_ref && patterns.len() == actuals.len() => {
             for (pattern, actual) in patterns.iter().zip(actuals) {
-                collect_constraints(context, pattern, actual, binders, substitutions, depth + 1)?;
+                collect_constraints(
+                    context,
+                    pattern,
+                    actual,
+                    binders,
+                    invariant_binders,
+                    substitutions,
+                    depth + 1,
+                )?;
             }
         }
         _ => {}
     }
     Ok(())
+}
+
+/// Find binders whose values flow through a mutable container in the formal
+/// signature. A value used anywhere in an array, dictionary, or record field
+/// must not be widened to a common supertype at another argument position:
+/// the generic body can write that widened value back into the caller's
+/// narrower container.
+fn collect_invariant_parameters(
+    context: &TypeContext,
+    ty: &Type,
+    binders: &HashSet<TypeParameterId>,
+    found: &mut HashSet<TypeParameterId>,
+    depth: usize,
+) {
+    if depth >= MAX_GENERIC_CONSTRAINT_DEPTH {
+        return;
+    }
+    if let Some(expanded) = context.expand_generic_alias_application(ty) {
+        collect_invariant_parameters(context, &expanded, binders, found, depth + 1);
+        return;
+    }
+    match ty {
+        Type::Array(item) => collect_generic_parameters(item, binders, found, depth + 1),
+        Type::Dictionary { key, value } => {
+            collect_generic_parameters(key, binders, found, depth + 1);
+            collect_generic_parameters(value, binders, found, depth + 1);
+        }
+        Type::Table(table) => {
+            for (_, field) in table.fields() {
+                collect_generic_parameters(&field.ty, binders, found, depth + 1);
+            }
+        }
+        Type::Union(types) | Type::Tuple(types) => {
+            for ty in types {
+                collect_invariant_parameters(context, ty, binders, found, depth + 1);
+            }
+        }
+        Type::Function(function) => {
+            for parameter in &function.parameters {
+                collect_invariant_parameters(context, &parameter.ty, binders, found, depth + 1);
+            }
+            for ty in function.return_types_or_any() {
+                collect_invariant_parameters(context, ty, binders, found, depth + 1);
+            }
+        }
+        Type::GenericAliasApplication { arguments, .. } => {
+            // A recursive or otherwise non-expandable alias may still hide a
+            // mutable occurrence. Be conservative rather than permit
+            // supertype widening through that alias.
+            for argument in arguments {
+                collect_invariant_parameters(context, argument, binders, found, depth + 1);
+            }
+        }
+        Type::GenericParameter { .. }
+        | Type::Alias(_)
+        | Type::Primitive(_)
+        | Type::Any
+        | Type::StringLiteral(_) => {}
+    }
 }
 
 fn contains_any_parameter(ty: &Type, binders: &HashSet<TypeParameterId>, depth: usize) -> bool {

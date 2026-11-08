@@ -799,6 +799,100 @@ return {
 }
 
 #[test]
+fn generic_array_invariance_blocks_a_runtime_type_corruption() {
+    let Some(lua) = working_lua_runtime() else {
+        return;
+    };
+    let source = r#"
+open class Animal {
+  init() {}
+}
+final class Cat extends Animal {
+  meow(): string { return "meow" }
+}
+
+local function overwrite<T>(items: T[], value: T): nil
+  items[1] = value
+end
+
+local cats: Cat[] = { Cat.new() }
+local animal: Animal = Animal.new()
+overwrite(cats, animal)
+local cat: Cat = cats[1]
+assert(cat:meow() == "meow")
+"#;
+    let temp = TempDir::new("generic-array-invariance");
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).expect("write config");
+    fs::create_dir_all(temp.path().join("src")).expect("create source directory");
+    fs::write(temp.path().join("src/main.tua"), source).expect("write source");
+
+    let checked = tua()
+        .arg("check")
+        .current_dir(temp.path())
+        .output()
+        .expect("run check");
+    assert!(
+        !checked.status.success(),
+        "unsafe generic write was accepted"
+    );
+    assert!(
+        String::from_utf8_lossy(&checked.stderr).contains("TL1015"),
+        "{}",
+        String::from_utf8_lossy(&checked.stderr)
+    );
+
+    // The emitter is deliberately exercised separately from checking to show
+    // the concrete Lua failure the checker prevents. Generic annotations erase;
+    // Lua itself permits the write, then the Cat-only method call fails.
+    let emitted = tua_core::emit::emit_tua_source("src/main.tua", source)
+        .expect("unchecked emission should preserve the ordinary Lua operation");
+    let emitted_path = temp.path().join("unsafe.lua");
+    fs::write(&emitted_path, emitted).expect("write emitted Lua");
+    let runtime = Command::new(&lua)
+        .arg(&emitted_path)
+        .output()
+        .expect("run emitted Lua oracle");
+    assert!(
+        !runtime.status.success(),
+        "the emitted unsafe program unexpectedly kept the Cat invariant"
+    );
+    let runtime_stderr = String::from_utf8_lossy(&runtime.stderr);
+    assert!(
+        runtime_stderr.contains("meow") || runtime_stderr.contains("nil"),
+        "unexpected runtime failure: {runtime_stderr}"
+    );
+
+    let safe_temp = TempDir::new("generic-array-safe-runtime");
+    fs::write(safe_temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).expect("write safe config");
+    fs::create_dir_all(safe_temp.path().join("src")).expect("create safe source directory");
+    let safe_source = source.replace(
+        "local animal: Animal = Animal.new()\noverwrite(cats, animal)",
+        "local other_cat: Cat = Cat.new()\noverwrite(cats, other_cat)",
+    );
+    fs::write(safe_temp.path().join("src/main.tua"), safe_source).expect("write safe source");
+    let built = tua()
+        .arg("build")
+        .current_dir(safe_temp.path())
+        .output()
+        .expect("build safe generic write");
+    assert!(
+        built.status.success(),
+        "{}",
+        String::from_utf8_lossy(&built.stderr)
+    );
+    let safe_runtime = Command::new(&lua)
+        .arg(safe_temp.path().join("build/main.lua"))
+        .output()
+        .expect("run safe emitted Lua");
+    assert!(
+        safe_runtime.status.success(),
+        "stdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&safe_runtime.stdout),
+        String::from_utf8_lossy(&safe_runtime.stderr)
+    );
+}
+
+#[test]
 fn check_exits_nonzero_for_parse_errors() {
     let temp = TempDir::new("check-parse-error");
 
