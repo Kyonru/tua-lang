@@ -20,6 +20,8 @@ language or editor behavior, and migration notes call out those changes.
   methods, matching signature help.
 - Connect protocol method references and rename across requirements,
   implementations, and protocol-typed calls.
+- Show protocol requirement comments in hover documentation, including when
+  the contract is imported from another file.
 - Preserve imported protocol members for completion while an edited consumer
   file temporarily has syntax errors.
 - Do not report a protocol type import as unused when a class uses it in an

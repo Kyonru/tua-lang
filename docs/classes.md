@@ -116,9 +116,10 @@ requirement; method hover and signature help omit the implicit receiver. Go to
 definition opens the requirement and go to implementation
 lists the statically known conforming methods in the workspace, including
 methods found through type-only imports. Comments on protocol requirements are
-not yet propagated into hover documentation. References and rename connect the
-requirement, statically known implementations, and protocol-typed calls across
-the workspace. The [feature-tour example](https://github.com/Kyonru/tua-lang/blob/main/examples/features/src/protocols.tua)
+shown in hover documentation for protocol-typed method calls. References and
+rename connect the requirement, statically known implementations, and
+protocol-typed calls across the workspace. The [feature-tour
+example](https://github.com/Kyonru/tua-lang/blob/main/examples/features/src/protocols.tua)
 exercises this language feature.
 
 Conformance does not add a wrapper, proxy, or generated interface table. The

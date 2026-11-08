@@ -795,7 +795,13 @@ pub(crate) fn documentation_for_definition(
                     .chain(class.methods.iter())
                     .any(|method| method.name_span == definition.span)
             });
-            if is_class_method {
+            let is_protocol_method = parsed.protocol_declarations.iter().any(|protocol| {
+                protocol
+                    .methods
+                    .iter()
+                    .any(|method| method.name_span == definition.span)
+            });
+            if is_class_method || is_protocol_method {
                 crate::source_text::leading_method_doc_comment(
                     &parsed.source,
                     definition.span.start.line,

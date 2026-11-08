@@ -5871,6 +5871,8 @@ fn imported_protocol_methods_are_available_to_completion_and_hover() {
     let fixture = Fixture::parse(
         r#"-- file: src/contracts.tua
 export protocol Updatable {
+  --- advances the actor by one frame
+  ---@param dt elapsed seconds
   update(dt: number): nil
 }
 -- file: src/main.tua
@@ -5897,6 +5899,14 @@ end
     assert!(hover.contents.contains("number"), "{hover:#?}");
     assert!(hover.contents.contains("(method)"), "{hover:#?}");
     assert!(!hover.contents.contains("self: any"), "{hover:#?}");
+    assert!(
+        hover.documentation.as_deref().is_some_and(|documentation| {
+            documentation.contains("advances the actor by one frame")
+                && documentation.contains("@param")
+                && documentation.contains("elapsed seconds")
+        }),
+        "protocol requirement docs should be visible from an imported method hover: {hover:#?}"
+    );
 }
 
 #[test]

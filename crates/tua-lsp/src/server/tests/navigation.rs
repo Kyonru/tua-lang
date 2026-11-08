@@ -956,6 +956,8 @@ return {
 fn protocol_method_navigation_crosses_type_imports() {
     let temp = TempProject::new("protocol-navigation");
     let contracts = r#"export protocol Updatable {
+  --- advances the actor by one frame
+  ---@param dt elapsed seconds
   update(dt: number): nil
 }
 "#;
@@ -999,6 +1001,7 @@ end
         references_request(5, &contracts_uri, contracts, "update", 2, true),
         rename_request(6, &contracts_uri, contracts, "update", 2, "step"),
         rename_request(7, &actors_uri, actors, "update(dt: number): nil", 0, "step"),
+        hover_request(8, &main_uri, main, "update(dt)"),
     ]);
 
     assert_definition_text(&output, 2, &contracts_uri, contracts, "update");
@@ -1019,6 +1022,8 @@ end
         .map(|location| location["range"]["start"]["line"].as_u64().unwrap())
         .collect::<Vec<_>>();
     assert_eq!(implementation_lines, [2, 5]);
+    assert_hover_contains(&output, 8, "advances the actor by one frame");
+    assert_hover_contains(&output, 8, "elapsed seconds");
     assert_definition_text(&output, 4, &contracts_uri, contracts, "Updatable");
 
     let references = response_with_id(&output, 5)["result"]
