@@ -109,6 +109,84 @@ fn named_type_reexports_resolve_across_depth_boundaries() {
 }
 
 #[test]
+fn generic_aliases_resolve_across_named_imports_and_reexports() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+import type { Box } from "./middle"
+local box: Box<number> = { value = 3 }
+local _result: number = box.value
+-- file: src/middle.tua
+export type { Box } from "./box"
+-- file: src/box.tua
+export type Box<T> = { value: T }
+"#,
+    );
+    let snapshot = host_from_fixture(&fixture).snapshot();
+    assert!(
+        snapshot
+            .type_database()
+            .generic_alias_definition(snapshot.module_graph(), "src/main.tua", "Box")
+            .is_some(),
+        "generic alias should resolve through named re-export"
+    );
+    assert!(
+        snapshot.diagnostics("src/main.tua").is_empty(),
+        "unexpected diagnostics: {:#?}",
+        snapshot.diagnostics("src/main.tua")
+    );
+
+    let environment = snapshot
+        .type_environment("src/main.tua")
+        .expect("main module should have a type environment");
+    let application = environment
+        .local("box")
+        .expect("annotated local should retain its generic application");
+    let resolved = snapshot.type_database().resolve_type(
+        snapshot.module_graph(),
+        "src/main.tua",
+        application,
+    );
+    let Type::Table(table) = resolved else {
+        panic!("expected a record after generic import resolution, got {resolved}");
+    };
+    assert_eq!(table.semantic_field("value").map(|field| &field.ty), Some(&Type::number()));
+}
+
+#[test]
+fn changing_argument_generic_alias_recursion_is_bounded_in_project_snapshots() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+import type { Grow } from "./aliases"
+local node: Grow<number>
+-- file: src/aliases.tua
+export type Grow<T> = { next: Grow<T[]> }
+"#,
+    );
+    let snapshot = host_from_fixture(&fixture).snapshot();
+    let environment = snapshot
+        .project_type_environment("src/main.tua")
+        .expect("main project environment should exist");
+    let mut current = environment.resolve_aliases(environment.local("node").unwrap());
+    let mut depth = 0;
+    loop {
+        match current {
+            Type::Table(table) => {
+                current = table
+                    .semantic_field("next")
+                    .expect("each recursive expansion has next")
+                    .ty
+                    .clone();
+                depth += 1;
+            }
+            Type::GenericAliasApplication { .. } => break,
+            other => panic!("expected bounded unresolved project alias, got {other:?}"),
+        }
+    }
+    assert!(depth <= 128, "project expansion exceeded its depth guard: {depth}");
+    assert!(depth >= 64, "project expansion should preserve useful shape: {depth}");
+}
+
+#[test]
 fn resolves_aliases_from_required_tua_modules() {
     let fixture = Fixture::parse(
         r#"-- file: src/main.tua
@@ -187,6 +265,7 @@ final class Panel implements Updatable {
   update(dt: number): nil {
   }
 }
+
 local _panel: Updatable = Panel.new()
 final class BrokenPanel implements Updatable {
 }
@@ -241,6 +320,95 @@ export protocol Updatable {
             }),
         "the valid implementation should remain accepted: {:#?}",
         snapshot.diagnostics("src/main.tua")
+    );
+}
+
+#[test]
+fn generic_aliases_resolve_in_imported_protocol_requirements_and_class_methods() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+import type { Box, Consumer } from "./contracts"
+final class GoodConsumer implements Consumer {
+  consume(value: Box<number>): nil {
+  }
+}
+final class BadConsumer implements Consumer {
+  consume(value: Box<string>): nil {
+  }
+}
+-- file: src/contracts.tua
+export type Box<T> = { value: T }
+export protocol Consumer {
+  consume(value: Box<number>): nil
+}
+"#,
+    );
+    let host = host_from_fixture(&fixture);
+    let snapshot = host.snapshot();
+    let diagnostics = snapshot.diagnostics("src/main.tua");
+    assert!(
+        diagnostics.iter().any(|diagnostic| {
+            diagnostic.message.contains("BadConsumer")
+                && diagnostic.message.contains("consume")
+        }),
+        "generic alias in an imported protocol requirement must distinguish incompatible implementations: {diagnostics:#?}"
+    );
+    assert!(
+        !diagnostics.iter().any(|diagnostic| diagnostic.message.contains("GoodConsumer")),
+        "matching generic alias method signature should conform: {diagnostics:#?}"
+    );
+}
+
+#[test]
+fn namespace_imported_generic_aliases_resolve_in_types_and_protocols() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+import type Contracts from "./contracts"
+local _box: Contracts.Box<number> = { value = 1 }
+local _bad: Contracts.Box<number, string>
+local _bare: Contracts.Box
+final class GoodConsumer implements Contracts.Consumer {
+  consume(value: Contracts.Box<number>): nil {
+  }
+}
+final class BadConsumer implements Contracts.Consumer {
+  consume(value: Contracts.Box<string>): nil {
+  }
+}
+-- file: src/contracts.tua
+export type Box<T> = { value: T }
+export protocol Consumer {
+  consume(value: Box<number>): nil
+}
+"#,
+    );
+    let host = host_from_fixture(&fixture);
+    let snapshot = host.snapshot();
+    let diagnostics = snapshot.diagnostics("src/main.tua");
+    assert!(
+        diagnostics.iter().any(|diagnostic| {
+            diagnostic.code == Some(crate::DiagnosticCode::TYPE_ARGUMENT_COUNT)
+                && diagnostic.message.contains("expects 1 type argument(s), found 2")
+        }),
+        "wrong namespace generic arity should be diagnosed: {diagnostics:#?}"
+    );
+    assert!(
+        diagnostics.iter().any(|diagnostic| {
+            diagnostic.code == Some(crate::DiagnosticCode::TYPE_ARGUMENT_COUNT)
+                && diagnostic.message.contains("expects 1 type argument(s), found 0")
+        }),
+        "bare namespace generic alias should be diagnosed: {diagnostics:#?}"
+    );
+    assert!(
+        diagnostics.iter().any(|diagnostic| {
+            diagnostic.message.contains("BadConsumer")
+                && diagnostic.message.contains("consume")
+        }),
+        "namespace imported protocol should reject incompatible method signatures: {diagnostics:#?}"
+    );
+    assert!(
+        !diagnostics.iter().any(|diagnostic| diagnostic.message.contains("GoodConsumer")),
+        "namespace imported protocol should accept matching generic alias method signatures: {diagnostics:#?}"
     );
 }
 

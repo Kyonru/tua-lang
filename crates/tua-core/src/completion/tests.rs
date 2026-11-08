@@ -1,8 +1,8 @@
 use super::*;
+use crate::Fixture;
 use crate::module_path_index::{ModulePathIndex, ProjectModuleWorkspace};
 use crate::source_text::position_at;
 use crate::vfs::ModulePathSeparator;
-use crate::Fixture;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -79,10 +79,11 @@ fn completes_builtin_ecs_module_and_documented_members() {
         .expect("built-in ecs module should complete");
 
     assert_eq!(ecs.kind, CompletionKind::Module);
-    assert!(ecs
-        .documentation
-        .as_deref()
-        .is_some_and(|documentation| { documentation.contains("data-oriented ECS helpers") }));
+    assert!(
+        ecs.documentation
+            .as_deref()
+            .is_some_and(|documentation| { documentation.contains("data-oriented ECS helpers") })
+    );
 
     let source = "local world = ecs.\n";
     let members = complete_tua_source("src/main.tua", source, position_after(source, "ecs."))
@@ -420,10 +421,11 @@ events:
         emit.detail.as_deref(),
         Some("function SignalBus:emit(name: string, ...: any): nil")
     );
-    assert!(emit
-        .documentation
-        .as_deref()
-        .is_some_and(|documentation| documentation.contains("Emit a named signal")));
+    assert!(
+        emit.documentation
+            .as_deref()
+            .is_some_and(|documentation| documentation.contains("Emit a named signal"))
+    );
     assert_eq!(
         emit.insert_text.as_deref(),
         Some("emit(${1:name}, ${2:...})$0")
@@ -480,10 +482,12 @@ bullets:
         .iter()
         .find(|completion| completion.label == "release")
         .expect("release should complete");
-    assert!(release
-        .documentation
-        .as_deref()
-        .is_some_and(|documentation| documentation.contains("duplicate releases")));
+    assert!(
+        release
+            .documentation
+            .as_deref()
+            .is_some_and(|documentation| documentation.contains("duplicate releases"))
+    );
     assert!(labels(&item_fields).contains(&"x".to_owned()));
     assert!(labels(&item_fields).contains(&"active".to_owned()));
 }
@@ -523,10 +527,12 @@ game:
         .iter()
         .find(|completion| completion.label == "watch")
         .expect("watch should complete");
-    assert!(watch
-        .documentation
-        .as_deref()
-        .is_some_and(|documentation| documentation.contains("top-level state field")));
+    assert!(
+        watch
+            .documentation
+            .as_deref()
+            .is_some_and(|documentation| documentation.contains("top-level state field"))
+    );
     let state_labels = labels(&state_fields);
     assert!(state_labels.contains(&"score".to_owned()));
     assert!(state_labels.contains(&"paused".to_owned()));
@@ -639,10 +645,12 @@ fn completes_typed_state_machine_events_callbacks_and_values() {
         .find(|completion| completion.label == "onenterred")
         .expect("onenterred should complete");
     assert!(on_enter_red.is_snippet);
-    assert!(on_enter_red
-        .insert_text
-        .as_deref()
-        .is_some_and(|text| text.contains("event: \"panic\" | \"warn\"")));
+    assert!(
+        on_enter_red
+            .insert_text
+            .as_deref()
+            .is_some_and(|text| text.contains("event: \"panic\" | \"warn\""))
+    );
 
     let method_labels = labels(&methods);
     for expected in ["warn", "panic", "is", "can", "cannot", "current"] {
@@ -849,12 +857,16 @@ events:emit("")
             "ui.ready".to_owned()
         ]
     );
-    assert!(completions
-        .iter()
-        .all(|completion| completion.kind == CompletionKind::Value));
-    assert!(completions
-        .iter()
-        .all(|completion| completion.detail.as_deref() == Some("SignalBus event")));
+    assert!(
+        completions
+            .iter()
+            .all(|completion| completion.kind == CompletionKind::Value)
+    );
+    assert!(
+        completions
+            .iter()
+            .all(|completion| completion.detail.as_deref() == Some("SignalBus event"))
+    );
 }
 
 #[test]
@@ -1059,9 +1071,11 @@ fn completes_table_fields_after_dot_access() {
         labels(&completions),
         vec!["hp".to_owned(), "alive".to_owned(), "pos".to_owned()]
     );
-    assert!(completions
-        .iter()
-        .all(|item| item.kind == CompletionKind::Field));
+    assert!(
+        completions
+            .iter()
+            .all(|item| item.kind == CompletionKind::Field)
+    );
 }
 
 #[test]
@@ -1889,11 +1903,13 @@ fn completes_love_function_calls_as_signature_snippets() {
         circle.insert_text.as_deref(),
         Some(r#"circle("${1|fill,line|}", ${2:x}, ${3:y}, ${4:radius})$0"#)
     );
-    assert!(circle
-        .documentation
-        .as_deref()
-        .unwrap_or_default()
-        .contains("[Open LOVE wiki](https://love2d.org/wiki/love.graphics.circle)"));
+    assert!(
+        circle
+            .documentation
+            .as_deref()
+            .unwrap_or_default()
+            .contains("[Open LOVE wiki](https://love2d.org/wiki/love.graphics.circle)")
+    );
 }
 
 #[test]
@@ -1963,11 +1979,13 @@ fn completes_love_callbacks_as_function_declaration_snippets() {
         keypressed.insert_text.as_deref(),
         Some("keypressed(key, scancode, isrepeat)\n  $0\nend")
     );
-    assert!(keypressed
-        .documentation
-        .as_deref()
-        .unwrap_or_default()
-        .contains("`scancode: Scancode`"));
+    assert!(
+        keypressed
+            .documentation
+            .as_deref()
+            .unwrap_or_default()
+            .contains("`scancode: Scancode`")
+    );
 }
 
 #[test]
@@ -2372,12 +2390,16 @@ player:setFilter("")
     .expect("FilterMode value completion should succeed");
 
     assert_eq!(labels(&completions), vec!["linear", "nearest"]);
-    assert!(completions
-        .iter()
-        .all(|completion| completion.kind == CompletionKind::Value));
-    assert!(completions
-        .iter()
-        .all(|completion| completion.detail.as_deref() == Some("FilterMode")));
+    assert!(
+        completions
+            .iter()
+            .all(|completion| completion.kind == CompletionKind::Value)
+    );
+    assert!(
+        completions
+            .iter()
+            .all(|completion| completion.detail.as_deref() == Some("FilterMode"))
+    );
 }
 
 #[test]
@@ -2507,12 +2529,16 @@ end
             .expect("DrawMode typo recovery completion should succeed");
 
     assert_eq!(labels(&completions), vec!["fill", "line"]);
-    assert!(completions
-        .iter()
-        .all(|completion| completion.detail.as_deref() == Some("DrawMode")));
-    assert!(completions
-        .iter()
-        .all(|completion| completion.filter_text.as_deref() == Some("fillter")));
+    assert!(
+        completions
+            .iter()
+            .all(|completion| completion.detail.as_deref() == Some("DrawMode"))
+    );
+    assert!(
+        completions
+            .iter()
+            .all(|completion| completion.filter_text.as_deref() == Some("fillter"))
+    );
 }
 
 #[test]
@@ -3315,11 +3341,12 @@ fn annotation_catalog_completions_explain_every_recognized_tag() {
             .iter()
             .find(|item| item.label == tag.name)
             .unwrap();
-        assert!(item
-            .documentation
-            .as_ref()
-            .unwrap()
-            .contains(&tag.description));
+        assert!(
+            item.documentation
+                .as_ref()
+                .unwrap()
+                .contains(&tag.description)
+        );
         assert!(item.insert_text.is_none());
     }
 }
@@ -3331,7 +3358,9 @@ fn audit_native_constructor_completion_is_whitespace_independent() {
         "local counter = Counter.new(1)",
         "local counter =\n Counter.new(1)",
     ] {
-        let source = format!("class Counter {{\n value: number = 0\n init(value: number) {{ self.value = value }}\n read(): number {{ return self.value }}\n}}\n{binding}\ncounter:\n");
+        let source = format!(
+            "class Counter {{\n value: number = 0\n init(value: number) {{ self.value = value }}\n read(): number {{ return self.value }}\n}}\n{binding}\ncounter:\n"
+        );
         let items =
             complete_tua_source("main.tua", &source, position_after(&source, "counter:")).unwrap();
         assert!(

@@ -1,5 +1,5 @@
 use super::*;
-use crate::{parse_lua_source, parse_tua_source, DiagnosticCode};
+use crate::{DiagnosticCode, parse_lua_source, parse_tua_source};
 
 #[test]
 fn inferred_dictionary_reads_include_nil_for_editor_queries() {
@@ -335,6 +335,46 @@ fn class_alias_targets_reject_structurally_matching_plain_tables() {
 
     assert!(!context.is_assignable(&shape, &Type::alias("Entity")));
     assert!(context.is_assignable(&Type::alias("Entity"), &shape));
+}
+
+#[test]
+fn mutable_array_protocol_view_guard_expands_generic_alias_elements() {
+    let alias_id = crate::parser::TypeAliasId {
+        module: std::path::PathBuf::from("src/aliases.tua"),
+        name: "Identity".to_owned(),
+        declaration: crate::parser::SourceSpan {
+            start: crate::SourcePosition { line: 1, column: 1 },
+            end: crate::SourcePosition { line: 1, column: 9 },
+        },
+    };
+    let parameter_id = crate::parser::TypeParameterId {
+        declaration: alias_id.clone(),
+        ordinal: 0,
+    };
+    let mut context = TypeContext::new();
+    context.insert_generic_alias(GenericAliasDefinition {
+        id: alias_id.clone(),
+        parameters: vec![parameter_id.clone()],
+        body: Box::new(Type::GenericParameter {
+            id: parameter_id,
+            name: "T".to_owned(),
+        }),
+    });
+    context.insert_nominal_alias_supertype("Concrete", "Readable");
+    context.insert_nominal_protocol("Readable");
+
+    let source = Type::array(Type::alias("Concrete"));
+    let target = Type::array(Type::GenericAliasApplication {
+        reference: GenericAliasReference::Declaration(alias_id),
+        arguments: vec![Type::alias("Readable")],
+        span: None,
+    });
+
+    assert!(context.is_assignable(&Type::alias("Concrete"), &Type::alias("Readable")));
+    assert!(
+        !context.is_assignable(&source, &target),
+        "mutable arrays must not widen class elements to protocol views through a generic alias"
+    );
 }
 
 #[test]
@@ -1385,9 +1425,11 @@ end
 
     assert_eq!(diagnostics.len(), 1);
     assert_eq!(diagnostics[0].code, Some(DiagnosticCode::TYPE_DOC_CONFLICT));
-    assert!(diagnostics[0]
-        .message
-        .contains("conflicting annotations for `test` parameter `value`"));
+    assert!(
+        diagnostics[0]
+            .message
+            .contains("conflicting annotations for `test` parameter `value`")
+    );
 }
 
 #[test]
@@ -1517,9 +1559,11 @@ type Player = {
             "duplicate type alias `Player`"
         ]
     );
-    assert!(diagnostics
-        .iter()
-        .all(|diagnostic| diagnostic.code == Some(DiagnosticCode::TYPE_DUPLICATE_ALIAS)));
+    assert!(
+        diagnostics
+            .iter()
+            .all(|diagnostic| diagnostic.code == Some(DiagnosticCode::TYPE_DUPLICATE_ALIAS))
+    );
     assert!(diagnostics[0].format_cli().contains("error TL1002"));
 }
 
@@ -1561,7 +1605,11 @@ return {}
             Type::Table(table) => table.fields().any(|(_, field)| contains_any(&field.ty)),
             Type::Array(item) => contains_any(item),
             Type::Dictionary { key, value } => contains_any(key) || contains_any(value),
-            Type::Primitive(_) | Type::Alias(_) | Type::StringLiteral(_) => false,
+            Type::Primitive(_)
+            | Type::Alias(_)
+            | Type::StringLiteral(_)
+            | Type::GenericParameter { .. }
+            | Type::GenericAliasApplication { .. } => false,
         }
     }
 
@@ -1575,7 +1623,9 @@ return {}
             | Type::Primitive(_)
             | Type::Any
             | Type::Alias(_)
-            | Type::StringLiteral(_) => false,
+            | Type::StringLiteral(_)
+            | Type::GenericParameter { .. }
+            | Type::GenericAliasApplication { .. } => false,
         }
     }
 
@@ -1583,9 +1633,11 @@ return {}
         panic!("expected the outer sequence union to remain available");
     };
     assert!(contains_table(&resolved));
-    assert!(sequence
-        .iter()
-        .any(|member| matches!(member, Type::Array(_))));
+    assert!(
+        sequence
+            .iter()
+            .any(|member| matches!(member, Type::Array(_)))
+    );
     assert!(
         contains_any(&resolved),
         "the recursive edge should become any"
@@ -1667,9 +1719,11 @@ local invalid = text:set("Bye"):getWidth()
     let position = crate::SourcePosition { line: 8, column: 1 };
     assert_eq!(semantic.type_of_name("w", position), Some(Type::number()));
     assert_eq!(semantic.type_of_name("h", position), Some(Type::number()));
-    assert!(semantic
-        .type_of_name("invalid", position)
-        .is_none_or(|ty| ty == Type::Any));
+    assert!(
+        semantic
+            .type_of_name("invalid", position)
+            .is_none_or(|ty| ty == Type::Any)
+    );
 }
 
 #[test]
@@ -1747,10 +1801,12 @@ local unsafe: number = table.remove(numbers)
         .hover("src/main.tua", fixture.position("hover"))
         .unwrap();
     assert!(hover.contents.contains("nil"), "{}", hover.contents);
-    assert!(snapshot
-        .completion("src/main.tua", fixture.position("member"))
-        .iter()
-        .any(|item| item.label == "health"));
+    assert!(
+        snapshot
+            .completion("src/main.tua", fixture.position("member"))
+            .iter()
+            .any(|item| item.label == "health")
+    );
     let diagnostics = snapshot.diagnostics("src/main.tua");
     for line in [9, 10] {
         assert!(
@@ -1784,18 +1840,36 @@ fn table_remove_mutation_preserves_user_return_contracts() {
         "local function install() table.remove = function(items: number[]): string return \"custom\" end end\ninstall()",
         "function table.remove(items: number[]): string return \"custom\" end",
     ] {
-        let source = format!("local enabled: boolean = true\nlocal values: number[] = {{1}}\n{mutation}\nlocal custom: string = table.remove(values)\nlocal function take(): string return table.remove(values) end\nprint(custom, take())\n");
+        let source = format!(
+            "local enabled: boolean = true\nlocal values: number[] = {{1}}\n{mutation}\nlocal custom: string = table.remove(values)\nlocal function take(): string return table.remove(values) end\nprint(custom, take())\n"
+        );
         let parsed = parse_tua_source("src/override.tua", &source).unwrap();
         let environment = build_type_environment(&parsed).unwrap();
         assert!(environment.table_remove_is_overridden(), "{mutation}");
         let semantic = crate::semantic::SemanticModel::new(&parsed, &environment);
-        let position = crate::SourcePosition { line: source.lines().count(), column: 7 };
-        assert_eq!(semantic.type_of_name("custom", position), Some(Type::string()), "{mutation}");
-        assert_eq!(environment.function("take").unwrap().return_types, vec![Type::string()], "{mutation}");
+        let position = crate::SourcePosition {
+            line: source.lines().count(),
+            column: 7,
+        };
+        assert_eq!(
+            semantic.type_of_name("custom", position),
+            Some(Type::string()),
+            "{mutation}"
+        );
+        assert_eq!(
+            environment.function("take").unwrap().return_types,
+            vec![Type::string()],
+            "{mutation}"
+        );
         let mut host = crate::AnalysisHost::new();
         host.set_file("src/override.tua", source);
         let diagnostics = host.snapshot().diagnostics("src/override.tua");
-        assert!(!diagnostics.iter().any(|d| d.severity == crate::DiagnosticSeverity::Error), "{mutation}: {diagnostics:?}");
+        assert!(
+            !diagnostics
+                .iter()
+                .any(|d| d.severity == crate::DiagnosticSeverity::Error),
+            "{mutation}: {diagnostics:?}"
+        );
     }
 }
 
@@ -1838,8 +1912,15 @@ fn table_insert_checks_typed_array_values_and_preserves_dynamic_replacements() {
         "function table.insert(items: number[], value: string) end\nlocal values: number[] = {}\ntable.insert(values, 'custom')",
     ] {
         let parsed = parse_tua_source("main.tua", source).unwrap();
-        let diagnostics = crate::check_parsed_source(&parsed).err().unwrap_or_default();
-        assert!(!diagnostics.iter().any(|d| d.severity == crate::DiagnosticSeverity::Error), "{source}: {diagnostics:?}");
+        let diagnostics = crate::check_parsed_source(&parsed)
+            .err()
+            .unwrap_or_default();
+        assert!(
+            !diagnostics
+                .iter()
+                .any(|d| d.severity == crate::DiagnosticSeverity::Error),
+            "{source}: {diagnostics:?}"
+        );
     }
 }
 
@@ -1918,7 +1999,9 @@ fn unresolved_return_expression_preserves_other_return_slots() {
         "1, runtimeValue, 3",
         "1, 2, runtimeValue",
     ] {
-        let source = format!("local function values()\n return {returned}\nend\nlocal x, y, z = 0, 0, 0\nx, y, z = values()\n");
+        let source = format!(
+            "local function values()\n return {returned}\nend\nlocal x, y, z = 0, 0, 0\nx, y, z = values()\n"
+        );
         crate::check_tua_source("src/returns.tua", &source).unwrap_or_else(|diagnostics| {
             assert!(
                 !diagnostics
@@ -1983,5 +2066,171 @@ fn unresolved_return_slot_does_not_hide_known_mismatch() {
             .any(|d| d.code == Some(DiagnosticCode::TYPE_MISMATCH)
                 && d.message.contains("expected number, found string")),
         "{diagnostics:#?}"
+    );
+}
+
+#[test]
+fn generic_alias_application_substitutes_nested_record_field() {
+    let parsed = parse_tua_source(
+        "generic_box.tua",
+        "type Box<T> = { value: T }\nlocal value: Box<number> = { value = 4 }\n",
+    )
+    .expect("generic alias syntax should parse");
+    let environment = build_type_environment(&parsed).expect("generic alias should resolve");
+    let value = environment
+        .local("value")
+        .expect("annotated local should be available");
+    let resolved = environment.resolve_aliases(value);
+    let Type::Table(table) = resolved else {
+        panic!("expected Box<number> to resolve to its record body: {resolved}");
+    };
+    assert_eq!(table.semantic_field("value").map(|field| &field.ty), Some(&Type::number()));
+}
+
+#[test]
+fn generic_alias_substitution_reaches_every_structured_type_position() {
+    let parsed = parse_tua_source(
+        "generic_shapes.tua",
+        "type Shapes<T> = {\n  list: T[],\n  maybe: T | nil,\n  values: { [string]: T },\n  transform: (value: T) -> T,\n  nested: { value: T },\n}\nlocal shapes: Shapes<number>\n",
+    )
+    .expect("generic shapes alias should parse");
+    let environment = build_type_environment(&parsed).expect("generic shapes alias should resolve");
+    let shapes = environment
+        .local("shapes")
+        .expect("annotated value should be present");
+    let Type::Table(table) = environment.resolve_aliases(shapes) else {
+        panic!("expected a table alias instantiation");
+    };
+
+    assert_eq!(table.semantic_field("list").map(|field| &field.ty), Some(&Type::array(Type::number())));
+    assert_eq!(table.semantic_field("maybe").map(|field| &field.ty), Some(&Type::union([Type::number(), Type::nil()])));
+    assert_eq!(
+        table.semantic_field("values").map(|field| &field.ty),
+        Some(&Type::dictionary(Type::string(), Type::number()))
+    );
+    let Type::Function(transform) = &table.semantic_field("transform").unwrap().ty else {
+        panic!("expected a function type with substituted parameter and return");
+    };
+    assert_eq!(transform.parameters[0].ty, Type::number());
+    assert_eq!(*transform.return_type, Type::number());
+    let Type::Table(nested) = &table.semantic_field("nested").unwrap().ty else {
+        panic!("expected nested record");
+    };
+    assert_eq!(nested.semantic_field("value").map(|field| &field.ty), Some(&Type::number()));
+}
+
+#[test]
+fn generic_alias_recursion_stabilizes_at_the_same_instantiation() {
+    let parsed = parse_tua_source(
+        "generic_node.tua",
+        "type Node<T> = { value: T, next: Node<T> | nil }\nlocal node: Node<number>\n",
+    )
+    .expect("recursive generic alias should parse");
+    let environment = build_type_environment(&parsed).expect("recursive generic alias should resolve");
+    let node = environment.local("node").unwrap();
+    let Type::Table(table) = environment.resolve_aliases(node) else {
+        panic!("expected recursive alias outer record");
+    };
+    assert_eq!(table.semantic_field("value").map(|field| &field.ty), Some(&Type::number()));
+    let Type::Union(next) = &table.semantic_field("next").unwrap().ty else {
+        panic!("expected recursive edge union");
+    };
+    assert!(next.iter().any(|ty| matches!(ty, Type::GenericAliasApplication { .. })));
+}
+
+#[test]
+fn changing_argument_generic_alias_recursion_stops_at_the_depth_limit() {
+    let parsed = parse_tua_source(
+        "generic_grow.tua",
+        "type Grow<T> = { next: Grow<T[]> }\nlocal node: Grow<number>\n",
+    )
+    .expect("changing-argument recursive generic alias should parse");
+    let environment = build_type_environment(&parsed).expect("generic alias should resolve");
+    let mut current = environment.resolve_aliases(environment.local("node").unwrap());
+    let mut depth = 0;
+    loop {
+        match current {
+            Type::Table(table) => {
+                current = table
+                    .semantic_field("next")
+                    .expect("each recursive expansion has next")
+                    .ty
+                    .clone();
+                depth += 1;
+            }
+            Type::GenericAliasApplication { .. } => break,
+            other => panic!("expected bounded unresolved alias application, got {other:?}"),
+        }
+    }
+    assert!(depth <= 128, "expansion exceeded the guarded depth: {depth}");
+    assert!(depth >= 64, "recursive type should retain useful outer shape: {depth}");
+}
+
+#[test]
+fn generic_alias_reports_bare_wrong_arity_and_unknown_uses() {
+    let parsed = parse_tua_source(
+        "generic_arity.tua",
+        "type Box<T> = { value: T }\nlocal _valid: Box<number>\nlocal _extra: Box<number, string>\nlocal _bare: Box\nlocal _unknown: Missing<number>\n",
+    )
+    .expect("generic alias applications should parse");
+    let (_, diagnostics) = build_type_environment_with_diagnostics(&parsed);
+
+    let arity = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::TYPE_ARGUMENT_COUNT))
+        .collect::<Vec<_>>();
+    assert_eq!(arity.len(), 2, "expected extra-argument and bare-use errors: {diagnostics:#?}");
+    assert!(arity.iter().any(|diagnostic| {
+        diagnostic.line == 3
+            && diagnostic.column == 15
+            && diagnostic.end_column == 34
+            && diagnostic.message.contains("expects 1 type argument(s), found 2")
+    }), "wrong-arity error should point at the full application: {arity:#?}");
+    assert!(arity.iter().any(|diagnostic| {
+        diagnostic.line == 4 && diagnostic.message.contains("found 0")
+    }), "bare alias use should report missing arguments: {arity:#?}");
+    assert!(diagnostics.iter().any(|diagnostic| {
+        diagnostic.code == Some(DiagnosticCode::TYPE_UNKNOWN_NAME)
+            && diagnostic.line == 5
+            && diagnostic.column == 17
+            && diagnostic.message.contains("unknown generic type alias `Missing`")
+    }), "unknown generic name should be reported at its identifier: {diagnostics:#?}");
+}
+
+#[test]
+fn generic_alias_wrong_arity_is_checked_in_class_field_types() {
+    let parsed = parse_tua_source(
+        "generic_class_field.tua",
+        "type Box<T> = { value: T }\nprotocol WantsBox {\n  accept(value: Box<number, string>): nil\n}\nclass Holder implements WantsBox {\n  value: Box<number, string>\n  accept(value: Box<number, string>): nil {}\n}\n",
+    )
+    .expect("class field generic alias application should parse");
+    let (_, diagnostics) = build_type_environment_with_diagnostics(&parsed);
+    let arity_errors = diagnostics
+        .iter()
+        .filter(|diagnostic| {
+            diagnostic.code == Some(DiagnosticCode::TYPE_ARGUMENT_COUNT)
+                && diagnostic.message.contains("expects 1 type argument(s), found 2")
+        })
+        .count();
+    assert!(
+        arity_errors >= 3,
+        "class fields, methods and protocol requirements should validate generic alias arity: {diagnostics:#?}"
+    );
+}
+
+#[test]
+fn generic_alias_arity_is_checked_in_luadoc_type_tags() {
+    let parsed = parse_tua_source(
+        "generic_luadoc.tua",
+        "type Box<T> = { value: T }\n---@type Box<number, string>\nlocal value = {}\n",
+    )
+    .expect("generic LuaDoc type should parse");
+    let (_, diagnostics) = build_type_environment_with_diagnostics(&parsed);
+    assert!(
+        diagnostics.iter().any(|diagnostic| {
+            diagnostic.code == Some(DiagnosticCode::TYPE_ARGUMENT_COUNT)
+                && diagnostic.message.contains("expects 1 type argument(s), found 2")
+        }),
+        "LuaDoc generic applications should use the same arity validation: {diagnostics:#?}"
     );
 }

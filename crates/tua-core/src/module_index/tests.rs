@@ -721,10 +721,12 @@ fn lua_exported_wrappers_preserve_untyped_named_and_variadic_parameters() {
     let source = "local Wrapper = require('wrapper')\nlocal count = Wrapper.call(1, 2, 3)\nlocal first = Wrapper.named('one', 2, 3)\n";
     host.set_file("src/main.tua", source);
     let snapshot = host.snapshot();
-    assert!(snapshot
-        .diagnostics("src/main.tua")
-        .iter()
-        .all(|d| d.severity != crate::DiagnosticSeverity::Error));
+    assert!(
+        snapshot
+            .diagnostics("src/main.tua")
+            .iter()
+            .all(|d| d.severity != crate::DiagnosticSeverity::Error)
+    );
     let parsed = crate::parse_lua_source(
         "src/wrapper.lua",
         "return function(first, ...) return first end\n",
@@ -790,10 +792,12 @@ fn imported_lua_overloads_preserve_all_call_contracts() {
         panic!("function");
     };
     assert_eq!(function.overloads.len(), 2);
-    assert!(crate::check_tua_source(&path, source)
-        .unwrap_err()
-        .iter()
-        .any(|d| d.code == Some(crate::DiagnosticCode::TYPE_MISMATCH)));
+    assert!(
+        crate::check_tua_source(&path, source)
+            .unwrap_err()
+            .iter()
+            .any(|d| d.code == Some(crate::DiagnosticCode::TYPE_MISMATCH))
+    );
     crate::check_tua_source(&path, source.replace("true", "42")).unwrap();
     let parsed = parse_tua_source(&path, source.replace("true", "42")).unwrap();
     let environment = crate::build_type_environment(&parsed).unwrap();

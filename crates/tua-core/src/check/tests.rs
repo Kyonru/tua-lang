@@ -2603,6 +2603,98 @@ final class BroadReturn implements Visitor {
 }
 
 #[test]
+fn rejects_mutable_concrete_array_widening_to_protocol_view() {
+    let parsed = crate::parse_tua_source("src/protocol_array_variance.tua", r#"
+protocol Readable { read(): number }
+final class A implements Readable { read(): number { return 1 } }
+local concrete: A[] = { A.new() }
+local view: Readable[] = concrete
+"#).unwrap();
+    let env = crate::types::build_type_environment(&parsed).unwrap();
+    assert!(
+        !env.to_type_context().is_assignable(
+            env.local("concrete").unwrap(),
+            env.local("view").unwrap()
+        ),
+        "the base TypeContext should reject this assignment too"
+    );
+    let diagnostics = check_tua_source(
+        "src/protocol_array_variance.tua",
+        r#"
+protocol Readable {
+  read(): number
+}
+final class A implements Readable {
+  read(): number {
+    return 1
+  }
+}
+final class B implements Readable {
+  read(): number {
+    return 2
+  }
+}
+local concrete: A[] = { A.new() }
+local view: Readable[] = concrete
+view[1] = B.new()
+"#,
+    )
+    .expect_err("a mutable A[] cannot be widened to a writable Readable[] alias");
+    assert!(diagnostics.iter().any(|diagnostic| {
+        diagnostic.code == Some(DiagnosticCode::TYPE_MISMATCH)
+            && diagnostic.line == 16
+            && diagnostic.message.contains("expected Readable[]")
+            && diagnostic.message.contains("found A[]")
+    }), "the unsafe widening should fail at its assignment with both element types: {diagnostics:#?}");
+
+    check_tua_source(
+        "src/protocol_array_literal.tua",
+        r#"
+protocol Readable {
+  read(): number
+}
+final class A implements Readable {
+  read(): number {
+    return 1
+  }
+}
+final class B implements Readable {
+  read(): number {
+    return 2
+  }
+}
+local view: Readable[] = { A.new(), B.new() }
+"#,
+    )
+    .expect("contextually typed protocol arrays may contain unrelated conformers");
+
+    check_tua_source(
+        "src/inherited_array_covariance.tua",
+        r#"
+open class Base {}
+final class A extends Base {}
+final class B extends Base {}
+local concrete: A[] = { A.new() }
+local widened: Base[] = concrete
+widened[1] = B.new()
+"#,
+    )
+    .expect("legacy class-array covariance remains compatible");
+
+    check_tua_source(
+        "src/dynamic_array_compatibility.tua",
+        r#"
+protocol Readable {
+  read(): number
+}
+local dynamic: any[] = {}
+local view: Readable[] = dynamic
+"#,
+    )
+    .expect("an explicitly dynamic any array remains an unchecked escape hatch");
+}
+
+#[test]
 fn protocol_assignability_requires_explicit_class_conformance() {
     let diagnostics = check_tua_source(
         "src/protocols.tua",

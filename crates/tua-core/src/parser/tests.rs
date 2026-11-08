@@ -729,6 +729,77 @@ type Player = {
 }
 
 #[test]
+fn parses_generic_alias_binders_and_structured_applications() {
+    let parsed = parse_tua_source(
+        "src/generic_types.tua",
+        r#"
+type Box<T> = { value: T }
+type Result<T, E> = { value: T | nil, error: E | nil }
+local box: Box<number>
+local result: Result<string, number>
+"#,
+    )
+    .expect("generic aliases and type applications should parse");
+
+    let box_alias = &parsed.type_aliases[0];
+    let value_parameter = &box_alias.generic_parameters[0];
+    assert_eq!(value_parameter.name, "T");
+    assert_eq!(value_parameter.id.declaration, box_alias.id);
+    assert_eq!(value_parameter.id.ordinal, 0);
+    let TuaType::Table(fields) = &box_alias.ty else {
+        panic!("Box should retain its record body");
+    };
+    assert_eq!(
+        fields[0].ty,
+        TuaType::Parameter {
+            id: value_parameter.id.clone(),
+            name: "T".to_owned(),
+        }
+    );
+
+    let result = &parsed.type_aliases[1];
+    assert_eq!(result.generic_parameters.len(), 2);
+    assert_ne!(
+        box_alias.generic_parameters[0].id, result.generic_parameters[0].id,
+        "same-spelled binders from separate declarations need separate identities"
+    );
+    let TuaType::Table(fields) = &result.ty else {
+        panic!("Result should retain its record body");
+    };
+    assert!(matches!(
+        &fields[0].ty,
+        TuaType::Union(types)
+            if types[0] == TuaType::Parameter {
+                id: result.generic_parameters[0].id.clone(),
+                name: "T".to_owned(),
+            }
+    ));
+    assert!(matches!(
+        &fields[1].ty,
+        TuaType::Union(types)
+            if types[0] == TuaType::Parameter {
+                id: result.generic_parameters[1].id.clone(),
+                name: "E".to_owned(),
+            }
+    ));
+
+    assert!(matches!(
+        &parsed.local_annotations[0].ty,
+        TuaType::Applied { name, arguments, .. }
+            if name == "Box" && arguments == &[TuaType::Named("number".to_owned())]
+    ));
+    assert!(matches!(
+        &parsed.local_annotations[1].ty,
+        TuaType::Applied { name, arguments, .. }
+            if name == "Result"
+                && arguments == &[
+                    TuaType::Named("string".to_owned()),
+                    TuaType::Named("number".to_owned()),
+                ]
+    ));
+}
+
+#[test]
 fn parses_optional_field_syntax_from_spec() {
     let parsed = parse_tua_source(
         "src/save_slot.tua",
@@ -1796,13 +1867,8 @@ fn rejects_luau_only_forms_at_the_tua_parse_boundary() {
         ),
         (
             "generic declaration",
-            "type Box<T> = { value: T }\n",
+            "local function identity<T>(value: T): T return value end\n",
             "generic declarations",
-        ),
-        (
-            "generic type application",
-            "local value: Box<number>\n",
-            "generic type applications",
         ),
         (
             "intersection type",
@@ -1833,11 +1899,6 @@ fn rejects_luau_only_forms_at_the_tua_parse_boundary() {
             "array access modifier",
             "type Value = { read number }\n",
             "access modifiers",
-        ),
-        (
-            "module generic type application",
-            "local value: Module.Box<number>\n",
-            "generic type applications",
         ),
         (
             "generic return pack",

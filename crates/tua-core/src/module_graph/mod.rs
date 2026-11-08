@@ -1289,7 +1289,9 @@ fn forwarded_nested_type(ty: &crate::Type, fields: &[String]) -> Option<crate::T
             | crate::Type::StringLiteral(_)
             | crate::Type::Array(_)
             | crate::Type::Tuple(_)
-            | crate::Type::Dictionary { .. } => return None,
+            | crate::Type::Dictionary { .. }
+            | crate::Type::GenericParameter { .. }
+            | crate::Type::GenericAliasApplication { .. } => return None,
         };
     }
     Some(current)

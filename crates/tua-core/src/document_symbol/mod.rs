@@ -1,7 +1,7 @@
 use std::path::Path;
 
-use crate::hir::{lower_parsed_source, HirExportValue, HirModule, HirSymbolId, HirSymbolKind};
-use crate::{parse_tua_source, Diagnostic, ParsedSource, SourcePosition, SourceSpan, TuaType};
+use crate::hir::{HirExportValue, HirModule, HirSymbolId, HirSymbolKind, lower_parsed_source};
+use crate::{Diagnostic, ParsedSource, SourcePosition, SourceSpan, TuaType, parse_tua_source};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DocumentSymbol {
@@ -305,6 +305,18 @@ fn max_position(left: SourcePosition, right: SourcePosition) -> SourcePosition {
 fn format_tua_type(ty: &TuaType) -> String {
     match ty {
         TuaType::Named(name) => name.clone(),
+        TuaType::Parameter { name, .. } => name.clone(),
+        TuaType::Applied {
+            name, arguments, ..
+        } => format!(
+            "{}<{}>",
+            name,
+            arguments
+                .iter()
+                .map(format_tua_type)
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
         TuaType::StringLiteral(value) => format!("{value:?}"),
         TuaType::Union(types) => types
             .iter()

@@ -1,8 +1,8 @@
 use crate::{
+    DiagnosticCode, DiagnosticSeverity, DiagnosticsConfig, EcsConfig, JitConfig,
     check::check_parsed_source_with_asset_roots_diagnostics_jit_and_ecs_config,
     check_parsed_source_with_diagnostics_config, check_tua_source,
-    check_tua_source_with_diagnostics_config, parse_lua_source, parse_tua_source, DiagnosticCode,
-    DiagnosticSeverity, DiagnosticsConfig, EcsConfig, JitConfig,
+    check_tua_source_with_diagnostics_config, parse_lua_source, parse_tua_source,
 };
 
 #[test]
@@ -124,12 +124,16 @@ print(tableEqual, functionsDiffer, same, sameCallback)
         .collect::<Vec<_>>();
 
     assert_eq!(messages.len(), 2, "{diagnostics:#?}");
-    assert!(messages
-        .iter()
-        .any(|message| message.ends_with("always false")));
-    assert!(messages
-        .iter()
-        .any(|message| message.ends_with("always true")));
+    assert!(
+        messages
+            .iter()
+            .any(|message| message.ends_with("always false"))
+    );
+    assert!(
+        messages
+            .iter()
+            .any(|message| message.ends_with("always true"))
+    );
 }
 
 #[test]
@@ -206,18 +210,26 @@ print(callback)
         .collect::<Vec<_>>();
 
     assert_eq!(messages.len(), 4, "{diagnostics:#?}");
-    assert!(messages
-        .iter()
-        .any(|message| message.starts_with("if branch")));
-    assert!(messages
-        .iter()
-        .any(|message| message.starts_with("while loop")));
-    assert!(messages
-        .iter()
-        .any(|message| message.starts_with("for loop")));
-    assert!(messages
-        .iter()
-        .any(|message| message.contains("missingImplementation")));
+    assert!(
+        messages
+            .iter()
+            .any(|message| message.starts_with("if branch"))
+    );
+    assert!(
+        messages
+            .iter()
+            .any(|message| message.starts_with("while loop"))
+    );
+    assert!(
+        messages
+            .iter()
+            .any(|message| message.starts_with("for loop"))
+    );
+    assert!(
+        messages
+            .iter()
+            .any(|message| message.contains("missingImplementation"))
+    );
 }
 
 #[test]
@@ -2070,9 +2082,11 @@ print(#v, #player.pos, #vec2(5, 12), #-v, #(v + v), v.length)
         ],
         "{diagnostics:#?}"
     );
-    assert!(warnings
-        .iter()
-        .all(|diagnostic| diagnostic.severity == crate::DiagnosticSeverity::Warning));
+    assert!(
+        warnings
+            .iter()
+            .all(|diagnostic| diagnostic.severity == crate::DiagnosticSeverity::Warning)
+    );
     assert_eq!(
         (warnings[0].line, warnings[0].column, warnings[0].end_column),
         (4, 7, 9),
@@ -3043,9 +3057,11 @@ local Missing = require("definitely_missing_lint_module")
     .expect_err("enabled lints should report diagnostics");
 
     assert_eq!(diagnostics.len(), 4);
-    assert!(diagnostics
-        .iter()
-        .all(|diagnostic| diagnostic.severity == DiagnosticSeverity::Warning));
+    assert!(
+        diagnostics
+            .iter()
+            .all(|diagnostic| diagnostic.severity == DiagnosticSeverity::Warning)
+    );
     assert_eq!(
         diagnostics
             .iter()
@@ -3114,9 +3130,11 @@ fn reports_bad_require_files_with_dedicated_toggle() {
 
     assert_eq!(diagnostics.len(), 1);
     assert_eq!(diagnostics[0].code, Some(DiagnosticCode::LINT_BAD_REQUIRE));
-    assert!(diagnostics[0]
-        .message
-        .contains("bad require file: `definitely_missing_bad_require_module`"));
+    assert!(
+        diagnostics[0]
+            .message
+            .contains("bad require file: `definitely_missing_bad_require_module`")
+    );
 }
 
 #[test]
@@ -3441,9 +3459,11 @@ MAX_HP = 20
         diagnostics[0].code,
         Some(DiagnosticCode::LINT_CONST_ASSIGNMENT)
     );
-    assert!(diagnostics[0]
-        .message
-        .contains("assignment to const-like name `MAX_HP`"));
+    assert!(
+        diagnostics[0]
+            .message
+            .contains("assignment to const-like name `MAX_HP`")
+    );
 }
 
 #[test]
@@ -3536,9 +3556,11 @@ ConfiguredGlobal()
         Some(DiagnosticCode::LINT_UNDEFINED_VARIABLE)
     );
     assert_eq!(diagnostics[0].severity, DiagnosticSeverity::Error);
-    assert!(diagnostics[0]
-        .message
-        .contains("undefined variable `missing`"));
+    assert!(
+        diagnostics[0]
+            .message
+            .contains("undefined variable `missing`")
+    );
 }
 
 #[test]
@@ -4000,15 +4022,21 @@ local explicit = 1
         .collect::<Vec<_>>();
 
     assert_eq!(messages.len(), 3, "{diagnostics:#?}");
-    assert!(messages
-        .iter()
-        .any(|message| message.contains("binding `key`")));
-    assert!(messages
-        .iter()
-        .any(|message| message.contains("binding `index`")));
-    assert!(messages
-        .iter()
-        .any(|message| message.contains("local `explicit`")));
+    assert!(
+        messages
+            .iter()
+            .any(|message| message.contains("binding `key`"))
+    );
+    assert!(
+        messages
+            .iter()
+            .any(|message| message.contains("binding `index`"))
+    );
+    assert!(
+        messages
+            .iter()
+            .any(|message| message.contains("local `explicit`"))
+    );
     assert!(!messages.iter().any(|message| message.contains("_ignored")));
     assert!(!messages.iter().any(|message| message.contains("_value")));
 }
@@ -4061,9 +4089,11 @@ write_only = 2
 
     assert_eq!(diagnostics.len(), 1);
     assert_eq!(diagnostics[0].code, Some(DiagnosticCode::LINT_UNUSED_LOCAL));
-    assert!(diagnostics[0]
-        .message
-        .contains("prefix with `_` to silence"));
+    assert!(
+        diagnostics[0]
+            .message
+            .contains("prefix with `_` to silence")
+    );
 }
 
 #[test]
@@ -4156,9 +4186,11 @@ print(score)
         diagnostics[0].code,
         Some(DiagnosticCode::LINT_USE_BEFORE_DEFINITION)
     );
-    assert!(diagnostics[0]
-        .message
-        .contains("use of local `score` before its definition"));
+    assert!(
+        diagnostics[0]
+            .message
+            .contains("use of local `score` before its definition")
+    );
 }
 
 #[test]
@@ -4454,13 +4486,19 @@ replaceParameter(1)
         .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_UNUSED_ASSIGNMENT))
         .map(|diagnostic| diagnostic.message.as_str())
         .collect::<Vec<_>>();
-    assert!(messages
-        .contains(&"initial value assigned to local `unused` is overwritten before it is read"));
+    assert!(
+        messages
+            .contains(&"initial value assigned to local `unused` is overwritten before it is read")
+    );
     assert!(messages.contains(&"value assigned to local `unused` is never read"));
-    assert!(messages
-        .contains(&"initial value assigned to local `used` is overwritten before it is read"));
-    assert!(messages
-        .contains(&"value assigned to local `overwritten` is overwritten before it is read"));
+    assert!(
+        messages
+            .contains(&"initial value assigned to local `used` is overwritten before it is read")
+    );
+    assert!(
+        messages
+            .contains(&"value assigned to local `overwritten` is overwritten before it is read")
+    );
     assert!(messages.contains(&"parameter `value` is overwritten before its value is read"));
 }
 
@@ -4569,9 +4607,11 @@ called()
         count_code(&diagnostics, DiagnosticCode::LINT_UNCALLED_LOCAL_FUNCTION),
         1
     );
-    assert!(diagnostics[0]
-        .message
-        .contains("local function `callback` is referenced but never directly called"));
+    assert!(
+        diagnostics[0]
+            .message
+            .contains("local function `callback` is referenced but never directly called")
+    );
 }
 
 #[test]
@@ -5165,9 +5205,11 @@ fn class_defaults_warn_when_they_follow_direct_init_assignments() {
     assert_eq!(warning.line, 2);
     assert!(warning.message.contains("Spacing.value"));
     let suppressed = check_standard_rules_source(&format!("-- tua-ignore-file TL4077\n{source}"));
-    assert!(!suppressed
-        .iter()
-        .any(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_CLASS_DEFAULT_AFTER_INIT)));
+    assert!(
+        !suppressed.iter().any(
+            |diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_CLASS_DEFAULT_AFTER_INIT)
+        )
+    );
     for body in [
         "local self = { value = 0 }; self.value = 1",
         "local later = function() self.value = 1 end",
@@ -5187,7 +5229,9 @@ fn class_defaults_warn_when_they_follow_direct_init_assignments() {
 
 #[test]
 fn nested_callback_annotations_keep_type_imports_live() {
-    let diagnostics = check_standard_rules_source("import type { Value, Unused } from 'types'\nlocal function run(callback: any) end\nrun(function()\n local inner = function(value: Value) return value end\n return inner\nend)\n");
+    let diagnostics = check_standard_rules_source(
+        "import type { Value, Unused } from 'types'\nlocal function run(callback: any) end\nrun(function()\n local inner = function(value: Value) return value end\n return inner\nend)\n",
+    );
     let unused = diagnostics
         .iter()
         .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_UNUSED_IMPORT))

@@ -529,6 +529,12 @@ impl AnalysisSnapshot {
         let environment = base_environment
             .with_project_module_globals(parsed, self.project_module_globals())
             .with_alias_types(self.project_imported_alias_types(parsed))
+            .with_generic_alias_bindings(self.project_imported_generic_alias_bindings(parsed))
+            .with_protocol_names(database::project_imported_protocol_names(
+                parsed,
+                &self.module_graph,
+                &self.type_database,
+            ))
             .with_local_types(self.project_module_binding_types(parsed))
             .with_required_module_types(
                 self.module_graph
@@ -559,6 +565,52 @@ impl AnalysisSnapshot {
         } else {
             environment
         }
+    }
+
+    fn project_imported_generic_alias_bindings(
+        &self,
+        parsed: &ParsedSource,
+    ) -> Vec<(PathBuf, String, crate::types::GenericAliasDefinition)> {
+        let mut bindings = Vec::new();
+        let source_path = normalize_path(&parsed.path);
+        for import in parsed.type_imports.iter().filter(|import| !import.reexport) {
+            for binding in &import.bindings {
+                if let Some(definition) = self.type_database.generic_alias_definition(
+                    &self.module_graph,
+                    &parsed.path,
+                    &binding.local,
+                ) {
+                    bindings.push((source_path.clone(), binding.local.clone(), definition));
+                }
+            }
+
+            if import.namespace.is_empty() {
+                continue;
+            }
+            let Some(module_path) =
+                self.indexed_module_path_for_specifier(parsed, &import.module)
+            else {
+                continue;
+            };
+            let Some(module) = self.type_database.module(module_path) else {
+                continue;
+            };
+            let exported_names = module
+                .exported_alias_names()
+                .map(str::to_owned)
+                .collect::<Vec<_>>();
+            for name in exported_names {
+                let local_name = format!("{}.{}", import.namespace, name);
+                if let Some(definition) = self.type_database.generic_alias_definition(
+                    &self.module_graph,
+                    &parsed.path,
+                    &local_name,
+                ) {
+                    bindings.push((source_path.clone(), local_name, definition));
+                }
+            }
+        }
+        bindings
     }
 
     pub(super) fn project_module_binding_types(
@@ -1105,18 +1157,59 @@ impl AnalysisSnapshot {
         ty: &TuaType,
     ) -> Option<Type> {
         match ty {
-            TuaType::Named(name) => self
-                .type_database
-                .resolve_type_name(&self.module_graph, &parsed.path, name)
-                .map(|binding| {
-                    self.type_database.resolve_type(
-                        &self.module_graph,
-                        &binding.module_path,
-                        &binding.ty,
-                    )
-                })
-                .or_else(|| self.required_module_type(parsed, name))
-                .or_else(|| Some(Type::named(name.trim()))),
+            TuaType::Named(name) => {
+                if self
+                    .type_database
+                    .is_protocol_type(&self.module_graph, &parsed.path, name)
+                {
+                    // Keep imported protocol references nominal in annotations.
+                    // Expanding them to their structural method table loses the
+                    // protocol view required to guard mutable array widening.
+                    Some(Type::alias(name.trim()))
+                } else {
+                    self.type_database
+                        .resolve_type_name(&self.module_graph, &parsed.path, name)
+                        .map(|binding| {
+                            let resolved = self.type_database.resolve_type(
+                                &self.module_graph,
+                                &binding.module_path,
+                                &binding.ty,
+                            );
+                            if matches!(&resolved, Type::Table(table) if table.nominal_identity().is_some()) {
+                                // Keep authored class-instance aliases in the
+                                // local annotation so diagnostics and hovers can
+                                // show the imported name while TypeContext still
+                                // expands it for member lookup and assignability.
+                                Type::alias(name.trim())
+                            } else {
+                                resolved
+                            }
+                        })
+                        .or_else(|| self.required_module_type(parsed, name))
+                        .or_else(|| Some(Type::named(name.trim())))
+                }
+            }
+            TuaType::Applied {
+                name,
+                arguments,
+                name_span,
+                span,
+            } => Some(Type::GenericAliasApplication {
+                reference: crate::types::GenericAliasReference::Imported {
+                    source_module: normalize_path(&parsed.path),
+                    name: name.trim().to_owned(),
+                    span: *name_span,
+                },
+                arguments: arguments
+                    .iter()
+                    .filter_map(|argument| self.project_type_from_tua_type(parsed, argument))
+                    .collect(),
+                span: *span,
+            }),
+            TuaType::Parameter { id, name } => Some(Type::GenericParameter {
+                id: id.clone(),
+                name: name.clone(),
+            }),
             TuaType::StringLiteral(value) => Some(Type::string_literal(value)),
             TuaType::Union(types) => {
                 Some(Type::union(types.iter().filter_map(|ty| {
@@ -1920,6 +2013,7 @@ impl AnalysisSnapshot {
                 | Type::Primitive(_)
                 | Type::StringLiteral(_)
                 | Type::Table(_) => None,
+                Type::GenericParameter { .. } | Type::GenericAliasApplication { .. } => None,
             },
         }
     }
@@ -1968,7 +2062,9 @@ impl AnalysisSnapshot {
             | Type::StringLiteral(_)
             | Type::Array(_)
             | Type::Tuple(_)
-            | Type::Dictionary { .. } => None,
+            | Type::Dictionary { .. }
+        | Type::GenericParameter { .. }
+        | Type::GenericAliasApplication { .. } => None,
         }
     }
 
@@ -2030,7 +2126,9 @@ impl AnalysisSnapshot {
             | Type::StringLiteral(_)
             | Type::Array(_)
             | Type::Tuple(_)
-            | Type::Dictionary { .. } => Vec::new(),
+            | Type::Dictionary { .. }
+        | Type::GenericParameter { .. }
+        | Type::GenericAliasApplication { .. } => Vec::new(),
         }
     }
 
@@ -2356,6 +2454,8 @@ impl AnalysisSnapshot {
                     .err()
                     .unwrap_or_default();
 
+                diagnostics.extend(facts.environment.generic_alias_diagnostics(parsed));
+
                 diagnostics.retain(|diagnostic| {
                     diagnostic.code != Some(crate::DiagnosticCode::TYPE_UNKNOWN_NAME)
                 });
@@ -2414,6 +2514,15 @@ fn collect_tua_type_names(ty: &TuaType, names: &mut BTreeSet<String>) {
         TuaType::Named(name) => {
             names.insert(name.clone());
         }
+        TuaType::Applied {
+            name, arguments, ..
+        } => {
+            names.insert(name.clone());
+            for argument in arguments {
+                collect_tua_type_names(argument, names);
+            }
+        }
+        TuaType::Parameter { .. } => {}
         TuaType::StringLiteral(_) => {}
         TuaType::Union(types) | TuaType::Tuple(types) => {
             for ty in types {
@@ -2493,7 +2602,9 @@ fn unresolved_expected_table_field(ty: &Type, field: &str) -> Option<TableField>
         | Type::Union(_)
         | Type::Array(_)
         | Type::Tuple(_)
-        | Type::Dictionary { .. } => None,
+        | Type::Dictionary { .. }
+        | Type::GenericParameter { .. }
+        | Type::GenericAliasApplication { .. } => None,
     }
 }
 
@@ -2511,7 +2622,9 @@ fn dictionary_key_accepts_field(ty: &Type, field: &str) -> bool {
         | Type::Table(_)
         | Type::Array(_)
         | Type::Tuple(_)
-        | Type::Dictionary { .. } => false,
+        | Type::Dictionary { .. }
+        | Type::GenericParameter { .. }
+        | Type::GenericAliasApplication { .. } => false,
     }
 }
 
@@ -2522,7 +2635,9 @@ mod declaration_overlay_tests {
 
     #[test]
     fn declaration_overlay_controls_callable_and_result_types_with_runtime_present() {
-        let fixture = Fixture::parse("-- file: src/main.tua\nlocal F = require(\"lib.feel\")\nlocal result = F.echo(<|signature|>\"hello\")\nprint(<|hover|>result)\n");
+        let fixture = Fixture::parse(
+            "-- file: src/main.tua\nlocal F = require(\"lib.feel\")\nlocal result = F.echo(<|signature|>\"hello\")\nprint(<|hover|>result)\n",
+        );
         let root = std::env::temp_dir().join(format!(
             "tua-declaration-overlay-{}-{}",
             std::process::id(),
@@ -2604,11 +2719,13 @@ mod declaration_overlay_tests {
                 signature.signatures[0].label.contains("value: string"),
                 "{signature:?}"
             );
-            assert!(snapshot
-                .hover(&main, fixture.position("hover"))
-                .unwrap()
-                .contents
-                .contains("result: string"));
+            assert!(
+                snapshot
+                    .hover(&main, fixture.position("hover"))
+                    .unwrap()
+                    .contents
+                    .contains("result: string")
+            );
         }
         host.set_file(&main, "local F=require(\"lib.feel\")\nF.echo(42)\n");
         assert!(
@@ -2618,7 +2735,9 @@ mod declaration_overlay_tests {
                 .any(|diagnostic| diagnostic.message.contains("string")),
             "bad argument must use declaration contract"
         );
-        let shadow = Fixture::parse("-- file: src/main.tua\nlocal F = require(\"lib.feel\")\ndo\n local F = {echo = function(value: number): number return value end}\n local number = F.echo(<|signature|>42)\nend\n");
+        let shadow = Fixture::parse(
+            "-- file: src/main.tua\nlocal F = require(\"lib.feel\")\ndo\n local F = {echo = function(value: number): number return value end}\n local number = F.echo(<|signature|>42)\nend\n",
+        );
         host.set_file(&main, shadow.files()[0].source.clone());
         let signature = host
             .snapshot()

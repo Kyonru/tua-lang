@@ -467,12 +467,16 @@ mod tests {
             .expect("operation should apply");
         let emission = document.finish();
 
-        assert!(emission.provenance[1..4]
-            .iter()
-            .all(|line| line.lowering == LoweringKind::DefaultParameter));
-        assert!(emission.provenance[1..4]
-            .iter()
-            .all(|line| line.source_span.start.line == 1));
+        assert!(
+            emission.provenance[1..4]
+                .iter()
+                .all(|line| line.lowering == LoweringKind::DefaultParameter)
+        );
+        assert!(
+            emission.provenance[1..4]
+                .iter()
+                .all(|line| line.source_span.start.line == 1)
+        );
     }
 
     #[test]
@@ -499,9 +503,11 @@ mod tests {
         let emission = document.finish();
 
         assert_eq!(emission.provenance.len(), 82);
-        assert!(emission.provenance[1..81]
-            .iter()
-            .all(|line| line.lowering == LoweringKind::Annotation));
+        assert!(
+            emission.provenance[1..81]
+                .iter()
+                .all(|line| line.lowering == LoweringKind::Annotation)
+        );
         assert_eq!(emission.provenance[81].lowering, LoweringKind::Source);
         assert_eq!(emission.provenance[81].source_span.start.line, 2);
     }
@@ -528,12 +534,16 @@ mod tests {
             "local text = \"Olá\"\nvalue = value + 1\nprint(\"✓\")\n"
         );
         assert_eq!(emission.provenance[0].lowering, LoweringKind::Source);
-        assert!(emission.provenance[1..]
-            .iter()
-            .all(|line| line.lowering == LoweringKind::CompoundAssignment));
-        assert!(emission.provenance[1..]
-            .iter()
-            .all(|line| line.source_span.start.line == 2));
+        assert!(
+            emission.provenance[1..]
+                .iter()
+                .all(|line| line.lowering == LoweringKind::CompoundAssignment)
+        );
+        assert!(
+            emission.provenance[1..]
+                .iter()
+                .all(|line| line.source_span.start.line == 2)
+        );
     }
 
     #[test]

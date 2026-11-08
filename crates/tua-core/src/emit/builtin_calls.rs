@@ -2,18 +2,17 @@
 use std::collections::BTreeMap;
 
 use full_moon::ast::{
-    self,
+    self, Call, Expression, FunctionArgs, Prefix, Suffix,
     punctuated::{Pair, Punctuated},
     span::ContainedSpan,
-    Call, Expression, FunctionArgs, Prefix, Suffix,
 };
 use full_moon::tokenizer::{StringLiteralQuoteType, Token, TokenReference, TokenType};
 use full_moon::visitors::VisitorMut;
 
-use crate::scope::{scope_map_parsed_source, ScopeGlobalKind, ScopeMap, ScopeResolution};
+use crate::scope::{ScopeGlobalKind, ScopeMap, ScopeResolution, scope_map_parsed_source};
 use crate::{
-    asset, audio, input, object_pool, signal, state_machine, store, vector, ParsedSource,
-    SourcePosition, SourceSpan,
+    ParsedSource, SourcePosition, SourceSpan, asset, audio, input, object_pool, signal,
+    state_machine, store, vector,
 };
 
 pub(super) fn lower(

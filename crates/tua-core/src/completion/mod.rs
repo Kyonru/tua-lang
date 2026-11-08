@@ -1,12 +1,12 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
-use self::context::{completion_context, CompletionContext, FieldAccessSeparator};
+use self::context::{CompletionContext, FieldAccessSeparator, completion_context};
 use self::domains::CompletionDomainRegistry;
 use self::query::CompletionQuery;
 use self::require::{complete_import_paths, complete_require_paths};
 use self::sequence::{
-    score_completion_sequence, CompletionSequenceCandidate, CompletionSequenceContextSnapshot,
+    CompletionSequenceCandidate, CompletionSequenceContextSnapshot, score_completion_sequence,
 };
 use self::symbol::lua_symbols_before_position;
 use crate::deprecation::deprecated_declarations;
@@ -15,18 +15,18 @@ use crate::lua::{self, LuaItem, LuaItemKind};
 use crate::module_index::{exported_field_for_fields, required_module_exports_for_receiver};
 use crate::module_path_index::ModulePathIndex;
 use crate::profile;
-use crate::scope::{scope_map_parsed_source, ScopeDeclaration, ScopeDeclarationKind};
-use crate::semantic::{resolve_aliases, SemanticModel};
+use crate::scope::{ScopeDeclaration, ScopeDeclarationKind, scope_map_parsed_source};
+use crate::semantic::{SemanticModel, resolve_aliases};
 use crate::semantic_domains::BuiltinDomainRegistry;
 use crate::source_text::line_at;
-use crate::text_match::{text_match_rank, text_matches, TextMatchRank};
-use crate::types::{build_type_environment_with_diagnostics, TableShape, Type, TypeEnvironment};
+use crate::text_match::{TextMatchRank, text_match_rank, text_matches};
+use crate::types::{TableShape, Type, TypeEnvironment, build_type_environment_with_diagnostics};
 use crate::usage_index::{MemberUsageCounts, MemberUsageSummary, ProjectUsageIndex};
-use crate::{asset, audio, ecs, input, love_conf, object_pool, signal, state_machine, store};
 use crate::{
-    parse_tua_source, Diagnostic, FunctionAnnotation, ParsedSource, SourcePosition, TextEdit,
-    TuaType,
+    Diagnostic, FunctionAnnotation, ParsedSource, SourcePosition, TextEdit, TuaType,
+    parse_tua_source,
 };
+use crate::{asset, audio, ecs, input, love_conf, object_pool, signal, state_machine, store};
 
 pub mod adaptive;
 pub(crate) mod context;
@@ -1508,6 +1508,18 @@ fn type_prefix(ty: &str) -> String {
 fn format_tua_type(ty: &TuaType) -> String {
     match ty {
         TuaType::Named(name) => name.clone(),
+        TuaType::Parameter { name, .. } => name.clone(),
+        TuaType::Applied {
+            name, arguments, ..
+        } => format!(
+            "{}<{}>",
+            name,
+            arguments
+                .iter()
+                .map(format_tua_type)
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
         TuaType::StringLiteral(value) => format!("{value:?}"),
         TuaType::Union(types) => types
             .iter()
@@ -2508,7 +2520,9 @@ fn collect_love_object_fields(
         | Type::StringLiteral(_)
         | Type::Array(_)
         | Type::Tuple(_)
-        | Type::Dictionary { .. } => {}
+        | Type::Dictionary { .. }
+        | Type::GenericParameter { .. }
+        | Type::GenericAliasApplication { .. } => {}
     }
 }
 
@@ -2557,7 +2571,9 @@ fn collect_table_fields_inner(
         | Type::StringLiteral(_)
         | Type::Array(_)
         | Type::Tuple(_)
-        | Type::Dictionary { .. } => {}
+        | Type::Dictionary { .. }
+        | Type::GenericParameter { .. }
+        | Type::GenericAliasApplication { .. } => {}
     }
 }
 
@@ -2692,7 +2708,9 @@ fn collect_export_fields(ty: &Type, fields: &mut BTreeMap<String, Type>) {
         | Type::StringLiteral(_)
         | Type::Array(_)
         | Type::Tuple(_)
-        | Type::Dictionary { .. } => {}
+        | Type::Dictionary { .. }
+        | Type::GenericParameter { .. }
+        | Type::GenericAliasApplication { .. } => {}
     }
 }
 
@@ -2946,7 +2964,9 @@ fn field_chain_type(mut ty: Type, fields: &[String]) -> Option<Type> {
             | Type::StringLiteral(_)
             | Type::Array(_)
             | Type::Tuple(_)
-            | Type::Dictionary { .. } => return None,
+            | Type::Dictionary { .. }
+            | Type::GenericParameter { .. }
+            | Type::GenericAliasApplication { .. } => return None,
         };
     }
 

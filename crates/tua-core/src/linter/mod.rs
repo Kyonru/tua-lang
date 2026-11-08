@@ -16,17 +16,17 @@ use crate::ast_utils::{
 };
 use crate::config::{DiagnosticsConfig, JitConfig};
 use crate::control_flow::block_fallthrough_position;
-use crate::deprecation::{deprecated_api_uses, Deprecation};
+use crate::deprecation::{Deprecation, deprecated_api_uses};
 use crate::module_index::resolve_required_module;
 use crate::must_use::discarded_must_use_calls;
 use crate::profile::{self, DiagnosticsTraceCategory};
 use crate::runtime_type;
-use crate::scope::{scope_map_parsed_source_with_globals, ScopeGlobalKind, ScopeResolution};
+use crate::scope::{ScopeGlobalKind, ScopeResolution, scope_map_parsed_source_with_globals};
 use crate::semantic::SemanticModel;
 use crate::types::{Type, TypeContext, TypeEnvironment};
 use crate::{
-    ecs, lua, Diagnostic, DiagnosticCode, DiagnosticSeverity, ParsedLanguage, ParsedSource,
-    SourcePosition, SourceSpan, TuaType,
+    Diagnostic, DiagnosticCode, DiagnosticSeverity, ParsedLanguage, ParsedSource, SourcePosition,
+    SourceSpan, TuaType, ecs, lua,
 };
 
 mod class_rules;
@@ -192,6 +192,15 @@ fn unused_type_diagnostics(parsed: &ParsedSource) -> Vec<Diagnostic> {
         match ty {
             TuaType::Named(name) => {
                 names.insert(name.trim().to_owned());
+            }
+            TuaType::Parameter { .. } => {}
+            TuaType::Applied {
+                name, arguments, ..
+            } => {
+                names.insert(name.trim().to_owned());
+                for argument in arguments {
+                    collect(argument, names);
+                }
             }
             TuaType::StringLiteral(_) => {}
             TuaType::Union(types) | TuaType::Tuple(types) => {
@@ -1891,6 +1900,21 @@ impl<'a> SymbolAnalyzer<'a> {
 
                 if self.declarations[declaration_id].kind == DeclarationKind::Import {
                     self.declarations[declaration_id].used = true;
+                }
+            }
+            TuaType::Parameter { .. } => {}
+            TuaType::Applied {
+                name, arguments, ..
+            } => {
+                if let Some((prefix, _)) = name.split_once('.') {
+                    if let Some(declaration_id) = self.resolve_local(prefix) {
+                        if self.declarations[declaration_id].kind == DeclarationKind::Import {
+                            self.declarations[declaration_id].used = true;
+                        }
+                    }
+                }
+                for argument in arguments {
+                    self.mark_imports_used_in_type(argument);
                 }
             }
             TuaType::Union(types) | TuaType::Tuple(types) => {
@@ -4286,7 +4310,10 @@ fn type_is_dynamic(ty: &Type, context: &TypeContext) -> bool {
         Type::Dictionary { key, value } => {
             type_is_dynamic(key, context) || type_is_dynamic(value, context)
         }
-        Type::Primitive(_) | Type::StringLiteral(_) => false,
+        Type::Primitive(_)
+        | Type::StringLiteral(_)
+        | Type::GenericParameter { .. }
+        | Type::GenericAliasApplication { .. } => false,
     }
 }
 

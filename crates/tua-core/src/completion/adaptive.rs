@@ -412,11 +412,7 @@ fn hash_byte(mut hash: u64, byte: u8) -> u64 {
 }
 
 fn nonzero_hash(hash: u64) -> u64 {
-    if hash == 0 {
-        1
-    } else {
-        hash
-    }
+    if hash == 0 { 1 } else { hash }
 }
 
 #[cfg(test)]
@@ -445,9 +441,11 @@ sprite.stop()
         );
         assert!(stats.score(file_hash, &receiver, "pause") > 0);
         assert_eq!(stats.score(file_hash, &receiver, "missing"), 0);
-        assert!(stats
-            .iter_members()
-            .all(|(_, member, _)| { matches!(member, "play" | "pause" | "stop") }));
+        assert!(
+            stats
+                .iter_members()
+                .all(|(_, member, _)| { matches!(member, "play" | "pause" | "stop") })
+        );
     }
 
     #[test]

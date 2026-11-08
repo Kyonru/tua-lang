@@ -992,18 +992,29 @@
       "patterns": [
         {
           "name": "meta.type.alias.tua",
-          "match": "^\\s*(type)\\s+([A-Za-z_][A-Za-z0-9_]*)\\s*(=)",
-          "captures": {
+          "begin": "^\\s*(type)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+          "beginCaptures": {
             "1": {
               "name": "storage.type.type.tua"
             },
             "2": {
               "name": "entity.name.type.alias.tua"
-            },
-            "3": {
+            }
+          },
+          "end": "(=)",
+          "endCaptures": {
+            "1": {
               "name": "keyword.operator.assignment.tua"
             }
-          }
+          },
+          "patterns": [
+            {
+              "include": "#type-punctuation"
+            },
+            {
+              "include": "#types"
+            }
+          ]
         }
       ]
     },

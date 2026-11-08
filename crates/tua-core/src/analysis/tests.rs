@@ -5941,10 +5941,10 @@ end
         "protocol method explanation should retain its signature: {explanation:#?}"
     );
     assert!(
-        explanation
-            .steps
-            .iter()
-            .any(|step| step.ty.as_ref().is_some_and(|ty| ty.to_string().contains("number"))),
+        explanation.steps.iter().any(|step| step
+            .ty
+            .as_ref()
+            .is_some_and(|ty| ty.to_string().contains("number"))),
         "the explanation path should identify the protocol method's typed receiver: {explanation:#?}"
     );
 }
@@ -6080,6 +6080,88 @@ final class Bad implements Updatable {
                 && diagnostic.message.contains("does not satisfy protocol")
         }),
         "editing an imported protocol should refresh conformance diagnostics: {changed:#?}"
+    );
+}
+
+#[test]
+fn namespace_imported_protocol_conformance_uses_declaration_contracts() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/contracts.d.tua
+export protocol Updatable {
+  update(dt: number): nil
+}
+-- file: src/actors.tua
+import type Contracts from "./contracts"
+final class Valid implements Contracts.Updatable {
+  update(dt: number): nil {
+  }
+}
+final class Missing implements Contracts.Updatable {
+}
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+
+    let snapshot = host.snapshot();
+    let diagnostics = snapshot.diagnostics("src/actors.tua");
+    assert!(
+        diagnostics.iter().any(|diagnostic| {
+            diagnostic.message.contains("Missing")
+                && diagnostic.message.contains("missing method `update`")
+        }),
+        "namespace-qualified conformance should use the exported declaration contract: {diagnostics:#?}"
+    );
+    assert!(
+        !diagnostics.iter().any(|diagnostic| {
+            diagnostic.message.contains("Valid")
+                && diagnostic.message.contains("does not satisfy protocol")
+        }),
+        "valid namespace-qualified conformance should remain accepted: {diagnostics:#?}"
+    );
+}
+
+#[test]
+fn imported_protocol_arrays_reject_mutable_concrete_widening() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/contracts.d.tua
+export protocol Readable {
+  read(): number
+}
+-- file: src/entities.tua
+import type { Readable } from "./contracts"
+final class Entity implements Readable {
+  read(): number {
+    return 1
+  }
+}
+export type EntityInstance = Entity
+return { Entity = Entity }
+-- file: src/main.tua
+import type { Readable } from "./contracts"
+import type { EntityInstance } from "./entities"
+local concrete: EntityInstance[] = {}
+local view: Readable[] = concrete
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+
+    let snapshot = host.snapshot();
+    let diagnostics = snapshot.diagnostics("src/main.tua");
+    assert!(
+        diagnostics.iter().any(|diagnostic| {
+            diagnostic.code == Some(DiagnosticCode::TYPE_MISMATCH)
+                && diagnostic.message.contains("expected Readable[]")
+                && diagnostic.message.contains("found EntityInstance[]")
+        }),
+        "the project semantic environment must preserve imported protocol identity when rejecting mutable widening: {diagnostics:#?}"
     );
 }
 
@@ -6400,7 +6482,11 @@ local player: Player = { health = 10, score = 1 }
     assert_eq!(typed_labels, vec!["health".to_owned()]);
     assert_eq!(typed_completions[0].filter_text.as_deref(), Some("EA"));
     assert_eq!(
-        second.completion_cache.lock().expect("completion cache lock poisoned").len(),
+        second
+            .completion_cache
+            .lock()
+            .expect("completion cache lock poisoned")
+            .len(),
         warmed_cache_len,
         "typing a case-insensitive contains prefix should reuse the warmed player. completion cache"
     );
@@ -8117,7 +8203,9 @@ fn chained_love_receivers_keep_signatures_and_do_not_invent_void_results() {
             None => assert!(labels.is_empty(), "{labels:?}"),
         }
     }
-    let fixture = Fixture::parse("-- file: love.tua\nlove.graphics.newText(love.graphics.newFont(12), 'hi'):getWidth(<|signature|>\n");
+    let fixture = Fixture::parse(
+        "-- file: love.tua\nlove.graphics.newText(love.graphics.newFont(12), 'hi'):getWidth(<|signature|>\n",
+    );
     let mut host = AnalysisHost::new();
     host.set_file("love.tua", fixture.files()[0].source.clone());
     let signature = host
@@ -8182,7 +8270,9 @@ fn recursive_imported_self_preserves_members_at_arbitrary_access_depth() {
         "import type { UnitInstance } from 'unit'",
         "import type Types from 'unit'\ntype UnitInstance = Types.UnitInstance",
     ] {
-        let fixture = Fixture::parse(&format!("-- file: src/main.tua\n{import}\nlocal function inspect(unit: UnitInstance)\n print(unit.followers[1].followers[1].<|complete|>speed)\n print(unit:same():same().<|hover|>speed)\nend\n"));
+        let fixture = Fixture::parse(&format!(
+            "-- file: src/main.tua\n{import}\nlocal function inspect(unit: UnitInstance)\n print(unit.followers[1].followers[1].<|complete|>speed)\n print(unit:same():same().<|hover|>speed)\nend\n"
+        ));
         let path = temp.path.join("src/main.tua");
         temp.write("src/main.tua", &fixture.files()[0].source);
         let mut host = AnalysisHost::new();
@@ -8218,7 +8308,9 @@ fn cross_file_event_payload_uses_imported_method_return_and_unsaved_edits() {
     temp.write("src/actor.tua", producer);
     temp.write("src/events.tua", "return { combat = signal() }\n");
     temp.write("src/world.tua", "import type { Actor } from 'actor'\nlocal events = require('events')\nlocal actors: Actor[] = {}\nlocal function hit(amount: number)\n local target = actors[1]\n local dead = target:damage(amount)\n events.combat:emit('hit', dead)\nend\nreturn { hit = hit }\n");
-    let fixture = Fixture::parse("-- file: src/main.tua\nlocal events = require('events')\nevents.combat:on('hit', function(dead)\n print(<|hover|>dead)\nend)\n");
+    let fixture = Fixture::parse(
+        "-- file: src/main.tua\nlocal events = require('events')\nevents.combat:on('hit', function(dead)\n print(<|hover|>dead)\nend)\n",
+    );
     let path = temp.path.join("src/main.tua");
     temp.write("src/main.tua", &fixture.files()[0].source);
     let mut host = AnalysisHost::new();
@@ -8287,7 +8379,9 @@ final class Node {
 #[test]
 fn guarded_capture_keeps_non_nil_after_member_writes_but_not_reassignment() {
     for (write, expected) in [("item.enabled = true", true), ("item = nil", false)] {
-        let fixture = Fixture::parse(&format!("-- file: capture.tua\ntype Item = {{ enabled: boolean }}\nlocal function later(item: Item | nil)\n if not item or item.enabled then return end\n {write}\n local callback = function() print(item.<|complete|>enabled) end\nend\n"));
+        let fixture = Fixture::parse(&format!(
+            "-- file: capture.tua\ntype Item = {{ enabled: boolean }}\nlocal function later(item: Item | nil)\n if not item or item.enabled then return end\n {write}\n local callback = function() print(item.<|complete|>enabled) end\nend\n"
+        ));
         let mut host = AnalysisHost::new();
         host.set_file("capture.tua", fixture.files()[0].source.clone());
         let labels = completion_labels(
@@ -8309,7 +8403,9 @@ fn native_class_parameter_navigation_and_rename_preserve_original_spans() {
         "<|declaration|>amount: number = 2, label: string = 'x'",
         "\n    <|declaration|>amount: number = 2,\n    label: string = 'x'\n  ",
     ] {
-        let fixture = Fixture::parse(&format!("-- file: counter.tua\nfinal class Counter {{\n apply({header}): number {{\n   local function nested(amount: number): number return amount end\n   print(<|use|>amount, label)\n   return amount\n }}\n}}\n"));
+        let fixture = Fixture::parse(&format!(
+            "-- file: counter.tua\nfinal class Counter {{\n apply({header}): number {{\n   local function nested(amount: number): number return amount end\n   print(<|use|>amount, label)\n   return amount\n }}\n}}\n"
+        ));
         let source = &fixture.files()[0].source;
         let mut host = AnalysisHost::new();
         host.set_file("counter.tua", source.clone());
@@ -8348,7 +8444,9 @@ fn side_effect_global_definition_follows_runtime_imports_without_guessing() {
         "src/unrelated.tua",
         "function loadAssets() return false end\n",
     );
-    let fixture = Fixture::parse("-- file: src/main.tua\nrequire('bridge')\n<|call|>loadAssets()\nlocal function shadow(loadAssets) <|shadow|>loadAssets() end\n");
+    let fixture = Fixture::parse(
+        "-- file: src/main.tua\nrequire('bridge')\n<|call|>loadAssets()\nlocal function shadow(loadAssets) <|shadow|>loadAssets() end\n",
+    );
     let path = temp.path.join("src/main.tua");
     temp.write("src/main.tua", &fixture.files()[0].source);
     let mut host = AnalysisHost::new();
@@ -8438,7 +8536,9 @@ love.graphics.newText(love.graphics.newFont(12), "hi"):set("bye"):<|void|>getWid
 
 #[test]
 fn anonymous_default_signature_and_body_hover_agree() {
-    let fixture = Fixture::parse("-- file: callbacks.tua\nlocal f = function(value: number = 3): number\n return <|hover|>value\nend\nf(<|signature|>)\n");
+    let fixture = Fixture::parse(
+        "-- file: callbacks.tua\nlocal f = function(value: number = 3): number\n return <|hover|>value\nend\nf(<|signature|>)\n",
+    );
     let mut host = AnalysisHost::new();
     host.set_file("callbacks.tua", fixture.files()[0].source.clone());
     let snapshot = host.snapshot();
@@ -8457,7 +8557,9 @@ fn anonymous_default_signature_and_body_hover_agree() {
 
 #[test]
 fn assertion_narrowing_agrees_in_completion_hover_and_return_inference() {
-    let fixture = Fixture::parse("-- file: assertions.tua\ntype Item = { value: number }\nlocal function need(item: Item | nil)\n assert(item)\n print(item.<|complete|>value)\n return item\nend\nlocal <|hover|>result = need(nil)\n");
+    let fixture = Fixture::parse(
+        "-- file: assertions.tua\ntype Item = { value: number }\nlocal function need(item: Item | nil)\n assert(item)\n print(item.<|complete|>value)\n return item\nend\nlocal <|hover|>result = need(nil)\n",
+    );
     let mut host = AnalysisHost::new();
     host.set_file("assertions.tua", fixture.files()[0].source.clone());
     let snapshot = host.snapshot();
@@ -8481,7 +8583,9 @@ fn assertion_completion_does_not_narrow_shadowed_calls() {
         "assert = function(value) return true end",
         "_G.assert = function(value) return true end",
     ] {
-        let fixture = Fixture::parse(&format!("-- file: assertions.tua\n{declaration}\nlocal function need(item: {{ value: number }} | nil)\n assert(item)\n print(item.<|complete|>value)\nend\n"));
+        let fixture = Fixture::parse(&format!(
+            "-- file: assertions.tua\n{declaration}\nlocal function need(item: {{ value: number }} | nil)\n assert(item)\n print(item.<|complete|>value)\nend\n"
+        ));
         let mut host = AnalysisHost::new();
         host.set_file("assertions.tua", fixture.files()[0].source.clone());
         let labels = completion_labels(
@@ -8498,7 +8602,9 @@ fn assertion_completion_does_not_narrow_shadowed_calls() {
 
 #[test]
 fn stable_member_guards_agree_across_queries() {
-    let fixture = Fixture::parse("-- file: paths.tua\ntype State = { target: { value: number } | nil }\nlocal function read(state: State)\n if state.target then\n  local value = state.target.<|complete|>value\n  return state.target\n end\n return { value = 0 }\nend\nlocal <|hover|>result = read({target = nil})\n");
+    let fixture = Fixture::parse(
+        "-- file: paths.tua\ntype State = { target: { value: number } | nil }\nlocal function read(state: State)\n if state.target then\n  local value = state.target.<|complete|>value\n  return state.target\n end\n return { value = 0 }\nend\nlocal <|hover|>result = read({target = nil})\n",
+    );
     let mut host = AnalysisHost::new();
     host.set_file("paths.tua", fixture.files()[0].source.clone());
     let snapshot = host.snapshot();
@@ -8517,7 +8623,9 @@ fn stable_member_guards_agree_across_queries() {
 
 #[test]
 fn table_sort_comparator_editor_context_matches_array_items() {
-    let fixture = Fixture::parse("-- file: sort.tua\ntype Item = { score: number }\nlocal items: Item[] = {}\ntable.sort(items, function(a, b)\n return a.<|complete|>score < <|hover|>b.score\nend)\n");
+    let fixture = Fixture::parse(
+        "-- file: sort.tua\ntype Item = { score: number }\nlocal items: Item[] = {}\ntable.sort(items, function(a, b)\n return a.<|complete|>score < <|hover|>b.score\nend)\n",
+    );
     let mut host = AnalysisHost::new();
     host.set_file("sort.tua", fixture.files()[0].source.clone());
     let snapshot = host.snapshot();
@@ -8541,14 +8649,20 @@ fn table_sort_context_respects_library_and_nested_parameter_shadows() {
         let fixture = Fixture::parse(&format!("-- file: sort.tua\n{source}\n"));
         let mut host = AnalysisHost::new();
         host.set_file("sort.tua", fixture.files()[0].source.clone());
-        let labels = completion_labels(&host.snapshot().completion("sort.tua", fixture.position("complete")));
+        let labels = completion_labels(
+            &host
+                .snapshot()
+                .completion("sort.tua", fixture.position("complete")),
+        );
         assert!(!labels.contains(&"score".into()), "{source}: {labels:?}");
     }
 }
 
 #[test]
 fn love_image_file_signature_and_result_completion_agree() {
-    let fixture = Fixture::parse("-- file: files.tua\nlocal function load(file: File)\n local data = love.image.newImageData(<|signature|>file)\n return data:<|complete|>getWidth()\nend\n");
+    let fixture = Fixture::parse(
+        "-- file: files.tua\nlocal function load(file: File)\n local data = love.image.newImageData(<|signature|>file)\n return data:<|complete|>getWidth()\nend\n",
+    );
     let mut host = AnalysisHost::new();
     host.set_file("files.tua", fixture.files()[0].source.clone());
     let snapshot = host.snapshot();
@@ -8584,11 +8698,37 @@ fn asset_metadata_and_completion_respect_loader_bindings() {
         host.set_file("src/main.tua", fixture.files()[0].source.clone());
         host.refresh_asset_index_from_disk();
         let snapshot = host.snapshot();
-        assert!(snapshot.hover("src/main.tua", fixture.position("complete")).is_none_or(|hover| !hover.contents.contains("asset `")), "{source}");
-        assert!(snapshot.definition("src/main.tua", fixture.position("complete")).is_none_or(|definition| definition.kind != DefinitionKind::Asset), "{source}");
-        assert!(!completion_labels(&snapshot.completion("src/main.tua", fixture.position("complete"))).contains(&"assets/player.png".into()), "{source}");
-        assert!(snapshot.asset_inventory().assets.iter().all(|asset| asset.references.is_empty()), "{source}");
-        assert!(snapshot.asset_file_rename_edits(&image, temp.path().join("assets/hero.png")).is_empty(), "{source}");
+        assert!(
+            snapshot
+                .hover("src/main.tua", fixture.position("complete"))
+                .is_none_or(|hover| !hover.contents.contains("asset `")),
+            "{source}"
+        );
+        assert!(
+            snapshot
+                .definition("src/main.tua", fixture.position("complete"))
+                .is_none_or(|definition| definition.kind != DefinitionKind::Asset),
+            "{source}"
+        );
+        assert!(
+            !completion_labels(&snapshot.completion("src/main.tua", fixture.position("complete")))
+                .contains(&"assets/player.png".into()),
+            "{source}"
+        );
+        assert!(
+            snapshot
+                .asset_inventory()
+                .assets
+                .iter()
+                .all(|asset| asset.references.is_empty()),
+            "{source}"
+        );
+        assert!(
+            snapshot
+                .asset_file_rename_edits(&image, temp.path().join("assets/hero.png"))
+                .is_empty(),
+            "{source}"
+        );
     }
 }
 
@@ -8596,13 +8736,23 @@ fn asset_metadata_and_completion_respect_loader_bindings() {
 fn asset_paths_survive_incomplete_strings_and_scope_exit() {
     let temp = TempProject::new("asset-recovery-binding");
     temp.write("assets/player.png", png_header(16, 16));
-    for source in ["local value = image 'assets/<|complete|>", "do local image = function(path) return path end end\nlocal value = image 'assets/<|complete|>player.png'"] {
+    for source in [
+        "local value = image 'assets/<|complete|>",
+        "do local image = function(path) return path end end\nlocal value = image 'assets/<|complete|>player.png'",
+    ] {
         let fixture = Fixture::parse(&format!("-- file: src/main.tua\n{source}\n"));
         let mut host = AnalysisHost::new();
         host.set_asset_roots([temp.path().to_path_buf()]);
         host.set_file("src/main.tua", fixture.files()[0].source.clone());
-        let labels = completion_labels(&host.snapshot().completion("src/main.tua", fixture.position("complete")));
-        assert!(labels.contains(&"assets/player.png".into()), "{source}: {labels:?}");
+        let labels = completion_labels(
+            &host
+                .snapshot()
+                .completion("src/main.tua", fixture.position("complete")),
+        );
+        assert!(
+            labels.contains(&"assets/player.png".into()),
+            "{source}: {labels:?}"
+        );
     }
 }
 
@@ -8614,7 +8764,9 @@ fn love_conf_window_completion_tracks_initial_state_and_disable() {
         ("t.window = false", false),
         ("mutate(t)", false),
     ] {
-        let fixture = Fixture::parse(&format!("-- file: conf.tua\nfunction love.conf(t)\n {statement}\n local width = t.window.<|complete|>width\nend\n"));
+        let fixture = Fixture::parse(&format!(
+            "-- file: conf.tua\nfunction love.conf(t)\n {statement}\n local width = t.window.<|complete|>width\nend\n"
+        ));
         let mut host = AnalysisHost::new();
         host.set_file("conf.tua", fixture.files()[0].source.clone());
         let labels = completion_labels(
@@ -8632,7 +8784,9 @@ fn love_conf_window_completion_tracks_initial_state_and_disable() {
 
 #[test]
 fn bundled_hump_timer_declarations_support_typed_migration() {
-    let fixture = Fixture::parse("-- file: src/main.tua\nlocal Timer = require('libraries.hump.timer')\nlocal timer = Timer.new()\ntimer:<|complete|>after(0.5, function() end)\ntimer:during(1, function(dt, remaining)\n local elapsed = <|hover|>dt\nend)\n");
+    let fixture = Fixture::parse(
+        "-- file: src/main.tua\nlocal Timer = require('libraries.hump.timer')\nlocal timer = Timer.new()\ntimer:<|complete|>after(0.5, function() end)\ntimer:during(1, function(dt, remaining)\n local elapsed = <|hover|>dt\nend)\n",
+    );
     let mut host = AnalysisHost::new();
     host.set_source_roots([PathBuf::from("src")]);
     host.set_type_libraries([ProjectTypeLibrary::new(
@@ -8661,7 +8815,9 @@ fn bundled_hump_timer_declarations_support_typed_migration() {
 
 #[test]
 fn nested_default_reads_share_lexical_navigation_and_rename() {
-    let fixture = Fixture::parse("-- file: defaults.tua\nlocal <|declaration|>seed = 4\nlocal f = function(callback = function(value: number = <|use|>seed) return value end) return callback() end\nprint(f())\n");
+    let fixture = Fixture::parse(
+        "-- file: defaults.tua\nlocal <|declaration|>seed = 4\nlocal f = function(callback = function(value: number = <|use|>seed) return value end) return callback() end\nprint(f())\n",
+    );
     let source = &fixture.files()[0].source;
     let mut host = AnalysisHost::new();
     host.set_file("defaults.tua", source.clone());
@@ -8684,7 +8840,9 @@ fn nested_default_reads_share_lexical_navigation_and_rename() {
 #[test]
 fn unclosed_native_classes_recover_members_without_erasing_outer_scopes() {
     for closing in ["", " }"] {
-        let fixture = Fixture::parse(&format!("-- file: draft.tua\nlocal label = 'ready'\nfinal class Draft {{\n count: number = 0\n show() {{\n  if true then print(<|hover|>label) end\n  self.<|complete|>\n{closing}\n"));
+        let fixture = Fixture::parse(&format!(
+            "-- file: draft.tua\nlocal label = 'ready'\nfinal class Draft {{\n count: number = 0\n show() {{\n  if true then print(<|hover|>label) end\n  self.<|complete|>\n{closing}\n"
+        ));
         let mut host = AnalysisHost::new();
         host.set_file("draft.tua", fixture.files()[0].source.clone());
         let snapshot = host.snapshot();

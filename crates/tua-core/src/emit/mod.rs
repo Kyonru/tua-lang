@@ -9,11 +9,11 @@ use full_moon::visitors::{Visitor, VisitorMut};
 use crate::classes;
 use crate::runtime_type;
 use crate::semantic::SemanticModel;
-use crate::types::{build_type_environment_with_diagnostics, TypeEnvironment};
+use crate::types::{TypeEnvironment, build_type_environment_with_diagnostics};
 use crate::{
-    audio, ecs, game_math, infer_module_exports, input, object_pool, parse_tua_source, signal,
-    state_machine, store, vector, AnnotationMode, Diagnostic, DiagnosticCode, ParameterDefault,
-    ParsedSource, ProjectWorkspace, SourcePosition, SourceSpan, TuaType, Type,
+    AnnotationMode, Diagnostic, DiagnosticCode, ParameterDefault, ParsedSource, ProjectWorkspace,
+    SourcePosition, SourceSpan, TuaType, Type, audio, ecs, game_math, infer_module_exports, input,
+    object_pool, parse_tua_source, signal, state_machine, store, vector,
 };
 
 mod builtin_calls;
@@ -299,13 +299,15 @@ fn apply_lowering_operations(
             .span
             .map(|span| span.start)
             .unwrap_or(SourcePosition { line: 1, column: 1 });
-        vec![Diagnostic::error(
-            parsed.path.clone(),
-            position.line,
-            position.column,
-            error.to_string(),
-        )
-        .with_code(DiagnosticCode::LOWERING_OPERATION)]
+        vec![
+            Diagnostic::error(
+                parsed.path.clone(),
+                position.line,
+                position.column,
+                error.to_string(),
+            )
+            .with_code(DiagnosticCode::LOWERING_OPERATION),
+        ]
     })
 }
 
@@ -1085,6 +1087,18 @@ impl<'a> LuacatsTypeRenderer<'a> {
                 .resolved_import(name.trim(), depth)
                 .map(|resolved| self.inferred_type(&resolved, depth + 1))
                 .unwrap_or_else(|| name.trim().to_owned()),
+            TuaType::Parameter { name, .. } => name.clone(),
+            TuaType::Applied {
+                name, arguments, ..
+            } => format!(
+                "{}<{}>",
+                name.trim(),
+                arguments
+                    .iter()
+                    .map(|argument| self.tua_type(argument, depth + 1))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
             TuaType::StringLiteral(value) => format!("{value:?}"),
             TuaType::Union(types) => types
                 .iter()
@@ -1207,6 +1221,18 @@ impl<'a> LuacatsTypeRenderer<'a> {
 fn luacats_type(ty: &TuaType) -> String {
     match ty {
         TuaType::Named(name) => name.to_owned(),
+        TuaType::Parameter { name, .. } => name.clone(),
+        TuaType::Applied {
+            name, arguments, ..
+        } => format!(
+            "{}<{}>",
+            name,
+            arguments
+                .iter()
+                .map(luacats_type)
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
         TuaType::StringLiteral(value) => format!("{value:?}"),
         TuaType::Union(types) => types
             .iter()
@@ -1328,7 +1354,9 @@ fn luacats_export_type(ty: &Type) -> Option<String> {
         | Type::Table(_)
         | Type::Array(_)
         | Type::Tuple(_)
-        | Type::Dictionary { .. } => Some(luacats_type_from_type(ty)),
+        | Type::Dictionary { .. }
+        | Type::GenericParameter { .. }
+        | Type::GenericAliasApplication { .. } => Some(luacats_type_from_type(ty)),
         Type::Function(function) => {
             let parameters = function
                 .parameters
@@ -1371,7 +1399,12 @@ fn append_luacats_vararg(parameters: String, vararg_type: Option<&Type>) -> Stri
 
 fn luacats_type_from_type(ty: &Type) -> String {
     match ty {
-        Type::Primitive(_) | Type::Any | Type::Alias(_) | Type::StringLiteral(_) => ty.to_string(),
+        Type::Primitive(_)
+        | Type::Any
+        | Type::Alias(_)
+        | Type::StringLiteral(_)
+        | Type::GenericParameter { .. }
+        | Type::GenericAliasApplication { .. } => ty.to_string(),
         Type::Union(types) => types
             .iter()
             .map(luacats_type_from_type)
@@ -2327,25 +2360,29 @@ fn lower_default_parameter_operations_with_ancestors(
         }
     }
     let output_ast = full_moon::parse(&output).map_err(|errors| {
-        vec![Diagnostic::error(
-            &parsed.path,
-            1,
-            1,
-            format!("cannot locate function bodies for default lowering: {errors:?}"),
-        )
-        .with_code(DiagnosticCode::LOWERING_OPERATION)]
+        vec![
+            Diagnostic::error(
+                &parsed.path,
+                1,
+                1,
+                format!("cannot locate function bodies for default lowering: {errors:?}"),
+            )
+            .with_code(DiagnosticCode::LOWERING_OPERATION),
+        ]
     })?;
     let mut bodies = BodyOffsets(Vec::new());
     bodies.visit_ast(&output_ast);
     bodies.0.sort_unstable();
     if bodies.0.len() != parsed.function_annotations.len() {
-        return Err(vec![Diagnostic::error(
-            &parsed.path,
-            1,
-            1,
-            "function body provenance changed during default lowering",
-        )
-        .with_code(DiagnosticCode::LOWERING_OPERATION)]);
+        return Err(vec![
+            Diagnostic::error(
+                &parsed.path,
+                1,
+                1,
+                "function body provenance changed during default lowering",
+            )
+            .with_code(DiagnosticCode::LOWERING_OPERATION),
+        ]);
     }
     let mut operations = Vec::new();
     let mut outer_scope = None;
@@ -2425,13 +2462,15 @@ fn lower_generated_default_helpers_with_ancestors(
     ancestors: &[(&crate::scope::ScopeMap, SourcePosition)],
 ) -> Result<String, Vec<Diagnostic>> {
     if ancestors.len() >= 64 {
-        return Err(vec![Diagnostic::error(
-            &parsed.path,
-            span.start.line,
-            span.start.column,
-            "nested parameter defaults exceed lowering depth limit",
-        )
-        .with_code(DiagnosticCode::LOWERING_OPERATION)]);
+        return Err(vec![
+            Diagnostic::error(
+                &parsed.path,
+                span.start.line,
+                span.start.column,
+                "nested parameter defaults exceed lowering depth limit",
+            )
+            .with_code(DiagnosticCode::LOWERING_OPERATION),
+        ]);
     }
     let remap_diagnostics = |mut diagnostics: Vec<Diagnostic>| {
         let position = parsed
@@ -2509,7 +2548,9 @@ fn invalid_import_specifier_reason(specifier: &str) -> Option<&'static str> {
     }
 
     if is_parent_relative_import_specifier(specifier) {
-        return Some("import specifier cannot traverse parent directories; use a project module name instead");
+        return Some(
+            "import specifier cannot traverse parent directories; use a project module name instead",
+        );
     }
 
     Some("import specifiers must be child-relative (`./foo`) or project modules (`engine.foo`)")

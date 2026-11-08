@@ -5,7 +5,7 @@ use full_moon::tokenizer::Position;
 use crate::classes::{ClassDeclaration, ProtocolDeclaration};
 use crate::sprite::SpriteDeclaration;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct SourcePosition {
     pub line: usize,
     pub column: usize,
@@ -20,7 +20,7 @@ impl SourcePosition {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct SourceSpan {
     pub start: SourcePosition,
     pub end: SourcePosition,
@@ -283,12 +283,38 @@ impl RawParsedSource {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TypeAlias {
+    pub id: TypeAliasId,
     pub name: String,
     pub ty: TuaType,
+    pub generic_parameters: Vec<TypeAliasParameter>,
     pub kind: TypeAliasKind,
     pub name_span: Option<SourceSpan>,
     pub span: Option<SourceSpan>,
     pub exported: bool,
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct TypeAliasId {
+    pub module: PathBuf,
+    pub name: String,
+    pub declaration: SourceSpan,
+}
+
+/// A binder declared by one generic type alias.
+///
+/// The declaration key is the normalized module path plus alias name. The
+/// ordinal distinguishes binders even when their source spelling is equal.
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct TypeAliasParameter {
+    pub id: TypeParameterId,
+    pub name: String,
+    pub name_span: SourceSpan,
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct TypeParameterId {
+    pub declaration: TypeAliasId,
+    pub ordinal: usize,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -322,6 +348,7 @@ pub struct LocalAnnotation {
     pub ty: TuaType,
     pub name_span: Option<SourceSpan>,
     pub span: Option<SourceSpan>,
+    pub type_span: Option<SourceSpan>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -380,6 +407,16 @@ pub struct ParameterOptional {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum TuaType {
     Named(String),
+    Parameter {
+        id: TypeParameterId,
+        name: String,
+    },
+    Applied {
+        name: String,
+        arguments: Vec<TuaType>,
+        name_span: Option<SourceSpan>,
+        span: Option<SourceSpan>,
+    },
     StringLiteral(String),
     Union(Vec<TuaType>),
     Table(Vec<TableFieldType>),

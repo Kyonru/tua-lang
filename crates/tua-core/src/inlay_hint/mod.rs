@@ -376,7 +376,12 @@ fn type_is_reasonably_shallow(ty: &Type, depth: usize) -> bool {
             type_is_reasonably_shallow(key, depth + 1)
                 && type_is_reasonably_shallow(value, depth + 1)
         }
-        Type::Primitive(_) | Type::Any | Type::Alias(_) | Type::StringLiteral(_) => true,
+        Type::Primitive(_)
+        | Type::Any
+        | Type::Alias(_)
+        | Type::StringLiteral(_)
+        | Type::GenericParameter { .. }
+        | Type::GenericAliasApplication { .. } => true,
     }
 }
 

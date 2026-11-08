@@ -214,6 +214,7 @@ fn protocol_conformance_resolves_through_type_reexports() {
 final class Particle implements Updatable {
   update(dt: number): nil {}
 }
+
 final class Broken implements Updatable {}
 "#;
     let actors_uri = temp.uri_for("src/actors.tua");

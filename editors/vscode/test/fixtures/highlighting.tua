@@ -2,6 +2,7 @@
 ---@class LegacyPlayer
 ---@field hp number
 type Callback = (player: Player, amount: number) -> boolean
+type Box<T> = { value: T }
 
 enum PlayerState
   "idle"

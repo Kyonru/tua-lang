@@ -78,10 +78,12 @@ fn simple_final_returned_table_creates_exports_symbol() {
     assert_eq!(exports.kind, DocumentSymbolKind::ModuleExports);
     assert_eq!(exports.detail.as_deref(), Some("module exports"));
     assert_eq!(names(&exports.children), vec!["damage", "player"]);
-    assert!(exports
-        .children
-        .iter()
-        .all(|symbol| symbol.kind == DocumentSymbolKind::Field));
+    assert!(
+        exports
+            .children
+            .iter()
+            .all(|symbol| symbol.kind == DocumentSymbolKind::Field)
+    );
 }
 
 #[test]

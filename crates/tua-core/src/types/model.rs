@@ -1,6 +1,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::hash::{Hash, Hasher};
+use std::path::PathBuf;
+
+use crate::parser::{SourceSpan, TypeAliasId, TypeParameterId};
 
 const MAX_METATABLE_FIELD_DEPTH: usize = 16;
 
@@ -9,6 +12,15 @@ pub enum Type {
     Primitive(PrimitiveType),
     Any,
     Alias(String),
+    GenericParameter {
+        id: TypeParameterId,
+        name: String,
+    },
+    GenericAliasApplication {
+        reference: GenericAliasReference,
+        arguments: Vec<Type>,
+        span: Option<SourceSpan>,
+    },
     StringLiteral(String),
     Union(Vec<Type>),
     Function(FunctionType),
@@ -16,6 +28,23 @@ pub enum Type {
     Array(Box<Type>),
     Tuple(Vec<Type>),
     Dictionary { key: Box<Type>, value: Box<Type> },
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub enum GenericAliasReference {
+    Declaration(TypeAliasId),
+    Imported {
+        source_module: PathBuf,
+        name: String,
+        span: Option<SourceSpan>,
+    },
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct GenericAliasDefinition {
+    pub id: TypeAliasId,
+    pub parameters: Vec<TypeParameterId>,
+    pub body: Box<Type>,
 }
 
 impl Type {
@@ -715,6 +744,25 @@ fn fmt_type(ty: &Type, formatter: &mut fmt::Formatter<'_>, depth: usize) -> fmt:
         Type::Primitive(primitive) => write!(formatter, "{primitive}"),
         Type::Any => write!(formatter, "any"),
         Type::Alias(name) => write!(formatter, "{name}"),
+        Type::GenericParameter { name, .. } => write!(formatter, "{name}"),
+        Type::GenericAliasApplication {
+            reference,
+            arguments,
+            ..
+        } => {
+            let name = match reference {
+                GenericAliasReference::Declaration(id) => id.name.as_str(),
+                GenericAliasReference::Imported { name, .. } => name.as_str(),
+            };
+            write!(formatter, "{name}<")?;
+            for (index, argument) in arguments.iter().enumerate() {
+                if index > 0 {
+                    write!(formatter, ", ")?;
+                }
+                fmt_type(argument, formatter, depth + 1)?;
+            }
+            write!(formatter, ">")
+        }
         Type::StringLiteral(value) => write!(formatter, "{value:?}"),
         Type::Union(types) => {
             for (index, ty) in types.iter().enumerate() {

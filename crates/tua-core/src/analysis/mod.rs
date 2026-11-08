@@ -17,16 +17,17 @@ use crate::ast_utils::{
     assignment_expression_for_local, field_chain_before_first_call, plain_field_chain_from_var,
 };
 use crate::classes::{
-    class_member_target as class_member_source_target, nominal_class_identity, ClassMemberKind,
+    ClassMemberKind, class_member_target as class_member_source_target, nominal_class_identity,
 };
 use crate::code_action::code_actions_parsed_source_with_kinds_and_diagnostics_config;
 use crate::completion::{
+    CompletionAdaptiveStats, CompletionMultiTokenConfig, CompletionRankingInputs,
+    CompletionSequenceRankingConfig,
     complete_current_file_field_access_with_environment_and_ranking_inputs,
     complete_current_file_lua_field_access,
     complete_field_access_in_source_with_environment_and_ranking_inputs,
     complete_indexed_module_paths, complete_source_with_parsed_environment_and_ranking_inputs,
-    filter_and_rank_completions, multitoken::complete_multi_token_source, CompletionAdaptiveStats,
-    CompletionMultiTokenConfig, CompletionRankingInputs, CompletionSequenceRankingConfig,
+    filter_and_rank_completions, multitoken::complete_multi_token_source,
 };
 use crate::folding_range::folding_ranges_source;
 use crate::hir::{HirExportValue, HirModule, HirRequireBinding, HirSymbol, HirSymbolKind};
@@ -39,20 +40,20 @@ use crate::inline_ignore::apply_inline_ignores;
 use crate::inspector::InspectorItem;
 use crate::module_index::infer_module_exports_with_optional_environment;
 use crate::module_link::{
-    module_specifier_at_position, module_specifier_literals, ModuleSpecifierKind,
+    ModuleSpecifierKind, module_specifier_at_position, module_specifier_literals,
 };
 use crate::module_path_index::{ModulePathIndex, ProjectModuleWorkspace};
 use crate::profile;
 use crate::scope::{ScopeDeclarationKind, ScopeGlobalKind, ScopeResolution};
 use crate::selection_range::selection_ranges_source;
-use crate::semantic::{resolve_aliases, SemanticModel};
+use crate::semantic::{SemanticModel, resolve_aliases};
 use crate::signal::{
-    bus_label, graph_call_from_mention, graph_event_id, graph_schema_summary, SignalEventIndex,
-    SignalGraph, SignalGraphEvent,
+    SignalEventIndex, SignalGraph, SignalGraphEvent, bus_label, graph_call_from_mention,
+    graph_event_id, graph_schema_summary,
 };
 use crate::source_text::{
-    byte_for_column, dotted_chain_at_position, function_name_table_field, line_at,
-    source_identifiers, SourceIdentifier,
+    SourceIdentifier, byte_for_column, dotted_chain_at_position, function_name_table_field,
+    line_at, source_identifiers,
 };
 use crate::text_match::text_matches;
 use crate::types::{
@@ -61,12 +62,24 @@ use crate::types::{
 };
 use crate::usage_index::{FileUsageIndex, ProjectUsageIndex};
 use crate::vfs::{
-    module_name_for_path, module_path_without_runtime_suffix, normalize_path, ModulePathSeparator,
-    VfsSnapshot, VfsSourceKind, VirtualFileSystem,
+    ModulePathSeparator, VfsSnapshot, VfsSourceKind, VirtualFileSystem, module_name_for_path,
+    module_path_without_runtime_suffix, normalize_path,
 };
 use crate::{
-    call_hierarchy_calls_parsed_source, call_hierarchy_prepare_parsed_source,
-    call_hierarchy_symbols_parsed_source,
+    Assist, AssistKind, AssistRange, CallHierarchyCallSite, CallHierarchyCallTarget,
+    CallHierarchyIncomingCall, CallHierarchyOutgoingCall, CallHierarchySymbol,
+    CallHierarchySymbolTarget, CodeLens, CodeLensReferenceKind, CodeLensReferenceTarget,
+    CodeLensTarget, Completion, CompletionKind, Definition, DefinitionKind, Diagnostic,
+    DocumentHighlight, DocumentSymbol, FoldingRange, Hover, InlayHint, ModuleDependencyEdge,
+    ModuleDependencyExport, ModuleDependencyGraph, ModuleDependencyModule, ModuleExportField,
+    ModuleExports, ModuleGraph, ModuleGraphInput, ModuleGraphOptions, ModuleInclusionPath,
+    ModuleInclusionStep, ModuleLink, ParsedSource, ProjectConfig, ProjectTypeDatabase,
+    ProjectTypeDatabaseInput, ProjectTypeExport, ProjectTypeLibrary, Reference, ReferenceKind,
+    RenameEdit, RenameTarget, RequireResolution, ScopeMap, SelectionRange, SemanticIndex,
+    SemanticToken, SignatureHelp, SourcePosition, SourceSpan, SymbolIndex, TableField, TextEdit,
+    TuaType, Type, TypeEnvironment, TypeExplanation, TypeExplanationStep, TypeExplanationStepKind,
+    TypedFunction, WorkspaceSymbol, call_hierarchy_calls_parsed_source,
+    call_hierarchy_prepare_parsed_source, call_hierarchy_symbols_parsed_source,
     check::{
         check_parsed_source_with_environment_and_ecs_config,
         check_parsed_source_with_environment_asset_roots_diagnostics_jit_config_and_asset_index,
@@ -80,19 +93,7 @@ use crate::{
     reference_kind_for_rename, references_to_definition_parsed_source_with_artifacts,
     rename_target_for_definition, require_bindings_for_parsed_source,
     semantic_tokens_parsed_source, semantic_tokens_tua_source, signature_help_tua_source,
-    type_alias_definition_count, Assist, AssistKind, AssistRange, CallHierarchyCallSite,
-    CallHierarchyCallTarget, CallHierarchyIncomingCall, CallHierarchyOutgoingCall,
-    CallHierarchySymbol, CallHierarchySymbolTarget, CodeLens, CodeLensReferenceKind,
-    CodeLensReferenceTarget, CodeLensTarget, Completion, CompletionKind, Definition,
-    DefinitionKind, Diagnostic, DocumentHighlight, DocumentSymbol, FoldingRange, Hover, InlayHint,
-    ModuleDependencyEdge, ModuleDependencyExport, ModuleDependencyGraph, ModuleDependencyModule,
-    ModuleExportField, ModuleExports, ModuleGraph, ModuleGraphInput, ModuleGraphOptions,
-    ModuleInclusionPath, ModuleInclusionStep, ModuleLink, ParsedSource, ProjectConfig,
-    ProjectTypeDatabase, ProjectTypeDatabaseInput, ProjectTypeExport, ProjectTypeLibrary,
-    Reference, ReferenceKind, RenameEdit, RenameTarget, RequireResolution, ScopeMap,
-    SelectionRange, SemanticIndex, SemanticToken, SignatureHelp, SourcePosition, SourceSpan,
-    SymbolIndex, TableField, TextEdit, TuaType, Type, TypeEnvironment, TypeExplanation,
-    TypeExplanationStep, TypeExplanationStepKind, TypedFunction, WorkspaceSymbol,
+    type_alias_definition_count,
 };
 use crate::{scope_map_parsed_source, scope_map_parsed_source_with_globals};
 
@@ -970,7 +971,9 @@ fn project_table_field_type(ty: &Type, field: &str) -> Option<Type> {
         | Type::StringLiteral(_)
         | Type::Array(_)
         | Type::Tuple(_)
-        | Type::Dictionary { .. } => None,
+        | Type::Dictionary { .. }
+        | Type::GenericParameter { .. }
+        | Type::GenericAliasApplication { .. } => None,
     }
 }
 
@@ -995,6 +998,8 @@ fn project_alias_field_span(
             .find(|candidate| candidate.name == field)
             .and_then(|candidate| candidate.name_span.or(candidate.span)),
         TuaType::Named(name) => project_alias_field_span(parsed, name, field, depth + 1),
+        TuaType::Applied { name, .. } => project_alias_field_span(parsed, name, field, depth + 1),
+        TuaType::Parameter { .. } => None,
         TuaType::Union(types) => types.iter().find_map(|ty| match ty {
             TuaType::Named(name) => project_alias_field_span(parsed, name, field, depth + 1),
             TuaType::Table(fields) => fields
@@ -1160,7 +1165,9 @@ fn receiver_alias_name(ty: &Type) -> Option<String> {
         | Type::Table(_)
         | Type::Array(_)
         | Type::Tuple(_)
-        | Type::Dictionary { .. } => None,
+        | Type::Dictionary { .. }
+        | Type::GenericParameter { .. }
+        | Type::GenericAliasApplication { .. } => None,
     }
 }
 
@@ -1215,6 +1222,10 @@ fn is_type_annotation_position(parsed: &ParsedSource, position: SourcePosition) 
 fn tua_type_uses_qualified_name(ty: &TuaType) -> bool {
     match ty {
         TuaType::Named(name) => name.contains('.'),
+        TuaType::Applied {
+            name, arguments, ..
+        } => name.contains('.') || arguments.iter().any(tua_type_uses_qualified_name),
+        TuaType::Parameter { .. } => false,
         TuaType::StringLiteral(_) => false,
         TuaType::Union(types) => types.iter().any(tua_type_uses_qualified_name),
         TuaType::Table(fields) => fields
@@ -1313,7 +1324,9 @@ fn collect_type_fields(ty: &Type, fields: &mut BTreeMap<String, Type>) {
         | Type::StringLiteral(_)
         | Type::Array(_)
         | Type::Tuple(_)
-        | Type::Dictionary { .. } => {}
+        | Type::Dictionary { .. }
+        | Type::GenericParameter { .. }
+        | Type::GenericAliasApplication { .. } => {}
     }
 }
 
@@ -1775,7 +1788,9 @@ fn collect_function_parameter_types(ty: &Type, index: usize, types: &mut Vec<Typ
         | Type::Table(_)
         | Type::Array(_)
         | Type::Tuple(_)
-        | Type::Dictionary { .. } => {}
+        | Type::Dictionary { .. }
+        | Type::GenericParameter { .. }
+        | Type::GenericAliasApplication { .. } => {}
     }
 }
 
@@ -1827,7 +1842,9 @@ fn collect_string_literal_values(ty: &Type, values: &mut BTreeSet<String>) {
         | Type::Table(_)
         | Type::Array(_)
         | Type::Tuple(_)
-        | Type::Dictionary { .. } => {}
+        | Type::Dictionary { .. }
+        | Type::GenericParameter { .. }
+        | Type::GenericAliasApplication { .. } => {}
     }
 }
 
@@ -1844,7 +1861,9 @@ fn type_contains_string_literal(ty: &Type, literal: &str) -> bool {
         | Type::Table(_)
         | Type::Array(_)
         | Type::Tuple(_)
-        | Type::Dictionary { .. } => false,
+        | Type::Dictionary { .. }
+        | Type::GenericParameter { .. }
+        | Type::GenericAliasApplication { .. } => false,
     }
 }
 
@@ -2070,6 +2089,7 @@ fn type_name_from_tua_type(ty: &TuaType) -> Option<String> {
     match ty {
         TuaType::Named(name) if name == "any" => None,
         TuaType::Named(name) => Some(name.clone()),
+        TuaType::Applied { name, .. } => Some(name.clone()),
         TuaType::StringLiteral(_) => Some("string".to_owned()),
         TuaType::Union(types) => {
             let names = types
@@ -2082,7 +2102,8 @@ fn type_name_from_tua_type(ty: &TuaType) -> Option<String> {
                 .then(|| names.into_iter().next())
                 .flatten()
         }
-        TuaType::Table(_)
+        TuaType::Parameter { .. }
+        | TuaType::Table(_)
         | TuaType::Array(_)
         | TuaType::Tuple(_)
         | TuaType::Dictionary { .. }

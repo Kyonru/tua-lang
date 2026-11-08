@@ -279,6 +279,7 @@ fn type_rejected(ty: &Type, shape: Shape, environment: &TypeEnvironment, depth: 
         }
         Type::StringLiteral(_) => !matches!(shape, Shape::Number),
         Type::Primitive(PrimitiveType::Nil) | Type::Function(_) => true,
+        Type::GenericParameter { .. } | Type::GenericAliasApplication { .. } => true,
         Type::Table(_) | Type::Dictionary { .. } => {
             matches!(shape, Shape::Number | Shape::Boolean | Shape::Texture)
         }

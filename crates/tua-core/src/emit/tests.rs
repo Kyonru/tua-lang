@@ -449,8 +449,11 @@ final class Fallback {
     )
     .expect("class constructors should emit");
 
-    assert!(emitted
-        .contains("return setmetatable({\n    value = value,\n    value = 10,\n  }, Optimized)"));
+    assert!(
+        emitted.contains(
+            "return setmetatable({\n    value = value,\n    value = 10,\n  }, Optimized)"
+        )
+    );
     assert!(emitted.contains(
         "local function Fallback_init(self, value)\n\n  self.value = value\n\n  self.value = 10\n  self.unrelated = {}\nend"
     ));
@@ -873,9 +876,11 @@ fn unresolved_child_relative_imports_do_not_emit_runtime_import_calls() {
         .expect_err("project-less child imports should not emit");
 
     assert_eq!(diagnostics[0].code, Some(DiagnosticCode::LINT_BAD_REQUIRE));
-    assert!(diagnostics[0]
-        .message
-        .contains("without project module resolution"));
+    assert!(
+        diagnostics[0]
+            .message
+            .contains("without project module resolution")
+    );
 }
 
 #[test]
@@ -1944,12 +1949,16 @@ end
 "#
     );
     assert_eq!(emission.provenance[0].source_span.start.line, 5);
-    assert!(emission.provenance[1..4]
-        .iter()
-        .all(|line| line.lowering == LoweringKind::DefaultParameter));
-    assert!(emission.provenance[1..4]
-        .iter()
-        .all(|line| line.source_span.start.line == 5));
+    assert!(
+        emission.provenance[1..4]
+            .iter()
+            .all(|line| line.lowering == LoweringKind::DefaultParameter)
+    );
+    assert!(
+        emission.provenance[1..4]
+            .iter()
+            .all(|line| line.source_span.start.line == 5)
+    );
     assert_eq!(
         emission.provenance[5],
         LuaLineProvenance {
@@ -2310,7 +2319,9 @@ fn callable_helpers_preserve_shadowing_across_helper_families() {
         "input",
         "audioSystem",
     ] {
-        let source = format!("local function run({helper}: (value: number) -> number)\n  return {helper}(2)\nend\nreturn run\n");
+        let source = format!(
+            "local function run({helper}: (value: number) -> number)\n  return {helper}(2)\nend\nreturn run\n"
+        );
         let emitted = emit_tua_source("src/shadow.tua", source).unwrap();
         assert!(
             emitted.contains(&format!("return {helper}(2)")),
@@ -2460,11 +2471,13 @@ fn generated_default_guard_errors_use_available_source_origins() {
         )
         .unwrap_err();
         assert!(!diagnostics.is_empty());
-        assert!(diagnostics
-            .iter()
-            .all(|diagnostic| diagnostic.line == source_line
-                && diagnostic.end_line == source_line
-                && diagnostic.column == diagnostic.end_column));
+        assert!(
+            diagnostics
+                .iter()
+                .all(|diagnostic| diagnostic.line == source_line
+                    && diagnostic.end_line == source_line
+                    && diagnostic.column == diagnostic.end_column)
+        );
     }
 }
 

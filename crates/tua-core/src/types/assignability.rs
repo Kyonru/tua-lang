@@ -1,6 +1,10 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
-use super::model::{is_index_signature_field, FunctionType, TableShape, Type, TypeAlias};
+use crate::parser::TypeAliasId;
+use super::model::{
+    FunctionType, GenericAliasDefinition, GenericAliasReference, TableShape, Type, TypeAlias,
+    is_index_signature_field,
+};
 
 const MAX_ASSIGNABILITY_DEPTH: usize = 64;
 
@@ -53,9 +57,12 @@ impl AssignabilityFailure {
 #[derive(Clone, Debug, Default)]
 pub struct TypeContext {
     aliases: BTreeMap<String, Type>,
+    generic_aliases: HashMap<TypeAliasId, GenericAliasDefinition>,
+    generic_alias_bindings: HashMap<(std::path::PathBuf, String), TypeAliasId>,
     nominal_supertypes: BTreeMap<String, BTreeSet<String>>,
     nominal_aliases: BTreeSet<String>,
     nominal_alias_supertypes: BTreeMap<String, BTreeSet<String>>,
+    nominal_protocols: BTreeSet<String>,
 }
 
 impl TypeContext {
@@ -70,6 +77,21 @@ impl TypeContext {
 
     pub fn insert_alias(&mut self, alias: TypeAlias) {
         self.aliases.insert(alias.name, alias.ty);
+    }
+
+    pub(crate) fn insert_generic_alias(&mut self, definition: GenericAliasDefinition) {
+        self.generic_aliases.insert(definition.id.clone(), definition);
+    }
+
+    pub(crate) fn insert_generic_alias_binding(
+        &mut self,
+        source_module: std::path::PathBuf,
+        local_name: String,
+        definition: GenericAliasDefinition,
+    ) {
+        self.generic_alias_bindings
+            .insert((crate::vfs::normalize_path(source_module), local_name), definition.id.clone());
+        self.insert_generic_alias(definition);
     }
 
     pub fn alias(&self, name: &str) -> Option<&Type> {
@@ -116,6 +138,12 @@ impl TypeContext {
         self.nominal_aliases.insert(name.into());
     }
 
+    pub fn insert_nominal_protocol(&mut self, name: impl Into<String>) {
+        let name = name.into();
+        self.nominal_aliases.insert(name.clone());
+        self.nominal_protocols.insert(name);
+    }
+
     pub fn is_assignable(&self, source: &Type, target: &Type) -> bool {
         self.check_assignable(source, target).is_ok()
     }
@@ -151,6 +179,27 @@ impl TypeContext {
 
         if depth >= MAX_ASSIGNABILITY_DEPTH {
             return Err(AssignabilityFailure::type_mismatch(source, target));
+        }
+
+        if let Type::GenericAliasApplication {
+            reference,
+            arguments,
+            ..
+        } = source
+        {
+            if let Some(expanded) = self.expand_generic_alias(reference, arguments) {
+                return self.check_assignable_inner(&expanded, target, depth + 1, resolving);
+            }
+        }
+        if let Type::GenericAliasApplication {
+            reference,
+            arguments,
+            ..
+        } = target
+        {
+            if let Some(expanded) = self.expand_generic_alias(reference, arguments) {
+                return self.check_assignable_inner(source, &expanded, depth + 1, resolving);
+            }
         }
 
         match (source, target) {
@@ -269,9 +318,20 @@ impl TypeContext {
             {
                 Ok(())
             }
-            (Type::Array(source), Type::Array(target)) => self
-                .check_assignable_inner(source, target, depth + 1, resolving)
-                .map_err(|failure| failure.at(AssignabilityPathSegment::ArrayElement)),
+            (Type::Array(source), Type::Array(target)) => {
+                if !matches!(source.as_ref(), Type::Any)
+                    && source != target
+                    && self.contains_protocol_view(target, &mut BTreeSet::new())
+                {
+                    return Err(AssignabilityFailure::type_mismatch(
+                        &Type::Array(source.clone()),
+                        &Type::Array(target.clone()),
+                    ));
+                }
+
+                self.check_assignable_inner(source, target, depth + 1, resolving)
+                    .map_err(|failure| failure.at(AssignabilityPathSegment::ArrayElement))
+            }
             (Type::Tuple(source), Type::Tuple(target)) => {
                 if source.len() != target.len() {
                     return Err(Box::new(AssignabilityFailure {
@@ -310,6 +370,82 @@ impl TypeContext {
             }
             _ => Err(AssignabilityFailure::type_mismatch(source, target)),
         }
+    }
+
+    fn contains_protocol_view(&self, ty: &Type, resolving: &mut BTreeSet<String>) -> bool {
+        match ty {
+            Type::Alias(name) if self.nominal_protocols.contains(name) => true,
+            Type::Alias(name) if resolving.insert(name.clone()) => {
+                let result = self
+                    .aliases
+                    .get(name)
+                    .is_some_and(|aliased| self.contains_protocol_view(aliased, resolving));
+                resolving.remove(name);
+                result
+            }
+            Type::GenericAliasApplication {
+                reference,
+                arguments,
+                ..
+            } => {
+                // Mutable arrays cannot safely widen class elements to a
+                // protocol view, even when that view is hidden behind a type
+                // alias. Bound recursive expansion and fail closed if the
+                // application cannot be resolved.
+                if resolving.len() >= 64 {
+                    return true;
+                }
+                let key = format!("{reference:?}<{arguments:?}>");
+                if !resolving.insert(key.clone()) {
+                    return false;
+                }
+                let contains = self
+                    .expand_generic_alias(reference, arguments)
+                    .is_none_or(|expanded| self.contains_protocol_view(&expanded, resolving));
+                resolving.remove(&key);
+                contains
+            }
+            Type::Union(types) => types
+                .iter()
+                .any(|ty| self.contains_protocol_view(ty, resolving)),
+            _ => false,
+        }
+    }
+
+    fn expand_generic_alias(
+        &self,
+        reference: &GenericAliasReference,
+        arguments: &[Type],
+    ) -> Option<Type> {
+        let definition = match reference {
+            GenericAliasReference::Declaration(id) => self.generic_aliases.get(id),
+            GenericAliasReference::Imported {
+                source_module,
+                name,
+                ..
+            } => self
+                .generic_alias_bindings
+                .get(&(crate::vfs::normalize_path(source_module), name.clone()))
+                .and_then(|id| self.generic_aliases.get(id))
+                .or_else(|| {
+                    self.generic_aliases.values().find(|definition| {
+                        definition.id.module == *source_module && definition.id.name == *name
+                    })
+                }),
+        }?;
+        if definition.parameters.len() != arguments.len() {
+            return None;
+        }
+        let substitutions = definition
+            .parameters
+            .iter()
+            .cloned()
+            .zip(arguments.iter().cloned())
+            .collect::<HashMap<_, _>>();
+        Some(crate::types::substitute_type_parameters(
+            &definition.body,
+            &substitutions,
+        ))
     }
 
     fn is_nominal_subtype(&self, source: &str, target: &str, depth: usize) -> bool {

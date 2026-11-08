@@ -363,7 +363,9 @@ impl AnalysisSnapshot {
             | Type::Function(_)
             | Type::Array(_)
             | Type::Tuple(_)
-            | Type::Dictionary { .. } => None,
+            | Type::Dictionary { .. }
+        | Type::GenericParameter { .. }
+        | Type::GenericAliasApplication { .. } => None,
         }
     }
 

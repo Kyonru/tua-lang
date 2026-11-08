@@ -5,23 +5,25 @@ mod model;
 
 use std::collections::{BTreeMap, HashMap};
 use std::hash::{DefaultHasher, Hash, Hasher};
+use std::path::PathBuf;
 
 pub use assignability::{
-    is_assignable, AssignabilityFailure, AssignabilityFailureKind, AssignabilityPathSegment,
-    TypeContext,
+    AssignabilityFailure, AssignabilityFailureKind, AssignabilityPathSegment, TypeContext,
+    is_assignable,
 };
 pub use environment::{
-    build_type_environment, TypeEnvironment, TypedFunction, TypedFunctionOverload, TypedParameter,
+    TypeEnvironment, TypedFunction, TypedFunctionOverload, TypedParameter, build_type_environment,
 };
 pub(crate) use environment::{
     build_type_environment_with_diagnostics, build_type_environment_with_domain_registry,
     inferred_function_type_from_body, lua_doc_required_parameter_count,
-    resolve_chained_call_returns,
+    resolve_chained_call_returns, substitute_type_parameters,
 };
 pub(crate) use format::{format_named_function_pretty, format_type_with_prefix};
 pub use model::{
-    FunctionParameter, FunctionType, IndexFallback, MetatableFacts, NewIndexRule, PrimitiveType,
-    TableField, TableShape, Type, TypeAlias,
+    FunctionParameter, FunctionType, GenericAliasDefinition, GenericAliasReference,
+    IndexFallback, MetatableFacts, NewIndexRule, PrimitiveType, TableField, TableShape, Type,
+    TypeAlias,
 };
 
 /// A callback may be optional, but competing callable contracts are ambiguous.
@@ -219,13 +221,35 @@ pub(crate) fn widen_inferred_type(ty: &Type) -> Type {
         Type::Dictionary { key, value } => {
             Type::dictionary(widen_inferred_type(key), widen_inferred_type(value))
         }
-        Type::Primitive(_) | Type::Any | Type::Alias(_) => ty.clone(),
+        Type::Primitive(_)
+        | Type::Any
+        | Type::Alias(_)
+        | Type::GenericParameter { .. }
+        | Type::GenericAliasApplication { .. } => ty.clone(),
     }
 }
 
 pub(crate) fn type_from_tua_type(ty: &TuaType) -> Type {
     match ty {
         TuaType::Named(name) => Type::named(name),
+        TuaType::Parameter { id, name } => Type::GenericParameter {
+            id: id.clone(),
+            name: name.clone(),
+        },
+        TuaType::Applied {
+            name,
+            arguments,
+            name_span,
+            span,
+        } => Type::GenericAliasApplication {
+            reference: GenericAliasReference::Imported {
+                source_module: PathBuf::new(),
+                name: name.clone(),
+                span: *name_span,
+            },
+            arguments: arguments.iter().map(type_from_tua_type).collect(),
+            span: *span,
+        },
         TuaType::StringLiteral(value) => Type::string_literal(value),
         TuaType::Union(types) => Type::union(types.iter().map(type_from_tua_type)),
         TuaType::Table(fields) => Type::table(fields.iter().map(|field| {

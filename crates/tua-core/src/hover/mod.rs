@@ -947,7 +947,9 @@ fn lua_type_field_item(environment: &TypeEnvironment, ty: &Type, field: &str) ->
         | Type::StringLiteral(_)
         | Type::Array(_)
         | Type::Tuple(_)
-        | Type::Dictionary { .. } => None,
+        | Type::Dictionary { .. }
+        | Type::GenericParameter { .. }
+        | Type::GenericAliasApplication { .. } => None,
     }
 }
 

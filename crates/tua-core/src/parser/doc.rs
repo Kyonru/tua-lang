@@ -854,7 +854,36 @@ pub(crate) fn parse_type_text(text: &str) -> TuaType {
         );
     }
 
+    if let Some((name, arguments)) = parse_generic_application_text(text) {
+        return TuaType::Applied {
+            name: name.to_owned(),
+            arguments: arguments.into_iter().map(parse_type_text).collect(),
+            name_span: None,
+            span: None,
+        };
+    }
+
     TuaType::Named(text.to_owned())
+}
+
+fn parse_generic_application_text(text: &str) -> Option<(&str, Vec<&str>)> {
+    let text = text.trim();
+    let open = text.find('<')?;
+    if !text.ends_with('>') {
+        return None;
+    }
+    let name = text[..open].trim();
+    if name.is_empty()
+        || !name
+            .chars()
+            .all(|character| character.is_alphanumeric() || matches!(character, '_' | '.'))
+    {
+        return None;
+    }
+
+    let arguments = split_top_level(&text[open + 1..text.len() - 1], ',');
+    (!arguments.is_empty() && arguments.iter().all(|argument| !argument.is_empty()))
+        .then_some((name, arguments))
 }
 
 fn parse_table_field(text: &str) -> Option<TableFieldType> {

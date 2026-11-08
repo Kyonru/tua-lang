@@ -1,5 +1,5 @@
 use super::*;
-use crate::completion::context::{completion_context, CompletionContext};
+use crate::completion::context::{CompletionContext, completion_context};
 use full_moon::visitors::Visitor;
 
 impl AnalysisSnapshot {
@@ -270,7 +270,7 @@ impl AnalysisSnapshot {
         &self,
         config_for_path: impl Fn(&Path) -> crate::config::ShadersConfig,
     ) -> Result<Vec<crate::shader_validation::ShaderValidationRequest>, String> {
-        use crate::shader_validation::{check_request_limits, ShaderValidationRequest};
+        use crate::shader_validation::{ShaderValidationRequest, check_request_limits};
         let mut requests = Vec::new();
         for (path, file) in &self.files {
             if self.is_generated_path(path) {

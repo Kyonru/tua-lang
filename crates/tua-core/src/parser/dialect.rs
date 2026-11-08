@@ -1,7 +1,8 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use full_moon::ast::luau::{
-    GenericDeclaration, IndexedTypeInfo, LuauAttribute, TypeField, TypeInfo, TypeInstantiation,
+    GenericDeclaration, GenericParameterInfo, IndexedTypeInfo, LuauAttribute, TypeDeclaration,
+    TypeField, TypeInfo, TypeInstantiation,
 };
 use full_moon::ast::{BinOp, Expression, LastStmt, Stmt};
 use full_moon::node::Node;
@@ -21,6 +22,7 @@ pub(super) fn validate_tua_dialect(raw: &RawParsedSource) -> Vec<Diagnostic> {
             .copied()
             .map(|syntax| (position_key(syntax.item_end), syntax.suffix_span))
             .collect(),
+        generic_alias_declarations: BTreeSet::new(),
     };
     validator.visit_ast(&raw.ast);
     for parser_span in validator.native_array_types.values().copied() {
@@ -38,6 +40,7 @@ struct TuaDialectValidator<'a> {
     raw: &'a RawParsedSource,
     diagnostics: Vec<Diagnostic>,
     native_array_types: BTreeMap<(usize, usize), SourceSpan>,
+    generic_alias_declarations: BTreeSet<(usize, usize)>,
 }
 
 impl TuaDialectValidator<'_> {
@@ -50,6 +53,10 @@ impl TuaDialectValidator<'_> {
 impl Visitor for TuaDialectValidator<'_> {
     fn visit_stmt(&mut self, statement: &Stmt) {
         match statement {
+            Stmt::TypeDeclaration(declaration) => self.allow_generic_alias(declaration),
+            Stmt::ExportedTypeDeclaration(declaration) => {
+                self.allow_generic_alias(declaration.type_declaration())
+            }
             Stmt::ConstAssignment(assignment) => self.report(
                 assignment.const_token(),
                 "Luau `const` declarations are not part of Tua; use `local` instead",
@@ -111,6 +118,15 @@ impl Visitor for TuaDialectValidator<'_> {
     }
 
     fn visit_generic_declaration(&mut self, declaration: &GenericDeclaration) {
+        let start = declaration
+            .range()
+            .map(|(start, _)| SourcePosition::from_full_moon(start));
+        if start.is_some_and(|start| {
+            self.generic_alias_declarations
+                .contains(&position_key(start))
+        }) {
+            return;
+        }
         self.report(declaration, "generic declarations are not part of Tua");
     }
 
@@ -131,9 +147,7 @@ impl Visitor for TuaDialectValidator<'_> {
                 access,
                 "Luau `read`/`write` array access modifiers are not part of Tua",
             ),
-            TypeInfo::Generic { .. } => {
-                self.report(type_info, "generic type applications are not part of Tua")
-            }
+            TypeInfo::Generic { .. } => {}
             TypeInfo::GenericPack { .. } | TypeInfo::VariadicPack { .. } => {
                 self.report(type_info, "Luau generic type packs are not part of Tua")
             }
@@ -147,11 +161,7 @@ impl Visitor for TuaDialectValidator<'_> {
         }
     }
 
-    fn visit_indexed_type_info(&mut self, type_info: &IndexedTypeInfo) {
-        if matches!(type_info, IndexedTypeInfo::Generic { .. }) {
-            self.report(type_info, "generic type applications are not part of Tua");
-        }
-    }
+    fn visit_indexed_type_info(&mut self, _type_info: &IndexedTypeInfo) {}
 
     fn visit_type_field(&mut self, field: &TypeField) {
         if let Some(access) = field.access() {
@@ -167,6 +177,37 @@ impl Visitor for TuaDialectValidator<'_> {
             instantiation,
             "Luau runtime type instantiation is not part of Tua",
         );
+    }
+}
+
+impl TuaDialectValidator<'_> {
+    fn allow_generic_alias(&mut self, declaration: &TypeDeclaration) {
+        let Some(generics) = declaration.generics() else {
+            return;
+        };
+
+        let mut names = BTreeSet::new();
+        if let Some(parameter) = generics.generics().iter().find(|parameter| {
+            if parameter.default_type().is_some() {
+                return true;
+            }
+            match parameter.parameter() {
+                GenericParameterInfo::Name(token) => !names.insert(token.to_string()),
+                GenericParameterInfo::Variadic { .. } => true,
+                _ => true,
+            }
+        }) {
+            self.report(
+                parameter,
+                "generic type alias parameters must be uniquely named, required, and non-variadic",
+            );
+            return;
+        }
+
+        if let Some((start, _)) = generics.range() {
+            self.generic_alias_declarations
+                .insert(position_key(SourcePosition::from_full_moon(start)));
+        }
     }
 }
 

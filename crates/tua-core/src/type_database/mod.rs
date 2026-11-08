@@ -9,10 +9,12 @@ use crate::sprite;
 use crate::store;
 use crate::vector;
 use crate::vfs::normalize_path;
+use crate::types::{GenericAliasDefinition, GenericAliasReference};
 use crate::{
     AnalysisSourceKind, Definition, FunctionType, ModuleExportField, ParsedSource,
     ScopeDeclarationKind, ScopeMap, Type, TypeEnvironment, TypedFunction,
 };
+use crate::parser::TypeAliasId;
 
 mod protocol_index;
 
@@ -30,6 +32,7 @@ pub struct ProjectTypeModule {
     pub source_kind: AnalysisSourceKind,
     class_names: BTreeSet<String>,
     aliases: BTreeMap<String, ProjectTypeBinding>,
+    generic_aliases: BTreeMap<String, GenericAliasDefinition>,
     locals: BTreeMap<String, ProjectTypeBinding>,
     functions: BTreeMap<String, TypedFunction>,
     module_aliases: BTreeMap<String, String>,
@@ -77,6 +80,17 @@ pub struct ProjectTypeDatabaseInput<'a> {
     pub parsed: Option<&'a ParsedSource>,
 }
 
+
+const MAX_PROJECT_TYPE_RESOLUTION_WORK: usize = 8192;
+const MAX_GENERIC_ALIAS_INSTANTIATION_DEPTH: usize = 128;
+
+#[derive(Default)]
+struct ProjectTypeResolutionContext {
+    aliases: Vec<(PathBuf, String)>,
+    generic_aliases: Vec<(TypeAliasId, Vec<Type>)>,
+    work: usize,
+}
+
 impl ProjectTypeDatabase {
     pub fn build<'a>(
         inputs: impl IntoIterator<Item = ProjectTypeDatabaseInput<'a>>,
@@ -93,6 +107,7 @@ impl ProjectTypeDatabase {
                 source_kind: input.source_kind,
                 class_names: BTreeSet::new(),
                 aliases: BTreeMap::new(),
+                generic_aliases: BTreeMap::new(),
                 locals: BTreeMap::new(),
                 functions: BTreeMap::new(),
                 module_aliases: module_aliases(input.scope, input.parsed),
@@ -132,6 +147,13 @@ impl ProjectTypeDatabase {
             };
 
             if let Some(environment) = input.environment {
+                for definition in environment.generic_alias_definitions() {
+                    module.generic_aliases.insert(
+                        definition.id.name.clone(),
+                        definition.clone(),
+                    );
+                }
+
                 for (name, ty) in environment.aliases() {
                     if environment.is_class(name) {
                         module.class_names.insert(name.to_owned());
@@ -245,6 +267,16 @@ impl ProjectTypeDatabase {
         self.protocols.related_method_definitions(target)
     }
 
+    pub(crate) fn is_protocol_type(
+        &self,
+        module_graph: &ModuleGraph,
+        source_path: impl AsRef<Path>,
+        protocol_name: &str,
+    ) -> bool {
+        self.protocol_identity(module_graph, source_path, protocol_name)
+            .is_some()
+    }
+
     pub(crate) fn protocol_method_definition_at_position(
         &self,
         path: impl AsRef<Path>,
@@ -326,14 +358,29 @@ impl ProjectTypeDatabase {
         source_path: impl AsRef<Path>,
         ty: &Type,
     ) -> Type {
-        let mut resolving = Vec::new();
+        let mut context = ProjectTypeResolutionContext::default();
 
         self.resolve_type_inner(
             module_graph,
             &normalize_path(source_path),
             ty,
-            &mut resolving,
+            &mut context,
         )
+    }
+
+    pub(crate) fn generic_alias_definition(
+        &self,
+        module_graph: &ModuleGraph,
+        source_path: impl AsRef<Path>,
+        name: &str,
+    ) -> Option<GenericAliasDefinition> {
+        self.resolve_generic_alias_name(
+            module_graph,
+            source_path.as_ref(),
+            name,
+            &mut BTreeSet::new(),
+        )
+        .cloned()
     }
 
     pub fn module_export_type(
@@ -378,9 +425,94 @@ impl ProjectTypeDatabase {
         module_graph: &ModuleGraph,
         source_path: &Path,
         ty: &Type,
-        resolving: &mut Vec<(PathBuf, String)>,
+        context: &mut ProjectTypeResolutionContext,
     ) -> Type {
+        if context.work >= MAX_PROJECT_TYPE_RESOLUTION_WORK {
+            return ty.clone();
+        }
+        context.work += 1;
         match ty {
+            Type::GenericAliasApplication {
+                reference,
+                arguments,
+                span,
+            } => {
+                if context.generic_aliases.len() >= MAX_GENERIC_ALIAS_INSTANTIATION_DEPTH {
+                    return ty.clone();
+                }
+                let lookup_path = match reference {
+                    GenericAliasReference::Declaration(id) => normalize_path(&id.module),
+                    GenericAliasReference::Imported { source_module, .. }
+                        if !source_module.as_os_str().is_empty() => normalize_path(source_module),
+                    GenericAliasReference::Imported { .. } => normalize_path(source_path),
+                };
+                let arguments = arguments
+                    .iter()
+                    .map(|argument| {
+                        self.resolve_type_inner(module_graph, &lookup_path, argument, context)
+                    })
+                    .collect::<Vec<_>>();
+                let definition = match reference {
+                    GenericAliasReference::Declaration(id) => self
+                        .module(&id.module)
+                        .and_then(|module| module.generic_aliases.get(&id.name))
+                        .filter(|definition| definition.id == *id),
+                    GenericAliasReference::Imported {
+                        source_module,
+                        name,
+                        ..
+                    } => self.resolve_generic_alias_name(
+                        module_graph,
+                        if source_module.as_os_str().is_empty() {
+                            source_path
+                        } else {
+                            source_module
+                        },
+                        name,
+                        &mut BTreeSet::new(),
+                    ),
+                };
+                let Some(definition) = definition else {
+                    return Type::GenericAliasApplication {
+                        reference: reference.clone(),
+                        arguments,
+                        span: *span,
+                    };
+                };
+                if definition.parameters.len() != arguments.len() {
+                    return Type::GenericAliasApplication {
+                        reference: GenericAliasReference::Declaration(definition.id.clone()),
+                        arguments,
+                        span: *span,
+                    };
+                }
+
+                let key = (definition.id.clone(), arguments.clone());
+                if context.generic_aliases.contains(&key) {
+                    return Type::GenericAliasApplication {
+                        reference: GenericAliasReference::Declaration(definition.id.clone()),
+                        arguments,
+                        span: *span,
+                    };
+                }
+
+                let substitutions = definition
+                    .parameters
+                    .iter()
+                    .cloned()
+                    .zip(arguments)
+                    .collect::<std::collections::HashMap<_, _>>();
+                let body = crate::types::substitute_type_parameters(&definition.body, &substitutions);
+                context.generic_aliases.push(key);
+                let resolved = self.resolve_type_inner(
+                    module_graph,
+                    &definition.id.module,
+                    &body,
+                    context,
+                );
+                context.generic_aliases.pop();
+                resolved
+            }
             Type::Alias(name) => {
                 let Some(binding) = self.resolve_type_name_raw(module_graph, source_path, name)
                 else {
@@ -391,7 +523,7 @@ impl ProjectTypeDatabase {
                 }
                 let key = (binding.module_path.clone(), binding.name.clone());
 
-                if resolving.contains(&key) {
+                if context.aliases.contains(&key) {
                     // Recursive LuaCATS aliases are valid (for example a
                     // linked-list node referring to `Node` again).  Do not
                     // expand the cycle indefinitely: replacing the back-edge
@@ -406,20 +538,20 @@ impl ProjectTypeDatabase {
                     .unwrap_or(Type::Any);
                 }
 
-                resolving.push(key);
+                context.aliases.push(key);
                 let resolved = self.resolve_type_inner(
                     module_graph,
                     &binding.module_path,
                     &binding.ty,
-                    resolving,
+                    context,
                 );
-                resolving.pop();
+                context.aliases.pop();
                 resolved
             }
             Type::Union(types) => Type::union(
                 types
                     .iter()
-                    .map(|ty| self.resolve_type_inner(module_graph, source_path, ty, resolving)),
+                    .map(|ty| self.resolve_type_inner(module_graph, source_path, ty, context)),
             ),
             Type::Function(function) => {
                 let parameters = function
@@ -431,23 +563,23 @@ impl ProjectTypeDatabase {
                             module_graph,
                             source_path,
                             &parameter.ty,
-                            resolving,
+                            context,
                         ),
                     })
                     .collect::<Vec<_>>();
                 let vararg_type = function
                     .vararg_type
                     .as_deref()
-                    .map(|ty| self.resolve_type_inner(module_graph, source_path, ty, resolving));
+                    .map(|ty| self.resolve_type_inner(module_graph, source_path, ty, context));
                 let return_types = function
                     .return_types_or_any()
                     .iter()
-                    .map(|ty| self.resolve_type_inner(module_graph, source_path, ty, resolving))
+                    .map(|ty| self.resolve_type_inner(module_graph, source_path, ty, context))
                     .collect::<Vec<_>>();
                 let guarded = function.guarded_return_types.as_ref().map(|types| {
                     types
                         .iter()
-                        .map(|ty| self.resolve_type_inner(module_graph, source_path, ty, resolving))
+                        .map(|ty| self.resolve_type_inner(module_graph, source_path, ty, context))
                         .collect()
                 });
 
@@ -459,7 +591,7 @@ impl ProjectTypeDatabase {
                             module_graph,
                             source_path,
                             &Type::Function(overload.clone()),
-                            resolving,
+                            context,
                         ) else {
                             unreachable!()
                         };
@@ -487,7 +619,7 @@ impl ProjectTypeDatabase {
                                     module_graph,
                                     source_path,
                                     &field.ty,
-                                    resolving,
+                                    context,
                                 ),
                                 optional: field.optional,
                             },
@@ -498,19 +630,96 @@ impl ProjectTypeDatabase {
                 Type::Table(resolved_table)
             }
             Type::Array(item) => {
-                Type::array(self.resolve_type_inner(module_graph, source_path, item, resolving))
+                Type::array(self.resolve_type_inner(module_graph, source_path, item, context))
             }
             Type::Tuple(items) => Type::tuple(
                 items
                     .iter()
-                    .map(|ty| self.resolve_type_inner(module_graph, source_path, ty, resolving)),
+                    .map(|ty| self.resolve_type_inner(module_graph, source_path, ty, context)),
             ),
             Type::Dictionary { key, value } => Type::dictionary(
-                self.resolve_type_inner(module_graph, source_path, key, resolving),
-                self.resolve_type_inner(module_graph, source_path, value, resolving),
+                self.resolve_type_inner(module_graph, source_path, key, context),
+                self.resolve_type_inner(module_graph, source_path, value, context),
             ),
-            Type::Primitive(_) | Type::Any | Type::StringLiteral(_) => ty.clone(),
+            Type::Primitive(_)
+        | Type::Any
+        | Type::StringLiteral(_)
+        | Type::GenericParameter { .. }
+        => ty.clone(),
         }
+    }
+
+    fn resolve_generic_alias_name(
+        &self,
+        module_graph: &ModuleGraph,
+        source_path: &Path,
+        name: &str,
+        visiting: &mut BTreeSet<(PathBuf, String)>,
+    ) -> Option<&GenericAliasDefinition> {
+        let source_path = normalize_path(source_path);
+        if !visiting.insert((source_path.clone(), name.to_owned())) {
+            return None;
+        }
+        let module = self.module(&source_path)?;
+
+        if let Some((alias, member)) = name.split_once('.') {
+            let target = self.module_path_for_alias(module_graph, &source_path, alias.trim())?;
+            let result = self.resolve_exported_generic_alias(
+                module_graph,
+                &target,
+                member.trim(),
+                visiting,
+            );
+            visiting.remove(&(source_path, name.to_owned()));
+            return result;
+        }
+
+        if let Some(definition) = module.generic_aliases.get(name) {
+            visiting.remove(&(source_path, name.to_owned()));
+            return Some(definition);
+        }
+
+        let imported = module.named_type_imports.get(name)?;
+        let target = self.module_path_for_specifier(module_graph, &source_path, &imported.module)?;
+        let result = self.resolve_exported_generic_alias(
+            module_graph,
+            &target,
+            &imported.imported,
+            visiting,
+        );
+        visiting.remove(&(source_path, name.to_owned()));
+        result
+    }
+
+    fn resolve_exported_generic_alias(
+        &self,
+        module_graph: &ModuleGraph,
+        module_path: &Path,
+        name: &str,
+        visiting: &mut BTreeSet<(PathBuf, String)>,
+    ) -> Option<&GenericAliasDefinition> {
+        let module_path = normalize_path(module_path);
+        if !visiting.insert((module_path.clone(), name.to_owned())) {
+            return None;
+        }
+        let module = self.module(&module_path)?;
+        if let Some(definition) = module.generic_aliases.get(name) {
+            visiting.remove(&(module_path, name.to_owned()));
+            return module
+                .exported_aliases
+                .contains(name)
+                .then_some(definition);
+        }
+        let reexport = module.reexported_aliases.get(name)?;
+        let target = self.module_path_for_specifier(module_graph, &module_path, &reexport.module)?;
+        let result = self.resolve_exported_generic_alias(
+            module_graph,
+            &target,
+            &reexport.imported,
+            visiting,
+        );
+        visiting.remove(&(module_path, name.to_owned()));
+        result
     }
 
     fn resolve_type_name_raw(
@@ -520,6 +729,24 @@ impl ProjectTypeDatabase {
         name: &str,
     ) -> Option<ProjectTypeBinding> {
         let name = name.trim();
+
+        if let Some(definition) = self.resolve_generic_alias_name(
+            module_graph,
+            source_path,
+            name,
+            &mut BTreeSet::new(),
+        ) {
+            return Some(ProjectTypeBinding {
+                module_path: definition.id.module.clone(),
+                name: definition.id.name.clone(),
+                ty: Type::GenericAliasApplication {
+                    reference: GenericAliasReference::Declaration(definition.id.clone()),
+                    arguments: Vec::new(),
+                    span: None,
+                },
+                origin: ProjectTypeOrigin::Tua,
+            });
+        }
 
         if let Some(ty) = builtin_type(name) {
             return Some(ProjectTypeBinding {
@@ -580,6 +807,21 @@ impl ProjectTypeDatabase {
                     .exported_aliases
                     .contains(&current_name)
                     .then(|| binding.clone());
+            }
+
+            if let Some(definition) = module.generic_aliases.get(&current_name) {
+                return module.exported_aliases.contains(&current_name).then(|| {
+                    ProjectTypeBinding {
+                        module_path: definition.id.module.clone(),
+                        name: definition.id.name.clone(),
+                        ty: Type::GenericAliasApplication {
+                            reference: GenericAliasReference::Declaration(definition.id.clone()),
+                            arguments: Vec::new(),
+                            span: None,
+                        },
+                        origin: ProjectTypeOrigin::Tua,
+                    }
+                });
             }
 
             let reexport = module.reexported_aliases.get(&current_name)?;
@@ -696,7 +938,9 @@ impl ProjectTypeDatabase {
                 | Type::StringLiteral(_)
                 | Type::Array(_)
                 | Type::Tuple(_)
-                | Type::Dictionary { .. } => return None,
+                | Type::Dictionary { .. }
+            | Type::GenericParameter { .. }
+            | Type::GenericAliasApplication { .. } => return None,
             };
         }
 

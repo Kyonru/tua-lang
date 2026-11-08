@@ -159,7 +159,11 @@ fn inline_aliases(ty: &Type, environment: &TypeEnvironment, visiting: &mut Vec<S
             inline_aliases(key, environment, visiting),
             inline_aliases(value, environment, visiting),
         ),
-        Type::Primitive(_) | Type::Any | Type::StringLiteral(_) => ty.clone(),
+        Type::Primitive(_)
+        | Type::Any
+        | Type::StringLiteral(_)
+        | Type::GenericParameter { .. }
+        | Type::GenericAliasApplication { .. } => ty.clone(),
     }
 }
 

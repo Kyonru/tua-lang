@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -15,9 +15,8 @@ use crate::classes::nominal_class_identity;
 use crate::deprecation::Deprecation;
 use crate::module_index::required_module_export_type_for_fields;
 use crate::narrowing::{
-    directly_assigned_name, extend_with_return_guards, forget_return_guards,
+    ReturnGuard, directly_assigned_name, extend_with_return_guards, forget_return_guards,
     narrowed_locals_after_false_condition, narrowed_locals_for_condition, return_guards_for_names,
-    ReturnGuard,
 };
 use crate::parser::{
     FunctionAnnotation as ParsedFunctionAnnotation, FunctionTypeParameter, LuaDocAnnotation,
@@ -26,22 +25,28 @@ use crate::parser::{
 };
 use crate::semantic_domains::{BuiltinDomain, BuiltinDomainRegistry};
 use crate::source_text::function_name_table_field;
-use crate::{asset, lua, Diagnostic, DiagnosticCode};
+use crate::{Diagnostic, DiagnosticCode, asset, lua};
 
-use super::model::{FunctionType, MetatableFacts, TableField, Type, TypeAlias};
+use super::model::{
+    FunctionType, GenericAliasDefinition, GenericAliasReference, MetatableFacts, TableField, Type,
+    TypeAlias,
+};
 use super::{
-    deduplicate_inferred_types, function_type_from_tua_signature, has_leading_lua_doc_type,
-    widen_inferred_type, FunctionParameter, TypeContext,
+    FunctionParameter, TypeContext, deduplicate_inferred_types, function_type_from_tua_signature,
+    has_leading_lua_doc_type, widen_inferred_type,
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TypeEnvironment {
     path: PathBuf,
     aliases: Arc<BTreeMap<String, Type>>,
+    generic_aliases: Arc<HashMap<crate::parser::TypeAliasId, GenericAliasDefinition>>,
+    generic_alias_bindings: Arc<HashMap<(PathBuf, String), crate::parser::TypeAliasId>>,
     alias_docs: BTreeMap<String, String>,
     class_names: BTreeSet<String>,
     class_parents: BTreeMap<String, String>,
     class_protocols: BTreeMap<String, Vec<String>>,
+    protocol_names: BTreeSet<String>,
     locals: Arc<BTreeMap<String, Type>>,
     local_docs: BTreeMap<String, String>,
     local_contracts: LocalContracts,
@@ -175,12 +180,191 @@ impl TypeEnvironment {
         self.aliases.iter().map(|(name, ty)| (name.as_str(), ty))
     }
 
+    pub(crate) fn generic_alias_definitions(
+        &self,
+    ) -> impl Iterator<Item = &GenericAliasDefinition> {
+        self.generic_aliases.values()
+    }
+
+    pub(crate) fn generic_alias_diagnostics(&self, parsed: &ParsedSource) -> Vec<Diagnostic> {
+        let mut diagnostics = Vec::new();
+        let mut emitted = BTreeSet::new();
+
+        for annotation in &parsed.local_annotations {
+            let Some(ty) = self.local(&annotation.name) else {
+                continue;
+            };
+            validate_generic_alias_type(
+                self,
+                ty,
+                annotation.type_span.or(annotation.span),
+                parsed,
+                &mut diagnostics,
+                &mut emitted,
+            );
+        }
+        for alias in &parsed.type_aliases {
+            if alias.generic_parameters.is_empty() {
+                if let Some(ty) = self.alias(&alias.name) {
+                    validate_generic_alias_type(
+                        self,
+                        ty,
+                        alias.span,
+                        parsed,
+                        &mut diagnostics,
+                        &mut emitted,
+                    );
+                }
+            }
+            if let Some(definition) = self.generic_aliases.get(&alias.id) {
+                validate_generic_alias_type(
+                    self,
+                    &definition.body,
+                    alias.span,
+                    parsed,
+                    &mut diagnostics,
+                    &mut emitted,
+                );
+            }
+        }
+        for class in &parsed.class_declarations {
+            for field in &class.fields {
+                let ty = super::type_from_tua_type(&field.parsed_ty);
+                validate_generic_alias_type(
+                    self,
+                    &ty,
+                    Some(field.span),
+                    parsed,
+                    &mut diagnostics,
+                    &mut emitted,
+                );
+            }
+            for method in class.init.iter().chain(class.methods.iter()) {
+                let signature = super::type_from_tua_type(&crate::parser::parse_tua_type_text(&format!(
+                    "({}) -> {}",
+                    method.parameters,
+                    method.return_type.as_deref().unwrap_or("any")
+                )));
+                validate_generic_alias_type(
+                    self,
+                    &signature,
+                    Some(method.span),
+                    parsed,
+                    &mut diagnostics,
+                    &mut emitted,
+                );
+            }
+        }
+        for protocol in &parsed.protocol_declarations {
+            for method in &protocol.methods {
+                let signature = super::type_from_tua_type(&crate::parser::parse_tua_type_text(&format!(
+                    "({}) -> {}",
+                    method.parameters, method.return_type
+                )));
+                validate_generic_alias_type(
+                    self,
+                    &signature,
+                    Some(method.span),
+                    parsed,
+                    &mut diagnostics,
+                    &mut emitted,
+                );
+            }
+        }
+        for annotation in &parsed.function_annotations {
+            let Some(name) = annotation.name.as_deref() else {
+                continue;
+            };
+            let Some(function) = self.function(name) else {
+                continue;
+            };
+            for parameter in &function.parameters {
+                validate_generic_alias_type(
+                    self,
+                    &parameter.ty,
+                    annotation.span,
+                    parsed,
+                    &mut diagnostics,
+                    &mut emitted,
+                );
+            }
+            for ty in &function.return_types {
+                validate_generic_alias_type(
+                    self,
+                    ty,
+                    annotation.span,
+                    parsed,
+                    &mut diagnostics,
+                    &mut emitted,
+                );
+            }
+        }
+        for annotation in &parsed.lua_doc_annotations {
+            let mut check = |ty: &TuaType, span: SourceSpan| {
+                let ty = super::type_from_tua_type(ty);
+                validate_generic_alias_type(
+                    self,
+                    &ty,
+                    Some(span),
+                    parsed,
+                    &mut diagnostics,
+                    &mut emitted,
+                );
+            };
+            match &annotation.kind {
+                LuaDocAnnotationKind::Alias(alias) => check(&alias.ty, alias.type_span),
+                LuaDocAnnotationKind::Field(field) => check(&field.ty, field.type_span),
+                LuaDocAnnotationKind::Type(ty) => check(&ty.ty, ty.type_span),
+                LuaDocAnnotationKind::Param(parameter) => {
+                    check(&parameter.ty, parameter.type_span)
+                }
+                LuaDocAnnotationKind::Return(returns) => {
+                    for result in &returns.returns {
+                        check(&result.ty, result.type_span);
+                    }
+                }
+                LuaDocAnnotationKind::As(annotation) => {
+                    check(&annotation.ty, annotation.type_span)
+                }
+                LuaDocAnnotationKind::Overload(overload) => {
+                    check(&overload.ty, overload.type_span)
+                }
+                LuaDocAnnotationKind::Vararg(vararg) => {
+                    check(&vararg.ty, vararg.type_span)
+                }
+                _ => {}
+            }
+        }
+
+        diagnostics
+    }
+
+    pub(crate) fn with_generic_alias_bindings(
+        mut self,
+        bindings: impl IntoIterator<Item = (PathBuf, String, GenericAliasDefinition)>,
+    ) -> Self {
+        let aliases = Arc::make_mut(&mut self.generic_aliases);
+        let names = Arc::make_mut(&mut self.generic_alias_bindings);
+        for (source_module, local_name, definition) in bindings {
+            names.insert(
+                (crate::vfs::normalize_path(source_module), local_name),
+                definition.id.clone(),
+            );
+            aliases.insert(definition.id.clone(), definition);
+        }
+        self
+    }
+
     /// Resolves aliases throughout a type while keeping recursive LuaCATS
     /// declarations finite. A repeated alias on the current expansion path is
     /// the recursive back-edge: native classes retain a nominal reference,
     /// while structural LuaCATS back-edges become `any`. Outer structure remains
     /// available to semantic and editor features.
     pub(crate) fn resolve_aliases(&self, ty: &Type) -> Type {
+        if type_contains_generic_alias_application(ty, 0) {
+            let mut context = GenericAliasExpansionContext::default();
+            return context.resolve(self, ty);
+        }
         if let Some(resolved) = resolve_nominal_reference(&self.aliases, ty) {
             return resolved;
         }
@@ -372,6 +556,19 @@ impl TypeEnvironment {
                 context.with_alias(TypeAlias::new(name.clone(), ty.clone()))
             });
 
+        for definition in self.generic_aliases.values() {
+            context.insert_generic_alias(definition.clone());
+        }
+        for ((source_module, local_name), id) in self.generic_alias_bindings.iter() {
+            if let Some(definition) = self.generic_aliases.get(id) {
+                context.insert_generic_alias_binding(
+                    source_module.clone(),
+                    local_name.clone(),
+                    definition.clone(),
+                );
+            }
+        }
+
         for &(type_name, supertype) in lua::love_type_supertypes() {
             context.insert_nominal_supertype(type_name, supertype);
         }
@@ -381,8 +578,11 @@ impl TypeEnvironment {
         }
         for protocols in self.class_protocols.values() {
             for protocol in protocols {
-                context.insert_nominal_alias(protocol);
+                context.insert_nominal_protocol(protocol);
             }
+        }
+        for protocol in &self.protocol_names {
+            context.insert_nominal_protocol(protocol);
         }
 
         // `Vec2` is a runtime BrineVector value, not merely any table with x
@@ -465,6 +665,14 @@ impl TypeEnvironment {
         self
     }
 
+    pub(crate) fn with_protocol_names(
+        mut self,
+        protocols: impl IntoIterator<Item = String>,
+    ) -> Self {
+        self.protocol_names.extend(protocols);
+        self
+    }
+
     pub(crate) fn with_deprecated_accesses(
         mut self,
         accesses: impl IntoIterator<Item = (Vec<String>, Deprecation)>,
@@ -519,6 +727,322 @@ impl TypeEnvironment {
 }
 
 const MAX_ALIAS_RESOLUTION_DEPTH: usize = 64;
+// Expansion is recursive; keep this well below the parser's structural
+// limits so pathological changing-argument recursion cannot exhaust the Rust
+// thread stack before the work budget stops it.
+const MAX_GENERIC_ALIAS_EXPANSION_WORK: usize = 4096;
+const MAX_GENERIC_ALIAS_INSTANTIATION_DEPTH: usize = 128;
+
+#[derive(Default)]
+struct GenericAliasExpansionContext {
+    work: usize,
+    active: Vec<(crate::parser::TypeAliasId, Vec<Type>)>,
+    aliases: AliasResolutionContext,
+}
+
+impl GenericAliasExpansionContext {
+    fn resolve(&mut self, environment: &TypeEnvironment, ty: &Type) -> Type {
+        if self.work >= MAX_GENERIC_ALIAS_EXPANSION_WORK {
+            return ty.clone();
+        }
+        self.work += 1;
+        match ty {
+            Type::GenericAliasApplication {
+                reference,
+                arguments,
+                span,
+            } => {
+                let arguments = arguments
+                    .iter()
+                    .map(|argument| self.resolve(environment, argument))
+                    .collect::<Vec<_>>();
+                let definition = match reference {
+                    GenericAliasReference::Declaration(id) => {
+                        environment.generic_aliases.get(id)
+                    }
+                    GenericAliasReference::Imported {
+                        source_module,
+                        name,
+                        ..
+                    } => environment
+                        .generic_alias_bindings
+                        .get(&(crate::vfs::normalize_path(source_module), name.clone()))
+                        .and_then(|id| environment.generic_aliases.get(id))
+                        .or_else(|| {
+                            environment.generic_aliases.values().find(|definition| {
+                                definition.id.module == *source_module
+                                    && definition.id.name == *name
+                            })
+                        }),
+                };
+                let Some(definition) = definition else {
+                    return Type::GenericAliasApplication {
+                        reference: reference.clone(),
+                        arguments,
+                        span: *span,
+                    };
+                };
+                if definition.parameters.len() != arguments.len() {
+                    return Type::GenericAliasApplication {
+                        reference: reference.clone(),
+                        arguments,
+                        span: *span,
+                    };
+                }
+
+                if self.active.len() >= MAX_GENERIC_ALIAS_INSTANTIATION_DEPTH {
+                    return Type::GenericAliasApplication {
+                        reference: GenericAliasReference::Declaration(definition.id.clone()),
+                        arguments,
+                        span: *span,
+                    };
+                }
+
+                let key = (definition.id.clone(), arguments.clone());
+                if self.active.contains(&key) {
+                    // A recursive alias at the same instantiation has reached
+                    // its fixed point. Retain its named edge within the outer
+                    // structure so hover/completion stay finite and useful.
+                    return Type::GenericAliasApplication {
+                        reference: GenericAliasReference::Declaration(definition.id.clone()),
+                        arguments,
+                        span: *span,
+                    };
+                }
+
+                let substitutions = definition
+                    .parameters
+                    .iter()
+                    .cloned()
+                    .zip(arguments)
+                    .collect::<HashMap<_, _>>();
+                let substituted = substitute_type_parameters(&definition.body, &substitutions);
+                self.active.push(key);
+                let resolved = self.resolve(environment, &substituted);
+                self.active.pop();
+                resolved
+            }
+            Type::Alias(name) => {
+                let Some(alias) = environment.alias(name) else {
+                    return ty.clone();
+                };
+                self.aliases.resolve(environment, alias)
+            }
+            Type::Union(types) => Type::union(
+                types
+                    .iter()
+                    .map(|ty| self.resolve(environment, ty)),
+            ),
+            Type::Function(function) => {
+                let parameters = function
+                    .parameters
+                    .iter()
+                    .map(|parameter| FunctionParameter {
+                        name: parameter.name.clone(),
+                        ty: self.resolve(environment, &parameter.ty),
+                    })
+                    .collect::<Vec<_>>();
+                let vararg_type = function
+                    .vararg_type
+                    .as_deref()
+                    .map(|ty| self.resolve(environment, ty));
+                let returns = function
+                    .return_types_or_any()
+                    .iter()
+                    .map(|ty| self.resolve(environment, ty))
+                    .collect::<Vec<_>>();
+                let guarded = function.guarded_return_types.as_ref().map(|types| {
+                    types.iter().map(|ty| self.resolve(environment, ty)).collect()
+                });
+                let overloads: Vec<FunctionType> = function
+                    .overloads
+                    .iter()
+                    .map(|overload| {
+                        let Type::Function(overload) = self.resolve(
+                            environment,
+                            &Type::Function(overload.clone()),
+                        ) else {
+                            unreachable!()
+                        };
+                        overload
+                    })
+                    .collect();
+                Type::Function(
+                    FunctionType::new_signature(
+                        parameters,
+                        function.required_parameter_count,
+                        vararg_type,
+                        returns,
+                    )
+                    .with_guarded_return_types(guarded)
+                    .with_overloads(overloads),
+                )
+            }
+            Type::Table(table) => {
+                let mut resolved = super::TableShape::from_fields(table.fields().map(|(name, field)| {
+                    (
+                        name.to_owned(),
+                        TableField {
+                            ty: self.resolve(environment, &field.ty),
+                            optional: field.optional,
+                        },
+                    )
+                }));
+                resolved.copy_semantic_metadata_from(table);
+                Type::Table(resolved)
+            }
+            Type::Array(item) => Type::array(self.resolve(environment, item)),
+            Type::Tuple(items) => Type::tuple(
+                items
+                    .iter()
+                    .map(|ty| self.resolve(environment, ty)),
+            ),
+            Type::Dictionary { key, value } => Type::dictionary(
+                self.resolve(environment, key),
+                self.resolve(environment, value),
+            ),
+            Type::GenericParameter { .. }
+            | Type::Primitive(_)
+            | Type::Any
+            | Type::StringLiteral(_) => ty.clone(),
+        }
+    }
+}
+
+fn type_contains_generic_alias_application(ty: &Type, depth: usize) -> bool {
+    if depth >= MAX_ALIAS_RESOLUTION_DEPTH {
+        return false;
+    }
+    match ty {
+        Type::GenericAliasApplication { .. } => true,
+        Type::Union(types) | Type::Tuple(types) => types
+            .iter()
+            .any(|ty| type_contains_generic_alias_application(ty, depth + 1)),
+        Type::Function(function) => {
+            function
+                .parameters
+                .iter()
+                .any(|parameter| type_contains_generic_alias_application(&parameter.ty, depth + 1))
+                || function
+                    .vararg_type
+                    .as_deref()
+                    .is_some_and(|ty| type_contains_generic_alias_application(ty, depth + 1))
+                || function
+                    .return_types_or_any()
+                    .iter()
+                    .any(|ty| type_contains_generic_alias_application(ty, depth + 1))
+        }
+        Type::Table(table) => table
+            .fields()
+            .any(|(_, field)| type_contains_generic_alias_application(&field.ty, depth + 1)),
+        Type::Array(item) => type_contains_generic_alias_application(item, depth + 1),
+        Type::Dictionary { key, value } => {
+            type_contains_generic_alias_application(key, depth + 1)
+                || type_contains_generic_alias_application(value, depth + 1)
+        }
+        Type::Alias(_)
+        | Type::GenericParameter { .. }
+        | Type::Primitive(_)
+        | Type::Any
+        | Type::StringLiteral(_) => false,
+    }
+}
+
+pub(crate) fn substitute_type_parameters(
+    ty: &Type,
+    substitutions: &HashMap<crate::parser::TypeParameterId, Type>,
+) -> Type {
+    match ty {
+        Type::GenericParameter { id, .. } => substitutions
+            .get(id)
+            .cloned()
+            .unwrap_or_else(|| ty.clone()),
+        Type::Union(types) => Type::union(
+            types
+                .iter()
+                .map(|ty| substitute_type_parameters(ty, substitutions)),
+        ),
+        Type::Function(function) => {
+            let parameters = function.parameters.iter().map(|parameter| FunctionParameter {
+                name: parameter.name.clone(),
+                ty: substitute_type_parameters(&parameter.ty, substitutions),
+            });
+            let vararg = function
+                .vararg_type
+                .as_deref()
+                .map(|ty| substitute_type_parameters(ty, substitutions));
+            let returns = function
+                .return_types_or_any()
+                .iter()
+                .map(|ty| substitute_type_parameters(ty, substitutions));
+            let mut result = FunctionType::new_signature(
+                parameters,
+                function.required_parameter_count,
+                vararg,
+                returns,
+            );
+            result.guarded_return_types = function.guarded_return_types.as_ref().map(|types| {
+                types
+                    .iter()
+                    .map(|ty| substitute_type_parameters(ty, substitutions))
+                    .collect()
+            });
+            result.overloads = function
+                .overloads
+                .iter()
+                .map(|overload| {
+                    let Type::Function(overload) = substitute_type_parameters(
+                        &Type::Function(overload.clone()),
+                        substitutions,
+                    ) else {
+                        unreachable!()
+                    };
+                    overload
+                })
+                .collect();
+            Type::Function(result)
+        }
+        Type::Table(table) => {
+            let mut result = super::TableShape::from_fields(table.fields().map(|(name, field)| {
+                (
+                    name.to_owned(),
+                    TableField {
+                        ty: substitute_type_parameters(&field.ty, substitutions),
+                        optional: field.optional,
+                    },
+                )
+            }));
+            result.copy_semantic_metadata_from(table);
+            Type::Table(result)
+        }
+        Type::Array(item) => Type::array(substitute_type_parameters(item, substitutions)),
+        Type::Tuple(items) => Type::tuple(
+            items
+                .iter()
+                .map(|ty| substitute_type_parameters(ty, substitutions)),
+        ),
+        Type::Dictionary { key, value } => Type::dictionary(
+            substitute_type_parameters(key, substitutions),
+            substitute_type_parameters(value, substitutions),
+        ),
+        Type::GenericAliasApplication {
+            reference,
+            arguments,
+            span,
+        } => Type::GenericAliasApplication {
+            reference: reference.clone(),
+            arguments: arguments
+                .iter()
+                .map(|ty| substitute_type_parameters(ty, substitutions))
+                .collect(),
+            span: *span,
+        },
+        Type::Alias(_)
+        | Type::Primitive(_)
+        | Type::Any
+        | Type::StringLiteral(_) => ty.clone(),
+    }
+}
 
 fn resolve_shallow_alias_chain(
     environment: &TypeEnvironment,
@@ -592,7 +1116,11 @@ fn type_contains_alias_cycle(
             type_contains_alias_cycle(environment, key, depth + 1, visiting)
                 || type_contains_alias_cycle(environment, value, depth + 1, visiting)
         }
-        Type::Primitive(_) | Type::Any | Type::StringLiteral(_) => false,
+        Type::Primitive(_)
+        | Type::Any
+        | Type::StringLiteral(_)
+        | Type::GenericParameter { .. }
+        | Type::GenericAliasApplication { .. } => false,
     }
 }
 
@@ -696,7 +1224,11 @@ impl AliasResolutionContext {
                 self.resolve(environment, key),
                 self.resolve(environment, value),
             ),
-            Type::Primitive(_) | Type::Any | Type::StringLiteral(_) => ty.clone(),
+            Type::Primitive(_)
+        | Type::Any
+        | Type::StringLiteral(_)
+        | Type::GenericParameter { .. }
+        | Type::GenericAliasApplication { .. } => ty.clone(),
         };
         self.depth -= 1;
         resolved
@@ -847,6 +1379,8 @@ pub(crate) fn build_type_environment_with_domain_registry(
         .chain(builtin_aliases.iter().map(|(name, _)| name.clone()))
         .collect::<BTreeSet<_>>();
     let mut aliases = BTreeMap::new();
+    let mut generic_aliases = HashMap::new();
+    let mut generic_alias_bindings = HashMap::new();
     let mut alias_docs = BTreeMap::new();
     let mut locals = BTreeMap::new();
     let mut local_docs = BTreeMap::new();
@@ -858,7 +1392,44 @@ pub(crate) fn build_type_environment_with_domain_registry(
         .collect::<BTreeSet<_>>();
 
     for alias in &parsed.type_aliases {
+        if alias.generic_parameters.is_empty() {
+            continue;
+        }
+        let context = TypeResolutionContext::with_self_type(Type::alias(alias.name.clone()));
+        let body = resolve_tua_type_with_context(
+            &parsed.path,
+            &alias.ty,
+            alias.span,
+            &alias_names,
+            &mut diagnostics,
+            &context,
+        );
+        generic_aliases.insert(
+            alias.id.clone(),
+            GenericAliasDefinition {
+                id: alias.id.clone(),
+                parameters: alias
+                    .generic_parameters
+                    .iter()
+                    .map(|parameter| parameter.id.clone())
+                    .collect(),
+                body: Box::new(body),
+            },
+        );
+        generic_alias_bindings.insert(
+            (crate::vfs::normalize_path(&parsed.path), alias.name.clone()),
+            alias.id.clone(),
+        );
+    }
+
+    for alias in &parsed.type_aliases {
         if aliases.contains_key(&alias.name) {
+            continue;
+        }
+        if !alias.generic_parameters.is_empty() {
+            // Generic alias declarations are stored as bound syntax and are
+            // instantiated from type positions; resolving their body as a
+            // monomorphic alias would make its parameters appear unbound.
             continue;
         }
 
@@ -1107,10 +1678,11 @@ pub(crate) fn build_type_environment_with_domain_registry(
         Arc::new(locals)
     };
 
-    (
-        TypeEnvironment {
+    let environment = TypeEnvironment {
             path: parsed.path.clone(),
             aliases,
+            generic_aliases: Arc::new(generic_aliases),
+            generic_alias_bindings: Arc::new(generic_alias_bindings),
             alias_docs,
             class_names,
             class_parents: parsed
@@ -1137,6 +1709,11 @@ pub(crate) fn build_type_environment_with_domain_registry(
                     )
                 })
                 .collect(),
+            protocol_names: parsed
+                .protocol_declarations
+                .iter()
+                .map(|protocol| protocol.name.clone())
+                .collect(),
             locals,
             local_docs,
             local_contracts,
@@ -1161,9 +1738,9 @@ pub(crate) fn build_type_environment_with_domain_registry(
             table_sort_overridden: lua::table_member_is_overridden(parsed, "sort"),
             project_module_globals: BTreeSet::new(),
             busted_globals: None,
-        },
-        diagnostics,
-    )
+        };
+    diagnostics.extend(environment.generic_alias_diagnostics(parsed));
+    (environment, diagnostics)
 }
 
 fn register_class_constructor_types(parsed: &ParsedSource, functions: &mut [TypedFunction]) {
@@ -3387,7 +3964,9 @@ fn type_is_always_truthy(ty: &Type, aliases: &BTreeMap<String, Type>, depth: usi
         | Type::Table(_)
         | Type::Array(_)
         | Type::Tuple(_)
-        | Type::Dictionary { .. } => true,
+        | Type::Dictionary { .. }
+        | Type::GenericParameter { .. }
+        | Type::GenericAliasApplication { .. } => true,
     }
 }
 
@@ -4503,7 +5082,9 @@ fn function_return_types(aliases: &BTreeMap<String, Type>, ty: &Type) -> Vec<Typ
         | Type::StringLiteral(_)
         | Type::Array(_)
         | Type::Tuple(_)
-        | Type::Dictionary { .. } => Vec::new(),
+        | Type::Dictionary { .. }
+        | Type::GenericParameter { .. }
+        | Type::GenericAliasApplication { .. } => Vec::new(),
     }
 }
 
@@ -4536,7 +5117,9 @@ fn love_object_method_return_types(
         | Type::StringLiteral(_)
         | Type::Array(_)
         | Type::Tuple(_)
-        | Type::Dictionary { .. } => Vec::new(),
+        | Type::Dictionary { .. }
+        | Type::GenericParameter { .. }
+        | Type::GenericAliasApplication { .. } => Vec::new(),
     }
 }
 
@@ -4853,7 +5436,9 @@ fn resolve_index_type_from_map(
         | Type::Alias(_)
         | Type::Function(_)
         | Type::Primitive(_)
-        | Type::StringLiteral(_) => None,
+        | Type::StringLiteral(_)
+        | Type::GenericParameter { .. }
+        | Type::GenericAliasApplication { .. } => None,
     }
 }
 
@@ -5152,6 +5737,36 @@ fn resolve_tua_type_with_context(
         TuaType::Named(name) => {
             resolve_named_type(path, name, span, alias_names, diagnostics, context)
         }
+        TuaType::Parameter { id, name } => Type::GenericParameter {
+            id: id.clone(),
+            name: name.clone(),
+        },
+        TuaType::Applied {
+            name,
+            arguments,
+            name_span,
+            span: application_span,
+        } => Type::GenericAliasApplication {
+            reference: GenericAliasReference::Imported {
+                source_module: crate::vfs::normalize_path(path),
+                name: name.clone(),
+                span: name_span.or(*application_span).or(span),
+            },
+            arguments: arguments
+                .iter()
+                .map(|argument| {
+                    resolve_tua_type_with_context(
+                        path,
+                        argument,
+                        *application_span,
+                        alias_names,
+                        diagnostics,
+                        context,
+                    )
+                })
+                .collect(),
+            span: *application_span,
+        },
         TuaType::StringLiteral(value) => Type::string_literal(value),
         TuaType::Union(types) => Type::union(types.iter().map(|ty| {
             resolve_tua_type_with_context(path, ty, span, alias_names, diagnostics, context)
@@ -5286,7 +5901,223 @@ fn type_diagnostic(
         .map(|span| span.start)
         .unwrap_or(crate::SourcePosition { line: 1, column: 1 });
 
-    Diagnostic::error(path, position.line, position.column, message).with_code(code)
+    let mut diagnostic = Diagnostic::error(path, position.line, position.column, message)
+        .with_code(code);
+    if let Some(span) = span {
+        diagnostic = diagnostic.with_range(
+            span.start.line,
+            span.start.column,
+            span.end.line,
+            span.end.column,
+        );
+    }
+    diagnostic
+}
+
+fn validate_generic_alias_type(
+    environment: &TypeEnvironment,
+    ty: &Type,
+    fallback_span: Option<SourceSpan>,
+    parsed: &ParsedSource,
+    diagnostics: &mut Vec<Diagnostic>,
+    emitted: &mut BTreeSet<(usize, usize, String)>,
+) {
+    let mut push = |span: Option<SourceSpan>, message: String, code: DiagnosticCode| {
+        let span = span.or(fallback_span);
+        let position = span
+            .map(|span| span.start)
+            .unwrap_or(crate::SourcePosition { line: 1, column: 1 });
+        if emitted.insert((position.line, position.column, message.clone())) {
+            diagnostics.push(type_diagnostic(&parsed.path, span, message, code));
+        }
+    };
+
+    match ty {
+        Type::GenericAliasApplication {
+            reference,
+            arguments,
+            span,
+        } => {
+            let definition = match reference {
+                GenericAliasReference::Declaration(id) => environment.generic_aliases.get(id),
+                GenericAliasReference::Imported {
+                    source_module,
+                    name,
+                    ..
+                } => environment
+                    .generic_alias_bindings
+                    .get(&(
+                        if source_module.as_os_str().is_empty() {
+                            crate::vfs::normalize_path(&environment.path)
+                        } else {
+                            crate::vfs::normalize_path(source_module)
+                        },
+                        name.clone(),
+                    ))
+                    .and_then(|id| environment.generic_aliases.get(id))
+                    .or_else(|| {
+                        environment.generic_aliases.values().find(|definition| {
+                            definition.id.module == *source_module
+                                && definition.id.name == *name
+                        })
+                    }),
+            };
+            if let Some(definition) = definition {
+                if definition.parameters.len() != arguments.len() {
+                    let alias_name = &definition.id.name;
+                    push(
+                        *span,
+                        format!(
+                            "generic type alias `{alias_name}` expects {} type argument(s), found {}",
+                            definition.parameters.len(),
+                            arguments.len()
+                        ),
+                        DiagnosticCode::TYPE_ARGUMENT_COUNT,
+                    );
+                }
+            } else {
+                let (name, name_span) = match reference {
+                    GenericAliasReference::Declaration(id) => (id.name.as_str(), None),
+                    GenericAliasReference::Imported { name, span, .. } => {
+                        (name.as_str(), *span)
+                    }
+                };
+                let imported_here = parsed.type_imports.iter().any(|import| {
+                    import.namespace == name
+                        || (!import.namespace.is_empty()
+                            && name.starts_with(&format!("{}.", import.namespace)))
+                        || import.bindings.iter().any(|binding| binding.local == name)
+                });
+                if let Some(alias) = environment.alias(name) {
+                    let _ = alias;
+                    push(
+                        *span,
+                        format!("type alias `{name}` does not accept type arguments"),
+                        DiagnosticCode::TYPE_ARGUMENT_COUNT,
+                    );
+                } else if !imported_here {
+                    push(
+                        name_span.or(*span),
+                        format!("unknown generic type alias `{name}`"),
+                        DiagnosticCode::TYPE_UNKNOWN_NAME,
+                    );
+                }
+            }
+            for argument in arguments {
+                validate_generic_alias_type(
+                    environment,
+                    argument,
+                    *span,
+                    parsed,
+                    diagnostics,
+                    emitted,
+                );
+            }
+        }
+        Type::Alias(name) => {
+            if let Some(id) = environment
+                .generic_alias_bindings
+                .get(&(crate::vfs::normalize_path(&environment.path), name.clone()))
+            {
+                if let Some(definition) = environment.generic_aliases.get(id) {
+                    push(
+                        fallback_span,
+                        format!(
+                            "generic type alias `{name}` expects {} type argument(s), found 0",
+                            definition.parameters.len()
+                        ),
+                        DiagnosticCode::TYPE_ARGUMENT_COUNT,
+                    );
+                }
+            }
+        }
+        Type::Union(types) | Type::Tuple(types) => {
+            for ty in types {
+                validate_generic_alias_type(
+                    environment,
+                    ty,
+                    fallback_span,
+                    parsed,
+                    diagnostics,
+                    emitted,
+                );
+            }
+        }
+        Type::Function(function) => {
+            for parameter in &function.parameters {
+                validate_generic_alias_type(
+                    environment,
+                    &parameter.ty,
+                    fallback_span,
+                    parsed,
+                    diagnostics,
+                    emitted,
+                );
+            }
+            if let Some(vararg) = function.vararg_type.as_deref() {
+                validate_generic_alias_type(
+                    environment,
+                    vararg,
+                    fallback_span,
+                    parsed,
+                    diagnostics,
+                    emitted,
+                );
+            }
+            for return_type in function.return_types_or_any() {
+                validate_generic_alias_type(
+                    environment,
+                    return_type,
+                    fallback_span,
+                    parsed,
+                    diagnostics,
+                    emitted,
+                );
+            }
+        }
+        Type::Table(table) => {
+            for (_, field) in table.fields() {
+                validate_generic_alias_type(
+                    environment,
+                    &field.ty,
+                    fallback_span,
+                    parsed,
+                    diagnostics,
+                    emitted,
+                );
+            }
+        }
+        Type::Array(item) => validate_generic_alias_type(
+            environment,
+            item,
+            fallback_span,
+            parsed,
+            diagnostics,
+            emitted,
+        ),
+        Type::Dictionary { key, value } => {
+            validate_generic_alias_type(
+                environment,
+                key,
+                fallback_span,
+                parsed,
+                diagnostics,
+                emitted,
+            );
+            validate_generic_alias_type(
+                environment,
+                value,
+                fallback_span,
+                parsed,
+                diagnostics,
+                emitted,
+            );
+        }
+        Type::GenericParameter { .. }
+        | Type::Primitive(_)
+        | Type::Any
+        | Type::StringLiteral(_) => {}
+    }
 }
 #[cfg(test)]
 mod sharing_tests {

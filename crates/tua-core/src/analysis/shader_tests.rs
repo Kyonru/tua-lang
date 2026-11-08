@@ -345,7 +345,9 @@ fn shader_value_checks_use_project_module_return_types() {
 #[test]
 fn unsent_shader_uniform_lint_is_opt_in_and_tracks_project_sends() {
     let temp = TempProject::new("shader-unsent");
-    let fixture = Fixture::parse("-- file: main.tua\nlocal effect = shader \"effect.glsl\"\nlove.graphics.setShader(effect)\n");
+    let fixture = Fixture::parse(
+        "-- file: main.tua\nlocal effect = shader \"effect.glsl\"\nlove.graphics.setShader(effect)\n",
+    );
     let mut host = shader_host(&temp, &fixture);
     let unsent = |host: &AnalysisHost| {
         host.snapshot()
@@ -420,7 +422,9 @@ fn unsent_shader_uniform_lint_suppresses_dynamic_or_escaped_uses() {
 #[test]
 fn unsent_shader_uniform_lint_ignores_initializers_and_unread_uniforms() {
     let temp = TempProject::new("shader-unsent-initialized");
-    let fixture = Fixture::parse("-- file: main.tua\nlocal effect = shader \"effect.glsl\"\nlove.graphics.setShader(effect)\n");
+    let fixture = Fixture::parse(
+        "-- file: main.tua\nlocal effect = shader \"effect.glsl\"\nlove.graphics.setShader(effect)\n",
+    );
     let mut host = shader_host(&temp, &fixture);
     temp.write("effect.glsl", "uniform float scale = 1.0;\nextern number unread;\nvec4 effect(vec4 c, Image t, vec2 u, vec2 p) { return c * scale; }\n");
     host.refresh_asset_index_from_disk();

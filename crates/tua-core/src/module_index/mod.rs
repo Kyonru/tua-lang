@@ -9,7 +9,7 @@ use full_moon::ast::{
 use full_moon::node::Node;
 
 use crate::ast_utils::plain_field_chain_from_var;
-use crate::deprecation::{deprecated_declarations, Deprecation};
+use crate::deprecation::{Deprecation, deprecated_declarations};
 use crate::module_link::ModuleSpecifierKind;
 use crate::must_use::must_use_paths;
 use crate::parser::{LuaDocAnnotation, LuaDocAnnotationKind};
@@ -18,11 +18,11 @@ use crate::semantic::SemanticModel;
 use crate::semantic_domains::BuiltinDomainRegistry;
 use crate::source_text::function_name_table_field;
 use crate::types::{
+    FunctionParameter, FunctionType, TableField, Type, TypeEnvironment, TypedFunction,
     build_type_environment, deduplicate_inferred_types, function_type_from_tua_signature,
-    inferred_function_type_from_body, FunctionParameter, FunctionType, TableField, Type,
-    TypeEnvironment, TypedFunction,
+    inferred_function_type_from_body,
 };
-use crate::{parse_lua_source, parse_tua_source, ParsedSource, SourceSpan};
+use crate::{ParsedSource, SourceSpan, parse_lua_source, parse_tua_source};
 
 thread_local! {
     static REQUIRED_MODULE_EXPORT_CACHE: RefCell<BTreeMap<PathBuf, CachedRequiredModuleExports>> =
@@ -297,7 +297,9 @@ fn export_table_field_type(ty: &Type, field: &str) -> Option<Type> {
         | Type::StringLiteral(_)
         | Type::Array(_)
         | Type::Tuple(_)
-        | Type::Dictionary { .. } => None,
+        | Type::Dictionary { .. }
+        | Type::GenericParameter { .. }
+        | Type::GenericAliasApplication { .. } => None,
     }
 }
 
@@ -1284,7 +1286,9 @@ fn collect_table_fields(ty: &Type, fields: &mut BTreeMap<String, ModuleExportFie
         | Type::StringLiteral(_)
         | Type::Array(_)
         | Type::Tuple(_)
-        | Type::Dictionary { .. } => {}
+        | Type::Dictionary { .. }
+        | Type::GenericParameter { .. }
+        | Type::GenericAliasApplication { .. } => {}
     }
 }
 
@@ -1537,7 +1541,11 @@ fn resolve_export_aliases_inner(
             resolve_export_aliases_inner(environment, key, expand_non_class_alias, visiting),
             resolve_export_aliases_inner(environment, value, expand_non_class_alias, visiting),
         ),
-        Type::Any | Type::Primitive(_) | Type::StringLiteral(_) => ty.clone(),
+        Type::Any
+        | Type::Primitive(_)
+        | Type::StringLiteral(_)
+        | Type::GenericParameter { .. }
+        | Type::GenericAliasApplication { .. } => ty.clone(),
     }
 }
 
@@ -1677,6 +1685,8 @@ fn type_from_lua_doc_type(ty: &crate::TuaType) -> Type {
     match ty {
         crate::TuaType::Named(name) if name == "identifier" => Type::string(),
         crate::TuaType::Named(name) => Type::named(name),
+        crate::TuaType::Parameter { name, .. } => Type::named(name),
+        crate::TuaType::Applied { name, .. } => Type::named(name),
         crate::TuaType::StringLiteral(value) => Type::string_literal(value),
         crate::TuaType::Union(types) => Type::union(types.iter().map(type_from_lua_doc_type)),
         crate::TuaType::Table(fields) => Type::table(fields.iter().map(|field| {

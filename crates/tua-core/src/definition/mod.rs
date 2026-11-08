@@ -409,7 +409,9 @@ impl<'a> DefinitionResolver<'a> {
             | Type::StringLiteral(_)
             | Type::Array(_)
             | Type::Tuple(_)
-            | Type::Dictionary { .. } => None,
+            | Type::Dictionary { .. }
+        | Type::GenericParameter { .. }
+        | Type::GenericAliasApplication { .. } => None,
         }
     }
 
@@ -978,7 +980,9 @@ impl<'a> ModuleDefinitionIndex<'a> {
             | Type::StringLiteral(_)
             | Type::Array(_)
             | Type::Tuple(_)
-            | Type::Dictionary { .. } => None,
+            | Type::Dictionary { .. }
+        | Type::GenericParameter { .. }
+        | Type::GenericAliasApplication { .. } => None,
         }
     }
 }

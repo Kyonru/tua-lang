@@ -2642,7 +2642,9 @@ pub(crate) fn resolve_index_type(
         | Type::Alias(_)
         | Type::Function(_)
         | Type::Primitive(_)
-        | Type::StringLiteral(_) => None,
+        | Type::StringLiteral(_)
+        | Type::GenericParameter { .. }
+        | Type::GenericAliasApplication { .. } => None,
     }
 }
 
@@ -2679,7 +2681,9 @@ fn array_element_type(environment: &TypeEnvironment, ty: &Type) -> Option<Type> 
         | Type::Function(_)
         | Type::Primitive(_)
         | Type::StringLiteral(_)
-        | Type::Table(_) => None,
+        | Type::Table(_)
+        | Type::GenericParameter { .. }
+        | Type::GenericAliasApplication { .. } => None,
     }
 }
 
@@ -2719,7 +2723,9 @@ fn pair_key_value_types(environment: &TypeEnvironment, ty: &Type) -> Option<(Typ
         | Type::Alias(_)
         | Type::Function(_)
         | Type::Primitive(_)
-        | Type::StringLiteral(_) => None,
+        | Type::StringLiteral(_)
+        | Type::GenericParameter { .. }
+        | Type::GenericAliasApplication { .. } => None,
     }
 }
 
@@ -2753,7 +2759,9 @@ fn iterator_metamethod_pair_types(
         | Type::Function(_)
         | Type::Primitive(_)
         | Type::StringLiteral(_)
-        | Type::Tuple(_) => None,
+        | Type::Tuple(_)
+        | Type::GenericParameter { .. }
+        | Type::GenericAliasApplication { .. } => None,
     }
 }
 
@@ -3343,7 +3351,9 @@ fn lua_type_field_item(environment: &TypeEnvironment, ty: &Type, field: &str) ->
         | Type::StringLiteral(_)
         | Type::Array(_)
         | Type::Tuple(_)
-        | Type::Dictionary { .. } => None,
+        | Type::Dictionary { .. }
+        | Type::GenericParameter { .. }
+        | Type::GenericAliasApplication { .. } => None,
     }
 }
 
@@ -3768,7 +3778,9 @@ fn call_metamethod_function(environment: &TypeEnvironment, ty: &Type) -> Option<
         | Type::StringLiteral(_)
         | Type::Array(_)
         | Type::Tuple(_)
-        | Type::Dictionary { .. } => None,
+        | Type::Dictionary { .. }
+        | Type::GenericParameter { .. }
+        | Type::GenericAliasApplication { .. } => None,
     }
 }
 

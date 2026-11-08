@@ -1,6 +1,6 @@
 use super::*;
-use crate::types::build_type_environment_with_domain_registry;
 use crate::DiagnosticCode;
+use crate::types::build_type_environment_with_domain_registry;
 
 impl AnalysisQueryCache {
     pub(super) fn cached_file(
@@ -631,6 +631,15 @@ pub(super) fn referenced_type_names(parsed: &ParsedSource) -> BTreeSet<String> {
             TuaType::Named(name) => {
                 names.insert(name.trim().to_owned());
             }
+            TuaType::Applied {
+                name, arguments, ..
+            } => {
+                names.insert(name.trim().to_owned());
+                for argument in arguments {
+                    collect(argument, names);
+                }
+            }
+            TuaType::Parameter { .. } => {}
             TuaType::StringLiteral(_) => {}
             TuaType::Union(types) | TuaType::Tuple(types) => {
                 for ty in types {
@@ -717,6 +726,20 @@ fn collect_runtime_type_names(ty: &Type, names: &mut BTreeSet<String>) {
         Type::Alias(name) => {
             names.insert(name.clone());
         }
+        Type::GenericAliasApplication { reference, arguments, .. } => {
+            match reference {
+                crate::types::GenericAliasReference::Declaration(identity) => {
+                    names.insert(identity.name.clone());
+                }
+                crate::types::GenericAliasReference::Imported { name, .. } => {
+                    names.insert(name.clone());
+                }
+            }
+            for argument in arguments {
+                collect_runtime_type_names(argument, names);
+            }
+        }
+        Type::GenericParameter { .. } => {}
         Type::Union(types) | Type::Tuple(types) => {
             for ty in types {
                 collect_runtime_type_names(ty, names);
@@ -954,5 +977,16 @@ pub(super) fn project_imported_alias_types(
                 .resolve_type_name(module_graph, &parsed.path, &name)
                 .map(|binding| (name, binding.ty))
         })
+        .collect()
+}
+
+pub(super) fn project_imported_protocol_names(
+    parsed: &ParsedSource,
+    module_graph: &ModuleGraph,
+    type_database: &ProjectTypeDatabase,
+) -> BTreeSet<String> {
+    referenced_type_names(parsed)
+        .into_iter()
+        .filter(|name| type_database.is_protocol_type(module_graph, &parsed.path, name))
         .collect()
 }

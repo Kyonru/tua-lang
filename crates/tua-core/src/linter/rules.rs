@@ -12,7 +12,7 @@ use full_moon::tokenizer::{TokenReference, TokenType};
 use full_moon::visitors::Visitor;
 use std::collections::{BTreeMap, BTreeSet};
 
-use super::{duplicate_local_diagnostic, DuplicateLocalKind, DuplicateLocalOrigin};
+use super::{DuplicateLocalKind, DuplicateLocalOrigin, duplicate_local_diagnostic};
 use crate::ast_utils::field_chain_before_first_call;
 use crate::control_flow::{block_fallthrough_position, call_is_terminating_builtin};
 use crate::scope::{ScopeGlobalKind, ScopeMap, ScopeResolution};
@@ -1366,6 +1366,7 @@ fn table_indexer_issue(
 ) -> Option<TableIndexerIssue> {
     match environment.resolve_aliases(ty) {
         Type::Any | Type::Union(_) => None,
+        Type::GenericParameter { .. } | Type::GenericAliasApplication { .. } => None,
         Type::Array(_) | Type::Tuple(_) => None,
         Type::Dictionary { key, .. } => match dictionary_key_kind(environment, &key) {
             DictionaryKeyKind::Number | DictionaryKeyKind::Unknown => None,
@@ -1396,6 +1397,9 @@ fn dictionary_key_kind(environment: &TypeEnvironment, ty: &Type) -> DictionaryKe
             DictionaryKeyKind::String
         }
         Type::Any | Type::Alias(_) => DictionaryKeyKind::Unknown,
+        Type::GenericParameter { .. } | Type::GenericAliasApplication { .. } => {
+            DictionaryKeyKind::Unknown
+        }
         Type::Union(types) => {
             let mut kinds = types.iter().map(|ty| dictionary_key_kind(environment, ty));
             let Some(first) = kinds.next() else {

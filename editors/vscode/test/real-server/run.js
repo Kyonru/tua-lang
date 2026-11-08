@@ -111,6 +111,8 @@ function createProject(workspacePath) {
   fs.writeFileSync(
     contractsPath,
     [
+      "export type Box<T> = { value: T }",
+      "",
       "export protocol Updatable {",
       "  --- advances the actor by one frame",
       "  update(dt: number): nil",
@@ -121,7 +123,7 @@ function createProject(workspacePath) {
   fs.writeFileSync(
     actorsPath,
     [
-      'import type { Updatable } from "./contracts"',
+      'import type { Box, Updatable } from "./contracts"',
       "final class Particle implements Updatable {",
       "  update(dt: number): nil {}",
       "}",
@@ -143,6 +145,8 @@ function createProject(workspacePath) {
       "local uppercase_name = string.upper(player.name)",
       "local greeting = helper.greet(player.name)",
       "local screen_width = love.graphics.getWidth()",
+      "local score: Box<number> = { value = 4 }",
+      "local score_value = score.value",
       "",
       "local function tick(value: Updatable, dt: number)",
       "  value:update(dt)",

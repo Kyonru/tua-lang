@@ -26,8 +26,37 @@ async function run() {
       "love.graphics.",
       "getWidth",
     ),
+    genericAlias: await expectCompletion(document, "score.value", "score.", "value"),
     protocol: await expectCompletion(document, "value:update(dt)", "value:up", "update"),
   };
+
+  const genericFieldPosition = positionAfter(document, "score.value", "score.");
+  const genericFieldHover = await retry(
+    () =>
+      vscode.commands.executeCommand(
+        "vscode.executeHoverProvider",
+        document.uri,
+        genericFieldPosition,
+      ),
+    (result) => hoverText(result).includes("number"),
+    "generic alias instantiated field hover",
+  );
+  assert.match(hoverText(genericFieldHover), /number/);
+
+  const genericTypePosition = positionAfter(document, "Box<number>", "Box");
+  const genericDefinitions = await retry(
+    () =>
+      vscode.commands.executeCommand(
+        "vscode.executeDefinitionProvider",
+        document.uri,
+        genericTypePosition,
+      ),
+    (result) =>
+      Array.isArray(result) &&
+      result.some((location) => location.uri.fsPath === fixtures.contractsPath),
+    "imported generic alias definition",
+  );
+  assert(genericDefinitions.some((location) => location.uri.fsPath === fixtures.contractsPath));
 
   const protocolPosition = positionAfter(document, "value:update(dt)", "value:");
   const protocolHover = await retry(
@@ -141,6 +170,10 @@ async function run() {
       protocolHover: "documented update(dt: number)",
       formattingEdits: formatting.length,
       hover: "Player",
+      genericAliasHover: "Box<number>.value: number",
+      genericAliasDefinition: genericDefinitions.some(
+        (location) => location.uri.fsPath === fixtures.contractsPath,
+      ),
       inlayHints: hints.length,
       references: references.length,
       server: path.basename(process.env.TUA_REAL_SERVER_PATH),

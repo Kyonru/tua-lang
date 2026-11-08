@@ -791,11 +791,15 @@ impl<'a> Checker<'a> {
         let Expression::TableConstructor(table) = expression else {
             return false;
         };
-        let resolved = self.environment.resolve_aliases(target);
-        let Type::Array(item_type) = resolved else {
-            return false;
+        let item_type = match target {
+            Type::Array(item_type) => item_type.as_ref().clone(),
+            _ => {
+                let Type::Array(item_type) = self.environment.resolve_aliases(target) else {
+                    return false;
+                };
+                *item_type
+            }
         };
-        let item_type = self.environment.resolve_aliases(&item_type);
 
         for field in table.fields() {
             let value = match field {
@@ -1222,6 +1226,12 @@ impl<'a> Checker<'a> {
     ) {
         if let Expression::TableConstructor(table) = expression {
             self.check_table_callback_contexts(table, target);
+            // A literal can be checked item-by-item against a protocol array
+            // contract. This preserves heterogeneous conforming literals while
+            // keeping an existing mutable class array invariant at assignment.
+            if self.check_large_table_against_contract(expression, target) {
+                return;
+            }
         }
         if self.check_contextual_function(expression, target, root, true) {
             return;
@@ -4392,6 +4402,9 @@ fn types_can_overlap(left: &Type, right: &Type) -> bool {
         (Type::Tuple(left), Type::Tuple(right)) => left.len() == right.len(),
         (Type::Dictionary { .. }, Type::Dictionary { .. }) => true,
         (Type::Alias(_), _) | (_, Type::Alias(_)) => true,
+        (Type::GenericParameter { id: left, .. }, Type::GenericParameter { id: right, .. }) => {
+            left == right
+        }
         (
             Type::Primitive(_)
             | Type::Function(_)
@@ -4408,6 +4421,7 @@ fn types_can_overlap(left: &Type, right: &Type) -> bool {
             | Type::Tuple(_)
             | Type::Dictionary { .. },
         ) => false,
+        _ => false,
     }
 }
 
@@ -4462,7 +4476,9 @@ fn lua_type_field_item(
         | Type::StringLiteral(_)
         | Type::Array(_)
         | Type::Tuple(_)
-        | Type::Dictionary { .. } => None,
+        | Type::Dictionary { .. }
+        | Type::GenericParameter { .. }
+        | Type::GenericAliasApplication { .. } => None,
     }
 }
 
@@ -4997,7 +5013,9 @@ fn array_element_type(environment: &TypeEnvironment, ty: &Type) -> Option<Type> 
         | Type::Function(_)
         | Type::Primitive(_)
         | Type::StringLiteral(_)
-        | Type::Table(_) => None,
+        | Type::Table(_)
+        | Type::GenericParameter { .. }
+        | Type::GenericAliasApplication { .. } => None,
     }
 }
 
@@ -5037,7 +5055,9 @@ fn pair_key_value_types(environment: &TypeEnvironment, ty: &Type) -> Option<(Typ
         | Type::Alias(_)
         | Type::Function(_)
         | Type::Primitive(_)
-        | Type::StringLiteral(_) => None,
+        | Type::StringLiteral(_)
+        | Type::GenericParameter { .. }
+        | Type::GenericAliasApplication { .. } => None,
     }
 }
 
@@ -5071,7 +5091,9 @@ fn iterator_metamethod_pair_types(
         | Type::Function(_)
         | Type::Primitive(_)
         | Type::StringLiteral(_)
-        | Type::Tuple(_) => None,
+        | Type::Tuple(_)
+        | Type::GenericParameter { .. }
+        | Type::GenericAliasApplication { .. } => None,
     }
 }
 
@@ -5450,7 +5472,11 @@ fn collect_unresolved_aliases(
             collect_unresolved_aliases(key, environment, aliases);
             collect_unresolved_aliases(value, environment, aliases);
         }
-        Type::Any | Type::Primitive(_) | Type::StringLiteral(_) => {}
+        Type::Any
+        | Type::Primitive(_)
+        | Type::StringLiteral(_)
+        | Type::GenericParameter { .. }
+        | Type::GenericAliasApplication { .. } => {}
     }
 }
 
@@ -5481,7 +5507,11 @@ fn type_contains_any_alias(ty: &Type, aliases: &BTreeSet<String>) -> bool {
         Type::Dictionary { key, value } => {
             type_contains_any_alias(key, aliases) || type_contains_any_alias(value, aliases)
         }
-        Type::Any | Type::Primitive(_) | Type::StringLiteral(_) => false,
+        Type::Any
+        | Type::Primitive(_)
+        | Type::StringLiteral(_)
+        | Type::GenericParameter { .. }
+        | Type::GenericAliasApplication { .. } => false,
     }
 }
 
@@ -5511,7 +5541,11 @@ fn type_contains_string_literal(ty: &Type) -> bool {
         Type::Dictionary { key, value } => {
             type_contains_string_literal(key) || type_contains_string_literal(value)
         }
-        Type::Primitive(_) | Type::Any | Type::Alias(_) => false,
+        Type::Primitive(_)
+        | Type::Any
+        | Type::Alias(_)
+        | Type::GenericParameter { .. }
+        | Type::GenericAliasApplication { .. } => false,
     }
 }
 
@@ -5551,7 +5585,11 @@ fn type_contains_lua_enum_alias(ty: &Type) -> bool {
         Type::Dictionary { key, value } => {
             type_contains_lua_enum_alias(key) || type_contains_lua_enum_alias(value)
         }
-        Type::Primitive(_) | Type::Any | Type::StringLiteral(_) => false,
+        Type::Primitive(_)
+        | Type::Any
+        | Type::StringLiteral(_)
+        | Type::GenericParameter { .. }
+        | Type::GenericAliasApplication { .. } => false,
     }
 }
 

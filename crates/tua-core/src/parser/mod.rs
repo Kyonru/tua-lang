@@ -7,7 +7,9 @@ mod normalize;
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
-use full_moon::ast::luau::{TypeArgument, TypeDeclaration, TypeField, TypeFieldKey, TypeInfo};
+use full_moon::ast::luau::{
+    IndexedTypeInfo, TypeArgument, TypeDeclaration, TypeField, TypeFieldKey, TypeInfo,
+};
 use full_moon::ast::{self, LuaVersion};
 use full_moon::node::Node;
 use full_moon::visitors::Visitor;
@@ -26,8 +28,9 @@ pub use model::{
     LuaDocOverload, LuaDocParam, LuaDocParseOptions, LuaDocParseResult, LuaDocReturn,
     LuaDocReturnType, LuaDocTypeAnnotation, LuaDocVararg, LuaDocVersion, NormalizedSource,
     ParameterAnnotation, ParameterDefault, ParameterOptional, ParsedLanguage, ParsedSource,
-    RawParsedSource, SourcePosition, SourceSpan, TableFieldType, TuaType, TypeAlias, TypeAliasKind,
-    TypeImport, TypeImportBinding, TypedSourceModel,
+    RawParsedSource, SourcePosition, SourceSpan, TableFieldType, TuaType, TypeAlias, TypeAliasId,
+    TypeAliasKind, TypeAliasParameter, TypeImport, TypeImportBinding, TypeParameterId,
+    TypedSourceModel,
 };
 pub(crate) use model::{NativeArrayTypeSyntax, ParserLineProvenance, ParserSourceFragment};
 use normalize::normalize_tua_source_for_luau_parser;
@@ -287,13 +290,10 @@ fn parse_raw_source(
             .into_iter()
             .map(|error| parser_error_to_diagnostic(&path, error))
             .collect()),
-        Err(_) => Err(vec![Diagnostic::error(
-            &path,
-            1,
-            1,
-            "parser rejected an unsupported token sequence",
-        )
-        .with_code(DiagnosticCode::SYNTAX_PARSE)]),
+        Err(_) => Err(vec![
+            Diagnostic::error(&path, 1, 1, "parser rejected an unsupported token sequence")
+                .with_code(DiagnosticCode::SYNTAX_PARSE),
+        ]),
     }
 }
 
@@ -878,10 +878,11 @@ fn collect_stmt_tua_syntax(path: &Path, source: &str, stmt: &ast::Stmt, syntax: 
         ast::Stmt::TypeDeclaration(declaration) => {
             syntax
                 .type_aliases
-                .push(type_alias_from_declaration(declaration, source));
+                .push(type_alias_from_declaration(path, declaration, source));
         }
         ast::Stmt::ExportedTypeDeclaration(declaration) => {
-            let mut alias = type_alias_from_declaration(declaration.type_declaration(), source);
+            let mut alias =
+                type_alias_from_declaration(path, declaration.type_declaration(), source);
             alias.exported = true;
             alias.span = node_span(declaration);
             syntax.type_aliases.push(alias);
@@ -894,9 +895,10 @@ fn collect_stmt_tua_syntax(path: &Path, source: &str, stmt: &ast::Stmt, syntax: 
 
                 syntax.local_annotations.push(LocalAnnotation {
                     name: token_text(name),
-                    ty: tua_type_from_type_info(specifier.type_info()),
+                    ty: tua_type_from_type_info_with_source(specifier.type_info(), source),
                     name_span: node_span(name),
                     span: node_span(specifier),
+                    type_span: node_span(specifier.type_info()),
                 });
             }
         }
@@ -958,20 +960,135 @@ fn collect_stmt_tua_syntax(path: &Path, source: &str, stmt: &ast::Stmt, syntax: 
     }
 }
 
-fn type_alias_from_declaration(declaration: &TypeDeclaration, source: &str) -> TypeAlias {
-    let ty = tua_type_from_type_info(declaration.type_definition());
+fn type_alias_from_declaration(
+    path: &Path,
+    declaration: &TypeDeclaration,
+    source: &str,
+) -> TypeAlias {
+    let mut ty = tua_type_from_type_info_with_source(declaration.type_definition(), source);
     let mut span = node_span(declaration);
     if matches!(ty, TuaType::Table(_)) {
         span = span.map(|span| complete_table_alias_span(source, span));
     }
 
+    let name = token_text(declaration.type_name());
+    let identity_span = node_span(declaration.type_name())
+        .or(span)
+        .expect("type alias declarations have a source span");
+    let identity = TypeAliasId {
+        module: crate::vfs::normalize_path(path),
+        name: name.clone(),
+        declaration: identity_span,
+    };
+    let generic_parameters = declaration
+        .generics()
+        .into_iter()
+        .flat_map(|generics| generics.generics())
+        .enumerate()
+        .filter_map(|(ordinal, parameter)| {
+            let full_moon::ast::luau::GenericParameterInfo::Name(token) = parameter.parameter()
+            else {
+                return None;
+            };
+            let name_span = node_span(token)?;
+            Some(TypeAliasParameter {
+                id: TypeParameterId {
+                    declaration: identity.clone(),
+                    ordinal,
+                },
+                name: token_text(token),
+                name_span,
+            })
+        })
+        .collect::<Vec<_>>();
+    ty = bind_generic_parameter_references(&ty, &generic_parameters);
+
     TypeAlias {
-        name: token_text(declaration.type_name()),
+        id: identity,
+        name,
         ty,
+        generic_parameters,
         kind: TypeAliasKind::Alias,
         name_span: node_span(declaration.type_name()),
         span,
         exported: false,
+    }
+}
+
+fn bind_generic_parameter_references(ty: &TuaType, parameters: &[TypeAliasParameter]) -> TuaType {
+    match ty {
+        TuaType::Named(name) => parameters
+            .iter()
+            .find(|parameter| parameter.name == *name)
+            .map(|parameter| TuaType::Parameter {
+                id: parameter.id.clone(),
+                name: parameter.name.clone(),
+            })
+            .unwrap_or_else(|| ty.clone()),
+        TuaType::Applied {
+            name,
+            arguments,
+            name_span,
+            span,
+        } => TuaType::Applied {
+            name: name.clone(),
+            arguments: arguments
+                .iter()
+                .map(|argument| bind_generic_parameter_references(argument, parameters))
+                .collect(),
+            name_span: *name_span,
+            span: *span,
+        },
+        TuaType::Union(types) => TuaType::Union(
+            types
+                .iter()
+                .map(|ty| bind_generic_parameter_references(ty, parameters))
+                .collect(),
+        ),
+        TuaType::Table(fields) => TuaType::Table(
+            fields
+                .iter()
+                .map(|field| TableFieldType {
+                    name: field.name.clone(),
+                    optional: field.optional,
+                    ty: bind_generic_parameter_references(&field.ty, parameters),
+                    name_span: field.name_span,
+                    span: field.span,
+                })
+                .collect(),
+        ),
+        TuaType::Array(item) => TuaType::Array(Box::new(bind_generic_parameter_references(
+            item, parameters,
+        ))),
+        TuaType::Tuple(items) => TuaType::Tuple(
+            items
+                .iter()
+                .map(|ty| bind_generic_parameter_references(ty, parameters))
+                .collect(),
+        ),
+        TuaType::Dictionary { key, value } => TuaType::Dictionary {
+            key: Box::new(bind_generic_parameter_references(key, parameters)),
+            value: Box::new(bind_generic_parameter_references(value, parameters)),
+        },
+        TuaType::Function {
+            parameters: function_parameters,
+            returns,
+        } => TuaType::Function {
+            parameters: function_parameters
+                .iter()
+                .map(|parameter| FunctionTypeParameter {
+                    name: parameter.name.clone(),
+                    ty: bind_generic_parameter_references(&parameter.ty, parameters),
+                    optional: parameter.optional,
+                    variadic: parameter.variadic,
+                })
+                .collect(),
+            returns: returns
+                .iter()
+                .map(|ty| bind_generic_parameter_references(ty, parameters))
+                .collect(),
+        },
+        TuaType::Parameter { .. } | TuaType::StringLiteral(_) => ty.clone(),
     }
 }
 
@@ -1101,20 +1218,27 @@ fn collect_enum_declarations(path: &Path, source: &str, syntax: &mut TuaSyntax) 
 
         let name_len = name.chars().count();
 
+        let declaration_span = SourceSpan {
+            start: SourcePosition {
+                line: start_line,
+                column: name_column,
+            },
+            end: SourcePosition {
+                line: start_line,
+                column: name_column + name_len,
+            },
+        };
         syntax.type_aliases.push(TypeAlias {
+            id: TypeAliasId {
+                module: path.to_path_buf(),
+                name: name.clone(),
+                declaration: declaration_span,
+            },
             name,
             ty: TuaType::Union(members),
+            generic_parameters: Vec::new(),
             kind: TypeAliasKind::Enum,
-            name_span: Some(SourceSpan {
-                start: SourcePosition {
-                    line: start_line,
-                    column: name_column,
-                },
-                end: SourcePosition {
-                    line: start_line,
-                    column: name_column + name_len,
-                },
-            }),
+            name_span: Some(declaration_span),
             span: Some(SourceSpan {
                 start: SourcePosition {
                     line: start_line,
@@ -1280,7 +1404,7 @@ fn function_annotation(
 
             Some(ParameterAnnotation {
                 name: token_text(name),
-                ty: tua_type_from_type_info(specifier.type_info()),
+                ty: tua_type_from_type_info_with_source(specifier.type_info(), source),
                 name_span: node_span(name),
                 span: node_span(specifier),
             })
@@ -1296,7 +1420,9 @@ fn function_annotation(
             };
             Some(FunctionSignatureParameter {
                 name: token_text(name),
-                ty: specifier.map(|specifier| tua_type_from_type_info(specifier.type_info())),
+                ty: specifier.map(|specifier| {
+                    tua_type_from_type_info_with_source(specifier.type_info(), source)
+                }),
                 name_span: node_span(name),
             })
         })
@@ -1316,14 +1442,18 @@ fn function_annotation(
             .zip(body.type_specifiers())
             .find_map(|(parameter, specifier)| {
                 matches!(parameter, ast::Parameter::Ellipsis(_))
-                    .then(|| specifier.map(|s| tua_type_from_type_info(s.type_info())))
+                    .then(|| {
+                        specifier.map(|s| tua_type_from_type_info_with_source(s.type_info(), source))
+                    })
                     .flatten()
             }),
         default_parameters,
         optional_parameters,
         return_type: body
             .return_type()
-            .map(|specifier| tua_type_from_type_info(specifier.type_info())),
+            .map(|specifier| {
+                tua_type_from_type_info_with_source(specifier.type_info(), source)
+            }),
         span: node_span(body),
     }
 }
@@ -1824,9 +1954,90 @@ fn compound_operator_from_ast(operator: &ast::CompoundOp) -> Option<CompoundOper
     }
 }
 
+fn tua_type_from_type_info_with_source(type_info: &TypeInfo, source: &str) -> TuaType {
+    let mut ty = tua_type_from_type_info(type_info);
+    complete_generic_type_spans(&mut ty, source);
+    ty
+}
+
+fn complete_generic_type_spans(ty: &mut TuaType, source: &str) {
+    match ty {
+        TuaType::Applied {
+            arguments,
+            name_span,
+            span,
+            ..
+        } => {
+            if let Some(name_span) = name_span {
+                if let Some(start_byte) = byte_for_source_position(source, name_span.end) {
+                    let bytes = source.as_bytes();
+                    if let Some(open_relative) = bytes[start_byte..].iter().position(|byte| *byte == b'<') {
+                        let open = start_byte + open_relative;
+                        let mut depth = 0usize;
+                        let mut close = None;
+                        for (offset, byte) in bytes[open..].iter().enumerate() {
+                            match byte {
+                                b'<' => depth += 1,
+                                b'>' => {
+                                    depth = depth.saturating_sub(1);
+                                    if depth == 0 {
+                                        close = Some(open + offset + 1);
+                                        break;
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+                        if let Some(close) = close {
+                            let end = source_position_for_byte(source, close);
+                            *span = Some(SourceSpan {
+                                start: name_span.start,
+                                end,
+                            });
+                        }
+                    }
+                }
+            }
+            for argument in arguments {
+                complete_generic_type_spans(argument, source);
+            }
+        }
+        TuaType::Union(items) | TuaType::Tuple(items) => {
+            for item in items {
+                complete_generic_type_spans(item, source);
+            }
+        }
+        TuaType::Table(fields) => {
+            for field in fields {
+                complete_generic_type_spans(&mut field.ty, source);
+            }
+        }
+        TuaType::Array(item) => complete_generic_type_spans(item, source),
+        TuaType::Dictionary { key, value } => {
+            complete_generic_type_spans(key, source);
+            complete_generic_type_spans(value, source);
+        }
+        TuaType::Function { parameters, returns } => {
+            for parameter in parameters {
+                complete_generic_type_spans(&mut parameter.ty, source);
+            }
+            for result in returns {
+                complete_generic_type_spans(result, source);
+            }
+        }
+        TuaType::Named(_) | TuaType::Parameter { .. } | TuaType::StringLiteral(_) => {}
+    }
+}
+
 pub(crate) fn tua_type_from_type_info(type_info: &TypeInfo) -> TuaType {
     match type_info {
         TypeInfo::Basic(token) => TuaType::Named(token_text(token)),
+        TypeInfo::Generic { base, generics, .. } => TuaType::Applied {
+            name: token_text(base),
+            arguments: generics.iter().map(tua_type_from_type_info).collect(),
+            name_span: node_span(base),
+            span: node_span(type_info),
+        },
         TypeInfo::String(token) => {
             TuaType::StringLiteral(unquote_short_string_token(&token_text(token)))
         }
@@ -1880,6 +2091,20 @@ pub(crate) fn tua_type_from_type_info(type_info: &TypeInfo) -> TuaType {
                     .collect(),
             )
         }
+        TypeInfo::Module {
+            module, type_info, ..
+        } => match type_info.as_ref() {
+            IndexedTypeInfo::Basic(name) => {
+                TuaType::Named(format!("{}.{}", token_text(module), token_text(name)))
+            }
+            IndexedTypeInfo::Generic { base, generics, .. } => TuaType::Applied {
+                name: format!("{}.{}", token_text(module), token_text(base)),
+                arguments: generics.iter().map(tua_type_from_type_info).collect(),
+                name_span: node_span(base),
+                span: node_span(type_info.as_ref()),
+            },
+            _ => TuaType::Named(type_info.to_string()),
+        },
         other => TuaType::Named(other.to_string()),
     }
 }

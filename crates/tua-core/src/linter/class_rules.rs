@@ -1,4 +1,4 @@
-use crate::classes::{class_lint_facts, ClassLintFact};
+use crate::classes::{ClassLintFact, class_lint_facts};
 use crate::{
     Diagnostic, DiagnosticCode, DiagnosticSeverity, ParsedSource, SourceSpan, TypeEnvironment,
 };
