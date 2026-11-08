@@ -26,7 +26,29 @@ async function run() {
       "love.graphics.",
       "getWidth",
     ),
+    protocol: await expectCompletion(document, "value:update(dt)", "value:up", "update"),
   };
+
+  const protocolPosition = positionAfter(document, "value:update(dt)", "value:");
+  const protocolHover = await retry(
+    () => vscode.commands.executeCommand("vscode.executeHoverProvider", document.uri, protocolPosition),
+    (result) => hoverText(result).includes("advances the actor by one frame"),
+    "imported protocol method hover documentation",
+  );
+  assert.match(hoverText(protocolHover), /update.*dt: number/s);
+  assert.match(hoverText(protocolHover), /advances the actor by one frame/);
+
+  const protocolDefinitions = await retry(
+    () =>
+      vscode.commands.executeCommand(
+        "vscode.executeDefinitionProvider",
+        document.uri,
+        protocolPosition,
+      ),
+    (result) => Array.isArray(result) && result.some((location) => location.uri.fsPath === fixtures.contractsPath),
+    "imported protocol method definition",
+  );
+  assert(protocolDefinitions.some((location) => location.uri.fsPath === fixtures.contractsPath));
 
   const playerUse = positionAfter(document, "player.name", "player");
   const hover = await retry(
@@ -43,7 +65,7 @@ async function run() {
     "local definition",
   );
   assert.equal(definitions[0].uri.fsPath, fixtures.mainPath);
-  assert.equal(definitions[0].range.start.line, 5);
+  assert.equal(definitions[0].range.start.line, 6);
 
   const references = await retry(
     () =>
@@ -115,6 +137,8 @@ async function run() {
       completions: completionEvidence,
       definitions: definitions.length,
       diagnostics: errors.length,
+      protocolDefinition: protocolDefinitions.some((location) => location.uri.fsPath === fixtures.contractsPath),
+      protocolHover: "documented update(dt: number)",
       formattingEdits: formatting.length,
       hover: "Player",
       inlayHints: hints.length,

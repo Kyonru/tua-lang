@@ -84,6 +84,8 @@ function createProject(workspacePath) {
   const sourcePath = path.join(workspacePath, "src");
   const mainPath = path.join(sourcePath, "main.tua");
   const helperPath = path.join(sourcePath, "helper.lua");
+  const contractsPath = path.join(sourcePath, "contracts.tua");
+  const actorsPath = path.join(sourcePath, "actors.tua");
   const configPath = path.join(workspacePath, "tua.toml");
 
   fs.mkdirSync(sourcePath, { recursive: true });
@@ -107,8 +109,29 @@ function createProject(workspacePath) {
     ].join("\n"),
   );
   fs.writeFileSync(
+    contractsPath,
+    [
+      "export protocol Updatable {",
+      "  --- advances the actor by one frame",
+      "  update(dt: number): nil",
+      "}",
+      "",
+    ].join("\n"),
+  );
+  fs.writeFileSync(
+    actorsPath,
+    [
+      'import type { Updatable } from "./contracts"',
+      "final class Particle implements Updatable {",
+      "  update(dt: number): nil {}",
+      "}",
+      "",
+    ].join("\n"),
+  );
+  fs.writeFileSync(
     mainPath,
     [
+      'import type { Updatable } from "./contracts"',
       "type Player = {",
       "  health: number,",
       "  name: string,",
@@ -121,6 +144,10 @@ function createProject(workspacePath) {
       "local greeting = helper.greet(player.name)",
       "local screen_width = love.graphics.getWidth()",
       "",
+      "local function tick(value: Updatable, dt: number)",
+      "  value:update(dt)",
+      "end",
+      "",
       "return {",
       "  current_health = current_health,",
       "  uppercase_name = uppercase_name,",
@@ -131,7 +158,14 @@ function createProject(workspacePath) {
     ].join("\n"),
   );
 
-  return { configPath, helperPath, mainPath, serverPath: process.env.TUA_REAL_SERVER_PATH };
+  return {
+    actorsPath,
+    configPath,
+    contractsPath,
+    helperPath,
+    mainPath,
+    serverPath: process.env.TUA_REAL_SERVER_PATH,
+  };
 }
 
 main().catch((error) => {
