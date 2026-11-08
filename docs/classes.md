@@ -102,7 +102,10 @@ The classes remain unrelated: each explicitly implements the contract, and
 calls through `Updatable[]` dispatch to the object's class method. The checker
 reports missing or incompatible methods and does not infer conformance merely
 because a class happens to have a method with the same name. A method inherited
-from a base class can satisfy a protocol requirement.
+from a base class can satisfy a protocol requirement, and a subclass inherits
+the base class's conformance. A class can list multiple protocols after
+`implements`; every requirement is checked, including same-named methods that
+must satisfy each contract's signature.
 
 Protocols can be exported and consumed as type-only imports; those imports and
 the protocol declaration are erased from Lua. Project diagnostics validate

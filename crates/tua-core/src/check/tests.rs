@@ -2390,6 +2390,106 @@ tick({ Actor.new(), Dialog.new() }, 0.016)
 }
 
 #[test]
+fn checks_multiple_protocol_obligations_and_inherited_conformance() {
+    check_tua_source(
+        "src/protocols.tua",
+        r#"
+protocol Updatable {
+  update(dt: number): nil
+}
+protocol Drawable {
+  draw(): nil
+}
+
+open class Actor implements Updatable, Drawable {
+  update(dt: number): nil {}
+  draw(): nil {}
+}
+
+final class Particle extends Actor {
+}
+
+local updatables: Updatable[] = { Particle.new() }
+local drawables: Drawable[] = { Particle.new() }
+"#,
+    )
+    .expect("all protocol obligations and inherited protocol identities should be preserved");
+}
+
+#[test]
+fn reports_each_missing_protocol_obligation() {
+    let diagnostics = check_tua_source(
+        "src/protocols.tua",
+        r#"
+protocol Updatable {
+  update(dt: number): nil
+}
+protocol Drawable {
+  draw(): nil
+}
+final class Particle implements Updatable, Drawable {
+  update(dt: number): nil {}
+}
+"#,
+    )
+    .expect_err("each declared protocol requires its methods");
+
+    assert!(
+        diagnostics.iter().any(|diagnostic| {
+            diagnostic
+                .message
+                .contains("does not implement protocol `Drawable`")
+                && diagnostic.message.contains("missing method `draw`")
+        }),
+        "missing second-protocol obligation should be diagnosed: {diagnostics:#?}"
+    );
+}
+
+#[test]
+fn checks_same_named_requirements_from_every_protocol() {
+    check_tua_source(
+        "src/protocols.tua",
+        r#"
+protocol First {
+  visit(value: number): nil
+}
+protocol Second {
+  visit(amount: number): nil
+}
+final class Visitor implements First, Second {
+  visit(value: number): nil {}
+}
+"#,
+    )
+    .expect("one implementation should satisfy equivalent same-named requirements");
+
+    let diagnostics = check_tua_source(
+        "src/protocols.tua",
+        r#"
+protocol NumericVisitor {
+  visit(value: number): nil
+}
+protocol StringVisitor {
+  visit(value: string): nil
+}
+final class Visitor implements NumericVisitor, StringVisitor {
+  visit(value: number): nil {}
+}
+"#,
+    )
+    .expect_err("a method must satisfy each protocol that declares its name");
+
+    assert!(
+        diagnostics.iter().any(|diagnostic| {
+            diagnostic
+                .message
+                .contains("does not satisfy protocol `StringVisitor.visit`")
+        }),
+        "the incompatible second obligation should be reported: {diagnostics:#?}"
+    );
+}
+
+#[test]
 fn reports_missing_protocol_methods_at_the_implementing_class() {
     let diagnostics = check_tua_source(
         "src/protocols.tua",
