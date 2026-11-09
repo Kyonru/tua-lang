@@ -39,6 +39,33 @@ fn rejects_excessive_nesting_and_operator_chains_before_parsing() {
 }
 
 #[test]
+fn type_nesting_limit_accepts_its_boundary_and_rejects_the_next_level() {
+    let accepted = format!("local value: number{}\n", "[]".repeat(64));
+    parse_tua_source("src/depth64.tua", accepted)
+        .expect("the documented 64-level structural limit should be accepted");
+
+    let rejected = format!("local value: number{}\n", "[]".repeat(65));
+    let diagnostics = parse_tua_source("src/depth65.tua", rejected)
+        .expect_err("the first level beyond the structural limit should be rejected");
+    assert!(
+        diagnostics.iter().any(|diagnostic| {
+            diagnostic.message.contains("64 nested constructs")
+                && diagnostic.code == Some(DiagnosticCode::SYNTAX_PARSE)
+        }),
+        "the over-limit type should produce the configured complexity diagnostic: {diagnostics:#?}"
+    );
+    assert_eq!((diagnostics[0].line, diagnostics[0].column), (1, 148));
+
+    let ignored = format!(
+        "-- {}\nlocal text = '{}'\n",
+        "[]".repeat(65),
+        "[]".repeat(65)
+    );
+    parse_tua_source("src/ignored-depth.tua", ignored)
+        .expect("array-like text inside comments and strings must not count as type nesting");
+}
+
+#[test]
 fn accepts_a_leading_utf8_byte_order_mark() {
     let tua = parse_tua_source(
         "main.tua",
