@@ -487,6 +487,75 @@ fn protocol_headers_allow_comments_between_declaration_tokens() {
 }
 
 #[test]
+fn protocol_spans_keep_unicode_columns_with_crlf_and_long_comments() {
+    let source =
+        "-- 😀 file preface\r\nexport protocol --[=[😀]=] Renderable {\r\n  render(): nil\r\n}\r\n";
+    let parsed = parse_tua_source("src/unicode_protocol.tua", source)
+        .expect("CRLF and Unicode in protocol trivia should parse");
+    let protocol = &parsed.protocol_declarations[0];
+
+    assert_eq!(
+        protocol.name_span.start,
+        crate::SourcePosition {
+            line: 2,
+            column: 27,
+        }
+    );
+    assert_eq!(
+        protocol.methods[0].name_span.start,
+        crate::SourcePosition { line: 3, column: 3 }
+    );
+    assert_eq!(
+        protocol.methods[0].name_span.end,
+        crate::SourcePosition { line: 3, column: 9 }
+    );
+}
+
+#[test]
+fn class_like_text_inside_a_malformed_protocol_does_not_overlap_lowering_edits() {
+    let source = "export protocol Contract {\n  class Placeholder {}\n}\n";
+    let diagnostics = parse_tua_source("src/malformed_contract.tua", source)
+        .expect_err("a class declaration is not a valid protocol requirement");
+
+    assert!(diagnostics.iter().any(|diagnostic| {
+        diagnostic
+            .message
+            .contains("invalid protocol member in `Contract`")
+    }), "malformed protocol members should produce a parser diagnostic, not abort class lowering: {diagnostics:#?}");
+}
+
+#[test]
+fn protocol_declarations_nested_in_class_bodies_are_not_top_level_contracts() {
+    let source = r#"final class Box<T> {
+  value: T
+  protocol Updatable {
+    update(dt: number): nil
+  }
+  init(value: T) {
+    self.value = value
+  }
+}
+"#;
+    let (protocols, _) = crate::classes::parse_protocol_declarations(
+        PathBuf::from("src/nested_protocol.tua").as_path(),
+        source,
+    );
+    assert!(
+        protocols.is_empty(),
+        "nested declaration text is not a top-level protocol"
+    );
+
+    let diagnostics = parse_tua_source("src/nested_protocol.tua", source)
+        .expect_err("protocol declarations are not valid class members");
+    assert!(
+        diagnostics
+            .iter()
+            .any(|diagnostic| { diagnostic.message.contains("unrecognized class member") }),
+        "the nested declaration should be rejected as a class member: {diagnostics:#?}"
+    );
+}
+
+#[test]
 fn protocol_method_parameters_can_span_lines_and_ignore_inline_comments() {
     let source = r#"export protocol Applies {
   apply(

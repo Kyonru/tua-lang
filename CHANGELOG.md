@@ -52,6 +52,8 @@ language or editor behavior, and migration notes call out those changes.
   type details.
 - Preserve nominal protocol identity through mutually recursive cross-file
   method signatures, while continuing to reject incompatible implementations.
+- Diagnose nested class/protocol declaration text in invalid protocol/class
+  bodies instead of producing overlapping lowering edits or panicking.
 - Stop generic alias expansion at the first repeated declaration, even when its
   arguments change, so recursive aliases retain a symbolic edge and diagnostics
   avoid expanding into long nested record chains.

@@ -1,0 +1,9 @@
+final class Box<T> {
+  value: T
+  protocol Updatable {
+    update(dt: number): nil
+  }
+  init(value: T) {
+    self.value = value
+  }
+}

@@ -266,7 +266,7 @@ pub(crate) fn parse_class_declarations_with_protocols(
     protocols: &[ProtocolDeclaration],
 ) -> (Vec<ClassDeclaration>, Vec<Diagnostic>) {
     let mut diagnostics = Vec::new();
-    let blocks = class_blocks(source);
+    let blocks = class_blocks(source, protocols);
 
     for span in blocks.iter().filter_map(|block| block.invalid_member_span) {
         diagnostics.push(class_diagnostic(
@@ -338,6 +338,7 @@ pub(crate) fn parse_protocol_declarations(
     let mut diagnostics = Vec::new();
     let positions = SourcePositionIndex::new(source);
     let mut index = 0;
+    let mut brace_depth = 0usize;
     while index < source.len() {
         if source[index..].starts_with("--") {
             index = consume_comment(source, index);
@@ -347,7 +348,21 @@ pub(crate) fn parse_protocol_declarations(
             index = end;
             continue;
         }
+        if brace_depth > 0 {
+            match source.as_bytes()[index] {
+                b'{' => brace_depth += 1,
+                b'}' => brace_depth = brace_depth.saturating_sub(1),
+                _ => {}
+            }
+            index += next_char_len(source, index);
+            continue;
+        }
         let Some(header) = protocol_header_at(source, index) else {
+            match source.as_bytes()[index] {
+                b'{' => brace_depth += 1,
+                b'}' => brace_depth = brace_depth.saturating_sub(1),
+                _ => {}
+            }
             index += next_char_len(source, index);
             continue;
         };
@@ -572,7 +587,8 @@ fn strip_protocol_comments(source: &str) -> String {
 }
 
 pub(crate) fn class_lowering_edits(source: &str) -> Vec<ClassLoweringEdit> {
-    let blocks = class_blocks(source);
+    let (protocols, _) = parse_protocol_declarations(Path::new("<protocol>"), source);
+    let blocks = class_blocks(source, &protocols);
 
     let mut declarations = blocks
         .iter()
@@ -635,7 +651,6 @@ pub(crate) fn class_lowering_edits(source: &str) -> Vec<ClassLoweringEdit> {
             }
         })
         .collect::<Vec<_>>();
-    let (protocols, _) = parse_protocol_declarations(Path::new("<protocol>"), source);
     for protocol in protocols {
         let Some(start) = crate::source_text::byte_for_position(source, protocol.span.start) else {
             continue;
@@ -960,12 +975,29 @@ pub(crate) fn source_with_closed_editor_declarations(source: &str) -> Option<Str
     changed.then_some(recovered)
 }
 
-fn class_blocks(source: &str) -> Vec<ClassBlock> {
+fn class_blocks(source: &str, protocols: &[ProtocolDeclaration]) -> Vec<ClassBlock> {
     let mut blocks = Vec::new();
     let mut index = 0usize;
     let positions = SourcePositionIndex::new(source);
+    let protocol_ranges = protocols
+        .iter()
+        .filter_map(|protocol| {
+            Some((
+                crate::source_text::byte_for_position(source, protocol.span.start)?,
+                crate::source_text::byte_for_position(source, protocol.span.end)?,
+            ))
+        })
+        .collect::<Vec<_>>();
 
     while index < source.len() {
+        if let Some((_, end)) = protocol_ranges
+            .iter()
+            .find(|(start, end)| *start <= index && index < *end)
+        {
+            index = *end;
+            continue;
+        }
+
         if source[index..].starts_with("--") {
             index = consume_comment(source, index);
             continue;
