@@ -542,6 +542,7 @@ gap in the current checkout.
 - **Expected:** A known member retains its substituted type, and the invalid string assignment reports TL1003.
 - **Actual before fix:** The structural-node work counter was exhausted while expanding the table. The resolver retained the symbolic root application, and member lookup degraded the known field to `any`, silently accepting the assignment.
 - **Fix:** Count generic alias applications rather than every record field against the full-expansion work limit. Resolve requested member paths lazily from one substituted alias body with a finite 64-edge depth, and preserve a concrete table's generic application at the selected edge without recursively expanding sibling fields.
+- **Source:** `crates/tua-core/src/types/environment.rs:444` and `:999` implement one-step alias substitution and the expansion budget; `crates/tua-core/src/semantic.rs:2651` implements bounded member lookup. Regressions are in `crates/tua-core/src/types/tests.rs`, `crates/tua-core/src/check/tests.rs`, and `crates/tua-core/src/analysis/tests.rs`.
 - **Regression coverage:** `wide_generic_alias_members_keep_their_substituted_types`, `generic_alias_member_lookup_stays_typed_after_full_expansion_is_bounded`, `wide_generic_alias_member_keeps_its_type_past_the_work_boundary`, and `generic_alias_expansion_work_limit_preserves_a_symbolic_application` cover large records, incorrect assignments, branching work exhaustion, and fail-closed symbolic expansion. An independent real LSP probe confirmed receiver/member hover types for the 4,200-field alias.
 - **Verification:** Independent CLI checks reject both invalid assignments with TL1003; all 20 generic-alias-focused core tests pass. A 4,200-field completion request exceeded the independent probe's 30-second timeout; it remains a stress follow-up and does not invalidate the checker/hover results.
 
@@ -553,6 +554,7 @@ gap in the current checkout.
 - **Expected:** Reject the malformed protocol member at the parameter with one precise syntax diagnostic, and avoid a misleading downstream conformance error.
 - **Actual before fix:** The method signature was accepted with an unknown/`any` parameter type, allowing a contract to be under-specified; some invalid signatures also produced confusing conformance cascades.
 - **Fix:** Parse protocol parameters with balanced delimiter/comment-aware ranges; require explicit, non-empty annotations for named and variadic parameters; omit malformed requirements from the protocol so the parser diagnostic remains authoritative.
+- **Source:** `crates/tua-core/src/classes.rs:604` parses/validates protocol parameter annotations. Core coverage is in `crates/tua-core/src/parser/tests.rs`; published diagnostic coverage is in `crates/tua-lsp/src/server/tests/diagnostics.rs`.
 - **Regression coverage:** `protocol_requirements_reject_missing_and_empty_parameter_types` checks ordinary, empty, and variadic parameters plus exact source ranges and a valid multiple-return control. The LSP regression asserts the two TL0001 diagnostics and no TL1008 cascade.
 - **Verification:** Independent CLI probes observed one TL0001 at `main.tua:2:5` for each malformed case and no TL1008; the valid typed variadic/two-return contract checks. Core and LSP focused tests pass.
 
@@ -564,6 +566,7 @@ gap in the current checkout.
 - **Expected:** Erase the generic binder while preserving both user comments exactly once in valid Lua.
 - **Actual before fix:** `with_generics(None)` discarded comment trivia attached to the generic declaration even though the compiled program still printed `42`.
 - **Fix:** Transfer source-ordered comment trivia and required line breaks from erased generic binders into the function parameter span; preserve trivia when no return annotation is present as well.
+- **Source:** `crates/tua-core/src/emit/mod.rs:1671` and `:1700` preserve generic binder comment trivia; `crates/tua-core/src/emit/tests.rs` contains the Lua parse regression.
 - **Regression coverage:** `generic_function_header_comments_survive_type_erasure` asserts both comments survive exactly once, the generic syntax is absent, and the emitted Lua parses. An independent CLI build/run probe printed `42` after the fix.
 
 During AUDIT-025 integration, a first direct-field shortcut changed recursive-alias hover and class `Self` hover behavior. The full core and LSP suites exposed those regressions; the final shortcut only preserves a raw field edge when it contains a generic alias application, and targeted tests for recursive imported `Self` and growing recursive generic aliases now pass.
