@@ -316,6 +316,67 @@ fn workspace_folder_changes_update_workspace_symbol_roots() {
     .contains(&"Enemy"));
     assert_eq!(response_with_id(&output, 4)["result"], json!([]));
 }
+
+#[test]
+fn same_named_protocols_and_conformance_stay_project_local() {
+    let first = TempProject::new("protocol-project-local-first");
+    let second = TempProject::new("protocol-project-local-second");
+    for project in [&first, &second] {
+        project.write("tua.toml", "source = \"src\"\n");
+    }
+    let first_contract = "export protocol Updatable {\n  update(dt: number): nil\n}\n";
+    let second_contract = "export protocol Updatable {\n  update(dt: string): nil\n}\n";
+    let first_actors = r#"import type { Updatable } from "./contracts"
+final class Actor implements Updatable {
+  update(dt: string): nil {
+  }
+}
+"#;
+    let second_actors = r#"import type { Updatable } from "./contracts"
+final class Actor implements Updatable {
+  update(dt: string): nil {
+  }
+}
+"#;
+    first.write("src/contracts.tua", first_contract);
+    first.write("src/actors.tua", first_actors);
+    second.write("src/contracts.tua", second_contract);
+    second.write("src/actors.tua", second_actors);
+
+    let first_contract_uri = first.uri_for("src/contracts.tua");
+    let first_actors_uri = first.uri_for("src/actors.tua");
+    let second_contract_uri = second.uri_for("src/contracts.tua");
+    let second_actors_uri = second.uri_for("src/actors.tua");
+    let output = run_messages(vec![
+        initialize_with_workspace_folders(1, [first.uri(), second.uri()]),
+        did_open(&first_contract_uri, first_contract),
+        did_open(&first_actors_uri, first_actors),
+        did_open(&second_contract_uri, second_contract),
+        did_open(&second_actors_uri, second_actors),
+    ]);
+    let first_diagnostics = last_published_diagnostics(&output, &first_actors_uri);
+    let second_diagnostics = last_published_diagnostics(&output, &second_actors_uri);
+
+    let mismatch = first_diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic["code"] == "TL1008")
+        .expect("the first project's number contract should reject its string implementation");
+    assert!(
+        mismatch["message"]
+            .as_str()
+            .is_some_and(|message| message.contains("Updatable.update")),
+        "the mismatch should name the first project's protocol requirement: {mismatch:#?}"
+    );
+    assert_eq!(
+        mismatch["relatedInformation"][0]["location"]["uri"],
+        first_contract_uri
+    );
+    assert!(
+        second_diagnostics.is_empty(),
+        "the second project's string contract should remain independent: {second_diagnostics:#?}"
+    );
+}
+
 #[test]
 fn workspace_symbol_empty_or_unavailable_workspace_returns_empty_array() {
     let temp = TempProject::new("empty-workspace-symbols");
