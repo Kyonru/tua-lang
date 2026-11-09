@@ -72,6 +72,11 @@ After adding the separate-imported-requirements range regression, the complete
 LSP suite passed again: 424 tests passed, with formatting and `make diff-check`
 also passing. This test-only update does not change the already tested VSIX.
 
+The protocol-and-paths nightly fuzz target also completed a 31-second bounded
+run: 711,266 executions, no crash, and observed peak RSS about 533 MiB. Its
+corpus contains 134 seed files; this run does not replace the targeted malformed
+edit and invalidation cases or establish a general resource bound.
+
 ## Audit findings
 
 ### AUDIT-001 — Generic multi-return behavior lacked a persistent acceptance test
