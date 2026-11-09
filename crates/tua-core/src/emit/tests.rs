@@ -195,6 +195,34 @@ end
 }
 
 #[test]
+fn generic_function_header_comments_survive_type_erasure() {
+    let emitted = emit_tua_source(
+        "src/generic_comments.tua",
+        r#"local function identity< -- binder-comment
+T -- parameter-comment
+>(value: T): T
+  return value
+end
+print(identity(42))
+"#,
+    )
+    .expect("comments in generic binders should survive Lua lowering");
+
+    assert_eq!(emitted.matches("-- binder-comment").count(), 1, "{emitted}");
+    assert_eq!(
+        emitted.matches("-- parameter-comment").count(),
+        1,
+        "{emitted}"
+    );
+    assert!(
+        !emitted.contains("<T>"),
+        "generic syntax must still erase: {emitted}"
+    );
+    crate::parse_raw_lua_source("generic_comments.lua", emitted)
+        .expect("comment-preserving generic erasure should remain valid Lua 5.1");
+}
+
+#[test]
 fn snapshot_erases_native_array_annotations_from_aliases_locals_and_functions() {
     let emitted = emit_tua_source(
         "src/actors.tua",

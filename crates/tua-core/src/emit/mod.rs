@@ -3,7 +3,7 @@ use std::path::Path;
 
 use full_moon::ast::span::ContainedSpan;
 use full_moon::ast::{self, Expression, Field, LastStmt, LuaVersion, Var};
-use full_moon::tokenizer::TokenReference;
+use full_moon::tokenizer::{Token, TokenKind, TokenReference};
 use full_moon::visitors::{Visitor, VisitorMut};
 
 use crate::classes;
@@ -1670,25 +1670,77 @@ fn erase_function_body(
 
 fn parameters_parentheses_without_return_type(body: &ast::FunctionBody) -> ContainedSpan {
     let (open, close) = body.parameters_parentheses().tokens();
-
-    let Some(return_type) = body.return_type() else {
-        return body.parameters_parentheses().clone();
-    };
-
-    // Trivia belongs to tokens, not their rendered symbol text. In particular,
-    // a trailing header comment must survive erasing the return annotation.
-    let mut trailing: Vec<_> = close.trailing_trivia().cloned().collect();
-    if let Some(last) = trailing_type_token(return_type.type_info()) {
-        trailing.extend(last.trailing_trivia().cloned());
+    let mut open_trailing = open.trailing_trivia().cloned().collect::<Vec<_>>();
+    if let Some(generics) = body.generics() {
+        open_trailing.extend(generic_comment_trivia(generics));
     }
+    let mut close_trailing = close.trailing_trivia().cloned().collect::<Vec<_>>();
+    if let Some(return_type) = body.return_type() {
+        // Trivia belongs to tokens, not their rendered symbol text. In particular,
+        // a trailing header comment must survive erasing the return annotation.
+        if let Some(last) = trailing_type_token(return_type.type_info()) {
+            close_trailing.extend(last.trailing_trivia().cloned());
+        }
+    }
+
     ContainedSpan::new(
-        open.clone(),
+        TokenReference::new(
+            open.leading_trivia().cloned().collect(),
+            open.token().clone(),
+            open_trailing,
+        ),
         TokenReference::new(
             close.leading_trivia().cloned().collect(),
             close.token().clone(),
-            trailing,
+            close_trailing,
         ),
     )
+}
+
+fn generic_comment_trivia(generics: &ast::luau::GenericDeclaration) -> Vec<Token> {
+    let mut trivia = full_moon::node::Node::tokens(generics)
+        .flat_map(|reference| {
+            reference
+                .leading_trivia()
+                .chain(reference.trailing_trivia())
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+    trivia.sort_by_key(|token| token.start_position().bytes());
+    let comments = trivia
+        .iter()
+        .filter(|token| {
+            matches!(
+                token.token_kind(),
+                TokenKind::SingleLineComment | TokenKind::MultiLineComment
+            )
+        })
+        .collect::<Vec<_>>();
+    let (Some(first), Some(last)) = (comments.first(), comments.last()) else {
+        return Vec::new();
+    };
+    let first_start = first.start_position().bytes();
+    let last_end = last.end_position().bytes();
+    let mut preserved = trivia
+        .iter()
+        .filter(|token| {
+            token.start_position().bytes() >= first_start
+                && token.end_position().bytes() <= last_end
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+
+    if last.token_kind() == TokenKind::SingleLineComment {
+        if let Some(newline) = trivia.iter().find(|token| {
+            token.start_position().bytes() >= last_end
+                && token.token_kind() == TokenKind::Whitespace
+                && token.to_string().contains('\n')
+        }) {
+            preserved.push(newline.clone());
+        }
+    }
+
+    preserved
 }
 
 // Full Moon's token iterator visits contained delimiters before their contents,
