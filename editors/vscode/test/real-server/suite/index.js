@@ -264,6 +264,48 @@ async function run() {
   );
   assert(protocolDefinitions.some((location) => location.uri.fsPath === fixtures.contractsPath));
 
+  const contractsDocument = await vscode.workspace.openTextDocument(fixtures.contractsPath);
+  const protocolRequirementPosition = positionAfter(
+    contractsDocument,
+    "update(dt: number)",
+    "up",
+  );
+  const protocolImplementations = await retry(
+    () =>
+      vscode.commands.executeCommand(
+        "vscode.executeImplementationProvider",
+        document.uri,
+        protocolPosition,
+      ),
+    (result) =>
+      Array.isArray(result) &&
+      result.some((location) => locationPath(location) === fixtures.actorsPath),
+    "installed-editor protocol implementation navigation",
+  );
+  assert(
+    protocolImplementations.some((location) => locationPath(location) === fixtures.actorsPath),
+    "implementation navigation should reach the imported protocol conformer",
+  );
+
+  const protocolRename = await retry(
+    () =>
+      vscode.commands.executeCommand(
+        "vscode.executeDocumentRenameProvider",
+        contractsDocument.uri,
+        protocolRequirementPosition,
+        "advance",
+      ),
+    (result) =>
+      result &&
+      typeof result.entries === "function" &&
+      result.entries().some(([uri]) => uri.fsPath === fixtures.actorsPath),
+    "installed-editor protocol rename across files",
+  );
+  assert(
+    protocolRename.entries().some(([uri]) => uri.fsPath === fixtures.actorsPath),
+    "renaming a protocol requirement should include its implementation edit",
+  );
+
   const playerUse = positionAfter(document, "player.name", "player");
   const hover = await retry(
     () => vscode.commands.executeCommand("vscode.executeHoverProvider", document.uri, playerUse),
@@ -355,6 +397,8 @@ async function run() {
       definitions: definitions.length,
       diagnostics: errors.length,
       protocolDefinition: protocolDefinitions.some((location) => location.uri.fsPath === fixtures.contractsPath),
+      protocolImplementations: protocolImplementations.length,
+      protocolRenameFiles: protocolRename.entries().map(([uri]) => path.basename(uri.fsPath)),
       protocolHover: "documented update(dt: number)",
       formattingEdits: formatting.length,
       hover: "Player",
@@ -447,6 +491,10 @@ function hoverText(hovers) {
     .flatMap((hover) => hover.contents || [])
     .map((content) => (typeof content === "string" ? content : content.value || ""))
     .join("\n");
+}
+
+function locationPath(location) {
+  return (location.uri || location.targetUri)?.fsPath;
 }
 
 function symbolNames(symbols) {
