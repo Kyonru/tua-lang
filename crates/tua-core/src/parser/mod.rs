@@ -55,6 +55,19 @@ pub fn parse_tua_source(
     Ok(ParsedSource::from_raw_and_typed(raw, typed))
 }
 
+/// Build a partial typed model for editor recovery while leaving model
+/// diagnostics on the original strict parse result. This lets project-aware
+/// queries use imports and class ancestry to enrich those diagnostics without
+/// weakening `parse_tua_source` or reparsing feature-specific source fragments.
+pub(crate) fn parse_tua_source_for_analysis_recovery(
+    path: impl AsRef<Path>,
+    source: impl Into<String>,
+) -> Result<ParsedSource, Vec<Diagnostic>> {
+    let raw = parse_raw_tua_source(path, source)?;
+    let (typed, _) = extract_tua_source_model_with_diagnostics(&raw);
+    Ok(ParsedSource::from_raw_and_typed(raw, typed))
+}
+
 pub fn normalize_tua_source(source: impl Into<String>) -> NormalizedSource {
     let original = source.into();
     let (parser_source, parser_provenance, native_array_types, syntax_source) =
@@ -177,6 +190,16 @@ pub fn extract_lua_source_model(raw: &RawParsedSource) -> TypedSourceModel {
 pub fn extract_tua_source_model(
     raw: &RawParsedSource,
 ) -> Result<TypedSourceModel, Vec<Diagnostic>> {
+    let (typed, diagnostics) = extract_tua_source_model_with_diagnostics(raw);
+    if !diagnostics.is_empty() {
+        return Err(diagnostics);
+    }
+    Ok(typed)
+}
+
+fn extract_tua_source_model_with_diagnostics(
+    raw: &RawParsedSource,
+) -> (TypedSourceModel, Vec<Diagnostic>) {
     let doc_result = {
         let _profile = crate::profile::span("parse.tua.doc_model");
         doc::collect_lua_doc_annotations(&raw.path, &raw.source)
@@ -210,23 +233,22 @@ pub fn extract_tua_source_model(
     diagnostics.extend(syntax.diagnostics);
     diagnostics.extend(declaration_file_diagnostics(raw));
 
-    if !diagnostics.is_empty() {
-        return Err(diagnostics);
-    }
-
-    Ok(TypedSourceModel {
-        lua_doc_annotations: doc_result.annotations,
-        lua_doc_diagnostics: doc_result.diagnostics,
-        type_aliases: syntax.type_aliases,
-        type_imports: syntax.type_imports,
-        local_annotations: syntax.local_annotations,
-        function_annotations: syntax.function_annotations,
-        compound_assignments: syntax.compound_assignments,
-        parameter_default_references: syntax.parameter_default_references,
-        sprite_declarations,
-        class_declarations,
-        protocol_declarations,
-    })
+    (
+        TypedSourceModel {
+            lua_doc_annotations: doc_result.annotations,
+            lua_doc_diagnostics: doc_result.diagnostics,
+            type_aliases: syntax.type_aliases,
+            type_imports: syntax.type_imports,
+            local_annotations: syntax.local_annotations,
+            function_annotations: syntax.function_annotations,
+            compound_assignments: syntax.compound_assignments,
+            parameter_default_references: syntax.parameter_default_references,
+            sprite_declarations,
+            class_declarations,
+            protocol_declarations,
+        },
+        diagnostics,
+    )
 }
 
 fn declaration_file_diagnostics(raw: &RawParsedSource) -> Vec<Diagnostic> {

@@ -2545,8 +2545,9 @@ impl AnalysisSnapshot {
         &self,
         path: &Path,
         diagnostics: Vec<Diagnostic>,
+        parsed: Option<&ParsedSource>,
     ) -> Vec<Diagnostic> {
-        deduplicate_diagnostics(diagnostics)
+        let mut diagnostics = deduplicate_diagnostics(diagnostics)
             .into_iter()
             .filter(|diagnostic| {
                 if diagnostic.code != Some(crate::DiagnosticCode::TYPE_UNKNOWN_NAME) {
@@ -2561,7 +2562,11 @@ impl AnalysisSnapshot {
                     .resolve_type_name(&self.module_graph, path, name)
                     .is_none()
             })
-            .collect()
+            .collect::<Vec<_>>();
+        if let Some(parsed) = parsed {
+            self.attach_imported_inherited_protocol_requirements(parsed, &mut diagnostics);
+        }
+        diagnostics
     }
 
     pub(super) fn project_type_diagnostics(
@@ -2618,7 +2623,6 @@ impl AnalysisSnapshot {
 
                 diagnostics.extend(facts.environment.generic_alias_diagnostics(parsed));
                 diagnostics.extend(self.generic_protocol_bound_diagnostics(parsed));
-
                 diagnostics.retain(|diagnostic| {
                     diagnostic.code != Some(crate::DiagnosticCode::TYPE_UNKNOWN_NAME)
                 });
@@ -2637,6 +2641,79 @@ impl AnalysisSnapshot {
             .insert(path, diagnostics.clone());
 
         diagnostics
+    }
+
+    fn attach_imported_inherited_protocol_requirements(
+        &self,
+        parsed: &ParsedSource,
+        diagnostics: &mut [Diagnostic],
+    ) {
+        for class in &parsed.class_declarations {
+            for method in class.methods.iter().filter(|method| method.is_override) {
+                let Some(diagnostic) = diagnostics.iter_mut().find(|diagnostic| {
+                    diagnostic.code == Some(crate::DiagnosticCode::TYPE_CLASS)
+                        && diagnostic.line == method.name_span.start.line
+                        && diagnostic.column == method.name_span.start.column
+                        && diagnostic
+                            .message
+                            .contains("has a signature incompatible with its parent method")
+                }) else {
+                    continue;
+                };
+
+                let mut requirements = Vec::new();
+                for protocol_name in
+                    crate::classes::inherited_protocol_names(&parsed.class_declarations, class)
+                {
+                    let Some(definition) = self.type_database.protocol_method_definition(
+                        &self.module_graph,
+                        &parsed.path,
+                        protocol_name,
+                        &method.name,
+                    ) else {
+                        continue;
+                    };
+                    let already_linked = diagnostic.related_information.iter().any(|related| {
+                        related.file == definition.path && related.span == definition.span
+                    }) || requirements.iter().any(
+                        |(_, related): &(String, crate::DiagnosticRelatedInformation)| {
+                            related.file == definition.path && related.span == definition.span
+                        },
+                    );
+                    if already_linked {
+                        continue;
+                    }
+                    requirements.push((
+                        format!("`{protocol_name}.{}`", method.name),
+                        crate::DiagnosticRelatedInformation {
+                            file: definition.path,
+                            span: definition.span,
+                            message: format!(
+                                "inherited protocol requirement `{protocol_name}.{}` is declared here",
+                                method.name
+                            ),
+                        },
+                    ));
+                }
+
+                if requirements.is_empty() {
+                    continue;
+                }
+
+                let names = requirements
+                    .iter()
+                    .map(|(name, _)| name.as_str())
+                    .collect::<Vec<_>>();
+                diagnostic.message.push_str(&format!(
+                    "; this override also violates inherited protocol requirement{} {}",
+                    if names.len() == 1 { "" } else { "s" },
+                    names.join(", ")
+                ));
+                diagnostic
+                    .related_information
+                    .extend(requirements.into_iter().map(|(_, information)| information));
+            }
+        }
     }
 
     fn generic_protocol_bound_diagnostics(&self, parsed: &ParsedSource) -> Vec<Diagnostic> {

@@ -118,8 +118,15 @@ impl AnalysisSnapshot {
         );
         diagnostics.extend(self.unparsed_lua_module_diagnostics(path.as_ref()));
 
-        let diagnostics =
-            self.project_aware_diagnostics(path.as_ref(), deduplicate_diagnostics(diagnostics));
+        let diagnostics = self.project_aware_diagnostics(
+            path.as_ref(),
+            deduplicate_diagnostics(diagnostics),
+            file.parsed
+                .as_ref()
+                .ok()
+                .map(Arc::as_ref)
+                .or_else(|| file.degraded_semantics.as_ref().map(|facts| &facts.parsed)),
+        );
 
         apply_inline_ignores(
             path.as_ref(),

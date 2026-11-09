@@ -3173,6 +3173,30 @@ fn inherited_protocol_requirements<'a>(
     method_name: &str,
 ) -> Vec<(&'a ProtocolDeclaration, &'a ProtocolMethod)> {
     let mut requirements = Vec::new();
+    for protocol_name in inherited_protocol_names(classes, class) {
+        let Some(protocol) = protocols
+            .iter()
+            .find(|protocol| protocol.name == protocol_name)
+        else {
+            continue;
+        };
+        if let Some(requirement) = protocol
+            .methods
+            .iter()
+            .find(|requirement| requirement.name == method_name)
+        {
+            requirements.push((protocol, requirement));
+        }
+    }
+
+    requirements
+}
+
+pub(crate) fn inherited_protocol_names<'a>(
+    classes: &'a [ClassDeclaration],
+    class: &ClassDeclaration,
+) -> Vec<&'a str> {
+    let mut names = Vec::new();
     let mut seen_protocols = BTreeSet::new();
     let mut visited_classes = BTreeSet::new();
     let mut parent_name = class.parent.as_deref();
@@ -3186,28 +3210,15 @@ fn inherited_protocol_requirements<'a>(
         };
 
         for (protocol_name, _) in &parent.implemented_protocols {
-            if !seen_protocols.insert(protocol_name.as_str()) {
-                continue;
-            }
-            let Some(protocol) = protocols
-                .iter()
-                .find(|protocol| protocol.name == *protocol_name)
-            else {
-                continue;
-            };
-            if let Some(requirement) = protocol
-                .methods
-                .iter()
-                .find(|requirement| requirement.name == method_name)
-            {
-                requirements.push((protocol, requirement));
+            if seen_protocols.insert(protocol_name.as_str()) {
+                names.push(protocol_name.as_str());
             }
         }
 
         parent_name = parent.parent.as_deref();
     }
 
-    requirements
+    names
 }
 
 fn class_method_signatures_match(

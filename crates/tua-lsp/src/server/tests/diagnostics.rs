@@ -241,6 +241,54 @@ final class Panel extends Actor {
 }
 
 #[test]
+fn inherited_override_diagnostics_link_to_imported_protocol_requirements() {
+    let temp = TempProject::new("inherited-imported-protocol-override-related-info");
+    temp.write("tua.toml", "source = \"src\"\n");
+    let contracts = "export protocol Updatable {\n  update(dt: string): nil\n}\nexport protocol Steppable {\n  update(dt: string): nil\n}\n";
+    let source = r#"import type { Updatable, Steppable } from "./contracts"
+open class Parent implements Updatable, Steppable {
+  update(dt: string): nil {}
+}
+final class Child extends Parent {
+  override update(dt: number): nil {}
+}
+"#;
+    let contracts_uri = temp.uri_for("src/contracts.tua");
+    let actors_uri = temp.uri_for("src/actors.tua");
+    let output = run_messages(vec![
+        initialize_with_root(1, temp.uri()),
+        did_open(&contracts_uri, contracts),
+        did_open(&actors_uri, source),
+    ]);
+    let diagnostics = last_published_diagnostics(&output, &actors_uri);
+    let diagnostic = diagnostics
+        .iter()
+        .find(|diagnostic| {
+            diagnostic["message"].as_str().is_some_and(|message| {
+                message.contains("inherited protocol requirements `Updatable.update`")
+            })
+        })
+        .unwrap_or_else(|| {
+            panic!("an imported inherited protocol violation should be diagnosed: {diagnostics:#?}")
+        });
+
+    assert_eq!(diagnostic["range"]["start"]["line"], 5);
+    assert_eq!(diagnostic["range"]["start"]["character"], 11);
+    let related = diagnostic["relatedInformation"]
+        .as_array()
+        .expect("the override error should link to the imported requirement");
+    assert_eq!(related.len(), 2);
+    assert_eq!(related[0]["location"]["uri"], contracts_uri);
+    assert_eq!(related[0]["location"]["range"]["start"]["line"], 1);
+    assert_eq!(related[0]["location"]["range"]["start"]["character"], 2);
+    assert_eq!(related[0]["location"]["range"]["end"]["character"], 8);
+    assert_eq!(related[1]["location"]["uri"], contracts_uri);
+    assert_eq!(related[1]["location"]["range"]["start"]["line"], 4);
+    assert_eq!(related[1]["location"]["range"]["start"]["character"], 2);
+    assert_eq!(related[1]["location"]["range"]["end"]["character"], 8);
+}
+
+#[test]
 fn unsaved_protocol_edit_refreshes_importing_class_diagnostics() {
     let temp = TempProject::new("unsaved-protocol-conformance-refresh");
     temp.write("tua.toml", "source = \"src\"\n");

@@ -6311,6 +6311,71 @@ final class Bad implements Updatable {
 }
 
 #[test]
+fn inherited_override_diagnostics_link_to_imported_protocol_requirements() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/contracts.tua
+export protocol Updatable {
+  update(dt: string): nil
+}
+export protocol Steppable {
+  update(dt: string): nil
+}
+-- file: src/actors.tua
+import type { Updatable, Steppable } from "./contracts"
+open class Parent implements Updatable, Steppable {
+  update(dt: string): nil {}
+}
+final class Child extends Parent {
+  override update(dt: number): nil {}
+}
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+
+    let diagnostics = host.snapshot().diagnostics("src/actors.tua");
+    let diagnostic = diagnostics
+        .iter()
+        .find(|diagnostic| {
+            diagnostic
+                .message
+                .contains("method `update` has a signature")
+        })
+        .expect("the incompatible inherited override should be diagnosed");
+    assert!(
+        diagnostic
+            .message
+            .contains("inherited protocol requirements `Updatable.update`"),
+        "the override diagnostic should identify its imported protocol obligation: {diagnostic:#?}"
+    );
+    assert!(diagnostic.message.contains("`Steppable.update`"));
+    assert_eq!(diagnostic.related_information.len(), 2, "{diagnostic:#?}");
+    assert_eq!(
+        diagnostic.related_information[0].file,
+        PathBuf::from("src/contracts.tua")
+    );
+    assert_eq!(
+        diagnostic.related_information[0].span.start,
+        SourcePosition { line: 2, column: 3 }
+    );
+    assert_eq!(
+        diagnostic.related_information[0].span.end,
+        SourcePosition { line: 2, column: 9 }
+    );
+    assert_eq!(
+        diagnostic.related_information[1].span.start,
+        SourcePosition { line: 5, column: 3 }
+    );
+    assert_eq!(
+        diagnostic.related_information[1].span.end,
+        SourcePosition { line: 5, column: 9 }
+    );
+}
+
+#[test]
 fn cyclic_imported_protocol_signatures_preserve_conformance_identity() {
     let fixture = Fixture::parse(
         r#"-- file: src/a.tua

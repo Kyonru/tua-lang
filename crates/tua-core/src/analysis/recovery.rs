@@ -157,7 +157,13 @@ pub(super) fn parse_degraded_analysis_source(
     } else {
         None
     };
-    parse_analysis_source(path, recovered.unwrap_or(source), kind)
+    let source = recovered.unwrap_or(source);
+    match kind {
+        AnalysisSourceKind::Tua => {
+            crate::parser::parse_tua_source_for_analysis_recovery(path, source)
+        }
+        AnalysisSourceKind::Lua => parse_analysis_source(path, source, kind),
+    }
 }
 
 pub(super) fn source_without_recoverable_incomplete_lines(source: &str) -> String {

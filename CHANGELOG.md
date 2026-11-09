@@ -41,7 +41,8 @@ language or editor behavior, and migration notes call out those changes.
   opening brace, including during editor recovery of an unfinished declaration.
 - Correct the language guide's stale claim that native generic parameters are
   unsupported; it now points to the supported alias, function, and class forms.
-- Identify inherited protocol requirements and link their declarations when a
+- Identify inherited protocol requirements, including imported contracts
+  implemented by a local base class, and link their declarations when a
   subclass override has an incompatible signature.
 - Keep `protocol` and `implements` available as ordinary Lua identifiers,
   including in files that also contain Tua type syntax. Protocol declarations
