@@ -42,10 +42,11 @@ loopback bind, and the extension suite passed 180/180 when rerun with local
 loopback access. The benchmark smoke likewise passed with local process
 sampling enabled.
 
-The earlier 4,200-field completion timeout is now confirmed as an editor
-performance defect and fixed as AUDIT-028 below. The regression test returns
-all 4,200 fields, and a replay through a real stdio LSP process returns 11
-matching candidates in 0.22 seconds on the audit host.
+AUDIT-028 records an optimization for repeated typed-domain resolution while
+completing wide generic records. A later independent replay found that the
+original timeout did not include a valid completion response and came from the
+probe setup; it is not evidence of a confirmed 60-second editor regression.
+The current sequential stdio probe returns 11 expected matches in about 54 ms.
 
 The latest artifact is suitable for manual beta testing on this host. It is not
 qualified for a general release: cross-platform/runtime qualification, visual
@@ -601,15 +602,15 @@ gap in the current checkout.
 
 ### AUDIT-028 — Large generic record completion repeated typed-domain resolution
 
-- **Category / severity / confidence:** Editor completion performance; Medium; confirmed by an imported-alias LSP reproduction, profile evidence, and a 4,200-field regression test.
-- **Status:** Fixed in the current worktree.
-- **Reproduction:** Run `cargo build -p tua-cli`, then `python3 internal/audits/generics-polymorphism-0.7.0-final/reproduce_large_generic_completion.py`. The script creates an imported `Wide<T>` alias with 4,200 fields and asks the actual stdio LSP for completion after `wide.f419`. Before the fix, this request timed out after 60 seconds in the audited process. After the fix, it returned 11 matching labels in 0.22 seconds on macOS arm64.
+- **Category / severity / confidence:** Editor completion performance; Low; redundant per-member domain work is confirmed by source/profile evidence, but the original end-to-end timeout is not confirmed.
+- **Status:** Optimization implemented; no current completion defect reproduced.
+- **Reproduction:** Run `cargo build -p tua-cli`, then `python3 internal/audits/generics-polymorphism-0.7.0-final/reproduce_large_generic_completion.py`. The script creates an imported `Wide<T>` alias with 4,200 fields and asks the actual stdio LSP for completion after `wide.f419`. The current server returns 11 matching labels; a corrected independent probe measured about 54 ms for the request on macOS arm64.
 - **Expected:** Completion should remain responsive on wide generic records while retaining all matching members and typed-domain method documentation.
-- **Actual before fix:** `complete_fields` called `CompletionDomainRegistry::typed_member` for each matching table member. Domain checks resolve and inspect the receiver type, so ordinary scalar fields repeatedly forced work proportional to the large generic record. Profiling showed member collection in milliseconds and per-candidate domain enrichment dominating the request.
+- **Observed behavior:** `complete_fields` called `CompletionDomainRegistry::typed_member` for each table member. Domain checks resolve and inspect the receiver type, so ordinary scalar fields repeated receiver classification. Profiling showed member collection in milliseconds and per-candidate domain enrichment dominating that path. A prior 60-second timeout was later traced to an invalid probe request/cursor and is excluded as symptom evidence.
 - **Fix:** Call typed-domain documentation resolution only for function-valued completion items. Typed domain methods are represented as function-valued fields; ordinary values cannot have method documentation. This keeps existing domain-method documentation while avoiding expensive receiver classification for record values.
 - **Source:** `crates/tua-core/src/completion/mod.rs` (`complete_fields` and `typed_member_documentation`).
 - **Regression coverage:** `large_generic_record_completion_keeps_all_fields_available` expands and completes a 4,200-field `Wide<number>` alias, asserting all labels are retained. `skips_typed_domain_documentation_for_non_function_fields` verifies the early exit. Existing ECS, store, state-machine, audio, and input completion tests cover function-method documentation.
-- **Verification:** `RUST_MIN_STACK=33554432 cargo test -p tua-core` passed (1,889 passed, 1 ignored); `cargo test -p tua-lsp` passed (427); `cargo test -p tua-core completion::tests::` passed (149). The dedicated 4,200-field regression passed in 0.30 seconds. The saved actual-LSP reproduction returned 11 matching candidates in 0.40 seconds on its rerun (0.22 seconds in the initial valid replay). `make extension-package` passed with 180/180 extension tests and `npm audit` reporting 0 vulnerabilities. The exact package installed in an isolated profile and passed `test:vscode-real` on VS Code 1.142.0/macOS arm64. Archive SHA-256: `977162265a6b6be4a8b46cbaa7dfd90f9491dc756de1b6fbea9118bbd760a0a3`.
+- **Verification:** `RUST_MIN_STACK=33554432 cargo test -p tua-core` passed (1,889 passed, 1 ignored); `cargo test -p tua-lsp` passed (427); `cargo test -p tua-core completion::tests::` passed (149). The dedicated 4,200-field regression passed in 0.30 seconds. The saved LSP script returns all expected matches; a corrected sequential probe measured about 54 ms. `make extension-package` passed with 180/180 extension tests and `npm audit` reporting 0 vulnerabilities. The exact package installed in an isolated profile and passed `test:vscode-real` on VS Code 1.142.0/macOS arm64. Earlier artifact SHA-256: `977162265a6b6be4a8b46cbaa7dfd90f9491dc756de1b6fbea9118bbd760a0a3`.
 
 ### AUDIT-029 — Conformance edits and inherited signature range matrix needed broader LSP coverage
 
