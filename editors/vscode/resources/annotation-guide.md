@@ -100,7 +100,7 @@ Reports TL4068 for a direct call statement that discards the resolved function r
 ---@generic T
 ```
 
-Metadata only. It does not add generic function inference or generic classes. Native Tua type aliases may use `type Box<T> = ...`; see Generic Type Aliases in the Typing In Tua guide.
+An unbounded `---@generic T` on a documented function binds T in its `---@param`, `---@vararg`, and `---@return` types. Calls infer each use independently. Generic bounds and generic methods are unsupported in LuaDoc; use native Tua syntax for bounded generics and generic classes. See Generic Type Aliases in the Typing In Tua guide and Generic Protocol Bounds in the Classes guide.
 
 ## @version
 
