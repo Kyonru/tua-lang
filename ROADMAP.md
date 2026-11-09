@@ -117,6 +117,33 @@ results.
 
 ## Next
 
+### Close Tua-Specific LSP Workflow Gaps
+
+The Kotlin LSP comparison found no missing standard request from its published
+feature list: Tua already supports completion, diagnostics/actions, semantic
+tokens, import organization, rename, formatting, documentation/hover, call
+hierarchy, and folding. Focus on behavior depth instead of duplicate endpoints.
+The comparison and source-license review are in
+`internal/lsp-peer-capability-review-2026-11-09.md`.
+
+- Add a compiler-backed action to generate clearly unfinished stubs for missing
+  protocol methods, including imported and inherited requirements.
+- Audit navigation for configured Lua dependencies and generated declarations;
+  link to indexed source or stable docs where available, and stay conservative
+  for dynamic modules.
+- Measure cold/open and large-workspace request latency before adding progress
+  UI or persistent indexes. Reuse current health/cache telemetry and keep
+  interactive requests cancellable.
+- Select future refactorings from repeated Tua workflows and add one safe,
+  semantically validated action at a time.
+- Maintain a small non-VS-Code LSP-client qualification matrix for protocol
+  compatibility; keep testing/debug integration in their appropriate client
+  APIs.
+
+Owner: shared core queries with thin LSP/extension adapters. Acceptance:
+focused core tests, protocol payload tests, and source-aware edit tests; no
+parallel parser or semantic model in the extension.
+
 ### Improve Semantic Precision Without Losing Lua Flexibility
 
 - Broaden control-flow and metatable inference only where identities are
