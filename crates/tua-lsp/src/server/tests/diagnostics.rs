@@ -326,6 +326,76 @@ final class Particle implements Updatable {
 }
 
 #[test]
+fn renaming_a_protocol_dependency_refreshes_importing_class_diagnostics() {
+    let temp = TempProject::new("renamed-protocol-dependency-refresh");
+    temp.write("tua.toml", "source = \"src\"\n");
+    let contracts = "export protocol Updatable {\n  update(dt: number): nil\n}\n";
+    let changed_contracts = "export protocol Updatable {\n  update(dt: string): nil\n}\n";
+    temp.write("src/contracts.tua", contracts);
+    let actors = r#"import type { Updatable } from "./contracts"
+final class Particle implements Updatable {
+  update(dt: number): nil {}
+}
+"#;
+    temp.write("src/actors.tua", actors);
+    let contracts_uri = temp.uri_for("src/contracts.tua");
+    let renamed_uri = temp.uri_for("src/api.tua");
+    let actors_uri = temp.uri_for("src/actors.tua");
+    let mut server = TestServer::new();
+
+    server.send(initialize_with_pull_diagnostics(1, temp.uri(), true));
+    server.send(did_open(&contracts_uri, contracts));
+    server.send(did_open(&actors_uri, actors));
+    server.send(text_document_diagnostic_request(2, &actors_uri));
+    assert!(document_diagnostic_items(server.output(), 2).is_empty());
+
+    server.send(did_close(&contracts_uri));
+    temp.remove("src/contracts.tua");
+    temp.write("src/api.tua", changed_contracts);
+    server.send(watched_files_changed([
+        (&contracts_uri, 3),
+        (&renamed_uri, 1),
+    ]));
+    server.send(did_open(&renamed_uri, changed_contracts));
+    server.send(text_document_diagnostic_request(3, &actors_uri));
+    let unresolved = document_diagnostic_items(server.output(), 3);
+    assert!(
+        unresolved
+            .iter()
+            .any(|diagnostic| diagnostic["code"] == "TL4002"),
+        "the old path should become unresolved immediately after the rename: {unresolved:#?}"
+    );
+
+    let renamed_actors = actors.replace("./contracts", "./api");
+    server.send(did_change(&actors_uri, &renamed_actors, 2));
+    let due = server
+        .next_slow_diagnostics_due()
+        .expect("edited-document diagnostics should be scheduled");
+    server.drain_due_diagnostics(due);
+    server.send(text_document_diagnostic_request(4, &actors_uri));
+    let diagnostics = document_diagnostic_items(server.output(), 4);
+    assert!(
+        diagnostics.iter().any(|diagnostic| {
+            diagnostic["message"].as_str().is_some_and(|message| {
+                message.contains("Particle.update")
+                    && message.contains("does not satisfy protocol `Updatable.update`")
+                    && message.contains("expected")
+                    && message.contains("found")
+            })
+        }),
+        "the renamed dependency's changed contract should be used after watcher and consumer edits: {diagnostics:#?}"
+    );
+    assert!(
+        diagnostics.iter().all(|diagnostic| {
+            !diagnostic["message"]
+                .as_str()
+                .is_some_and(|message| message.contains("import file not found"))
+        }),
+        "the consumer should no longer resolve the old dependency path: {diagnostics:#?}"
+    );
+}
+
+#[test]
 fn protocol_conformance_resolves_through_type_reexports() {
     let temp = TempProject::new("protocol-conformance-type-reexport");
     temp.write("tua.toml", "source = \"src\"\n");
