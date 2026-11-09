@@ -189,7 +189,9 @@ pub(super) fn parse_degraded_analysis_source(
 
 pub(super) fn source_without_recoverable_incomplete_lines(source: &str) -> String {
     let source = source_without_unfinished_member_access(source);
+    let class_body_ranges = crate::classes::class_body_ranges(&source);
     let mut recovered = String::with_capacity(source.len());
+    let mut line_start = 0;
 
     for line in source.split_inclusive('\n') {
         let content = line.strip_suffix('\n').unwrap_or(line);
@@ -209,10 +211,37 @@ pub(super) fn source_without_recoverable_incomplete_lines(source: &str) -> Strin
             Some(crate::completion::context::CompletionContext::StringArgument { .. })
         );
         if line_is_recoverable_incomplete_edit(trimmed) || unfinished_argument {
-            recovered.push('\n');
+            if class_body_ranges
+                .iter()
+                .any(|range| range.contains(&line_start))
+            {
+                let indentation = content.len() - content.trim_start().len();
+                let indentation_chars = content[..indentation].chars().count();
+                recovered.push_str(&content[..indentation]);
+                recovered.push_str("do end");
+                recovered.push_str(
+                    &" ".repeat(
+                        content
+                            .chars()
+                            .count()
+                            .saturating_sub(indentation_chars + 6),
+                    ),
+                );
+            } else {
+                // Outside class bodies, preserve the established behavior:
+                // deleting an incomplete expression keeps callback and table
+                // context parseable.
+                recovered.push_str(&" ".repeat(content.chars().count()));
+            }
+            if line.ends_with("\r\n") {
+                recovered.push_str("\r\n");
+            } else if line.ends_with('\n') {
+                recovered.push('\n');
+            }
         } else {
             recovered.push_str(line);
         }
+        line_start += line.len();
     }
 
     recovered

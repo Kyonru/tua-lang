@@ -1141,6 +1141,48 @@ fn unclosed_class(source: &str) -> Option<(ClassHeader, usize)> {
     None
 }
 
+/// Return byte ranges for class bodies in source. These ranges are used by
+/// editor recovery so incomplete expressions are replaced only where the
+/// parser's generated class representation needs the source line preserved.
+pub(crate) fn class_body_ranges(source: &str) -> Vec<std::ops::Range<usize>> {
+    if !source.contains("class") {
+        return Vec::new();
+    }
+
+    let positions = SourcePositionIndex::new(source);
+    let mut ranges = Vec::new();
+    let mut index = 0;
+    while index < source.len() {
+        if source[index..].starts_with("--") {
+            index = consume_comment(source, index);
+            continue;
+        }
+        if let Some(end) = consume_string_literal(source, index) {
+            index = end;
+            continue;
+        }
+        if let Some(header) = parse_class_header(source, &positions, index) {
+            match matching_delimiter(source, header.body_open, '{', '}') {
+                Ok(end) => {
+                    ranges.push(header.body_start..end);
+                    // Continue inside the body so nested declarations are
+                    // included too; the outer range already covers them.
+                    index = header.body_start;
+                    continue;
+                }
+                Err(depth) if depth > 0 => {
+                    ranges.push(header.body_start..source.len());
+                    index = header.body_start;
+                    continue;
+                }
+                _ => {}
+            }
+        }
+        index += next_char_len(source, index);
+    }
+    ranges
+}
+
 pub(crate) fn unclosed_class_diagnostic(path: &Path, source: &str) -> Option<Diagnostic> {
     let (header, _) = unclosed_class(source)?;
     Some(

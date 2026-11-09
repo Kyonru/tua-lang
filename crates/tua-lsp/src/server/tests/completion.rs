@@ -580,9 +580,10 @@ end
 }
 
 #[test]
-fn generic_class_bound_completion_uses_last_good_facts_during_incomplete_edit() {
+fn generic_class_bound_completion_survives_incomplete_class_edits() {
     let temp = TempProject::new("generic-class-bound-incomplete-completion");
     let main_uri = temp.uri_for("src/main.tua");
+    let fresh_uri = temp.uri_for("src/fresh.tua");
     let valid = r#"protocol Readable {
   read(): string
 }
@@ -603,8 +604,11 @@ final class Box<T: Readable> implements Readable {
     server.send(did_open(&main_uri, valid));
     server.send(did_change(&main_uri, &incomplete, 2));
     server.send(completion_request(2, &main_uri, &incomplete, "value:"));
+    server.send(did_open(&fresh_uri, &incomplete));
+    server.send(completion_request(3, &fresh_uri, &incomplete, "value:"));
 
     assert_completion_labels(server.output(), 2, ["read"]);
+    assert_completion_labels(server.output(), 3, ["read"]);
 }
 
 #[test]

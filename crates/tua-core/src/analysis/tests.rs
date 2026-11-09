@@ -8193,6 +8193,19 @@ end)
 }
 
 #[test]
+fn incomplete_line_recovery_uses_class_placeholder_only_inside_class_bodies() {
+    let table_source = "local options = {\n  pending\n}\n";
+    let recovered_table = source_without_recoverable_incomplete_lines(table_source);
+    assert!(!recovered_table.contains("do end"));
+    assert!(recovered_table.contains("  \n"));
+
+    let class_source = "final class Box {\n  inspect(value: number) {\n    value:\n  }\n}\n";
+    let recovered_class = source_without_recoverable_incomplete_lines(class_source);
+    assert!(recovered_class.contains("    do end\n"));
+    assert_eq!(class_source.len(), recovered_class.len());
+}
+
+#[test]
 fn snapshot_chained_factory_uses_final_multiple_returns() {
     let fixture = Fixture::parse(
         r#"-- file: src/main.tua
@@ -9761,7 +9774,7 @@ fn unclosed_protocols_keep_current_buffer_semantics_available() {
 }
 
 #[test]
-fn incomplete_generic_class_completion_uses_last_good_bound_members() {
+fn incomplete_generic_class_completion_uses_current_and_last_good_facts() {
     let fixture = Fixture::parse(
         r#"-- file: draft.tua
 protocol Renderable {
@@ -9775,6 +9788,16 @@ final class Draft<T: Renderable> implements Renderable {
 "#,
     );
     let mut host = AnalysisHost::new();
+    let mut fresh_host = AnalysisHost::new();
+    fresh_host.set_file("draft.tua", fixture.files()[0].source.clone());
+    let fresh_snapshot = fresh_host.snapshot();
+    let fresh_labels =
+        completion_labels(&fresh_snapshot.completion("draft.tua", fixture.position("complete")));
+    assert!(
+        fresh_labels.contains(&"render".into()),
+        "new generic class bodies should expose protocol-bound members before a valid snapshot exists: {fresh_labels:?}"
+    );
+
     let valid = fixture.files()[0]
         .source
         .replace("  value:\n", "  value:render()\n")
