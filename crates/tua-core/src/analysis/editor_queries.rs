@@ -736,6 +736,11 @@ impl AnalysisSnapshot {
                     .rfind('\n')
                     .map_or(0, |newline| newline + 1);
                 let closing_line_prefix = &source[closing_line_start..closing_brace];
+                let line_ending = if source[..closing_brace].contains("\r\n") {
+                    "\r\n"
+                } else {
+                    "\n"
+                };
                 let (insert_offset, method_indent, leading_newline) =
                     if closing_line_prefix.trim().is_empty() {
                         (
@@ -744,15 +749,15 @@ impl AnalysisSnapshot {
                             "",
                         )
                     } else {
-                        (closing_brace, "  ".to_owned(), "\n")
+                        (closing_brace, "  ".to_owned(), line_ending)
                     };
                 let mut new_text = leading_newline.to_owned();
                 for (method, documentation) in methods {
                     for line in documentation {
-                        new_text.push_str(&format!("{method_indent}{line}\n"));
+                        new_text.push_str(&format!("{method_indent}{line}{line_ending}"));
                     }
                     new_text.push_str(&format!(
-                        "{method_indent}{}({}): {} {{\n{method_indent}  error(\"TODO: implement {}.{}\")\n{method_indent}}}\n",
+                        "{method_indent}{}({}): {} {{{line_ending}{method_indent}  error(\"TODO: implement {}.{}\"){line_ending}{method_indent}}}{line_ending}",
                         method.name,
                         method.parameters,
                         method.return_type,

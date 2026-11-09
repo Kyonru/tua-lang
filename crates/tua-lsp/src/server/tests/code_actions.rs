@@ -852,6 +852,37 @@ final class Actor implements TextActions, NumberActions {
 }
 
 #[test]
+fn protocol_stub_action_preserves_crlf_line_endings() {
+    let uri = "file:///tmp/code-action-protocol-crlf.tua";
+    let source = "protocol Renderable {\r\n  render(): nil\r\n}\r\nfinal class Panel implements Renderable {\r\n}\r\n";
+    let mut server = TestServer::new();
+    server.send(did_open(uri, source));
+    let diagnostics = last_published_diagnostics(server.output(), uri);
+    server.send(code_action_request_with_only(
+        2,
+        uri,
+        &["quickfix"],
+        diagnostics,
+    ));
+    let actions = response_with_id(server.output(), 2)["result"]
+        .as_array()
+        .expect("code actions should be an array");
+    let action = actions
+        .iter()
+        .find(|action| action["title"] == "Implement missing protocol methods")
+        .expect("the protocol stub quick fix should be available");
+    let new_text = action["edit"]["changes"][uri][0]["newText"]
+        .as_str()
+        .expect("protocol stubs should be inserted as source text");
+
+    assert!(new_text.contains("\r\n"), "generated text: {new_text:?}");
+    assert!(
+        !new_text.replace("\r\n", "").contains('\n'),
+        "generated text must not mix LF into a CRLF document: {new_text:?}"
+    );
+}
+
+#[test]
 fn code_action_creates_object_pool_for_repeated_constructor_call() {
     let uri = "file:///tmp/code-action-object-pool.tua";
     let source = r#"local first = Bullet.new()
