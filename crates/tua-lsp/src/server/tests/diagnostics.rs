@@ -1217,45 +1217,47 @@ final class Particle implements Updatable {
         "restoring the re-export should recover the latest changed contract: {restored:#?}"
     );
 
-    // Close the declaration overlays so subsequent file-system events are
-    // authoritative, then delete and recreate the contract behind both
-    // re-export hops. Consumers must not retain the deleted last-good graph.
+    // Close declaration overlays so subsequent file-system events are
+    // authoritative. Exercise every node in the re-export chain in turn;
+    // consumers must not retain a deleted last-good graph after repeated
+    // delete/recreate cycles.
     server.send(did_close(&contracts_uri));
     server.send(did_close(&relay_uri));
     server.send(did_close(&api_uri));
-    temp.remove("src/contracts.d.tua");
-    server.send(watched_files_changed([(&contracts_uri, 3)]));
-    server.send(text_document_diagnostic_request(6, &relay_uri));
-    let relay_deleted = document_diagnostic_items(server.output(), 6);
-    server.send(text_document_diagnostic_request(7, &consumer_uri));
-    let deleted = document_diagnostic_items(server.output(), 7);
-    assert!(
-        relay_deleted
-            .iter()
-            .any(|diagnostic| { matches!(diagnostic["code"].as_str(), Some("TL4002" | "TL1001")) }),
-        "the relay should report the deleted protocol import: {relay_deleted:#?}"
-    );
-    assert!(
-        deleted.iter().any(|diagnostic| {
-            matches!(diagnostic["code"].as_str(), Some("TL4002" | "TL1001"))
-        }),
-        "deleting the contract behind two re-exports should report an unresolved type: {deleted:#?}"
-    );
-    assert!(
-        deleted
-            .iter()
-            .all(|diagnostic| diagnostic["code"] != "TL1008"),
-        "a deleted contract must not leave stale conformance diagnostics: {deleted:#?}"
-    );
+    for (request_id, (path, uri, contents)) in [
+        (9, ("src/contracts.d.tua", &contracts_uri, contracts)),
+        (11, ("src/relay.d.tua", &relay_uri, relay)),
+        (13, ("src/api.d.tua", &api_uri, api)),
+    ] {
+        temp.remove(path);
+        server.send(watched_files_changed([(uri, 3)]));
+        server.send(text_document_diagnostic_request(request_id, &consumer_uri));
+        let deleted = document_diagnostic_items(server.output(), request_id);
+        assert!(
+            deleted.iter().any(|diagnostic| {
+                matches!(diagnostic["code"].as_str(), Some("TL4002" | "TL1001"))
+            }),
+            "deleting {path} should report a transitive type import failure: {deleted:#?}"
+        );
+        assert!(
+            deleted
+                .iter()
+                .all(|diagnostic| diagnostic["code"] != "TL1008"),
+            "deleting {path} must not leave stale conformance diagnostics: {deleted:#?}"
+        );
 
-    temp.write("src/contracts.d.tua", contracts);
-    server.send(watched_files_changed([(&contracts_uri, 1)]));
-    server.send(text_document_diagnostic_request(8, &consumer_uri));
-    let recreated = document_diagnostic_items(server.output(), 8);
-    assert!(
-        recreated.is_empty(),
-        "recreating the compatible contract should clear transitive import errors: {recreated:#?}"
-    );
+        temp.write(path, contents);
+        server.send(watched_files_changed([(uri, 1)]));
+        server.send(text_document_diagnostic_request(
+            request_id + 1,
+            &consumer_uri,
+        ));
+        let recreated = document_diagnostic_items(server.output(), request_id + 1);
+        assert!(
+            recreated.is_empty(),
+            "recreating {path} should clear transitive import errors: {recreated:#?}"
+        );
+    }
 }
 
 #[test]
