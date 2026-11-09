@@ -313,6 +313,20 @@ impl<'a> HoverResolver<'a> {
             return Some(hover);
         }
 
+        if let Some(definition) = self
+            .environment
+            .generic_alias_definition_for_local_name(&current_part.text)
+        {
+            let parameters = definition.parameter_names.join(", ");
+            let contents = format_type_with_prefix(
+                format!("type {}<{}> = ", current_part.text, parameters),
+                &definition.body,
+            );
+            let mut result = hover(contents, Some(current_part.span));
+            result.context = self.declaration_context(position, DefinitionKind::TypeAlias);
+            return Some(result);
+        }
+
         if let Some(ty) = self.environment.alias(&current_part.text) {
             let contents = format_type_with_prefix(format!("type {} = ", current_part.text), ty);
 

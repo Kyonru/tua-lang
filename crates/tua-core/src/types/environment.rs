@@ -191,6 +191,16 @@ impl TypeEnvironment {
         self.generic_aliases.values()
     }
 
+    pub(crate) fn generic_alias_definition_for_local_name(
+        &self,
+        name: &str,
+    ) -> Option<&GenericAliasDefinition> {
+        let id = self
+            .generic_alias_bindings
+            .get(&(crate::vfs::normalize_path(&self.path), name.to_owned()))?;
+        self.generic_aliases.get(id)
+    }
+
     pub(crate) fn generic_class_definitions(
         &self,
     ) -> impl Iterator<Item = &GenericClassDefinition> {
@@ -1607,6 +1617,11 @@ pub(crate) fn build_type_environment_with_domain_registry(
                     .generic_parameters
                     .iter()
                     .map(|parameter| parameter.id.clone())
+                    .collect(),
+                parameter_names: alias
+                    .generic_parameters
+                    .iter()
+                    .map(|parameter| parameter.name.clone())
                     .collect(),
                 body: Box::new(body),
             },

@@ -162,9 +162,17 @@ impl AnalysisSnapshot {
         let binding =
             self.type_database
                 .resolve_type_name(&self.module_graph, &parsed.path, &name)?;
+        let contents = self
+            .type_database
+            .generic_alias_definition(&self.module_graph, &parsed.path, &name)
+            .map(|definition| {
+                let parameters = definition.parameter_names.join(", ");
+                format_type_with_prefix(format!("type {name}<{parameters}> = "), &definition.body)
+            })
+            .unwrap_or_else(|| format_type_with_prefix(format!("type {name} = "), &binding.ty));
         let mut hover = Hover {
             is_markdown: false,
-            contents: format_type_with_prefix(format!("type {name} = "), &binding.ty),
+            contents,
             span: Some(current_part.span),
             documentation: None,
             context: Vec::new(),

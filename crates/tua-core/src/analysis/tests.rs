@@ -3229,7 +3229,7 @@ fn imported_generic_class_alias_uses_runtime_constructor_and_shared_members() {
 import type { BoxInstance as ImportedBox } from "./box"
 local BoxModule = require("box")
 local box = BoxModule.Box.new(3)
-local typed: ImportedBox<number> = box
+local typed: <|alias|>ImportedBox<number> = box
 local _value: number = box.value
 local _method_value: number = typed:get(<|signature|>)
 local _ = box.ge<|members|>
@@ -3260,6 +3260,12 @@ return { Box = Box }
     let snapshot = host.snapshot();
     let diagnostics = snapshot.diagnostics("src/main.tua");
     let environment = snapshot.project_type_environment("src/main.tua").unwrap();
+    assert!(
+        environment
+            .generic_alias_definition_for_local_name("ImportedBox")
+            .is_some(),
+        "the project environment should retain the imported alias spelling"
+    );
     assert!(environment.generic_alias_definitions().any(|definition| {
         matches!(definition.body.as_ref(), Type::GenericClassApplication { name, .. } if name == "Box")
     }), "the imported generic instance alias must retain its producer class identity");
@@ -3274,6 +3280,10 @@ return { Box = Box }
             .contents,
         "(field) value: number"
     );
+    let alias_hover = snapshot
+        .hover("src/main.tua", fixture.position("alias"))
+        .expect("an imported generic alias should show its declaration signature");
+    assert_eq!(alias_hover.contents, "type ImportedBox<T> = Box<T>");
     let completions = snapshot.completion("src/main.tua", fixture.position("members"));
     assert!(
         completions.iter().any(|item| {

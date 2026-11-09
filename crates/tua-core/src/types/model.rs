@@ -58,6 +58,7 @@ pub enum GenericAliasReference {
 pub struct GenericAliasDefinition {
     pub id: TypeAliasId,
     pub parameters: Vec<TypeParameterId>,
+    pub parameter_names: Vec<String>,
     pub body: Box<Type>,
 }
 

@@ -381,6 +381,7 @@ fn mutable_array_protocol_view_guard_expands_generic_alias_elements() {
     context.insert_generic_alias(GenericAliasDefinition {
         id: alias_id.clone(),
         parameters: vec![parameter_id.clone()],
+        parameter_names: vec!["T".to_owned()],
         body: Box::new(Type::GenericParameter {
             id: parameter_id,
             name: "T".to_owned(),
