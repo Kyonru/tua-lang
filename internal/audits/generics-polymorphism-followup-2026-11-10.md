@@ -136,8 +136,9 @@ delete/recreate churn behind two declaration-file re-export hops.
 - `make extension-package` with loopback access — passed. The extension check
   reported 180 passed and 0 failed; all 454 tracked JSON files validated, and
   the release server and VSIX were built.
-- `make extension-real-server-test` with loopback access — passed using the
-  development extension and release-mode server; the VS Code extension-host
+- `TUA_TEST_VSIX="$(pwd)/editors/vscode/tua-0.7.0.vsix" make extension-real-server-test`
+  with loopback access — passed after installing the package into a disposable
+  VS Code profile and using its bundled release server; the VS Code extension-host
   process exited with code 0. The suite exercised protocol and generic
   completion, hover, signatures, definitions, rename, unsaved edits, and
   implementation navigation.
@@ -147,6 +148,11 @@ delete/recreate churn behind two declaration-file re-export hops.
 The generated VSIX is a local macOS arm64 beta artifact. This follow-up does
 not claim cross-platform, LOVE/LuaJIT, visual, or long-session release
 qualification.
+
+The packaged VSIX installation path was exercised directly after the artifact
+was rebuilt: VS Code installed `tua-0.7.0.vsix` in a temporary extensions
+directory, discovered the bundled `bin/tua`, and passed the real-server editor
+suite without a development-server override.
 
 ## Remaining work and recommended order
 
