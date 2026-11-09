@@ -6,6 +6,7 @@ use crate::types::substitute_type_parameters;
 use super::{FunctionParameter, FunctionType, Type, TypeContext};
 
 const MAX_GENERIC_CONSTRAINT_DEPTH: usize = 64;
+pub(crate) const MAX_GENERIC_CALL_INSTANTIATIONS_PER_FILE: usize = 4_096;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct GenericInferenceFailure {
@@ -19,6 +20,7 @@ pub(crate) enum GenericInferenceFailureKind {
     ReturnOnly,
     Callback,
     Unresolved,
+    WorkLimit,
     Conflict {
         previous: Box<Type>,
         next: Box<Type>,
@@ -43,6 +45,10 @@ impl GenericInferenceFailure {
             GenericInferenceFailureKind::Unresolved => format!(
                 "cannot infer generic type parameter `{}` from the supplied arguments",
                 self.parameter
+            ),
+            GenericInferenceFailureKind::WorkLimit => format!(
+                "generic inference stopped after {} distinct call instantiations in this source file; split generated call-heavy code across files or simplify the generic signatures",
+                MAX_GENERIC_CALL_INSTANTIATIONS_PER_FILE
             ),
             GenericInferenceFailureKind::Conflict { previous, next } => format!(
                 "conflicting arguments for generic type parameter `{}`: inferred both `{previous}` and `{next}`",
@@ -559,7 +565,12 @@ fn contains_any_parameter(ty: &Type, binders: &HashSet<TypeParameterId>, depth: 
 
 fn contains_parameter(ty: &Type, parameter: &TypeParameterId, depth: usize) -> bool {
     if depth >= MAX_GENERIC_CONSTRAINT_DEPTH {
-        return false;
+        // Constraint collection stops at this depth, but deciding that the
+        // binder is absent would mislabel a deeply nested input use as a
+        // return-only parameter. Finish this presence check iteratively so the
+        // Rust call stack stays bounded while the caller reports an unresolved
+        // inference instead of a misleading diagnostic.
+        return contains_parameter_iteratively(ty, parameter);
     }
     match ty {
         Type::GenericParameter { id, .. } => id == parameter,
@@ -590,6 +601,35 @@ fn contains_parameter(ty: &Type, parameter: &TypeParameterId, depth: usize) -> b
             .any(|ty| contains_parameter(ty, parameter, depth + 1)),
         Type::Alias(_) | Type::Primitive(_) | Type::Any | Type::StringLiteral(_) => false,
     }
+}
+
+fn contains_parameter_iteratively(root: &Type, parameter: &TypeParameterId) -> bool {
+    let mut pending = vec![root];
+    while let Some(ty) = pending.pop() {
+        match ty {
+            Type::GenericParameter { id, .. } if id == parameter => return true,
+            Type::Union(types) | Type::Tuple(types) => pending.extend(types),
+            Type::Function(function) => {
+                pending.extend(function.parameters.iter().map(|parameter| &parameter.ty));
+                pending.extend(function.vararg_type.iter().map(Box::as_ref));
+                pending.extend(function.return_types_or_any());
+            }
+            Type::Table(table) => pending.extend(table.fields().map(|(_, field)| &field.ty)),
+            Type::Array(item) => pending.push(item),
+            Type::Dictionary { key, value } => {
+                pending.push(key);
+                pending.push(value);
+            }
+            Type::GenericAliasApplication { arguments, .. }
+            | Type::GenericClassApplication { arguments, .. } => pending.extend(arguments),
+            Type::GenericParameter { .. }
+            | Type::Alias(_)
+            | Type::Primitive(_)
+            | Type::Any
+            | Type::StringLiteral(_) => {}
+        }
+    }
+    false
 }
 
 fn collect_generic_parameters(

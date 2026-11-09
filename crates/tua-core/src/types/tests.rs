@@ -2314,6 +2314,46 @@ fn test_generic_parameter(name: &str, ordinal: usize) -> crate::parser::GenericP
 }
 
 #[test]
+fn generic_alias_expansion_work_limit_preserves_the_unexpanded_type() {
+    let fields = (0..4_200)
+        .map(|index| format!("  field_{index:04}: T,\n"))
+        .collect::<String>();
+    let source = format!("type Wide<T> = {{\n{fields}}}\nlocal value: Wide<number>\n");
+    let parsed = parse_tua_source("src/wide_generic_alias.tua", source)
+        .expect("wide generic aliases should parse");
+    let environment =
+        build_type_environment(&parsed).expect("wide generic alias should build an environment");
+    let value = environment.local("value").expect("local type exists");
+
+    assert!(
+        matches!(environment.resolve_aliases(value), Type::GenericAliasApplication { .. }),
+        "when bounded expansion stops, preserve the complete alias application instead of returning a partially substituted table"
+    );
+}
+
+#[test]
+fn generic_alias_instantiation_depth_limit_preserves_a_symbolic_edge() {
+    let mut source = String::new();
+    for index in 0..140 {
+        source.push_str(&format!("type Alias{index}<T> = Alias{}<T>\n", index + 1));
+    }
+    source.push_str("type Alias140<T> = { value: T }\nlocal value: Alias0<number>\n");
+    let parsed = parse_tua_source("src/deep_generic_aliases.tua", source)
+        .expect("a long chain of generic aliases should parse");
+    let environment = build_type_environment(&parsed)
+        .expect("a long chain of generic aliases should build an environment");
+    let value = environment.local("value").expect("local type exists");
+
+    assert!(
+        matches!(
+            environment.resolve_aliases(value),
+            Type::GenericAliasApplication { .. }
+        ),
+        "a deep alias chain should remain symbolic at the expansion bound"
+    );
+}
+
+#[test]
 fn generic_function_instantiation_is_fresh_and_handles_union_any_and_ambiguity() {
     let binder = test_generic_parameter("T", 0);
     let generic = Type::GenericParameter {
@@ -2385,6 +2425,44 @@ fn generic_function_instantiation_is_fresh_and_handles_union_any_and_ambiguity()
     .unwrap_err()
     .message()
     .contains("cannot infer generic type parameter `T`"));
+}
+
+#[test]
+fn generic_constraint_depth_limit_keeps_binders_actionably_unresolved() {
+    let binder = test_generic_parameter("T", 0);
+    let generic = Type::GenericParameter {
+        id: binder.id.clone(),
+        name: binder.name.clone(),
+    };
+    let context = TypeContext::new();
+
+    for (depth, should_infer) in [(63, true), (64, false)] {
+        let parameter = (0..depth).fold(generic.clone(), |ty, _| Type::array(ty));
+        let actual = (0..depth).fold(Type::number(), |ty, _| Type::array(ty));
+        let scheme = FunctionType::new_signature(
+            [FunctionParameter::named("value", parameter)],
+            1,
+            None,
+            [generic.clone()],
+        )
+        .with_generic_parameters([binder.clone()]);
+
+        let result = instantiate_generic_function(&scheme, &[Some(actual)], &context);
+        if should_infer {
+            assert_eq!(
+                result
+                    .expect("the binder just inside the depth limit should infer")
+                    .return_types_or_any(),
+                &[Type::number()]
+            );
+        } else {
+            assert_eq!(
+                result.unwrap_err().kind,
+                crate::types::GenericInferenceFailureKind::Unresolved,
+                "a binder beyond the solver depth limit should remain an explicit inference error"
+            );
+        }
+    }
 }
 
 #[test]

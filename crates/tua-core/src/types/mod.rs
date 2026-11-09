@@ -23,7 +23,7 @@ pub(crate) use environment::{
 pub(crate) use format::{format_named_function_pretty, format_type_with_prefix};
 pub(crate) use inference::{
     instantiate_generic_function, instantiate_generic_function_from_context,
-    GenericInferenceFailure,
+    GenericInferenceFailure, GenericInferenceFailureKind, MAX_GENERIC_CALL_INSTANTIATIONS_PER_FILE,
 };
 pub(crate) use model::GenericClassDefinition;
 pub use model::{

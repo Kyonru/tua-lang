@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 
 use full_moon::ast::{
@@ -40,6 +40,7 @@ use crate::types::{
     instantiate_generic_function_from_context, widen_inferred_type, AssignabilityFailure,
     AssignabilityFailureKind, FunctionParameter, FunctionType, IndexFallback, MetatableFacts,
     TableField, Type, TypeContext, TypeEnvironment, TypedFunction,
+    MAX_GENERIC_CALL_INSTANTIATIONS_PER_FILE,
 };
 use crate::{asset, love_callback, lua, signal, sprite, state_machine};
 use crate::{Diagnostic, DiagnosticCode, DiagnosticSeverity};
@@ -187,6 +188,12 @@ pub(crate) fn check_parsed_source_with_environment_and_ecs_config(
     .run_with_environment(environment)
 }
 
+type GenericInstantiationCacheKey = (FunctionType, Vec<Option<Type>>);
+type GenericInstantiationCache = HashMap<
+    GenericInstantiationCacheKey,
+    Result<FunctionType, crate::types::GenericInferenceFailure>,
+>;
+
 struct Checker<'a> {
     parsed: &'a ParsedSource,
     scope: crate::ScopeMap,
@@ -215,6 +222,9 @@ struct Checker<'a> {
     /// Numeric `for` variables whose literal bounds give every value.
     constant_loop_values: Vec<(String, Vec<i64>)>,
     diagnostics: Vec<Diagnostic>,
+    generic_call_instantiations: usize,
+    generic_instantiation_limit_reported: bool,
+    generic_instantiation_cache: GenericInstantiationCache,
 }
 
 #[derive(Clone, Debug)]
@@ -308,6 +318,9 @@ impl<'a> Checker<'a> {
             shader_sources: BTreeMap::new(),
             constant_loop_values: Vec::new(),
             diagnostics: Vec::new(),
+            generic_call_instantiations: 0,
+            generic_instantiation_limit_reported: false,
+            generic_instantiation_cache: HashMap::new(),
         }
     }
 
@@ -3229,22 +3242,31 @@ impl<'a> Checker<'a> {
                 })
                 .or_else(|| node_span(node));
             let position = span.map_or_else(|| node_position(node), |span| span.start);
-            let mut diagnostic = Diagnostic::error(
-                &self.parsed.path,
-                position.line,
-                position.column,
-                failure.message(),
-            )
-            .with_code(DiagnosticCode::TYPE_GENERIC_INFERENCE);
-            if let Some(span) = span {
-                diagnostic = diagnostic.with_range(
-                    span.start.line,
-                    span.start.column,
-                    span.end.line,
-                    span.end.column,
-                );
+            let work_limit = matches!(
+                failure.kind,
+                crate::types::GenericInferenceFailureKind::WorkLimit
+            );
+            if !work_limit || !self.generic_instantiation_limit_reported {
+                let mut diagnostic = Diagnostic::error(
+                    &self.parsed.path,
+                    position.line,
+                    position.column,
+                    failure.message(),
+                )
+                .with_code(DiagnosticCode::TYPE_GENERIC_INFERENCE);
+                if let Some(span) = span {
+                    diagnostic = diagnostic.with_range(
+                        span.start.line,
+                        span.start.column,
+                        span.end.line,
+                        span.end.column,
+                    );
+                }
+                self.diagnostics.push(diagnostic);
             }
-            self.diagnostics.push(diagnostic);
+            if work_limit {
+                self.generic_instantiation_limit_reported = true;
+            }
             // A failed generic instantiation has no trustworthy result type.
             // Do not leak the unresolved declaration binder into the caller
             // and report a second, cascading assignment mismatch.
@@ -4414,7 +4436,7 @@ fn typed_call_candidates(function: &TypedFunction) -> Vec<TypedCallCandidate> {
 }
 
 fn instantiate_typed_call_candidate(
-    checker: &Checker<'_>,
+    checker: &mut Checker<'_>,
     candidate: &TypedCallCandidate,
     argument_types: &[Option<Type>],
 ) -> Result<TypedCallCandidate, crate::types::GenericInferenceFailure> {
@@ -4434,7 +4456,24 @@ fn instantiate_typed_call_candidate(
         candidate.return_types.clone(),
     )
     .with_generic_parameters(candidate.generic_parameters.clone());
-    let instantiated = instantiate_generic_function(&scheme, argument_types, &checker.context)?;
+    let key = (scheme.clone(), argument_types.to_vec());
+    let instantiated = if let Some(cached) = checker.generic_instantiation_cache.get(&key) {
+        cached.clone()
+    } else {
+        if checker.generic_call_instantiations >= MAX_GENERIC_CALL_INSTANTIATIONS_PER_FILE {
+            return Err(crate::types::GenericInferenceFailure {
+                parameter: String::new(),
+                kind: crate::types::GenericInferenceFailureKind::WorkLimit,
+                argument_index: None,
+            });
+        }
+        checker.generic_call_instantiations += 1;
+        let instantiated = instantiate_generic_function(&scheme, argument_types, &checker.context);
+        checker
+            .generic_instantiation_cache
+            .insert(key, instantiated.clone());
+        instantiated
+    }?;
     Ok(TypedCallCandidate {
         generic_parameters: instantiated.generic_parameters.clone(),
         parameters: instantiated

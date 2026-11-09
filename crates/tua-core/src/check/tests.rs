@@ -6938,6 +6938,46 @@ fn generic_function_calls_infer_independent_type_arguments() {
 }
 
 #[test]
+fn generic_call_instantiation_budget_is_bounded_and_reports_once() {
+    let mut source = String::from("local function identity<T>(value: T): T return value end\n");
+    for index in 0..=crate::types::MAX_GENERIC_CALL_INSTANTIATIONS_PER_FILE {
+        source.push_str(&format!("identity(\"value-{index}\")\n"));
+    }
+
+    let diagnostics = check_tua_source("src/generated_generic_calls.tua", source)
+        .expect_err("a source file over the generic-call work limit must stop checking calls");
+    let budget_diagnostics = diagnostics
+        .iter()
+        .filter(|diagnostic| {
+            diagnostic.code == Some(DiagnosticCode::TYPE_GENERIC_INFERENCE)
+                && diagnostic
+                    .message
+                    .contains("4096 distinct call instantiations")
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        budget_diagnostics.len(),
+        1,
+        "the work limit should produce one actionable diagnostic, got {diagnostics:#?}"
+    );
+    assert_eq!(
+        budget_diagnostics[0].line,
+        crate::types::MAX_GENERIC_CALL_INSTANTIATIONS_PER_FILE + 2,
+        "the diagnostic should point at the first call beyond the limit"
+    );
+}
+
+#[test]
+fn generic_call_cache_reuses_identical_specializations_within_one_check() {
+    let source = format!(
+        "local function identity<T>(value: T): T return value end\n{}",
+        "identity(\"same\")\n".repeat(crate::types::MAX_GENERIC_CALL_INSTANTIATIONS_PER_FILE + 1)
+    );
+    check_tua_source("src/repeated_generic_calls.tua", source)
+        .expect("identical call schemes and argument types should reuse one specialization");
+}
+
+#[test]
 fn generic_function_calls_report_conflicts_and_ambiguous_binders() {
     let conflict = check_tua_source(
         "src/generic_calls.tua",

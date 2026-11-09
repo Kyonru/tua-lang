@@ -409,7 +409,15 @@ impl TypeEnvironment {
     pub(crate) fn resolve_aliases(&self, ty: &Type) -> Type {
         if type_contains_generic_alias_application(ty, 0) {
             let mut context = GenericAliasExpansionContext::default();
-            return context.resolve(self, ty);
+            let resolved = context.resolve(self, ty);
+            return if context.exhausted {
+                // Keep the caller's complete symbolic type when the budget is
+                // exhausted. Returning a partly expanded record would silently
+                // discard some substituted member types based on field order.
+                ty.clone()
+            } else {
+                resolved
+            };
         }
         if let Some(resolved) = resolve_nominal_reference(&self.aliases, ty) {
             return resolved;
@@ -953,6 +961,7 @@ const MAX_GENERIC_ALIAS_INSTANTIATION_DEPTH: usize = 128;
 #[derive(Default)]
 struct GenericAliasExpansionContext {
     work: usize,
+    exhausted: bool,
     active: Vec<(crate::parser::TypeAliasId, Vec<Type>)>,
     aliases: AliasResolutionContext,
 }
@@ -960,6 +969,7 @@ struct GenericAliasExpansionContext {
 impl GenericAliasExpansionContext {
     fn resolve(&mut self, environment: &TypeEnvironment, ty: &Type) -> Type {
         if self.work >= MAX_GENERIC_ALIAS_EXPANSION_WORK {
+            self.exhausted = true;
             return ty.clone();
         }
         self.work += 1;
