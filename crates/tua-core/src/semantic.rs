@@ -621,6 +621,33 @@ impl<'a> SemanticModel<'a> {
         }
 
         if let Some(function) = self.typed_function_for_call_parts(&parts, position) {
+            if function.overloads.is_empty() && !function.generic_parameters.is_empty() {
+                if let Some(Type::Function(scheme)) = function.as_type() {
+                    let mut arguments = function_call_expression_arguments(function_call)
+                        .map(|expression| {
+                            self.type_of_expression_return_at_depth(
+                                expression,
+                                position,
+                                0,
+                                depth + 1,
+                            )
+                        })
+                        .collect::<Vec<_>>();
+                    if function_call_is_method(function_call) {
+                        arguments.insert(
+                            0,
+                            self.type_of_field_chain(&parts[..parts.len() - 1], position),
+                        );
+                    }
+                    if let Ok(instantiated) = crate::types::instantiate_generic_function(
+                        &scheme,
+                        &arguments,
+                        &self.environment.to_type_context(),
+                    ) {
+                        return instantiated.return_types_or_any().to_vec();
+                    }
+                }
+            }
             if !function.overloads.is_empty() {
                 let mut arguments = function_call_expression_arguments(function_call)
                     .map(|expression| {

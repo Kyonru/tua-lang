@@ -1,14 +1,14 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 
 use crate::audio;
 use crate::ecs;
 use crate::input;
 use crate::module_graph::{ModuleExportOrigin, ModuleGraph, RequireResolution};
-use crate::parser::TypeAliasId;
+use crate::parser::{GenericDeclarationId, TypeAliasId};
 use crate::sprite;
 use crate::store;
-use crate::types::{GenericAliasDefinition, GenericAliasReference};
+use crate::types::{GenericAliasDefinition, GenericAliasReference, GenericClassDefinition};
 use crate::vector;
 use crate::vfs::normalize_path;
 use crate::{
@@ -33,6 +33,7 @@ pub struct ProjectTypeModule {
     class_names: BTreeSet<String>,
     aliases: BTreeMap<String, ProjectTypeBinding>,
     generic_aliases: BTreeMap<String, GenericAliasDefinition>,
+    generic_classes: HashMap<GenericDeclarationId, GenericClassDefinition>,
     locals: BTreeMap<String, ProjectTypeBinding>,
     functions: BTreeMap<String, TypedFunction>,
     module_aliases: BTreeMap<String, String>,
@@ -107,6 +108,7 @@ impl ProjectTypeDatabase {
                 class_names: BTreeSet::new(),
                 aliases: BTreeMap::new(),
                 generic_aliases: BTreeMap::new(),
+                generic_classes: HashMap::new(),
                 locals: BTreeMap::new(),
                 functions: BTreeMap::new(),
                 module_aliases: module_aliases(input.scope, input.parsed),
@@ -150,6 +152,12 @@ impl ProjectTypeDatabase {
                     module
                         .generic_aliases
                         .insert(definition.id.name.clone(), definition.clone());
+                }
+
+                for definition in environment.generic_class_definitions() {
+                    module
+                        .generic_classes
+                        .insert(definition.id.clone(), definition.clone());
                 }
 
                 for (name, ty) in environment.aliases() {
@@ -384,6 +392,16 @@ impl ProjectTypeDatabase {
             &mut BTreeSet::new(),
         )
         .cloned()
+    }
+
+    pub(crate) fn generic_class_definition(
+        &self,
+        identity: &GenericDeclarationId,
+    ) -> Option<GenericClassDefinition> {
+        self.module(&identity.module)?
+            .generic_classes
+            .get(identity)
+            .cloned()
     }
 
     pub fn module_export_type(

@@ -189,6 +189,23 @@ impl TypeEnvironment {
         self.generic_aliases.values()
     }
 
+    pub(crate) fn generic_class_definitions(
+        &self,
+    ) -> impl Iterator<Item = &GenericClassDefinition> {
+        self.generic_classes.values()
+    }
+
+    pub(crate) fn with_generic_class_definitions(
+        mut self,
+        definitions: impl IntoIterator<Item = GenericClassDefinition>,
+    ) -> Self {
+        let classes = Arc::make_mut(&mut self.generic_classes);
+        for definition in definitions {
+            classes.insert(definition.id.clone(), definition);
+        }
+        self
+    }
+
     pub(crate) fn generic_alias_diagnostics(&self, parsed: &ParsedSource) -> Vec<Diagnostic> {
         let mut diagnostics = Vec::new();
         let mut emitted = BTreeSet::new();
@@ -1535,7 +1552,9 @@ pub(crate) fn build_type_environment_with_domain_registry(
         if alias.generic_parameters.is_empty() {
             continue;
         }
-        let context = TypeResolutionContext::with_self_type(Type::alias(alias.name.clone()));
+        let mut context =
+            TypeResolutionContext::with_classes(&parsed.path, &parsed.class_declarations);
+        context.self_type = Some(Type::alias(alias.name.clone()));
         let body = resolve_tua_type_with_context(
             &parsed.path,
             &alias.ty,
@@ -1573,7 +1592,9 @@ pub(crate) fn build_type_environment_with_domain_registry(
             continue;
         }
 
-        let context = TypeResolutionContext::with_self_type(Type::alias(alias.name.clone()));
+        let mut context =
+            TypeResolutionContext::with_classes(&parsed.path, &parsed.class_declarations);
+        context.self_type = Some(Type::alias(alias.name.clone()));
         let ty = resolve_tua_type_with_context(
             &parsed.path,
             &alias.ty,

@@ -3223,6 +3223,146 @@ return { Dialogue = Dialogue }
 }
 
 #[test]
+fn imported_generic_class_alias_uses_runtime_constructor_and_shared_members() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+import type { BoxInstance as ImportedBox } from "./box"
+local BoxModule = require("box")
+local box = BoxModule.Box.new(3)
+local typed: ImportedBox<number> = box
+local _value: number = box.value
+local _method_value: number = typed:get(<|signature|>)
+local _ = box.ge<|members|>
+local _shown = box.<|hover|>value
+-- file: src/box.tua
+final class Box<T> {
+  value: T
+
+  init(value: T) {
+    self.value = value
+  }
+
+  get(): T {
+    return self.value
+  }
+}
+
+export type BoxInstance<T> = Box<T>
+return { Box = Box }
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+
+    let snapshot = host.snapshot();
+    let diagnostics = snapshot.diagnostics("src/main.tua");
+    let environment = snapshot.project_type_environment("src/main.tua").unwrap();
+    assert!(environment.generic_alias_definitions().any(|definition| {
+        matches!(definition.body.as_ref(), Type::GenericClassApplication { name, .. } if name == "Box")
+    }), "the imported generic instance alias must retain its producer class identity");
+    assert!(
+        diagnostics.is_empty(),
+        "imported generic class members should retain their producer identity: {diagnostics:#?}"
+    );
+    assert_eq!(
+        snapshot
+            .hover("src/main.tua", fixture.position("hover"))
+            .expect("imported generic field should hover")
+            .contents,
+        "(field) value: number"
+    );
+    let completions = snapshot.completion("src/main.tua", fixture.position("members"));
+    assert!(
+        completions.iter().any(|item| {
+            item.label == "get"
+                && item
+                    .detail
+                    .as_deref()
+                    .is_some_and(|detail| detail.contains("number"))
+        }),
+        "imported generic member completion should show the instantiated type: {completions:#?}"
+    );
+    let signature = snapshot
+        .signature_help("src/main.tua", fixture.position("signature"))
+        .expect("imported generic method should provide signature help");
+    assert!(
+        signature.signatures[0].label.contains("get(): number"),
+        "signature should use the instantiated imported class type: {signature:#?}"
+    );
+}
+
+#[test]
+fn reexported_generic_class_metadata_refreshes_after_unsaved_provider_edits() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+import type Types from "./barrel"
+local Bundle = require("barrel")
+local box = Bundle.Box.new(3)
+local typed: Types.BoxInstance<number> = box
+local _value: number = typed:get()
+local _shown = typed.<|hover|>get
+-- file: src/barrel.tua
+export type { BoxInstance } from "./box"
+local Provider = require("box")
+return { Box = Provider.Box }
+-- file: src/box.tua
+final class Box<T> {
+  value: T
+  init(value: T) { self.value = value }
+  get(): T { return self.value }
+}
+export type BoxInstance<T> = Box<T>
+return { Box = Box }
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+
+    let initial = host.snapshot();
+    assert!(
+        initial.diagnostics("src/main.tua").is_empty(),
+        "namespace type alias plus runtime re-export should resolve: {:#?}",
+        initial.diagnostics("src/main.tua")
+    );
+    assert!(initial
+        .hover("src/main.tua", fixture.position("hover"))
+        .is_some());
+
+    host.set_file(
+        "src/box.tua",
+        r#"final class Box<T> {
+  value: T
+  init(value: T) { self.value = value }
+  get(): string { return "ready" }
+}
+export type BoxInstance<T> = Box<T>
+return { Box = Box }
+"#,
+    );
+    let edited = host.snapshot();
+    let diagnostics = edited.diagnostics("src/main.tua");
+    assert!(
+        diagnostics.iter().any(|diagnostic| {
+            diagnostic.code == Some(DiagnosticCode::TYPE_MISMATCH)
+                && diagnostic.message.contains("expected number, found string")
+        }),
+        "unsaved provider signature edit should refresh consumer diagnostics: {diagnostics:#?}"
+    );
+    assert!(
+        edited
+            .hover("src/main.tua", fixture.position("hover"))
+            .is_some(),
+        "unsaved provider edit should retain imported member hover"
+    );
+}
+
+#[test]
 fn imported_record_aliases_accept_values_with_nested_exported_aliases() {
     let fixture = Fixture::parse(
         r#"-- file: src/main.tua

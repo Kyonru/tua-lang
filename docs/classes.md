@@ -51,11 +51,11 @@ particle:update(0.016)
 `class` is final by default; `open class` is required for inheritance.
 `final class` may be written explicitly. Instance fields, `init`, methods,
 `override`, `final` methods, and `super(...)` are supported. Generic classes can
-be declared and used within the same module; their constructor arguments infer
-the instance type, and fields and methods substitute the class parameters.
-Static members, private members, getters/setters, mixins, and multiple
-inheritance are not currently supported. Generic class imports, generic parent
-substitution, and protocol bounds remain in progress.
+be declared locally or shared through an exported generic instance alias; their
+constructor arguments infer the instance type, and fields and methods
+substitute the class parameters. Static members, private members,
+getters/setters, mixins, and multiple inheritance are not currently supported.
+Protocol bounds on generic class parameters remain in progress.
 
 ### Generic Classes
 
@@ -84,11 +84,47 @@ instantiated member types, and `Box<number>` cannot be assigned to
 `Box<string>` because class parameters are invariant for mutable instances.
 Generic class declarations and applications erase before Lua emission: the
 runtime class remains the ordinary table and metatable generated for `Box`.
-In a local inheritance chain, a generic class can apply its parent parameters
+In an inheritance chain, a generic class can apply its parent parameters
 with `extends Base<T>`. Parent fields and methods use the applied types, and
 `super(...)` checks the parent initializer with those same types. Assigning a
 generic subclass to a base class preserves the inherited type arguments.
-Imported generic classes are not yet supported.
+
+To share a generic class, export a generic alias for its instance type beside
+the runtime class value:
+
+```tua title="src/box.tua"
+final class Box<T> {
+  value: T
+
+  init(value: T) {
+    self.value = value
+  }
+
+  get(): T {
+    return self.value
+  }
+}
+
+export type BoxInstance<T> = Box<T>
+return { Box = Box }
+```
+
+Import the type contract and runtime constructor separately. The constructor
+infers its type arguments, and the imported alias applies those same arguments
+to hover, completion, signatures, and checking:
+
+```tua title="src/main.tua"
+import type { BoxInstance } from "./box"
+local BoxModule = require("box")
+
+local box = BoxModule.Box.new(42)
+local typed: BoxInstance<number> = box
+local value: number = typed:get()
+```
+
+The type-only import and generic arguments erase before Lua emission; only the
+runtime `require` and class table remain. Generic class metadata follows named,
+namespace, and re-exported type aliases, including unsaved edits to a provider.
 
 For a runnable cross-module example, see
 [`polymorphism.tua`](https://github.com/Kyonru/tua-lang/blob/main/examples/features/src/polymorphism.tua)

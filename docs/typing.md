@@ -139,8 +139,8 @@ recursive edges remain named, while a recursion that keeps changing arguments
 stops at the expansion limit and may leave an unresolved application without a
 dedicated diagnostic.
 
-Generic class parameters are supported for classes declared and used in one
-module:
+Generic class parameters are supported locally and across module boundaries
+when a class exports a generic instance alias:
 
 ```tua
 final class Pair<K, V> {
@@ -165,7 +165,12 @@ number of arguments reports `TL1004`. Generic class types are erased from Lua;
 the generated class remains an ordinary table and metatable. Local generic
 inheritance supports applied parents such as `Child<U> extends Base<U>`;
 inherited fields, methods, `super(...)` initializer calls, and base assignments
-keep the parent arguments. Imported generic classes are not yet supported.
+keep the parent arguments. To share a class, export `type BoxInstance<T> =
+Box<T>` beside the runtime class value, then pair `import type` with a runtime
+`require`; constructor inference and imported member types preserve the
+producer's class identity. Generic class arguments are erased before Lua
+emission. Generic class parameter bounds and protocol constraints remain
+unsupported.
 
 ### Protocol Contracts
 
@@ -367,11 +372,11 @@ type Logger = (prefix: string, ...string) -> nil
 The tail annotation is checked at calls too: `logAll("items", 1)` is an
 error because each extra argument must be a string.
 
-Generic type parameters are supported on aliases, free functions, and
-same-module classes; functions and class constructors infer binders from direct
-call arguments. Same-module generic classes can extend an applied generic
-parent. Imported generic classes and protocol bounds are not currently
-supported. Protocols provide explicit method contracts.
+Generic type parameters are supported on aliases, free functions, and classes;
+functions and class constructors infer binders from direct call arguments.
+Generic classes can extend an applied generic parent. Protocols provide
+explicit method contracts; generic class parameter bounds are not currently
+supported.
 Arrays and dictionaries remain the built-in collection forms; use `any` at
 genuinely dynamic boundaries.
 

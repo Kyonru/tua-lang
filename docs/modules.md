@@ -111,10 +111,35 @@ Generic aliases use the same export and import rules. For example,
 `import type { Box } from "./events"` permits `Box<number>` in a type
 annotation; namespace imports use `Events.Box<number>`. Type arguments and the
 alias declaration are erased and add no runtime module load.
-Generic classes currently have local, same-module semantics only. Importing a
-generic class and substituting its parameters across a module boundary is not
-supported yet; export and import a nongeneric instance alias only when its
-underlying class is nongeneric.
+To share a generic class, export a generic instance alias beside the runtime
+class value, then import that alias as a type and require the module for the
+constructor:
+
+```tua title="src/box.tua"
+final class Box<T> {
+  value: T
+  init(value: T) { self.value = value }
+  get(): T { return self.value }
+}
+
+export type BoxInstance<T> = Box<T>
+return { Box = Box }
+```
+
+```tua title="src/main.tua"
+import type { BoxInstance } from "./box"
+local BoxModule = require("box")
+
+local box = BoxModule.Box.new(42)
+local typed: BoxInstance<number> = box
+local value: number = typed:get()
+```
+
+The type import and generic arguments are erased. The runtime `require`
+provides the constructor; project type metadata carries the original class
+identity and substitutes imported fields and methods. Named, namespace, and
+re-exported aliases are supported. Generic class parameter bounds remain
+unsupported.
 
 For a method contract shared by runtime modules, export the protocol from a
 regular `.tua` module and import it only where the class needs its type:

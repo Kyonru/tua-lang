@@ -1,5 +1,7 @@
 use super::*;
 use crate::Deprecation;
+use full_moon::ast::{Call, FunctionArgs, Suffix};
+use std::collections::HashSet;
 
 impl AnalysisSnapshot {
     pub fn is_type_completion_position(
@@ -530,6 +532,7 @@ impl AnalysisSnapshot {
             .with_project_module_globals(parsed, self.project_module_globals())
             .with_alias_types(self.project_imported_alias_types(parsed))
             .with_generic_alias_bindings(self.project_imported_generic_alias_bindings(parsed))
+            .with_generic_class_definitions(self.project_imported_generic_class_definitions(parsed))
             .with_protocol_names(database::project_imported_protocol_names(
                 parsed,
                 &self.module_graph,
@@ -613,6 +616,55 @@ impl AnalysisSnapshot {
             }
         }
         bindings
+    }
+
+    fn project_imported_generic_class_definitions(
+        &self,
+        parsed: &ParsedSource,
+    ) -> Vec<crate::types::GenericClassDefinition> {
+        let mut pending = HashSet::new();
+
+        for (_, ty) in self.project_imported_alias_types(parsed) {
+            collect_generic_class_identities(&ty, &mut pending);
+        }
+        for (_, _, definition) in self.project_imported_generic_alias_bindings(parsed) {
+            collect_generic_class_identities(&definition.body, &mut pending);
+        }
+
+        for binding in require_bindings_for_parsed_source(parsed) {
+            let Some(module_path) = self.indexed_required_module_path(parsed, &binding.alias)
+            else {
+                continue;
+            };
+            let Some(module_type) = self.indexed_module_value_type(module_path) else {
+                continue;
+            };
+            let resolved =
+                self.type_database
+                    .resolve_type(&self.module_graph, module_path, &module_type);
+            collect_generic_class_identities(&resolved, &mut pending);
+        }
+
+        let mut definitions = Vec::new();
+        let mut resolved = HashSet::new();
+        let mut pending = pending.into_iter().collect::<Vec<_>>();
+        while let Some(identity) = pending.pop() {
+            if !resolved.insert(identity.clone()) {
+                continue;
+            }
+            let Some(definition) = self.type_database.generic_class_definition(&identity) else {
+                continue;
+            };
+            let mut nested = HashSet::new();
+            if let Some(parent) = &definition.parent {
+                collect_generic_class_identities(parent, &mut nested);
+            }
+            collect_generic_class_identities(&definition.body, &mut nested);
+            pending.extend(nested);
+            definitions.push(definition);
+        }
+
+        definitions
     }
 
     fn project_imported_class_protocol_conformances(
@@ -932,8 +984,6 @@ impl AnalysisSnapshot {
     ) -> Option<Type> {
         match expression {
             Expression::FunctionCall(function_call) => {
-                let parts = field_chain_before_first_call(function_call)?;
-
                 if function_call
                     .suffixes()
                     .filter(|suffix| matches!(suffix, full_moon::ast::Suffix::Call(_)))
@@ -941,7 +991,7 @@ impl AnalysisSnapshot {
                     > 1
                 {
                     let first =
-                        self.project_type_for_function_call_parts(parsed, &parts, 0, local_types)?;
+                        self.project_type_for_function_call(parsed, function_call, 0, local_types)?;
                     let aliases = self
                         .project_imported_alias_types(parsed)
                         .into_iter()
@@ -954,7 +1004,12 @@ impl AnalysisSnapshot {
                     .get(return_index)
                     .cloned();
                 }
-                self.project_type_for_function_call_parts(parsed, &parts, return_index, local_types)
+                self.project_type_for_function_call(
+                    parsed,
+                    function_call,
+                    return_index,
+                    local_types,
+                )
             }
             Expression::Var(var) if return_index == 0 => {
                 let parts = plain_field_chain_from_var(var)?;
@@ -970,22 +1025,52 @@ impl AnalysisSnapshot {
         }
     }
 
-    pub(super) fn project_type_for_function_call_parts(
+    fn project_type_for_function_call(
         &self,
         parsed: &ParsedSource,
-        parts: &[String],
+        function_call: &FunctionCall,
         return_index: usize,
         local_types: &BTreeMap<String, Type>,
     ) -> Option<Type> {
+        let parts = field_chain_before_first_call(function_call)?;
         let (root, fields) = parts.split_first()?;
         let ty = if fields.is_empty() {
             local_types.get(root).cloned()
         } else {
-            self.project_type_for_field_chain(parsed, parts)
+            self.project_type_for_field_chain(parsed, &parts)
         }?;
 
         match ty {
-            Type::Function(function) => function.return_types_or_any().get(return_index).cloned(),
+            Type::Function(function) => {
+                if function.generic_parameters.is_empty() {
+                    return function.return_types_or_any().get(return_index).cloned();
+                }
+
+                let mut arguments = project_call_argument_expressions(function_call)?
+                    .iter()
+                    .map(|argument| {
+                        self.project_type_for_expression(parsed, argument, 0, local_types)
+                            .or_else(|| project_literal_type(argument))
+                    })
+                    .collect::<Vec<_>>();
+                if function_call_has_method_receiver(function_call) {
+                    let receiver_parts = parts.get(..parts.len().saturating_sub(1))?;
+                    let receiver = self
+                        .project_type_for_field_chain(parsed, receiver_parts)
+                        .or_else(|| project_local_field_chain_type(local_types, receiver_parts));
+                    arguments.insert(0, receiver);
+                }
+
+                crate::types::instantiate_generic_function(
+                    &function,
+                    &arguments,
+                    &crate::types::TypeContext::default(),
+                )
+                .ok()?
+                .return_types_or_any()
+                .get(return_index)
+                .cloned()
+            }
             _ => None,
         }
     }
@@ -2679,6 +2764,132 @@ fn dictionary_key_accepts_field(ty: &Type, field: &str) -> bool {
         | Type::GenericAliasApplication { .. }
         | Type::GenericClassApplication { .. } => false,
     }
+}
+
+fn project_call_argument_expressions(function_call: &FunctionCall) -> Option<Vec<&Expression>> {
+    let call = function_call.suffixes().find_map(|suffix| match suffix {
+        Suffix::Call(call) => Some(call),
+        _ => None,
+    })?;
+    match call {
+        Call::AnonymousCall(FunctionArgs::Parentheses { arguments, .. }) => {
+            Some(arguments.iter().collect())
+        }
+        Call::AnonymousCall(FunctionArgs::String(value)) => {
+            // String-call sugar supplies its string as the only argument.
+            // The owned AST node cannot be borrowed from this helper, so the
+            // caller will retain the unspecialized return in this uncommon
+            // syntax form.
+            let _ = value;
+            None
+        }
+        Call::AnonymousCall(FunctionArgs::TableConstructor(value)) => {
+            let _ = value;
+            None
+        }
+        Call::MethodCall(method) => match method.args() {
+            FunctionArgs::Parentheses { arguments, .. } => Some(arguments.iter().collect()),
+            FunctionArgs::String(_) | FunctionArgs::TableConstructor(_) => None,
+            _ => Some(Vec::new()),
+        },
+        _ => None,
+    }
+}
+
+fn function_call_has_method_receiver(function_call: &FunctionCall) -> bool {
+    function_call
+        .suffixes()
+        .find_map(|suffix| match suffix {
+            Suffix::Call(call) => Some(matches!(call, Call::MethodCall(_))),
+            _ => None,
+        })
+        .unwrap_or(false)
+}
+
+fn project_literal_type(expression: &Expression) -> Option<Type> {
+    match expression {
+        Expression::Number(_) => Some(Type::number()),
+        Expression::String(_) => Some(Type::string()),
+        Expression::Symbol(symbol)
+            if token_text(symbol) == "true" || token_text(symbol) == "false" =>
+        {
+            Some(Type::boolean())
+        }
+        Expression::Symbol(symbol) if token_text(symbol) == "nil" => Some(Type::nil()),
+        _ => None,
+    }
+}
+
+fn collect_generic_class_identities(
+    ty: &Type,
+    identities: &mut HashSet<crate::parser::GenericDeclarationId>,
+) {
+    fn collect(
+        ty: &Type,
+        identities: &mut HashSet<crate::parser::GenericDeclarationId>,
+        depth: usize,
+    ) {
+        if depth >= 64 {
+            return;
+        }
+        match ty {
+            Type::GenericClassApplication {
+                identity,
+                arguments,
+                ..
+            } => {
+                identities.insert(identity.clone());
+                for argument in arguments {
+                    collect(argument, identities, depth + 1);
+                }
+            }
+            Type::GenericAliasApplication { arguments, .. } => {
+                for argument in arguments {
+                    collect(argument, identities, depth + 1);
+                }
+            }
+            Type::Union(types) | Type::Tuple(types) => {
+                for ty in types {
+                    collect(ty, identities, depth + 1);
+                }
+            }
+            Type::Function(function) => {
+                for parameter in &function.parameters {
+                    collect(&parameter.ty, identities, depth + 1);
+                }
+                if let Some(vararg) = function.vararg_type.as_deref() {
+                    collect(vararg, identities, depth + 1);
+                }
+                for ty in function
+                    .return_types_or_any()
+                    .iter()
+                    .chain(function.guarded_return_types.iter().flatten())
+                {
+                    collect(ty, identities, depth + 1);
+                }
+                for overload in &function.overloads {
+                    collect(&Type::Function(overload.clone()), identities, depth + 1);
+                }
+            }
+            Type::Table(table) => {
+                for (_, field) in table.fields() {
+                    collect(&field.ty, identities, depth + 1);
+                }
+            }
+            Type::Array(item) => collect(item, identities, depth + 1),
+            Type::Dictionary { key, value } => {
+                collect(key, identities, depth + 1);
+                collect(value, identities, depth + 1);
+            }
+            Type::Alias(_)
+            | Type::GenericParameter { .. }
+            | Type::Primitive(_)
+            | Type::Any
+            | Type::StringLiteral(_) => {}
+        }
+    }
+
+    collect(ty, identities, 0);
 }
 
 #[cfg(test)]

@@ -25,6 +25,7 @@ pub(crate) use inference::{
     instantiate_generic_function, instantiate_generic_function_from_context,
     GenericInferenceFailure,
 };
+pub(crate) use model::GenericClassDefinition;
 pub use model::{
     FunctionParameter, FunctionType, GenericAliasDefinition, GenericAliasReference, IndexFallback,
     MetatableFacts, NewIndexRule, PrimitiveType, TableField, TableShape, Type, TypeAlias,
