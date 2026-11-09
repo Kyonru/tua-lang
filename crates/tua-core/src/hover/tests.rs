@@ -880,7 +880,7 @@ account:withdraw(10)
 
     assert_eq!(
         hover.contents,
-        "(field) withdraw: (self: Account, amount: number) -> number"
+        "(method) withdraw: (amount: number) -> number"
     );
 }
 
