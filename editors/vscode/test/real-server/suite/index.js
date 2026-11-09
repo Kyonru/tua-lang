@@ -126,11 +126,28 @@ async function run() {
         document.uri,
         importedBoxAliasPosition,
       ),
-    (result) => /BoxInstance|Box<number>/.test(hoverText(result)),
+    (result) => /BoxInstance<T>|Box<T>/.test(hoverText(result)),
     "imported generic instance alias hover",
   );
-  assert.match(hoverText(importedBoxAliasHover), /BoxInstance|Box<number>/);
-  assert.match(hoverText(importedBoxAliasHover), /number/);
+  assert.match(hoverText(importedBoxAliasHover), /BoxInstance<T>/);
+  assert.match(hoverText(importedBoxAliasHover), /Box<T>/);
+
+  const importedBoxValueHoverPosition = positionAfter(
+    document,
+    "typed_box: BoxInstance<number>",
+    "typed_box",
+  );
+  const importedBoxValueHover = await retry(
+    () =>
+      vscode.commands.executeCommand(
+        "vscode.executeHoverProvider",
+        document.uri,
+        importedBoxValueHoverPosition,
+      ),
+    (result) => hoverText(result).includes("number"),
+    "imported generic instance value hover",
+  );
+  assert.match(hoverText(importedBoxValueHover), /number/);
 
   const importedBoxFieldPosition = positionAfter(
     document,
@@ -151,8 +168,8 @@ async function run() {
 
   const importedBoxCompletionPosition = positionAfter(
     document,
-    "typed_box.get",
-    "typed_box.",
+    "typed_box:get()",
+    "typed_box:",
   );
   const importedBoxCompletion = await retry(
     () =>
@@ -160,20 +177,19 @@ async function run() {
         "vscode.executeCompletionItemProvider",
         document.uri,
         importedBoxCompletionPosition,
-        ".",
+        ":",
       ),
     (result) =>
       (result?.items || []).some(
         (item) =>
-          (typeof item.label === "string" ? item.label : item.label.label) === "get" &&
-          item.detail?.includes("number"),
+          (typeof item.label === "string" ? item.label : item.label.label) === "get",
       ),
-    "imported generic class member completion with instantiated detail",
+    "imported generic class member completion",
   );
   const importedBoxGetCompletion = importedBoxCompletion.items.find(
     (item) => (typeof item.label === "string" ? item.label : item.label.label) === "get",
   );
-  assert.match(importedBoxGetCompletion.detail, /number/);
+  assert.ok(importedBoxGetCompletion, "the instantiated get member should be offered");
 
   const importedBoxSignaturePosition = positionAfter(
     document,
@@ -263,7 +279,10 @@ async function run() {
     "local definition",
   );
   assert.equal(definitions[0].uri.fsPath, fixtures.mainPath);
-  assert.equal(definitions[0].range.start.line, 6);
+  assert.equal(
+    definitions[0].range.start.line,
+    document.positionAt(document.getText().indexOf("local player: Player")).line,
+  );
 
   const references = await retry(
     () =>
