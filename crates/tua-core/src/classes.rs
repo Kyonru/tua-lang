@@ -339,6 +339,7 @@ pub(crate) fn parse_protocol_declarations(
     let positions = SourcePositionIndex::new(source);
     let mut index = 0;
     let mut brace_depth = 0usize;
+    let mut block_stack = Vec::new();
     while index < source.len() {
         if source[index..].starts_with("--") {
             index = consume_comment(source, index);
@@ -357,7 +358,35 @@ pub(crate) fn parse_protocol_declarations(
             index += next_char_len(source, index);
             continue;
         }
-        let Some(header) = protocol_header_at(source, index) else {
+        if !block_stack.is_empty() {
+            if let Some(header) = protocol_header_at(source, index) {
+                diagnostics.push(module_scope_diagnostic(
+                    path,
+                    positions.position(header.declaration_start),
+                    format!(
+                        "protocol `{}` must be declared at module scope",
+                        header.name
+                    ),
+                ));
+                break;
+            }
+            if let Some(header) = parse_class_header(source, &positions, index) {
+                diagnostics.push(module_scope_diagnostic(
+                    path,
+                    header.name_span.start,
+                    format!("class `{}` must be declared at module scope", header.name),
+                ));
+                break;
+            }
+        }
+
+        let Some(header) = protocol_header_at(source, index).filter(|_| block_stack.is_empty())
+        else {
+            if let Some((word, _, end)) = take_identifier(source, index) {
+                update_lua_block_stack(&word, &mut block_stack);
+                index = end;
+                continue;
+            }
             match source.as_bytes()[index] {
                 b'{' => brace_depth += 1,
                 b'}' => brace_depth = brace_depth.saturating_sub(1),
@@ -457,6 +486,15 @@ pub(crate) fn parse_protocol_declarations(
         index = body_end + 1;
     }
     (declarations, diagnostics)
+}
+
+fn module_scope_diagnostic(
+    path: &Path,
+    position: SourcePosition,
+    message: impl Into<String>,
+) -> Diagnostic {
+    Diagnostic::error(path, position.line, position.column, message)
+        .with_code(DiagnosticCode::SYNTAX_PARSE)
 }
 
 fn protocol_header_at(source: &str, start: usize) -> Option<ProtocolHeader> {
@@ -915,6 +953,21 @@ pub(crate) fn unclosed_class_diagnostic(path: &Path, source: &str) -> Option<Dia
     )
 }
 
+/// Check declaration-scope and unterminated-protocol errors before the Lua
+/// parser sees syntax that the lowering stage otherwise has to preserve.
+pub(crate) fn declaration_syntax_diagnostic(path: &Path, source: &str) -> Option<Diagnostic> {
+    let (_, diagnostics) = parse_protocol_declarations(path, source);
+    diagnostics
+        .into_iter()
+        .find(|diagnostic| {
+            diagnostic.message.starts_with("unclosed protocol `")
+                || diagnostic
+                    .message
+                    .contains("must be declared at module scope")
+        })
+        .map(|diagnostic| diagnostic.with_code(DiagnosticCode::SYNTAX_PARSE))
+}
+
 pub(crate) fn unclosed_protocol_diagnostic(path: &Path, source: &str) -> Option<Diagnostic> {
     let (_, diagnostics) = parse_protocol_declarations(path, source);
     diagnostics
@@ -978,6 +1031,8 @@ pub(crate) fn source_with_closed_editor_declarations(source: &str) -> Option<Str
 fn class_blocks(source: &str, protocols: &[ProtocolDeclaration]) -> Vec<ClassBlock> {
     let mut blocks = Vec::new();
     let mut index = 0usize;
+    let mut brace_depth = 0usize;
+    let mut block_stack = Vec::new();
     let positions = SourcePositionIndex::new(source);
     let protocol_ranges = protocols
         .iter()
@@ -1008,10 +1063,24 @@ fn class_blocks(source: &str, protocols: &[ProtocolDeclaration]) -> Vec<ClassBlo
             continue;
         }
 
-        let Some(header) = parse_class_header(source, &positions, index) else {
+        let Some(header) = (brace_depth == 0 && block_stack.is_empty())
+            .then(|| parse_class_header(source, &positions, index))
+            .flatten()
+        else {
+            if let Some((word, _, end)) = take_identifier(source, index) {
+                update_lua_block_stack(&word, &mut block_stack);
+                index = end;
+                continue;
+            }
+            match source.as_bytes()[index] {
+                b'{' => brace_depth += 1,
+                b'}' => brace_depth = brace_depth.saturating_sub(1),
+                _ => {}
+            }
             index += next_char_len(source, index);
             continue;
         };
+
         let Some(body_end) = find_matching_brace(source, header.body_open) else {
             index += next_char_len(source, index);
             continue;
@@ -1032,6 +1101,46 @@ fn class_blocks(source: &str, protocols: &[ProtocolDeclaration]) -> Vec<ClassBlo
     }
 
     blocks
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum LuaBlockKind {
+    Function,
+    Conditional,
+    Loop { awaiting_do: bool },
+    Do,
+    Repeat,
+}
+
+/// Track Lua statement blocks while scanning declaration-like Tua syntax.
+/// Class and protocol declarations are top-level constructs; indentation
+/// alone cannot distinguish them from text nested inside `function`, `if`, or
+/// loop bodies.
+fn update_lua_block_stack(word: &str, stack: &mut Vec<LuaBlockKind>) {
+    match word {
+        "function" => stack.push(LuaBlockKind::Function),
+        "if" => stack.push(LuaBlockKind::Conditional),
+        "for" | "while" => stack.push(LuaBlockKind::Loop { awaiting_do: true }),
+        "do" => {
+            if let Some(LuaBlockKind::Loop { awaiting_do }) = stack.last_mut() {
+                if *awaiting_do {
+                    *awaiting_do = false;
+                    return;
+                }
+            }
+            stack.push(LuaBlockKind::Do);
+        }
+        "repeat" => stack.push(LuaBlockKind::Repeat),
+        "end" => {
+            stack.pop();
+        }
+        "until" => {
+            if matches!(stack.last(), Some(LuaBlockKind::Repeat)) {
+                stack.pop();
+            }
+        }
+        _ => {}
+    }
 }
 
 fn parse_class_header(

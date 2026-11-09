@@ -130,6 +130,33 @@ fn did_open_publishes_matching_core_diagnostics() {
 }
 
 #[test]
+fn did_open_publishes_actionable_module_scope_diagnostic_for_nested_protocol() {
+    let uri = "file:///tmp/nested-protocol.tua";
+    let output = run_messages(vec![
+        json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {}
+        }),
+        did_open(
+            uri,
+            "local function build()\n  protocol Hidden {\n    run(): nil\n  }\nend\n",
+        ),
+    ]);
+
+    let diagnostics = published_diagnostics(&output, uri);
+    assert_eq!(diagnostics.len(), 1, "{diagnostics:#?}");
+    assert_eq!(diagnostics[0]["code"], "TL0001");
+    assert_eq!(diagnostics[0]["range"]["start"]["line"], 1);
+    assert_eq!(diagnostics[0]["range"]["start"]["character"], 2);
+    assert_eq!(
+        diagnostics[0]["message"],
+        "protocol `Hidden` must be declared at module scope"
+    );
+}
+
+#[test]
 fn imported_protocol_conformance_diagnostics_are_published_in_implementing_file() {
     let temp = TempProject::new("cross-file-protocol-conformance");
     temp.write("tua.toml", "source = \"src\"\n");

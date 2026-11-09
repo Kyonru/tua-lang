@@ -54,6 +54,9 @@ language or editor behavior, and migration notes call out those changes.
   method signatures, while continuing to reject incompatible implementations.
 - Diagnose nested class/protocol declaration text in invalid protocol/class
   bodies instead of producing overlapping lowering edits or panicking.
+- Keep protocol and generic class declarations inside Lua function, conditional,
+  loop, `do`, or `repeat` blocks in the parser input so invalid nested
+  declarations are diagnosed instead of silently erased as top-level types.
 - Resolve Go to Definition for fields and methods on imported generic class
   instances, preserving the originating class declaration across modules.
 - Stop generic alias expansion at the first repeated declaration, even when its

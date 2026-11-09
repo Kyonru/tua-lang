@@ -556,6 +556,52 @@ fn protocol_declarations_nested_in_class_bodies_are_not_top_level_contracts() {
 }
 
 #[test]
+fn protocol_and_generic_class_declarations_are_not_erased_inside_lua_blocks() {
+    let protocol_cases = [
+        "local function build()\n  protocol Hidden {\n    run(): nil\n  }\nend\n",
+        "if true then\n  protocol Hidden {\n    run(): nil\n  }\nend\n",
+        "do\n  protocol Hidden {\n    run(): nil\n  }\nend\n",
+        "while true do\n  protocol Hidden {\n    run(): nil\n  }\n  break\nend\n",
+        "for _ = 1, 1 do\n  do\n    protocol Hidden {\n      run(): nil\n    }\n  end\nend\n",
+        "repeat\n  protocol Hidden {\n    run(): nil\n  }\nuntil true\n",
+    ];
+
+    for source in protocol_cases {
+        let (lowered, _) = crate::emit::lowering::lower_classes_for_parser(source);
+        assert!(
+            lowered.contains("protocol Hidden"),
+            "nested protocol text must remain for the parser to reject: {source}"
+        );
+        let diagnostics = parse_tua_source("src/nested_protocol.tua", source)
+            .expect_err("a protocol declaration inside a Lua block must be rejected");
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:#?}");
+        assert!(diagnostics[0]
+            .message
+            .contains("must be declared at module scope"));
+    }
+
+    let nested_generic_class =
+        "local function build()\n  final class Hidden<T> {\n    value: T\n  }\nend\n";
+    let (lowered, _) = crate::emit::lowering::lower_classes_for_parser(nested_generic_class);
+    assert!(
+        lowered.contains("class Hidden<T>"),
+        "nested class text must remain for the parser to reject"
+    );
+    let diagnostics = parse_tua_source("src/nested_class.tua", nested_generic_class)
+        .expect_err("a generic class declaration inside a Lua block must be rejected");
+    assert_eq!(diagnostics.len(), 1, "{diagnostics:#?}");
+    assert!(diagnostics[0]
+        .message
+        .contains("must be declared at module scope"));
+
+    let top_level_after_block = "local function build()\n  return 1\nend\nprotocol Visible {\n  run(): nil\n}\nfinal class Box<T> {\n  value: T\n}\n";
+    let parsed = parse_tua_source("src/top_level_after_block.tua", top_level_after_block)
+        .expect("top-level declarations after a closed Lua block remain supported");
+    assert_eq!(parsed.protocol_declarations[0].name, "Visible");
+    assert_eq!(parsed.class_declarations[0].name, "Box");
+}
+
+#[test]
 fn protocol_method_parameters_can_span_lines_and_ignore_inline_comments() {
     let source = r#"export protocol Applies {
   apply(
