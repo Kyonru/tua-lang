@@ -708,6 +708,43 @@ fn editor_recovery_closes_an_unfinished_protocol_without_losing_its_contract() {
 }
 
 #[test]
+fn protocol_editor_recovery_handles_every_character_prefix_of_nested_types() {
+    let source = "local retained = true\nexport protocol Display {\n  render(value: { text: string }): number | nil\n}\n";
+
+    for end in source
+        .char_indices()
+        .map(|(end, _)| end)
+        .chain(std::iter::once(source.len()))
+    {
+        let prefix = &source[..end];
+        let has_complete_local = prefix.starts_with("local retained = true\n");
+        let original_parse = parse_tua_source("src/display.tua", prefix);
+        if let Ok(parsed) = &original_parse {
+            if has_complete_local {
+                assert!(
+                    parsed.ast.to_string().contains("retained"),
+                    "a valid prefix must preserve unrelated source at byte {end}: {prefix:?}"
+                );
+            }
+        }
+
+        let Some(recovered) = crate::classes::source_with_closed_editor_declarations(prefix) else {
+            continue;
+        };
+        if let Ok(parsed) = parse_tua_source("src/display.tua", &recovered) {
+            if has_complete_local {
+                assert!(
+                    parsed.ast.to_string().contains("retained"),
+                    "editor recovery must preserve unrelated source at byte {end}: {recovered:?}"
+                );
+            }
+            assert_eq!(parsed.protocol_declarations.len(), 1);
+            assert_eq!(parsed.protocol_declarations[0].name, "Display");
+        }
+    }
+}
+
+#[test]
 fn class_array_fields_parse_after_lowering() {
     let source = r#"final class BeatManager {
   steps: number[]
