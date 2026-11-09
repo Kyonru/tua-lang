@@ -45,11 +45,13 @@ pub struct TypeEnvironment {
     generic_aliases: Arc<HashMap<crate::parser::TypeAliasId, GenericAliasDefinition>>,
     generic_alias_bindings: Arc<HashMap<(PathBuf, String), crate::parser::TypeAliasId>>,
     generic_classes: Arc<HashMap<GenericDeclarationId, GenericClassDefinition>>,
+    generic_protocol_views: Arc<HashMap<crate::parser::TypeParameterId, Type>>,
     alias_docs: BTreeMap<String, String>,
     class_names: BTreeSet<String>,
     class_parents: BTreeMap<String, String>,
     class_protocols: BTreeMap<String, Vec<String>>,
     protocol_names: BTreeSet<String>,
+    protocol_conformance_identities: BTreeSet<(String, PathBuf, String)>,
     locals: Arc<BTreeMap<String, Type>>,
     local_docs: BTreeMap<String, String>,
     local_contracts: LocalContracts,
@@ -698,14 +700,40 @@ impl TypeEnvironment {
         }
         for definition in self.generic_classes.values() {
             context.insert_generic_class_definition(definition.clone());
+            for parameter in &definition.generic_parameters {
+                if let Some(bound) = &parameter.protocol_bound {
+                    context.insert_generic_protocol_bound(parameter.id.clone(), bound.clone());
+                }
+            }
+        }
+        for function in &self.functions {
+            for parameter in &function.generic_parameters {
+                if let Some(bound) = &parameter.protocol_bound {
+                    context.insert_generic_protocol_bound(parameter.id.clone(), bound.clone());
+                }
+            }
         }
         for (class, protocols) in &self.class_protocols {
             for protocol in protocols {
                 context.insert_nominal_alias_supertype(class, protocol);
             }
         }
+        for (class, protocol_module, protocol_name) in &self.protocol_conformance_identities {
+            context.insert_protocol_conformance_identity(
+                class.clone(),
+                protocol_module.clone(),
+                protocol_name.clone(),
+            );
+        }
 
         context
+    }
+
+    pub(crate) fn generic_protocol_view(&self, ty: &Type) -> Option<&Type> {
+        let Type::GenericParameter { id, .. } = ty else {
+            return None;
+        };
+        self.generic_protocol_views.get(id)
     }
 
     /// Project assignments own these module names; the compiler must not inject
@@ -772,6 +800,14 @@ impl TypeEnvironment {
         protocols: impl IntoIterator<Item = String>,
     ) -> Self {
         self.protocol_names.extend(protocols);
+        self
+    }
+
+    pub(crate) fn with_protocol_conformance_identities(
+        mut self,
+        conformances: impl IntoIterator<Item = (String, PathBuf, String)>,
+    ) -> Self {
+        self.protocol_conformance_identities.extend(conformances);
         self
     }
 
@@ -1665,9 +1701,10 @@ pub(crate) fn build_type_environment_with_domain_registry(
             ));
             let signature = match signature {
                 Type::Function(mut function) => {
-                    function
-                        .parameters
-                        .insert(0, super::FunctionParameter::named("self", Type::Any));
+                    function.parameters.insert(
+                        0,
+                        super::FunctionParameter::named("self", Type::alias(protocol.name.clone())),
+                    );
                     function.required_parameter_count += 1;
                     Type::Function(function)
                 }
@@ -1828,6 +1865,25 @@ pub(crate) fn build_type_environment_with_domain_registry(
     register_class_constructor_types(parsed, &mut functions);
     register_class_method_types(parsed, &mut aliases, &functions);
     let generic_classes = generic_class_definitions(parsed, &aliases);
+    let generic_protocol_views = parsed
+        .function_annotations
+        .iter()
+        .flat_map(|function| function.generic_parameters.iter())
+        .chain(
+            parsed
+                .class_declarations
+                .iter()
+                .flat_map(|class| class.generic_parameters.iter()),
+        )
+        .filter_map(|parameter| {
+            parameter.protocol_bound.as_ref().map(|bound| {
+                (
+                    parameter.id.clone(),
+                    Type::alias(bound.name.trim().to_owned()),
+                )
+            })
+        })
+        .collect();
 
     let shared_aliases = domains.shared_builtin_aliases();
     let aliases = if aliases == *shared_aliases {
@@ -1857,6 +1913,7 @@ pub(crate) fn build_type_environment_with_domain_registry(
         generic_aliases: Arc::new(generic_aliases),
         generic_alias_bindings: Arc::new(generic_alias_bindings),
         generic_classes: Arc::new(generic_classes),
+        generic_protocol_views: Arc::new(generic_protocol_views),
         alias_docs,
         class_names,
         class_parents: parsed
@@ -1888,6 +1945,7 @@ pub(crate) fn build_type_environment_with_domain_registry(
             .iter()
             .map(|protocol| protocol.name.clone())
             .collect(),
+        protocol_conformance_identities: BTreeSet::new(),
         locals,
         local_docs,
         local_contracts,
@@ -1952,6 +2010,7 @@ fn generic_class_definitions(
                         .iter()
                         .map(|parameter| parameter.id.clone())
                         .collect(),
+                    generic_parameters: class.generic_parameters.clone(),
                     parent: class.parent_application.as_ref().map(|application| {
                         let context = TypeResolutionContext::for_class(
                             &parsed.path,
@@ -2793,6 +2852,8 @@ fn lua_doc_generic_parameters(
                 },
                 name: parameter.name.clone(),
                 name_span: parameter.name_span,
+                protocol_bound: None,
+                protocol_bound_error: None,
             });
         }
     }
@@ -6659,6 +6720,34 @@ fn validate_generic_alias_type(
                         ),
                         DiagnosticCode::TYPE_ARGUMENT_COUNT,
                     );
+                } else {
+                    let context = environment.to_type_context();
+                    for (index, (parameter, actual)) in definition
+                        .generic_parameters
+                        .iter()
+                        .zip(arguments)
+                        .enumerate()
+                    {
+                        let Some(bound) = &parameter.protocol_bound else {
+                            continue;
+                        };
+                        if !context.satisfies_protocol_bound(
+                            actual,
+                            bound,
+                            &parameter.id.declaration.module,
+                        ) {
+                            push(
+                                *span,
+                                format!(
+                                    "generic class `{name}` argument {} for `{}` must explicitly conform to protocol `{}`, found `{actual}`",
+                                    index + 1,
+                                    parameter.name,
+                                    bound.name
+                                ),
+                                DiagnosticCode::TYPE_MISMATCH,
+                            );
+                        }
+                    }
                 }
             }
             for argument in arguments {

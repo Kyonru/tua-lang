@@ -20,6 +20,7 @@ pub(crate) enum GenericInferenceFailureKind {
     Callback,
     Unresolved,
     Conflict { previous: Type, next: Type },
+    ProtocolBound { actual: Type, protocol: String },
 }
 
 impl GenericInferenceFailure {
@@ -39,6 +40,10 @@ impl GenericInferenceFailure {
             ),
             GenericInferenceFailureKind::Conflict { previous, next } => format!(
                 "conflicting arguments for generic type parameter `{}`: inferred both `{previous}` and `{next}`",
+                self.parameter
+            ),
+            GenericInferenceFailureKind::ProtocolBound { actual, protocol } => format!(
+                "generic type parameter `{}` requires explicit conformance to protocol `{protocol}`, but inferred `{actual}` does not conform",
                 self.parameter
             ),
         }
@@ -72,6 +77,7 @@ pub(crate) fn instantiate_generic_function(
         collect_invariant_parameters(context, parameter, &binders, &mut invariant_binders, 0);
     }
     let mut substitutions = HashMap::new();
+    let mut substitution_arguments = HashMap::new();
     let mut callback_binders = HashSet::new();
     let mut callback_argument_indices = HashMap::new();
     let mut incompatible_callback_binders = HashSet::new();
@@ -88,6 +94,7 @@ pub(crate) fn instantiate_generic_function(
         else {
             continue;
         };
+        let bound_before = substitutions.keys().cloned().collect::<HashSet<_>>();
         if matches!(parameter_type, Type::Function(_)) {
             let found = if matches!(actual, Type::Function(_)) {
                 &mut callback_binders
@@ -113,6 +120,11 @@ pub(crate) fn instantiate_generic_function(
         ) {
             failure.argument_index = Some(index);
             return Err(failure);
+        }
+        for id in substitutions.keys() {
+            if !bound_before.contains(id) {
+                substitution_arguments.entry(id.clone()).or_insert(index);
+            }
         }
     }
 
@@ -147,6 +159,27 @@ pub(crate) fn instantiate_generic_function(
             kind,
             argument_index: callback_argument_indices.get(&parameter.id).copied(),
         });
+    }
+
+    for parameter in &function.generic_parameters {
+        let Some(bound) = &parameter.protocol_bound else {
+            continue;
+        };
+        let Some(actual) = substitutions.get(&parameter.id) else {
+            continue;
+        };
+        let conforms =
+            context.satisfies_protocol_bound(actual, bound, &parameter.id.declaration.module);
+        if !conforms {
+            return Err(GenericInferenceFailure {
+                parameter: parameter.name.clone(),
+                kind: GenericInferenceFailureKind::ProtocolBound {
+                    actual: actual.clone(),
+                    protocol: bound.name.clone(),
+                },
+                argument_index: substitution_arguments.get(&parameter.id).copied(),
+            });
+        }
     }
 
     let substitute = |ty: &Type| substitute_type_parameters(ty, &substitutions);

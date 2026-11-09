@@ -283,6 +283,19 @@ pub(crate) fn parse_class_declarations(
         }
         let mut names = BTreeSet::new();
         for parameter in &declaration.generic_parameters {
+            if let Some(span) = parameter.protocol_bound_error {
+                let position = span.start;
+                let mut diagnostic = Diagnostic::error(
+                    path,
+                    position.line,
+                    position.column,
+                    "generic bounds support one protocol name; malformed, multiple, or non-protocol bounds are unsupported",
+                )
+                .with_code(DiagnosticCode::SYNTAX_PARSE);
+                diagnostic.end_line = span.end.line;
+                diagnostic.end_column = span.end.column.max(position.column + 1);
+                diagnostics.push(diagnostic);
+            }
             if !names.insert(parameter.name.clone()) {
                 diagnostics.push(class_diagnostic(
                     path,
@@ -978,12 +991,55 @@ fn parse_class_generic_parameters(
         let start = skip_whitespace(source, range.start);
         let end = trim_end_whitespace(source, start, range.end);
         let (name, name_start, name_end) = take_identifier(source, start)?;
-        if name_end != end {
-            return None;
-        }
         let name_span = SourceSpan {
             start: positions.position(name_start),
             end: positions.position(name_end),
+        };
+        let mut cursor = skip_whitespace(source, name_end).min(end);
+        let mut protocol_bound_error = None;
+        let protocol_bound = if source[cursor..end].starts_with(':') {
+            cursor = skip_whitespace(source, cursor + 1).min(end);
+            let bound_start = cursor;
+            let bound_name = source[bound_start..end].trim();
+            if !crate::parser::is_qualified_protocol_name(bound_name) {
+                // The declaration scanner reports malformed/multiple bounds;
+                // continue parsing the class so the rest of the file survives.
+                let leading =
+                    source[bound_start..end].len() - source[bound_start..end].trim_start().len();
+                let trailing = source[bound_start..end].trim_end().len();
+                let error_start = if bound_name.is_empty() {
+                    bound_start.saturating_sub(1)
+                } else {
+                    bound_start + leading
+                };
+                let error_end = if bound_name.is_empty() {
+                    bound_start
+                } else {
+                    bound_start + trailing
+                };
+                protocol_bound_error = Some(SourceSpan {
+                    start: positions.position(error_start),
+                    end: positions.position(error_end),
+                });
+                None
+            } else {
+                let leading =
+                    source[bound_start..end].len() - source[bound_start..end].trim_start().len();
+                let trailing = source[bound_start..end].trim_end().len();
+                Some(crate::parser::GenericProtocolBound {
+                    name: bound_name.to_owned(),
+                    span: SourceSpan {
+                        start: positions.position(bound_start + leading),
+                        end: positions.position(bound_start + trailing),
+                    },
+                    identity: None,
+                })
+            }
+        } else {
+            if cursor != end {
+                return None;
+            }
+            None
         };
         parameters.push(GenericParameter {
             id: TypeParameterId {
@@ -1000,6 +1056,8 @@ fn parse_class_generic_parameters(
             },
             name,
             name_span,
+            protocol_bound,
+            protocol_bound_error,
         });
     }
     Some((parameters, close + 1))

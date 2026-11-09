@@ -723,7 +723,12 @@ fn generic_parameter_suffix(parameters: &[crate::parser::GenericParameter]) -> S
         "<{}>",
         parameters
             .iter()
-            .map(|parameter| parameter.name.as_str())
+            .map(|parameter| {
+                parameter.protocol_bound.as_ref().map_or_else(
+                    || parameter.name.clone(),
+                    |bound| format!("{}: {}", parameter.name, bound.name),
+                )
+            })
             .collect::<Vec<_>>()
             .join(", ")
     )

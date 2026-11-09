@@ -333,6 +333,21 @@ pub struct GenericParameter {
     pub id: TypeParameterId,
     pub name: String,
     pub name_span: SourceSpan,
+    pub protocol_bound: Option<GenericProtocolBound>,
+    pub protocol_bound_error: Option<SourceSpan>,
+}
+
+/// A single explicit nominal protocol constraint on a generic binder.
+/// `name` is resolved against the module containing the binder so imports and
+/// namespace aliases retain their original meaning across re-exports.
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct GenericProtocolBound {
+    pub name: String,
+    pub span: SourceSpan,
+    /// Canonical declaration identity after project resolution. The parser
+    /// leaves this unset; the project type database fills it while resolving
+    /// imported and re-exported generic schemes.
+    pub identity: Option<(PathBuf, String)>,
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]

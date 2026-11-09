@@ -54,6 +54,30 @@ fn generic_class_headers_preserve_declaration_identity_and_parent_arguments() {
 }
 
 #[test]
+fn generic_class_headers_keep_one_protocol_bound_and_reject_bad_bounds() {
+    let source = "final class Box<T: Contracts.Readable> { value: T }";
+    let (classes, diagnostics) = parse_class_declarations(Path::new("src/box.tua"), source);
+    assert!(diagnostics.is_empty(), "{diagnostics:#?}");
+    let bound = classes[0].generic_parameters[0]
+        .protocol_bound
+        .as_ref()
+        .expect("class binder retains its bound");
+    assert_eq!(bound.name, "Contracts.Readable");
+
+    for invalid in ["T:", "T: Readable & Writable", "T: Readable | nil"] {
+        let source = format!("final class Box<{invalid}> {{ value: T }}");
+        let (classes, diagnostics) = parse_class_declarations(Path::new("src/box.tua"), &source);
+        assert!(!classes.is_empty(), "class recovery failed for {invalid}");
+        assert!(
+            diagnostics.iter().any(|diagnostic| diagnostic
+                .message
+                .contains("generic bounds support one protocol name")),
+            "expected a targeted bound diagnostic for {invalid}, got {diagnostics:#?}"
+        );
+    }
+}
+
+#[test]
 fn bare_parent_headers_keep_the_legacy_parent_and_record_empty_application() {
     let source = "open class Base {\n}\nfinal class Child extends Base {\n}\n";
     let (classes, diagnostics) = parse_class_declarations(Path::new("src/child.tua"), source);

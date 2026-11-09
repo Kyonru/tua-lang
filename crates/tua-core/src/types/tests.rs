@@ -2315,6 +2315,8 @@ fn test_generic_parameter(name: &str, ordinal: usize) -> crate::parser::GenericP
         },
         name: name.to_owned(),
         name_span: span,
+        protocol_bound: None,
+        protocol_bound_error: None,
     }
 }
 

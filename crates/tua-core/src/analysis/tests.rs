@@ -6384,6 +6384,107 @@ final class Missing implements Contracts.Updatable {
 }
 
 #[test]
+fn generic_protocol_bounds_keep_canonical_identity_through_imported_reexports() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/contracts.d.tua
+export protocol Updatable {
+  update(dt: number): nil
+}
+-- file: src/relay.tua
+import type { Updatable } from "./contracts"
+export type { Updatable } from "./contracts"
+-- file: src/api.tua
+import type { Updatable } from "./relay"
+function tick<T: Updatable>(value: T): T
+  value:update(1)
+  return value
+end
+return { tick = tick }
+-- file: src/actors.tua
+import type { Updatable } from "./contracts"
+final class Actor implements Updatable {
+  update(dt: number): nil { return nil }
+}
+return { Actor = Actor }
+-- file: src/lookalike.tua
+final class Lookalike {
+  update(dt: number): nil { return nil }
+}
+return { Lookalike = Lookalike }
+-- file: src/main.tua
+local api = require("api")
+local actors = require("actors")
+local lookalikes = require("lookalike")
+local actor = actors.Actor.new()
+local valid = api.tick(actor)
+local invalid = api.tick(lookalikes.Lookalike.new())
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+    let snapshot = host.snapshot();
+
+    let diagnostics = snapshot.pipeline_diagnostics("src/main.tua");
+    assert!(
+        diagnostics.iter().any(|diagnostic| {
+            diagnostic.message.contains("requires explicit conformance")
+                && diagnostic.message.contains("Updatable")
+                && diagnostic.message.contains("Lookalike")
+        }),
+        "the imported generic function must reject a same-shaped class using the canonical re-exported protocol identity: {diagnostics:#?}"
+    );
+    assert!(
+        !diagnostics.iter().any(|diagnostic| {
+            diagnostic.message.contains("Actor") && diagnostic.message.contains("Updatable")
+        }),
+        "the explicit cross-file conformer should remain accepted: {diagnostics:#?}"
+    );
+}
+
+#[test]
+fn bounded_generic_body_uses_protocol_members_and_displays_the_constraint() {
+    let fixture = Fixture::parse(
+        r#"protocol Updatable {
+  update(dt: number): nil
+}
+
+final class Actor implements Updatable {
+  update(dt: number): nil { return nil }
+}
+
+function <|function_hover|>tick<T: <|bound|>Updatable<|/bound|>>(value: T): T
+  value:<|completion|>update(1)
+  return value
+end
+
+local result = tick(Actor.new())
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_file("src/main.tua", fixture.source("src/main.tua"));
+    let snapshot = host.snapshot();
+
+    let completions =
+        completion_labels(&snapshot.completion("src/main.tua", fixture.position("completion")));
+    assert_eq!(completions, ["update"]);
+
+    let hover = snapshot
+        .hover("src/main.tua", fixture.position("function_hover"))
+        .expect("generic declaration hover should be available");
+    assert!(hover.contents.contains("T: Updatable"), "{hover:#?}");
+
+    let definition = snapshot
+        .definition("src/main.tua", fixture.position("bound"))
+        .expect("protocol bound should navigate to its declaration");
+    assert_eq!(definition.span.start.line, 1);
+    assert_eq!(definition.span.start.column, 10);
+    assert!(definition.path.ends_with("src/main.tua"));
+}
+
+#[test]
 fn imported_protocol_arrays_reject_mutable_concrete_widening() {
     let fixture = Fixture::parse(
         r#"-- file: src/contracts.d.tua

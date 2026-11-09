@@ -2552,6 +2552,14 @@ fn collect_table_fields_inner(
         return;
     }
 
+    // A bounded generic parameter exposes the protocol's declared members in
+    // its body. Keep completion on the same protocol view used by hover and
+    // field inference rather than treating the binder as an opaque type.
+    if let Some(view) = environment.generic_protocol_view(ty) {
+        collect_table_fields_inner(environment, view, fields, depth + 1);
+        return;
+    }
+
     match resolve_aliases(environment, ty, 0) {
         Type::Table(table) => collect_shape_fields(environment, &table, fields),
         application @ Type::GenericClassApplication { .. } => {

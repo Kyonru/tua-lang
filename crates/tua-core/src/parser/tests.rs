@@ -861,6 +861,42 @@ fn parses_generic_function_binders_with_distinct_declaration_identity() {
 }
 
 #[test]
+fn parses_one_qualified_protocol_bound_on_generic_functions() {
+    let parsed = parse_tua_source(
+        "src/generic_bounds.tua",
+        "function visit<T: Contracts.Updatable>(value: T): T return value end",
+    )
+    .expect("a single qualified protocol bound should normalize and parse");
+    let function = parsed.function_annotations.first().unwrap();
+    let bound = function.generic_parameters[0]
+        .protocol_bound
+        .as_ref()
+        .expect("bound retained in the binder model");
+    assert_eq!(bound.name, "Contracts.Updatable");
+    assert!(bound.span.start.column < bound.span.end.column);
+}
+
+#[test]
+fn generic_function_bounds_reject_missing_and_multiple_protocols() {
+    for bound in ["", "Readable & Writable", "number | nil"] {
+        let source = format!("function visit<T: {bound}>(value: T): T return value end");
+        let diagnostics = parse_tua_source("src/generic_bounds.tua", source)
+            .expect_err("malformed and multiple bounds must not become unbounded binders");
+        assert!(
+            diagnostics.iter().any(|diagnostic| {
+                diagnostic
+                    .message
+                    .contains("generic bounds support one protocol name")
+                    || diagnostic
+                        .message
+                        .contains("expected a protocol name after generic bound")
+            }),
+            "expected a targeted bound error, got {diagnostics:#?}"
+        );
+    }
+}
+
+#[test]
 fn generic_function_header_rejects_unsupported_binders_and_methods() {
     for source in [
         "local function defaulted<T = number>(value: T): T return value end",

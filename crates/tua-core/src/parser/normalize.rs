@@ -332,7 +332,7 @@ fn position_key(position: SourcePosition) -> (usize, usize) {
 }
 
 fn normalize_parser_syntax(source: &str) -> String {
-    let chars: Vec<char> = source.chars().collect();
+    let chars = erase_function_generic_protocol_bounds(source);
     let (type_imports, _) = super::scan_type_imports(std::path::Path::new(""), source);
     let erased_type_lines = type_imports
         .iter()
@@ -424,6 +424,57 @@ fn normalize_parser_syntax(source: &str) -> String {
     }
 
     normalized
+}
+
+/// Luau's parser accepts generic binders but not Tua's nominal protocol bound
+/// syntax. Erase just `: Protocol` from function generic lists before parsing;
+/// the source-positioned binder model recovers it from the unmodified syntax.
+fn erase_function_generic_protocol_bounds(source: &str) -> Vec<char> {
+    let mut chars = source.chars().collect::<Vec<_>>();
+    let protected = protected_syntax_characters(&chars);
+    let mut index = 0;
+
+    while index < chars.len() {
+        if chars[index] != '<' || protected[index] || !function_generic_open(&chars, index) {
+            index += 1;
+            continue;
+        }
+
+        let Some(close) = (index + 1..chars.len())
+            .find(|candidate| chars[*candidate] == '>' && !protected[*candidate])
+        else {
+            index += 1;
+            continue;
+        };
+
+        let mut cursor = index + 1;
+        while cursor < close {
+            if chars[cursor] != ':' || protected[cursor] {
+                cursor += 1;
+                continue;
+            }
+            chars[cursor] = ' ';
+            cursor += 1;
+            while cursor < close && chars[cursor] != ',' {
+                if chars[cursor] != '\n' && chars[cursor] != '\r' {
+                    chars[cursor] = ' ';
+                }
+                cursor += 1;
+            }
+        }
+        index = close + 1;
+    }
+
+    chars
+}
+
+fn function_generic_open(chars: &[char], open: usize) -> bool {
+    let line_start = chars[..open]
+        .iter()
+        .rposition(|character| matches!(character, '\n' | ';' | '{' | '}'))
+        .map_or(0, |index| index + 1);
+    let header = chars[line_start..open].iter().collect::<String>();
+    header.contains("function")
 }
 
 fn is_optional_field_marker(chars: &[char], index: usize) -> bool {

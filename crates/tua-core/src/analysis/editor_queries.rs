@@ -339,10 +339,18 @@ impl AnalysisSnapshot {
         ty: &Type,
         field: &str,
     ) -> Option<Type> {
-        match self
+        let resolved = self
             .type_database
-            .resolve_type(&self.module_graph, source_path, ty)
-        {
+            .resolve_type(&self.module_graph, source_path, ty);
+        if matches!(resolved, Type::GenericParameter { .. }) {
+            let file = self.file(source_path)?;
+            let parsed = file.parsed.as_ref().ok()?;
+            let environment = self.semantic_environment(parsed);
+            if let Some(view) = environment.generic_protocol_view(&resolved) {
+                return self.field_type_for_type(source_path, view, field);
+            }
+        }
+        match resolved {
             Type::Table(table) => table.semantic_field(field).map(|field| field.ty.clone()),
             Type::Union(types) => {
                 let fields = types

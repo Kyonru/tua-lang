@@ -4089,6 +4089,97 @@ local wrong_box: Box<string> = box
 }
 
 #[test]
+fn generic_protocol_bounds_validate_calls_forwarding_and_class_constructors() {
+    let source = r#"
+protocol Updatable {
+  update(dt: number): nil
+}
+
+open class Actor implements Updatable {
+  update(dt: number): nil { return nil }
+}
+
+final class ActorChild extends Actor {}
+
+final class Lookalike {
+  update(dt: number): nil { return nil }
+}
+
+function tick<T: Updatable>(value: T): T
+  value:update(1)
+  value.update(value, 1)
+  local update = value.update
+  update(value, 1)
+  return value
+end
+
+function forward<U: Updatable>(value: U): U
+  return tick(value)
+end
+
+final class Box<T: Updatable> {
+  value: T
+  init(value: T) { self.value = value }
+  get(): T { return self.value }
+}
+
+local actor = Actor.new()
+local result: Actor = forward(actor)
+local inherited = forward(ActorChild.new())
+local box = Box.new(actor)
+local stored: Actor = box:get()
+"#;
+    check_tua_source("src/bounded_generics.tua", source)
+        .expect("explicit conformers and already-bounded binders should be accepted");
+
+    for (name, source) in [
+        (
+            "call",
+            source.replace(
+                "local result: Actor = forward(actor)",
+                "local result = tick(Lookalike.new())",
+            ),
+        ),
+        (
+            "constructor",
+            source.replace(
+                "local box = Box.new(actor)",
+                "local box = Box.new(Lookalike.new())",
+            ),
+        ),
+        (
+            "application",
+            source.replace(
+                "local stored: Actor = box:get()",
+                "local invalid: Box<Lookalike> = nil",
+            ),
+        ),
+        (
+            "dot receiver",
+            source.replace(
+                "  value.update(value, 1)",
+                "  value.update(Lookalike.new(), 1)",
+            ),
+        ),
+        (
+            "extracted receiver",
+            source.replace("  update(value, 1)", "  update(Lookalike.new(), 1)"),
+        ),
+    ] {
+        let diagnostics = check_tua_source("src/bounded_generics.tua", source)
+            .expect_err("lookalike types must not satisfy nominal protocol bounds");
+        assert!(
+            diagnostics.iter().any(|diagnostic| {
+                diagnostic.message.contains("explicitly conform")
+                    || diagnostic.message.contains("requires explicit conformance")
+                    || diagnostic.message.contains("expected Updatable")
+            }),
+            "{name} should have an actionable bound error, got {diagnostics:#?}"
+        );
+    }
+}
+
+#[test]
 fn user_function_with_constructor_suffix_does_not_receive_generic_constructor_correction() {
     let diagnostics = check_tua_source(
         "src/generic_constructor_suffix.tua",

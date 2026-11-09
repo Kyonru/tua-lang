@@ -16,21 +16,21 @@ use full_moon::visitors::Visitor;
 
 use crate::ast_utils::plain_field_chain_from_var;
 use crate::classes;
-use crate::source_text::{byte_for_column, column_for_byte};
+use crate::source_text::{byte_for_column, column_for_byte, SourcePositionIndex};
 use crate::{Diagnostic, DiagnosticCode};
 pub(crate) use doc::parse_type_text as parse_tua_type_text;
 pub use doc::{parse_lua_doc_annotations, parse_lua_doc_annotations_with_options};
 pub use model::{
     CompoundAssignment, CompoundOperator, FunctionAnnotation, FunctionSignatureParameter,
     FunctionTypeParameter, GenericDeclarationId, GenericDeclarationKind, GenericParameter,
-    LocalAnnotation, LuaDocAlias, LuaDocAnnotation, LuaDocAnnotationKind, LuaDocAs, LuaDocCast,
-    LuaDocClass, LuaDocDeprecated, LuaDocDiagnostic, LuaDocEnum, LuaDocField, LuaDocGeneric,
-    LuaDocGenericParameter, LuaDocMeta, LuaDocModule, LuaDocNoDiscard, LuaDocOverload, LuaDocParam,
-    LuaDocParseOptions, LuaDocParseResult, LuaDocReturn, LuaDocReturnType, LuaDocTypeAnnotation,
-    LuaDocVararg, LuaDocVersion, NormalizedSource, ParameterAnnotation, ParameterDefault,
-    ParameterOptional, ParsedLanguage, ParsedSource, RawParsedSource, SourcePosition, SourceSpan,
-    TableFieldType, TuaType, TypeAlias, TypeAliasId, TypeAliasKind, TypeImport, TypeImportBinding,
-    TypeParameterId, TypedSourceModel,
+    GenericProtocolBound, LocalAnnotation, LuaDocAlias, LuaDocAnnotation, LuaDocAnnotationKind,
+    LuaDocAs, LuaDocCast, LuaDocClass, LuaDocDeprecated, LuaDocDiagnostic, LuaDocEnum, LuaDocField,
+    LuaDocGeneric, LuaDocGenericParameter, LuaDocMeta, LuaDocModule, LuaDocNoDiscard,
+    LuaDocOverload, LuaDocParam, LuaDocParseOptions, LuaDocParseResult, LuaDocReturn,
+    LuaDocReturnType, LuaDocTypeAnnotation, LuaDocVararg, LuaDocVersion, NormalizedSource,
+    ParameterAnnotation, ParameterDefault, ParameterOptional, ParsedLanguage, ParsedSource,
+    RawParsedSource, SourcePosition, SourceSpan, TableFieldType, TuaType, TypeAlias, TypeAliasId,
+    TypeAliasKind, TypeImport, TypeImportBinding, TypeParameterId, TypedSourceModel,
 };
 pub(crate) use model::{NativeArrayTypeSyntax, ParserLineProvenance, ParserSourceFragment};
 use normalize::normalize_tua_source_for_luau_parser;
@@ -1001,6 +1001,8 @@ fn type_alias_from_declaration(
                 },
                 name: token_text(token),
                 name_span,
+                protocol_bound: None,
+                protocol_bound_error: None,
             })
         })
         .collect::<Vec<_>>();
@@ -1392,6 +1394,7 @@ fn function_annotation(
                     .unwrap_or_else(|| "<anonymous-function>".to_owned()),
                 declaration: body.generics().and_then(node_span).unwrap_or(name_span),
             };
+            let protocol_bound = parse_generic_protocol_bound(path, source, name_span, diagnostics);
             Some(GenericParameter {
                 id: TypeParameterId {
                     declaration,
@@ -1399,6 +1402,8 @@ fn function_annotation(
                 },
                 name: token_text(token),
                 name_span,
+                protocol_bound,
+                protocol_bound_error: None,
             })
         })
         .collect::<Vec<_>>();
@@ -1504,6 +1509,86 @@ fn function_annotation(
         generic_parameters,
         span: node_span(body),
     }
+}
+
+fn parse_generic_protocol_bound(
+    path: &Path,
+    source: &str,
+    name_span: SourceSpan,
+    diagnostics: &mut Vec<Diagnostic>,
+) -> Option<GenericProtocolBound> {
+    let name_end = crate::source_text::byte_for_position(source, name_span.end)?;
+    let mut cursor = name_end;
+    while source
+        .as_bytes()
+        .get(cursor)
+        .is_some_and(u8::is_ascii_whitespace)
+    {
+        cursor += 1;
+    }
+    if source.as_bytes().get(cursor) != Some(&b':') {
+        return None;
+    }
+    let colon = cursor;
+    cursor += 1;
+    while source
+        .as_bytes()
+        .get(cursor)
+        .is_some_and(u8::is_ascii_whitespace)
+    {
+        cursor += 1;
+    }
+    let end = source[cursor..]
+        .find([',', '>'])
+        .map_or(source.len(), |offset| cursor + offset);
+    let raw = &source[cursor..end];
+    let leading = raw.len() - raw.trim_start().len();
+    let trailing = raw.trim_end().len();
+    let bound = raw.trim();
+    if !is_qualified_protocol_name(bound) {
+        let (message, start, finish) = if bound.is_empty() {
+            (
+                "expected a protocol name after generic bound `:`",
+                colon,
+                colon + 1,
+            )
+        } else {
+            (
+                "generic bounds support one protocol name; multiple or non-protocol bounds are unsupported",
+                cursor + leading,
+                cursor + trailing,
+            )
+        };
+        let position = SourcePositionIndex::new(source).position(start);
+        let mut diagnostic = Diagnostic::error(path, position.line, position.column, message)
+            .with_code(DiagnosticCode::SYNTAX_PARSE);
+        let end_position = SourcePositionIndex::new(source).position(finish);
+        diagnostic.end_line = end_position.line;
+        diagnostic.end_column = end_position.column.max(position.column + 1);
+        diagnostics.push(diagnostic);
+        return None;
+    }
+
+    let span = SourceSpan {
+        start: SourcePositionIndex::new(source).position(cursor + leading),
+        end: SourcePositionIndex::new(source).position(cursor + trailing),
+    };
+    Some(GenericProtocolBound {
+        name: bound.to_owned(),
+        span,
+        identity: None,
+    })
+}
+
+pub(crate) fn is_qualified_protocol_name(value: &str) -> bool {
+    !value.is_empty()
+        && value.split('.').all(|segment| {
+            let mut characters = segment.chars();
+            characters
+                .next()
+                .is_some_and(|character| character == '_' || character.is_ascii_alphabetic())
+                && characters.all(|character| character == '_' || character.is_ascii_alphanumeric())
+        })
 }
 
 fn parameter_optionals_from_body(source: &str, body: &ast::FunctionBody) -> Vec<ParameterOptional> {

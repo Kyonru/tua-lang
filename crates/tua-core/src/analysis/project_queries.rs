@@ -541,6 +541,9 @@ impl AnalysisSnapshot {
             .with_class_protocol_conformances(
                 self.project_imported_class_protocol_conformances(parsed),
             )
+            .with_protocol_conformance_identities(
+                self.type_database.all_class_protocol_conformances(),
+            )
             .with_local_types(self.project_module_binding_types(parsed))
             .with_required_module_types(
                 self.module_graph
@@ -652,7 +655,10 @@ impl AnalysisSnapshot {
             if !resolved.insert(identity.clone()) {
                 continue;
             }
-            let Some(definition) = self.type_database.generic_class_definition(&identity) else {
+            let Some(definition) = self
+                .type_database
+                .generic_class_definition(&self.module_graph, &identity)
+            else {
                 continue;
             };
             let mut nested = HashSet::new();
@@ -2591,6 +2597,7 @@ impl AnalysisSnapshot {
                     .unwrap_or_default();
 
                 diagnostics.extend(facts.environment.generic_alias_diagnostics(parsed));
+                diagnostics.extend(self.generic_protocol_bound_diagnostics(parsed));
 
                 diagnostics.retain(|diagnostic| {
                     diagnostic.code != Some(crate::DiagnosticCode::TYPE_UNKNOWN_NAME)
@@ -2610,6 +2617,44 @@ impl AnalysisSnapshot {
             .insert(path, diagnostics.clone());
 
         diagnostics
+    }
+
+    fn generic_protocol_bound_diagnostics(&self, parsed: &ParsedSource) -> Vec<Diagnostic> {
+        let parameters = parsed
+            .function_annotations
+            .iter()
+            .flat_map(|function| function.generic_parameters.iter())
+            .chain(
+                parsed
+                    .class_declarations
+                    .iter()
+                    .flat_map(|class| class.generic_parameters.iter()),
+            );
+        parameters
+            .filter_map(|parameter| {
+                let bound = parameter.protocol_bound.as_ref()?;
+                if self.type_database.is_protocol_type(
+                    &self.module_graph,
+                    &parameter.id.declaration.module,
+                    &bound.name,
+                ) {
+                    return None;
+                }
+                let mut diagnostic = Diagnostic::error(
+                    &parsed.path,
+                    bound.span.start.line,
+                    bound.span.start.column,
+                    format!(
+                        "unknown protocol bound `{}` on generic parameter `{}`",
+                        bound.name, parameter.name
+                    ),
+                )
+                .with_code(crate::DiagnosticCode::TYPE_UNKNOWN_NAME);
+                diagnostic.end_line = bound.span.end.line;
+                diagnostic.end_column = bound.span.end.column.max(bound.span.start.column + 1);
+                Some(diagnostic)
+            })
+            .collect()
     }
 
     pub(super) fn project_type_check_required(&self, file: &AnalysisFile) -> bool {

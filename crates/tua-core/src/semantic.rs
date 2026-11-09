@@ -2645,6 +2645,9 @@ pub(crate) fn resolve_table_field_type(
     ty: &Type,
     field: &str,
 ) -> Option<Type> {
+    if let Some(view) = environment.generic_protocol_view(ty) {
+        return resolve_table_field_type(environment, view, field);
+    }
     match resolve_aliases(environment, ty, 0) {
         Type::Table(table) => table.semantic_field(field).map(|field| field.value_type()),
         application @ Type::GenericClassApplication { .. } => {

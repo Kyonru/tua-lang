@@ -699,7 +699,21 @@ pub(super) fn referenced_type_names(parsed: &ParsedSource) -> BTreeSet<String> {
                 .iter()
                 .map(|(name, _)| name.trim().to_owned()),
         );
+        names.extend(class.generic_parameters.iter().filter_map(|parameter| {
+            parameter
+                .protocol_bound
+                .as_ref()
+                .map(|bound| bound.name.trim().to_owned())
+        }));
     }
+    names.extend(parsed.function_annotations.iter().flat_map(|function| {
+        function.generic_parameters.iter().filter_map(|parameter| {
+            parameter
+                .protocol_bound
+                .as_ref()
+                .map(|bound| bound.name.trim().to_owned())
+        })
+    }));
 
     let mut collector = ReferencedAnonymousFunctionCollector::default();
     collector.visit_ast(&parsed.ast);

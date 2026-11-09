@@ -1296,6 +1296,8 @@ fn lua_doc_generic_function_parameter_at_position(
                         },
                         name: parameter.name.clone(),
                         name_span: parameter.name_span,
+                        protocol_bound: None,
+                        protocol_bound_error: None,
                     });
                 }
                 ordinal += 1;

@@ -4,7 +4,7 @@ use super::model::{
     is_index_signature_field, FunctionType, GenericAliasDefinition, GenericAliasReference,
     GenericClassDefinition, TableShape, Type, TypeAlias,
 };
-use crate::parser::TypeAliasId;
+use crate::parser::{GenericProtocolBound, TypeAliasId, TypeParameterId};
 
 const MAX_ASSIGNABILITY_DEPTH: usize = 64;
 
@@ -65,6 +65,8 @@ pub struct TypeContext {
     nominal_aliases: BTreeSet<String>,
     nominal_alias_supertypes: BTreeMap<String, BTreeSet<String>>,
     nominal_protocols: BTreeSet<String>,
+    protocol_conformance_identities: BTreeSet<(String, std::path::PathBuf, String)>,
+    generic_protocol_bounds: HashMap<TypeParameterId, GenericProtocolBound>,
 }
 
 impl TypeContext {
@@ -182,6 +184,118 @@ impl TypeContext {
         self.nominal_protocols.insert(name);
     }
 
+    pub(crate) fn insert_protocol_conformance_identity(
+        &mut self,
+        class_identity: impl Into<String>,
+        protocol_module: impl Into<std::path::PathBuf>,
+        protocol_name: impl Into<String>,
+    ) {
+        let protocol_module = protocol_module.into();
+        self.protocol_conformance_identities.insert((
+            class_identity.into(),
+            crate::vfs::normalize_path(&protocol_module),
+            protocol_name.into(),
+        ));
+    }
+
+    pub(crate) fn explicitly_conforms_to_protocol(
+        &self,
+        actual: &Type,
+        protocol: &(std::path::PathBuf, String),
+    ) -> bool {
+        self.explicitly_conforms_to_protocol_inner(actual, protocol, &mut HashSet::new())
+    }
+
+    fn explicitly_conforms_to_protocol_inner(
+        &self,
+        actual: &Type,
+        protocol: &(std::path::PathBuf, String),
+        resolving_aliases: &mut HashSet<String>,
+    ) -> bool {
+        match actual {
+            Type::Any => true,
+            Type::Union(types) => types.iter().all(|ty| {
+                self.explicitly_conforms_to_protocol_inner(ty, protocol, resolving_aliases)
+            }),
+            Type::Table(table) => table.nominal_identity().is_some_and(|identity| {
+                self.protocol_conformance_identities.contains(&(
+                    identity.to_owned(),
+                    crate::vfs::normalize_path(&protocol.0),
+                    protocol.1.clone(),
+                ))
+            }),
+            Type::GenericClassApplication { identity, .. } => {
+                let class_identity = format!(
+                    "{}::class::{}",
+                    identity.module.to_string_lossy(),
+                    identity.name
+                );
+                self.protocol_conformance_identities.contains(&(
+                    class_identity,
+                    crate::vfs::normalize_path(&protocol.0),
+                    protocol.1.clone(),
+                ))
+            }
+            Type::GenericParameter { id, .. } => self
+                .generic_protocol_bounds
+                .get(id)
+                .and_then(|bound| bound.identity.as_ref())
+                .is_some_and(|bound| {
+                    crate::vfs::normalize_path(&bound.0) == crate::vfs::normalize_path(&protocol.0)
+                        && bound.1 == protocol.1
+                }),
+            Type::Alias(name) => {
+                if !resolving_aliases.insert(name.clone()) {
+                    return false;
+                }
+                let result = self.aliases.get(name).is_some_and(|ty| {
+                    self.explicitly_conforms_to_protocol_inner(ty, protocol, resolving_aliases)
+                });
+                resolving_aliases.remove(name);
+                result
+            }
+            _ => false,
+        }
+    }
+
+    pub(crate) fn insert_generic_protocol_bound(
+        &mut self,
+        parameter: TypeParameterId,
+        bound: GenericProtocolBound,
+    ) {
+        self.generic_protocol_bounds.insert(parameter, bound);
+    }
+
+    pub(crate) fn satisfies_protocol_bound(
+        &self,
+        actual: &Type,
+        bound: &GenericProtocolBound,
+        bound_owner: &std::path::Path,
+    ) -> bool {
+        if let Type::GenericParameter { id, .. } = actual {
+            return self
+                .generic_protocol_bounds
+                .get(id)
+                .is_some_and(
+                    |actual_bound| match (&actual_bound.identity, &bound.identity) {
+                        (Some(actual), Some(expected)) => {
+                            crate::vfs::normalize_path(&actual.0)
+                                == crate::vfs::normalize_path(&expected.0)
+                                && actual.1 == expected.1
+                        }
+                        (None, None) => {
+                            actual_bound.name == bound.name && id.declaration.module == bound_owner
+                        }
+                        _ => false,
+                    },
+                );
+        }
+        bound.identity.as_ref().map_or_else(
+            || self.is_assignable(actual, &Type::alias(bound.name.clone())),
+            |identity| self.explicitly_conforms_to_protocol(actual, identity),
+        )
+    }
+
     pub fn is_assignable(&self, source: &Type, target: &Type) -> bool {
         self.check_assignable(source, target).is_ok()
     }
@@ -240,8 +354,23 @@ impl TypeContext {
             }
         }
 
+        if let Some(failure) = self
+            .generic_class_bound_failure(source)
+            .or_else(|| self.generic_class_bound_failure(target))
+        {
+            return Err(failure);
+        }
+
         match (source, target) {
             (Type::Any, _) | (_, Type::Any) => Ok(()),
+            (Type::GenericParameter { id, .. }, Type::Alias(target_name))
+                if self
+                    .generic_protocol_bounds
+                    .get(id)
+                    .is_some_and(|bound| bound.name == *target_name) =>
+            {
+                Ok(())
+            }
             (Type::Alias(source), Type::Alias(target))
                 if self.is_nominal_alias_type(source) || self.is_nominal_alias_type(target) =>
             {
@@ -470,6 +599,37 @@ impl TypeContext {
             }
             _ => Err(AssignabilityFailure::type_mismatch(source, target)),
         }
+    }
+
+    fn generic_class_bound_failure(&self, ty: &Type) -> Option<Box<AssignabilityFailure>> {
+        let Type::GenericClassApplication {
+            identity,
+            arguments,
+            ..
+        } = ty
+        else {
+            return None;
+        };
+        let definition = self.generic_classes.get(identity)?;
+        for (index, (parameter, actual)) in definition
+            .generic_parameters
+            .iter()
+            .zip(arguments)
+            .enumerate()
+        {
+            let Some(bound) = &parameter.protocol_bound else {
+                continue;
+            };
+            let conforms =
+                self.satisfies_protocol_bound(actual, bound, &parameter.id.declaration.module);
+            if !conforms {
+                return Some(
+                    AssignabilityFailure::type_mismatch(actual, &Type::alias(bound.name.clone()))
+                        .at(AssignabilityPathSegment::GenericArgument(index)),
+                );
+            }
+        }
+        None
     }
 
     fn contains_protocol_view(&self, ty: &Type, resolving: &mut BTreeSet<String>) -> bool {

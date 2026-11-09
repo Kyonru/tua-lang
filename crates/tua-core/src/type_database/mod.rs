@@ -293,6 +293,10 @@ impl ProjectTypeDatabase {
             .collect()
     }
 
+    pub(crate) fn all_class_protocol_conformances(&self) -> Vec<(String, PathBuf, String)> {
+        self.protocols.all_class_conformances()
+    }
+
     pub(crate) fn protocol_method_definition_at_position(
         &self,
         path: impl AsRef<Path>,
@@ -396,12 +400,26 @@ impl ProjectTypeDatabase {
 
     pub(crate) fn generic_class_definition(
         &self,
+        module_graph: &ModuleGraph,
         identity: &GenericDeclarationId,
     ) -> Option<GenericClassDefinition> {
-        self.module(&identity.module)?
+        let mut definition = self
+            .module(&identity.module)?
             .generic_classes
             .get(identity)
-            .cloned()
+            .cloned()?;
+        for parameter in &mut definition.generic_parameters {
+            if let Some(bound) = &mut parameter.protocol_bound {
+                if bound.identity.is_none() {
+                    bound.identity = self.protocol_identity(
+                        module_graph,
+                        &parameter.id.declaration.module,
+                        &bound.name,
+                    );
+                }
+            }
+        }
+        Some(definition)
     }
 
     pub fn module_export_type(
@@ -635,6 +653,23 @@ impl ProjectTypeDatabase {
                         overload
                     })
                     .collect::<Vec<_>>();
+                let generic_parameters = function
+                    .generic_parameters
+                    .iter()
+                    .cloned()
+                    .map(|mut parameter| {
+                        if let Some(bound) = &mut parameter.protocol_bound {
+                            if bound.identity.is_none() {
+                                bound.identity = self.protocol_identity(
+                                    module_graph,
+                                    &parameter.id.declaration.module,
+                                    &bound.name,
+                                );
+                            }
+                        }
+                        parameter
+                    })
+                    .collect::<Vec<_>>();
                 Type::Function(
                     FunctionType::new_signature(
                         parameters,
@@ -644,7 +679,7 @@ impl ProjectTypeDatabase {
                     )
                     .with_guarded_return_types(guarded)
                     .with_overloads(overloads)
-                    .with_generic_parameters(function.generic_parameters.clone()),
+                    .with_generic_parameters(generic_parameters),
                 )
             }
             Type::Table(table) => {

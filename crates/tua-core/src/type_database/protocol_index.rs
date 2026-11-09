@@ -128,6 +128,17 @@ impl ProjectProtocolIndex {
             .flat_map(BTreeSet::iter)
     }
 
+    pub(super) fn all_class_conformances(&self) -> Vec<(String, PathBuf, String)> {
+        self.class_conformances
+            .iter()
+            .flat_map(|(class, protocols)| {
+                protocols
+                    .iter()
+                    .map(|(path, name)| (class.clone(), path.clone(), name.clone()))
+            })
+            .collect()
+    }
+
     pub(super) fn method_definition(
         &self,
         identity: &ProtocolIdentity,
