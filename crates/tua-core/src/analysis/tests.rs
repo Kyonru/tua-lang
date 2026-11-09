@@ -9761,6 +9761,54 @@ fn unclosed_protocols_keep_current_buffer_semantics_available() {
 }
 
 #[test]
+fn incomplete_generic_class_completion_uses_last_good_bound_members() {
+    let fixture = Fixture::parse(
+        r#"-- file: draft.tua
+protocol Renderable {
+ render(): string
+}
+final class Draft<T: Renderable> implements Renderable {
+ render(): string { return "draft" }
+ inspect(value: T) {
+  value:<|complete|>
+ }
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    let valid = fixture.files()[0]
+        .source
+        .replace("  value:\n", "  value:render()\n")
+        + "}\n";
+    host.set_file("draft.tua", valid);
+    let valid_snapshot = host.snapshot();
+    assert!(
+        valid_snapshot.semantic_file("draft.tua").is_some(),
+        "valid setup source should parse: {:#?}",
+        valid_snapshot.parse("draft.tua")
+    );
+    host.set_file("draft.tua", fixture.files()[0].source.clone());
+    let snapshot = host.snapshot();
+
+    let labels = completion_labels(&snapshot.completion("draft.tua", fixture.position("complete")));
+    let last_good = snapshot
+        .last_good_semantic_facts(Path::new("draft.tua"))
+        .expect("the valid generic class snapshot should be retained");
+    let cached_last_good = snapshot
+        .last_good_semantic_facts(Path::new("draft.tua"))
+        .expect("last-good facts should remain available for later editor requests");
+    assert!(std::sync::Arc::ptr_eq(&last_good, &cached_last_good));
+    assert!(
+        labels.contains(&"render".into()),
+        "a partially typed member in an edited generic class should use last-good protocol-bound facts: {labels:?}; diagnostics: {:#?}",
+        snapshot.diagnostics("draft.tua")
+    );
+    assert!(snapshot
+        .diagnostics("draft.tua")
+        .iter()
+        .any(|diagnostic| { diagnostic.message.contains("unclosed class `Draft`") }));
+}
+
+#[test]
 fn workspace_declaration_overlays_keep_project_ownership() {
     let mut host = AnalysisHost::new();
     host.set_source_roots([PathBuf::from("first/src"), PathBuf::from("second/src")]);

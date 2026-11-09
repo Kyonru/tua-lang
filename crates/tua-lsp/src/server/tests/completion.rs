@@ -578,6 +578,35 @@ end
     assert_completion_labels(server.output(), 4, ["update"]);
     assert_completion_labels(server.output(), 3, ["update"]);
 }
+
+#[test]
+fn generic_class_bound_completion_uses_last_good_facts_during_incomplete_edit() {
+    let temp = TempProject::new("generic-class-bound-incomplete-completion");
+    let main_uri = temp.uri_for("src/main.tua");
+    let valid = r#"protocol Readable {
+  read(): string
+}
+
+final class Box<T: Readable> implements Readable {
+  read(): string { return "box" }
+  inspect(value: T) {
+    value:read()
+  }
+}
+"#;
+    let incomplete = valid.replace("value:read()", "value:");
+    let incomplete = incomplete[..incomplete.rfind("}\n").unwrap()].to_owned();
+    temp.write("tua.toml", "source = \"src\"\n");
+
+    let mut server = TestServer::new();
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&main_uri, valid));
+    server.send(did_change(&main_uri, &incomplete, 2));
+    server.send(completion_request(2, &main_uri, &incomplete, "value:"));
+
+    assert_completion_labels(server.output(), 2, ["read"]);
+}
+
 #[test]
 fn completion_survives_incomplete_colon_after_valid_open() {
     let uri = "file:///tmp/recovered-completion.tua";

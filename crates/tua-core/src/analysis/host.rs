@@ -743,6 +743,7 @@ impl AnalysisHost {
             completion_multi_token: self.completion_multi_token.clone(),
             semantic_facts: Arc::new(Mutex::new(BTreeMap::new())),
             degraded_facts: Arc::new(Mutex::new(BTreeMap::new())),
+            last_good_facts: Arc::new(Mutex::new(BTreeMap::new())),
             completion_cache: Arc::clone(&self.completion_cache),
             completion_cache_stats: Arc::clone(&self.completion_cache_stats),
             definition_cache: Arc::clone(&self.definition_cache),
@@ -1251,6 +1252,7 @@ impl AnalysisHost {
             .expect("analysis snapshot cache lock poisoned")
             .as_ref()
             .and_then(|cached| cached.snapshot.last_good_semantic_facts(path))
+            .map(|facts| facts.as_ref().clone())
     }
 
     pub fn current_file_inlay_hints(

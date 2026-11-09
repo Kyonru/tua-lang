@@ -207,6 +207,7 @@ pub struct AnalysisSnapshot {
     completion_multi_token: CompletionMultiTokenConfig,
     semantic_facts: Arc<Mutex<BTreeMap<PathBuf, Arc<AnalysisSemanticFacts>>>>,
     degraded_facts: Arc<Mutex<BTreeMap<PathBuf, Arc<DegradedSemanticFacts>>>>,
+    last_good_facts: Arc<Mutex<BTreeMap<PathBuf, Arc<DegradedSemanticFacts>>>>,
     completion_cache: Arc<Mutex<BTreeMap<CompletionRequestKey, Vec<Completion>>>>,
     completion_cache_stats: Arc<Mutex<CompletionCacheStats>>,
     definition_cache: Arc<Mutex<BTreeMap<DefinitionRequestKey, Option<Definition>>>>,

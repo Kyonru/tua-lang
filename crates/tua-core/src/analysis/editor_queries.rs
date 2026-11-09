@@ -253,7 +253,37 @@ impl AnalysisSnapshot {
                                 self.completion_ranking_inputs(file_scope_hash),
                             );
 
-                        completions
+                        if !completions.is_empty()
+                            || !matches!(
+                                crate::completion::context::completion_context(source, position),
+                                Some(
+                                    crate::completion::context::CompletionContext::FieldAccess { .. }
+                                )
+                            )
+                        {
+                            completions
+                        } else if let Some(last_good) = self.last_good_semantic_facts(path) {
+                            let completions = self.project_completions_with_environment(
+                                &last_good.parsed,
+                                source,
+                                position,
+                                &last_good.environment,
+                                file_scope_hash,
+                            );
+                            if !completions.is_empty() {
+                                completions
+                            } else {
+                                complete_source_with_parsed_environment_and_ranking_inputs(
+                                    source,
+                                    &last_good.parsed,
+                                    position,
+                                    &last_good.environment,
+                                    self.completion_ranking_inputs(file_scope_hash),
+                                )
+                            }
+                        } else {
+                            completions
+                        }
                     }
                 } else {
                     degraded_completion_fallback(path, source, position)

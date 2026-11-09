@@ -30,10 +30,10 @@ impl AnalysisSnapshot {
             return Some(facts);
         }
 
-        let facts = Arc::new(
-            self.degraded_current_semantic_facts(file)
-                .or_else(|| self.last_good_semantic_facts(&path))?,
-        );
+        let facts = self
+            .degraded_current_semantic_facts(file)
+            .map(Arc::new)
+            .or_else(|| self.last_good_semantic_facts(&path))?;
         self.degraded_facts
             .lock()
             .expect("degraded semantic facts lock poisoned")
@@ -66,8 +66,22 @@ impl AnalysisSnapshot {
         })
     }
 
-    pub(super) fn last_good_semantic_facts(&self, path: &Path) -> Option<DegradedSemanticFacts> {
-        let last_good = self.last_good_files.get(&normalize_path(path))?.clone();
+    pub(super) fn last_good_semantic_facts(
+        &self,
+        path: &Path,
+    ) -> Option<Arc<DegradedSemanticFacts>> {
+        let path = normalize_path(path);
+        if let Some(cached) = self
+            .last_good_facts
+            .lock()
+            .expect("last-good semantic facts lock poisoned")
+            .get(&path)
+            .cloned()
+        {
+            return Some(cached);
+        }
+
+        let last_good = self.last_good_files.get(&path)?.clone();
         let parsed = last_good.parsed.as_ref().ok()?;
         let semantics = last_good.semantics()?;
         let hir = last_good.hir()?;
@@ -79,13 +93,20 @@ impl AnalysisSnapshot {
         );
         let semantic_index = SemanticIndex::build(parsed, Some(hir), &environment);
 
-        Some(DegradedSemanticFacts {
+        let facts = Arc::new(DegradedSemanticFacts {
             parsed: parsed.as_ref().clone(),
             hir: hir.clone(),
             environment,
             semantic_index,
             project_inference,
-        })
+        });
+        let mut cache = self
+            .last_good_facts
+            .lock()
+            .expect("last-good semantic facts lock poisoned");
+        Some(Arc::clone(
+            cache.entry(path).or_insert_with(|| Arc::clone(&facts)),
+        ))
     }
 }
 
