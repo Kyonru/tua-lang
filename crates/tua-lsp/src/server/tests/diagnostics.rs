@@ -1362,6 +1362,73 @@ final class Particle implements Updatable {
 }
 
 #[test]
+fn rapid_protocol_and_reexport_edits_do_not_publish_stale_conformance_errors() {
+    let temp = TempProject::new("rapid-protocol-reexport-diagnostic-edits");
+    temp.write("tua.toml", "source = \"src\"\n");
+    let compatible = "export protocol Updatable {\n  update(dt: number): nil\n}\n";
+    let incompatible = "export protocol Updatable {\n  update(dt: string): nil\n}\n";
+    let public = "export type { Updatable } from \"./contracts\"\n";
+    let renamed_public = "export type { Updatable as Renamed } from \"./contracts\"\n";
+    temp.write("src/contracts.d.tua", compatible);
+    temp.write("src/public.d.tua", public);
+    let actors = r#"import type { Updatable } from "./public"
+final class Particle implements Updatable {
+  update(dt: number): nil {}
+}
+"#;
+    temp.write("src/actors.tua", actors);
+
+    let contract_uri = temp.uri_for("src/contracts.d.tua");
+    let public_uri = temp.uri_for("src/public.d.tua");
+    let actors_uri = temp.uri_for("src/actors.tua");
+    let mut server = TestServer::new();
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&contract_uri, compatible));
+    server.send(did_open(&public_uri, public));
+    server.send(did_open(&actors_uri, actors));
+
+    server.send_without_drain(did_change(&contract_uri, incompatible, 2));
+    let incompatible_due = server
+        .next_slow_diagnostics_due()
+        .expect("contract edit should schedule dependent diagnostics");
+    server.send_without_drain(did_change(&public_uri, renamed_public, 2));
+    let renamed_due = server
+        .next_slow_diagnostics_due()
+        .expect("re-export edit should schedule dependent diagnostics");
+    server.send_without_drain(did_change(&contract_uri, compatible, 3));
+    let restored_contract_due = server
+        .next_slow_diagnostics_due()
+        .expect("restored contract should schedule dependent diagnostics");
+    server.send_without_drain(did_change(&public_uri, public, 3));
+    let restored_public_due = server
+        .next_slow_diagnostics_due()
+        .expect("restored re-export should schedule dependent diagnostics");
+
+    assert!(incompatible_due <= renamed_due);
+    assert!(renamed_due <= restored_contract_due);
+    assert!(restored_contract_due <= restored_public_due);
+    server.drain_due_diagnostics(restored_public_due);
+
+    let publications = diagnostics_publications(server.output(), &actors_uri);
+    assert!(
+        publications.iter().all(|publication| publication["params"]["diagnostics"]
+            .as_array()
+            .is_some_and(|diagnostics| diagnostics.iter().all(|diagnostic| {
+                diagnostic["code"] != "TL1008" && diagnostic["code"] != "TL1001"
+            }))),
+        "superseded contract/re-export facts must not publish errors for the restored consumer: {publications:#?}"
+    );
+    assert!(
+        publications
+            .last()
+            .is_some_and(|publication| publication["params"]["diagnostics"]
+                .as_array()
+                .is_some_and(|diagnostics| diagnostics.is_empty())),
+        "final consumer diagnostics should reflect the restored protocol export: {publications:#?}"
+    );
+}
+
+#[test]
 fn protocol_conformance_resolves_through_type_reexports() {
     let temp = TempProject::new("protocol-conformance-type-reexport");
     temp.write("tua.toml", "source = \"src\"\n");
