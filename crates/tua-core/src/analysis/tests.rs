@@ -6285,6 +6285,67 @@ final class Bad implements Updatable {
 }
 
 #[test]
+fn cyclic_imported_protocol_signatures_preserve_conformance_identity() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/a.tua
+import type { B } from "./b"
+export protocol A {
+  f(value: B): nil
+}
+-- file: src/b.tua
+import type { A } from "./a"
+export protocol B {
+  g(value: A): nil
+}
+-- file: src/actors.tua
+import type { A } from "./a"
+import type { B } from "./b"
+final class Actor implements A, B {
+  f(value: B): nil {}
+  g(value: A): nil {}
+}
+final class Wrong implements A, B {
+  f(value: A): nil {}
+  g(value: B): nil {}
+}
+local function inspect(value: B)
+  value:g<|complete|>()
+end
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+
+    let snapshot = host.snapshot();
+    let diagnostics = snapshot.diagnostics("src/actors.tua");
+    assert_eq!(
+        completion_labels(&snapshot.completion("src/actors.tua", fixture.position("complete"))),
+        ["g"],
+        "cyclic protocol views should still expose their methods to completion"
+    );
+    assert!(
+        !diagnostics.iter().any(|diagnostic| {
+            diagnostic.severity == crate::DiagnosticSeverity::Error
+                && diagnostic.message.contains("Actor.")
+        }),
+        "matching implementations of cyclic imported protocol signatures should conform: {diagnostics:#?}"
+    );
+    assert!(
+        diagnostics.iter().any(|diagnostic| {
+            diagnostic.message.contains("Wrong.f")
+                && diagnostic.message.contains("does not satisfy protocol `A.f`")
+        }) && diagnostics.iter().any(|diagnostic| {
+            diagnostic.message.contains("Wrong.g")
+                && diagnostic.message.contains("does not satisfy protocol `B.g`")
+        }),
+        "wrong protocol parameter types must remain rejected around a recursive protocol cycle: {diagnostics:#?}"
+    );
+}
+
+#[test]
 fn imported_class_instances_keep_protocol_conformance_across_modules() {
     let fixture = Fixture::parse(
         r#"-- file: src/contracts.d.tua

@@ -84,6 +84,13 @@ pub struct ProjectTypeDatabaseInput<'a> {
 const MAX_PROJECT_TYPE_RESOLUTION_WORK: usize = 8192;
 const MAX_GENERIC_ALIAS_INSTANTIATION_DEPTH: usize = 128;
 
+pub(crate) fn protocol_nominal_identity(module_path: &Path, name: &str) -> String {
+    format!(
+        "{}::protocol::{name}",
+        normalize_path(module_path).to_string_lossy()
+    )
+}
+
 #[derive(Default)]
 struct ProjectTypeResolutionContext {
     aliases: Vec<(PathBuf, String)>,
@@ -365,6 +372,24 @@ impl ProjectTypeDatabase {
         let name = name.trim();
         let binding = self.resolve_type_name_raw(module_graph, &source_path, name)?;
         let resolved = self.resolve_type(module_graph, &binding.module_path, &binding.ty);
+        let resolved = if self
+            .protocols
+            .contains_protocol(&binding.module_path, &binding.name)
+        {
+            match resolved {
+                Type::Table(mut table) => {
+                    table.mark_nominal(
+                        protocol_nominal_identity(&binding.module_path, &binding.name),
+                        binding.name.clone(),
+                        std::iter::empty(),
+                    );
+                    Type::Table(table)
+                }
+                other => other,
+            }
+        } else {
+            resolved
+        };
 
         Some(ProjectTypeBinding {
             ty: resolved,
@@ -579,6 +604,24 @@ impl ProjectTypeDatabase {
                 let key = (binding.module_path.clone(), binding.name.clone());
 
                 if context.aliases.contains(&key) {
+                    if self
+                        .protocols
+                        .contains_protocol(&binding.module_path, &binding.name)
+                    {
+                        if let Type::Table(table) = &binding.ty {
+                            let mut table = table.clone();
+                            table.mark_nominal(
+                                protocol_nominal_identity(&binding.module_path, &binding.name),
+                                binding.name.clone(),
+                                std::iter::empty(),
+                            );
+                            return table
+                                .nominal_reference()
+                                .map(Type::Table)
+                                .unwrap_or(Type::Any);
+                        }
+                    }
+
                     // Recursive LuaCATS aliases are valid (for example a
                     // linked-list node referring to `Node` again).  Do not
                     // expand the cycle indefinitely: replacing the back-edge
@@ -601,6 +644,22 @@ impl ProjectTypeDatabase {
                     context,
                 );
                 context.aliases.pop();
+                if self
+                    .protocols
+                    .contains_protocol(&binding.module_path, &binding.name)
+                {
+                    return match resolved {
+                        Type::Table(mut table) => {
+                            table.mark_nominal(
+                                protocol_nominal_identity(&binding.module_path, &binding.name),
+                                binding.name,
+                                std::iter::empty(),
+                            );
+                            Type::Table(table)
+                        }
+                        other => other,
+                    };
+                }
                 resolved
             }
             Type::Union(types) => Type::union(

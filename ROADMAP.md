@@ -19,9 +19,9 @@ duplicate protocol methods, related-type inference order, and generic-alias
 navigation/completion. This does not complete every P0–P5/R0 qualification gate
 in `internal/generics-polymorphism-0.7.0.md`.
 
-Remaining language and project-analysis work includes cyclic protocol method
-signatures, cross-module class inheritance/conformance, and broader recovery
-from malformed or incomplete protocol declarations. Generic callback-only
+Remaining language and project-analysis work includes cross-module class
+inheritance/conformance and broader recovery from malformed or incomplete
+protocol declarations. Generic callback-only
 inference, generic methods, explicit call-site type arguments, and bounded
 LuaDoc generics remain unsupported and should stay explicit feature gaps.
 Protocol and generic behavior still needs installed-editor, runtime, source-map,

@@ -66,6 +66,7 @@ pub struct TypeContext {
     nominal_alias_supertypes: BTreeMap<String, BTreeSet<String>>,
     nominal_protocols: BTreeSet<String>,
     protocol_identities: BTreeMap<String, (std::path::PathBuf, String)>,
+    protocol_nominal_identities: BTreeMap<String, (std::path::PathBuf, String)>,
     protocol_conformance_identities: BTreeSet<(String, std::path::PathBuf, String)>,
     generic_protocol_bounds: HashMap<TypeParameterId, GenericProtocolBound>,
 }
@@ -191,10 +192,15 @@ impl TypeContext {
         module_path: impl Into<std::path::PathBuf>,
         protocol_name: impl Into<String>,
     ) {
-        self.protocol_identities.insert(
-            visible_name.into(),
-            (module_path.into(), protocol_name.into()),
+        let module_path: std::path::PathBuf = module_path.into();
+        let module_path = crate::vfs::normalize_path(module_path);
+        let protocol_name = protocol_name.into();
+        self.protocol_nominal_identities.insert(
+            crate::type_database::protocol_nominal_identity(&module_path, &protocol_name),
+            (module_path.clone(), protocol_name.clone()),
         );
+        self.protocol_identities
+            .insert(visible_name.into(), (module_path, protocol_name));
     }
 
     pub(crate) fn insert_protocol_conformance_identity(
@@ -382,6 +388,41 @@ impl TypeContext {
                     .is_some_and(|identity| self.explicitly_conforms_to_protocol(source, identity))
             {
                 return Ok(());
+            }
+        }
+
+        if let Type::Table(target_table) = target {
+            if let Some(target_identity) = target_table.nominal_identity() {
+                if let Some(protocol_identity) =
+                    self.protocol_nominal_identities.get(target_identity)
+                {
+                    let generic_bound_matches = match source {
+                        Type::GenericParameter { id, .. } => {
+                            self.generic_protocol_bounds.get(id).is_some_and(|bound| {
+                                bound.identity.as_ref() == Some(protocol_identity)
+                                    || self.protocol_identities.get(&bound.name)
+                                        == Some(protocol_identity)
+                            })
+                        }
+                        _ => false,
+                    };
+                    let same_protocol_alias = match source {
+                        Type::Alias(name) => {
+                            self.protocol_identities.get(name) == Some(protocol_identity)
+                        }
+                        _ => false,
+                    };
+                    let conforms = match source {
+                        Type::Table(source_table) => {
+                            source_table.is_nominal_subtype_of(target_identity)
+                                || self.explicitly_conforms_to_protocol(source, protocol_identity)
+                        }
+                        _ => self.explicitly_conforms_to_protocol(source, protocol_identity),
+                    };
+                    return (generic_bound_matches || same_protocol_alias || conforms)
+                        .then_some(())
+                        .ok_or_else(|| AssignabilityFailure::type_mismatch(source, target));
+                }
             }
         }
 

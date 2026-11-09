@@ -37,6 +37,8 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Preserve nominal protocol identity through mutually recursive cross-file
+  method signatures, while continuing to reject incompatible implementations.
 - Show imported generic alias declarations with their binders and body instead
   of presenting them as a recursive zero-argument application.
 - Compare generic override signatures after substituting the concrete parent

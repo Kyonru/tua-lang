@@ -74,12 +74,15 @@ parameter packs, specialization/monomorphization, and a new runtime.
 - LSP already advertises implementation navigation. Extend its shared query;
   do not add a second unrelated implementation lookup.
 
-Evidence as of November 9, 2026: the full core suite passes (1855 passed, 1
-ignored), the full LSP suite passes (407), and the CLI integration target
-passes (132). These used `CARGO_INCREMENTAL=0 RUST_MIN_STACK=16777216
-RUST_TEST_THREADS=1`. Core and LSP editor requests cover imported protocol
-completion, hover, signature help, definition, and implementation navigation;
-the incomplete-edit completion case first establishes last-good project facts.
+Evidence as of November 9, 2026, after the cyclic protocol identity fix: the
+full core suite passes (1856 passed, 1 ignored), the full LSP suite passes
+(407), and the CLI integration target passes (132). These used
+`CARGO_INCREMENTAL=0 RUST_MIN_STACK=16777216 RUST_TEST_THREADS=1`. Core and LSP
+editor requests cover imported protocol completion, hover, signature help,
+definition, and implementation navigation; the incomplete-edit completion
+case first establishes last-good project facts. The new regression exercises
+mutually recursive imported contracts, positive and negative conformance, and
+protocol-member completion.
 Prior full-package evidence and its stack-sensitive serial settings are recorded in
 `internal/audits/devex-space-invaders-0.7.0/REPORT.md`. That report contains a
 five-module game exercise, generated-Lua smoke test, exact limitations, and
@@ -87,14 +90,14 @@ remaining verification gaps. Generic aliases and the G2 generic free-function
 slice are implemented. Generic classes support constructor inference, member
 substitution, applied inheritance, imported instance aliases, and protocol
 bounds. The VS Code real-server host passes imported generic alias hover,
-value/member hover, completion, and signatures. `make extension-package` passes
-the 180 extension checks and produces a 40-file 0.7.0 VSIX; its archive is
-valid. The packaged VSIX has not been installed into a user's editor. LOVE,
-LuaJIT, source-map/hot-reload, and cross-platform release qualification remain
-open. This audit's `make extension-check` attempt remains blocked in the
-restricted environment: two runtime-inspector tests cannot bind `127.0.0.1`
-(`listen EPERM`); the same outcome occurred on a retry. The other 178 of 180
-unit/replay tests passed before the gate stopped.
+value/member hover, completion, and signatures. After the cyclic protocol fix,
+the 180-test extension check passes with local loopback access and the rebuilt
+40-file 0.7.0 VSIX passes its installed real-server test on this macOS host.
+That installed test covers imported protocol completion, hover and requirement
+definition, and generic alias/class/function completion, hover, signatures,
+and alias definition. It does not yet exercise installed-editor implementation
+navigation or rename. LOVE, LuaJIT, source-map/hot-reload, cross-platform and
+long-session release qualification remain open.
 
 ## 3. Language contract and remaining decisions
 
@@ -320,13 +323,13 @@ from the tests and current documentation that prove it.
 | P0 | Contract and baseline; first | Settle syntax/semantics, diagnostic locations, namespace and receiver rules. Add positive/negative fixture specifications and characterize mutable-container risk. Existing inheritance regression stays green. | Partial: method-only protocols, explicit nominal conformance, colon dispatch, and no-runtime-erasure rules are in code. Receiver edge cases and mutable-container interactions still need characterization. | M |
 | P1 | Protocol syntax and identities; P0 | Parse declarations/conformance clauses, scope type names/members, preserve docs and spans, recover edits, format and erase safely. Unsupported use must never be silently accepted. | Partial: local and exported protocol declarations, class clauses, spans, type identities, erasure, and method comments are covered. Protocol method signatures support balanced multiline parameters, inline comments, and a return annotation after the closing parenthesis; formatter round-trip, comment preservation, and post-format checking pass. An unclosed protocol gets a targeted syntax diagnostic. Broader malformed-edit recovery still needs coverage. | L |
 | P2 | Local conformance and dispatch; P1 | Share method compatibility, inherited methods and conformances, multiple obligations, protocol assignments/calls, and structured errors. Invalid signatures fail at the correct span. | Partial: local/imported conformance, protocol-typed values, inherited method satisfaction, disjoint and same-named multiple obligations, and missing/incompatible method tests pass. Function variance is tested: broader implementation parameters and narrower returns pass; narrower parameters and broader returns fail. Mismatch diagnostics identify the specific parameter or return slot. Inherited override edge cases and range precision still need broader verification. | L |
-| P3 | Modules and invalidation; P2 | Type imports, exports/re-exports, declaration-file contracts, cycles and missing modules. Unsaved contract/member edits refresh dependents without transient false errors. | Partial: exported protocols, named and namespace type-only imports, and project diagnostics for missing/incompatible imported methods work, including when `implements` is the import's only use. Saved and unsaved contract edits refresh those diagnostics. Named declaration-file re-exports and namespace re-exports resolve to the original protocol identity. Cyclic protocol method signatures remain a confirmed gap: mutually recursive A/B contracts can report TL1008 for an otherwise matching implementation. Broader dependency-edit freshness remains open. | L |
-| P4 | Complete protocol IDE slice; P3 | Member completion, hover/docs, signatures, inlays, definitions, implementations, references/rename, tokens, type explanations, actionable diagnostics. Verify real LSP responses and installed VS Code. | Partial: core and in-process LSP requests cover completion after a typed method prefix, incomplete edits with last-good project facts, hover signatures and protocol requirement comments (with the implicit receiver hidden for colon calls), signature help, definition, implementation navigation, references, and rename across type-only imports. A real `tua lsp` process probe confirms invoked completion after an incomplete imported-protocol edit. Semantic tokens classify protocol types as interfaces and requirements/calls as methods. Inlay hints and type explanations preserve imported protocol member types. The VS Code real-server host passes imported protocol completion, documented hover, definition navigation, and imported generic alias/class hover, completion, and signatures. This audit additionally verified constrained generic class parameters complete in class fields and method return annotations; completion returns the binder's protocol constraint. Installed-VSIX and cross-platform qualification remain open. | L |
+| P3 | Modules and invalidation; P2 | Type imports, exports/re-exports, declaration-file contracts, cycles and missing modules. Unsaved contract/member edits refresh dependents without transient false errors. | Partial: exported protocols, named and namespace type-only imports, and project diagnostics for missing/incompatible imported methods work, including when `implements` is the import's only use. Saved and unsaved contract edits refresh those diagnostics. Named declaration-file re-exports and namespace re-exports resolve to the original protocol identity. Mutually recursive cross-file protocol signatures now retain nominal identity: matching conformance passes, incompatible parameter types still report TL1008, and member completion remains available. Broader dependency-edit freshness remains open. | L |
+| P4 | Complete protocol IDE slice; P3 | Member completion, hover/docs, signatures, inlays, definitions, implementations, references/rename, tokens, type explanations, actionable diagnostics. Verify real LSP responses and installed VS Code. | Partial: core and in-process LSP requests cover completion after a typed method prefix, incomplete edits with last-good project facts, hover signatures and protocol requirement comments (with the implicit receiver hidden for colon calls), signature help, definition, implementation navigation, references, and rename across type-only imports. A real `tua lsp` process probe confirms invoked completion after an incomplete imported-protocol edit. Semantic tokens classify protocol types as interfaces and requirements/calls as methods. Inlay hints and type explanations preserve imported protocol member types. The installed VSIX real-server test passes imported protocol completion, documented hover and requirement definition, and generic alias/class/function hover, completion, signatures and alias definition. Installed-editor implementation navigation/rename and cross-platform qualification remain open. | L |
 | P5 | Usable protocol examples/docs; P4 | Add runnable game/UI and negative examples, runtime/source-map/hot-reload qualification; preserve adapters for Lua interop. | Partial: class/typing/module docs and a feature-tour sample now explain the shipped slice; an audit game build ran under system Lua with a LOVE shim. LOVE/LuaJIT, source maps, hot reload, editor UX, and visual behavior remain unverified. | M |
 | G0 | Binder/substitution design; after P5 | Specify generic inference, recursive types, variance, first-class functions, contextual typing, limits and error policy; reuse protocol bounds. No unused framework-only abstraction. | Decisions recorded above: native alias syntax, binder identity, substitution semantics, arity/error behavior, inference boundaries, erasure, mutability variance, and resource limits. | M |
 | G1 | Generic aliases; G0 | Scoped binder IDs, arity checks, type applications, bounded capture-avoiding substitution, recursion/occurs handling, imports and IDE display. Connect machinery to its first consumer. | Implemented: exact-arity and unknown-name diagnostics, structured substitution, named/namespace imports, named re-exports, shared protocol and class signatures, LuaDoc type-text parsing, formatter/emission erasure, and core editor queries. Same-argument recursive edges remain named; changing-argument recursion stops at a 128 active-instantiation limit and leaves an unresolved application without a dedicated diagnostic. Focused core tests pass; real VS Code and broad release qualification remain open. | L |
-| G2 | Generic functions; G1 | Universally checked bodies, per-call inference, returns/callbacks, independent instantiations, navigation and actionable failures; align supported LuaDoc forms. | Implemented for generic free functions, direct/assigned/local/imported/re-exported calls, varargs and unbounded LuaDoc tags. Mutable container positions are invariant during inference. Callback-only/return-only inference, methods, and explicit call-site arguments remain diagnosed or unsupported. Core and CLI runtime tests pass; the VS Code real-server host passes generic hover and signature checks. Installed-VSIX testing remains open. | L |
-| G3 | Generic classes and bounds; G2 | Constructor inference, instance members, inherited substitutions, `Self`, invariant mutable containers and protocol constraints. Retain runtime/class identity and editor parity. | Implemented for the scoped surface: local and imported generic classes, constructor/member substitution, applied generic parents and `super(...)`, invariant class arguments, explicit one-protocol bounds, cross-file generic function schemes, bounded-body member completion/hover/navigation, erasure, and generic override signature comparison after parent substitution. Cross-module inherited conformance and installed-editor qualification are still open. Generic methods, generic protocols, and compound bounds remain deferred. | L |
+| G2 | Generic functions; G1 | Universally checked bodies, per-call inference, returns/callbacks, independent instantiations, navigation and actionable failures; align supported LuaDoc forms. | Implemented for generic free functions, direct/assigned/local/imported/re-exported calls, varargs and unbounded LuaDoc tags. Mutable container positions are invariant during inference. Callback-only/return-only inference, methods, and explicit call-site arguments remain diagnosed or unsupported. Core and CLI runtime tests pass; the locally installed VSIX real-server test verifies imported generic hover, completion, signatures and result hover. | L |
+| G3 | Generic classes and bounds; G2 | Constructor inference, instance members, inherited substitutions, `Self`, invariant mutable containers and protocol constraints. Retain runtime/class identity and editor parity. | Implemented for the scoped surface: local and imported generic classes, constructor/member substitution, applied generic parents and `super(...)`, invariant class arguments, explicit one-protocol bounds, cross-file generic function schemes, bounded-body member completion/hover/navigation, erasure, and generic override signature comparison after parent substitution. Cross-module inherited conformance remains open. The locally installed VSIX real-server test verifies imported generic class hover, completion, constructor/method signatures and generic alias navigation. Generic methods, generic protocols, and compound bounds remain deferred. | L |
 | R0 | Qualification; P5 and selected complete G milestones | Docs/examples, performance, cross-platform CI, installed-editor tests and package smoke; publish honest release scope and migration notes. | Open. | L |
 
 Commit convention: one coherent implementation/fix with its regression tests
@@ -512,7 +515,10 @@ Before calling 0.7.0 ready:
 - [ ] Runtime output, source maps, initialization and hot reload are qualified.
 - [ ] Fresh and warm-cache performance and memory evidence is recorded.
 - [ ] Linux, Windows, Intel Mac and Apple Silicon trusted release gates pass.
-- [ ] Real installed VSIX tests cover typing protocols/generics and navigation.
+- [x] A locally installed VSIX test on macOS covers protocol/generic typing,
+      hover, completion, signatures, and selected definitions.
+- [ ] Installed-editor implementation navigation and rename, and other
+      supported operating systems, are qualified.
 - [ ] Docs, examples, migration notes and version metadata match implementation.
 - [ ] Focused independent code review covers binder identity, conformance,
       variance, cache invalidation and erasure; record unresolved findings.
@@ -524,10 +530,9 @@ Before calling 0.7.0 ready:
 The protocol, G1 generic-alias, G2 generic-function, and scoped G3
 generic-class/bound slices are implemented. Keep the actor/panel,
 inherited-method, incompatible-signature, cross-file, and generic alias fixtures
-as regression anchors. Remaining engineering work includes cyclic protocol
-method-signature conformance, broader protocol malformed-edit/range coverage,
-cross-module inherited conformance, and dependency invalidation for cyclic
-graphs. Cross-module class extension is not supported by the parser/lowering
+as regression anchors. Remaining engineering work includes broader protocol
+malformed-edit/range coverage, cross-module inherited conformance, and
+dependency invalidation for cyclic graphs. Cross-module class extension is not supported by the parser/lowering
 contract and must remain an explicit feature gap unless designed as its own
 change. Real installed VS Code, LOVE/LuaJIT runtime, source-map/hot-reload, and
 cross-platform qualification remain release gates. Do not treat completion of
