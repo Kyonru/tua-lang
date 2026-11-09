@@ -259,6 +259,34 @@ fn unused_type_diagnostics(parsed: &ParsedSource) -> Vec<Diagnostic> {
         collect(ty, &mut live);
     }
 
+    for parameter in parsed
+        .function_annotations
+        .iter()
+        .flat_map(|function| &function.generic_parameters)
+        .chain(
+            parsed
+                .class_declarations
+                .iter()
+                .flat_map(|class| &class.generic_parameters),
+        )
+    {
+        if let Some(bound) = &parameter.protocol_bound {
+            live.insert(bound.name.trim().to_owned());
+        }
+    }
+
+    for method in parsed
+        .protocol_declarations
+        .iter()
+        .flat_map(|protocol| &protocol.methods)
+    {
+        let signature = crate::parser::parse_tua_type_text(&format!(
+            "({}) -> {}",
+            method.parameters, method.return_type
+        ));
+        collect(&signature, &mut live);
+    }
+
     // `implements` clauses are type-level references too. Keep imported
     // protocols live even when the class never mentions the type in an
     // annotation or expression.

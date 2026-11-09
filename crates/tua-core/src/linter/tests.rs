@@ -1003,6 +1003,28 @@ final class Player implements Updatable {
 }
 
 #[test]
+fn protocol_bounds_and_signatures_keep_type_imports_live() {
+    let diagnostics = check_standard_rules_source(
+        r#"
+import type { Updatable, State } from "./contracts"
+function tick<T: Updatable>(value: T): T return value end
+export protocol Snapshot {
+  read(): State
+}
+"#,
+    );
+
+    assert!(
+        !diagnostics.iter().any(|diagnostic| {
+            diagnostic.code == Some(DiagnosticCode::LINT_UNUSED_TYPE)
+                && (diagnostic.message.contains("Updatable")
+                    || diagnostic.message.contains("State"))
+        }),
+        "generic protocol bounds and protocol method signatures reference imported types: {diagnostics:#?}"
+    );
+}
+
+#[test]
 fn unused_types_do_not_keep_their_import_dependencies_alive() {
     let diagnostics = check_standard_rules_source(
         r#"

@@ -395,6 +395,17 @@ impl TypeContext {
             {
                 Ok(())
             }
+            (Type::GenericParameter { id, .. }, target) => {
+                let Some(bound) = self.generic_protocol_bounds.get(id) else {
+                    return Err(AssignabilityFailure::type_mismatch(source, target));
+                };
+                self.check_assignable_inner(
+                    &Type::Alias(bound.name.clone()),
+                    target,
+                    depth + 1,
+                    resolving,
+                )
+            }
             (Type::Alias(source), Type::Alias(target))
                 if self.is_nominal_alias_type(source) || self.is_nominal_alias_type(target) =>
             {

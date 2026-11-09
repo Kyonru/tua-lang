@@ -6410,7 +6410,7 @@ import type { Updatable } from "./contracts"
 export type { Updatable } from "./contracts"
 -- file: src/api.tua
 import type { Updatable } from "./relay"
-function tick<T: Updatable>(value: T): T
+local function tick<T: Updatable>(value: T): T
   value:update(1)
   return value
 end
@@ -6441,6 +6441,15 @@ local invalid = api.tick(lookalikes.Lookalike.new())
         host.set_file(&file.path, file.source.clone());
     }
     let snapshot = host.snapshot();
+
+    let api_diagnostics = snapshot.diagnostics("src/api.tua");
+    assert!(
+        !api_diagnostics.iter().any(|diagnostic| {
+            diagnostic.severity == crate::DiagnosticSeverity::Error
+                || diagnostic.code == Some(crate::DiagnosticCode::LINT_UNUSED_TYPE)
+        }),
+        "a generic function must be able to use its imported protocol bound in its body without false errors or unused-import warnings: {api_diagnostics:#?}"
+    );
 
     let diagnostics = snapshot.pipeline_diagnostics("src/main.tua");
     assert!(
