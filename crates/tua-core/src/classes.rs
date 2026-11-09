@@ -15,7 +15,8 @@ use crate::parser::{
 use crate::scope::{scope_map_parsed_source, ScopeDeclarationKind, ScopeSymbolId};
 use crate::source_text::SourcePositionIndex;
 use crate::types::{
-    AssignabilityFailure, AssignabilityPathSegment, Type, TypeEnvironment, TypedFunction,
+    AssignabilityFailure, AssignabilityFailureKind, AssignabilityPathSegment, Type,
+    TypeEnvironment, TypedFunction,
 };
 use crate::{Diagnostic, DiagnosticCode};
 
@@ -2232,7 +2233,30 @@ pub(crate) fn class_contract_diagnostics(
 
 fn protocol_method_failure_detail(failure: &AssignabilityFailure) -> String {
     let Some(segment) = failure.path.first() else {
-        return String::new();
+        return match &failure.kind {
+            AssignabilityFailureKind::FunctionParameterCount { expected, found } => {
+                let found_noun = if *found == 1 { "argument" } else { "arguments" };
+                let expected_noun = if *expected == 1 {
+                    "argument"
+                } else {
+                    "arguments"
+                };
+                format!(
+                    "; implementation requires {found} required {found_noun}, but the protocol permits only {expected} required {expected_noun}"
+                )
+            }
+            AssignabilityFailureKind::FunctionVararg => {
+                "; the protocol requires variadic arguments, but the implementation does not accept them".to_owned()
+            }
+            AssignabilityFailureKind::FunctionReturnCount { expected, found } => {
+                let expected_noun = if *expected == 1 { "value" } else { "values" };
+                let found_noun = if *found == 1 { "value" } else { "values" };
+                format!(
+                    "; the protocol declares {expected} return {expected_noun}, but the implementation declares {found} return {found_noun}"
+                )
+            }
+            _ => String::new(),
+        };
     };
 
     match segment {

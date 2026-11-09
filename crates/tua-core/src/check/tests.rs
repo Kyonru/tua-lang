@@ -2761,6 +2761,121 @@ final class BroadReturn implements Visitor {
 }
 
 #[test]
+fn protocol_compatibility_respects_optional_varargs_and_each_return_slot() {
+    check_tua_source(
+        "src/protocol_function_shapes.tua",
+        r#"
+protocol Decoder {
+  decode(input: string, ...: number): (number, string)
+  find(index?: number): nil
+}
+final class Reader implements Decoder {
+  decode(input: string, ...: number): (number, string) { return 1, input }
+  find(): nil {}
+}
+"#,
+    )
+    .expect("matching varargs, tuple results, and an omitted optional argument are compatible");
+
+    let required_optional = check_tua_source(
+        "src/protocol_function_shapes.tua",
+        r#"
+protocol Finder {
+  find(index?: number): nil
+}
+final class RequiredFinder implements Finder {
+  find(index: number): nil {}
+}
+"#,
+    )
+    .expect_err("an implementation may not require a protocol-optional argument");
+    assert!(
+        required_optional.iter().any(|diagnostic| {
+            diagnostic
+                .message
+                .contains("does not satisfy protocol `Finder.find`")
+                && diagnostic
+                    .message
+                    .contains("implementation requires 1 required argument, but")
+                && diagnostic
+                    .message
+                    .contains("protocol permits only 0 required arguments")
+        }),
+        "the optional-argument incompatibility should be reported: {required_optional:#?}"
+    );
+
+    let missing_varargs = check_tua_source(
+        "src/protocol_function_shapes.tua",
+        r#"
+protocol Writer {
+  write(...: string): nil
+}
+final class FixedWriter implements Writer {
+  write(): nil {}
+}
+"#,
+    )
+    .expect_err("an implementation must accept the protocol's variadic arguments");
+    assert!(
+        missing_varargs.iter().any(|diagnostic| {
+            diagnostic
+                .message
+                .contains("does not satisfy protocol `Writer.write`")
+                && diagnostic
+                    .message
+                    .contains("protocol requires variadic arguments")
+        }),
+        "missing variadic support should be described: {missing_varargs:#?}"
+    );
+
+    let wrong_second_return = check_tua_source(
+        "src/protocol_function_shapes.tua",
+        r#"
+protocol Decoder {
+  decode(): (number, string)
+}
+final class WrongDecoder implements Decoder {
+  decode(): (number, number) { return 1, 2 }
+}
+"#,
+    )
+    .expect_err("each declared return slot participates in conformance");
+    assert!(
+        wrong_second_return.iter().any(|diagnostic| {
+            diagnostic
+                .message
+                .contains("does not satisfy protocol `Decoder.decode`")
+                && diagnostic.message.contains("incompatible return value 2")
+        }),
+        "the second return mismatch should identify its slot: {wrong_second_return:#?}"
+    );
+
+    let missing_return = check_tua_source(
+        "src/protocol_function_shapes.tua",
+        r#"
+protocol Decoder {
+  decode(): (number, string)
+}
+final class ShortDecoder implements Decoder {
+  decode(): number { return 1 }
+}
+"#,
+    )
+    .expect_err("an implementation must provide every protocol return slot");
+    assert!(
+        missing_return.iter().any(|diagnostic| {
+            diagnostic
+                .message
+                .contains("does not satisfy protocol `Decoder.decode`")
+                && diagnostic.message.contains(
+                    "protocol declares 2 return values, but the implementation declares 1 return value",
+                )
+        }),
+        "the return arity mismatch should be described: {missing_return:#?}"
+    );
+}
+
+#[test]
 fn rejects_mutable_concrete_array_widening_to_protocol_view() {
     let parsed = crate::parse_tua_source(
         "src/protocol_array_variance.tua",
