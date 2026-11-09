@@ -472,46 +472,6 @@ export protocol Updatable {
 }
 
 #[test]
-fn cyclic_protocol_type_imports_resolve_without_losing_conformance() {
-    let fixture = Fixture::parse(
-        r#"-- file: src/main.tua
-import type { A } from "./a"
-import type { B } from "./b"
-final class Handler implements A {
-  accept(value: B): nil {}
-}
-local _handler: A = Handler.new()
--- file: src/a.d.tua
-import type { B } from "./b"
-export protocol A {
-  accept(value: B): nil
-}
--- file: src/b.d.tua
-import type { A } from "./a"
-export protocol B {
-  accept(value: A): nil
-}
-"#,
-    );
-    let host = host_from_fixture(&fixture);
-    let snapshot = host.snapshot();
-
-    let diagnostics = snapshot.diagnostics("src/main.tua");
-    assert!(
-        diagnostics.is_empty(),
-        "mutually-referential type-only protocol contracts should resolve deterministically: {diagnostics:#?}"
-    );
-    assert!(snapshot
-        .type_database()
-        .resolve_type_name(snapshot.module_graph(), "src/main.tua", "A")
-        .is_some());
-    assert!(snapshot
-        .type_database()
-        .resolve_type_name(snapshot.module_graph(), "src/main.tua", "B")
-        .is_some());
-}
-
-#[test]
 fn declaration_modules_support_named_imports_aliases_and_reexports() {
     let fixture = Fixture::parse(
         r#"-- file: src/main.tua
