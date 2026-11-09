@@ -7112,6 +7112,66 @@ mod sharing_tests {
 }
 
 #[cfg(test)]
+mod generic_alias_limit_tests {
+    use super::*;
+
+    fn alias_applications(environment: &TypeEnvironment, count: usize) -> Type {
+        let definition = environment
+            .generic_aliases
+            .values()
+            .next()
+            .expect("fixture should define one generic alias");
+        let application = || Type::GenericAliasApplication {
+            reference: GenericAliasReference::Declaration(definition.id.clone()),
+            arguments: vec![Type::number()],
+            span: None,
+        };
+
+        Type::Table(TableShape::from_fields((0..count).map(|index| {
+            (
+                format!("field_{index}"),
+                TableField {
+                    ty: application(),
+                    optional: false,
+                },
+            )
+        })))
+    }
+
+    #[test]
+    fn generic_alias_expansion_work_limit_has_an_exact_boundary() {
+        let parsed = crate::parse_tua_source("src/leaf.tua", "type Leaf<T> = { value: T }\n")
+            .expect("generic alias fixture should parse");
+        let environment = TypeEnvironment::from_parsed(&parsed)
+            .expect("generic alias fixture should build an environment");
+
+        let at_limit = alias_applications(&environment, MAX_GENERIC_ALIAS_EXPANSION_WORK);
+        let mut context = GenericAliasExpansionContext::default();
+        let expanded = context.resolve(&environment, &at_limit);
+        assert_eq!(context.work, MAX_GENERIC_ALIAS_EXPANSION_WORK);
+        assert!(!context.exhausted);
+        let Type::Table(expanded) = expanded else {
+            panic!("an at-limit record should fully expand");
+        };
+        assert!(matches!(
+            expanded.semantic_field("field_4095").map(|field| &field.ty),
+            Some(Type::Table(table)) if table.semantic_field("value").is_some_and(|field| field.ty == Type::number())
+        ));
+
+        let above_limit = alias_applications(&environment, MAX_GENERIC_ALIAS_EXPANSION_WORK + 1);
+        let mut context = GenericAliasExpansionContext::default();
+        let _ = context.resolve(&environment, &above_limit);
+        assert!(context.exhausted);
+        assert_eq!(context.work, MAX_GENERIC_ALIAS_EXPANSION_WORK);
+        assert_eq!(
+            environment.resolve_aliases(&above_limit),
+            above_limit,
+            "public resolution must preserve the original whole record instead of a partial expansion"
+        );
+    }
+}
+
+#[cfg(test)]
 mod love_context_tests {
     #[test]
     fn love_callback_parameters_use_catalog_without_overriding_annotations() {
