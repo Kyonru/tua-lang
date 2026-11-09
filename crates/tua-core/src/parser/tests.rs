@@ -458,6 +458,35 @@ fn protocol_declarations_preserve_method_contracts_and_erase_from_lua() {
 }
 
 #[test]
+fn protocol_headers_allow_comments_between_declaration_tokens() {
+    let source = "export -- public contract\nprotocol -- behavior name\nRenderable -- contract body\n{\n  render(): nil\n}\n";
+    let parsed = parse_tua_source("src/commented_protocol.tua", source)
+        .expect("comments should be trivia within a protocol declaration header");
+
+    assert_eq!(parsed.protocol_declarations.len(), 1);
+    let protocol = &parsed.protocol_declarations[0];
+    assert!(protocol.exported);
+    assert_eq!(protocol.name, "Renderable");
+    assert_eq!(protocol.methods[0].name, "render");
+    let lua = crate::emit::emit_lua(&parsed).expect("commented protocol declarations erase");
+    assert!(!lua.contains("Renderable") && !lua.contains("protocol"));
+
+    let unfinished = "export -- { contract visibility }\nprotocol -- { behavior comment }\nRenderable -- { contract body }\n{\n  render(): nil\n";
+    let diagnostics = parse_tua_source("src/commented_protocol.tua", unfinished)
+        .expect_err("editor recovery must not make an incomplete declaration valid source");
+    assert!(diagnostics.iter().any(|diagnostic| {
+        diagnostic
+            .message
+            .contains("unclosed protocol `Renderable`")
+    }));
+    let recovered = crate::classes::source_with_closed_editor_declarations(unfinished)
+        .expect("recovery should locate the protocol body past comment text");
+    let partial = parse_tua_source("src/commented_protocol.tua", recovered)
+        .expect("recovered commented protocol should retain its partial contract");
+    assert_eq!(partial.protocol_declarations[0].methods[0].name, "render");
+}
+
+#[test]
 fn protocol_method_parameters_can_span_lines_and_ignore_inline_comments() {
     let source = r#"export protocol Applies {
   apply(

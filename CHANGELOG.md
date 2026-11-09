@@ -37,6 +37,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Treat Lua comments as trivia between `export protocol`, its name, and its
+  opening brace, including during editor recovery of an unfinished declaration.
+- Correct the language guide's stale claim that native generic parameters are
+  unsupported; it now points to the supported alias, function, and class forms.
 - Keep `protocol` and `implements` available as ordinary Lua identifiers,
   including in files that also contain Tua type syntax. Protocol declarations
   are now recognized only in declaration position.

@@ -97,6 +97,16 @@ pub(crate) struct ProtocolMethod {
     pub name_span: SourceSpan,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct ProtocolHeader {
+    declaration_start: usize,
+    name: String,
+    exported: bool,
+    name_start: usize,
+    name_end: usize,
+    body_open: usize,
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum ClassMemberKind {
     Field,
@@ -327,45 +337,20 @@ pub(crate) fn parse_protocol_declarations(
             index = end;
             continue;
         }
-        let exported = starts_keyword(source, index, "export");
-        let protocol_start = if exported {
-            skip_whitespace(source, index + "export".len())
-        } else {
-            index
-        };
-        if !starts_keyword(source, protocol_start, "protocol") {
+        let Some(header) = protocol_header_at(source, index) else {
             index += next_char_len(source, index);
             continue;
-        }
-        let line_start = source[..protocol_start]
-            .rfind('\n')
-            .map_or(0, |newline| newline + 1);
-        let line_prefix = source[line_start..protocol_start].trim();
-        if !matches!(line_prefix, "" | "export") {
-            index = protocol_start + "protocol".len();
-            continue;
-        }
-        let start = index;
-        let mut cursor = skip_whitespace(source, protocol_start + "protocol".len());
-        let Some((name, name_start, name_end)) = take_identifier(source, cursor) else {
-            index += "protocol".len();
-            continue;
         };
-        cursor = skip_whitespace(source, name_end);
-        if !source[cursor..].starts_with('{') {
-            index = cursor;
-            continue;
-        }
-        let Some(body_end) = find_matching_brace(source, cursor) else {
+        let Some(body_end) = find_matching_brace(source, header.body_open) else {
             diagnostics.push(class_diagnostic(
                 path,
-                positions.position(start),
-                format!("unclosed protocol `{name}`"),
+                positions.position(header.declaration_start),
+                format!("unclosed protocol `{}`", header.name),
             ));
             break;
         };
         let mut methods = Vec::new();
-        let mut body_cursor = cursor + 1;
+        let mut body_cursor = header.body_open + 1;
         while body_cursor < body_end {
             body_cursor = skip_body_ws_and_comments(source, body_cursor);
             if body_cursor >= body_end {
@@ -392,7 +377,10 @@ pub(crate) fn parse_protocol_declarations(
                     diagnostics.push(class_diagnostic(
                         path,
                         positions.position(method_start),
-                        format!("duplicate method `{method_name}` in protocol `{name}`"),
+                        format!(
+                            "duplicate method `{method_name}` in protocol `{}`",
+                            header.name
+                        ),
                     ));
                 } else {
                     methods.push(ProtocolMethod {
@@ -410,7 +398,7 @@ pub(crate) fn parse_protocol_declarations(
                     });
                 }
             } else {
-                diagnostics.push(class_diagnostic(path, positions.position(body_cursor), format!("invalid protocol member in `{name}`; expected `method(parameters): ReturnType`")));
+                diagnostics.push(class_diagnostic(path, positions.position(body_cursor), format!("invalid protocol member in `{}`; expected `method(parameters): ReturnType`", header.name)));
             }
             body_cursor = if line_end < body_end {
                 line_end + 1
@@ -420,30 +408,68 @@ pub(crate) fn parse_protocol_declarations(
         }
         if declarations
             .iter()
-            .any(|protocol: &ProtocolDeclaration| protocol.name == name)
+            .any(|protocol: &ProtocolDeclaration| protocol.name == header.name)
         {
             diagnostics.push(class_diagnostic(
                 path,
-                positions.position(name_start),
-                format!("duplicate protocol `{name}`"),
+                positions.position(header.name_start),
+                format!("duplicate protocol `{}`", header.name),
             ));
         }
         declarations.push(ProtocolDeclaration {
-            name,
-            exported,
+            name: header.name,
+            exported: header.exported,
             methods,
             span: SourceSpan {
-                start: positions.position(start),
+                start: positions.position(header.declaration_start),
                 end: positions.position(body_end + 1),
             },
             name_span: SourceSpan {
-                start: positions.position(name_start),
-                end: positions.position(name_end),
+                start: positions.position(header.name_start),
+                end: positions.position(header.name_end),
             },
         });
         index = body_end + 1;
     }
     (declarations, diagnostics)
+}
+
+fn protocol_header_at(source: &str, start: usize) -> Option<ProtocolHeader> {
+    let exported = starts_keyword(source, start, "export");
+    let protocol_start = if exported {
+        skip_protocol_whitespace_and_comments(source, start + "export".len(), source.len())
+    } else {
+        start
+    };
+    if !starts_keyword(source, protocol_start, "protocol") {
+        return None;
+    }
+
+    let line_start = source[..protocol_start]
+        .rfind('\n')
+        .map_or(0, |newline| newline + 1);
+    let line_prefix = source[line_start..protocol_start].trim();
+    if !matches!(line_prefix, "" | "export") {
+        return None;
+    }
+
+    let name_start = skip_protocol_whitespace_and_comments(
+        source,
+        protocol_start + "protocol".len(),
+        source.len(),
+    );
+    let (name, name_start, name_end) = take_identifier(source, name_start)?;
+    let body_open = skip_protocol_whitespace_and_comments(source, name_end, source.len());
+    source[body_open..]
+        .starts_with('{')
+        .then_some(ProtocolHeader {
+            declaration_start: start,
+            name,
+            exported,
+            name_start,
+            name_end,
+            body_open,
+        })
 }
 
 fn parse_protocol_method_line(line: &str) -> (Option<String>, Option<String>, Option<String>) {
@@ -894,7 +920,7 @@ pub(crate) fn source_with_closed_protocol_bodies(source: &str) -> Option<String>
             column: diagnostic.column,
         },
     )?;
-    let open = start + source[start..].find('{')?;
+    let open = protocol_header_at(source, start)?.body_open;
     let depth = matching_delimiter(source, open, '{', '}').err()?;
     if depth == 0 || depth > 32 {
         return None;

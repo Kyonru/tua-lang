@@ -580,9 +580,12 @@ inheritance, protocol contracts, documentation, and initialization order.
 method-only contract; `class Name implements Protocol` opts a class into it.
 Use `export protocol` and `import type` to share a protocol across modules.
 Protocols and conformance clauses are erased from emitted Lua. Generic type
-parameters such as `<T>` are not supported. Read the initialization section
-before combining field defaults with assignments in `init`: defaults run after
-that class's initializer and can overwrite those assignments.
+parameters are supported for type aliases, free functions, and classes within
+the documented limits. Generic methods, generic protocols, and explicit
+call-site type arguments remain unsupported; see [Typing In Tua](typing.md) for
+the supported generic forms. Read the initialization section before combining
+field defaults with assignments in `init`: defaults run after that class's
+initializer and can overwrite those assignments.
 
 ## Functions, Parameters, And Returns
 

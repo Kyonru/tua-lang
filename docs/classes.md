@@ -216,6 +216,8 @@ diagnostics explain when an implementation requires an optional argument,
 omits protocol varargs, or declares the wrong number of return values.
 Missing-method and incompatible-signature diagnostics include a related
 location on the protocol requirement, including when the contract is imported.
+Whitespace and Lua comments may separate `export`, `protocol`, the protocol
+name, and the opening brace in a declaration header.
 
 Protocol methods remain ordinary unbound methods. Call them with `:` through a
 protocol-typed receiver. A dot call or a method saved in a local variable must
