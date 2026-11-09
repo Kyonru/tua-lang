@@ -877,6 +877,29 @@ fn parses_one_qualified_protocol_bound_on_generic_functions() {
 }
 
 #[test]
+fn generic_bound_normalization_does_not_capture_comparisons_in_function_bodies() {
+    let source = r#"
+local function compare(a: number, b: number, value: Comparable)
+  return a < b and value:lessThan(b) < 10
+end
+
+function identity<T: Contracts.Value>(value: T): T
+  return value
+end
+"#;
+    let parsed = parse_tua_source("src/generic_bounds.tua", source)
+        .expect("comparison and colon-call syntax before a bounded generic must remain intact");
+    assert_eq!(parsed.function_annotations.len(), 2);
+    assert_eq!(
+        parsed.function_annotations[1].generic_parameters[0].name,
+        "T"
+    );
+    let normalized_ast = parsed.ast.to_string();
+    assert!(normalized_ast.contains("lessThan"), "{normalized_ast}");
+    assert!(normalized_ast.contains("a < b"), "{normalized_ast}");
+}
+
+#[test]
 fn generic_function_bounds_reject_missing_and_multiple_protocols() {
     for bound in ["", "Readable & Writable", "number | nil"] {
         let source = format!("function visit<T: {bound}>(value: T): T return value end");
