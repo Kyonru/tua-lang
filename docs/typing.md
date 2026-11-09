@@ -179,7 +179,9 @@ Classes can opt in to a method-only [protocol contract](classes.md#protocol-cont
 Unlike structural table aliases, a class must declare `implements` before its
 instances can be assigned to that protocol type. Protocol-typed values expose
 the declared methods; they do not expose extra fields from a concrete class or
-support an implicit downcast.
+support an implicit downcast. The words `protocol` and `implements` remain
+available as ordinary Lua identifiers outside declaration headers, including
+in modules that use Tua type annotations.
 
 Generic functions and classes can use one protocol bound, such as
 `T: Updatable`. The bound makes protocol methods available through `T` and

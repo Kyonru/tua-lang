@@ -37,6 +37,12 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Keep `protocol` and `implements` available as ordinary Lua identifiers,
+  including in files that also contain Tua type syntax. Protocol declarations
+  are now recognized only in declaration position.
+- Explain required-argument, missing-vararg, and return-arity failures in
+  protocol conformance diagnostics, alongside existing parameter and return
+  type details.
 - Preserve nominal protocol identity through mutually recursive cross-file
   method signatures, while continuing to reject incompatible implementations.
 - Stop generic alias expansion at the first repeated declaration, even when its

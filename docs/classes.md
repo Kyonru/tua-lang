@@ -210,7 +210,16 @@ Method compatibility follows function variance: an implementation must accept
 every argument allowed by the protocol and may return a narrower type. A
 method that accepts only a subset of protocol inputs or may return an extra
 type is rejected. A signature mismatch diagnostic names the incompatible
-parameter or return slot and shows its expected and actual types.
+parameter or return slot and shows its expected and actual types. Required
+argument counts, typed varargs, and every declared return slot are checked too;
+diagnostics explain when an implementation requires an optional argument,
+omits protocol varargs, or declares the wrong number of return values.
+
+Protocol methods remain ordinary unbound methods. Call them with `:` through a
+protocol-typed receiver. A dot call or a method saved in a local variable must
+pass the receiver explicitly, just like other Tua class methods. The words
+`protocol` and `implements` remain usable as Lua identifiers outside protocol
+declarations and class headers, including in files with Tua type annotations.
 
 Protocols can be exported and consumed as type-only imports; those imports and
 the protocol declaration are erased from Lua. Project diagnostics validate
