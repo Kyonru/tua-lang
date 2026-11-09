@@ -78,19 +78,17 @@ parameter packs, specialization/monomorphization, and a new runtime.
 - LSP already advertises implementation navigation. Extend its shared query;
   do not add a second unrelated implementation lookup.
 
-Evidence as of November 9, 2026, after the latest audit fixes: the last full
-`make verify` passed with 1,874 core tests (1 ignored), 423 LSP tests, 92 CLI
-library tests (2 ignored), and 136 CLI integration tests. The current full LSP
-suite passes with 425 tests after two additional edge regressions, and the
-focused transitive-inheritance core regression passes. The core suite used
-`RUST_MIN_STACK=33554432` because an unrelated emitter test overflows the
-default test-thread stack on this host.
-`CARGO_INCREMENTAL=0 RUST_MIN_STACK=33554432 make verify` completed, including
-Clippy, repository/schema/reference checks, the VS Code extension suite (180),
-and `git diff --check`. The VS Code inspector tests require loopback access;
-they initially failed in the restricted sandbox and passed when rerun with
-host loopback access. A transient CLI temporary-workspace failure also passed
-in isolation and on the successful full run. Core and LSP
+Evidence as of November 10, 2026, after the latest audit fixes: the full
+`CARGO_INCREMENTAL=0 RUST_MIN_STACK=33554432 make verify` passes with 1,874
+core tests (1 ignored), 425 LSP tests, 92 CLI library tests (2 ignored), and
+136 CLI integration tests. It also passes the 180-test VS Code extension
+check, Clippy, version/schema/reference checks, and `git diff --check`. The core
+suite used `RUST_MIN_STACK=33554432` because an unrelated emitter test
+overflows the default test-thread stack on this host.
+The VS Code inspector tests require loopback access; they initially failed in
+the restricted sandbox and passed in the full verification rerun with host
+loopback access. A transient CLI temporary-workspace failure also passed in
+isolation and on the successful full run. Core and LSP
 editor requests cover imported protocol completion, hover, signature help,
 definition, and implementation navigation; the incomplete-edit completion
 case first establishes last-good project facts. The new regression exercises

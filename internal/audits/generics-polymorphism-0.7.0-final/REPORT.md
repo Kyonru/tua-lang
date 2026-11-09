@@ -22,11 +22,11 @@ Working tree before audit: clean. No unrelated project changes were present.
 
 The documented 0.7.0 slice has strong compiler, project-analysis, LSP, runtime, and installed-editor coverage. The audit fixed the listed parser, inference, documentation, and diagnostic issues; this continuation also fixes inherited override links when a local base class implements an imported protocol, malformed declaration text that could panic during lowering, missing Go to Definition for imported generic class members, and nested class/protocol text being erased as a top-level declaration. The audit added regressions for these behaviors, generic multi-return checker/runtime coverage, and installed VS Code protocol implementation navigation, generic binder references, rename, and unsaved dependency-edit coverage.
 
-The protocol/generic implementation is suitable for **manual beta testing on macOS arm64**. The latest packaged VSIX (40 files, 8.7 MB), including incomplete-protocol recovery, protocol-requirement diagnostic links, commented protocol-header parsing, inherited-override diagnostic links, malformed nested-declaration recovery, module-scope diagnostics for nested Tua declarations, and concrete generic-parent substitution, was installed into an isolated VS Code profile and passed the real-server suite using its bundled compiler. The exact package passed archive validation and has SHA-256 `8612fb2783b8c0eb197db74e34fe35bf704a4b97ea8ce7a5482898eaa012aea2`. It is not qualified for a general 0.7.0 release: Linux, Windows, Intel Mac, LuaJIT/LOVE, source-map/hot-reload, visual screenshot review, and long-session checks remain open. A local class hierarchy can inherit an imported protocol's requirements; cross-module class inheritance itself remains outside the parser/lowering contract.
+The protocol/generic implementation is suitable for **manual beta testing on macOS arm64**. The latest packaged VSIX (40 files, 8.7 MB), including incomplete-protocol recovery, protocol-requirement diagnostic links, commented protocol-header parsing, inherited-override diagnostic links, malformed nested-declaration recovery, module-scope diagnostics for nested Tua declarations, and concrete generic-parent substitution, was installed into an isolated VS Code profile and passed the real-server suite using its bundled compiler. The exact package passed archive validation and has SHA-256 `cba9f9749d45a7969706962750c7d71746478b7604645fa36196c4b20fc03b57`. It is not qualified for a general 0.7.0 release: Linux, Windows, Intel Mac, LuaJIT/LOVE, source-map/hot-reload, visual screenshot review, and long-session checks remain open. A local class hierarchy can inherit an imported protocol's requirements; cross-module class inheritance itself remains outside the parser/lowering contract.
 
 Repeated local profile measurements (five cold samples, twenty warm and contention samples) on the 1,000-line fixture show cold completion p95 251.10 ms, warm completion p95 6.24 ms, cold hover p95 266.65 ms, warm hover p95 20.03 ms, and completion p95 under contention 153.03 ms. The 100-module project reports cold completion p95 116.04 ms, warm completion 0.40 ms, and warm hover 1.66 ms. These have no before/after baseline; cold latency and large-project contention remain performance opportunities.
 
-## Final verification addendum — November 9, 2026
+## Final verification addendum — November 10, 2026
 
 The earlier checksum and suite counts in this report are historical snapshots.
 After that snapshot, the recursive protocol-signature defect was independently
@@ -35,21 +35,21 @@ editor-surface regressions were added. Further tests cover deletion of one node
 from a cyclic import graph through both `AnalysisHost` and LSP watched-file /
 pull-diagnostics flow, editor recovery at every character prefix of a nested
 record/union protocol fixture, and imported inherited-override diagnostic
-ranges after Unicode-prefixed source lines. A further LSP regression confirms
-that one inherited override diagnostic links to every requirement when those
-requirements originate in separate imported modules, rather than a single
-contract file.
+ranges after Unicode-prefixed source lines. Further regressions confirm that
+one inherited override diagnostic links to requirements in separate imported
+modules, protocol obligations survive an intermediate subclass, and creating
+then editing a missing type-only protocol dependency refreshes diagnostics.
 
-At revision `2e64b244236bf1878a89c6e670a7ba370fb9eb58`, `CARGO_INCREMENTAL=0
-RUST_MIN_STACK=33554432 make verify` completed successfully on macOS arm64. It
-included 1,874 core tests passed (1 ignored), 423 LSP tests passed, 92 CLI
-library tests passed (2 ignored), 136 CLI integration tests passed, 180 VS Code
-extension tests passed, Clippy, schema/reference/version checks, and
-`git diff --check`. The `source_pipeline` nightly fuzz target completed 21,595
-executions in 31 seconds with no crash (observed peak RSS about 600 MiB). The
-restricted sandbox initially denied VS Code inspector loopback access; the
-suite passed on retry with host loopback access. A transient CLI temporary
-workspace failure also passed in isolation and on the successful full run.
+At revision `0cbb06a0`, `CARGO_INCREMENTAL=0 RUST_MIN_STACK=33554432 make verify`
+completed successfully on macOS arm64. It included 1,874 core tests passed (1
+ignored), 425 LSP tests passed, 92 CLI library tests passed (2 ignored), 136
+CLI integration tests passed, 3 gameplay runtime tests, 180 VS Code extension
+tests, Clippy, schema/reference/version checks, and `git diff --check`. The
+core test suite also passed independently with the recorded stack setting.
+The VS Code inspector tests require loopback access; they passed in this
+full-verification run with host loopback access. A transient CLI
+temporary-workspace failure earlier in the audit also passed in isolation and
+in the successful full run.
 
 The exact `editors/vscode/tua-0.7.0.vsix` artifact remains version 0.7.0, passes
 archive integrity validation, and has SHA-256
@@ -68,19 +68,11 @@ qualification gaps, not evidence of a known implementation defect. Cross-module
 class inheritance, generic methods/protocols, compound bounds, and explicit
 call-site generic arguments remain documented feature limits.
 
-After adding the separate-imported-requirements range regression, the complete
-LSP suite passed again: 424 tests passed. A subsequent watched-file lifecycle
-test also passed: it starts with a missing type-only protocol dependency,
-creates a compatible protocol file to clear the import error, then edits that
-file to an incompatible signature and observes the conformance diagnostic.
-The complete LSP suite then passed with 425 tests, with formatting and
-`make diff-check` also passing. These test-only updates do not change the
-already tested VSIX.
-
-The protocol-and-paths nightly fuzz target also completed a 31-second bounded
-run: 711,266 executions, no crash, and observed peak RSS about 533 MiB. Its
-corpus contains 134 seed files; this run does not replace the targeted malformed
-edit and invalidation cases or establish a general resource bound.
+The `source_pipeline` nightly fuzz target completed 21,595 executions in 31
+seconds without a crash (observed peak RSS about 600 MiB). The
+`protocol_and_paths` target completed 711,266 executions in 31 seconds without
+a crash (observed peak RSS about 533 MiB). Its corpus contained 134 seed files;
+these bounded runs do not establish a general resource bound.
 
 The core inherited-override regression now places an intermediate class
 between the protocol-conforming base and the incompatible leaf override. The
