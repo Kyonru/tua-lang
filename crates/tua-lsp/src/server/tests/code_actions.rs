@@ -709,6 +709,149 @@ fn code_action_creates_missing_love_callbacks() {
 }
 
 #[test]
+fn code_action_implements_missing_imported_protocol_methods_for_inheriting_class() {
+    let temp = TempProject::new("code-action-protocol-stubs");
+    let source = r#"import type { Updatable } from "./contracts"
+open class Base {
+  update(dt: number): nil {}
+}
+final class Actor extends Base implements Updatable {
+}
+"#;
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write(
+        "src/contracts.d.tua",
+        "export protocol Updatable {\n  update(dt: number): nil\n  --- draws the actor to the screen\n  draw(): nil\n}\n",
+    );
+
+    let uri = temp.uri_for("src/main.tua");
+    let mut server = TestServer::new();
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&uri, source));
+    let diagnostics = last_published_diagnostics(server.output(), &uri);
+    let actor_diagnostic = diagnostics
+        .iter()
+        .cloned()
+        .find(|diagnostic| {
+            diagnostic["message"].as_str().is_some_and(|message| {
+                message.contains("class `Actor`") && message.contains("missing method `draw`")
+            })
+        })
+        .unwrap_or_else(|| panic!("the inheriting class should receive its unimplemented protocol requirement: {diagnostics:#?}"));
+
+    server.send(code_action_request_with_only(
+        2,
+        &uri,
+        &["quickfix"],
+        vec![actor_diagnostic],
+    ));
+    let actions = response_with_id(server.output(), 2)["result"]
+        .as_array()
+        .expect("code actions should be an array");
+    let action = actions
+        .iter()
+        .find(|action| action["title"] == "Implement missing protocol methods")
+        .expect("the protocol stub quick fix should be available");
+
+    assert_eq!(action["kind"], "quickfix");
+    let edit = &action["edit"]["changes"][&uri][0];
+    assert_eq!(range_text(source, &edit["range"]), "");
+    assert_eq!(
+        edit["newText"],
+        "  --- draws the actor to the screen\n  draw(): nil {\n    error(\"TODO: implement Actor.draw\")\n  }\n"
+    );
+
+    let mut implemented_source = source.to_owned();
+    implemented_source.insert_str(
+        implemented_source
+            .rfind('}')
+            .expect("class closing brace exists"),
+        edit["newText"].as_str().expect("stub edit is text"),
+    );
+    server.send(did_change(&uri, &implemented_source, 2));
+    assert!(
+        last_published_diagnostics(server.output(), &uri)
+            .iter()
+            .all(|diagnostic| diagnostic["code"] != "TL1008"),
+        "the TODO-throwing stub should satisfy the imported protocol signature"
+    );
+}
+
+#[test]
+fn protocol_stub_action_generates_multiple_methods_but_skips_conflicting_obligations() {
+    let uri = "file:///tmp/code-action-protocol-conflict.tua";
+    let source = r#"protocol TextActions {
+  act(value: string): nil
+  ready(): nil
+}
+protocol NumberActions {
+  act(value: number): nil
+  done(): nil
+}
+final class Actor implements TextActions, NumberActions {
+}
+"#;
+    let mut server = TestServer::new();
+    server.send(did_open(uri, source));
+    let diagnostics = last_published_diagnostics(server.output(), uri);
+    assert!(
+        diagnostics.len() >= 4,
+        "each protocol requirement should produce an actionable missing-method diagnostic: {diagnostics:#?}"
+    );
+    server.send(code_action_request_with_only(
+        2,
+        uri,
+        &["quickfix"],
+        diagnostics,
+    ));
+    let actions = response_with_id(server.output(), 2)["result"]
+        .as_array()
+        .expect("code actions should be an array");
+    let action = actions
+        .iter()
+        .find(|action| action["title"] == "Implement missing protocol methods")
+        .expect("unambiguous protocol requirements should still be generated");
+    let new_text = action["edit"]["changes"][uri][0]["newText"]
+        .as_str()
+        .expect("protocol stubs should be inserted as source text");
+
+    assert!(
+        new_text.contains("ready(): nil"),
+        "generated source: {new_text:?}"
+    );
+    assert!(
+        new_text.contains("done(): nil"),
+        "generated source: {new_text:?}"
+    );
+    assert!(
+        !new_text.contains("act("),
+        "conflicting signatures must not be guessed"
+    );
+
+    let mut partially_implemented = source.to_owned();
+    partially_implemented.insert_str(
+        partially_implemented
+            .rfind('}')
+            .expect("class closing brace exists"),
+        new_text,
+    );
+    server.send(did_change(uri, &partially_implemented, 2));
+    let remaining = last_published_diagnostics(server.output(), uri);
+    assert_eq!(
+        remaining.len(),
+        2,
+        "both conflicting `act` requirements should remain visible: {remaining:#?}"
+    );
+    assert!(
+        remaining
+            .iter()
+            .filter_map(|diagnostic| diagnostic["message"].as_str())
+            .all(|message| message.contains("missing method `act`")),
+        "only the genuinely ambiguous requirement should remain: {remaining:#?}"
+    );
+}
+
+#[test]
 fn code_action_creates_object_pool_for_repeated_constructor_call() {
     let uri = "file:///tmp/code-action-object-pool.tua";
     let source = r#"local first = Bullet.new()

@@ -418,9 +418,13 @@ function requiring Updatable while preserving the concrete result type.
 - Example wording: `Panel does not implement Updatable: missing method update`;
   `Panel.update cannot implement Updatable.update: parameter dt accepts string,
   but the protocol permits number`. Final wording must reflect actual variance.
-- Consider an implement-missing-methods code action after semantic correctness.
-  Generated stubs must clearly be unfinished and never claim a working return
-  implementation. This is polish, not a prerequisite to valid protocols.
+- Implemented a compiler-backed missing-protocol-method code action. It uses
+  related requirement locations, accounts for imported contracts and inherited
+  implementations, refuses conflicting same-named signatures, and generates
+  `error("TODO: implement ...")` bodies so placeholders cannot silently return
+  as though the method were implemented. Core, LSP, and installed VS Code
+  application tests cover this workflow; other editor clients still need
+  protocol-level qualification.
 
 ## 8. Performance, runtime, and compatibility gates
 

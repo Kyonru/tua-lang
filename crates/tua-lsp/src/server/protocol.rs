@@ -20,7 +20,7 @@ use super::analysis::{
     AnalysisSnapshot, CallHierarchyIdentity, CallHierarchyIncomingCall, CallHierarchyItem,
     CallHierarchyItemKind, CallHierarchyOutgoingCall,
 };
-use super::uri::uri_from_path;
+use super::uri::{path_from_uri, uri_from_path};
 
 pub(super) fn response(id: Value, result: Value) -> Value {
     json!({
@@ -149,10 +149,20 @@ pub(super) fn lsp_diagnostic_from_core_with_snapshot(
     result
 }
 
+#[cfg(test)]
 pub(super) fn core_diagnostic_from_lsp(
     path: &std::path::Path,
     diagnostic: &Value,
     source: &str,
+) -> Option<Diagnostic> {
+    core_diagnostic_from_lsp_with_snapshot(path, diagnostic, source, None)
+}
+
+pub(super) fn core_diagnostic_from_lsp_with_snapshot(
+    path: &std::path::Path,
+    diagnostic: &Value,
+    source: &str,
+    snapshot: Option<&AnalysisSnapshot>,
 ) -> Option<Diagnostic> {
     let start = diagnostic.get("range")?.get("start")?;
     let position = source_position_for_source(source, start)?;
@@ -179,6 +189,55 @@ pub(super) fn core_diagnostic_from_lsp(
 
     if let Some(code) = code {
         output = output.with_code(code);
+    }
+
+    if let Some(related_information) = diagnostic
+        .get("relatedInformation")
+        .and_then(Value::as_array)
+    {
+        for information in related_information {
+            let Some(location) = information.get("location") else {
+                continue;
+            };
+            let Some(uri) = location.get("uri").and_then(Value::as_str) else {
+                continue;
+            };
+            let related_path = path_from_uri(uri);
+            let related_source = if related_path == path {
+                Some(source)
+            } else {
+                snapshot.and_then(|snapshot| snapshot.source(&related_path))
+            };
+            let Some(related_source) = related_source else {
+                continue;
+            };
+            let Some(related_range) = location.get("range") else {
+                continue;
+            };
+            let Some(related_start) = related_range
+                .get("start")
+                .and_then(|position| source_position_for_source(related_source, position))
+            else {
+                continue;
+            };
+            let Some(related_end) = related_range
+                .get("end")
+                .and_then(|position| source_position_for_source(related_source, position))
+            else {
+                continue;
+            };
+            let Some(message) = information.get("message").and_then(Value::as_str) else {
+                continue;
+            };
+            output = output.with_related_information(tua_core::DiagnosticRelatedInformation {
+                file: related_path,
+                span: SourceSpan {
+                    start: related_start,
+                    end: related_end,
+                },
+                message: message.to_owned(),
+            });
+        }
     }
 
     Some(output)

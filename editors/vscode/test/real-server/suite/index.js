@@ -13,6 +13,34 @@ async function run() {
   await extension.activate();
   await waitForServer();
 
+  const protocolStubDocument = await vscode.workspace.openTextDocument(fixtures.protocolStubsPath);
+  await vscode.window.showTextDocument(protocolStubDocument, { preview: false });
+  await retry(
+    () => vscode.languages.getDiagnostics(protocolStubDocument.uri),
+    (diagnostics) => diagnostics.some((diagnostic) => diagnostic.message.includes("missing method `draw`")),
+    "imported protocol requirement diagnostic for the inheriting class",
+  );
+  const protocolStubActions = await vscode.commands.executeCommand(
+    "vscode.executeCodeActionProvider",
+    protocolStubDocument.uri,
+    new vscode.Range(
+      new vscode.Position(0, 0),
+      protocolStubDocument.positionAt(protocolStubDocument.getText().length),
+    ),
+    vscode.CodeActionKind.QuickFix.value,
+  );
+  const protocolStubAction = (protocolStubActions || []).find(
+    (action) => action.title === "Implement missing protocol methods",
+  );
+  assert(protocolStubAction?.edit, "the installed extension should offer the protocol stub quick fix");
+  assert(await vscode.workspace.applyEdit(protocolStubAction.edit));
+  await retry(
+    () => vscode.languages.getDiagnostics(protocolStubDocument.uri),
+    (diagnostics) => !diagnostics.some((diagnostic) => diagnostic.message.includes("missing method `draw`")),
+    "protocol stub edit to clear the missing-method diagnostic",
+  );
+  assert.match(protocolStubDocument.getText(), /error\("TODO: implement Actor\.draw"\)/);
+
   const document = await vscode.workspace.openTextDocument(fixtures.mainPath);
   await vscode.window.showTextDocument(document, { preview: false });
   assert.equal(document.languageId, "tua");
@@ -653,6 +681,7 @@ async function run() {
       protocolImplementations: protocolImplementations.length,
       protocolRenameFiles: protocolRename.entries().map(([uri]) => path.basename(uri.fsPath)),
       protocolHover: "documented update(dt: number)",
+      protocolStubActionApplied: true,
       formattingEdits: formatting.length,
       hover: "Player",
       genericAliasHover: "Box<number>.value: number",

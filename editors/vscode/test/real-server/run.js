@@ -88,6 +88,7 @@ function createProject(workspacePath) {
   const actorsPath = path.join(sourcePath, "actors.tua");
   const genericPath = path.join(sourcePath, "generic.tua");
   const genericClassPath = path.join(sourcePath, "generic_class.tua");
+  const protocolStubsPath = path.join(sourcePath, "protocol_stubs.tua");
   const configPath = path.join(workspacePath, "tua.toml");
 
   fs.mkdirSync(sourcePath, { recursive: true });
@@ -118,6 +119,7 @@ function createProject(workspacePath) {
       "export protocol Updatable {",
       "  --- advances the actor by one frame",
       "  update(dt: number): nil",
+      "  draw(): nil",
       "}",
       "",
     ].join("\n"),
@@ -128,6 +130,7 @@ function createProject(workspacePath) {
       'import type { Box, Updatable } from "./contracts"',
       "final class Particle implements Updatable {",
       "  update(dt: number): nil {}",
+      "  draw(): nil {}",
       "}",
       "",
     ].join("\n"),
@@ -167,6 +170,18 @@ function createProject(workspacePath) {
       "export type BoxInstance<T> = Box<T>",
       "export type NumberBoxInstance = NumberBox",
       "return { Box = Box, NumberBox = NumberBox }",
+      "",
+    ].join("\n"),
+  );
+  fs.writeFileSync(
+    protocolStubsPath,
+    [
+      'import type { Updatable } from "./contracts"',
+      "open class Base {",
+      "  update(dt: number): nil {}",
+      "}",
+      "final class Actor extends Base implements Updatable {",
+      "}",
       "",
     ].join("\n"),
   );
@@ -225,6 +240,7 @@ function createProject(workspacePath) {
     genericClassPath,
     helperPath,
     mainPath,
+    protocolStubsPath,
     serverPath: process.env.TUA_REAL_SERVER_PATH,
   };
 }

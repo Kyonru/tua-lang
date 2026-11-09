@@ -457,6 +457,10 @@ Quick fixes and source actions include:
   while preserving dynamic and shadowed calls;
 - changing known LOVE object calls from `.` to `:`;
 - generating missing core LOVE callbacks;
+- generating missing protocol methods from related requirement locations. Each
+  generated body throws with a `TODO` message so the stub cannot silently act
+  like an implemented method; inherited methods already satisfying a
+  requirement are not generated again;
 - adding inferred local annotations;
 - extracting expressions to locals or parameterized local functions;
 - inlining stable local bindings;

@@ -697,7 +697,10 @@ fn diagnostic_key(diagnostic: &Diagnostic) -> (PathBuf, usize, usize, u8, Option
         );
     }
 
-    let message = if diagnostic.code == Some(crate::DiagnosticCode::DOMAIN_SPRITE) {
+    let message = if matches!(
+        diagnostic.code,
+        Some(crate::DiagnosticCode::DOMAIN_SPRITE | crate::DiagnosticCode::TYPE_CLASS)
+    ) {
         diagnostic.message.clone()
     } else {
         String::new()

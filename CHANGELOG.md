@@ -34,6 +34,9 @@ language or editor behavior, and migration notes call out those changes.
   interface token class.
 - Imported protocol member types remain visible in inlay hints and type
   explanations.
+- Code actions can generate clearly unfinished, type-checked stubs for missing
+  protocol methods, including imported requirements and subclass methods that
+  already satisfy inherited requirements.
 
 ### Fixed
 

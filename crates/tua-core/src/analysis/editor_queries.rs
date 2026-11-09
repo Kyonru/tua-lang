@@ -601,7 +601,7 @@ impl AnalysisSnapshot {
         };
         let source_dir = self.assist_source_root_for_path(path);
 
-        code_actions_parsed_source_with_kinds_and_diagnostics_config(
+        let mut actions = code_actions_parsed_source_with_kinds_and_diagnostics_config(
             parsed,
             diagnostics,
             range,
@@ -609,7 +609,9 @@ impl AnalysisSnapshot {
             &self.config.extension,
             &[],
             &self.config.diagnostics,
-        )
+        );
+        actions.extend(self.missing_protocol_method_actions(parsed, diagnostics, range));
+        actions
     }
 
     pub fn code_actions(
@@ -625,7 +627,7 @@ impl AnalysisSnapshot {
         };
         let source_dir = self.assist_source_root_for_path(path);
 
-        code_actions_parsed_source_with_kinds_and_diagnostics_config(
+        let mut actions = code_actions_parsed_source_with_kinds_and_diagnostics_config(
             parsed,
             diagnostics,
             range,
@@ -633,7 +635,154 @@ impl AnalysisSnapshot {
             &self.config.extension,
             requested_kinds,
             &self.config.diagnostics,
-        )
+        );
+        if requested_kinds.is_empty() || requested_kinds.contains(&crate::AssistKind::QuickFix) {
+            actions.extend(self.missing_protocol_method_actions(parsed, diagnostics, range));
+        }
+        actions
+    }
+
+    fn missing_protocol_method_actions(
+        &self,
+        parsed: &ParsedSource,
+        diagnostics: &[Diagnostic],
+        range: AssistRange,
+    ) -> Vec<Assist> {
+        let mut missing_by_class = BTreeMap::<
+            usize,
+            BTreeMap<String, Option<(crate::classes::ProtocolMethod, Vec<String>)>>,
+        >::new();
+
+        for diagnostic in diagnostics {
+            if diagnostic.code != Some(crate::DiagnosticCode::TYPE_CLASS)
+                || !diagnostic.message.contains(": missing method `")
+            {
+                continue;
+            }
+            let position = SourcePosition {
+                line: diagnostic.line,
+                column: diagnostic.column,
+            };
+            if !range.contains(position) {
+                continue;
+            }
+            let Some((class_index, class)) = parsed
+                .class_declarations
+                .iter()
+                .enumerate()
+                .find(|(_, class)| class.name_span.start == position)
+            else {
+                continue;
+            };
+            let Some((requirement, documentation)) =
+                diagnostic.related_information.iter().find_map(|related| {
+                    let protocol_file = self.file(&related.file)?;
+                    let protocol = protocol_file.parsed.as_ref().ok()?;
+                    let method = protocol
+                        .protocol_declarations
+                        .iter()
+                        .flat_map(|protocol| protocol.methods.iter())
+                        .find(|method| method.name_span == related.span)
+                        .cloned()?;
+                    let documentation =
+                        protocol_method_documentation(&protocol.source, method.span.start.line);
+                    Some((method, documentation))
+                })
+            else {
+                continue;
+            };
+            if class
+                .methods
+                .iter()
+                .any(|method| method.name == requirement.name)
+            {
+                continue;
+            }
+
+            let methods = missing_by_class.entry(class_index).or_default();
+            match methods.get(&requirement.name) {
+                Some(Some((existing, _)))
+                    if existing.parameters != requirement.parameters
+                        || existing.return_type != requirement.return_type =>
+                {
+                    methods.insert(requirement.name.clone(), None);
+                }
+                Some(None) => {}
+                Some(Some(_)) => {}
+                None => {
+                    methods.insert(requirement.name.clone(), Some((requirement, documentation)));
+                }
+            }
+        }
+
+        missing_by_class
+            .into_iter()
+            .filter_map(|(class_index, methods)| {
+                let class = parsed.class_declarations.get(class_index)?;
+                let methods = methods
+                    .into_values()
+                    .flatten()
+                    .collect::<Vec<_>>();
+                if methods.is_empty() {
+                    return None;
+                }
+                let source = &parsed.source;
+                let class_end = crate::source_text::byte_for_position(source, class.span.end)?;
+                let closing_brace = class_end.checked_sub(1)?;
+                if source.as_bytes().get(closing_brace) != Some(&b'}') {
+                    return None;
+                }
+                let closing_line_start = source[..closing_brace]
+                    .rfind('\n')
+                    .map_or(0, |newline| newline + 1);
+                let closing_line_prefix = &source[closing_line_start..closing_brace];
+                let (insert_offset, method_indent, leading_newline) =
+                    if closing_line_prefix.trim().is_empty() {
+                        (
+                            closing_line_start,
+                            format!("{closing_line_prefix}  "),
+                            "",
+                        )
+                    } else {
+                        (closing_brace, "  ".to_owned(), "\n")
+                    };
+                let mut new_text = leading_newline.to_owned();
+                for (method, documentation) in methods {
+                    for line in documentation {
+                        new_text.push_str(&format!("{method_indent}{line}\n"));
+                    }
+                    new_text.push_str(&format!(
+                        "{method_indent}{}({}): {} {{\n{method_indent}  error(\"TODO: implement {}.{}\")\n{method_indent}}}\n",
+                        method.name,
+                        method.parameters,
+                        method.return_type,
+                        class.name,
+                        method.name,
+                    ));
+                }
+                let position = crate::source_text::SourcePositionIndex::new(source)
+                    .position(insert_offset);
+                let edit = crate::TextEdit {
+                    path: parsed.path.clone(),
+                    span: crate::SourceSpan {
+                        start: position,
+                        end: position,
+                    },
+                    new_text,
+                };
+                let mut changes = BTreeMap::new();
+                changes.insert(parsed.path.clone(), vec![edit]);
+
+                Some(Assist {
+                    title: "Implement missing protocol methods".to_owned(),
+                    kind: crate::AssistKind::QuickFix,
+                    edit: crate::AssistEdit {
+                        changes,
+                        create_files: Vec::new(),
+                    },
+                })
+            })
+            .collect()
     }
 
     pub(super) fn index_hir_declarations(
@@ -853,4 +1002,22 @@ impl AnalysisSnapshot {
             .or_else(|| path.parent().map(Path::to_path_buf))
             .unwrap_or_else(|| PathBuf::from("."))
     }
+}
+
+fn protocol_method_documentation(source: &str, method_line: usize) -> Vec<String> {
+    let lines = source.lines().collect::<Vec<_>>();
+    let mut index = method_line.saturating_sub(1);
+    let mut documentation = Vec::new();
+
+    while let Some(line) = index.checked_sub(1).and_then(|index| lines.get(index)) {
+        let comment = line.trim_start();
+        if !comment.starts_with("---") {
+            break;
+        }
+        documentation.push(comment.to_owned());
+        index -= 1;
+    }
+
+    documentation.reverse();
+    documentation
 }

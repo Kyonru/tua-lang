@@ -65,6 +65,20 @@ fn related_diagnostic_ranges_use_utf16_columns() {
         lsp["relatedInformation"][0]["location"]["range"]["end"]["character"],
         12
     );
+
+    let round_tripped = protocol::core_diagnostic_from_lsp(Path::new("src/main.tua"), &lsp, source)
+        .expect("related diagnostic should round-trip");
+    assert_eq!(round_tripped.related_information.len(), 1);
+    assert_eq!(
+        round_tripped.related_information[0].span,
+        tua_core::SourceSpan {
+            start: SourcePosition { line: 1, column: 6 },
+            end: SourcePosition {
+                line: 1,
+                column: 12,
+            },
+        }
+    );
 }
 
 #[test]

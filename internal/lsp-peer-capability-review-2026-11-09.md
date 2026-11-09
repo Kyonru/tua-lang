@@ -24,8 +24,11 @@ or project model.
 The useful Tua work is therefore targeted workflow polish, not adding duplicate
 LSP methods:
 
-1. Generate correct, clearly unfinished class methods for missing protocol
-   requirements through a compiler-backed code action.
+1. **Implemented:** generate clearly unfinished methods for missing protocol
+   requirements through a compiler-backed code action. Core/LSP coverage
+   verifies imported contracts, inherited implementations, and rechecking the
+   applied edit. An installed VS Code test applies the action and verifies the
+   missing-method diagnostic clears.
 2. Audit and improve navigation from external Lua dependencies and generated
    library declarations to their best available source or documentation.
 3. Profile real large-workspace open, completion, navigation, and indexing
@@ -84,6 +87,21 @@ LSP and VS Code adapters.
 inherited satisfaction, multiple contracts, and incomplete class bodies; LSP
 code-action response and VS Code apply test; result formats and rechecks without
 new diagnostics except the deliberate TODO marker/diagnostic.
+
+**Status:** Implemented and verified in core, LSP, and the installed VS Code
+extension test harness.
+
+**Implementation:** Core analysis consumes the protocol requirement location
+already attached to the conformance diagnostic. The LSP round-trip now retains
+related locations, resolving UTF-16 ranges against snapshot source. The action
+groups missing methods per class, skips inherited methods, refuses conflicting
+same-named protocol signatures, and inserts an `error("TODO: implement …")`
+body. An LSP test applies the edit and confirms it clears the missing-method
+diagnostic. The installed VS Code test also requests and applies the action
+through the VS Code API. Diagnostics from the throwing TODO body are
+intentionally not generated. Distinct class-contract diagnostics at the same
+class-name range are retained by diagnostic deduplication, so multiple and
+conflicting requirements remain visible.
 
 ### Epic 2 — Complete source-backed library navigation
 

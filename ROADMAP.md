@@ -126,8 +126,6 @@ hierarchy, and folding. Focus on behavior depth instead of duplicate endpoints.
 The comparison and source-license review are in
 `internal/lsp-peer-capability-review-2026-11-09.md`.
 
-- Add a compiler-backed action to generate clearly unfinished stubs for missing
-  protocol methods, including imported and inherited requirements.
 - Audit navigation for configured Lua dependencies and generated declarations;
   link to indexed source or stable docs where available, and stay conservative
   for dynamic modules.

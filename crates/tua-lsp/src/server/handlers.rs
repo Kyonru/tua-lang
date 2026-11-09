@@ -14,7 +14,7 @@ use tua_core::{
 use super::configuration::WorkspaceSettings;
 use super::protocol::{
     call_hierarchy_identity_from_lsp, code_lens_resolve_data, completion_for_client,
-    completion_resolve_data, core_diagnostic_from_lsp, error_response,
+    completion_resolve_data, core_diagnostic_from_lsp_with_snapshot, error_response,
     lsp_asset_inventory_from_core, lsp_call_hierarchy_incoming_call, lsp_call_hierarchy_item,
     lsp_call_hierarchy_outgoing_call, lsp_code_action_from_core, lsp_code_lens_from_core,
     lsp_completion_from_core, lsp_diagnostic_from_core, lsp_document_highlight_from_core,
@@ -2420,6 +2420,9 @@ impl LspServer {
         else {
             return json!([]);
         };
+        let snapshot = self
+            .analysis
+            .snapshot(&self.workspace_folders, &self.settings);
         let diagnostics = request
             .params
             .get("context")
@@ -2429,7 +2432,7 @@ impl LspServer {
                 diagnostics
                     .iter()
                     .filter_map(|diagnostic| {
-                        core_diagnostic_from_lsp(
+                        core_diagnostic_from_lsp_with_snapshot(
                             &request.path,
                             diagnostic,
                             if is_config_uri(request.uri) {
@@ -2437,6 +2440,7 @@ impl LspServer {
                             } else {
                                 request.source
                             },
+                            Some(&snapshot),
                         )
                     })
                     .collect::<Vec<_>>()
@@ -2448,15 +2452,10 @@ impl LspServer {
                 &request.path,
                 diagnostics,
                 &requested_kinds,
-                &self
-                    .analysis
-                    .snapshot(&self.workspace_folders, &self.settings),
+                &snapshot,
             );
         }
 
-        let snapshot = self
-            .analysis
-            .snapshot(&self.workspace_folders, &self.settings);
         let diagnostics = if requested_kinds.contains(&AssistKind::SourceFixAll) {
             snapshot.diagnostics_for_uri(request.uri)
         } else {
