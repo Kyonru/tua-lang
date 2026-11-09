@@ -1738,6 +1738,7 @@ pub(crate) fn build_type_environment_with_domain_registry(
             let signature = super::type_from_tua_type(&crate::parser::parse_tua_type_text(
                 &format!("({}) -> {}", method.parameters, method.return_type),
             ));
+            let signature = super::bind_protocol_self(&signature, &protocol.name);
             let signature = match signature {
                 Type::Function(mut function) => {
                     function.parameters.insert(
@@ -1990,8 +1991,41 @@ pub(crate) fn build_type_environment_with_domain_registry(
             .iter()
             .map(|protocol| protocol.name.clone())
             .collect(),
-        protocol_identities: BTreeMap::new(),
-        protocol_conformance_identities: BTreeSet::new(),
+        protocol_identities: parsed
+            .protocol_declarations
+            .iter()
+            .map(|protocol| {
+                (
+                    protocol.name.clone(),
+                    (
+                        crate::vfs::normalize_path(&parsed.path),
+                        protocol.name.clone(),
+                    ),
+                )
+            })
+            .collect(),
+        protocol_conformance_identities: parsed
+            .class_declarations
+            .iter()
+            .flat_map(|class| {
+                class
+                    .implemented_protocols
+                    .iter()
+                    .filter(|(name, _)| {
+                        parsed
+                            .protocol_declarations
+                            .iter()
+                            .any(|protocol| protocol.name == *name)
+                    })
+                    .map(|(name, _)| {
+                        (
+                            crate::classes::nominal_class_identity(&parsed.path, &class.name),
+                            crate::vfs::normalize_path(&parsed.path),
+                            name.clone(),
+                        )
+                    })
+            })
+            .collect(),
         locals,
         local_docs,
         local_contracts,

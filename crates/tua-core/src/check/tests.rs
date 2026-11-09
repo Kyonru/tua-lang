@@ -2626,6 +2626,50 @@ final class Panel implements Updatable {
 }
 
 #[test]
+fn protocol_self_returns_are_covariant_but_self_parameters_stay_wide() {
+    let source = r#"
+        protocol Cloneable {
+          clone(): Self
+        }
+final class Thing implements Cloneable {
+  clone(): Self { return self }
+}
+local _view: Cloneable = Thing.new()
+"#;
+    let parsed = crate::parse_tua_source("src/protocol_self.tua", source).unwrap();
+    let environment = crate::types::build_type_environment(&parsed).unwrap();
+    assert!(
+        environment
+            .to_type_context()
+            .is_assignable(&Type::alias("Thing"), &Type::alias("Cloneable")),
+        "the local conformance identity should make the class assignable to its protocol"
+    );
+    check_tua_source("src/protocol_self.tua", source)
+        .expect("a conforming class may return itself for a protocol Self result");
+
+    let diagnostics = check_tua_source(
+        "src/protocol_self.tua",
+        r#"
+        protocol AcceptsSelf {
+          accept(value: Self): nil
+        }
+final class Narrow implements AcceptsSelf {
+  accept(value: Narrow): nil {}
+}
+"#,
+    )
+    .expect_err("a concrete-only parameter must not satisfy a protocol Self parameter");
+    assert!(
+        diagnostics.iter().any(|diagnostic| {
+            diagnostic
+                .message
+                .contains("does not satisfy protocol `AcceptsSelf.accept`")
+        }),
+        "Self parameters represent the full protocol view: {diagnostics:#?}"
+    );
+}
+
+#[test]
 fn rejects_protocol_methods_with_unsafe_parameter_types() {
     let diagnostics = check_tua_source(
         "src/protocols.tua",

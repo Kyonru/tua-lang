@@ -51,6 +51,107 @@ pub(crate) fn contextual_function_type(ty: Type) -> Option<FunctionType> {
     collect(ty, &mut callback).then_some(callback).flatten()
 }
 
+/// Bind a protocol method's `Self` references to the protocol view. A
+/// conforming class can then return itself covariantly, while function
+/// assignability still rejects parameters narrowed to one concrete class.
+pub(crate) fn bind_protocol_self(ty: &Type, protocol_name: &str) -> Type {
+    match ty {
+        Type::Alias(name) if name == "Self" => Type::alias(protocol_name),
+        Type::GenericAliasApplication {
+            reference,
+            arguments,
+            span,
+        } => Type::GenericAliasApplication {
+            reference: reference.clone(),
+            arguments: arguments
+                .iter()
+                .map(|argument| bind_protocol_self(argument, protocol_name))
+                .collect(),
+            span: span.clone(),
+        },
+        Type::GenericClassApplication {
+            identity,
+            name,
+            arguments,
+            span,
+        } => Type::GenericClassApplication {
+            identity: identity.clone(),
+            name: name.clone(),
+            arguments: arguments
+                .iter()
+                .map(|argument| bind_protocol_self(argument, protocol_name))
+                .collect(),
+            span: span.clone(),
+        },
+        Type::Union(types) => Type::union(
+            types
+                .iter()
+                .map(|item| bind_protocol_self(item, protocol_name)),
+        ),
+        Type::Function(function) => {
+            let mut function = function.clone();
+            for parameter in &mut function.parameters {
+                parameter.ty = bind_protocol_self(&parameter.ty, protocol_name);
+            }
+            function.vararg_type = function
+                .vararg_type
+                .as_deref()
+                .map(|ty| Box::new(bind_protocol_self(ty, protocol_name)));
+            let return_types = function.return_types_or_any().to_vec();
+            function.return_types = return_types
+                .iter()
+                .map(|ty| bind_protocol_self(ty, protocol_name))
+                .collect();
+            function.return_type = Box::new(function.return_types[0].clone());
+            function.guarded_return_types = function.guarded_return_types.as_ref().map(|types| {
+                types
+                    .iter()
+                    .map(|ty| bind_protocol_self(ty, protocol_name))
+                    .collect()
+            });
+            function.overloads = function
+                .overloads
+                .iter()
+                .map(|overload| {
+                    match bind_protocol_self(&Type::Function(overload.clone()), protocol_name) {
+                        Type::Function(function) => function,
+                        _ => unreachable!("binding Self preserves function types"),
+                    }
+                })
+                .collect();
+            Type::Function(function)
+        }
+        Type::Table(table) => {
+            let mut bound = TableShape::from_fields(table.fields().map(|(name, field)| {
+                (
+                    name.to_owned(),
+                    TableField {
+                        ty: bind_protocol_self(&field.ty, protocol_name),
+                        optional: field.optional,
+                    },
+                )
+            }));
+            bound.copy_semantic_metadata_from(table);
+            Type::Table(bound)
+        }
+        Type::Array(item) => Type::array(bind_protocol_self(item, protocol_name)),
+        Type::Tuple(items) => Type::tuple(
+            items
+                .iter()
+                .map(|item| bind_protocol_self(item, protocol_name)),
+        ),
+        Type::Dictionary { key, value } => Type::dictionary(
+            bind_protocol_self(key, protocol_name),
+            bind_protocol_self(value, protocol_name),
+        ),
+        Type::Primitive(_)
+        | Type::Any
+        | Type::Alias(_)
+        | Type::GenericParameter { .. }
+        | Type::StringLiteral(_) => ty.clone(),
+    }
+}
+
 /// Remove duplicate inferred types without repeatedly comparing every deeply
 /// nested type with every type already seen. Generated table literals can
 /// contain thousands of structurally large records; the previous Vec::contains

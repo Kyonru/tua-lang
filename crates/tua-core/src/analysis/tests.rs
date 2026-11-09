@@ -6399,6 +6399,34 @@ final class Missing implements Contracts.Updatable {
 }
 
 #[test]
+fn imported_protocol_self_returns_accept_conforming_class_instances() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/contracts.d.tua
+export protocol Cloneable {
+  clone(): Self
+}
+-- file: src/actors.tua
+import type { Cloneable } from "./contracts"
+final class Thing implements Cloneable {
+  clone(): Self { return self }
+}
+local _view: Cloneable = Thing.new()
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+
+    let diagnostics = host.snapshot().diagnostics("src/actors.tua");
+    assert!(
+        !diagnostics.iter().any(|diagnostic| diagnostic.severity == crate::DiagnosticSeverity::Error),
+        "imported protocol Self returns should accept the explicit class conformer: {diagnostics:#?}"
+    );
+}
+
+#[test]
 fn generic_protocol_bounds_keep_canonical_identity_through_imported_reexports() {
     let fixture = Fixture::parse(
         r#"-- file: src/contracts.d.tua

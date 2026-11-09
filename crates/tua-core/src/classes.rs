@@ -1980,12 +1980,12 @@ pub(crate) fn class_contract_diagnostics(
                     .methods
                     .iter()
                     .map(|method| {
+                        let signature = crate::types::type_from_tua_type(&parse_tua_type_text(
+                            &format!("({}) -> {}", method.parameters, method.return_type),
+                        ));
                         (
                             method.name.clone(),
-                            crate::types::type_from_tua_type(&parse_tua_type_text(&format!(
-                                "({}) -> {}",
-                                method.parameters, method.return_type
-                            ))),
+                            crate::types::bind_protocol_self(&signature, &protocol.name),
                             false,
                         )
                     })
