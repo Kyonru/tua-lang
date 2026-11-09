@@ -731,12 +731,12 @@ final class Actor extends Base implements Updatable {
     let diagnostics = last_published_diagnostics(server.output(), &uri);
     let actor_diagnostic = diagnostics
         .iter()
-        .cloned()
         .find(|diagnostic| {
             diagnostic["message"].as_str().is_some_and(|message| {
                 message.contains("class `Actor`") && message.contains("missing method `draw`")
             })
         })
+        .cloned()
         .unwrap_or_else(|| panic!("the inheriting class should receive its unimplemented protocol requirement: {diagnostics:#?}"));
 
     server.send(code_action_request_with_only(
