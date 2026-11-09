@@ -450,6 +450,24 @@ fn protocol_method_signatures_ignore_trailing_comments_but_keep_comment_text_in_
 }
 
 #[test]
+fn unclosed_protocol_reports_targeted_syntax_diagnostic() {
+    let diagnostics = parse_tua_source(
+        "src/unclosed.tua",
+        "protocol Updatable {\n  update(dt: number): nil\n",
+    )
+    .expect_err("an unclosed protocol declaration should be rejected");
+
+    assert_eq!(diagnostics.len(), 1, "{diagnostics:#?}");
+    assert_eq!(diagnostics[0].code, Some(DiagnosticCode::SYNTAX_PARSE));
+    assert!(
+        diagnostics[0]
+            .message
+            .contains("unclosed protocol `Updatable`"),
+        "{diagnostics:#?}"
+    );
+}
+
+#[test]
 fn class_array_fields_parse_after_lowering() {
     let source = r#"final class BeatManager {
   steps: number[]

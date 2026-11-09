@@ -128,6 +128,9 @@ pub fn parse_raw_tua_source(
     if let Some(diagnostic) = crate::classes::unclosed_class_diagnostic(&path, &source) {
         return Err(vec![diagnostic]);
     }
+    if let Some(diagnostic) = crate::classes::unclosed_protocol_diagnostic(&path, &source) {
+        return Err(vec![diagnostic]);
+    }
 
     let normalized = normalize_tua_source(source);
 

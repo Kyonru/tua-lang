@@ -801,6 +801,14 @@ pub(crate) fn unclosed_class_diagnostic(path: &Path, source: &str) -> Option<Dia
     )
 }
 
+pub(crate) fn unclosed_protocol_diagnostic(path: &Path, source: &str) -> Option<Diagnostic> {
+    let (_, diagnostics) = parse_protocol_declarations(path, source);
+    diagnostics
+        .into_iter()
+        .find(|diagnostic| diagnostic.message.starts_with("unclosed protocol `"))
+        .map(|diagnostic| diagnostic.with_code(DiagnosticCode::SYNTAX_PARSE))
+}
+
 /// Editor-only recovery. Keep the original prefix and let the normal parser
 /// reject incomplete Lua blocks or other ambiguous syntax; never emit this text.
 pub(crate) fn source_with_closed_class_bodies(source: &str) -> Option<String> {
