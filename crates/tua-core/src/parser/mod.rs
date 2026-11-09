@@ -1567,14 +1567,26 @@ fn parse_generic_protocol_bound(
     {
         cursor += 1;
     }
-    let end = source[cursor..]
-        .find([',', '>'])
-        .map_or(source.len(), |offset| cursor + offset);
+    let source_chars = source.chars().collect::<Vec<_>>();
+    let protected = normalize::protected_syntax_characters(&source_chars);
+    let cursor_char = source[..cursor].chars().count();
+    let end_char = (cursor_char..source_chars.len())
+        .find(|index| matches!(source_chars[*index], ',' | '>') && !protected[*index])
+        .unwrap_or(source_chars.len());
+    let end = source
+        .char_indices()
+        .nth(end_char)
+        .map_or(source.len(), |(byte, _)| byte);
     let raw = &source[cursor..end];
     let leading = raw.len() - raw.trim_start().len();
-    let trailing = raw.trim_end().len();
-    let bound = raw.trim();
-    if !is_qualified_protocol_name(bound) {
+    let name_end = raw[leading..]
+        .find(|character: char| {
+            !(character == '_' || character == '.' || character.is_ascii_alphanumeric())
+        })
+        .map_or(raw.len(), |offset| leading + offset);
+    let bound = &raw[leading..name_end];
+    let trailing_comment = generic_bound_trailing_comment(&raw[name_end..]);
+    if !is_qualified_protocol_name(bound) || !trailing_comment {
         let (message, start, finish) = if bound.is_empty() {
             (
                 "expected a protocol name after generic bound `:`",
@@ -1585,7 +1597,7 @@ fn parse_generic_protocol_bound(
             (
                 "generic bounds support one protocol name; multiple or non-protocol bounds are unsupported",
                 cursor + leading,
-                cursor + trailing,
+                cursor + name_end,
             )
         };
         let position = SourcePositionIndex::new(source).position(start);
@@ -1600,13 +1612,42 @@ fn parse_generic_protocol_bound(
 
     let span = SourceSpan {
         start: SourcePositionIndex::new(source).position(cursor + leading),
-        end: SourcePositionIndex::new(source).position(cursor + trailing),
+        end: SourcePositionIndex::new(source).position(cursor + name_end),
     };
     Some(GenericProtocolBound {
         name: bound.to_owned(),
         span,
         identity: None,
     })
+}
+
+fn generic_bound_trailing_comment(suffix: &str) -> bool {
+    let suffix = suffix.trim_start();
+    if suffix.is_empty() {
+        return true;
+    }
+    if !suffix.starts_with("--") {
+        return false;
+    }
+
+    let comment = &suffix[2..];
+    if let Some(rest) = comment.strip_prefix('[') {
+        let equals = rest
+            .chars()
+            .take_while(|character| *character == '=')
+            .count();
+        if rest.chars().nth(equals) == Some('[') {
+            let close = format!("]{}]", "=".repeat(equals));
+            let Some(end) = suffix.find(&close) else {
+                return false;
+            };
+            return suffix[end + close.len()..].trim().is_empty();
+        }
+    }
+
+    suffix
+        .find(['\n', '\r'])
+        .is_none_or(|end| suffix[end..].trim().is_empty())
 }
 
 pub(crate) fn is_qualified_protocol_name(value: &str) -> bool {

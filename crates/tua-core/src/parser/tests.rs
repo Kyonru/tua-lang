@@ -1230,6 +1230,32 @@ fn parses_generic_function_binders_with_distinct_declaration_identity() {
 }
 
 #[test]
+fn generic_protocol_bounds_allow_trailing_header_comments() {
+    let parsed = parse_tua_source(
+        "src/generic_bound_comments.tua",
+        "protocol Runnable { run(): nil }\n\
+         -- keep this prefix when locating the bound\n\
+         local function identity<T: Runnable -- bound comment with , and >\n\
+         >(value: T): T\n  return value\nend\n",
+    )
+    .expect("comments should remain trivia after a generic protocol bound");
+
+    let function = parsed
+        .function_annotations
+        .iter()
+        .find(|function| function.name.as_deref() == Some("identity"))
+        .expect("generic function annotation");
+    assert_eq!(function.generic_parameters.len(), 1);
+    assert_eq!(
+        function.generic_parameters[0]
+            .protocol_bound
+            .as_ref()
+            .map(|bound| bound.name.as_str()),
+        Some("Runnable")
+    );
+}
+
+#[test]
 fn parses_one_qualified_protocol_bound_on_generic_functions() {
     let parsed = parse_tua_source(
         "src/generic_bounds.tua",

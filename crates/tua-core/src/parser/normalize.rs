@@ -244,7 +244,7 @@ fn normalize_native_array_types(source: &str) -> (String, Vec<NativeArrayTypeSyn
     (chars.into_iter().collect(), syntax)
 }
 
-fn protected_syntax_characters(chars: &[char]) -> Vec<bool> {
+pub(super) fn protected_syntax_characters(chars: &[char]) -> Vec<bool> {
     let mut protected = vec![false; chars.len()];
     let mut index = 0usize;
 
@@ -478,8 +478,8 @@ fn erase_function_generic_protocol_bounds(source: &str) -> Vec<char> {
             }
             chars[cursor] = ' ';
             cursor += 1;
-            while cursor < close && chars[cursor] != ',' {
-                if chars[cursor] != '\n' && chars[cursor] != '\r' {
+            while cursor < close && (chars[cursor] != ',' || protected[cursor]) {
+                if !protected[cursor] && chars[cursor] != '\n' && chars[cursor] != '\r' {
                     chars[cursor] = ' ';
                 }
                 cursor += 1;

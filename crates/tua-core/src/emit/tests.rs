@@ -223,6 +223,35 @@ print(identity(42))
 }
 
 #[test]
+fn generic_protocol_bound_comments_survive_type_erasure() {
+    let emitted = emit_tua_source(
+        "src/generic_bound_comments.tua",
+        r#"protocol Runnable {
+  run(): nil
+}
+local function identity<T: Runnable -- bound-comment, >
+>(value: T): T
+  return value
+end
+print(identity({ run = function(self) end }))
+"#,
+    )
+    .expect("comments in generic protocol bounds should survive Lua lowering");
+
+    assert_eq!(
+        emitted.matches("-- bound-comment, >").count(),
+        1,
+        "{emitted}"
+    );
+    assert!(
+        !emitted.contains("<T:"),
+        "generic syntax must erase: {emitted}"
+    );
+    crate::parse_raw_lua_source("generic_bound_comments.lua", emitted)
+        .expect("comment-preserving protocol-bound erasure should remain Lua 5.1");
+}
+
+#[test]
 fn snapshot_erases_native_array_annotations_from_aliases_locals_and_functions() {
     let emitted = emit_tua_source(
         "src/actors.tua",

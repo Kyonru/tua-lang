@@ -53,6 +53,38 @@ review, long-session memory behavior, and second-client testing remain open.
 
 Repeated local profile measurements (five cold samples, twenty warm and contention samples) on the 1,000-line fixture show cold completion p95 251.10 ms, warm completion p95 6.24 ms, cold hover p95 266.65 ms, warm hover p95 20.03 ms, and completion p95 under contention 153.03 ms. The 100-module project reports cold completion p95 116.04 ms, warm completion 0.40 ms, and warm hover 1.66 ms. These have no before/after baseline; cold latency and large-project contention remain performance opportunities.
 
+### Final audit continuation — November 10, 2026
+
+One additional low-severity syntax/trivia defect was found and fixed: a line
+comment after a supported generic protocol bound (for example,
+`<T: Runnable -- note\n>`) was included in the bound name and rejected as an
+unsupported constraint. Normalization also erased comment characters while
+removing the bound. The parser now finds generic-list delimiters outside
+comments and preserves comment trivia while erasing only the bound text. Parser
+and emitted-Lua regressions cover a prefixed source file and comment contents
+that include `,` and `>`.
+
+The earlier 4,200-field completion timeout was rechecked with a sequential,
+framed stdio LSP probe and a valid cursor position. The current server returned
+hover `(field) f4199: number` and 11 completion matches in about 54 ms. The
+earlier timeout did not yield a valid completion response and is treated as a
+probe setup failure; it is not a current unresolved performance finding.
+
+On the final source, `CARGO_INCREMENTAL=0 RUST_MIN_STACK=33554432
+RUST_TEST_THREADS=1 make verify` passed: 1,891 core tests passed (1 ignored),
+431 LSP tests, 92 CLI library tests (2 ignored), 137 CLI integration tests,
+3 gameplay tests, and 180 extension tests. Clippy, version/config/schema
+checks, language evaluation, JSON validation, and diff checks passed. This run
+had local loopback access for the inspector test. `make extension-package`
+rebuilt the macOS arm64 0.7.0 VSIX; npm audit found zero vulnerabilities. The
+exact package passed the isolated installed VS Code real-server suite on VS
+Code 1.142.0, and `unzip -tq` passed. SHA-256:
+`be629e0c43098727b0091bd192737557e9f05ab7f52c751636736335055c4ee7`.
+
+This updates local beta-test readiness only. Linux, Windows, Intel Mac,
+LOVE/LuaJIT runtime, visual, long-session, and second-client qualification
+remain open as recorded above.
+
 ## Final verification addendum — November 10, 2026
 
 The earlier checksum and suite counts in this report are historical snapshots.
@@ -601,6 +633,18 @@ gap in the current checkout.
 - **Coverage added:** The pull-diagnostics regression verifies clean initial conformance, a changed requirement through both re-exports, removal of the intermediate symbol without stale TL1008, and restoration that brings the changed-contract TL1008 back.
 - **Source:** `crates/tua-lsp/src/server/tests/diagnostics.rs`.
 - **Remaining boundary:** Repeated on-disk rename/delete/create permutations across a larger dependency graph and cancellation during those changes remain untested. This regression validates unsaved VFS overlays and re-export identity, not OS watcher races.
+
+### AUDIT-031 — Trailing comments in generic protocol bounds were rejected and erased
+
+- **Category / severity / confidence:** Generic syntax and source-preserving erasure; Low; confirmed with parser and emission regressions.
+- **Status:** Fixed in the current worktree.
+- **Reproduction:** Place a line comment after a supported protocol bound, for example `local function identity<T: Runnable -- note, >\n>(value: T): T ... end`. A comment containing `,` or `>` also exercises delimiter scanning.
+- **Expected:** Parse `Runnable` as the bound, accept the comment as Lua/Tua trivia, then erase the bound while retaining the comment once in parseable Lua.
+- **Actual before fix:** Bound extraction included the comment in the protocol name and reported TL0001. Normalization also blanked protected comment characters while erasing the bound.
+- **Fix:** Locate generic-list delimiters outside protected comments and strings; erase only unprotected bound characters. Parse the protocol name separately from trailing comment trivia.
+- **Source:** `crates/tua-core/src/parser/mod.rs` (`parse_generic_protocol_bound` and its trailing-comment check) and `crates/tua-core/src/parser/normalize.rs` (`protected_syntax_characters` and generic-bound erasure).
+- **Regression coverage:** `generic_protocol_bounds_allow_trailing_header_comments` verifies parsing and bound identity after a prefixed source line. `generic_protocol_bound_comments_survive_type_erasure` checks a delimiter-containing comment survives exactly once and the emitted output remains valid Lua 5.1.
+- **Verification:** The two focused tests passed; `CARGO_INCREMENTAL=0 RUST_MIN_STACK=33554432 RUST_TEST_THREADS=1 make verify` passed on the final source, including 1,891 core tests (1 ignored), 431 LSP tests, 92 CLI library tests (2 ignored), 137 CLI integration tests, 3 gameplay tests, and 180 extension tests. Core clippy passed.
 - **Verification:** The focused test passes; `cargo test -p tua-lsp` passes 431/431, and `cargo clippy -p tua-lsp --all-targets -- -D warnings`, `cargo fmt --all -- --check`, and `git diff --check` pass.
 
 During AUDIT-025 integration, a first direct-field shortcut changed recursive-alias hover and class `Self` hover behavior. The full core and LSP suites exposed those regressions; the final shortcut only preserves a raw field edge when it contains a generic alias application, and targeted tests for recursive imported `Self` and growing recursive generic aliases now pass.
