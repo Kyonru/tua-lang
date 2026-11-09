@@ -2040,9 +2040,7 @@ fn complete_fields(
             .cloned()
             .chain(std::iter::once(name.clone()))
             .collect::<Vec<_>>();
-        let documentation =
-            CompletionDomainRegistry::typed_member(environment, &receiver_type, &name)
-                .and_then(|function| function.documentation);
+        let documentation = typed_member_documentation(kind, environment, &receiver_type, &name);
 
         completions.insert(
             name.clone(),
@@ -2083,6 +2081,23 @@ fn complete_fields(
     }
 
     completions.into_values().collect()
+}
+
+fn typed_member_documentation(
+    kind: CompletionKind,
+    environment: &TypeEnvironment,
+    receiver_type: &Type,
+    member: &str,
+) -> Option<String> {
+    // Domain metadata can require resolving a receiver alias. A typed domain
+    // method always occupies a function-valued field, so avoid repeating that
+    // resolution for ordinary members in large records.
+    if kind != CompletionKind::Function {
+        return None;
+    }
+
+    CompletionDomainRegistry::typed_member(environment, receiver_type, member)
+        .and_then(|function| function.documentation)
 }
 
 fn complete_string_argument_values(

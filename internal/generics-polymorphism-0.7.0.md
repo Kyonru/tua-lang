@@ -595,16 +595,27 @@ core/LSP diagnostics without conformance cascades, a 4,200-field generic alias
 and an over-budget branching alias graph, recursive generic hover and class
 `Self` consistency, and emitted-Lua parsing/runtime behavior.
 
+The final completion stress follow-up is also resolved: field completion no
+longer runs typed-domain documentation resolution for non-function fields.
+This removes repeated receiver-alias resolution from large ordinary records
+while preserving documentation on function-valued domain methods. The 4,200-
+field core completion regression returns every field, and an imported-alias
+stdio LSP replay completed in 0.22 seconds on the audit host. See AUDIT-028 in
+`internal/audits/generics-polymorphism-0.7.0-final/REPORT.md`.
+
 `make docs-build`, the workspace tests, Clippy, extension tests (180/180),
 `make benchmark-smoke`, packaging, and the installed VSIX real-server suite
 passed on macOS arm64. The aggregate `make verify` invocation was stopped by
 the sandbox's loopback restriction; the loopback-dependent extension checks
-passed in a local-access retry. The exact VSIX is
+passed in a local-access retry. The exact VSIX at that checkpoint was
 `editors/vscode/tua-0.7.0.vsix`, SHA-256
-`8de57325a50b0adbbbe2045f1b83fe556dfdbc833a3b1d39c96a89a1db966f46`.
+`8de57325a50b0adbbbe2045f1b83fe556dfdbc833a3b1d39c96a89a1db966f46`. The
+updated package after AUDIT-028 is 8.71 MB with SHA-256
+`977162265a6b6be4a8b46cbaa7dfd90f9491dc756de1b6fbea9118bbd760a0a3`.
 
-An artificial 4,200-field dot-completion request did not return within 30
-seconds; this remains a scalability probe to investigate and is not a
-confirmed correctness defect. Linux/Windows/Intel Mac, LOVE/LuaJIT, visual,
-long-session, and second-client qualification remain open. The VSIX is ready
-for manual beta testing on this host, not general release qualification.
+Before the completion fix, an artificial 4,200-field imported-alias request
+timed out. After the fix, the same stdio LSP workflow returned 11 matching
+fields in 0.22 seconds; a core stress regression also returns all 4,200
+members. Linux/Windows/Intel Mac, LOVE/LuaJIT, visual, long-session, and
+second-client qualification remain open. The VSIX is ready for manual beta
+testing on this host, not general release qualification.

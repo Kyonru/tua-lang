@@ -22,6 +22,36 @@ local typed: Pl = nil
 "#;
 
 #[test]
+fn skips_typed_domain_documentation_for_non_function_fields() {
+    let parsed = parse_tua_source("src/main.tua", "").expect("empty source should parse");
+    let (environment, _) = build_type_environment_with_diagnostics(&parsed);
+
+    assert_eq!(
+        typed_member_documentation(CompletionKind::Field, &environment, &Type::Any, "value"),
+        None
+    );
+}
+
+#[test]
+fn large_generic_record_completion_keeps_all_fields_available() {
+    let fields = (0..4_200)
+        .map(|index| format!("f{index}: T"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let source = format!("type Wide<T> = {{ {fields} }}\nlocal wide: Wide<number>\nwide.\n");
+    let completions = complete_tua_source(
+        "src/main.tua",
+        source.as_str(),
+        position_after(source.as_str(), "wide."),
+    )
+    .expect("large generic record completion should succeed");
+    let names = labels(&completions);
+
+    assert_eq!(names.len(), 4_200);
+    assert!(names.iter().any(|name| name == "f419"));
+}
+
+#[test]
 fn replacement_spans_cover_typed_identifiers_and_string_values() {
     let identifier_source = "local playerName = 1\nlocal copy = play";
     let identifier_position = position_after(identifier_source, "local copy = play");

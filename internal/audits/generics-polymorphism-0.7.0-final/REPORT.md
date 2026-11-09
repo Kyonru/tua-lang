@@ -42,12 +42,10 @@ loopback bind, and the extension suite passed 180/180 when rerun with local
 loopback access. The benchmark smoke likewise passed with local process
 sampling enabled.
 
-One stress probe remains inconclusive: dot completion on an artificial
-4,200-field generic record did not answer within 30 seconds, while hover on
-the same last field and CLI checking returned the correct `number` type. This
-does not establish a regression or typical-project latency problem; it is
-recorded as a targeted completion scalability follow-up, not a confirmed
-correctness defect.
+The earlier 4,200-field completion timeout is now confirmed as an editor
+performance defect and fixed as AUDIT-028 below. The regression test returns
+all 4,200 fields, and a replay through a real stdio LSP process returns 11
+matching candidates in 0.22 seconds on the audit host.
 
 The latest artifact is suitable for manual beta testing on this host. It is not
 qualified for a general release: cross-platform/runtime qualification, visual
@@ -569,6 +567,18 @@ gap in the current checkout.
 - **Source:** `crates/tua-core/src/emit/mod.rs:1671` and `:1700` preserve generic binder comment trivia; `crates/tua-core/src/emit/tests.rs` contains the Lua parse regression.
 - **Regression coverage:** `generic_function_header_comments_survive_type_erasure` asserts both comments survive exactly once, the generic syntax is absent, and the emitted Lua parses. An independent CLI build/run probe printed `42` after the fix.
 
+### AUDIT-028 — Large generic record completion repeated typed-domain resolution
+
+- **Category / severity / confidence:** Editor completion performance; Medium; confirmed by an imported-alias LSP reproduction, profile evidence, and a 4,200-field regression test.
+- **Status:** Fixed in the current worktree.
+- **Reproduction:** Run `cargo build -p tua-cli`, then `python3 internal/audits/generics-polymorphism-0.7.0-final/reproduce_large_generic_completion.py`. The script creates an imported `Wide<T>` alias with 4,200 fields and asks the actual stdio LSP for completion after `wide.f419`. Before the fix, this request timed out after 60 seconds in the audited process. After the fix, it returned 11 matching labels in 0.22 seconds on macOS arm64.
+- **Expected:** Completion should remain responsive on wide generic records while retaining all matching members and typed-domain method documentation.
+- **Actual before fix:** `complete_fields` called `CompletionDomainRegistry::typed_member` for each matching table member. Domain checks resolve and inspect the receiver type, so ordinary scalar fields repeatedly forced work proportional to the large generic record. Profiling showed member collection in milliseconds and per-candidate domain enrichment dominating the request.
+- **Fix:** Call typed-domain documentation resolution only for function-valued completion items. Typed domain methods are represented as function-valued fields; ordinary values cannot have method documentation. This keeps existing domain-method documentation while avoiding expensive receiver classification for record values.
+- **Source:** `crates/tua-core/src/completion/mod.rs` (`complete_fields` and `typed_member_documentation`).
+- **Regression coverage:** `large_generic_record_completion_keeps_all_fields_available` expands and completes a 4,200-field `Wide<number>` alias, asserting all labels are retained. `skips_typed_domain_documentation_for_non_function_fields` verifies the early exit. Existing ECS, store, state-machine, audio, and input completion tests cover function-method documentation.
+- **Verification:** `RUST_MIN_STACK=33554432 cargo test -p tua-core` passed (1,889 passed, 1 ignored); `cargo test -p tua-lsp` passed (427); `cargo test -p tua-core completion::tests::` passed (149). The dedicated 4,200-field regression passed in 0.30 seconds. The saved actual-LSP reproduction returned 11 matching candidates in 0.40 seconds on its rerun (0.22 seconds in the initial valid replay). `make extension-package` passed with 180/180 extension tests and `npm audit` reporting 0 vulnerabilities. The exact package installed in an isolated profile and passed `test:vscode-real` on VS Code 1.142.0/macOS arm64. Archive SHA-256: `977162265a6b6be4a8b46cbaa7dfd90f9491dc756de1b6fbea9118bbd760a0a3`.
+
 During AUDIT-025 integration, a first direct-field shortcut changed recursive-alias hover and class `Self` hover behavior. The full core and LSP suites exposed those regressions; the final shortcut only preserves a raw field edge when it contains a generic alias application, and targeted tests for recursive imported `Self` and growing recursive generic aliases now pass.
 
 ## Coverage matrix
@@ -662,6 +672,7 @@ All commands ran from repository root unless noted.
 | `make extension-package` | Passed at the November 10 re-audit revision. Built Tua 0.7.0 VSIX (40 files, 8.65 MB); extension tests 180/180 and npm audit 0 vulnerabilities. |
 | `env TUA_TEST_VSIX="$PWD/editors/vscode/tua-0.7.0.vsix" npm --prefix editors/vscode run test:vscode-real` | Passed against the exact rebuilt package on VS Code 1.142.0/macOS arm64 with the bundled server. The isolated-profile real-server suite covers cyclic protocol returns (`local target: B`, `B.previous` completion), recursive argument hover/completion/docs, imported generic behavior, and protocol stub action. `unzip -tq` passed. Current VSIX SHA-256: `d3fb8703ce8893cbb119bc6a9dc68f9085a928d7eeeeeccaa3c7407730806de0`. |
 | Absolute-path imported-protocol generic-bound CLI reproduction and its CLI/LSP regression tests | Passed after `d7c56d50`: the explicitly conforming imported `Actor` has no TL1015; the nonconforming same-shape `Lookalike` retains TL1015. A redundant type import initially triggered the separate unused-import lint and was removed from the fixture in `580307ea`. |
+| AUDIT-028 continuation: `RUST_MIN_STACK=33554432 cargo test -p tua-core`; `cargo test -p tua-lsp`; `make extension-package`; exact VSIX `test:vscode-real`; large generic completion reproduction | Passed. Core 1,889 passed/1 ignored; LSP 427 passed; extension 180/180; npm audit 0 vulnerabilities. The 4,200-field core completion test passed in 0.30 seconds; the stdio LSP fixture returned 11 matching candidates in 0.40 seconds. The exact 0.7.0 VSIX installed into an isolated profile and passed its real-server suite on VS Code 1.142.0/macOS arm64. Final artifact SHA-256: `977162265a6b6be4a8b46cbaa7dfd90f9491dc756de1b6fbea9118bbd760a0a3`. |
 
 The VS Code/Electron tests require local host access for the editor and language server. A sandboxed first attempt terminated Electron with `SIGABRT`; rerunning with the approved local host access completed and passed. This was a test-environment restriction, not a Tua assertion failure.
 
