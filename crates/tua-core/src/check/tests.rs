@@ -7128,6 +7128,23 @@ fn generic_function_varargs_bind_and_infer_their_type_parameter() {
 }
 
 #[test]
+fn generic_function_multiple_return_slots_infer_independently() {
+    check_tua_source(
+        "src/generic_multiple_returns.tua",
+        r#"
+local function split<T, U>(left: T, right: U): (T, U)
+  return left, right
+end
+
+local text, count = split("enemy", 3)
+local _text_check: string = text
+local _count_check: number = count
+"#,
+    )
+    .expect("each generic return slot should preserve its corresponding argument type");
+}
+
+#[test]
 fn generic_function_inference_matches_lua_string_and_table_call_sugar() {
     check_tua_source(
         "src/generic_call_sugar.tua",

@@ -893,6 +893,54 @@ assert(cat:meow() == "meow")
 }
 
 #[test]
+fn generic_multiple_return_slots_preserve_lua_runtime_values() {
+    let Some(lua) = working_lua_runtime() else {
+        return;
+    };
+    let temp = TempDir::new("generic-multiple-return-runtime");
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).expect("write config");
+    fs::create_dir_all(temp.path().join("src")).expect("create source directory");
+    fs::write(
+        temp.path().join("src/main.tua"),
+        r#"
+local function split<T, U>(left: T, right: U): (T, U)
+  return left, right
+end
+
+local text, count = split("enemy", 3)
+assert(text == "enemy")
+assert(count == 3)
+"#,
+    )
+    .expect("write source");
+
+    let build = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .expect("run Tua build");
+    assert!(
+        build.status.success(),
+        "{}",
+        String::from_utf8_lossy(&build.stderr)
+    );
+    let emitted = fs::read_to_string(temp.path().join("build/main.lua")).expect("read emitted Lua");
+    assert!(!emitted.contains("<T, U>"));
+    assert!(emitted.contains("local text, count = split(\"enemy\", 3)"));
+
+    let runtime = Command::new(&lua)
+        .arg(temp.path().join("build/main.lua"))
+        .output()
+        .expect("run emitted Lua");
+    assert!(
+        runtime.status.success(),
+        "stdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&runtime.stdout),
+        String::from_utf8_lossy(&runtime.stderr)
+    );
+}
+
+#[test]
 fn check_exits_nonzero_for_parse_errors() {
     let temp = TempDir::new("check-parse-error");
 
