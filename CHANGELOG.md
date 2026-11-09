@@ -15,6 +15,10 @@ language or editor behavior, and migration notes call out those changes.
 - Generic free functions with symbolic body checking, independent call-site
   inference, imported/re-exported schemes, and `TL1015` diagnostics for
   conflicting or unsupported inference.
+- Cache identical generic call specializations during one source-file check and
+  bound distinct instantiations to 4,096; report the limit once with `TL1015`
+  instead of allowing generated call-heavy files to consume unbounded checker
+  work.
 - Generic classes with constructor inference, substituted field and method
   members, nominal invariant arguments, editor completion/navigation, applied
   generic-parent substitution, generic `super(...)` initializer checking,
@@ -29,6 +33,8 @@ language or editor behavior, and migration notes call out those changes.
   signatures; callback-only inference for a generic callee stays ambiguous.
 - Unbounded LuaDoc `---@generic T` function binders across parameter, vararg,
   and return annotations.
+- Formatter preserves compact generic function headers, including bounded
+  parameters, as valid Tua syntax.
 - Namespace type imports can qualify protocols in `implements` clauses.
 - Semantic tokens identify protocol declarations and type uses with the LSP
   interface token class.

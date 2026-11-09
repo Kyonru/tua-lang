@@ -125,6 +125,10 @@ their binders are symbolic. Inference that depends only on a return type or on
 the parameter types of a callback is rejected with `TL1015`; generic methods,
 explicit call-site type arguments, and bounded LuaDoc generic parameters are
 not supported. Generic functions and aliases erase from emitted Lua.
+To bound analysis work in generated source, Tua caches identical generic call
+specializations for one source-file check and reports one `TL1015` after 4,096
+distinct call instantiations. Splitting generated call-heavy code across files
+keeps each check within that limit.
 
 Do not write `identity<number>(1)` to select a type argument. Tua does not
 support type arguments at call sites, and `<` / `>` already form valid Lua
