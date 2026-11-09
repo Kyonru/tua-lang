@@ -95,7 +95,9 @@ tested editor surfaces.
 The same follow-up adds exact generic alias expansion work-limit coverage at
 4,096 and 4,097 applications, per-character recovery coverage for protocol and
 generic class headers, a stale dependent-diagnostic cancellation case, and
-delete/recreate churn behind two declaration-file re-export hops.
+delete/recreate churn behind each node in a three-module declaration-file
+re-export chain. The expanded LSP regression passes after every removal and
+restoration; broader rename-plus-delete sequences remain open.
 
 ## Coverage and evidence
 
@@ -110,7 +112,7 @@ delete/recreate churn behind two declaration-file re-export hops.
 | Completion/hover agreement for recursive protocols | Exercised | Core analysis tests assert nominal hover and completion members; extension real-server suite covers generic/protocol editor queries |
 | Parser depth and malformed edits | Exercised | Exact 64/65 native array depth boundary, protected comment/string cases, and every character prefix of protocol/generic class headers |
 | Formatter and comment round-trip | Exercised | Generic function-bound formatter regression plus class/function bound Lua-emission regressions |
-| Cross-file invalidation | Exercised | Contract change/restore cancels stale diagnostics; delete/recreate behind two type re-export hops updates dependent diagnostics |
+| Cross-file invalidation | Exercised | Contract change/restore cancels stale diagnostics; delete/recreate of each node in a three-module type re-export chain updates dependent diagnostics |
 | Cross-platform editor behavior | Not exercised | This run used the local macOS VS Code installation and macOS arm64 release server |
 | LOVE/LuaJIT runtime behavior | Not exercised | The protocol feature-tour runtime test uses system Lua 5.4.8; LOVE/LuaJIT are unavailable or not qualified here |
 | Long-session/performance behavior | Not exercised | No soak test or release-build latency benchmark was run in this follow-up |
