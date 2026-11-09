@@ -158,7 +158,7 @@ combinations and broader cancellation permutations remain open.
 | Incomplete generic class completion | Exercised | Core snapshot and LSP edit-sequence regressions verify protocol-bound members remain suggested after an unclosed-class edit |
 | Parser depth and malformed edits | Exercised | Exact 64/65 native array depth boundary and protected comment/string cases. UTF-8 prefix tests include direct assertions that complete protocol and generic class headers recover before their first members; conditional prefix-loop assertions do not claim every malformed prefix recovers. |
 | Formatter and comment round-trip | Exercised | Generic function-bound formatter regression plus class/function bound Lua-emission regressions |
-| Cross-file invalidation | Exercised | Contract change/restore cancels stale diagnostics; delete/recreate of each node in a three-module type re-export chain and rename/delete/recreate of a direct dependency update dependent diagnostics |
+| Cross-file invalidation | Exercised | Contract change/restore cancels stale diagnostics; a rapid incompatible-contract / re-export-rename / restore sequence does not publish stale consumer errors; delete/recreate of each node in a three-module type re-export chain and rename/delete/recreate of a direct dependency update dependent diagnostics |
 | Cross-platform editor behavior | Not exercised | This run used the local macOS VS Code installation and macOS arm64 release server |
 | LOVE/LuaJIT runtime behavior | Not exercised | The protocol feature-tour runtime test uses system Lua 5.4.8; LOVE/LuaJIT are unavailable or not qualified here |
 | Long-session/performance behavior | Not exercised | No soak test or release-build latency benchmark was run in this follow-up |
@@ -179,6 +179,11 @@ defect. They identified two evidence gaps, both addressed with regression tests:
   checks generic binder hover, instantiated signature help, inferred result
   hover, result member completion, and definition navigation to the Lua
   implementation.
+- Cancellation coverage had a single contract change/restore. A new LSP
+  regression sends a burst of incompatible contract and re-export edits, then
+  restores both before draining diagnostics; the consumer receives neither
+  stale conformance failures nor a missing-import error. Other cancellation
+  schedules are still not exhaustive.
 
 The reviewers also corrected the scope of prior fuzz evidence: `source_pipeline`
 calls normalization/parsing and includes protocol-related seeds;
@@ -232,12 +237,14 @@ limit, separate from this scoped protocol/generic implementation.
 
 - `RUST_MIN_STACK=16777216 cargo test -p tua-core` — passed: 1,899 passed, 1 ignored (1,900 tests total), including the explicit class-only recovery placeholder regression and generic completion in both a new invalid buffer and after editing a valid document.
 - `RUST_MIN_STACK=16777216 cargo test -p tua-lsp` — passed: 434 tests, including imported LuaDoc-generic hover, instantiated signature, result hover, member completion, and navigation to the `.lua` declaration.
+- `RUST_MIN_STACK=16777216 cargo test -p tua-lsp rapid_protocol_and_reexport_edits_do_not_publish_stale_conformance_errors` — passed; exercises an incompatible contract, renamed re-export, restored contract, and restored re-export before draining diagnostics.
 - `cargo test -p tua-core declaration_library_drives_recursive_discriminated_table_completion` — passed; guards callback/table context outside class bodies.
 - `cargo test -p tua-core incomplete_line_recovery_uses_class_placeholder_only_inside_class_bodies` — passed; directly checks the class-only no-op placeholder and equal source length.
 - `cargo test -p tua-lsp generic_class_bound_completion_survives_incomplete_class_edits` — passed; actual in-process LSP requests cover fresh and edited documents.
 - `env -u RUST_MIN_STACK -u RUST_TEST_THREADS make verify` — the initial sandboxed run blocked two loopback inspector tests. Rerunning with loopback access passed the full gate: core 1,900 passed/1 ignored; LSP 433; CLI library 92 passed/2 ignored; CLI integration 137; gameplay 3; helper defaults 1; LOVE examples 3; LSP smoke 1; Lua syntax 1; VS Code 180/180; Clippy, version/schema/docs generation, language evaluation, JSON validation, and diff checks all passed. LOVE-dependent tests were skipped by their explicit environment guards.
 - `make docs-build` — passed.
 - `make ci-check` — passed on macOS arm64, including strict Clippy, Rust dependency audit, workspace tests, all example builds, LSP feature smoke, VS Code checks, documentation, and benchmark smoke. Cargo audit reported only the already-allowed `paste` unmaintained advisory (RUSTSEC-2024-0436); it found no denied vulnerability.
+- `make runtime-test LUA=lua` — passed the bundled vector, sprite, tween, camera, hot-reload, and input-helper Lua runtime tests under Lua 5.4.8.
 - `env -u RUST_MIN_STACK -u RUST_TEST_THREADS make verify` — passed after the audit-only test additions, using the Makefile's 16 MiB default Rust test stack and local loopback access. This run included 1,899 core tests passed/1 ignored, 434 LSP tests, 180 VS Code tests, CLI/example/runtime/syntax tests, Clippy, version/schema/language checks, JSON validation, and diff checks.
 - `make extension-package` — passed after granting the loopback access required by the inspector tests; 180/180 extension tests passed, npm reported zero vulnerabilities, the release server was bundled, and the VSIX was built.
 - `TUA_TEST_VSIX="$(pwd)/editors/vscode/tua-0.7.0.vsix" make extension-real-server-test` — passed against the final packaged artifact. VS Code installed it into a disposable profile, launched its bundled real server, exercised the protocol/generic editor suite, and exited with code 0.
