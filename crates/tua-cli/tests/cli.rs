@@ -941,6 +941,67 @@ assert(count == 3)
 }
 
 #[test]
+fn protocol_polymorphic_dispatch_preserves_runtime_receiver_identity() {
+    let Some(lua) = working_lua_runtime() else {
+        return;
+    };
+    let temp = TempDir::new("protocol-dispatch-runtime");
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).expect("write config");
+    fs::create_dir_all(temp.path().join("src")).expect("create source directory");
+    let source = include_str!("../../../examples/features/src/protocols.tua");
+    let main = temp.path().join("src/main.tua");
+    fs::write(&main, source).expect("write protocol example");
+
+    let build = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .expect("run Tua build");
+    assert!(
+        build.status.success(),
+        "stdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&build.stdout),
+        String::from_utf8_lossy(&build.stderr)
+    );
+    let emitted = fs::read_to_string(temp.path().join("build/main.lua")).expect("read emitted Lua");
+    assert!(!emitted.contains("Updatable") && !emitted.contains("implements"));
+    assert!(emitted.contains("item:update(dt)"));
+
+    let runtime = Command::new(&lua)
+        .arg(temp.path().join("build/main.lua"))
+        .output()
+        .expect("run emitted protocol example");
+    assert!(
+        runtime.status.success(),
+        "stdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&runtime.stdout),
+        String::from_utf8_lossy(&runtime.stderr)
+    );
+
+    let invalid = source.replace(
+        "return { items = items, updateAll = updateAll }",
+        "final class Incomplete implements Updatable {\n}\nreturn { items = items, updateAll = updateAll }",
+    );
+    fs::write(&main, invalid).expect("write missing-method negative case");
+    let check = tua()
+        .arg("check")
+        .current_dir(temp.path())
+        .output()
+        .expect("check missing-method negative case");
+    assert!(
+        !check.status.success(),
+        "a nonconforming class was accepted"
+    );
+    let stderr = String::from_utf8_lossy(&check.stderr);
+    assert!(
+        stderr.contains("Incomplete")
+            && stderr.contains("missing method `update`")
+            && stderr.contains("missing method `progress`"),
+        "both missing protocol obligations should be reported:\n{stderr}"
+    );
+}
+
+#[test]
 fn concrete_generic_parent_substitution_preserves_emitted_lua_behavior() {
     let Some(lua) = working_lua_runtime() else {
         return;

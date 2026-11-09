@@ -34,9 +34,16 @@ local function updateAll(items: Updatable[], dt: number): nil
   end
 end
 
-local items: Updatable[] = { Particle.new(), HudClock.new() }
+local function updateOne<T: Updatable>(item: T, dt: number): T
+  item:update(dt)
+  return item
+end
+
+local particle = updateOne(Particle.new(), 0.25)
+local clock = updateOne(HudClock.new(), 0.25)
+local items: Updatable[] = { particle, clock }
 updateAll(items, 0.5)
-assert(items[1]:progress() == 0.5)
-assert(items[2]:progress() == 0.5)
+assert(items[1]:progress() == 0.75)
+assert(items[2]:progress() == 0.75)
 
 return { items = items, updateAll = updateAll }

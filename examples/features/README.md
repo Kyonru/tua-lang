@@ -48,7 +48,8 @@ make build-features
   lowering, exact method contracts, final-method devirtualization, and class
   runtime `is` checks.
 - `src/protocols.tua` covers method-only protocols, explicit class conformance,
-  heterogeneous protocol-typed arrays, and checked method dispatch.
+  bounded generic helpers, heterogeneous protocol-typed arrays, and checked
+  method dispatch. Its assertions can run with Lua without LOVE.
 - `src/polymorphism.tua` and `src/polymorphism/actors.tua` demonstrate imported
   instance types, base-typed collections, virtual dispatch, and explicit typed
   adapters for unrelated objects. After building, run their assertions without

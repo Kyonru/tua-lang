@@ -43,7 +43,9 @@ It also includes focused modules for native protocol contracts, the
 Baton-backed `input({...})` helper, state machines, stores, Signals, ECS,
 object pools, sprite sheets, vectors, and Lua interoperability.
 `src/protocols.tua` demonstrates unrelated classes implementing a shared
-method contract and dispatch through a protocol-typed array.
+method contract, bounded generic helpers that preserve concrete result types,
+and runtime dispatch through a protocol-typed array. Its assertions run with
+Lua without LOVE.
 `src/polymorphism.tua` demonstrates cross-module native inheritance and typed
 adapters for unrelated gameplay and UI objects; it also serves as a runnable
 companion to the [migration guidance](lua-interop.md#migrate-singleton-tables-and-mixins).
