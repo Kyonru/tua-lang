@@ -2898,7 +2898,7 @@ fn validate_overrides(
                 ))
             }
             (true, Some(parent_method))
-                if !class_method_signatures_match(method, parent_method) =>
+                if !class_method_signatures_match(classes, class, method, parent_method) =>
             {
                 diagnostics.push(class_diagnostic(
                     path,
@@ -2914,15 +2914,177 @@ fn validate_overrides(
     }
 }
 
-fn class_method_signatures_match(method: &ClassMethod, parent: &ClassMethod) -> bool {
+fn class_method_signatures_match(
+    classes: &[ClassDeclaration],
+    child: &ClassDeclaration,
+    method: &ClassMethod,
+    parent: &ClassMethod,
+) -> bool {
     let Some((method_parameters, method_returns)) = class_method_signature(method) else {
         return false;
     };
-    let Some((parent_parameters, parent_returns)) = class_method_signature(parent) else {
+    let Some((mut parent_parameters, mut parent_returns)) = class_method_signature(parent) else {
         return false;
     };
 
+    if let Some((parent_class, _)) = child
+        .parent
+        .as_deref()
+        .and_then(|parent_name| class_method_declaration(classes, parent_name, &parent.name))
+    {
+        let Some(substitutions) =
+            class_type_substitutions_to_ancestor(classes, child, &parent_class.name)
+        else {
+            return false;
+        };
+        parent_parameters = parent_parameters
+            .into_iter()
+            .map(|(ty, optional, variadic)| {
+                (
+                    substitute_class_method_type(&ty, &substitutions),
+                    optional,
+                    variadic,
+                )
+            })
+            .collect();
+        parent_returns = parent_returns
+            .iter()
+            .map(|ty| substitute_class_method_type(ty, &substitutions))
+            .collect();
+    }
+
     method_parameters == parent_parameters && method_returns == parent_returns
+}
+
+/// Resolves each ancestor class parameter in the child's type-parameter scope.
+/// For example, `Child<U> extends Middle<U>`, `Middle<V> extends Base<V>`
+/// yields the substitution `Base.T -> Child.U`.
+fn class_type_substitutions_to_ancestor(
+    classes: &[ClassDeclaration],
+    child: &ClassDeclaration,
+    ancestor_name: &str,
+) -> Option<BTreeMap<String, TuaType>> {
+    let mut current = child;
+    let mut current_substitutions = child
+        .generic_parameters
+        .iter()
+        .map(|parameter| {
+            (
+                parameter.name.clone(),
+                TuaType::Named(parameter.name.clone()),
+            )
+        })
+        .collect::<BTreeMap<_, _>>();
+    let mut visited = BTreeSet::new();
+
+    while visited.insert(current.name.clone()) {
+        let parent_name = current.parent.as_deref()?;
+        let parent = class_by_name(classes, parent_name)?;
+        let parent_arguments = if parent.generic_parameters.is_empty() {
+            Vec::new()
+        } else {
+            let application = current.parent_application.as_ref()?;
+            if application.arguments.len() != parent.generic_parameters.len() {
+                return None;
+            }
+            application
+                .arguments
+                .iter()
+                .map(|argument| substitute_class_method_type(&argument.ty, &current_substitutions))
+                .collect()
+        };
+        let parent_substitutions = parent
+            .generic_parameters
+            .iter()
+            .zip(parent_arguments)
+            .map(|(parameter, argument)| (parameter.name.clone(), argument))
+            .collect::<BTreeMap<_, _>>();
+
+        if parent.name == ancestor_name {
+            return Some(parent_substitutions);
+        }
+
+        current = parent;
+        current_substitutions = parent_substitutions;
+    }
+
+    None
+}
+
+fn substitute_class_method_type(
+    ty: &TuaType,
+    substitutions: &BTreeMap<String, TuaType>,
+) -> TuaType {
+    match ty {
+        TuaType::Named(name) => substitutions
+            .get(name)
+            .cloned()
+            .unwrap_or_else(|| ty.clone()),
+        TuaType::Applied {
+            name,
+            arguments,
+            name_span,
+            span,
+        } => TuaType::Applied {
+            name: name.clone(),
+            arguments: arguments
+                .iter()
+                .map(|argument| substitute_class_method_type(argument, substitutions))
+                .collect(),
+            name_span: *name_span,
+            span: *span,
+        },
+        TuaType::Union(types) => TuaType::Union(
+            types
+                .iter()
+                .map(|ty| substitute_class_method_type(ty, substitutions))
+                .collect(),
+        ),
+        TuaType::Table(fields) => TuaType::Table(
+            fields
+                .iter()
+                .map(|field| crate::parser::TableFieldType {
+                    name: field.name.clone(),
+                    optional: field.optional,
+                    ty: substitute_class_method_type(&field.ty, substitutions),
+                    name_span: field.name_span,
+                    span: field.span,
+                })
+                .collect(),
+        ),
+        TuaType::Array(item) => {
+            TuaType::Array(Box::new(substitute_class_method_type(item, substitutions)))
+        }
+        TuaType::Tuple(items) => TuaType::Tuple(
+            items
+                .iter()
+                .map(|item| substitute_class_method_type(item, substitutions))
+                .collect(),
+        ),
+        TuaType::Dictionary { key, value } => TuaType::Dictionary {
+            key: Box::new(substitute_class_method_type(key, substitutions)),
+            value: Box::new(substitute_class_method_type(value, substitutions)),
+        },
+        TuaType::Function {
+            parameters,
+            returns,
+        } => TuaType::Function {
+            parameters: parameters
+                .iter()
+                .map(|parameter| crate::parser::FunctionTypeParameter {
+                    name: parameter.name.clone(),
+                    ty: substitute_class_method_type(&parameter.ty, substitutions),
+                    optional: parameter.optional,
+                    variadic: parameter.variadic,
+                })
+                .collect(),
+            returns: returns
+                .iter()
+                .map(|ty| substitute_class_method_type(ty, substitutions))
+                .collect(),
+        },
+        TuaType::Parameter { .. } | TuaType::StringLiteral(_) => ty.clone(),
+    }
 }
 
 fn class_method_signature(method: &ClassMethod) -> Option<ClassMethodSignature> {

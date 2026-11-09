@@ -4611,6 +4611,70 @@ final class Child extends Base {
 }
 
 #[test]
+fn generic_class_overrides_compare_signatures_after_inheritance_substitution() {
+    check_tua_source(
+        "src/generic_overrides.tua",
+        r#"
+open class Base<T> {
+  value: T
+
+  init(value: T) {
+    self.value = value
+  }
+
+  get(): T {
+    return self.value
+  }
+}
+
+open class Middle<V> extends Base<V> {
+  init(value: V) { super(value) }
+}
+
+final class Box<U> extends Middle<U> {
+  init(value: U) { super(value) }
+  override get(): U {
+    return self.value
+  }
+}
+
+local box = Box.new(42)
+local value: number = box:get()
+"#,
+    )
+    .expect("an override matching the instantiated generic parent signature should pass");
+
+    let diagnostics = check_tua_source(
+        "src/generic_bad_override.tua",
+        r#"
+open class Base<T> {
+  value: T
+
+  init(value: T) {
+    self.value = value
+  }
+
+  get(): T {
+    return self.value
+  }
+}
+
+final class Box<U> extends Base<U> {
+  init(value: U) { super(value) }
+  override get(): string {
+    return "wrong"
+  }
+}
+"#,
+    )
+    .expect_err("an override with a different substituted return type should fail");
+
+    assert!(diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.message.contains("signature incompatible")));
+}
+
+#[test]
 fn rejects_incompatible_inherited_class_field_redeclarations() {
     let diagnostics = check_tua_source(
         "src/classes.tua",
