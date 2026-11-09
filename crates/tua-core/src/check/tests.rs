@@ -6819,6 +6819,36 @@ local value: string = apply(identity)
             .any(|diagnostic| diagnostic.code == Some(DiagnosticCode::TYPE_MISMATCH)),
         "{incompatible:#?}"
     );
+
+    let violates_bound = check_tua_source(
+        "src/generic_callback_context.tua",
+        r#"
+protocol Updatable { update(dt: number): nil }
+final class NotUpdatable {}
+final class Actor implements Updatable {
+  update(dt: number): nil { return nil }
+}
+local function tick<T: Updatable>(value: T): T
+  value:update(1)
+  return value
+end
+local function apply(callback: (NotUpdatable) -> NotUpdatable): NotUpdatable
+  return callback(NotUpdatable.new())
+end
+local function apply_actor(callback: (Actor) -> Actor): Actor
+  return callback(Actor.new())
+end
+local _valid: Actor = apply_actor(tick)
+local _result: NotUpdatable = apply(tick)
+"#,
+    )
+    .expect_err("contextual specialization must enforce generic protocol bounds");
+    assert!(
+        violates_bound
+            .iter()
+            .any(|diagnostic| diagnostic.code == Some(DiagnosticCode::TYPE_MISMATCH)),
+        "a bounded generic function must not specialize to a non-conforming callback: {violates_bound:#?}"
+    );
 }
 
 #[test]

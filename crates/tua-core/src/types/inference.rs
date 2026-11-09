@@ -746,6 +746,25 @@ pub(crate) fn instantiate_generic_function_from_context(
         }
     }
 
+    for parameter in &function.generic_parameters {
+        let Some(bound) = &parameter.protocol_bound else {
+            continue;
+        };
+        let Some(actual) = substitutions.get(&parameter.id) else {
+            continue;
+        };
+        if !context.satisfies_protocol_bound(actual, bound, &parameter.id.declaration.module) {
+            return Err(GenericInferenceFailure {
+                parameter: parameter.name.clone(),
+                kind: GenericInferenceFailureKind::ProtocolBound {
+                    actual: Box::new(actual.clone()),
+                    protocol: bound.name.clone(),
+                },
+                argument_index: None,
+            });
+        }
+    }
+
     let substitute = |ty: &Type| substitute_type_parameters(ty, &substitutions);
     let mut instantiated = FunctionType::new_signature(
         function
