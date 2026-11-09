@@ -2450,6 +2450,8 @@ open class Actor implements Updatable {
 }
 
 final class Panel extends Actor implements Updatable {
+  override update(dt: number): nil {
+  }
 }
 
 final class Dialog implements Updatable {
@@ -2469,7 +2471,45 @@ tick({ Actor.new(), Dialog.new() }, 0.016)
 }
 
 #[test]
-fn protocol_dot_and_extracted_methods_reject_nonconforming_receivers() {
+fn inherited_protocol_conformance_survives_overrides_and_reports_the_method_span() {
+    let source = r#"protocol Updatable {
+  update(dt: number): nil
+}
+open class Actor implements Updatable {
+  update(dt: number): nil {}
+}
+final class Panel extends Actor {
+  override update(dt: number): nil {}
+}
+final class NarrowPanel extends Actor {
+  override update(dt: string): nil {}
+}
+"#;
+    let diagnostics = check_tua_source("src/inherited_protocol_override.tua", source)
+        .expect_err("an override must preserve its inherited protocol contract");
+    let diagnostic = diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic.message.contains("signature incompatible"))
+        .expect("the incompatible override should be rejected by the class contract");
+
+    assert_eq!(
+        (
+            diagnostic.line,
+            diagnostic.column,
+            diagnostic.end_line,
+            diagnostic.end_column
+        ),
+        (11, 12, 11, 18),
+        "the inherited protocol violation should point at the overriding method name"
+    );
+    assert!(
+        diagnostics.iter().all(|diagnostic| diagnostic.line == 11),
+        "the valid inherited override must remain accepted: {diagnostics:#?}"
+    );
+}
+
+#[test]
+fn protocol_dot_and_extracted_methods_require_explicit_conforming_receivers() {
     let diagnostics = check_tua_source(
         "src/protocol_receivers.tua",
         r#"
@@ -2482,6 +2522,10 @@ final class Actor implements Updatable {
 }
 
 local function invalid(value: Updatable, other: {})
+  value:update(0.016)
+  value.update(value, 0.016)
+  local valid_extracted = value.update
+  valid_extracted(value, 0.016)
   value.update(other, 0.016)
   local extracted = value.update
   extracted(other, 0.016)
