@@ -126,6 +126,12 @@ the parameter types of a callback is rejected with `TL1015`; generic methods,
 explicit call-site type arguments, and bounded LuaDoc generic parameters are
 not supported. Generic functions and aliases erase from emitted Lua.
 
+Do not write `identity<number>(1)` to select a type argument. Tua does not
+support type arguments at call sites, and `<` / `>` already form valid Lua
+comparison expressions, so this text is parsed as Lua expression syntax rather
+than as a generic specialization. Let Tua infer the type from the argument, or
+put the type on a variable or alias where type applications are supported.
+
 When a generic parameter occurs inside a mutable array, dictionary, or record
 field in the function signature, inference keeps it invariant across all call
 arguments. For example, `overwrite(cats, animal)` is rejected when `cats` is a
