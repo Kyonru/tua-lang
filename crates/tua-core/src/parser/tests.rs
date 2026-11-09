@@ -843,6 +843,35 @@ final class Box<T -- binder comment with >
 }
 "#;
 
+    let protocol_body_open = source
+        .find("\nRenderable {\n")
+        .map(|index| index + "\nRenderable {".len())
+        .expect("protocol body opener should exist");
+    let protocol_prefix = &source[..protocol_body_open];
+    let recovered_protocol =
+        crate::classes::source_with_closed_editor_declarations(protocol_prefix)
+            .expect("a complete protocol header should recover before its first member");
+    let parsed_protocol = parse_tua_source("src/recovery.tua", &recovered_protocol)
+        .expect("the recovered protocol header should parse");
+    assert_eq!(parsed_protocol.protocol_declarations.len(), 1);
+    assert_eq!(parsed_protocol.protocol_declarations[0].name, "Renderable");
+
+    let class_header_open = source
+        .find("final class Box")
+        .and_then(|start| source[start..].find("{\n").map(|open| start + open + 1))
+        .expect("generic class body opener should exist");
+    let class_prefix = &source[..class_header_open];
+    let recovered_class = crate::classes::source_with_closed_editor_declarations(class_prefix)
+        .expect("a complete generic class header should recover before its first field");
+    let parsed_class = parse_tua_source("src/recovery.tua", &recovered_class)
+        .expect("the recovered generic class header should parse");
+    assert_eq!(parsed_class.class_declarations.len(), 1);
+    assert_eq!(parsed_class.class_declarations[0].name, "Box");
+    assert_eq!(
+        parsed_class.class_declarations[0].implemented_protocols[0].0,
+        "Renderable"
+    );
+
     for end in source
         .char_indices()
         .map(|(end, _)| end)
