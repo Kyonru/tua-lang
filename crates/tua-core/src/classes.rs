@@ -362,10 +362,9 @@ pub(crate) fn parse_protocol_declarations(
             if body_cursor >= body_end {
                 break;
             }
-            let line_end = source[body_cursor..body_end]
-                .find('\n')
-                .map_or(body_end, |n| body_cursor + n);
-            let line = source[body_cursor..line_end].trim();
+            let line_end = protocol_method_line_end(source, body_cursor, body_end);
+            let line = &source[body_cursor..line_end];
+            let line = line.trim();
             if line == "}" {
                 break;
             }
@@ -439,7 +438,8 @@ pub(crate) fn parse_protocol_declarations(
 }
 
 fn parse_protocol_method_line(line: &str) -> (Option<String>, Option<String>, Option<String>) {
-    let line = strip_protocol_line_comment(line).trim();
+    let line = strip_protocol_comments(line);
+    let line = line.trim();
     let (name, _, name_end) = match take_identifier(line, 0) {
         Some(parts) => parts,
         None => return (None, None, None),
@@ -462,25 +462,68 @@ fn parse_protocol_method_line(line: &str) -> (Option<String>, Option<String>, Op
         .trim_end_matches(',')
         .trim()
         .to_owned();
-    if return_type.is_empty() || return_type.contains('{') {
+    if return_type.is_empty() {
         return (None, None, None);
     }
     (Some(name), Some(parameters), Some(return_type))
 }
 
-fn strip_protocol_line_comment(line: &str) -> &str {
-    let mut index = 0;
-    while index < line.len() {
-        if line[index..].starts_with("--") {
-            return &line[..index];
+fn protocol_method_line_end(source: &str, start: usize, body_end: usize) -> usize {
+    let first_line_end = source[start..body_end]
+        .find('\n')
+        .map_or(body_end, |offset| start + offset);
+    let Some((_, _, name_end)) = take_identifier(source, start) else {
+        return first_line_end;
+    };
+    let open = skip_whitespace(source, name_end);
+    if !source[open..].starts_with('(') {
+        return first_line_end;
+    }
+    let Some(close) = find_matching_paren(&source[..body_end], open) else {
+        return first_line_end;
+    };
+    let mut annotation = skip_protocol_whitespace_and_comments(source, close + 1, body_end);
+    if !source[annotation..body_end].starts_with(':') {
+        return first_line_end;
+    }
+    annotation = skip_protocol_whitespace_and_comments(source, annotation + 1, body_end);
+    source[annotation..body_end]
+        .find('\n')
+        .map_or(body_end, |offset| annotation + offset)
+}
+
+fn skip_protocol_whitespace_and_comments(source: &str, mut index: usize, end: usize) -> usize {
+    loop {
+        index = skip_whitespace(source, index).min(end);
+        if index < end && source[index..end].starts_with("--") {
+            index = consume_comment(source, index).min(end);
+            continue;
         }
-        if let Some(end) = consume_string_literal(line, index) {
+        return index;
+    }
+}
+
+fn strip_protocol_comments(source: &str) -> String {
+    let mut stripped = source.as_bytes().to_vec();
+    let mut index = 0;
+    while index < source.len() {
+        if source[index..].starts_with("--") {
+            let comment_end = consume_comment(source, index);
+            for byte in &mut stripped[index..comment_end] {
+                if *byte != b'\n' && *byte != b'\r' {
+                    *byte = b' ';
+                }
+            }
+            index = comment_end;
+            continue;
+        }
+        if let Some(end) = consume_string_literal(source, index) {
             index = end;
             continue;
         }
-        index += next_char_len(line, index);
+        index += next_char_len(source, index);
     }
-    line
+    String::from_utf8(stripped).expect("spaces preserve the source's valid UTF-8 structure")
 }
 
 pub(crate) fn class_lowering_edits(source: &str) -> Vec<ClassLoweringEdit> {

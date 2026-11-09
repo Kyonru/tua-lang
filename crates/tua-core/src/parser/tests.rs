@@ -435,6 +435,33 @@ fn protocol_declarations_preserve_method_contracts_and_erase_from_lua() {
 }
 
 #[test]
+fn protocol_method_parameters_can_span_lines_and_ignore_inline_comments() {
+    let source = r#"export protocol Applies {
+  apply(
+    input: number, -- the measurement
+    mode: string
+  ): nil -- completes the application
+}
+final class Worker implements Applies {
+  apply(input: number, mode: string): nil {}
+}
+"#;
+    let parsed = parse_tua_source("src/multiline_protocol.tua", source)
+        .expect("multiline method contracts should parse");
+    let method = &parsed.protocol_declarations[0].methods[0];
+    assert_eq!(method.name, "apply");
+    assert_eq!(
+        crate::parser::parse_tua_type_text(&format!(
+            "({}) -> {}",
+            method.parameters, method.return_type
+        )),
+        crate::parser::parse_tua_type_text("(input: number, mode: string) -> nil")
+    );
+    crate::check_tua_source("src/multiline_protocol.tua", source)
+        .expect("the one-line implementation should satisfy the multiline protocol contract");
+}
+
+#[test]
 fn protocol_method_signatures_ignore_trailing_comments_but_keep_comment_text_in_strings() {
     let source = r#"protocol Marked {
   update(dt: number): nil -- a normal contract comment

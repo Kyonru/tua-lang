@@ -96,6 +96,27 @@ local _actor:Updatable=Actor.new()
 }
 
 #[test]
+fn formats_multiline_protocol_signatures_idempotently_and_preserves_comments() {
+    let source = r#"protocol Applies {
+apply(
+input:number, -- measurement
+mode:string
+):nil -- finished
+}
+final class Worker implements Applies {
+apply(input:number,mode:string):nil {}
+}
+"#;
+    let output = format(source);
+
+    assert!(output.contains("-- measurement"), "{output}");
+    assert!(output.contains("-- finished"), "{output}");
+    assert_eq!(format(&output), output);
+    crate::check_tua_source("src/main.tua", output)
+        .expect("formatted multiline signatures should still satisfy protocol checking");
+}
+
+#[test]
 fn formats_local_function_blocks() {
     let source = r#"local function makePlayer(name:string):Player
 return {name=name,hp=100}
