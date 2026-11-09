@@ -10,51 +10,24 @@ workflow pages under `docs/`. Completed work belongs in
 
 ## Now
 
-### 0.7.0: Protocol Contracts First, Then Generics
+### 0.7.0: Protocol Contracts And Generics
 
-The primary 0.7.0 goal is stronger polymorphism and generics. Method-only
-protocols, explicit class conformance, cross-module type imports, and generic
-type aliases are implemented. Generic functions, generic classes, the complete
-protocol editor slice, and release qualification remain open; this is not a
-release completion claim. The detailed contributor plan is kept locally in
-`internal/generics-polymorphism-0.7.0.md`.
+The planned protocol, generic-alias, generic-function, and scoped generic-class
+features are implemented. The recent semantics/editor audit also fixed generic
+callback bound validation, imported protocol views, protocol `Self` variance,
+duplicate protocol methods, related-type inference order, and generic-alias
+navigation/completion. This does not complete every P0–P5/R0 qualification gate
+in `internal/generics-polymorphism-0.7.0.md`.
 
-1. **Complete protocol semantics and module freshness.** The compiler now
-   supports method-only declarations, explicit `implements`, protocol-typed
-   parameters/arrays, basic missing and incompatible method diagnostics,
-   inherited method satisfaction, and exported protocols through type-only
-   imports. Local multiple obligations, same-named requirements, and inherited
-   conformance are covered. Verify variance edge cases, declaration-module
-   contracts, and re-exports. Unsaved edits to an imported protocol now refresh
-   its implementing classes' diagnostics.
-   Keep class identity nominal and erase contracts without runtime wrappers.
-2. **Ship complete protocol editor support.** Completion, hover, signature help,
-   inlay hints, definition, references, rename, and implementation navigation
-   must agree on protocol and concrete member identity, including unsaved edits
-   and incomplete declarations. Core/LSP request coverage exercises completion,
-   hover, signature help, definition, implementation navigation, references,
-   rename, and semantic tokens across type-only imports; a real-process probe
-   confirms completion after an incomplete imported-protocol edit. Inlay hints
-   and type explanations also preserve protocol members through core/LSP
-   requests. The VS Code real-server host test now checks imported protocol
-   completion, documentation hover, and definition navigation. Cross-platform
-   editor and broader module-freshness qualification remain open. Use the shared
-   model rather than feature-local checks.
-3. **Add generic functions.** Generic aliases now use declaration-owned type
-   parameters, explicit applications, shared substitution, and named/namespace
-   imports. Introduce per-call inference for functions while preserving return
-   tuples, callback signatures, imports, and declaration identity. Make
-   unsupported forms explicit instead of silently degrading to `any`; LuaDoc
-   `---@generic` remains metadata-only until its supported semantics are defined.
-4. **Add generic classes and protocol constraints.** Reuse the same substitution
-   model for construction, inherited members, `Self`, and protocol bounds.
-   Decide mutable-container variance before accepting generic widening; current
-   array subtyping is not evidence that mutable generic containers are safe.
-5. **Qualify the release.** A buildable protocol example and an audit-only game
-   fixture now exercise emitted Lua and dispatch; actual LOVE/LuaJIT behavior,
-   source maps, hot reload, cross-platform CI, LSP, installed-editor, and
-   responsiveness gates remain pending. Keep examples and public documentation
-   aligned as capabilities land, with explicit migration notes.
+Remaining language and project-analysis work includes cyclic protocol method
+signatures, cross-module class inheritance/conformance, and broader recovery
+from malformed or incomplete protocol declarations. Generic callback-only
+inference, generic methods, explicit call-site type arguments, and bounded
+LuaDoc generics remain unsupported and should stay explicit feature gaps.
+Protocol and generic behavior still needs installed-editor, runtime, source-map,
+hot-reload, cross-platform, and long-session qualification. Use the shared type
+model across checker, editor, and project analysis; add focused regressions as
+each gap is addressed.
 
 Owner: core parser/semantic/checker/emitter and IDE queries; LSP and VS Code
 consume shared results. Each behavior lands with its own tests and documentation.

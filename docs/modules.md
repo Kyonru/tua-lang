@@ -138,8 +138,9 @@ local value: number = typed:get()
 The type import and generic arguments are erased. The runtime `require`
 provides the constructor; project type metadata carries the original class
 identity and substitutes imported fields and methods. Named, namespace, and
-re-exported aliases are supported. Generic class parameter bounds remain
-unsupported.
+re-exported aliases are supported. Generic class constructors may use one
+protocol bound per type parameter; imported and re-exported protocol identity is
+preserved across the module boundary.
 
 For a method contract shared by runtime modules, export the protocol from a
 regular `.tua` module and import it only where the class needs its type:

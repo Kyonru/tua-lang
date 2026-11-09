@@ -380,8 +380,9 @@ error because each extra argument must be a string.
 Generic type parameters are supported on aliases, free functions, and classes;
 functions and class constructors infer binders from direct call arguments.
 Generic classes can extend an applied generic parent. Protocols provide
-explicit method contracts; generic class parameter bounds are not currently
-supported.
+explicit method contracts, and generic functions/classes can constrain a type
+parameter to one protocol (`T: Updatable`). Generic alias binders also support
+completion, definition, references, and rename within their declaration.
 Arrays and dictionaries remain the built-in collection forms; use `any` at
 genuinely dynamic boundaries.
 

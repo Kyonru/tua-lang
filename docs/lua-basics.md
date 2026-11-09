@@ -155,8 +155,10 @@ control-flow blocks still use `end`. Tua uses `protocol` for explicit,
 method-only class contracts; it does not support JavaScript imports or
 `interface`, `async`, optional chaining, or Luau casts. Generic type parameters
 are available on type aliases (`type Box<T> = ...`) and free functions such as
-`local function identity<T>(value: T): T ... end`. Generic classes are not
-supported.
+`local function identity<T>(value: T): T ... end`, and generic classes. Function
+and constructor calls infer parameters from their values. See
+[Typing In Tua](typing.md#generic-type-aliases-and-functions) for the supported
+inference and compatibility rules.
 
 Continue with [Learn Tua](learn.md), [Modules And Imports](modules.md), or
 [Typing In Tua](typing.md). Types improve static feedback; they do not validate
