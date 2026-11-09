@@ -3141,6 +3141,12 @@ fn parse_completion_source(
     position: SourcePosition,
 ) -> Result<ParsedSource, Vec<Diagnostic>> {
     parse_tua_source(path, source.to_owned()).or_else(|_| {
+        if let Some(recovered) = crate::classes::source_with_closed_editor_declarations(source) {
+            if let Ok(parsed) = parse_tua_source(path, recovered) {
+                return Ok(parsed);
+            }
+        }
+
         let source = source_with_line_removed(source, position.line);
         let recovered =
             crate::classes::source_with_closed_editor_declarations(&source).unwrap_or(source);

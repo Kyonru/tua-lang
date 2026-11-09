@@ -580,6 +580,36 @@ end
 }
 
 #[test]
+fn protocol_names_complete_in_an_incomplete_class_implements_clause() {
+    let temp = TempProject::new("protocol-implements-type-completion");
+    let main_uri = temp.uri_for("src/main.tua");
+    let bound_uri = temp.uri_for("src/bound.tua");
+    let contracts = "export protocol Readable {\n  read(): nil\n}\n";
+    let valid = "import type { Readable } from \"./contracts\"\nfinal class Box implements Readable {\n  read(): nil {}\n}\n";
+    let incomplete = valid.replace("implements Readable", "implements Re");
+    let incomplete_bound =
+        "import type { Readable } from \"./contracts\"\nfinal class Box<\n  T: Re";
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/contracts.tua", contracts);
+
+    let mut server = TestServer::new();
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&main_uri, valid));
+    server.send(did_change(&main_uri, &incomplete, 2));
+    server.send(completion_request(
+        2,
+        &main_uri,
+        &incomplete,
+        "final class Box implements Re",
+    ));
+    server.send(did_open(&bound_uri, incomplete_bound));
+    server.send(completion_request(3, &bound_uri, incomplete_bound, "T: Re"));
+
+    assert_completion_labels(server.output(), 2, ["Readable"]);
+    assert_completion_labels(server.output(), 3, ["Readable"]);
+}
+
+#[test]
 fn generic_class_bound_completion_survives_incomplete_class_edits() {
     let temp = TempProject::new("generic-class-bound-incomplete-completion");
     let main_uri = temp.uri_for("src/main.tua");

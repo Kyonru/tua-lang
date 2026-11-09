@@ -267,6 +267,9 @@ exercises this language feature.
 
 While editing a protocol-typed method call, invoked completion keeps using the
 last valid project types until the incomplete edit is repaired.
+Protocol type names also complete in class `implements` clauses, including
+while the declaration header is still being written. Generic protocol bounds
+also complete in multiline class headers before the closing `>` is typed.
 
 Conformance does not add a wrapper, proxy, or generated interface table. The
 class still lowers to its normal Lua table and metatable, and a call through a

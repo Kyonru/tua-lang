@@ -911,6 +911,28 @@ final class Box<T -- binder comment with >
 }
 
 #[test]
+fn editor_recovery_closes_incomplete_multiline_generic_class_headers() {
+    let source = "protocol Readable { read(): nil }\nfinal class Box<\n  T: Re";
+    let recovered = crate::classes::source_with_closed_editor_declarations(source)
+        .expect("editor recovery should close the unfinished generic binder and class body");
+    assert!(recovered.starts_with(source));
+
+    let parsed = parse_tua_source("src/incomplete_bound.tua", &recovered)
+        .expect("the synthetic suffix should leave a queryable partial class");
+    assert_eq!(parsed.class_declarations.len(), 1);
+    assert_eq!(parsed.class_declarations[0].name, "Box");
+    assert_eq!(
+        parsed.class_declarations[0].generic_parameters[0]
+            .protocol_bound
+            .as_ref()
+            .map(|bound| bound.name.as_str()),
+        Some("Re")
+    );
+
+    assert!(parse_tua_source("src/incomplete_bound.tua", source).is_err());
+}
+
+#[test]
 fn class_array_fields_parse_after_lowering() {
     let source = r#"final class BeatManager {
   steps: number[]

@@ -88,6 +88,7 @@ function createProject(workspacePath) {
   const actorsPath = path.join(sourcePath, "actors.tua");
   const genericPath = path.join(sourcePath, "generic.tua");
   const genericClassPath = path.join(sourcePath, "generic_class.tua");
+  const headerCompletionPath = path.join(sourcePath, "header_completion.tua");
   const protocolStubsPath = path.join(sourcePath, "protocol_stubs.tua");
   const cyclicProtocolAPath = path.join(sourcePath, "cyclic_a.d.tua");
   const cyclicProtocolBPath = path.join(sourcePath, "cyclic_b.d.tua");
@@ -136,6 +137,16 @@ function createProject(workspacePath) {
       "  update(dt: number): nil {}",
       "  draw(): nil {}",
       "}",
+      "",
+    ].join("\n"),
+  );
+  fs.writeFileSync(
+    headerCompletionPath,
+    [
+      'import type { Updatable } from "./contracts"',
+      "final class HeaderProbe<",
+      "  T: Up",
+      "> implements Up",
       "",
     ].join("\n"),
   );
@@ -299,6 +310,7 @@ function createProject(workspacePath) {
     contractsPath,
     genericPath,
     genericClassPath,
+    headerCompletionPath,
     helperPath,
     mainPath,
     protocolStubsPath,

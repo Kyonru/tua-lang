@@ -366,6 +366,74 @@ fn completes_scoped_generic_alias_parameters_in_type_positions() {
 }
 
 #[test]
+fn completes_protocol_names_in_class_implements_clauses() {
+    let cases = [
+        (
+            "protocol Readable { read(): nil }\nfinal class Box implements Re",
+            "final class Box implements Re",
+            true,
+        ),
+        (
+            "protocol Readable { read(): nil }\nopen class Box implements Readable, Re",
+            "open class Box implements Readable, Re",
+            true,
+        ),
+        (
+            "protocol Readable { read(): nil }\nfinal class Box<\n  T\n> implements Re",
+            "> implements Re",
+            true,
+        ),
+        (
+            "protocol Readable { read(): nil }\nlocal implements = Re",
+            "local implements = Re",
+            false,
+        ),
+        (
+            "protocol Readable { read(): nil }\nfinal class Box -- implements Re",
+            "final class Box -- implements Re",
+            false,
+        ),
+        (
+            "protocol Readable { read(): nil }\nfinal class Box implementsRe",
+            "final class Box implementsRe",
+            false,
+        ),
+        (
+            "protocol Readable { read(): nil }\n--[[\nfinal class Box implements Re\n]]",
+            "final class Box implements Re",
+            false,
+        ),
+    ];
+
+    for (source, marker, should_complete) in cases {
+        let completions =
+            complete_tua_source("src/main.tua", source, position_after(source, marker))
+                .expect("protocol completion query should succeed");
+        let has_protocol = labels(&completions).contains(&"Readable".to_owned());
+        assert_eq!(
+            has_protocol,
+            should_complete,
+            "unexpected protocol completion for {source:?}: {:?}",
+            labels(&completions)
+        );
+    }
+}
+
+#[test]
+fn completes_protocol_names_in_incomplete_multiline_generic_bounds() {
+    let source = "protocol Readable { read(): nil }\nfinal class Box<\n  T: Re";
+    let position = position_after(source, "T: Re");
+    let completions = complete_tua_source("src/main.tua", source, position)
+        .expect("generic class bound completion should succeed before `>` is typed");
+
+    assert!(
+        labels(&completions).contains(&"Readable".to_owned()),
+        "protocol bounds should complete in an incomplete generic header: {:?}",
+        labels(&completions)
+    );
+}
+
+#[test]
 fn completes_generic_function_and_class_parameters_with_protocol_constraints() {
     let function_source = r#"protocol Updatable {
   update(dt: number): nil

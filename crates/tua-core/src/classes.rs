@@ -1258,6 +1258,11 @@ pub(crate) fn source_with_closed_editor_declarations(source: &str) -> Option<Str
     let mut recovered = source.to_owned();
     let mut changed = false;
 
+    if let Some(next) = source_with_closed_incomplete_class_header(&recovered) {
+        recovered = next;
+        changed = true;
+    }
+
     // An edit may leave an outer declaration and a nested declaration open.
     // Two passes cover the class and protocol declaration kinds without
     // repeatedly appending closers after they have been balanced.
@@ -1272,6 +1277,102 @@ pub(crate) fn source_with_closed_editor_declarations(source: &str) -> Option<Str
     }
 
     changed.then_some(recovered)
+}
+
+fn source_with_closed_incomplete_class_header(source: &str) -> Option<String> {
+    let trimmed_end = source.trim_end();
+    if trimmed_end.is_empty() {
+        return None;
+    }
+
+    let header = incomplete_class_header_prefix(trimmed_end, trimmed_end.len())?;
+    let header_start = trimmed_end.len() - header.len();
+
+    let suffix = if let Some(relative_open) = header.find('<') {
+        let open = header_start + relative_open;
+        match matching_delimiter(trimmed_end, open, '<', '>') {
+            Ok(_) => " {}".to_owned(),
+            Err(depth) if (1..=32).contains(&depth) => {
+                format!("{} {{}}", ">".repeat(depth))
+            }
+            Err(_) => return None,
+        }
+    } else {
+        " {}".to_owned()
+    };
+
+    Some(format!("{source}{suffix}"))
+}
+
+pub(crate) fn editor_incomplete_class_header_prefix(
+    source: &str,
+    position: SourcePosition,
+) -> Option<&str> {
+    let cursor = crate::source_text::byte_for_position(source, position)?;
+    incomplete_class_header_prefix(source, cursor)
+}
+
+fn incomplete_class_header_prefix(source: &str, cursor: usize) -> Option<&str> {
+    let mut index = 0usize;
+    let mut brace_depth = 0usize;
+    let mut block_stack = Vec::new();
+    let mut candidate = None;
+
+    while index < cursor {
+        if source[index..].starts_with("--") {
+            let end = consume_comment(source, index);
+            if end > cursor {
+                return None;
+            }
+            index = end;
+            continue;
+        }
+
+        if let Some(end) = consume_string_literal(source, index) {
+            if end > cursor {
+                return None;
+            }
+            index = end;
+            continue;
+        }
+
+        if let Some((word, start, end)) = take_identifier(source, index) {
+            if brace_depth == 0 && block_stack.is_empty() && starts_keyword(source, start, "class")
+            {
+                let line_start = source[..start].rfind('\n').map_or(0, |offset| offset + 1);
+                let line_prefix = source[line_start..start].trim();
+                if line_prefix.is_empty() || line_prefix == "final" || line_prefix == "open" {
+                    candidate = Some(start);
+                }
+            }
+            update_lua_block_stack(&word, &mut block_stack);
+            index = end;
+            continue;
+        }
+
+        match source.as_bytes()[index] {
+            b'{' => brace_depth += 1,
+            b'}' => brace_depth = brace_depth.saturating_sub(1),
+            _ => {}
+        }
+        index += next_char_len(source, index);
+    }
+
+    let start = candidate?;
+    let header = &source[start..cursor];
+    if header.contains('{')
+        || header.lines().skip(1).any(|line| {
+            let line = line.trim();
+            line.is_empty()
+                || line.starts_with("local ")
+                || line.starts_with("return ")
+                || line.starts_with("function ")
+                || line.starts_with("if ")
+        })
+    {
+        return None;
+    }
+    Some(header)
 }
 
 fn class_blocks(source: &str, protocols: &[ProtocolDeclaration]) -> Vec<ClassBlock> {

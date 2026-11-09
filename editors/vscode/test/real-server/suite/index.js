@@ -58,6 +58,23 @@ async function run() {
     protocol: await expectCompletion(document, "value:update(dt)", "value:up", "update"),
   };
 
+  const headerCompletionDocument = await vscode.workspace.openTextDocument(
+    fixtures.headerCompletionPath,
+  );
+  await vscode.window.showTextDocument(headerCompletionDocument, { preview: false });
+  const genericBoundCompletion = await expectCompletion(
+    headerCompletionDocument,
+    "T: Up",
+    "T: Up",
+    "Updatable",
+  );
+  const implementsCompletion = await expectCompletion(
+    headerCompletionDocument,
+    "> implements Up",
+    "> implements Up",
+    "Updatable",
+  );
+
   const genericFieldPosition = positionAfter(document, "score.value", "score.");
   const genericFieldHover = await retry(
     () =>
@@ -769,6 +786,8 @@ async function run() {
     `REAL_SERVER_EVIDENCE ${JSON.stringify({
       cacheStats: true,
       completions: completionEvidence,
+      genericBoundCompletion,
+      implementsCompletion,
       definitions: definitions.length,
       diagnostics: errors.length,
       protocolDefinition: protocolDefinitions.some((location) => location.uri.fsPath === fixtures.contractsPath),

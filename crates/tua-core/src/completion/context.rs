@@ -65,7 +65,109 @@ pub(crate) fn completion_context(
         .or_else(|| string_argument_context(source, line, cursor, position))
         .or_else(|| field_access_context(line, cursor, position))
         .or_else(|| type_annotation_context(line, cursor, position))
+        .or_else(|| class_implements_type_context(source, position))
+        .or_else(|| class_generic_bound_type_context(source, position))
         .or_else(|| identifier_context(line, cursor, position))
+}
+
+pub(super) fn class_implements_type_context(
+    source: &str,
+    position: SourcePosition,
+) -> Option<CompletionContext> {
+    if !looks_like_class_type_header_context(source, position) {
+        return None;
+    }
+    let header = crate::classes::editor_incomplete_class_header_prefix(source, position)?;
+    let class_keyword_end = header.find("class ")? + "class ".len();
+    let after_class_name = &header[class_keyword_end..];
+    let implements_start = after_class_name.rfind("implements")?;
+    let before_implements = &after_class_name[..implements_start];
+    if before_implements.trim().is_empty()
+        || before_implements
+            .chars()
+            .last()
+            .is_some_and(crate::source_text::is_identifier_continue_char)
+    {
+        return None;
+    }
+    let implements_end = implements_start + "implements".len();
+    let protocol_prefix = &after_class_name[implements_end..];
+    if protocol_prefix
+        .chars()
+        .next()
+        .is_some_and(crate::source_text::is_identifier_continue_char)
+        || protocol_prefix.contains("--")
+        || after_class_name[..implements_start]
+            .rsplit('\n')
+            .next()
+            .is_some_and(|line| line.contains("--"))
+        || protocol_prefix.chars().any(|character| {
+            !(character.is_ascii_alphanumeric()
+                || character == '_'
+                || character == '.'
+                || character == ','
+                || character.is_whitespace())
+        })
+    {
+        return None;
+    }
+
+    let prefix_start = reverse_identifier_start(protocol_prefix, protocol_prefix.len());
+    Some(CompletionContext::TypeAnnotation {
+        prefix: protocol_prefix[prefix_start..].to_owned(),
+        position,
+    })
+}
+
+pub(super) fn class_generic_bound_type_context(
+    source: &str,
+    position: SourcePosition,
+) -> Option<CompletionContext> {
+    if !looks_like_class_type_header_context(source, position) {
+        return None;
+    }
+    let header = crate::classes::editor_incomplete_class_header_prefix(source, position)?;
+    let generic_start = header.find('<')?;
+    if header[generic_start..].contains('>') {
+        return None;
+    }
+    let bound_colon = header.rfind(':')?;
+    if bound_colon <= generic_start || header[generic_start..].contains("--") {
+        return None;
+    }
+    let typed_prefix = &header[bound_colon + 1..];
+    if !typed_prefix.chars().all(|character| {
+        character.is_ascii_alphanumeric()
+            || character == '_'
+            || character == '.'
+            || character.is_whitespace()
+    }) {
+        return None;
+    }
+    let prefix_start = reverse_identifier_start(typed_prefix, typed_prefix.len());
+    Some(CompletionContext::TypeAnnotation {
+        prefix: typed_prefix[prefix_start..].to_owned(),
+        position,
+    })
+}
+
+fn looks_like_class_type_header_context(source: &str, position: SourcePosition) -> bool {
+    let Some(cursor) = crate::source_text::byte_for_position(source, position) else {
+        return false;
+    };
+    let mut saw_class = false;
+    let mut saw_type_marker = false;
+    for line in source[..cursor].rsplit('\n').take(64) {
+        saw_class |= line.contains("class ");
+        saw_type_marker |= line.contains("implements") || line.contains(':');
+        if saw_class && saw_type_marker {
+            return true;
+        }
+        if line.trim().is_empty() && saw_class {
+            return false;
+        }
+    }
+    false
 }
 
 pub(crate) fn string_argument_is_method(source: &str, position: SourcePosition) -> bool {

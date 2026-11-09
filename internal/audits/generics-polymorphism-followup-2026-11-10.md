@@ -4,17 +4,19 @@
 
 The generic/protocol implementation plan is substantially implemented, and the
 existing suite contains broad same-file, cross-file, editor, and runtime
-coverage. This follow-up found three defects: comments inside generic class
+coverage. This follow-up found four defects: comments inside generic class
 headers were discarded by Lua emission; deeply nested native array type suffixes
-bypassed the configured parser depth limit; and protocol-bounded generic class
-members disappeared from completion during an incomplete edit. All three are
-fixed and have regressions.
+bypassed the configured parser depth limit; protocol-bounded generic class
+members disappeared from completion during an incomplete edit; and protocol
+names were missing from incomplete class-header completion. All four are fixed
+and have regressions.
 
 The previously identified recursive protocol identity case is now covered by
 same-file and cross-file conformance, hover, and completion tests. The full
-`tua-core` suite passes these cases. This audit did not find a new failure in
-generic substitution, protocol bounds, import/re-export propagation, or the
-tested editor surfaces.
+`tua-core` suite passes these cases. The follow-up found one additional class-
+header completion gap (GP-FU-004 below), now fixed. It did not find another
+failure in generic substitution, protocol bounds, import/re-export propagation,
+or the remaining tested editor surfaces.
 
 ## Finding
 
@@ -135,6 +137,48 @@ tested editor surfaces.
   `crates/tua-core/src/analysis/tests.rs`, `crates/tua-core/src/classes.rs`, and
   `crates/tua-lsp/src/server/tests/completion.rs`.
 
+### GP-FU-004 — Protocol types were missing from class-header completion
+
+- **Category:** editor completion / incomplete-source recovery
+- **Severity:** Medium
+- **Status:** Fixed and verified
+- **Affected workflow:** selecting a protocol after `implements`, or a protocol
+  bound inside a multiline generic class header
+- **Reproduction:**
+
+  ```tua
+  protocol Readable { read(): nil }
+  final class Box<
+    T: Re
+  ```
+
+  A second reproduction is `final class Box implements Re` after importing
+  `Readable` from another file. Before the fix, these completion requests
+  offered unrelated identifiers or generated LOVE types and omitted
+  `Readable`.
+- **Cause:** completion recognized ordinary annotations and member accesses,
+  but not protocol-name positions in class headers. Its line-removal recovery
+  also left earlier lines of an incomplete generic header in place, so parsing
+  fell back to lossy identifier completion.
+- **Fix:** shared editor-only class recovery now appends the missing `>` and
+  empty class body for an incomplete generic class header, preserving the
+  original source for diagnostics and builds. Completion recognizes protocol
+  names after `implements` and inside unfinished generic bounds, including
+  multiline headers. The context check excludes ordinary Lua identifiers and
+  comment text.
+- **Regression coverage:** core completion tests cover same-line and multiline
+  conformance lists, local protocol names, unfinished generic bounds, and false
+  positives in ordinary identifiers/comments. An LSP regression verifies the
+  imported protocol case. A parser test verifies
+  the recovered class retains its partial bound while the original source
+  remains invalid. An in-process LSP test covers imported protocol completion
+  after an unsaved conformance edit and in a fresh incomplete multiline generic
+  bound.
+- **Files:** `crates/tua-core/src/classes.rs`,
+  `crates/tua-core/src/completion/context.rs`,
+  `crates/tua-core/src/completion/mod.rs`, core/LSP completion and parser tests,
+  and `docs/classes.md`.
+
 The same follow-up adds exact generic alias expansion work-limit coverage at
 4,096 and 4,097 applications, per-character recovery coverage for protocol and
 generic class headers, a stale dependent-diagnostic cancellation case, and
@@ -155,6 +199,7 @@ combinations and broader cancellation permutations remain open.
 | Same-file recursive protocols | Exercised | `same_file_recursive_protocol_signatures_keep_conformance_and_editor_types` and `same_file_recursive_protocol_method_returns_keep_nominal_identity` |
 | Cross-file recursive protocols | Exercised | `cyclic_imported_protocol_signatures_preserve_conformance_identity` and imported recursive method-return identity coverage |
 | Completion/hover agreement for recursive protocols | Exercised | Core analysis tests assert nominal hover and completion members; extension real-server suite covers generic/protocol editor queries |
+| Protocol type completion in class headers | Exercised | Core completion covers `implements` and incomplete multiline generic bounds; in-process LSP verifies imported protocol suggestions after edits |
 | Incomplete generic class completion | Exercised | Core snapshot and LSP edit-sequence regressions verify protocol-bound members remain suggested after an unclosed-class edit |
 | Parser depth and malformed edits | Exercised | Exact 64/65 native array depth boundary and protected comment/string cases. UTF-8 prefix tests include direct assertions that complete protocol and generic class headers recover before their first members; conditional prefix-loop assertions do not claim every malformed prefix recovers. |
 | Formatter and comment round-trip | Exercised | Generic function-bound formatter regression plus class/function bound Lua-emission regressions |
@@ -238,6 +283,17 @@ limit, separate from this scoped protocol/generic implementation.
 - `RUST_MIN_STACK=16777216 cargo test -p tua-core` — passed: 1,899 passed, 1 ignored (1,900 tests total), including the explicit class-only recovery placeholder regression and generic completion in both a new invalid buffer and after editing a valid document.
 - `RUST_MIN_STACK=16777216 cargo test -p tua-lsp` — passed: 434 tests, including imported LuaDoc-generic hover, instantiated signature, result hover, member completion, and navigation to the `.lua` declaration.
 - `RUST_MIN_STACK=16777216 cargo test -p tua-lsp rapid_protocol_and_reexport_edits_do_not_publish_stale_conformance_errors` — passed; exercises an incompatible contract, renamed re-export, restored contract, and restored re-export before draining diagnostics.
+- `RUST_MIN_STACK=16777216 cargo test -p tua-core completes_protocol_names_in_class_implements_clauses` — passed; checks valid/incomplete same-line and multiline class headers plus ordinary-identifier and comment false positives.
+- `RUST_MIN_STACK=16777216 cargo test -p tua-core completes_protocol_names_in_incomplete_multiline_generic_bounds` — passed; checks protocol suggestions before the generic list's `>` is typed.
+- `RUST_MIN_STACK=16777216 cargo test -p tua-core editor_recovery_closes_incomplete_multiline_generic_class_headers` — passed; checks synthetic recovery preserves the partial class and bound while the original source remains invalid.
+- `RUST_MIN_STACK=16777216 cargo test -p tua-lsp protocol_names_complete_in_an_incomplete_class_implements_clause` — passed; checks imported protocol suggestions after an unsaved edit and in a fresh incomplete multiline generic bound.
+- `RUST_MIN_STACK=16777216 cargo test -p tua-core` — passed after the recovery and completion fixes: 1,902 passed, 1 ignored.
+- `RUST_MIN_STACK=16777216 cargo test -p tua-lsp` — passed after the recovery and completion fixes: 436 passed.
+- `cargo clippy -p tua-core -p tua-lsp --all-targets -- -D warnings` — passed.
+- `make docs-build`, `cargo fmt --all -- --check`, and `git diff --check` — passed.
+- `make extension-package` with local loopback access — passed: 180/180 extension tests, zero npm vulnerabilities, and a new 0.7.0 VSIX containing the updated release server.
+- `TUA_TEST_VSIX=/Users/kyonru/Documents/projects/Experiments/tlua/editors/vscode/tua-0.7.0.vsix make extension-real-server-test` with local loopback access — passed against the packaged server; the installed VS Code suite now checks both imported protocol-name completion after `implements` and protocol-bound completion before the generic class header's closing `>`.
+- `unzip -tq editors/vscode/tua-0.7.0.vsix` — passed. The rebuilt 8.72 MB artifact has SHA-256 `e7dfc55e3de1383a80336f4b2c07d81753d3ec257d506b926377dcce915464e9`.
 - `cargo test -p tua-core declaration_library_drives_recursive_discriminated_table_completion` — passed; guards callback/table context outside class bodies.
 - `cargo test -p tua-core incomplete_line_recovery_uses_class_placeholder_only_inside_class_bodies` — passed; directly checks the class-only no-op placeholder and equal source length.
 - `cargo test -p tua-lsp generic_class_bound_completion_survives_incomplete_class_edits` — passed; actual in-process LSP requests cover fresh and edited documents.
@@ -248,7 +304,7 @@ limit, separate from this scoped protocol/generic implementation.
 - `env -u RUST_MIN_STACK -u RUST_TEST_THREADS make verify` — passed after the audit-only test additions, using the Makefile's 16 MiB default Rust test stack and local loopback access. This run included 1,899 core tests passed/1 ignored, 434 LSP tests, 180 VS Code tests, CLI/example/runtime/syntax tests, Clippy, version/schema/language checks, JSON validation, and diff checks.
 - `make extension-package` — passed after granting the loopback access required by the inspector tests; 180/180 extension tests passed, npm reported zero vulnerabilities, the release server was bundled, and the VSIX was built.
 - `TUA_TEST_VSIX="$(pwd)/editors/vscode/tua-0.7.0.vsix" make extension-real-server-test` — passed against the final packaged artifact. VS Code installed it into a disposable profile, launched its bundled real server, exercised the protocol/generic editor suite, and exited with code 0.
-- `unzip -tq editors/vscode/tua-0.7.0.vsix` — passed, no archive errors. Current artifact: 8.7 MB, SHA-256 `bb06d1f4ea32c108ec0df543e89123d290eb2489b4cc13c24fe7d87c934cd8ba`.
+- `unzip -tq editors/vscode/tua-0.7.0.vsix` — passed, no archive errors. Artifact at that verification point: 8.7 MB, SHA-256 `bb06d1f4ea32c108ec0df543e89123d290eb2489b4cc13c24fe7d87c934cd8ba`; see the newer package record below for the current build.
 
 The generated VSIX is a local macOS arm64 beta artifact. This follow-up does
 not claim cross-platform, LOVE/LuaJIT, visual, or long-session release
