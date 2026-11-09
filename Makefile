@@ -1,6 +1,7 @@
 .DEFAULT_GOAL := help
 
 CARGO ?= cargo
+RUST_MIN_STACK ?= 16777216
 NPM ?= npm
 NPX ?= npx
 CODE ?= code
@@ -49,7 +50,7 @@ fmt-check: ## Check Rust formatting without modifying files.
 
 .PHONY: test
 test: ## Run the full Rust test suite.
-	$(CARGO) test --workspace
+	RUST_MIN_STACK=$(RUST_MIN_STACK) $(CARGO) test --workspace
 
 .PHONY: generate-love-api
 generate-love-api: ## Regenerate all LOVE catalogs from the pinned love-api checkout.
