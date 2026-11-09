@@ -21,6 +21,10 @@ language or editor behavior, and migration notes call out those changes.
   exact `TL1004` arity diagnostics, and erased Lua output. Exported generic
   instance aliases preserve class identity and member types across named,
   namespace, and re-exported type imports alongside the runtime constructor.
+- Protocol bounds on generic function and class parameters, including imported
+  and re-exported protocol identity, protocol-member completion in bounded
+  generic bodies, and explicit-conformance checks during inference and type
+  application.
 - Generic function values specialize from known callback parameter and return
   signatures; callback-only inference for a generic callee stays ambiguous.
 - Unbounded LuaDoc `---@generic T` function binders across parameter, vararg,

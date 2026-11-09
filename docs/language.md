@@ -410,8 +410,11 @@ callback-only inference are not. These ambiguous calls report `TL1015` rather
 than silently widening to `any`. Generic functions, aliases, and local generic
 class applications erase from Lua output. Generic class constructors infer
 their parameters from supplied arguments, and fields and methods expose
-substituted types. Generic class imports, generic inheritance, generic
-protocols, defaults, packs, and protocol bounds remain unsupported. Recursive
+substituted types. Generic classes can be shared through imported generic
+instance aliases and can extend applied generic parents. Generic protocols,
+defaults, packs, and compound protocol bounds remain unsupported. A generic
+parameter may have one explicit protocol bound such as `T: Updatable`.
+Recursive
 alias expansion is bounded; changing the arguments on each recursive step may
 leave an unresolved application without a dedicated recursion diagnostic.
 

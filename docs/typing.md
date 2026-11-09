@@ -169,8 +169,7 @@ keep the parent arguments. To share a class, export `type BoxInstance<T> =
 Box<T>` beside the runtime class value, then pair `import type` with a runtime
 `require`; constructor inference and imported member types preserve the
 producer's class identity. Generic class arguments are erased before Lua
-emission. Generic class parameter bounds and protocol constraints remain
-unsupported.
+emission.
 
 ### Protocol Contracts
 
@@ -179,6 +178,12 @@ Unlike structural table aliases, a class must declare `implements` before its
 instances can be assigned to that protocol type. Protocol-typed values expose
 the declared methods; they do not expose extra fields from a concrete class or
 support an implicit downcast.
+
+Generic functions and classes can use one protocol bound, such as
+`T: Updatable`. The bound makes protocol methods available through `T` and
+requires inferred or explicitly applied class arguments to come from a class
+that declares `implements Updatable`. This is nominal conformance, not
+structural matching. See [Generic Protocol Bounds](classes.md#generic-protocol-bounds).
 
 When a generic function value is passed to a parameter with a known callback
 signature, Tua specializes it from that expected parameter and return type. For

@@ -55,7 +55,6 @@ be declared locally or shared through an exported generic instance alias; their
 constructor arguments infer the instance type, and fields and methods
 substitute the class parameters. Static members, private members,
 getters/setters, mixins, and multiple inheritance are not currently supported.
-Protocol bounds on generic class parameters remain in progress.
 
 ### Generic Classes
 
@@ -133,6 +132,35 @@ subclass. Unrelated objects can join a shared loop through explicitly typed
 table/function adapters that bind their receivers. Tua also supports
 method-only [protocol contracts](#protocol-contracts) for explicitly conforming
 classes. Abstract classes and methods are not supported.
+
+## Generic Protocol Bounds
+
+A generic function or class can require one protocol for a type parameter:
+
+```tua
+protocol Updatable {
+  update(dt: number): nil
+}
+
+function tick<T: Updatable>(value: T): T
+  value:update(0.016)
+  return value
+end
+
+final class Actor implements Updatable {
+  update(dt: number): nil { return nil }
+}
+
+local actor = tick(Actor.new())
+```
+
+The bound exposes the protocol methods inside the generic body and constrains
+inference at calls and generic class applications. A class must explicitly
+`implements` the protocol; a same-shaped class does not conform automatically.
+Imported and re-exported protocol names resolve by declaration identity, so a
+consumer does not need to import the bound protocol separately. `any` remains
+an unchecked dynamic escape hatch. A parameter currently accepts one protocol
+name as its bound; compound bounds and generic protocols are not supported.
 
 ## Protocol Contracts
 
