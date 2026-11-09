@@ -65,6 +65,7 @@ pub struct TypeContext {
     nominal_aliases: BTreeSet<String>,
     nominal_alias_supertypes: BTreeMap<String, BTreeSet<String>>,
     nominal_protocols: BTreeSet<String>,
+    protocol_identities: BTreeMap<String, (std::path::PathBuf, String)>,
     protocol_conformance_identities: BTreeSet<(String, std::path::PathBuf, String)>,
     generic_protocol_bounds: HashMap<TypeParameterId, GenericProtocolBound>,
 }
@@ -182,6 +183,18 @@ impl TypeContext {
         let name = name.into();
         self.nominal_aliases.insert(name.clone());
         self.nominal_protocols.insert(name);
+    }
+
+    pub(crate) fn insert_protocol_identity(
+        &mut self,
+        visible_name: impl Into<String>,
+        module_path: impl Into<std::path::PathBuf>,
+        protocol_name: impl Into<String>,
+    ) {
+        self.protocol_identities.insert(
+            visible_name.into(),
+            (module_path.into(), protocol_name.into()),
+        );
     }
 
     pub(crate) fn insert_protocol_conformance_identity(
@@ -359,6 +372,17 @@ impl TypeContext {
             .or_else(|| self.generic_class_bound_failure(target))
         {
             return Err(failure);
+        }
+
+        if let Type::Alias(protocol_name) = target {
+            if self.nominal_protocols.contains(protocol_name)
+                && self
+                    .protocol_identities
+                    .get(protocol_name)
+                    .is_some_and(|identity| self.explicitly_conforms_to_protocol(source, identity))
+            {
+                return Ok(());
+            }
         }
 
         match (source, target) {

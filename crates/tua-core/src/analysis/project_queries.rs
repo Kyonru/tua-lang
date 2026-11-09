@@ -546,6 +546,11 @@ impl AnalysisSnapshot {
                 &self.module_graph,
                 &self.type_database,
             ))
+            .with_protocol_identities(database::project_imported_protocol_identities(
+                parsed,
+                &self.module_graph,
+                &self.type_database,
+            ))
             .with_class_protocol_conformances(
                 self.project_imported_class_protocol_conformances(parsed),
             )

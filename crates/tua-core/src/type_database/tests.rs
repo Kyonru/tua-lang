@@ -427,6 +427,91 @@ export protocol Consumer {
 }
 
 #[test]
+fn namespace_protocol_reexports_preserve_the_original_contract_identity() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+import type Relay from "./relay"
+final class Valid implements Relay.Updatable {
+  update(dt: number): nil {}
+}
+final class Missing implements Relay.Updatable {
+}
+-- file: src/relay.d.tua
+import type { Updatable } from "./contracts"
+export type { Updatable } from "./contracts"
+-- file: src/contracts.d.tua
+export protocol Updatable {
+  update(dt: number): nil
+}
+"#,
+    );
+    let host = host_from_fixture(&fixture);
+    let snapshot = host.snapshot();
+    let binding = snapshot
+        .type_database()
+        .resolve_type_name(snapshot.module_graph(), "src/main.tua", "Relay.Updatable")
+        .expect("a namespace should expose a re-exported protocol");
+    assert_eq!(binding.name, "Updatable");
+    assert_eq!(binding.module_path, PathBuf::from("src/contracts.d.tua"));
+
+    let diagnostics = snapshot.diagnostics("src/main.tua");
+    assert!(
+        diagnostics.iter().any(|diagnostic| {
+            diagnostic.message.contains("Missing")
+                && diagnostic.message.contains("missing method `update`")
+        }),
+        "the namespace re-export should retain the source protocol contract: {diagnostics:#?}"
+    );
+    assert!(
+        !diagnostics.iter().any(|diagnostic| {
+            diagnostic.message.contains("Valid")
+                && diagnostic.message.contains("does not satisfy protocol")
+        }),
+        "a valid namespace re-export implementation should remain accepted: {diagnostics:#?}"
+    );
+}
+
+#[test]
+fn cyclic_protocol_type_imports_resolve_without_losing_conformance() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+import type { A } from "./a"
+import type { B } from "./b"
+final class Handler implements A {
+  accept(value: B): nil {}
+}
+local _handler: A = Handler.new()
+-- file: src/a.d.tua
+import type { B } from "./b"
+export protocol A {
+  accept(value: B): nil
+}
+-- file: src/b.d.tua
+import type { A } from "./a"
+export protocol B {
+  accept(value: A): nil
+}
+"#,
+    );
+    let host = host_from_fixture(&fixture);
+    let snapshot = host.snapshot();
+
+    let diagnostics = snapshot.diagnostics("src/main.tua");
+    assert!(
+        diagnostics.is_empty(),
+        "mutually-referential type-only protocol contracts should resolve deterministically: {diagnostics:#?}"
+    );
+    assert!(snapshot
+        .type_database()
+        .resolve_type_name(snapshot.module_graph(), "src/main.tua", "A")
+        .is_some());
+    assert!(snapshot
+        .type_database()
+        .resolve_type_name(snapshot.module_graph(), "src/main.tua", "B")
+        .is_some());
+}
+
+#[test]
 fn declaration_modules_support_named_imports_aliases_and_reexports() {
     let fixture = Fixture::parse(
         r#"-- file: src/main.tua

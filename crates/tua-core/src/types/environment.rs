@@ -51,6 +51,7 @@ pub struct TypeEnvironment {
     class_parents: BTreeMap<String, String>,
     class_protocols: BTreeMap<String, Vec<String>>,
     protocol_names: BTreeSet<String>,
+    protocol_identities: BTreeMap<String, (PathBuf, String)>,
     protocol_conformance_identities: BTreeSet<(String, PathBuf, String)>,
     locals: Arc<BTreeMap<String, Type>>,
     local_docs: BTreeMap<String, String>,
@@ -695,6 +696,13 @@ impl TypeEnvironment {
         for protocol in &self.protocol_names {
             context.insert_nominal_protocol(protocol);
         }
+        for (name, (module_path, protocol_name)) in &self.protocol_identities {
+            context.insert_protocol_identity(
+                name.clone(),
+                module_path.clone(),
+                protocol_name.clone(),
+            );
+        }
 
         // `Vec2` is a runtime BrineVector value, not merely any table with x
         // and y fields. Keeping the built-in alias nominal prevents a plain
@@ -810,6 +818,18 @@ impl TypeEnvironment {
         protocols: impl IntoIterator<Item = String>,
     ) -> Self {
         self.protocol_names.extend(protocols);
+        self
+    }
+
+    pub(crate) fn with_protocol_identities(
+        mut self,
+        identities: impl IntoIterator<Item = (String, PathBuf, String)>,
+    ) -> Self {
+        self.protocol_identities.extend(
+            identities
+                .into_iter()
+                .map(|(name, module_path, protocol_name)| (name, (module_path, protocol_name))),
+        );
         self
     }
 
@@ -1960,6 +1980,7 @@ pub(crate) fn build_type_environment_with_domain_registry(
             .iter()
             .map(|protocol| protocol.name.clone())
             .collect(),
+        protocol_identities: BTreeMap::new(),
         protocol_conformance_identities: BTreeSet::new(),
         locals,
         local_docs,

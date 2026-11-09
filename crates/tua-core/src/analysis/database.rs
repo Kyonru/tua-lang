@@ -1018,3 +1018,18 @@ pub(super) fn project_imported_protocol_names(
         .filter(|name| type_database.is_protocol_type(module_graph, &parsed.path, name))
         .collect()
 }
+
+pub(super) fn project_imported_protocol_identities(
+    parsed: &ParsedSource,
+    module_graph: &ModuleGraph,
+    type_database: &ProjectTypeDatabase,
+) -> Vec<(String, PathBuf, String)> {
+    referenced_type_names(parsed)
+        .into_iter()
+        .filter_map(|name| {
+            let (module_path, protocol_name) =
+                type_database.protocol_identity(module_graph, &parsed.path, &name)?;
+            Some((name, module_path, protocol_name))
+        })
+        .collect()
+}

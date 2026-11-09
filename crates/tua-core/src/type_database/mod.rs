@@ -306,7 +306,7 @@ impl ProjectTypeDatabase {
             .method_definition_at_position(path.as_ref(), position)
     }
 
-    fn protocol_identity(
+    pub(crate) fn protocol_identity(
         &self,
         module_graph: &ModuleGraph,
         source_path: impl AsRef<Path>,
@@ -573,6 +573,19 @@ impl ProjectTypeDatabase {
                 else {
                     return ty.clone();
                 };
+                // Keep protocol references inside method contracts nominal.
+                // Expanding mutually-referential protocols here turns a
+                // finite `B` parameter into an arbitrarily truncated table,
+                // which then fails conformance against the same imported
+                // protocol alias. The top-level exported protocol binding is
+                // still resolved from its table; this preserves only nested
+                // protocol references as identities.
+                if self
+                    .protocols
+                    .contains_protocol(&binding.module_path, &binding.name)
+                {
+                    return Type::Alias(name.clone());
+                }
                 if binding.origin == ProjectTypeOrigin::Builtin {
                     return ty.clone();
                 }
