@@ -2,17 +2,17 @@
 
 Date: 2026-11-09  
 Audited base: `06c1065b940622eee2f179b4c7752ce496010b8c`
-Final code revision: `4f6f6842`; latest editor regression-test revision:
+Final code revision: `39d2dc4c`; latest editor regression-test revision:
 `f209b882`. The plan update is in the code fix commit. This report records
-verification after all three changes.
+verification after the parser and documentation audit fixes.
 Scope: `internal/generics-polymorphism-0.7.0.md`, protocol contracts, native generics, type inference, editor surfaces, Lua erasure, and the locally shareable VS Code extension.  
 Working tree before audit: clean. No unrelated project changes were present.
 
 ## Executive summary
 
-The documented 0.7.0 slice has strong compiler, project-analysis, LSP, runtime, and installed-editor coverage. This pass fixed five verified issues: growing recursive aliases now preserve the first repeated declaration symbolically; `protocol` and `implements` remain valid identifiers in ordinary and typed code instead of confusing grammar selection and protocol scanning; protocol conformance messages explain required-argument, vararg, and return-arity failures; editor queries now recover useful current-buffer semantics while a protocol body is still open; and project conformance diagnostics now link to the exact protocol requirement. The audit added regressions for these behaviors, generic multi-return checker/runtime coverage, and installed VS Code protocol implementation navigation, generic binder references, and rename coverage.
+The documented 0.7.0 slice has strong compiler, project-analysis, LSP, runtime, and installed-editor coverage. This pass fixed seven verified issues: growing recursive aliases now preserve the first repeated declaration symbolically; `protocol` and `implements` remain valid identifiers in ordinary and typed code instead of confusing grammar selection and protocol scanning; protocol conformance messages explain required-argument, vararg, and return-arity failures; editor queries now recover useful current-buffer semantics while a protocol body is still open; project conformance diagnostics now link to the exact protocol requirement; protocol headers treat comments as trivia and recovery locates braces lexically; and the language guide no longer says native generics are unsupported. The audit added regressions for these behaviors, generic multi-return checker/runtime coverage, and installed VS Code protocol implementation navigation, generic binder references, and rename coverage.
 
-The protocol/generic implementation is suitable for **manual beta testing on macOS arm64**. The latest packaged VSIX, including incomplete-protocol recovery and protocol-requirement diagnostic links, was installed into an isolated VS Code profile and passed the real-server suite using its bundled compiler. It is not qualified for a general 0.7.0 release: Linux, Windows, Intel Mac, LuaJIT/LOVE, source-map/hot-reload, visual screenshot review, and long-session checks remain open. The plan still records cross-module inherited conformance as unsupported because cross-module class inheritance itself is outside the current parser/lowering contract.
+The protocol/generic implementation is suitable for **manual beta testing on macOS arm64**. The latest packaged VSIX, including incomplete-protocol recovery, protocol-requirement diagnostic links, and commented protocol-header parsing, was installed into an isolated VS Code profile and passed the real-server suite using its bundled compiler. It is not qualified for a general 0.7.0 release: Linux, Windows, Intel Mac, LuaJIT/LOVE, source-map/hot-reload, visual screenshot review, and long-session checks remain open. The plan still records cross-module inherited conformance as unsupported because cross-module class inheritance itself is outside the current parser/lowering contract.
 
 Repeated local profile measurements (five cold samples, twenty warm and contention samples) on the 1,000-line fixture show cold completion p95 251.10 ms, warm completion p95 6.24 ms, cold hover p95 266.65 ms, warm hover p95 20.03 ms, and completion p95 under contention 153.03 ms. The 100-module project reports cold completion p95 116.04 ms, warm completion 0.40 ms, and warm hover 1.66 ms. These have no before/after baseline; cold latency and large-project contention remain performance opportunities.
 
@@ -173,6 +173,37 @@ Repeated local profile measurements (five cold samples, twenty warm and contenti
 - **Verification:** Core `imported_protocol_conformance_is_checked_in_the_implementing_module` asserts requirement path/span for both missing and incompatible members. LSP `imported_protocol_conformance_diagnostics_are_published_in_implementing_file` asserts the published URI, range, and message. `related_diagnostic_ranges_use_utf16_columns` checks non-BMP source positioning. Full `tua-core` and `tua-lsp` suites pass.
 - **Remaining edge:** The fast single-file diagnostic path does not carry cross-file related information; full project diagnostic refresh does. Broader local/inherited override related-range combinations remain covered only partially and are tracked in P2 follow-up.
 
+### AUDIT-011 — Protocol headers rejected comments and editor recovery searched comments for braces
+
+- **Category / severity:** Parser and editing workflow; Medium.
+- **Status:** Fixed in `39d2dc4c` (`fix: parse commented protocol headers`).
+- **Reproduction:**
+
+  ```tua
+  export -- public contract
+  protocol -- behavior name
+  Renderable -- contract body
+  {
+    render(): nil
+  }
+  ```
+
+  The declaration was missed because the scanner skipped whitespace but not Lua comments between header tokens. It then produced unrelated parser diagnostics. With the same header left unfinished, editor recovery also searched the raw source for the first `{`; a brace in any header comment made recovery fail before reaching the protocol body.
+- **Expected:** Comments act as trivia between declaration tokens. A complete declaration parses and erases normally; an incomplete one remains invalid to build/check but exposes partial semantics to editor queries, with comment text excluded from delimiter matching.
+- **Root cause:** Header scanning treated comments inconsistently, and recovery rediscovered the body brace with an unlexed substring search.
+- **Fix:** Consolidated protocol header parsing into `protocol_header_at`, which skips whitespace and line/long comments and retains the actual body-brace offset. The unclosed-declaration recovery path now uses that parsed offset.
+- **Verification:** `protocol_headers_allow_comments_between_declaration_tokens` asserts exported identity and method parsing, Lua erasure, strict rejection of an unfinished declaration, and recovery when comments contain braces. The protocol-focused core selection passes (47 tests), full core passes (1,864 passed, 1 ignored), full LSP passes (409), and Clippy/docs build pass.
+
+### AUDIT-012 — Language guide contradicted the implemented generic feature set
+
+- **Category / severity:** Documentation accuracy; Low.
+- **Status:** Fixed in `39d2dc4c` (`fix: parse commented protocol headers`).
+- **Evidence:** The Classes section of `docs/language.md` said generic type parameters such as `<T>` were unsupported, although the same guide and the implementation support generic aliases, free functions, and classes.
+- **Expected:** State supported generic forms and link to their limits, distinguishing deferred generic methods, generic protocols, and explicit call-site type arguments.
+- **Root cause:** A paragraph predating generic implementation remained after the newer generic-language sections were added.
+- **Fix:** Replaced the stale statement with the supported forms and a link to the typing guide; added a changelog entry.
+- **Verification:** `make docs-build` passes, and the owning classes/language guides now agree with the milestone table and `docs/typing.md`.
+
 ## Coverage matrix
 
 Status key: **Exercised** means a focused regression or real request/runtime test ran; **Inspected** means code/docs were reviewed but not independently executed for that specific edge; **Pending** means no qualifying environment or scenario was available.
@@ -180,7 +211,7 @@ Status key: **Exercised** means a focused regression or real request/runtime tes
 | Plan area | Status | Evidence and limits |
 | --- | --- | --- |
 | P0 protocol syntax, nominality, colon receiver, mutable views | Exercised | Positive/negative assignments, colon calls, explicit dot/extracted receivers, class array mutation safety, nominal identity, inherited overrides, and contextual identifier compatibility are covered. |
-| P1 parsing, identities, spans, formatting and erasure | Exercised, partial | Local/exported/multiline protocol headers, comments, spans, formatting, diagnostics, Lua erasure, contextual words, and editor recovery of unclosed protocol bodies pass. Current-buffer queries retain partial declarations while dependency indexes keep last-good contracts. Broader malformed-edit recovery remains incomplete. |
+| P1 parsing, identities, spans, formatting and erasure | Exercised, partial | Local/exported/multiline and comment-separated protocol headers, comments containing braces during recovery, spans, formatting, diagnostics, Lua erasure, contextual words, and editor recovery of unclosed protocol bodies pass. Current-buffer queries retain partial declarations while dependency indexes keep last-good contracts. Broader malformed-edit recovery remains incomplete. |
 | P2 conformance, variance, multiple obligations, inheritance | Exercised, partial | Positive/negative local/imported conformance, inherited satisfaction/override, same-name obligations, optional parameters, varargs, multiple return slots/counts, variance, exact override/parameter/return locations, and related locations for imported protocol requirements are tested; uncommon override/range combinations remain open. |
 | P3 module identity, re-exports, cycles, edits | Exercised, partial | Named/namespace/re-export and cyclic protocol identity, saved/unsaved refresh tests pass; all dependency graph edit patterns are not exhausted. |
 | P4 completion, hover, signatures, navigation, rename | Exercised on macOS, partial | Core/LSP suites and installed VSIX cover protocol completion, hover, signature, definition, implementation navigation, references/rename; generic alias/class/function completion/hover/signatures, alias definition, and generic binder definition/references/rename. Cross-module alias completion/hover are covered by in-process LSP tests, not a dedicated VS Code scenario. |
@@ -202,10 +233,10 @@ All commands ran from repository root unless noted.
 | --- | --- |
 | `env CARGO_INCREMENTAL=0 RUST_MIN_STACK=16777216 RUST_TEST_THREADS=1 make ci-check` | Passed. Includes formatting, clippy, RustSec audit, all workspace tests, bundled example builds, editor regression smoke, version/schema/generated-doc checks, extension check (180 tests), docs build, benchmarks, and `git diff --check`. Two runtime-dependent tests were ignored by their existing gates. `cargo audit` reported one allowed unmaintained-crate warning: `paste 1.0.15`, RUSTSEC-2024-0436; no vulnerability was reported. |
 | `make extension-real-server-test` | Passed on installed local VS Code development extension after navigation/rename assertions were added. First runs exposed test cursor placement at the method token's end; changing it to an interior character made the provider test meaningful. |
-| `make extension-package` | Passed after `4f6f6842`. Package version synchronized at 0.7.0; extension check passed 180/180; npm audit reported 0 vulnerabilities; produced a 40-file, 8.65 MiB VSIX with bundled `tua` server. |
+| `make extension-package` | Passed after `39d2dc4c`. Package version synchronized at 0.7.0; extension check passed 180/180; npm audit reported 0 vulnerabilities; produced the exact tested 40-file, 8.65 MiB VSIX with bundled `tua` server. |
 | `env TUA_TEST_VSIX="$PWD/editors/vscode/tua-0.7.0.vsix" npm --prefix editors/vscode run test:vscode-real` | Passed against the exact latest packaged VSIX on macOS arm64 / VS Code 1.142.0. Installs into an isolated profile and starts the bundled server; asserts protocol implementation navigation, generic binder definition/references/rename (three rename edits), imported generic hovers/completions/signatures. A sandboxed Electron attempt terminated with SIGABRT; the approved local-host retry passed. |
-| `CARGO_INCREMENTAL=0 RUST_MIN_STACK=16777216 RUST_TEST_THREADS=1 cargo test -q -p tua-core` | Passed after the implementation change: 1,863 passed, 0 failed, 1 ignored. |
-| `CARGO_INCREMENTAL=0 RUST_MIN_STACK=16777216 RUST_TEST_THREADS=1 cargo test -p tua-core protocol_` | Passed: 45 protocol-focused core tests, including contextual identifiers, explicit receivers, inherited overrides, and optional/variadic/multiple-return contracts. |
+| `CARGO_INCREMENTAL=0 RUST_MIN_STACK=16777216 RUST_TEST_THREADS=1 cargo test -q -p tua-core` | Passed after the parser fix: 1,864 passed, 0 failed, 1 ignored. |
+| `CARGO_INCREMENTAL=0 RUST_MIN_STACK=16777216 RUST_TEST_THREADS=1 cargo test -p tua-core protocol_` | Passed: 47 protocol-focused core tests, including comment-separated headers and recovery when header comments contain braces, as well as contextual identifiers, explicit receivers, inherited overrides, and optional/variadic/multiple-return contracts. |
 | `CARGO_INCREMENTAL=0 RUST_MIN_STACK=16777216 RUST_TEST_THREADS=1 cargo test -p tua-lsp` | Passed after the implementation change: 409 passed, 0 failed. |
 | `CARGO_INCREMENTAL=0 RUST_MIN_STACK=16777216 RUST_TEST_THREADS=1 cargo test -p tua-cli` | Passed: 92 unit, 133 CLI integration, 3 gameplay, 1 helper defaults, 3 LOVE example, 1 LSP, and 1 Lua syntax integration tests; runtime-dependent LOVE execution tests use existing gates. |
 | `CARGO_INCREMENTAL=0 RUST_MIN_STACK=16777216 cargo clippy --workspace --all-targets -- -D warnings` | Passed. |
@@ -214,8 +245,7 @@ All commands ran from repository root unless noted.
 | `make docs-build` | Passed; standalone build reported no issues. |
 | `make extension-screenshots-check` | Passed: 5 linked PNGs and manifest hashes/dimensions valid. Manifest is from 0.6.0; no protocol/generic UI layout changed, so gallery recapture was not needed for this language-only work. Visual review remains a release-prep task. |
 | `unzip -tq editors/vscode/tua-0.7.0.vsix` | Passed: no archive errors. |
-| `shasum -a 256 editors/vscode/tua-0.7.0.vsix` | `65d5f06dfa7385c86e7094fa4a24e06c52ab5ab26233bdf2d0ebd24403284c95` (latest package, version 0.7.0). |
-| `unzip -tq editors/vscode/tua-0.7.0.vsix` | Passed: no archive errors. |
+| `shasum -a 256 editors/vscode/tua-0.7.0.vsix` | `6894fc3ac6462eeda68502bb07879d01b90c8a0eb1b6ee3a6bfd8f6e0146437b` (latest package, version 0.7.0). |
 | `cargo fmt --all -- --check`, `git diff --check` | Passed after implementation and test changes. |
 
 The VS Code/Electron tests require local host access for the editor and language server. A sandboxed first attempt terminated Electron with `SIGABRT`; rerunning with the approved local host access completed and passed. This was a test-environment restriction, not a Tua assertion failure.
