@@ -377,19 +377,30 @@ pub(crate) fn parse_protocol_declarations(
                     + source[body_cursor..line_end]
                         .find(method_name.as_str())
                         .unwrap_or(0);
-                methods.push(ProtocolMethod {
-                    name: method_name.clone(),
-                    parameters,
-                    return_type,
-                    span: SourceSpan {
-                        start: positions.position(method_start),
-                        end: positions.position(line_end),
-                    },
-                    name_span: SourceSpan {
-                        start: positions.position(method_start),
-                        end: positions.position(method_start + method_name.len()),
-                    },
-                });
+                if methods
+                    .iter()
+                    .any(|method: &ProtocolMethod| method.name == method_name)
+                {
+                    diagnostics.push(class_diagnostic(
+                        path,
+                        positions.position(method_start),
+                        format!("duplicate method `{method_name}` in protocol `{name}`"),
+                    ));
+                } else {
+                    methods.push(ProtocolMethod {
+                        name: method_name.clone(),
+                        parameters,
+                        return_type,
+                        span: SourceSpan {
+                            start: positions.position(method_start),
+                            end: positions.position(line_end),
+                        },
+                        name_span: SourceSpan {
+                            start: positions.position(method_start),
+                            end: positions.position(method_start + method_name.len()),
+                        },
+                    });
+                }
             } else {
                 diagnostics.push(class_diagnostic(path, positions.position(body_cursor), format!("invalid protocol member in `{name}`; expected `method(parameters): ReturnType`")));
             }

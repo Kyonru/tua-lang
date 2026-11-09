@@ -450,6 +450,27 @@ fn protocol_method_signatures_ignore_trailing_comments_but_keep_comment_text_in_
 }
 
 #[test]
+fn protocol_method_names_must_be_unique() {
+    let diagnostics = parse_tua_source(
+        "src/duplicate_protocol_method.tua",
+        r#"protocol Visitor {
+  visit(value: number): nil
+  visit(value: string): nil
+}
+"#,
+    )
+    .expect_err("protocol declarations do not currently define overload sets");
+
+    assert_eq!(diagnostics.len(), 1, "{diagnostics:#?}");
+    assert!(
+        diagnostics[0]
+            .message
+            .contains("duplicate method `visit` in protocol `Visitor`"),
+        "duplicate requirements should have a direct diagnostic: {diagnostics:#?}"
+    );
+}
+
+#[test]
 fn unclosed_protocol_reports_targeted_syntax_diagnostic() {
     let diagnostics = parse_tua_source(
         "src/unclosed.tua",
