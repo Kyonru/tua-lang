@@ -1789,7 +1789,13 @@ pub(crate) fn build_type_environment_with_domain_registry(
             };
             (method.name.clone(), TableField::required(signature))
         });
-        aliases.insert(protocol.name.clone(), Type::table(fields));
+        let mut table = super::TableShape::from_fields(fields);
+        table.mark_nominal(
+            crate::type_database::protocol_nominal_identity(&parsed.path, &protocol.name),
+            protocol.name.clone(),
+            std::iter::empty(),
+        );
+        aliases.insert(protocol.name.clone(), Type::Table(table));
     }
 
     for (name, ty) in builtin_aliases {

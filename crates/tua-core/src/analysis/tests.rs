@@ -6555,6 +6555,96 @@ end
 }
 
 #[test]
+fn same_file_recursive_protocol_method_returns_keep_nominal_identity() {
+    let fixture = Fixture::parse(
+        r#"protocol A {
+  next(): B
+}
+protocol B {
+  previous(): A
+}
+final class Value implements A, B {
+  next(): Self { return self }
+  previous(): Self { return self }
+}
+local a: A = Value.new()
+local <|target|>target: B = a:next()
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_file("src/main.tua", fixture.source("src/main.tua"));
+    let snapshot = host.snapshot();
+
+    let diagnostics = snapshot.diagnostics("src/main.tua");
+    assert!(
+        !diagnostics.iter().any(|diagnostic| {
+            diagnostic.code == Some(DiagnosticCode::TYPE_MISMATCH)
+                && diagnostic.message.contains("target")
+        }),
+        "a method returning a recursive protocol must retain its declared protocol identity: {diagnostics:#?}"
+    );
+    assert_eq!(
+        snapshot
+            .hover("src/main.tua", fixture.position("target"))
+            .expect("the assignment target should expose its protocol type")
+            .contents,
+        "local target: B"
+    );
+}
+
+#[test]
+fn imported_recursive_protocol_method_returns_keep_nominal_identity() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/a.tua
+import type { B } from "./b"
+export protocol A {
+  next(): B
+}
+-- file: src/b.tua
+import type { A } from "./a"
+export protocol B {
+  previous(): A
+}
+-- file: src/value.tua
+import type { A } from "./a"
+import type { B } from "./b"
+final class Value implements A, B {
+  next(): B { return self }
+  previous(): A { return self }
+}
+-- file: src/main.tua
+import type { A } from "./a"
+import type { B } from "./b"
+local Values = require("value")
+local a: A = Values.Value.new()
+local <|target|>target: B = a:next()
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+    let snapshot = host.snapshot();
+
+    let diagnostics = snapshot.diagnostics("src/main.tua");
+    assert!(
+        !diagnostics.iter().any(|diagnostic| {
+            diagnostic.code == Some(DiagnosticCode::TYPE_MISMATCH)
+                && diagnostic.message.contains("target")
+        }),
+        "an imported recursive protocol method must preserve its declared return identity: {diagnostics:#?}"
+    );
+    assert_eq!(
+        snapshot
+            .hover("src/main.tua", fixture.position("target"))
+            .expect("the assignment target should expose its imported protocol type")
+            .contents,
+        "local target: B"
+    );
+}
+
+#[test]
 fn imported_class_instances_keep_protocol_conformance_across_modules() {
     let fixture = Fixture::parse(
         r#"-- file: src/contracts.d.tua
