@@ -6369,6 +6369,25 @@ end
         }),
         "wrong protocol parameter types must remain rejected around a recursive protocol cycle: {diagnostics:#?}"
     );
+
+    host.set_file(
+        "src/a.tua",
+        "import type { B } from \"./b\"\nexport protocol A {\n  f(value: string): nil\n}\n",
+    );
+    let changed = host.snapshot();
+    let changed_diagnostics = changed.diagnostics("src/actors.tua");
+    assert!(
+        changed_diagnostics.iter().any(|diagnostic| {
+            diagnostic.message.contains("Actor.f")
+                && diagnostic.message.contains("does not satisfy protocol `A.f`")
+        }),
+        "editing a protocol in a cyclic import graph should refresh dependent conformance: {changed_diagnostics:#?}"
+    );
+    assert_eq!(
+        completion_labels(&changed.completion("src/actors.tua", fixture.position("complete"))),
+        ["g"],
+        "the other side of the cyclic graph should retain its completion surface"
+    );
 }
 
 #[test]
