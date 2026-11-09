@@ -37,6 +37,8 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Show imported generic alias declarations with their binders and body instead
+  of presenting them as a recursive zero-argument application.
 - Generic function inference keeps binders invariant when they occur inside
   mutable arrays, dictionaries, or record fields, preventing widened values
   from being written into narrower caller-owned containers. `TL1015` highlights
