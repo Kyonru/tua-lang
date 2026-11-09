@@ -673,10 +673,12 @@ compatible `---@alias ... fun(...)` annotations.
 
 Generic functions infer type arguments from direct calls; see the generic
 function section above. LuaDoc also supports unbounded `---@generic T` on
-documented functions. Same-module generic classes substitute class parameters
-through fields and methods; generic classes across imports, generic inheritance,
-independently generic methods, explicit call-site type arguments, and advanced
-LuaCATS generic features are not supported.
+documented functions. Generic class parameters substitute through fields and
+methods, and a class can extend an applied generic parent. To share a generic
+class across modules, export a generic instance alias and import that alias as
+a type. Extending a class declared in another module, independently generic
+methods, explicit call-site type arguments, and advanced LuaCATS generic
+features are not supported.
 
 ## LOVE Assets And Callbacks
 
