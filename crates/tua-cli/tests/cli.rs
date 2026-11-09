@@ -2546,6 +2546,86 @@ print(player.name)
 }
 
 #[test]
+fn traceback_remaps_runtime_errors_inside_generic_class_methods() {
+    let Some(lua) = working_lua_runtime() else {
+        eprintln!("skipping generic class traceback test; no Lua executable was found");
+        return;
+    };
+    let temp = TempDir::new("traceback-generic-class-method");
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).expect("failed to write config");
+    fs::create_dir_all(temp.path().join("src")).expect("failed to create source");
+    let source = r#"final class Box<T> {
+  value: T
+
+  init(value: T) {
+    self.value = value
+  }
+
+  fail(): nil {
+    error("generic class failure")
+  }
+}
+
+local box = Box.new("value")
+box:fail()
+"#;
+    fs::write(temp.path().join("src/main.tua"), source)
+        .expect("failed to write generic class source");
+
+    let build = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to build generic class source");
+    assert!(
+        build.status.success(),
+        "stdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&build.stdout),
+        String::from_utf8_lossy(&build.stderr)
+    );
+
+    let runtime = Command::new(lua)
+        .arg("build/main.lua")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to execute emitted Lua");
+    assert!(
+        !runtime.status.success(),
+        "the generic class method should raise its intentional runtime error"
+    );
+    let traceback = String::from_utf8(runtime.stderr).expect("Lua traceback should be UTF-8");
+    assert!(
+        traceback.contains("generic class failure"),
+        "unexpected runtime traceback:\n{traceback}"
+    );
+    fs::write(temp.path().join("generic-class-traceback.txt"), &traceback)
+        .expect("failed to save runtime traceback");
+
+    let remapped = tua()
+        .args([
+            "traceback",
+            "--maps",
+            "build",
+            "generic-class-traceback.txt",
+        ])
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to remap generic class traceback");
+    assert!(
+        remapped.status.success(),
+        "stdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&remapped.stdout),
+        String::from_utf8_lossy(&remapped.stderr)
+    );
+    let remapped = String::from_utf8(remapped.stdout)
+        .expect("remapped generic class traceback should be UTF-8");
+    assert!(
+        remapped.contains("src/main.tua:9 (generated build/main.lua:"),
+        "runtime failure should map to the error expression inside Box.fail:\n{remapped}"
+    );
+}
+
+#[test]
 fn build_lowers_static_imports_to_require_calls() {
     let temp = TempDir::new("build-relative-import");
 
