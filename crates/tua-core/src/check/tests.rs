@@ -2484,7 +2484,9 @@ open class Actor implements Updatable, Tickable {
 final class Panel extends Actor {
   override update(dt: number): nil {}
 }
-final class NarrowPanel extends Actor {
+open class Intermediate extends Actor {
+}
+final class NarrowPanel extends Intermediate {
   override update(dt: string): nil {}
 }
 "#;
@@ -2502,7 +2504,7 @@ final class NarrowPanel extends Actor {
             diagnostic.end_line,
             diagnostic.end_column
         ),
-        (14, 12, 14, 18),
+        (16, 12, 16, 18),
         "the inherited protocol violation should point at the overriding method name"
     );
     assert!(
@@ -2530,7 +2532,7 @@ final class NarrowPanel extends Actor {
         SourcePosition { line: 5, column: 9 }
     );
     assert!(
-        diagnostics.iter().all(|diagnostic| diagnostic.line == 14),
+        diagnostics.iter().all(|diagnostic| diagnostic.line == 16),
         "the valid inherited override must remain accepted: {diagnostics:#?}"
     );
 }

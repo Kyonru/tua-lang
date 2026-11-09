@@ -77,6 +77,13 @@ run: 711,266 executions, no crash, and observed peak RSS about 533 MiB. Its
 corpus contains 134 seed files; this run does not replace the targeted malformed
 edit and invalidation cases or establish a general resource bound.
 
+The core inherited-override regression now places an intermediate class
+between the protocol-conforming base and the incompatible leaf override. The
+focused `inherited_protocol_conformance_survives_overrides_and_reports_the_method_span`
+test passes and still asserts the leaf method's primary span and both related
+protocol requirements. This test-only extension does not change product code
+or the packaged VSIX.
+
 ## Audit findings
 
 ### AUDIT-001 — Generic multi-return behavior lacked a persistent acceptance test
