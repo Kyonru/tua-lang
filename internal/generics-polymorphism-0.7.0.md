@@ -585,12 +585,12 @@ generic-class/bound slices are implemented. Concrete and transitive generic
 parent specialization now shares the generic class instance path. Keep the actor/panel,
 inherited-method, incompatible-signature, cross-file, and generic alias fixtures
 as regression anchors. Remaining engineering work includes broader protocol
-header malformed-edit recovery, dependency churn combinations spanning
-multiple modules and repeated rename/delete/create cycles, and a
+header malformed-edit recovery, broader cancellation-race permutations, and a
 separate design for cross-module class inheritance. Delete/recreate recovery
-is now tested for each file in a three-module protocol re-export chain;
-rename combined with repeated delete/create still needs coverage. Cross-module class
-extension is not supported by the parser/lowering contract and remains an
+is tested for each file in a three-module protocol re-export chain, and a
+renamed dependency is tested through deletion, recreation, and compatible
+contract restoration. Cross-module class extension is not supported by the
+parser/lowering contract and remains an
 explicit feature gap unless designed as its own change. Real installed VS
 Code, LOVE/LuaJIT runtime, source-map/hot-reload, and cross-platform
 qualification remain release gates. Do not treat completion of G3 as
@@ -650,8 +650,9 @@ testing on this host, not general release qualification.
 
 A follow-up added a per-character-prefix recovery matrix for protocol and
 generic class headers, an unsaved contract change/restore cancellation test,
-and deletion/recreation coverage for each file in a three-module type
-re-export chain. These cases pass in the core and LSP suites. A test-driven
+deletion/recreation coverage for each file in a three-module type re-export
+chain, and rename followed by delete/recreate/contract restoration. These cases
+pass in the core and LSP suites. A test-driven
 review of the explicit complexity limit found that contiguous native `[]`
 suffixes were erased before structural-depth counting, allowing arbitrarily
 nested array types through the 64-level limit. The parser now checks native
