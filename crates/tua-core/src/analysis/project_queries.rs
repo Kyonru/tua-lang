@@ -551,6 +551,13 @@ impl AnalysisSnapshot {
                 &self.module_graph,
                 &self.type_database,
             ))
+            .with_protocol_method_definitions(
+                database::project_imported_protocol_method_definitions(
+                    parsed,
+                    &self.module_graph,
+                    &self.type_database,
+                ),
+            )
             .with_class_protocol_conformances(
                 self.project_imported_class_protocol_conformances(parsed),
             )

@@ -130,7 +130,8 @@ pub use definition::{
 };
 pub use deprecation::Deprecation;
 pub use diagnostic::{
-    format_diagnostics_for_cli, Diagnostic, DiagnosticCategory, DiagnosticCode, DiagnosticSeverity,
+    format_diagnostics_for_cli, Diagnostic, DiagnosticCategory, DiagnosticCode,
+    DiagnosticRelatedInformation, DiagnosticSeverity,
 };
 pub use document_highlight::{
     document_highlights_parsed_source, document_highlights_tua_source, DocumentHighlight,

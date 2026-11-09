@@ -308,6 +308,13 @@ impl fmt::Display for DiagnosticCode {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DiagnosticRelatedInformation {
+    pub file: PathBuf,
+    pub span: crate::SourceSpan,
+    pub message: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Diagnostic {
     pub file: PathBuf,
     pub line: usize,
@@ -317,6 +324,7 @@ pub struct Diagnostic {
     pub severity: DiagnosticSeverity,
     pub message: String,
     pub code: Option<DiagnosticCode>,
+    pub related_information: Vec<DiagnosticRelatedInformation>,
 }
 
 impl Diagnostic {
@@ -336,6 +344,7 @@ impl Diagnostic {
             severity,
             message: message.into(),
             code: None,
+            related_information: Vec::new(),
         }
     }
 
@@ -350,6 +359,11 @@ impl Diagnostic {
 
     pub fn with_code(mut self, code: DiagnosticCode) -> Self {
         self.code = Some(code);
+        self
+    }
+
+    pub fn with_related_information(mut self, information: DiagnosticRelatedInformation) -> Self {
+        self.related_information.push(information);
         self
     }
 

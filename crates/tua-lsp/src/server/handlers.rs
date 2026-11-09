@@ -1017,7 +1017,11 @@ impl LspServer {
             .into_iter()
             .map(|diagnostic| {
                 let source = self.analysis.document_text(uri).unwrap_or("");
-                lsp_diagnostic_from_core(diagnostic, source)
+                super::protocol::lsp_diagnostic_from_core_with_snapshot(
+                    diagnostic,
+                    source,
+                    Some(&snapshot),
+                )
             })
             .chain(self.shader_diagnostics(uri))
             .collect()
@@ -1265,7 +1269,11 @@ impl LspServer {
             .into_iter()
             .map(|diagnostic| {
                 let source = snapshot.source(&path_from_uri(uri)).unwrap_or("");
-                lsp_diagnostic_from_core(diagnostic, source)
+                super::protocol::lsp_diagnostic_from_core_with_snapshot(
+                    diagnostic,
+                    source,
+                    Some(&snapshot),
+                )
             })
             .chain(self.shader_diagnostics(uri))
             .collect()

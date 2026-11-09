@@ -52,6 +52,7 @@ pub struct TypeEnvironment {
     class_protocols: BTreeMap<String, Vec<String>>,
     protocol_names: BTreeSet<String>,
     protocol_identities: BTreeMap<String, (PathBuf, String)>,
+    protocol_method_definitions: BTreeMap<(PathBuf, String, String), crate::Definition>,
     protocol_conformance_identities: BTreeSet<(String, PathBuf, String)>,
     locals: Arc<BTreeMap<String, Type>>,
     local_docs: BTreeMap<String, String>,
@@ -835,6 +836,37 @@ impl TypeEnvironment {
                 .map(|(name, module_path, protocol_name)| (name, (module_path, protocol_name))),
         );
         self
+    }
+
+    pub(crate) fn with_protocol_method_definitions(
+        mut self,
+        definitions: impl IntoIterator<Item = (String, String, crate::Definition)>,
+    ) -> Self {
+        for (local_protocol, method, definition) in definitions {
+            let (path, name) = self
+                .protocol_identities
+                .get(&local_protocol)
+                .cloned()
+                .unwrap_or_else(|| {
+                    (
+                        crate::vfs::normalize_path(&self.path),
+                        local_protocol.clone(),
+                    )
+                });
+            self.protocol_method_definitions
+                .insert((path, name, method), definition);
+        }
+        self
+    }
+
+    pub(crate) fn protocol_method_definition(
+        &self,
+        protocol_name: &str,
+        method: &str,
+    ) -> Option<&crate::Definition> {
+        let (path, name) = self.protocol_identities.get(protocol_name)?;
+        self.protocol_method_definitions
+            .get(&(path.clone(), name.clone(), method.to_owned()))
     }
 
     pub(crate) fn with_protocol_conformance_identities(
@@ -2008,6 +2040,25 @@ pub(crate) fn build_type_environment_with_domain_registry(
                     ),
                 )
             })
+            .collect(),
+        protocol_method_definitions: parsed
+            .protocol_declarations
+            .iter()
+            .flat_map(|protocol| {
+                protocol.methods.iter().map(|method| {
+                    (
+                        crate::vfs::normalize_path(&parsed.path),
+                        protocol.name.clone(),
+                        method.name.clone(),
+                        crate::Definition {
+                            path: parsed.path.clone(),
+                            span: method.name_span,
+                            kind: crate::DefinitionKind::Function,
+                        },
+                    )
+                })
+            })
+            .map(|(path, protocol, method, definition)| ((path, protocol, method), definition))
             .collect(),
         protocol_conformance_identities: parsed
             .class_declarations

@@ -147,6 +147,13 @@ impl ProjectProtocolIndex {
         self.methods.get(identity)?.get(method)
     }
 
+    pub(super) fn method_definitions(
+        &self,
+        identity: &ProtocolIdentity,
+    ) -> Option<&BTreeMap<String, Definition>> {
+        self.methods.get(identity)
+    }
+
     pub(super) fn method_definition_at_position(
         &self,
         path: &Path,

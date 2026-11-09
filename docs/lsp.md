@@ -91,6 +91,9 @@ for further edits and requests. When imports or required modules can change a ty
 answer, the fast pass defers type mismatches to that project-aware pass rather
 than briefly showing a stale red squiggle.
 
+Cross-file protocol conformance diagnostics include related information linking
+the implementation error to the required method declaration.
+
 Open documents retain their last valid semantic facts while syntax is
 temporarily incomplete. Completion uses the current cursor context with those
 facts on both manually invoked and trigger-character requests, while hover and

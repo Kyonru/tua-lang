@@ -86,6 +86,14 @@ fn workspace_refresh_request(id: u64, method: &str) -> Value {
 }
 
 pub(super) fn lsp_diagnostic_from_core(diagnostic: Diagnostic, source: &str) -> Value {
+    lsp_diagnostic_from_core_with_snapshot(diagnostic, source, None)
+}
+
+pub(super) fn lsp_diagnostic_from_core_with_snapshot(
+    diagnostic: Diagnostic,
+    source: &str,
+    snapshot: Option<&AnalysisSnapshot>,
+) -> Value {
     let source = if diagnostic
         .file
         .file_name()
@@ -100,7 +108,26 @@ pub(super) fn lsp_diagnostic_from_core(diagnostic: Diagnostic, source: &str) -> 
     let end_line = diagnostic.end_line.saturating_sub(1);
     let end_character = utf16_column(source, diagnostic.end_line, diagnostic.end_column);
 
-    json!({
+    let related_information = diagnostic
+        .related_information
+        .iter()
+        .filter_map(|information| {
+            let related_source = if information.file == diagnostic.file {
+                Some(source)
+            } else {
+                snapshot?.source(&information.file)
+            }?;
+            Some(json!({
+                "location": {
+                    "uri": uri_from_path(&information.file),
+                    "range": lsp_range_for_source(related_source, information.span)
+                },
+                "message": information.message
+            }))
+        })
+        .collect::<Vec<_>>();
+
+    let mut result = json!({
         "range": {
             "start": {
                 "line": start_line,
@@ -115,7 +142,11 @@ pub(super) fn lsp_diagnostic_from_core(diagnostic: Diagnostic, source: &str) -> 
         "code": diagnostic.code.map(|code| code.to_string()),
         "source": "tua",
         "message": diagnostic.message
-    })
+    });
+    if !related_information.is_empty() {
+        result["relatedInformation"] = Value::Array(related_information);
+    }
+    result
 }
 
 pub(super) fn core_diagnostic_from_lsp(

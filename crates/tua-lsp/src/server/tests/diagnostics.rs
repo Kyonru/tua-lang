@@ -41,6 +41,33 @@ fn diagnostic_ranges_round_trip_through_lsp() {
 }
 
 #[test]
+fn related_diagnostic_ranges_use_utf16_columns() {
+    let source = "-- 😀 update";
+    let diagnostic = Diagnostic::error("src/main.tua", 1, 1, "method does not satisfy protocol")
+        .with_related_information(tua_core::DiagnosticRelatedInformation {
+            file: PathBuf::from("src/main.tua"),
+            span: tua_core::SourceSpan {
+                start: SourcePosition { line: 1, column: 6 },
+                end: SourcePosition {
+                    line: 1,
+                    column: 12,
+                },
+            },
+            message: "protocol requirement `Updatable.update` is declared here".to_owned(),
+        });
+    let lsp = protocol::lsp_diagnostic_from_core(diagnostic, source);
+
+    assert_eq!(
+        lsp["relatedInformation"][0]["location"]["range"]["start"]["character"],
+        6
+    );
+    assert_eq!(
+        lsp["relatedInformation"][0]["location"]["range"]["end"]["character"],
+        12
+    );
+}
+
+#[test]
 fn code_diagnostics_underline_complete_identifier_tokens() {
     let uri = "file:///tmp/full-diagnostic-range.tua";
     let source = "local unusedPlayer = 1\nprint(missingPlayer)\n";
@@ -142,11 +169,26 @@ final class Bad implements Updatable {
         }),
         "missing protocol method should be published on the implementing file: {diagnostics:#?}"
     );
-    assert!(diagnostics.iter().any(|diagnostic| {
-        diagnostic["message"].as_str().is_some_and(|message| {
-            message.contains("Bad.update") && message.contains("does not satisfy protocol")
+    let bad = diagnostics
+        .iter()
+        .find(|diagnostic| {
+            diagnostic["message"].as_str().is_some_and(|message| {
+                message.contains("Bad.update") && message.contains("does not satisfy protocol")
+            })
         })
-    }), "incompatible protocol signature should be published on the implementing file: {diagnostics:#?}");
+        .expect("incompatible protocol signature should be published on the implementing file");
+    let related = bad["relatedInformation"]
+        .as_array()
+        .expect("protocol diagnostics should link to the contract requirement");
+    assert_eq!(related.len(), 1, "{related:#?}");
+    assert_eq!(related[0]["location"]["uri"], contracts_uri);
+    assert_eq!(related[0]["location"]["range"]["start"]["line"], 1);
+    assert_eq!(related[0]["location"]["range"]["start"]["character"], 2);
+    assert_eq!(related[0]["location"]["range"]["end"]["line"], 1);
+    assert_eq!(related[0]["location"]["range"]["end"]["character"], 8);
+    assert!(related[0]["message"]
+        .as_str()
+        .is_some_and(|message| message.contains("Updatable.update")));
     assert!(
         !diagnostics.iter().any(|diagnostic| {
             diagnostic["message"].as_str().is_some_and(|message| {

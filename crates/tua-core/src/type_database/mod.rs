@@ -260,6 +260,22 @@ impl ProjectTypeDatabase {
         self.protocols.method_definition(&identity, method).cloned()
     }
 
+    pub(crate) fn protocol_method_definitions(
+        &self,
+        module_graph: &ModuleGraph,
+        source_path: impl AsRef<Path>,
+        protocol_name: &str,
+    ) -> Option<Vec<(String, Definition)>> {
+        let identity = self.protocol_identity(module_graph, source_path, protocol_name)?;
+        Some(
+            self.protocols
+                .method_definitions(&identity)?
+                .iter()
+                .map(|(method, definition)| (method.clone(), definition.clone()))
+                .collect(),
+        )
+    }
+
     pub(crate) fn protocol_method_implementations(
         &self,
         module_graph: &ModuleGraph,

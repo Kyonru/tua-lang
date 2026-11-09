@@ -1033,3 +1033,35 @@ pub(super) fn project_imported_protocol_identities(
         })
         .collect()
 }
+
+pub(super) fn project_imported_protocol_method_definitions(
+    parsed: &ParsedSource,
+    module_graph: &ModuleGraph,
+    type_database: &ProjectTypeDatabase,
+) -> Vec<(String, String, crate::Definition)> {
+    let mut definitions = Vec::new();
+    for class in &parsed.class_declarations {
+        for (protocol_name, _) in &class.implemented_protocols {
+            if parsed
+                .protocol_declarations
+                .iter()
+                .any(|protocol| protocol.name == *protocol_name)
+            {
+                continue;
+            }
+            let Some(methods) = type_database.protocol_method_definitions(
+                module_graph,
+                &parsed.path,
+                protocol_name,
+            ) else {
+                continue;
+            };
+            definitions.extend(
+                methods
+                    .into_iter()
+                    .map(|(method, definition)| (protocol_name.clone(), method, definition)),
+            );
+        }
+    }
+    definitions
+}

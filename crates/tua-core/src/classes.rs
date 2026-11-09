@@ -18,7 +18,7 @@ use crate::types::{
     AssignabilityFailure, AssignabilityFailureKind, AssignabilityPathSegment, Type,
     TypeEnvironment, TypedFunction,
 };
-use crate::{Diagnostic, DiagnosticCode};
+use crate::{Diagnostic, DiagnosticCode, DiagnosticRelatedInformation};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct ClassDeclaration {
@@ -2142,13 +2142,19 @@ pub(crate) fn class_contract_diagnostics(
                     &class.name,
                     &requirement_name,
                 ) else {
-                    diagnostics.push(class_diagnostic(
+                    let diagnostic = class_diagnostic(
                         &parsed.path,
                         class.name_span.start,
                         format!(
                             "class `{}` does not implement protocol `{}`: missing method `{}`",
                             class.name, protocol_name, requirement_name
                         ),
+                    );
+                    diagnostics.push(with_protocol_requirement_location(
+                        diagnostic,
+                        environment,
+                        protocol_name,
+                        &requirement_name,
                     ));
                     continue;
                 };
@@ -2185,10 +2191,16 @@ pub(crate) fn class_contract_diagnostics(
                 };
                 if let Some(failure) = context.assignability_failure(&actual, &expected) {
                     let detail = protocol_method_failure_detail(&failure);
-                    diagnostics.push(class_diagnostic(
+                    let diagnostic = class_diagnostic(
                         &parsed.path,
                         implementation.name_span.start,
                         format!("method `{}.{}` does not satisfy protocol `{}.{}`: expected `{}`, found `{}`{detail}", class.name, requirement_name, protocol_name, requirement_name, expected, actual),
+                    );
+                    diagnostics.push(with_protocol_requirement_location(
+                        diagnostic,
+                        environment,
+                        protocol_name,
+                        &requirement_name,
                     ));
                 }
             }
@@ -2322,6 +2334,24 @@ fn protocol_method_failure_detail(failure: &AssignabilityFailure) -> String {
         ),
         _ => String::new(),
     }
+}
+
+fn with_protocol_requirement_location(
+    diagnostic: Diagnostic,
+    environment: &TypeEnvironment,
+    protocol_name: &str,
+    method_name: &str,
+) -> Diagnostic {
+    let Some(definition) = environment.protocol_method_definition(protocol_name, method_name)
+    else {
+        return diagnostic;
+    };
+
+    diagnostic.with_related_information(DiagnosticRelatedInformation {
+        file: definition.path.clone(),
+        span: definition.span,
+        message: format!("protocol requirement `{protocol_name}.{method_name}` is declared here"),
+    })
 }
 
 pub(crate) fn class_lint_facts(

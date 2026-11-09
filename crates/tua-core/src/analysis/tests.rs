@@ -6262,6 +6262,32 @@ final class Bad implements Updatable {
         }),
         "project analysis should report an incompatible protocol method in the implementing module: {diagnostics:#?}"
     );
+    let bad = diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic.message.contains("Bad.update"))
+        .expect("the incompatible method diagnostic should exist");
+    assert_eq!(bad.related_information.len(), 1, "{bad:#?}");
+    assert_eq!(
+        bad.related_information[0].file,
+        PathBuf::from("src/contracts.tua")
+    );
+    assert_eq!(
+        bad.related_information[0].span.start,
+        SourcePosition { line: 2, column: 3 }
+    );
+    assert_eq!(
+        bad.related_information[0].span.end,
+        SourcePosition { line: 2, column: 9 }
+    );
+    let missing = diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic.message.contains("Missing"))
+        .expect("the missing method diagnostic should exist");
+    assert_eq!(missing.related_information.len(), 1, "{missing:#?}");
+    assert_eq!(
+        missing.related_information[0].file,
+        PathBuf::from("src/contracts.tua")
+    );
     assert!(
         !diagnostics.iter().any(|diagnostic| {
             diagnostic.message.contains("Valid")
