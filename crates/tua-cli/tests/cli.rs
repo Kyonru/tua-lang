@@ -941,6 +941,68 @@ assert(count == 3)
 }
 
 #[test]
+fn concrete_generic_parent_substitution_preserves_emitted_lua_behavior() {
+    let Some(lua) = working_lua_runtime() else {
+        return;
+    };
+    let temp = TempDir::new("generic-parent-specialization-runtime");
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).expect("write config");
+    fs::create_dir_all(temp.path().join("src")).expect("create source directory");
+    fs::write(
+        temp.path().join("src/main.tua"),
+        r#"
+open class Base<T> {
+  value: T
+
+  init(value: T) { self.value = value }
+  get(): T { return self.value }
+}
+
+open class NumericBox extends Base<number> {
+  init(value: number) { super(value) }
+}
+
+final class LabeledNumericBox extends NumericBox {
+  init(value: number) { super(value) }
+}
+
+local box: LabeledNumericBox = LabeledNumericBox.new(42)
+assert(box.value == 42)
+assert(box:get() == 42)
+box.value = 43
+assert(box:get() == 43)
+"#,
+    )
+    .expect("write source");
+
+    let build = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .expect("build specialized generic subclass");
+    assert!(
+        build.status.success(),
+        "stdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&build.stdout),
+        String::from_utf8_lossy(&build.stderr)
+    );
+    let emitted = fs::read_to_string(temp.path().join("build/main.lua")).expect("read emitted Lua");
+    assert!(!emitted.contains("Base<number>"));
+    assert!(!emitted.contains("LabeledNumericBox<>"));
+
+    let runtime = Command::new(lua)
+        .arg(temp.path().join("build/main.lua"))
+        .output()
+        .expect("run emitted Lua");
+    assert!(
+        runtime.status.success(),
+        "stdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&runtime.stdout),
+        String::from_utf8_lossy(&runtime.stderr)
+    );
+}
+
+#[test]
 fn check_exits_nonzero_for_parse_errors() {
     let temp = TempDir::new("check-parse-error");
 

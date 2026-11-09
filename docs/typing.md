@@ -166,8 +166,10 @@ instances are mutable. A bare generic class or an application with the wrong
 number of arguments reports `TL1004`. Generic class types are erased from Lua;
 the generated class remains an ordinary table and metatable. Local generic
 inheritance supports applied parents such as `Child<U> extends Base<U>`;
-inherited fields, methods, `super(...)` initializer calls, and base assignments
-keep the parent arguments. To share a class, export `type BoxInstance<T> =
+non-generic subclasses can specialize a parent such as
+`Score extends Base<number>`. Inherited fields, methods, `super(...)`
+initializer calls, and base assignments keep those parent arguments. To share
+a class, export `type BoxInstance<T> =
 Box<T>` beside the runtime class value, then pair `import type` with a runtime
 `require`; constructor inference and imported member types preserve the
 producer's class identity. Generic class arguments are erased before Lua

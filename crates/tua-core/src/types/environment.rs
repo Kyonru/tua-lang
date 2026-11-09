@@ -2196,13 +2196,14 @@ fn register_class_constructor_types(parsed: &ParsedSource, functions: &mut [Type
         else {
             continue;
         };
-        let instance_type = if class.generic_parameters.is_empty() {
+        let instance_type = if class.generic_parameters.is_empty()
+            && !crate::classes::class_has_generic_ancestor(&parsed.class_declarations, class)
+        {
             Type::alias(class.name.clone())
         } else {
-            let identity = generic_class_identity(&parsed.path, class);
             constructor.generic_parameters = class.generic_parameters.clone();
             Type::GenericClassApplication {
-                identity,
+                identity: generic_class_identity(&parsed.path, class),
                 name: class.name.clone(),
                 arguments: class
                     .generic_parameters
@@ -6438,6 +6439,7 @@ fn unquote_string(value: &str) -> String {
 struct TypeResolutionContext {
     self_type: Option<Type>,
     class_bindings: BTreeMap<String, GenericDeclarationId>,
+    specialized_class_bindings: BTreeSet<String>,
     generic_parameters: Vec<GenericParameter>,
 }
 
@@ -6462,6 +6464,11 @@ impl TypeResolutionContext {
             context
                 .class_bindings
                 .insert(class.name.clone(), generic_class_identity(path, class));
+            if crate::classes::class_has_generic_ancestor(classes, class) {
+                context
+                    .specialized_class_bindings
+                    .insert(class.name.clone());
+            }
         }
         context
     }
@@ -6473,7 +6480,9 @@ impl TypeResolutionContext {
     ) -> Self {
         let mut context = Self::with_classes(path, classes);
         context.generic_parameters = class.generic_parameters.clone();
-        context.self_type = if class.generic_parameters.is_empty() {
+        context.self_type = if class.generic_parameters.is_empty()
+            && !context.specialized_class_bindings.contains(&class.name)
+        {
             Some(Type::alias(class.name.clone()))
         } else {
             Some(Type::GenericClassApplication {
@@ -6691,6 +6700,17 @@ fn resolve_named_type(
                 Type::Any
             }
         }),
+        _ if context.specialized_class_bindings.contains(name) => {
+            let Some(identity) = context.class_bindings.get(name) else {
+                return Type::alias(name);
+            };
+            Type::GenericClassApplication {
+                identity: identity.clone(),
+                name: name.to_owned(),
+                arguments: Vec::new(),
+                span,
+            }
+        }
         _ if alias_names.contains(name) => Type::alias(name),
         _ if name.split_once('.').is_some_and(|(namespace, member)| {
             !member.is_empty() && alias_names.contains(namespace)

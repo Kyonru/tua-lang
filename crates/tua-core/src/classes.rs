@@ -846,6 +846,27 @@ pub(crate) fn class_by_name<'a>(
     classes.iter().find(|class| class.name == name)
 }
 
+pub(crate) fn class_has_generic_ancestor(
+    classes: &[ClassDeclaration],
+    class: &ClassDeclaration,
+) -> bool {
+    let mut current = class;
+    let mut visited = BTreeSet::new();
+    while visited.insert(current.name.as_str()) {
+        let Some(parent_name) = current.parent.as_deref() else {
+            return false;
+        };
+        let Some(parent) = class_by_name(classes, parent_name) else {
+            return false;
+        };
+        if !parent.generic_parameters.is_empty() {
+            return true;
+        }
+        current = parent;
+    }
+    false
+}
+
 pub(crate) fn class_method_is_final(
     classes: &[ClassDeclaration],
     class_name: &str,

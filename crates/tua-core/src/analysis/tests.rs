@@ -9711,6 +9711,44 @@ print(<|number|>n, <|state|>state)
 }
 
 #[test]
+fn concrete_generic_parent_substitution_reaches_completion_and_hover() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+open class Base<T> {
+  value: T
+
+  init(value: T) { self.value = value }
+  get(): T { return self.value }
+}
+
+final class NumericBox extends Base<number> {
+  init(value: number) { super(value) }
+}
+
+local box: NumericBox = NumericBox.new(42)
+local value: number = box.<|complete|>value
+local result = box:<|hover|>get()
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_file("src/main.tua", fixture.files()[0].source.clone());
+    let snapshot = host.snapshot();
+
+    assert!(
+        completion_labels(&snapshot.completion("src/main.tua", fixture.position("complete")))
+            .contains(&"value".into()),
+        "inherited fields should complete on a specialized generic subclass"
+    );
+    let hover = snapshot
+        .hover("src/main.tua", fixture.position("hover"))
+        .expect("the inherited generic method call should have hover");
+    assert!(
+        hover.contents.contains("number") && !hover.contents.contains("T"),
+        "inherited method hover should show the applied parent argument: {hover:?}"
+    );
+}
+
+#[test]
 fn imported_ecs_component_retains_its_payload_schema() {
     let fixture = Fixture::parse(
         r#"-- file: src/components.tua

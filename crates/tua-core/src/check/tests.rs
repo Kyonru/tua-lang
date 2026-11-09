@@ -4630,6 +4630,58 @@ local wrong_base: Base<string> = child
 }
 
 #[test]
+fn nongeneric_subclass_can_specialize_a_generic_parent() {
+    let diagnostics = check_tua_source(
+        "src/specialized_generic_parent.tua",
+        r#"
+open class Base<T> {
+  value: T
+
+  init(value: T) {
+    self.value = value
+  }
+
+  get(): T {
+    return self.value
+  }
+}
+
+open class NumericBox extends Base<number> {
+  init(value: number) {
+    super(value)
+  }
+}
+
+final class LabeledNumericBox extends NumericBox {
+  init(value: number) {
+    super(value)
+  }
+}
+
+local box: LabeledNumericBox = LabeledNumericBox.new(42)
+local field: number = box.value
+local method: number = box:get()
+local base: Base<number> = box
+local wrong_base: Base<string> = box
+local inferred_box = NumericBox.new(7)
+local inferred_field: number = inferred_box.value
+local inferred_method: number = inferred_box:get()
+"#,
+    )
+    .expect_err("the specialized parent must remain invariant at Base<number>");
+
+    assert!(
+        diagnostics.len() == 1
+            && diagnostics.iter().any(|diagnostic| {
+                diagnostic.code == Some(DiagnosticCode::TYPE_MISMATCH)
+                    && diagnostic.message.contains("generic argument 1")
+                    && diagnostic.message.contains("expected string, found number")
+            }),
+        "only the deliberately incompatible Base<string> assignment should fail: {diagnostics:#?}"
+    );
+}
+
+#[test]
 fn nested_generic_class_inheritance_substitutes_each_parent_application() {
     let diagnostics = check_tua_source(
         "src/nested_generic_parent.tua",

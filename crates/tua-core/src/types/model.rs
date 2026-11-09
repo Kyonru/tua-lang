@@ -800,6 +800,9 @@ fn fmt_type(ty: &Type, formatter: &mut fmt::Formatter<'_>, depth: usize) -> fmt:
         Type::GenericClassApplication {
             name, arguments, ..
         } => {
+            if arguments.is_empty() {
+                return write!(formatter, "{name}");
+            }
             write!(formatter, "{name}<")?;
             for (index, argument) in arguments.iter().enumerate() {
                 if index > 0 {

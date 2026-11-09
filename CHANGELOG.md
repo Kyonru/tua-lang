@@ -37,6 +37,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Preserve concrete generic parent arguments when a non-generic subclass
+  extends a generic class, including constructor checking, inherited members,
+  `super(...)`, hover/completion, and invariant base assignments.
 - Treat Lua comments as trivia between `export protocol`, its name, and its
   opening brace, including during editor recovery of an unfinished declaration.
 - Correct the language guide's stale claim that native generic parameters are

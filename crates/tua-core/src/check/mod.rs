@@ -1618,7 +1618,8 @@ impl<'a> Checker<'a> {
             return None;
         }
         let class = self.parsed.class_declarations.iter().find(|class| {
-            !class.generic_parameters.is_empty()
+            (!class.generic_parameters.is_empty()
+                || classes::class_has_generic_ancestor(&self.parsed.class_declarations, class))
                 && function_name == format!("{}_new", class.name)
                 && origin.source_position.line >= class.span.start.line
                 && origin.source_position.line <= class.span.end.line
@@ -1627,10 +1628,18 @@ impl<'a> Checker<'a> {
                 && (origin.source_position.line != class.span.end.line
                     || origin.source_position.column <= class.span.end.column)
         })?;
-        class
-            .generic_parameters
-            .first()
-            .map(|parameter| parameter.id.declaration.clone())
+        Some(
+            class
+                .generic_parameters
+                .first()
+                .map(|parameter| parameter.id.declaration.clone())
+                .unwrap_or_else(|| crate::parser::GenericDeclarationId {
+                    module: crate::vfs::normalize_path(&self.parsed.path),
+                    kind: crate::parser::GenericDeclarationKind::Class,
+                    name: class.name.clone(),
+                    declaration: class.name_span,
+                }),
+        )
     }
 
     fn infer_expression(&mut self, expression: &Expression) -> Option<Type> {

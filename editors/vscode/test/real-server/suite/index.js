@@ -283,6 +283,83 @@ async function run() {
   assert.match(importedBoxConstructorSignature.signatures[0].label, /value: number/);
   assert.match(importedBoxConstructorSignature.signatures[0].label, /Box<number>/);
 
+  const specializedParentHoverPosition = positionAfter(
+    document,
+    "local specialized_box = BoxModule.NumberBox.new(42)",
+    "local specialized_box",
+  );
+  const specializedParentHover = await retry(
+    () =>
+      vscode.commands.executeCommand(
+        "vscode.executeHoverProvider",
+        document.uri,
+        specializedParentHoverPosition,
+      ),
+    (result) => /NumberBox/.test(hoverText(result)),
+    "concrete generic-parent subclass hover",
+  );
+  assert.match(hoverText(specializedParentHover), /NumberBox/);
+
+  const specializedParentFieldHoverPosition = positionAfter(
+    document,
+    "typed_specialized_box.value",
+    "typed_specialized_box.",
+  );
+  const specializedParentFieldHover = await retry(
+    () =>
+      vscode.commands.executeCommand(
+        "vscode.executeHoverProvider",
+        document.uri,
+        specializedParentFieldHoverPosition,
+      ),
+    (result) => /number/.test(hoverText(result)),
+    "concrete generic-parent inherited field hover",
+  );
+  assert.match(hoverText(specializedParentFieldHover), /value: number/);
+
+  const specializedParentCompletionPosition = positionAfter(
+    document,
+    "typed_specialized_box:get()",
+    "typed_specialized_box:",
+  );
+  const specializedParentCompletion = await retry(
+    () =>
+      vscode.commands.executeCommand(
+        "vscode.executeCompletionItemProvider",
+        document.uri,
+        specializedParentCompletionPosition,
+        ":",
+      ),
+    (result) =>
+      (result?.items || []).some(
+        (item) =>
+          (typeof item.label === "string" ? item.label : item.label.label) === "get",
+      ),
+    "concrete generic-parent inherited method completion",
+  );
+  const specializedParentGetCompletion = specializedParentCompletion.items.find(
+    (item) => (typeof item.label === "string" ? item.label : item.label.label) === "get",
+  );
+  assert.ok(specializedParentGetCompletion, "the specialized inherited method should complete");
+
+  const specializedParentSignaturePosition = positionAfter(
+    document,
+    "typed_specialized_box:get()",
+    "typed_specialized_box:get(",
+  );
+  const specializedParentSignature = await retry(
+    () =>
+      vscode.commands.executeCommand(
+        "vscode.executeSignatureHelpProvider",
+        document.uri,
+        specializedParentSignaturePosition,
+        "(",
+      ),
+    (result) => result?.signatures?.length > 0,
+    "concrete generic-parent inherited method signature",
+  );
+  assert.match(specializedParentSignature.signatures[0].label, /get\(\): number/);
+
   const genericTypePosition = positionAfter(document, "Box<number>", "Box");
   const genericDefinitions = await retry(
     () =>
@@ -593,6 +670,10 @@ async function run() {
       ),
       importedGenericClassConstructorSignature:
         importedBoxConstructorSignature.signatures[0].label,
+      concreteGenericParentHover: hoverText(specializedParentHover),
+      concreteGenericParentFieldHover: hoverText(specializedParentFieldHover),
+      concreteGenericParentCompletion: specializedParentGetCompletion.detail,
+      concreteGenericParentSignature: specializedParentSignature.signatures[0].label,
       genericAliasDefinition: genericDefinitions.some(
         (location) => location.uri.fsPath === fixtures.contractsPath,
       ),

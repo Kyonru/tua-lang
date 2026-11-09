@@ -90,6 +90,10 @@ In an inheritance chain, a generic class can apply its parent parameters
 with `extends Base<T>`. Parent fields and methods use the applied types, and
 `super(...)` checks the parent initializer with those same types. Assigning a
 generic subclass to a base class preserves the inherited type arguments.
+A non-generic subclass may also fix those arguments, such as
+`final class Score extends Value<number>`. The specialized types flow through
+its constructor, `self`, inherited members, and assignments to `Value<number>`;
+incompatible assignments such as `Value<string>` remain errors.
 
 To share a generic class, export a generic alias for its instance type beside
 the runtime class value:
