@@ -1216,6 +1216,102 @@ final class Particle implements Updatable {
         }),
         "restoring the re-export should recover the latest changed contract: {restored:#?}"
     );
+
+    // Close the declaration overlays so subsequent file-system events are
+    // authoritative, then delete and recreate the contract behind both
+    // re-export hops. Consumers must not retain the deleted last-good graph.
+    server.send(did_close(&contracts_uri));
+    server.send(did_close(&relay_uri));
+    server.send(did_close(&api_uri));
+    temp.remove("src/contracts.d.tua");
+    server.send(watched_files_changed([(&contracts_uri, 3)]));
+    server.send(text_document_diagnostic_request(6, &relay_uri));
+    let relay_deleted = document_diagnostic_items(server.output(), 6);
+    server.send(text_document_diagnostic_request(7, &consumer_uri));
+    let deleted = document_diagnostic_items(server.output(), 7);
+    assert!(
+        relay_deleted
+            .iter()
+            .any(|diagnostic| { matches!(diagnostic["code"].as_str(), Some("TL4002" | "TL1001")) }),
+        "the relay should report the deleted protocol import: {relay_deleted:#?}"
+    );
+    assert!(
+        deleted.iter().any(|diagnostic| {
+            matches!(diagnostic["code"].as_str(), Some("TL4002" | "TL1001"))
+        }),
+        "deleting the contract behind two re-exports should report an unresolved type: {deleted:#?}"
+    );
+    assert!(
+        deleted
+            .iter()
+            .all(|diagnostic| diagnostic["code"] != "TL1008"),
+        "a deleted contract must not leave stale conformance diagnostics: {deleted:#?}"
+    );
+
+    temp.write("src/contracts.d.tua", contracts);
+    server.send(watched_files_changed([(&contracts_uri, 1)]));
+    server.send(text_document_diagnostic_request(8, &consumer_uri));
+    let recreated = document_diagnostic_items(server.output(), 8);
+    assert!(
+        recreated.is_empty(),
+        "recreating the compatible contract should clear transitive import errors: {recreated:#?}"
+    );
+}
+
+#[test]
+fn restoring_a_protocol_contract_cancels_stale_dependent_diagnostics() {
+    let temp = TempProject::new("cancel-stale-protocol-dependent-diagnostics");
+    temp.write("tua.toml", "source = \"src\"\n");
+    let compatible = "export protocol Updatable {\n  update(dt: number): nil\n}\n";
+    let incompatible = "export protocol Updatable {\n  update(dt: string): nil\n}\n";
+    temp.write("src/contracts.tua", compatible);
+    let actors = r#"import type { Updatable } from "./contracts"
+final class Particle implements Updatable {
+  update(dt: number): nil {}
+}
+"#;
+    temp.write("src/actors.tua", actors);
+    let contracts_uri = temp.uri_for("src/contracts.tua");
+    let actors_uri = temp.uri_for("src/actors.tua");
+    let mut server = TestServer::new();
+
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&contracts_uri, compatible));
+    server.send(did_open(&actors_uri, actors));
+    assert!(
+        diagnostics_publications(server.output(), &actors_uri)
+            .iter()
+            .all(|publication| publication["params"]["diagnostics"]
+                .as_array()
+                .is_some_and(|diagnostics| diagnostics.is_empty())),
+        "the baseline consumer should conform: {:#?}",
+        server.output()
+    );
+
+    server.send_without_drain(did_change(&contracts_uri, incompatible, 2));
+    let stale_due = server
+        .next_slow_diagnostics_due()
+        .expect("the incompatible contract edit should schedule dependents");
+    server.send_without_drain(did_change(&contracts_uri, compatible, 3));
+    let restored_due = server
+        .next_slow_diagnostics_due()
+        .expect("restoring the contract should schedule fresh dependents");
+    assert!(restored_due >= stale_due);
+
+    server.drain_due_diagnostics(restored_due);
+    let actor_publications = diagnostics_publications(server.output(), &actors_uri);
+    assert!(
+        actor_publications.iter().all(|publication| publication["params"]["diagnostics"]
+            .as_array()
+            .is_some_and(|diagnostics| diagnostics.iter().all(|diagnostic| {
+                diagnostic["code"] != "TL1008"
+                    || !diagnostic["message"].as_str().is_some_and(|message| {
+                        message.contains("Particle.update")
+                            && message.contains("does not satisfy protocol")
+                    })
+            }))),
+        "the superseded incompatible contract must never publish for the consumer: {actor_publications:#?}"
+    );
 }
 
 #[test]
