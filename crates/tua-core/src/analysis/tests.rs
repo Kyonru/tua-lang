@@ -6108,10 +6108,12 @@ end
 #[test]
 fn protocol_types_flow_through_inlays_and_type_explanations() {
     let fixture = Fixture::parse(
-        r#"protocol Updatable {
+        r#"-- file: src/contracts.d.tua
+export protocol Updatable {
   update(dt: number): nil
 }
-
+-- file: src/main.tua
+import type { Updatable } from "./contracts"
 local function tick(value: Updatable, dt: number)
   local current = value
   current:<|call|>update(dt)
@@ -6120,7 +6122,10 @@ end
     );
     let path = PathBuf::from("src/main.tua");
     let mut host = AnalysisHost::new();
-    host.set_file(&path, fixture.source("src/main.tua"));
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
     let snapshot = host.snapshot();
 
     let hints = snapshot.inlay_hints(&path);
