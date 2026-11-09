@@ -163,6 +163,7 @@ struct ClassBlock {
     declaration: ClassDeclaration,
     invalid_member_span: Option<SourceSpan>,
     start: usize,
+    header_end: usize,
     end: usize,
 }
 
@@ -826,6 +827,17 @@ pub(crate) fn class_lowering_edits(source: &str) -> Vec<ClassLoweringEdit> {
                 replacement.insert_str(0, &forward_parent_declarations);
             }
 
+            let header_comments = class_header_comments(source, block.start, block.header_end);
+            if !header_comments.is_empty() {
+                // Keep comments after the generated type alias. That alias is
+                // erased from the runtime AST, so comments attached before it
+                // would be discarded with the alias as well.
+                let insertion = replacement
+                    .find("\n\n")
+                    .map_or(0, |separator| separator + 2);
+                replacement.insert_str(insertion, &header_comments);
+            }
+
             let parser_provenance = class_parser_line_provenance(&replacement, declaration, source);
 
             ClassLoweringEdit {
@@ -866,6 +878,30 @@ pub(crate) fn class_lowering_edits(source: &str) -> Vec<ClassLoweringEdit> {
     }
     edits.sort_by_key(|edit| edit.range.start);
     edits
+}
+
+fn class_header_comments(source: &str, start: usize, end: usize) -> String {
+    let mut comments = String::new();
+    let mut index = start;
+
+    while index < end {
+        if source[index..].starts_with("--") {
+            let comment_end = consume_comment(source, index).min(end);
+            comments.push_str(&source[index..comment_end]);
+            comments.push('\n');
+            index = comment_end;
+            continue;
+        }
+
+        if let Some(string_end) = consume_string_literal(source, index) {
+            index = string_end.min(end);
+            continue;
+        }
+
+        index += next_char_len(source, index);
+    }
+
+    comments
 }
 
 fn class_parser_line_provenance(
@@ -1262,6 +1298,7 @@ fn class_blocks(source: &str, protocols: &[ProtocolDeclaration]) -> Vec<ClassBlo
             declaration,
             invalid_member_span,
             start: index,
+            header_end: header.body_open,
             end: body_end + 1,
         });
 
@@ -1462,34 +1499,32 @@ fn parse_class_generic_parameters(
     let (parts, close) = split_angle_arguments(source, open)?;
     let mut parameters = Vec::with_capacity(parts.len());
     for (ordinal, range) in parts.into_iter().enumerate() {
-        let start = skip_whitespace(source, range.start);
+        let start = skip_class_header_trivia(source, range.start, range.end);
         let end = trim_end_whitespace(source, start, range.end);
         let (name, name_start, name_end) = take_identifier(source, start)?;
         let name_span = SourceSpan {
             start: positions.position(name_start),
             end: positions.position(name_end),
         };
-        let mut cursor = skip_whitespace(source, name_end).min(end);
+        let cursor = skip_class_header_trivia(source, name_end, end);
         let mut protocol_bound_error = None;
         let protocol_bound = if source[cursor..end].starts_with(':') {
-            cursor = skip_whitespace(source, cursor + 1).min(end);
-            let bound_start = cursor;
-            let bound_name = source[bound_start..end].trim();
-            if !crate::parser::is_qualified_protocol_name(bound_name) {
+            let bound_start = skip_class_header_trivia(source, cursor + 1, end);
+            let bound_end = scan_qualified_protocol_name(source, bound_start, end);
+            let bound_name = &source[bound_start..bound_end];
+            let trailing = skip_class_header_trivia(source, bound_end, end);
+            if !crate::parser::is_qualified_protocol_name(bound_name) || trailing != end {
                 // The declaration scanner reports malformed/multiple bounds;
                 // continue parsing the class so the rest of the file survives.
-                let leading =
-                    source[bound_start..end].len() - source[bound_start..end].trim_start().len();
-                let trailing = source[bound_start..end].trim_end().len();
-                let error_start = if bound_name.is_empty() {
+                let error_start = if bound_start == end {
                     bound_start.saturating_sub(1)
                 } else {
-                    bound_start + leading
+                    bound_start
                 };
-                let error_end = if bound_name.is_empty() {
+                let error_end = if bound_start == end {
                     bound_start
                 } else {
-                    bound_start + trailing
+                    bound_end.max(bound_start + 1)
                 };
                 protocol_bound_error = Some(SourceSpan {
                     start: positions.position(error_start),
@@ -1497,14 +1532,11 @@ fn parse_class_generic_parameters(
                 });
                 None
             } else {
-                let leading =
-                    source[bound_start..end].len() - source[bound_start..end].trim_start().len();
-                let trailing = source[bound_start..end].trim_end().len();
                 Some(crate::parser::GenericProtocolBound {
                     name: bound_name.to_owned(),
                     span: SourceSpan {
-                        start: positions.position(bound_start + leading),
-                        end: positions.position(bound_start + trailing),
+                        start: positions.position(bound_start),
+                        end: positions.position(bound_end),
                     },
                     identity: None,
                 })
@@ -1580,6 +1612,10 @@ fn split_angle_arguments(source: &str, open: usize) -> Option<(Vec<Range<usize>>
     let mut brace_depth = 0usize;
     let mut index = content_start;
     while index < close {
+        if source[index..].starts_with("--") {
+            index = consume_comment(source, index).min(close);
+            continue;
+        }
         if let Some(end) = consume_string_literal(source, index) {
             index = end.min(close);
             continue;
@@ -1620,6 +1656,10 @@ fn matching_angle_close(source: &str, open: usize) -> Option<usize> {
     let mut depth = 0usize;
     let mut index = open;
     while index < source.len() {
+        if source[index..].starts_with("--") {
+            index = consume_comment(source, index);
+            continue;
+        }
         if let Some(end) = consume_string_literal(source, index) {
             index = end;
             continue;
@@ -1633,7 +1673,6 @@ fn matching_angle_close(source: &str, open: usize) -> Option<usize> {
                     return Some(index);
                 }
             }
-            '\n' if depth > 0 => return None,
             _ => {}
         }
         index += character.len_utf8();
@@ -4022,6 +4061,46 @@ fn skip_whitespace(source: &str, mut index: usize) -> usize {
     }
 
     index
+}
+
+fn skip_class_header_trivia(source: &str, mut index: usize, end: usize) -> usize {
+    while index < end {
+        let character = source[index..]
+            .chars()
+            .next()
+            .expect("index should stay on a valid character boundary");
+        if character.is_whitespace() {
+            index += character.len_utf8();
+        } else if source[index..].starts_with("--") {
+            let next = consume_comment(source, index).min(end);
+            if next == index {
+                break;
+            }
+            index = next;
+        } else {
+            break;
+        }
+    }
+    index
+}
+
+fn scan_qualified_protocol_name(source: &str, start: usize, limit: usize) -> usize {
+    let Some((_, _, mut cursor)) =
+        take_identifier(source, start).filter(|(_, _, name_end)| *name_end <= limit)
+    else {
+        return start;
+    };
+
+    while cursor < limit && source[cursor..].starts_with('.') {
+        let segment_start = cursor + 1;
+        let Some((_, _, segment_end)) =
+            take_identifier(source, segment_start).filter(|(_, _, name_end)| *name_end <= limit)
+        else {
+            break;
+        };
+        cursor = segment_end;
+    }
+    cursor
 }
 
 fn consume_comment(source: &str, index: usize) -> usize {

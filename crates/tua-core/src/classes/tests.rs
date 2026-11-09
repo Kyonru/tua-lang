@@ -78,6 +78,22 @@ fn generic_class_headers_keep_one_protocol_bound_and_reject_bad_bounds() {
 }
 
 #[test]
+fn generic_class_bounds_allow_comments_between_tokens() {
+    let source = "final class Box<\n  T -- binder comment with , and >\n  : -- bound comment with , and >\n  Contracts.Readable -- trailing comment with , and >\n> { value: T }";
+    let (classes, diagnostics) = parse_class_declarations(Path::new("src/box.tua"), source);
+
+    assert!(diagnostics.is_empty(), "{diagnostics:#?}");
+    assert_eq!(classes.len(), 1);
+    assert_eq!(
+        classes[0].generic_parameters[0]
+            .protocol_bound
+            .as_ref()
+            .map(|bound| bound.name.as_str()),
+        Some("Contracts.Readable")
+    );
+}
+
+#[test]
 fn bare_parent_headers_keep_the_legacy_parent_and_record_empty_application() {
     let source = "open class Base {\n}\nfinal class Child extends Base {\n}\n";
     let (classes, diagnostics) = parse_class_declarations(Path::new("src/child.tua"), source);

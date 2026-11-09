@@ -1235,24 +1235,33 @@ fn generic_protocol_bounds_allow_trailing_header_comments() {
         "src/generic_bound_comments.tua",
         "protocol Runnable { run(): nil }\n\
          -- keep this prefix when locating the bound\n\
-         local function identity<T: Runnable -- bound comment with , and >\n\
-         >(value: T): T\n  return value\nend\n",
+         local function trailing<T: Runnable -- trailing comment with , and >\n\
+         >(value: T): T\n  return value\nend\n\
+         local function before_colon<U -- comment before colon, >\n\
+         : Runnable>(value: U): U\n  return value\nend\n\
+         local function after_colon<V: -- comment before bound, >\n\
+         Runnable>(value: V): V\n  return value\nend\n\
+         local function block_comment<W: --[=[ block comment with , and > ]=] Runnable>(value: W): W\n\
+           return value\n         end\n",
     )
     .expect("comments should remain trivia after a generic protocol bound");
 
-    let function = parsed
-        .function_annotations
-        .iter()
-        .find(|function| function.name.as_deref() == Some("identity"))
-        .expect("generic function annotation");
-    assert_eq!(function.generic_parameters.len(), 1);
-    assert_eq!(
-        function.generic_parameters[0]
-            .protocol_bound
-            .as_ref()
-            .map(|bound| bound.name.as_str()),
-        Some("Runnable")
-    );
+    for name in ["trailing", "before_colon", "after_colon", "block_comment"] {
+        let function = parsed
+            .function_annotations
+            .iter()
+            .find(|function| function.name.as_deref() == Some(name))
+            .unwrap_or_else(|| panic!("generic function annotation for {name}"));
+        assert_eq!(function.generic_parameters.len(), 1);
+        assert_eq!(
+            function.generic_parameters[0]
+                .protocol_bound
+                .as_ref()
+                .map(|bound| bound.name.as_str()),
+            Some("Runnable"),
+            "generic bound was lost for {name}"
+        );
+    }
 }
 
 #[test]

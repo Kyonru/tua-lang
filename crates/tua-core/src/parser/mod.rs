@@ -1404,6 +1404,9 @@ fn function_annotation(
     body: &ast::FunctionBody,
     diagnostics: &mut Vec<Diagnostic>,
 ) -> FunctionAnnotation {
+    let generic_header = body
+        .generics()
+        .and_then(|generics| GenericHeaderSource::new(source, generics));
     let generic_parameters = body
         .generics()
         .into_iter()
@@ -1423,7 +1426,9 @@ fn function_annotation(
                     .unwrap_or_else(|| "<anonymous-function>".to_owned()),
                 declaration: body.generics().and_then(node_span).unwrap_or(name_span),
             };
-            let protocol_bound = parse_generic_protocol_bound(path, source, name_span, diagnostics);
+            let protocol_bound = generic_header.as_ref().and_then(|header| {
+                parse_generic_protocol_bound(path, source, header, name_span, diagnostics)
+            });
             Some(GenericParameter {
                 id: TypeParameterId {
                     declaration,
@@ -1540,64 +1545,66 @@ fn function_annotation(
     }
 }
 
+struct GenericHeaderSource<'a> {
+    base_byte: usize,
+    text: &'a str,
+    chars: Vec<char>,
+    protected: Vec<bool>,
+}
+
+impl<'a> GenericHeaderSource<'a> {
+    fn new(source: &'a str, generics: &ast::luau::GenericDeclaration) -> Option<Self> {
+        let span = node_span(generics)?;
+        let base_byte = byte_for_source_position(source, span.start)?;
+        let end_byte = normalize::generic_header_end(source, base_byte)?;
+        let text = source.get(base_byte..end_byte)?;
+        let chars = text.chars().collect::<Vec<_>>();
+        let protected = normalize::protected_syntax_characters(&chars);
+        Some(Self {
+            base_byte,
+            text,
+            chars,
+            protected,
+        })
+    }
+}
+
 fn parse_generic_protocol_bound(
     path: &Path,
     source: &str,
+    header: &GenericHeaderSource<'_>,
     name_span: SourceSpan,
     diagnostics: &mut Vec<Diagnostic>,
 ) -> Option<GenericProtocolBound> {
     let name_end = crate::source_text::byte_for_position(source, name_span.end)?;
-    let mut cursor = name_end;
-    while source
-        .as_bytes()
-        .get(cursor)
-        .is_some_and(u8::is_ascii_whitespace)
-    {
-        cursor += 1;
-    }
-    if source.as_bytes().get(cursor) != Some(&b':') {
+    let name_end_in_header = name_end.checked_sub(header.base_byte)?;
+    let name_end_char = header.text[..name_end_in_header].chars().count();
+    let colon = skip_generic_trivia(&header.chars, &header.protected, name_end_char);
+    if header.chars.get(colon) != Some(&':') || header.protected[colon] {
         return None;
     }
-    let colon = cursor;
-    cursor += 1;
-    while source
-        .as_bytes()
-        .get(cursor)
-        .is_some_and(u8::is_ascii_whitespace)
-    {
-        cursor += 1;
-    }
-    let source_chars = source.chars().collect::<Vec<_>>();
-    let protected = normalize::protected_syntax_characters(&source_chars);
-    let cursor_char = source[..cursor].chars().count();
-    let end_char = (cursor_char..source_chars.len())
-        .find(|index| matches!(source_chars[*index], ',' | '>') && !protected[*index])
-        .unwrap_or(source_chars.len());
-    let end = source
-        .char_indices()
-        .nth(end_char)
-        .map_or(source.len(), |(byte, _)| byte);
-    let raw = &source[cursor..end];
-    let leading = raw.len() - raw.trim_start().len();
-    let name_end = raw[leading..]
-        .find(|character: char| {
-            !(character == '_' || character == '.' || character.is_ascii_alphanumeric())
-        })
-        .map_or(raw.len(), |offset| leading + offset);
-    let bound = &raw[leading..name_end];
-    let trailing_comment = generic_bound_trailing_comment(&raw[name_end..]);
-    if !is_qualified_protocol_name(bound) || !trailing_comment {
-        let (message, start, finish) = if bound.is_empty() {
+
+    let bound_start = skip_generic_trivia(&header.chars, &header.protected, colon + 1);
+    let bound_limit = (bound_start..header.chars.len())
+        .find(|index| matches!(header.chars[*index], ',' | '>') && !header.protected[*index])
+        .unwrap_or(header.chars.len());
+    let bound_end = scan_qualified_protocol_name(&header.chars, bound_start, bound_limit);
+    let start = header.base_byte + char_offset_to_byte(header.text, bound_start);
+    let finish = header.base_byte + char_offset_to_byte(header.text, bound_end);
+    let bound = &source[start..finish];
+    let trailing = skip_generic_trivia(&header.chars, &header.protected, bound_end);
+    if !is_qualified_protocol_name(bound) || trailing != bound_limit {
+        let (message, start, finish) = if bound_start == bound_limit {
             (
                 "expected a protocol name after generic bound `:`",
-                colon,
-                colon + 1,
+                header.base_byte + char_offset_to_byte(header.text, colon),
+                header.base_byte + char_offset_to_byte(header.text, colon + 1),
             )
         } else {
             (
                 "generic bounds support one protocol name; multiple or non-protocol bounds are unsupported",
-                cursor + leading,
-                cursor + name_end,
+                start,
+                finish.max(start + 1),
             )
         };
         let position = SourcePositionIndex::new(source).position(start);
@@ -1611,8 +1618,8 @@ fn parse_generic_protocol_bound(
     }
 
     let span = SourceSpan {
-        start: SourcePositionIndex::new(source).position(cursor + leading),
-        end: SourcePositionIndex::new(source).position(cursor + name_end),
+        start: SourcePositionIndex::new(source).position(start),
+        end: SourcePositionIndex::new(source).position(finish),
     };
     Some(GenericProtocolBound {
         name: bound.to_owned(),
@@ -1621,33 +1628,50 @@ fn parse_generic_protocol_bound(
     })
 }
 
-fn generic_bound_trailing_comment(suffix: &str) -> bool {
-    let suffix = suffix.trim_start();
-    if suffix.is_empty() {
-        return true;
-    }
-    if !suffix.starts_with("--") {
-        return false;
-    }
-
-    let comment = &suffix[2..];
-    if let Some(rest) = comment.strip_prefix('[') {
-        let equals = rest
-            .chars()
-            .take_while(|character| *character == '=')
-            .count();
-        if rest.chars().nth(equals) == Some('[') {
-            let close = format!("]{}]", "=".repeat(equals));
-            let Some(end) = suffix.find(&close) else {
-                return false;
-            };
-            return suffix[end + close.len()..].trim().is_empty();
+fn skip_generic_trivia(chars: &[char], protected: &[bool], mut index: usize) -> usize {
+    while index < chars.len() {
+        if chars[index].is_whitespace() {
+            index += 1;
+        } else if protected[index] && chars[index] == '-' && chars.get(index + 1) == Some(&'-') {
+            index = normalize::comment_end(chars, index).unwrap_or(index + 2);
+        } else {
+            break;
         }
     }
+    index
+}
 
-    suffix
-        .find(['\n', '\r'])
-        .is_none_or(|end| suffix[end..].trim().is_empty())
+fn scan_qualified_protocol_name(chars: &[char], start: usize, limit: usize) -> usize {
+    let is_identifier_start = |character: char| character == '_' || character.is_ascii_alphabetic();
+    let is_identifier_continue =
+        |character: char| character == '_' || character.is_ascii_alphanumeric();
+    let mut index = start;
+
+    if index >= limit || !is_identifier_start(chars[index]) {
+        return index;
+    }
+    index += 1;
+    while index < limit && is_identifier_continue(chars[index]) {
+        index += 1;
+    }
+    while index < limit && chars[index] == '.' {
+        let segment_start = index + 1;
+        if segment_start >= limit || !is_identifier_start(chars[segment_start]) {
+            break;
+        }
+        index = segment_start + 1;
+        while index < limit && is_identifier_continue(chars[index]) {
+            index += 1;
+        }
+    }
+    index
+}
+
+fn char_offset_to_byte(source: &str, char_offset: usize) -> usize {
+    source
+        .char_indices()
+        .nth(char_offset)
+        .map_or(source.len(), |(byte, _)| byte)
 }
 
 pub(crate) fn is_qualified_protocol_name(value: &str) -> bool {

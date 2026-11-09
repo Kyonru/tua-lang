@@ -252,6 +252,81 @@ print(identity({ run = function(self) end }))
 }
 
 #[test]
+fn generic_protocol_bound_comments_between_tokens_survive_type_erasure() {
+    let emitted = emit_tua_source(
+        "src/generic_bound_comments.tua",
+        r#"protocol Runnable {
+  run(): nil
+}
+local function before_colon<T -- before-colon
+: Runnable>(value: T): T
+  return value
+end
+local function after_colon<U: -- after-colon
+Runnable>(value: U): U
+  return value
+end
+print(before_colon({ run = function(self) end }))
+print(after_colon({ run = function(self) end }))
+"#,
+    )
+    .expect("comments between generic bound tokens should survive Lua lowering");
+
+    for comment in ["-- before-colon", "-- after-colon"] {
+        assert_eq!(emitted.matches(comment).count(), 1, "{emitted}");
+    }
+    assert!(
+        !emitted.contains("<T"),
+        "generic syntax must erase: {emitted}"
+    );
+    assert!(
+        !emitted.contains("<U"),
+        "generic syntax must erase: {emitted}"
+    );
+    crate::parse_raw_lua_source("generic_bound_comments.lua", emitted)
+        .expect("comment-preserving generic-bound erasure should remain valid Lua 5.1");
+}
+
+#[test]
+fn generic_class_bound_comments_survive_type_erasure() {
+    let emitted = emit_tua_source(
+        "src/generic_class_bound_comments.tua",
+        r#"protocol Runnable {
+  run(): nil
+}
+final class Box<
+  T -- binder-comment with >
+  : -- bound-comment with , and >
+  Runnable -- trailing-comment with , and >
+> {
+  value: T
+
+  init(value: T) {
+    self.value = value
+  }
+}
+local box = Box.new({ run = function(self) end })
+print(box.value)
+"#,
+    )
+    .expect("comments in generic class bounds should survive Lua lowering");
+
+    for comment in [
+        "-- binder-comment",
+        "-- bound-comment",
+        "-- trailing-comment",
+    ] {
+        assert_eq!(emitted.matches(comment).count(), 1, "{emitted}");
+    }
+    assert!(
+        !emitted.contains("class Box<"),
+        "class syntax must erase: {emitted}"
+    );
+    crate::parse_raw_lua_source("generic_class_bound_comments.lua", emitted)
+        .expect("comment-preserving generic class erasure should remain valid Lua 5.1");
+}
+
+#[test]
 fn snapshot_erases_native_array_annotations_from_aliases_locals_and_functions() {
     let emitted = emit_tua_source(
         "src/actors.tua",

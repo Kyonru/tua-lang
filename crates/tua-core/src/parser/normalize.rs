@@ -295,6 +295,100 @@ pub(super) fn protected_syntax_characters(chars: &[char]) -> Vec<bool> {
     protected
 }
 
+pub(super) fn comment_end(chars: &[char], index: usize) -> Option<usize> {
+    if chars.get(index) != Some(&'-') || chars.get(index + 1) != Some(&'-') {
+        return None;
+    }
+
+    long_bracket_end(chars, index + 2).or_else(|| {
+        chars[index..]
+            .iter()
+            .position(|character| *character == '\n')
+            .map_or(chars.len(), |offset| index + offset)
+            .into()
+    })
+}
+
+pub(super) fn generic_header_end(source: &str, start_byte: usize) -> Option<usize> {
+    let bytes = source.as_bytes();
+    let mut index = start_byte;
+
+    while index < bytes.len() {
+        if bytes[index] == b'-' && bytes.get(index + 1) == Some(&b'-') {
+            let after_comment = index + 2;
+            if let Some((body_start, equals)) = long_bracket_open(bytes, after_comment) {
+                index = long_bracket_close(bytes, body_start, equals)?;
+            } else {
+                index = bytes[after_comment..]
+                    .iter()
+                    .position(|byte| *byte == b'\n')
+                    .map_or(bytes.len(), |offset| after_comment + offset);
+            }
+            continue;
+        }
+
+        if let Some((body_start, equals)) = long_bracket_open(bytes, index) {
+            index = long_bracket_close(bytes, body_start, equals)?;
+            continue;
+        }
+
+        if matches!(bytes[index], b'\'' | b'"') {
+            let quote = bytes[index];
+            index += 1;
+            while index < bytes.len() {
+                if bytes[index] == b'\\' {
+                    index = (index + 2).min(bytes.len());
+                } else if bytes[index] == quote {
+                    index += 1;
+                    break;
+                } else {
+                    index += 1;
+                }
+            }
+            continue;
+        }
+
+        if bytes[index] == b'>' {
+            return Some(index + 1);
+        }
+        index += 1;
+    }
+
+    None
+}
+
+fn long_bracket_open(bytes: &[u8], start: usize) -> Option<(usize, usize)> {
+    if bytes.get(start) != Some(&b'[') {
+        return None;
+    }
+    let mut open_end = start + 1;
+    while bytes.get(open_end) == Some(&b'=') {
+        open_end += 1;
+    }
+    (bytes.get(open_end) == Some(&b'[')).then_some((open_end + 1, open_end - start - 1))
+}
+
+fn long_bracket_close(bytes: &[u8], mut index: usize, equals: usize) -> Option<usize> {
+    while index < bytes.len() {
+        if bytes[index] != b']' {
+            index += 1;
+            continue;
+        }
+        let mut cursor = index + 1;
+        for _ in 0..equals {
+            if bytes.get(cursor) != Some(&b'=') {
+                break;
+            }
+            cursor += 1;
+        }
+        if cursor == index + equals + 1 && bytes.get(cursor) == Some(&b']') {
+            return Some(cursor + 1);
+        }
+        index += 1;
+    }
+    None
+}
+
 fn long_bracket_end(chars: &[char], index: usize) -> Option<usize> {
     if chars.get(index) != Some(&'[') {
         return None;
