@@ -97,6 +97,121 @@ async function run() {
   );
   assert.match(hoverText(importedGenericResultHover), /local generic_text: string/);
 
+  const importedBoxHoverPosition = positionAfter(
+    document,
+    "local imported_box = BoxModule.Box.new(42)",
+    "local imported_box",
+  );
+  const importedBoxHover = await retry(
+    () =>
+      vscode.commands.executeCommand(
+        "vscode.executeHoverProvider",
+        document.uri,
+        importedBoxHoverPosition,
+      ),
+    (result) => /Box<number>/.test(hoverText(result)),
+    "imported generic class constructor result hover",
+  );
+  assert.match(hoverText(importedBoxHover), /Box<number>/);
+
+  const importedBoxAliasPosition = positionAfter(
+    document,
+    "typed_box: BoxInstance<number>",
+    "typed_box: ",
+  );
+  const importedBoxAliasHover = await retry(
+    () =>
+      vscode.commands.executeCommand(
+        "vscode.executeHoverProvider",
+        document.uri,
+        importedBoxAliasPosition,
+      ),
+    (result) => /BoxInstance|Box<number>/.test(hoverText(result)),
+    "imported generic instance alias hover",
+  );
+  assert.match(hoverText(importedBoxAliasHover), /BoxInstance|Box<number>/);
+  assert.match(hoverText(importedBoxAliasHover), /number/);
+
+  const importedBoxFieldPosition = positionAfter(
+    document,
+    "typed_box.value",
+    "typed_box.",
+  );
+  const importedBoxFieldHover = await retry(
+    () =>
+      vscode.commands.executeCommand(
+        "vscode.executeHoverProvider",
+        document.uri,
+        importedBoxFieldPosition,
+      ),
+    (result) => hoverText(result).includes("number"),
+    "imported generic class field hover",
+  );
+  assert.match(hoverText(importedBoxFieldHover), /value: number/);
+
+  const importedBoxCompletionPosition = positionAfter(
+    document,
+    "typed_box.get",
+    "typed_box.",
+  );
+  const importedBoxCompletion = await retry(
+    () =>
+      vscode.commands.executeCommand(
+        "vscode.executeCompletionItemProvider",
+        document.uri,
+        importedBoxCompletionPosition,
+        ".",
+      ),
+    (result) =>
+      (result?.items || []).some(
+        (item) =>
+          (typeof item.label === "string" ? item.label : item.label.label) === "get" &&
+          item.detail?.includes("number"),
+      ),
+    "imported generic class member completion with instantiated detail",
+  );
+  const importedBoxGetCompletion = importedBoxCompletion.items.find(
+    (item) => (typeof item.label === "string" ? item.label : item.label.label) === "get",
+  );
+  assert.match(importedBoxGetCompletion.detail, /number/);
+
+  const importedBoxSignaturePosition = positionAfter(
+    document,
+    "typed_box:get()",
+    "typed_box:get(",
+  );
+  const importedBoxSignature = await retry(
+    () =>
+      vscode.commands.executeCommand(
+        "vscode.executeSignatureHelpProvider",
+        document.uri,
+        importedBoxSignaturePosition,
+        "(",
+      ),
+    (result) => result?.signatures?.length > 0,
+    "imported generic class method signature help",
+  );
+  assert.match(importedBoxSignature.signatures[0].label, /get\(\): number/);
+
+  const importedBoxConstructorSignaturePosition = positionAfter(
+    document,
+    "BoxModule.Box.new(42)",
+    "BoxModule.Box.new(42",
+  );
+  const importedBoxConstructorSignature = await retry(
+    () =>
+      vscode.commands.executeCommand(
+        "vscode.executeSignatureHelpProvider",
+        document.uri,
+        importedBoxConstructorSignaturePosition,
+        "(",
+      ),
+    (result) => result?.signatures?.length > 0,
+    "imported generic class constructor signature help",
+  );
+  assert.match(importedBoxConstructorSignature.signatures[0].label, /value: number/);
+  assert.match(importedBoxConstructorSignature.signatures[0].label, /Box<number>/);
+
   const genericTypePosition = positionAfter(document, "Box<number>", "Box");
   const genericDefinitions = await retry(
     () =>
@@ -228,6 +343,13 @@ async function run() {
       importedGenericFunctionHover: hoverText(importedGenericHover),
       importedGenericFunctionSignature: importedGenericSignature.signatures[0].label,
       importedGenericResultHover: hoverText(importedGenericResultHover),
+      importedGenericClassHover: hoverText(importedBoxHover),
+      importedGenericClassAliasHover: hoverText(importedBoxAliasHover),
+      importedGenericClassFieldHover: hoverText(importedBoxFieldHover),
+      importedGenericClassCompletion: importedBoxGetCompletion.detail,
+      importedGenericClassMethodSignature: importedBoxSignature.signatures[0].label,
+      importedGenericClassConstructorSignature:
+        importedBoxConstructorSignature.signatures[0].label,
       genericAliasDefinition: genericDefinitions.some(
         (location) => location.uri.fsPath === fixtures.contractsPath,
       ),

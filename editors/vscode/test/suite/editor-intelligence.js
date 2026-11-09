@@ -141,6 +141,49 @@ async function testLiveLanguageFeatures() {
   assert.equal(signatures.signatures[0].label, "greet(name: string): string");
   assert.equal(signatures.activeParameter, 0);
 
+  const importedBoxPosition = positionAfter(document, "local imported_box =", "local imported_box");
+  const importedBoxHover = await vscode.commands.executeCommand(
+    "vscode.executeHoverProvider",
+    document.uri,
+    importedBoxPosition,
+  );
+  assert.match(hoverText(importedBoxHover), /imported_box.*number/s);
+
+  const typedBoxPosition = positionAfter(document, "typed_box: BoxInstance<number>", "typed_box");
+  const typedBoxHover = await vscode.commands.executeCommand(
+    "vscode.executeHoverProvider",
+    document.uri,
+    typedBoxPosition,
+  );
+  assert.match(hoverText(typedBoxHover), /typed_box.*Box<number>/s);
+
+  const typedBoxFieldPosition = positionAfter(document, "typed_box.value", "typed_box.");
+  const typedBoxFieldHover = await vscode.commands.executeCommand(
+    "vscode.executeHoverProvider",
+    document.uri,
+    typedBoxFieldPosition,
+  );
+  assert.match(hoverText(typedBoxFieldHover), /value: number/);
+
+  const typedBoxCompletion = await vscode.commands.executeCommand(
+    "vscode.executeCompletionItemProvider",
+    document.uri,
+    typedBoxFieldPosition,
+    ".",
+  );
+  const getCompletion = typedBoxCompletion.items.find((item) => item.label === "get");
+  assert(getCompletion, "member completion should include the generic Box method");
+  assert.match(getCompletion.detail, /number/);
+
+  const typedBoxSignaturePosition = positionAfter(document, "typed_box:get()", "typed_box:get(");
+  const typedBoxSignatures = await vscode.commands.executeCommand(
+    "vscode.executeSignatureHelpProvider",
+    document.uri,
+    typedBoxSignaturePosition,
+    "(",
+  );
+  assert.match(typedBoxSignatures.signatures[0].label, /get\(\): number/);
+
   const eventPosition = positionAfter(document, 'events:emit("player.hit');
   const eventHovers = await vscode.commands.executeCommand(
     "vscode.executeHoverProvider",

@@ -86,6 +86,7 @@ function createWorkspaceFixtures(workspaceOne, workspaceTwo) {
 
   const fixtures = {
     ecs: path.join(sourceOne, "ecs.tua"),
+    genericClass: path.join(sourceOne, "generic_class.tua"),
     intelligence: path.join(sourceOne, "intelligence.tua"),
     moduleGraphRoot: path.join(sourceOne, "module-graph-main.tua"),
     moduleGraphPlayer: path.join(sourceOne, "module_graph_player.tua"),
@@ -102,6 +103,19 @@ function createWorkspaceFixtures(workspaceOne, workspaceTwo) {
   };
 
   fs.writeFileSync(fixtures.suggestions, "local seed = 1\n\n");
+  fs.writeFileSync(
+    fixtures.genericClass,
+    [
+      "final class Box<T> {",
+      "  value: T",
+      "  init(value: T) { self.value = value }",
+      "  get(): T { return self.value }",
+      "}",
+      "export type BoxInstance<T> = Box<T>",
+      "return { Box = Box }",
+      "",
+    ].join("\n"),
+  );
   fs.writeFileSync(
     fixtures.ecs,
     [
@@ -123,6 +137,12 @@ function createWorkspaceFixtures(workspaceOne, workspaceTwo) {
       "local hover_probe = target_value",
       "local call_probe = greet(",
       "local inlay_probe = target_value",
+      'import type { BoxInstance } from "./generic_class"',
+      'local BoxModule = require("generic_class")',
+      "local imported_box = BoxModule.Box.new(42)",
+      "local typed_box: BoxInstance<number> = imported_box",
+      "local box_field_probe = typed_box.value",
+      "local box_method_probe = typed_box:get()",
       "local events = signal()",
       'events:on("player.hit", function() end)',
       'events:emit("player.hit")',

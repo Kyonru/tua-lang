@@ -252,8 +252,9 @@ function changeDocument(params) {
 
 function complete(message) {
   const context = requestContext(message);
+  const genericClassMember = context.line.includes("typed_box.");
   const initial = context.prefix === "o";
-  const label = initial ? "outdated_result" : "outside_from_lsp";
+  const label = genericClassMember ? "get" : initial ? "outdated_result" : "outside_from_lsp";
   const delayMs = initial ? 600 : continuedCompletionCount++ === 0 ? 20 : 200;
 
   log({
@@ -275,6 +276,7 @@ function complete(message) {
       isIncomplete: false,
       items: [
         {
+          ...(genericClassMember ? { detail: "function get(): number" } : {}),
           filterText: context.prefix,
           kind: 6,
           label,
@@ -331,6 +333,11 @@ function inlineCompletionDelay() {
 
 function hover(message) {
   const context = requestContext(message);
+  const value = context.word === "value" && context.line.includes("typed_box.value")
+    ? "value: number"
+    : context.word === "typed_box" && context.line.includes("BoxInstance<number>")
+      ? "typed_box: Box<number>"
+      : `${context.word}: number`;
 
   log({
     type: "hover.request",
@@ -340,7 +347,7 @@ function hover(message) {
   respond(message.id, {
     contents: {
       kind: "markdown",
-      value: `\`${context.word}\`: number\n\nDocument version ${context.docVersion}.`,
+      value: `\`${value}\`\n\nDocument version ${context.docVersion}.`,
     },
     range: wordRange(context.line, context.position),
   });
@@ -442,6 +449,8 @@ function workspaceSymbols(message) {
 
 function signatureHelp(message) {
   const context = requestContext(message);
+  const genericClassMethod = context.line.includes("typed_box:get(");
+  const label = genericClassMethod ? "get(): number" : "greet(name: string): string";
 
   log({
     type: "signature.request",
@@ -453,8 +462,8 @@ function signatureHelp(message) {
     activeSignature: 0,
     signatures: [
       {
-        label: "greet(name: string): string",
-        parameters: [{ label: "name: string" }],
+        label,
+        parameters: genericClassMethod ? [] : [{ label: "name: string" }],
       },
     ],
   });

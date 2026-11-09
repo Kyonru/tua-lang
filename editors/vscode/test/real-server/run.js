@@ -87,6 +87,7 @@ function createProject(workspacePath) {
   const contractsPath = path.join(sourcePath, "contracts.tua");
   const actorsPath = path.join(sourcePath, "actors.tua");
   const genericPath = path.join(sourcePath, "generic.tua");
+  const genericClassPath = path.join(sourcePath, "generic_class.tua");
   const configPath = path.join(workspacePath, "tua.toml");
 
   fs.mkdirSync(sourcePath, { recursive: true });
@@ -143,10 +144,32 @@ function createProject(workspacePath) {
     ].join("\n"),
   );
   fs.writeFileSync(
+    genericClassPath,
+    [
+      "final class Box<T> {",
+      "  value: T",
+      "",
+      "  init(value: T) {",
+      "    self.value = value",
+      "  }",
+      "",
+      "  get(): T {",
+      "    return self.value",
+      "  }",
+      "}",
+      "",
+      "export type BoxInstance<T> = Box<T>",
+      "return { Box = Box }",
+      "",
+    ].join("\n"),
+  );
+  fs.writeFileSync(
     mainPath,
     [
       'import type { Box, Updatable } from "./contracts"',
+      'import type { BoxInstance } from "./generic_class"',
       'local Generic = require("generic")',
+      'local BoxModule = require("generic_class")',
       "type Player = {",
       "  health: number,",
       "  name: string,",
@@ -161,6 +184,10 @@ function createProject(workspacePath) {
       "local score: Box<number> = { value = 4 }",
       "local score_value = score.value",
       'local generic_text = Generic.identity("ready")',
+      "local imported_box = BoxModule.Box.new(42)",
+      "local typed_box: BoxInstance<number> = imported_box",
+      "local imported_box_value: number = typed_box.value",
+      "local imported_box_method: number = typed_box:get()",
       "",
       "local function tick(value: Updatable, dt: number)",
       "  value:update(dt)",
@@ -172,6 +199,8 @@ function createProject(workspacePath) {
       "  greeting = greeting,",
       "  screen_width = screen_width,",
       "  generic_text = generic_text,",
+      "  imported_box_value = imported_box_value,",
+      "  imported_box_method = imported_box_method,",
       "}",
       "",
     ].join("\n"),
@@ -182,6 +211,7 @@ function createProject(workspacePath) {
     configPath,
     contractsPath,
     genericPath,
+    genericClassPath,
     helperPath,
     mainPath,
     serverPath: process.env.TUA_REAL_SERVER_PATH,
