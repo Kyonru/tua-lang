@@ -475,6 +475,58 @@ final class Particle implements Updatable {
 }
 
 #[test]
+fn creating_and_editing_a_protocol_dependency_refreshes_import_diagnostics() {
+    let temp = TempProject::new("created-protocol-dependency-refresh");
+    temp.write("tua.toml", "source = \"src\"\n");
+    let compatible = "export protocol Updatable {\n  update(dt: number): nil\n}\n";
+    let incompatible = "export protocol Updatable {\n  update(dt: string): nil\n}\n";
+    let actors = r#"import type { Updatable } from "./contracts"
+final class Particle implements Updatable {
+  update(dt: number): nil {}
+}
+"#;
+    let contracts_uri = temp.uri_for("src/contracts.tua");
+    let actors_uri = temp.uri_for("src/actors.tua");
+    let mut server = TestServer::new();
+
+    server.send(initialize_with_pull_diagnostics(1, temp.uri(), true));
+    server.send(did_open(&actors_uri, actors));
+    server.send(text_document_diagnostic_request(2, &actors_uri));
+    let diagnostics = document_diagnostic_items(server.output(), 2);
+    assert!(
+        diagnostics.iter().any(|diagnostic| {
+            diagnostic["code"] == "TL4002"
+                && diagnostic["message"]
+                    .as_str()
+                    .is_some_and(|message| message.contains("import file not found: `./contracts`"))
+        }),
+        "the unresolved type-only protocol import should be diagnosed: {diagnostics:#?}"
+    );
+
+    temp.write("src/contracts.tua", compatible);
+    server.send(watched_files_changed([(&contracts_uri, 1)]));
+    server.send(text_document_diagnostic_request(3, &actors_uri));
+    let diagnostics = document_diagnostic_items(server.output(), 3);
+    assert!(
+        diagnostics.is_empty(),
+        "creating a compatible protocol module should clear import errors: {diagnostics:#?}"
+    );
+
+    temp.write("src/contracts.tua", incompatible);
+    server.send(watched_files_changed([(&contracts_uri, 2)]));
+    server.send(text_document_diagnostic_request(4, &actors_uri));
+    let diagnostics = document_diagnostic_items(server.output(), 4);
+    assert!(
+        diagnostics.iter().any(|diagnostic| {
+            diagnostic["message"].as_str().is_some_and(|message| {
+                message.contains("Particle.update") && message.contains("does not satisfy protocol")
+            })
+        }),
+        "editing the created contract should refresh conformance: {diagnostics:#?}"
+    );
+}
+
+#[test]
 fn deleting_a_protocol_from_a_cyclic_import_graph_discards_stale_contracts() {
     let temp = TempProject::new("deleted-cyclic-protocol-dependency-refresh");
     temp.write("tua.toml", "source = \"src\"\n");

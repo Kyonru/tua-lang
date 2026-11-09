@@ -69,8 +69,13 @@ class inheritance, generic methods/protocols, compound bounds, and explicit
 call-site generic arguments remain documented feature limits.
 
 After adding the separate-imported-requirements range regression, the complete
-LSP suite passed again: 424 tests passed, with formatting and `make diff-check`
-also passing. This test-only update does not change the already tested VSIX.
+LSP suite passed again: 424 tests passed. A subsequent watched-file lifecycle
+test also passed: it starts with a missing type-only protocol dependency,
+creates a compatible protocol file to clear the import error, then edits that
+file to an incompatible signature and observes the conformance diagnostic.
+The complete LSP suite then passed with 425 tests, with formatting and
+`make diff-check` also passing. These test-only updates do not change the
+already tested VSIX.
 
 The protocol-and-paths nightly fuzz target also completed a 31-second bounded
 run: 711,266 executions, no crash, and observed peak RSS about 533 MiB. Its
