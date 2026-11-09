@@ -9440,12 +9440,17 @@ fn unclosed_native_classes_recover_members_without_erasing_outer_scopes() {
 #[test]
 fn unclosed_protocols_keep_current_buffer_semantics_available() {
     let fixture = Fixture::parse(
-        "-- file: draft.tua\nlocal label = 'ready'\nprotocol Display {\n render(): string\n",
+        "-- file: draft.tua\nlocal label = 'ready'\nlocal function draw(value: Display): nil\n value:<|complete|>\nend\nprotocol Display {\n render(): string\n",
     );
     let mut host = AnalysisHost::new();
     host.set_file("draft.tua", fixture.files()[0].source.clone());
     let snapshot = host.snapshot();
 
+    let labels = completion_labels(&snapshot.completion("draft.tua", fixture.position("complete")));
+    assert!(
+        labels.contains(&"render".into()),
+        "the partial protocol contract should serve current-file completion: {labels:?}"
+    );
     let hover = snapshot
         .hover("draft.tua", SourcePosition { line: 1, column: 8 })
         .expect("an earlier local should still resolve in the recovered current buffer");
