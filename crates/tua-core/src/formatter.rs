@@ -993,6 +993,7 @@ fn normalize_spacing(line: &str, quote_style: QuoteStyle) -> String {
     let mut state = MaskState::Code;
     let mut output = String::with_capacity(line.len());
     let bytes = line.as_bytes();
+    let function_generics = function_generic_span(line);
     let mut index = 0;
 
     while index < bytes.len() {
@@ -1016,6 +1017,15 @@ fn normalize_spacing(line: &str, quote_style: QuoteStyle) -> String {
 
         match &mut state {
             MaskState::Code => {
+                if let Some((start, end)) = function_generics {
+                    if index == start {
+                        trim_trailing_spaces(&mut output);
+                        output.push_str(&normalize_generic_parameters(&line[start..end]));
+                        index = end;
+                        continue;
+                    }
+                }
+
                 if bytes[index] == b'-' && bytes.get(index + 1) == Some(&b'-') {
                     if !output.is_empty() && !output.ends_with(' ') {
                         output.push(' ');
@@ -1198,6 +1208,43 @@ fn normalize_spacing(line: &str, quote_style: QuoteStyle) -> String {
     }
 
     output.trim_end().to_owned()
+}
+
+fn function_generic_span(line: &str) -> Option<(usize, usize)> {
+    let trimmed_start = line.len() - line.trim_start().len();
+    let code = &line[trimmed_start..];
+    let function_keyword_end = if let Some(rest) = code.strip_prefix("local ") {
+        rest.strip_prefix("function")?;
+        "local function".len()
+    } else {
+        code.strip_prefix("function")?;
+        "function".len()
+    };
+    let name_start = trimmed_start + function_keyword_end;
+    let before_args = line[name_start..].find('(')? + name_start;
+    let generic_start = line[name_start..before_args].rfind('<')? + name_start;
+    let generic_end = line[generic_start..before_args].find('>')? + generic_start + 1;
+    Some((generic_start, generic_end))
+}
+
+fn normalize_generic_parameters(parameters: &str) -> String {
+    let inner = parameters
+        .strip_prefix('<')
+        .and_then(|parameters| parameters.strip_suffix('>'))
+        .unwrap_or(parameters);
+    let parameters = inner
+        .split(',')
+        .map(|parameter| {
+            let parameter = parameter.trim();
+            if let Some((name, bound)) = parameter.split_once(':') {
+                format!("{}: {}", name.trim(), bound.trim())
+            } else {
+                parameter.to_owned()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+    format!("<{parameters}>")
 }
 
 fn short_string_end(bytes: &[u8], start: usize) -> Option<usize> {

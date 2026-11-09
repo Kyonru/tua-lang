@@ -78,6 +78,25 @@ fn formats_generic_class_headers_and_applied_parent_without_erasure() {
 }
 
 #[test]
+fn formats_generic_function_headers_without_changing_their_syntax() {
+    let source = r#"protocol Updatable { update(dt: number): nil }
+local function _updateOne<T: Updatable>(item: T, dt: number): T
+  item:update(dt)
+  return item
+end
+"#;
+
+    let output = format(source);
+    assert!(
+        output.contains("local function _updateOne<T: Updatable>(item: T, dt: number): T"),
+        "{output}"
+    );
+    assert_eq!(format(&output), output);
+    crate::check_tua_source("src/main.tua", output)
+        .expect("formatted generic function headers should remain semantically valid");
+}
+
+#[test]
 fn formats_protocol_comments_without_changing_method_signatures() {
     let source = r#"protocol Updatable {
 update(dt:number):nil -- advance one simulation step
