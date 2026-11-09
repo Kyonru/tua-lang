@@ -241,6 +241,63 @@ final class Bad implements Updatable {
 }
 
 #[test]
+fn imported_generic_protocol_bound_diagnostics_use_project_conformance() {
+    let temp = TempProject::new("imported-generic-protocol-bound");
+    temp.write("tua.toml", "source = \"src\"\n");
+    let contracts = "export protocol Updatable {\n  update(dt: number): nil\n}\n";
+    let relay =
+        "import type { Updatable } from \"./contracts\"\nexport type { Updatable } from \"./contracts\"\n";
+    let api = "import type { Updatable } from \"./relay\"\nlocal function tick<T: Updatable>(value: T): T\n  value:update(1)\n  return value\nend\nreturn { tick = tick }\n";
+    let actors = "import type { Updatable } from \"./contracts\"\nfinal class Actor implements Updatable {\n  update(dt: number): nil { return nil }\n}\nreturn { Actor = Actor }\n";
+    let lookalikes = "final class Lookalike {\n  update(dt: number): nil { return nil }\n}\nreturn { Lookalike = Lookalike }\n";
+    temp.write("src/contracts.d.tua", contracts);
+    temp.write("src/relay.tua", relay);
+    temp.write("src/api.tua", api);
+    temp.write("src/actors.tua", actors);
+    temp.write("src/lookalike.tua", lookalikes);
+    let main = "local api = require(\"api\")\nlocal actors = require(\"actors\")\nlocal lookalikes = require(\"lookalike\")\nlocal actor = actors.Actor.new()\nlocal _valid = api.tick(actor)\nlocal _invalid = api.tick(lookalikes.Lookalike.new())\n";
+    temp.write("src/main.tua", main);
+
+    let contracts_uri = temp.uri_for("src/contracts.d.tua");
+    let relay_uri = temp.uri_for("src/relay.tua");
+    let api_uri = temp.uri_for("src/api.tua");
+    let actors_uri = temp.uri_for("src/actors.tua");
+    let lookalikes_uri = temp.uri_for("src/lookalike.tua");
+    let main_uri = temp.uri_for("src/main.tua");
+    let output = run_messages(vec![
+        initialize_with_root(1, temp.uri()),
+        did_open(&contracts_uri, contracts),
+        did_open(&relay_uri, relay),
+        did_open(&api_uri, api),
+        did_open(&actors_uri, actors),
+        did_open(&lookalikes_uri, lookalikes),
+        did_open(&main_uri, main),
+        text_document_diagnostic_request(2, &main_uri),
+    ]);
+    let diagnostics = response_with_id(&output, 2)["result"]["items"]
+        .as_array()
+        .expect("pull diagnostics should return items");
+    assert!(
+        diagnostics.iter().any(|diagnostic| {
+            diagnostic["code"] == "TL1015"
+                && diagnostic["message"].as_str().is_some_and(|message| {
+                    message.contains("Lookalike") && message.contains("Updatable")
+                })
+        }),
+        "the project-aware pass should retain the nonconforming class diagnostic: {diagnostics:#?}"
+    );
+    assert!(
+        !diagnostics.iter().any(|diagnostic| {
+            diagnostic["code"] == "TL1015"
+                && diagnostic["message"].as_str().is_some_and(|message| {
+                    message.contains("Actor") && message.contains("Updatable")
+                })
+        }),
+        "the fast file-only diagnostic should not reject the imported explicit conformer: {diagnostics:#?}"
+    );
+}
+
+#[test]
 fn inherited_protocol_override_diagnostics_link_to_the_requirement() {
     let temp = TempProject::new("inherited-protocol-override-related-info");
     temp.write("tua.toml", "source = \"src\"\n");

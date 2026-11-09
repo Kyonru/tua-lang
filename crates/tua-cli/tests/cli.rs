@@ -1002,6 +1002,57 @@ fn protocol_polymorphic_dispatch_preserves_runtime_receiver_identity() {
 }
 
 #[test]
+fn imported_generic_protocol_bounds_keep_project_conformance_diagnostics() {
+    let temp = TempDir::new("imported-generic-protocol-bound");
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).expect("write config");
+    fs::create_dir_all(temp.path().join("src")).expect("create source directory");
+    for (path, source) in [
+        (
+            "src/contracts.d.tua",
+            "export protocol Updatable {\n  update(dt: number): nil\n}\n",
+        ),
+        (
+            "src/relay.tua",
+            "import type { Updatable } from \"./contracts\"\nexport type { Updatable } from \"./contracts\"\n",
+        ),
+        (
+            "src/api.tua",
+            "import type { Updatable } from \"./relay\"\nlocal function tick<T: Updatable>(value: T): T\n  value:update(1)\n  return value\nend\nreturn { tick = tick }\n",
+        ),
+        (
+            "src/actors.tua",
+            "import type { Updatable } from \"./contracts\"\nfinal class Actor implements Updatable {\n  update(dt: number): nil { return nil }\n}\nreturn { Actor = Actor }\n",
+        ),
+        (
+            "src/lookalike.tua",
+            "final class Lookalike {\n  update(dt: number): nil { return nil }\n}\nreturn { Lookalike = Lookalike }\n",
+        ),
+        (
+            "src/main.tua",
+            "local api = require(\"api\")\nlocal actors = require(\"actors\")\nlocal lookalikes = require(\"lookalike\")\nlocal actor = actors.Actor.new()\nlocal _valid = api.tick(actor)\nlocal _invalid = api.tick(lookalikes.Lookalike.new())\n",
+        ),
+    ] {
+        fs::write(temp.path().join(path), source).expect("write project fixture");
+    }
+
+    let check = tua()
+        .arg("check")
+        .current_dir(temp.path())
+        .output()
+        .expect("run project check");
+    assert!(!check.status.success(), "the nonconforming class must fail");
+    let stderr = String::from_utf8_lossy(&check.stderr);
+    assert!(
+        stderr.contains("requires explicit conformance") && stderr.contains("Lookalike"),
+        "project checking should retain the real nonconformance error:\n{stderr}"
+    );
+    assert!(
+        !stderr.contains("inferred `Actor` does not conform"),
+        "the project-aware pass should remove the earlier file-only false error:\n{stderr}"
+    );
+}
+
+#[test]
 fn concrete_generic_parent_substitution_preserves_emitted_lua_behavior() {
     let Some(lua) = working_lua_runtime() else {
         return;

@@ -85,6 +85,7 @@ impl AnalysisSnapshot {
                     diagnostic.code,
                     Some(
                         crate::DiagnosticCode::TYPE_MISMATCH
+                            | crate::DiagnosticCode::TYPE_GENERIC_INFERENCE
                             | crate::DiagnosticCode::DOMAIN_ECS_COMPONENT_VALUE
                             | crate::DiagnosticCode::DOMAIN_ECS_QUERY
                     )
