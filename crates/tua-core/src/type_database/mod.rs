@@ -571,7 +571,14 @@ impl ProjectTypeDatabase {
                 }
 
                 let key = (definition.id.clone(), arguments.clone());
-                if context.generic_aliases.contains(&key) {
+                if context
+                    .generic_aliases
+                    .iter()
+                    .any(|(active_id, _)| active_id == &definition.id)
+                {
+                    // Recursive generic aliases may change their arguments on
+                    // every edge. Preserve the named edge on the first return
+                    // to a declaration instead of expanding a deep prefix.
                     return Type::GenericAliasApplication {
                         reference: GenericAliasReference::Declaration(definition.id.clone()),
                         arguments,

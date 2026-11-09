@@ -996,10 +996,15 @@ impl GenericAliasExpansionContext {
                 }
 
                 let key = (definition.id.clone(), arguments.clone());
-                if self.active.contains(&key) {
-                    // A recursive alias at the same instantiation has reached
-                    // its fixed point. Retain its named edge within the outer
-                    // structure so hover/completion stay finite and useful.
+                if self
+                    .active
+                    .iter()
+                    .any(|(active_id, _)| active_id == &definition.id)
+                {
+                    // Once an alias declaration reappears, preserve that edge
+                    // symbolically even if its arguments changed. Expanding
+                    // Grow<T[]> through 128 nested records adds no useful
+                    // information and makes downstream diagnostics unwieldy.
                     return Type::GenericAliasApplication {
                         reference: GenericAliasReference::Declaration(definition.id.clone()),
                         arguments,

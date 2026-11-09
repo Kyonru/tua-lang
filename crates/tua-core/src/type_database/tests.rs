@@ -155,11 +155,14 @@ export type Box<T> = { value: T }
 }
 
 #[test]
-fn changing_argument_generic_alias_recursion_is_bounded_in_project_snapshots() {
+fn changing_argument_generic_alias_recursion_preserves_its_first_project_edge() {
     let fixture = Fixture::parse(
         r#"-- file: src/main.tua
 import type { Grow } from "./aliases"
 local node: Grow<number>
+local function child(value: Grow<number>): Grow<number[]>
+  return value.next
+end
 -- file: src/aliases.tua
 export type Grow<T> = { next: Grow<T[]> }
 "#,
@@ -168,29 +171,37 @@ export type Grow<T> = { next: Grow<T[]> }
     let environment = snapshot
         .project_type_environment("src/main.tua")
         .expect("main project environment should exist");
-    let mut current = environment.resolve_aliases(environment.local("node").unwrap());
-    let mut depth = 0;
-    loop {
-        match current {
-            Type::Table(table) => {
-                current = table
-                    .semantic_field("next")
-                    .expect("each recursive expansion has next")
-                    .ty
-                    .clone();
-                depth += 1;
-            }
-            Type::GenericAliasApplication { .. } => break,
-            other => panic!("expected bounded unresolved project alias, got {other:?}"),
-        }
-    }
-    assert!(
-        depth <= 128,
-        "project expansion exceeded its depth guard: {depth}"
+    let Type::Table(table) = environment.resolve_aliases(environment.local("node").unwrap()) else {
+        panic!("expected the recursive project alias outer record");
+    };
+    let Type::GenericAliasApplication {
+        reference,
+        arguments,
+        ..
+    } = &table
+        .semantic_field("next")
+        .expect("recursive edge exists")
+        .ty
+    else {
+        panic!("the first repeated project declaration should remain symbolic");
+    };
+    assert_eq!(
+        arguments,
+        &[Type::array(Type::number())],
+        "the recursive edge should retain the changed argument"
     );
     assert!(
-        depth >= 64,
-        "project expansion should preserve useful shape: {depth}"
+        matches!(reference, crate::types::GenericAliasReference::Declaration(id) if id.name == "Grow"),
+        "the unresolved edge should retain the canonical declaration identity"
+    );
+    let diagnostics = snapshot.diagnostics("src/main.tua");
+    assert!(
+        diagnostics
+            .iter()
+            .all(|diagnostic| {
+                diagnostic.severity != crate::DiagnosticSeverity::Error || diagnostic.line < 3
+            }),
+        "a cross-module member should keep the recursive alias's changed argument: {diagnostics:#?}"
     );
 }
 

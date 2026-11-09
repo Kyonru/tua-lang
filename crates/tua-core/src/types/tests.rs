@@ -2176,36 +2176,28 @@ fn generic_alias_recursion_stabilizes_at_the_same_instantiation() {
 }
 
 #[test]
-fn changing_argument_generic_alias_recursion_stops_at_the_depth_limit() {
+fn changing_argument_generic_alias_recursion_preserves_its_first_named_edge() {
     let parsed = parse_tua_source(
         "generic_grow.tua",
         "type Grow<T> = { next: Grow<T[]> }\nlocal node: Grow<number>\n",
     )
     .expect("changing-argument recursive generic alias should parse");
     let environment = build_type_environment(&parsed).expect("generic alias should resolve");
-    let mut current = environment.resolve_aliases(environment.local("node").unwrap());
-    let mut depth = 0;
-    loop {
-        match current {
-            Type::Table(table) => {
-                current = table
-                    .semantic_field("next")
-                    .expect("each recursive expansion has next")
-                    .ty
-                    .clone();
-                depth += 1;
-            }
-            Type::GenericAliasApplication { .. } => break,
-            other => panic!("expected bounded unresolved alias application, got {other:?}"),
-        }
-    }
-    assert!(
-        depth <= 128,
-        "expansion exceeded the guarded depth: {depth}"
-    );
-    assert!(
-        depth >= 64,
-        "recursive type should retain useful outer shape: {depth}"
+    let Type::Table(table) = environment.resolve_aliases(environment.local("node").unwrap()) else {
+        panic!("expected the recursive alias outer record");
+    };
+    let Type::GenericAliasApplication { arguments, .. } = &table
+        .semantic_field("next")
+        .expect("recursive edge exists")
+        .ty
+    else {
+        panic!("the first repeated declaration should remain a named application");
+    };
+    assert_eq!(arguments, &[Type::array(Type::number())]);
+    assert_eq!(
+        format::format_type_pretty(&Type::Table(table), 0),
+        "{ next: Grow<number[]> }",
+        "formatting should show the symbolic recursive edge instead of a deep expansion"
     );
 }
 

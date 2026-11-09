@@ -210,6 +210,40 @@ return { define = define }
 }
 
 #[test]
+fn growing_recursive_generic_alias_keeps_editor_types_finite_and_usable() {
+    let temp = TempProject::new("growing-recursive-generic-alias");
+    let main = r#"import type { Grow } from "./aliases"
+
+local function child(node: Grow<number>): Grow<number[]>
+  return node.next
+end
+
+local node: Grow<number>
+node.next.
+"#;
+    let aliases = "export type Grow<T> = { next: Grow<T[]> }\n";
+    temp.write("src/main.tua", main);
+    temp.write("src/aliases.tua", aliases);
+
+    let main_uri = temp.uri_for("src/main.tua");
+    let aliases_uri = temp.uri_for("src/aliases.tua");
+    let output = run_messages(vec![
+        initialize_with_root(1, temp.uri()),
+        did_open(&main_uri, main),
+        did_open(&aliases_uri, aliases),
+        completion_request(2, &main_uri, main, "node.next."),
+        hover_request(3, &main_uri, main, "next"),
+    ]);
+
+    assert_completion_labels(&output, 2, ["next"]);
+    assert_hover_contains(&output, 3, "Grow<number[]>");
+    assert!(
+        hover_contents(&output, 3).len() < 200,
+        "hover should keep a growing recursive alias symbolic"
+    );
+}
+
+#[test]
 fn workspace_symbol_searches_all_workspace_folders() {
     let game = TempProject::new("workspace-folder-game");
     let tools = TempProject::new("workspace-folder-tools");

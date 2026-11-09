@@ -39,6 +39,9 @@ language or editor behavior, and migration notes call out those changes.
 
 - Preserve nominal protocol identity through mutually recursive cross-file
   method signatures, while continuing to reject incompatible implementations.
+- Stop generic alias expansion at the first repeated declaration, even when its
+  arguments change, so recursive aliases retain a symbolic edge and diagnostics
+  avoid expanding into long nested record chains.
 - Show imported generic alias declarations with their binders and body instead
   of presenting them as a recursive zero-argument application.
 - Compare generic override signatures after substituting the concrete parent

@@ -134,10 +134,12 @@ that base value into the caller's narrower container. A read-only use such as
 `first(cats)` still infers `Cat`. This rule applies to generic call inference;
 existing assignment compatibility for non-generic arrays is unchanged.
 
-Recursive generic aliases are bounded during resolution: same-argument
-recursive edges remain named, while a recursion that keeps changing arguments
-stops at the expansion limit and may leave an unresolved application without a
-dedicated diagnostic.
+Recursive generic aliases remain symbolic when resolution returns to the same
+alias declaration, including when that recursive edge changes its type
+arguments. For example, `Grow<T> = { next: Grow<T[]> }` resolves to one record
+whose `next` field is `Grow<T[]>`; it does not expand into a long chain of
+nested records. Separate depth and work limits still protect unusually deep
+chains of distinct aliases.
 
 Generic class parameters are supported locally and across module boundaries
 when a class exports a generic instance alias:

@@ -7145,6 +7145,45 @@ local _count_check: number = count
 }
 
 #[test]
+fn growing_recursive_generic_aliases_keep_a_symbolic_member_type() {
+    check_tua_source(
+        "src/growing_alias.tua",
+        r#"
+type Grow<T> = { next: Grow<T[]> }
+
+local function child(node: Grow<number>): Grow<number[]>
+  return node.next
+end
+"#,
+    )
+    .expect("a growing recursive alias member should retain its changed type argument");
+
+    let diagnostics = check_tua_source(
+        "src/growing_alias_error.tua",
+        r#"
+type Grow<T> = { next: Grow<T[]> }
+
+local function read(node: Grow<number>): number
+  return node.next.next
+end
+"#,
+    )
+    .expect_err("returning a recursive record is not a number");
+    let mismatch = diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic.code == Some(DiagnosticCode::TYPE_MISMATCH))
+        .expect("the return value should retain its real type mismatch");
+    assert!(
+        mismatch.message.contains("Grow<number[][][]>"),
+        "the diagnostic should keep the recursive edge symbolic: {mismatch:#?}"
+    );
+    assert!(
+        mismatch.message.len() < 200,
+        "recursive alias diagnostics should not render a long expanded chain: {mismatch:#?}"
+    );
+}
+
+#[test]
 fn generic_function_inference_matches_lua_string_and_table_call_sugar() {
     check_tua_source(
         "src/generic_call_sugar.tua",
