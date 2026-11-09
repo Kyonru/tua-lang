@@ -114,16 +114,25 @@ tested editor surfaces.
 - **Fix:** For an invalid current document, when current recovered facts and
   ordinary completion both return no results at a member-access cursor, retry
   that query against the file's last-good parsed facts and type environment.
-  Successfully parsed documents continue to use current facts only. Last-good
-  semantic facts are memoized per snapshot so successive keystrokes do not
-  rebuild project inference.
+  Successfully parsed documents continue to use current facts only. Degraded
+  recovery replaces recoverable incomplete lines inside class bodies with a
+  syntax-safe no-op block padded to preserve source columns. Outside class
+  bodies it preserves the prior whitespace recovery, so table and callback
+  context remains parseable. Fresh buffers therefore retain the generated
+  class source mapping needed to locate method parameters. Last-good semantic
+  facts are memoized per snapshot so successive keystrokes do not rebuild
+  project inference.
 - **Regression coverage:** Core snapshot and actual LSP edit-sequence tests
   open the valid generic class, remove the final class brace and method call,
-  then assert that `read` is suggested after `value:`. The core test also
-  verifies the unclosed-class diagnostic remains present and that last-good
-  semantic facts reuse the same cached allocation.
+  then assert that `read` is suggested after `value:`. They also open the same
+  incomplete source without any prior valid snapshot. The core test verifies
+  the unclosed-class diagnostic remains present and that last-good semantic
+  facts reuse the same cached allocation. A direct recovery test checks that
+  only class-body lines receive the no-op placeholder and that source length
+  remains unchanged; a table-completion regression protects non-class context.
 - **Files:** `crates/tua-core/src/analysis/editor_queries.rs`,
-  `crates/tua-core/src/analysis/tests.rs`, and
+  `crates/tua-core/src/analysis/recovery.rs`,
+  `crates/tua-core/src/analysis/tests.rs`, `crates/tua-core/src/classes.rs`, and
   `crates/tua-lsp/src/server/tests/completion.rs`.
 
 The same follow-up adds exact generic alias expansion work-limit coverage at
@@ -193,7 +202,19 @@ combinations and broader cancellation permutations remain open.
   completion, hover, signatures, definitions, rename, unsaved edits, and
   implementation navigation.
 - `unzip -tq editors/vscode/tua-0.7.0.vsix` — passed, no archive errors.
-- Final VSIX SHA-256: `87c33c1711f5ce22b14ae4809a80719223534dda2a1194740af59f5a746e34eb`.
+- Previously audited VSIX SHA-256: `87c33c1711f5ce22b14ae4809a80719223534dda2a1194740af59f5a746e34eb` (superseded by the revalidated artifact below).
+
+### Revalidation after fresh-buffer recovery coverage
+
+- `RUST_MIN_STACK=16777216 cargo test -p tua-core incomplete_generic_class_completion_uses_current_and_last_good_facts` — passed; verifies completion in both a new invalid buffer and after editing a valid document.
+- `cargo test -p tua-core declaration_library_drives_recursive_discriminated_table_completion` — passed; guards callback/table context outside class bodies.
+- `cargo test -p tua-core incomplete_line_recovery_uses_class_placeholder_only_inside_class_bodies` — passed; directly checks the class-only no-op placeholder and equal source length.
+- `cargo test -p tua-lsp generic_class_bound_completion_survives_incomplete_class_edits` — passed; actual in-process LSP requests cover fresh and edited documents.
+- `env -u RUST_MIN_STACK -u RUST_TEST_THREADS make verify` — the initial sandboxed run blocked two loopback inspector tests. Rerunning with loopback access passed the full gate: core 1,900 passed/1 ignored; LSP 433; CLI library 92 passed/2 ignored; CLI integration 137; gameplay 3; helper defaults 1; LOVE examples 3; LSP smoke 1; Lua syntax 1; VS Code 180/180; Clippy, version/schema/docs generation, language evaluation, JSON validation, and diff checks all passed. LOVE-dependent tests were skipped by their explicit environment guards.
+- `make docs-build` — passed.
+- `make extension-package` — passed after granting the loopback access required by the inspector tests; 180/180 extension tests passed, npm reported zero vulnerabilities, the release server was bundled, and the VSIX was built.
+- `TUA_TEST_VSIX="$(pwd)/editors/vscode/tua-0.7.0.vsix" make extension-real-server-test` — passed against the final packaged artifact. VS Code installed it into a disposable profile, launched its bundled real server, exercised the protocol/generic editor suite, and exited with code 0.
+- `unzip -tq editors/vscode/tua-0.7.0.vsix` — passed, no archive errors. Current artifact: 8.7 MB, SHA-256 `bb06d1f4ea32c108ec0df543e89123d290eb2489b4cc13c24fe7d87c934cd8ba`.
 
 The generated VSIX is a local macOS arm64 beta artifact. This follow-up does
 not claim cross-platform, LOVE/LuaJIT, visual, or long-session release
