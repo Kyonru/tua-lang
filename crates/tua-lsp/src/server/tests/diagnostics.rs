@@ -330,6 +330,66 @@ final class Child extends Parent {
 }
 
 #[test]
+fn inherited_override_diagnostics_link_to_requirements_in_each_imported_file() {
+    let temp = TempProject::new("inherited-override-multiple-imported-requirements");
+    temp.write("tua.toml", "source = \"src\"\n");
+    let updatable =
+        "-- 😀 first contract\nexport protocol Updatable {\n  update(dt: string): nil\n}\n";
+    let steppable =
+        "-- 🧪 second contract\nexport protocol Steppable {\n  update(dt: string): nil\n}\n";
+    let source = r#"import type { Updatable } from "./updatable"
+import type { Steppable } from "./steppable"
+-- 🧙‍♂️ consumer
+open class Parent implements Updatable, Steppable {
+  update(dt: string): nil {}
+}
+final class Child extends Parent {
+  override update(dt: number): nil {}
+}
+"#;
+    let updatable_uri = temp.uri_for("src/updatable.tua");
+    let steppable_uri = temp.uri_for("src/steppable.tua");
+    let actors_uri = temp.uri_for("src/actors.tua");
+    let output = run_messages(vec![
+        initialize_with_root(1, temp.uri()),
+        did_open(&updatable_uri, updatable),
+        did_open(&steppable_uri, steppable),
+        did_open(&actors_uri, source),
+    ]);
+    let diagnostics = last_published_diagnostics(&output, &actors_uri);
+    let diagnostic = diagnostics
+        .iter()
+        .find(|diagnostic| {
+            diagnostic["message"].as_str().is_some_and(|message| {
+                message.contains("inherited protocol requirements `Updatable.update`")
+                    && message.contains("`Steppable.update`")
+            })
+        })
+        .unwrap_or_else(|| {
+            panic!("the override should identify every inherited protocol: {diagnostics:#?}")
+        });
+
+    assert_eq!(diagnostic["range"]["start"]["line"], 7);
+    assert_eq!(diagnostic["range"]["start"]["character"], 11);
+    assert_eq!(diagnostic["range"]["end"]["line"], 7);
+    assert_eq!(diagnostic["range"]["end"]["character"], 17);
+    let related = diagnostic["relatedInformation"]
+        .as_array()
+        .expect("each imported contract should be navigable");
+    assert_eq!(related.len(), 2, "{diagnostic:#?}");
+    assert_eq!(related[0]["location"]["uri"], updatable_uri);
+    assert_eq!(related[0]["location"]["range"]["start"]["line"], 2);
+    assert_eq!(related[0]["location"]["range"]["start"]["character"], 2);
+    assert_eq!(related[0]["location"]["range"]["end"]["line"], 2);
+    assert_eq!(related[0]["location"]["range"]["end"]["character"], 8);
+    assert_eq!(related[1]["location"]["uri"], steppable_uri);
+    assert_eq!(related[1]["location"]["range"]["start"]["line"], 2);
+    assert_eq!(related[1]["location"]["range"]["start"]["character"], 2);
+    assert_eq!(related[1]["location"]["range"]["end"]["line"], 2);
+    assert_eq!(related[1]["location"]["range"]["end"]["character"], 8);
+}
+
+#[test]
 fn unsaved_protocol_edit_refreshes_importing_class_diagnostics() {
     let temp = TempProject::new("unsaved-protocol-conformance-refresh");
     temp.write("tua.toml", "source = \"src\"\n");

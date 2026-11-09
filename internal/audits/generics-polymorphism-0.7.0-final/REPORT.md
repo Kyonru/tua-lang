@@ -35,7 +35,10 @@ editor-surface regressions were added. Further tests cover deletion of one node
 from a cyclic import graph through both `AnalysisHost` and LSP watched-file /
 pull-diagnostics flow, editor recovery at every character prefix of a nested
 record/union protocol fixture, and imported inherited-override diagnostic
-ranges after Unicode-prefixed source lines.
+ranges after Unicode-prefixed source lines. A further LSP regression confirms
+that one inherited override diagnostic links to every requirement when those
+requirements originate in separate imported modules, rather than a single
+contract file.
 
 At revision `2e64b244236bf1878a89c6e670a7ba370fb9eb58`, `CARGO_INCREMENTAL=0
 RUST_MIN_STACK=33554432 make verify` completed successfully on macOS arm64. It
@@ -64,6 +67,10 @@ measurement; and testing in a second LSP client. These are environment or
 qualification gaps, not evidence of a known implementation defect. Cross-module
 class inheritance, generic methods/protocols, compound bounds, and explicit
 call-site generic arguments remain documented feature limits.
+
+After adding the separate-imported-requirements range regression, the complete
+LSP suite passed again: 424 tests passed, with formatting and `make diff-check`
+also passing. This test-only update does not change the already tested VSIX.
 
 ## Audit findings
 
