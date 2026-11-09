@@ -754,6 +754,10 @@ impl TypeEnvironment {
         self.generic_protocol_views.get(id)
     }
 
+    pub(crate) fn is_protocol_name(&self, name: &str) -> bool {
+        self.protocol_names.contains(name) || self.protocol_identities.contains_key(name)
+    }
+
     /// Project assignments own these module names; the compiler must not inject
     /// a different runtime. Unknown cross-file values remain dynamically typed.
     pub(crate) fn with_project_module_globals(
@@ -1970,6 +1974,12 @@ pub(crate) fn build_type_environment_with_domain_registry(
                     class
                         .implemented_protocols
                         .iter()
+                        .filter(|(name, _)| {
+                            parsed
+                                .protocol_declarations
+                                .iter()
+                                .any(|protocol| protocol.name == *name)
+                        })
                         .map(|(name, _)| name.clone())
                         .collect(),
                 )

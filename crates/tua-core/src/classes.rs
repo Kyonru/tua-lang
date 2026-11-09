@@ -1993,7 +1993,8 @@ pub(crate) fn class_contract_diagnostics(
             } else {
                 match environment.alias(protocol_name) {
                     Some(Type::Table(table))
-                        if table.fields().next().is_some()
+                        if environment.is_protocol_name(protocol_name)
+                            && table.fields().next().is_some()
                             && table
                                 .fields()
                                 .all(|(_, field)| matches!(field.ty, Type::Function(_))) =>

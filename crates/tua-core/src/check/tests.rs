@@ -2832,6 +2832,28 @@ local value: Updatable = Lookalike.new()
 }
 
 #[test]
+fn structural_function_aliases_cannot_be_used_as_nominal_protocols() {
+    let diagnostics = check_tua_source(
+        "src/protocol_alias.tua",
+        r#"
+type Callable = { run: (x: number) -> nil }
+final class Actor implements Callable {
+  run(): nil {}
+}
+local _callable: Callable = Actor.new()
+"#,
+    )
+    .expect_err("a structural function alias is not a declared nominal protocol");
+
+    assert!(
+        diagnostics
+            .iter()
+            .any(|diagnostic| { diagnostic.message.contains("unknown protocol `Callable`") }),
+        "implements must only accept declared protocol types: {diagnostics:#?}"
+    );
+}
+
+#[test]
 fn rejects_values_that_do_not_match_a_native_array_item_type() {
     let diagnostics = check_tua_source(
         "src/actors.tua",
