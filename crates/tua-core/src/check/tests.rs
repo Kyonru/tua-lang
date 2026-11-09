@@ -2469,6 +2469,41 @@ tick({ Actor.new(), Dialog.new() }, 0.016)
 }
 
 #[test]
+fn protocol_dot_and_extracted_methods_reject_nonconforming_receivers() {
+    let diagnostics = check_tua_source(
+        "src/protocol_receivers.tua",
+        r#"
+protocol Updatable {
+  update(dt: number): nil
+}
+
+final class Actor implements Updatable {
+  update(dt: number): nil {}
+}
+
+local function invalid(value: Updatable, other: {})
+  value.update(other, 0.016)
+  local extracted = value.update
+  extracted(other, 0.016)
+end
+"#,
+    )
+    .expect_err("protocol methods require an explicit conforming receiver in dot calls");
+
+    let receiver_errors = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::TYPE_MISMATCH))
+        .collect::<Vec<_>>();
+    assert_eq!(receiver_errors.len(), 2, "{diagnostics:#?}");
+    assert!(
+        receiver_errors
+            .iter()
+            .all(|diagnostic| diagnostic.message.contains("expected Updatable")),
+        "both direct and extracted method calls should report the protocol receiver type: {diagnostics:#?}"
+    );
+}
+
+#[test]
 fn checks_multiple_protocol_obligations_and_inherited_conformance() {
     check_tua_source(
         "src/protocols.tua",

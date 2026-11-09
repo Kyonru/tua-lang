@@ -6445,6 +6445,74 @@ local invalid = api.tick(lookalikes.Lookalike.new())
 }
 
 #[test]
+fn imported_child_classes_keep_inherited_protocol_bounds() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/contracts.d.tua
+export protocol Updatable {
+  update(dt: number): nil
+}
+-- file: src/actors.tua
+import type { Updatable } from "./contracts"
+open class Base implements Updatable {
+  update(dt: number): nil { return nil }
+}
+final class Child extends Base {
+}
+export type ChildInstance = Child
+final class Box<T: Updatable> {
+  value: T
+  init(value: T) { self.value = value }
+  get(): T { return self.value }
+}
+export type ChildBox = Box<Child>
+return { Child = Child, Box = Box }
+-- file: src/api.tua
+import type { Updatable } from "./contracts"
+export function tick<T: Updatable>(value: T): T
+  value:update(1)
+  return value
+end
+return { tick = tick }
+-- file: src/lookalike.tua
+final class Lookalike {
+  update(dt: number): nil { return nil }
+}
+return { Lookalike = Lookalike }
+-- file: src/main.tua
+import type { ChildInstance } from "./actors"
+import type { ChildBox } from "./actors"
+local actors = require("actors")
+local api = require("api")
+local lookalikes = require("lookalike")
+local child: ChildInstance = actors.Child.new()
+local _accepted = api.tick(child)
+local _box = actors.Box.new(child)
+local _typedBox: ChildBox = _box
+local _invalidBox = actors.Box.new(lookalikes.Lookalike.new())
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+    let snapshot = host.snapshot();
+
+    let diagnostics = snapshot.pipeline_diagnostics("src/main.tua");
+    let errors = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.severity == crate::DiagnosticSeverity::Error)
+        .collect::<Vec<_>>();
+    assert!(
+        errors.len() == 1
+            && errors[0].message.contains("requires explicit conformance")
+            && errors[0].message.contains("Updatable")
+            && errors[0].message.contains("Lookalike"),
+        "an imported child should retain its same-file parent's protocol conformance for bounded functions and classes, while a same-shaped lookalike is rejected: {diagnostics:#?}"
+    );
+}
+
+#[test]
 fn bounded_generic_body_uses_protocol_members_and_displays_the_constraint() {
     let fixture = Fixture::parse(
         r#"protocol Updatable {
