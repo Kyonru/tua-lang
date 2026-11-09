@@ -415,6 +415,58 @@ final class Particle implements Updatable {
 }
 
 #[test]
+fn deleting_a_protocol_from_a_cyclic_import_graph_discards_stale_contracts() {
+    let temp = TempProject::new("deleted-cyclic-protocol-dependency-refresh");
+    temp.write("tua.toml", "source = \"src\"\n");
+    let protocol_a = "import type { B } from \"./b\"\nexport protocol A {\n  f(value: B): nil\n}\n";
+    let protocol_b = "import type { A } from \"./a\"\nexport protocol B {\n  g(value: A): nil\n}\n";
+    temp.write("src/a.tua", protocol_a);
+    temp.write("src/b.tua", protocol_b);
+    let actors = r#"import type { A } from "./a"
+import type { B } from "./b"
+final class Actor implements A, B {
+  f(value: B): nil {}
+  g(value: A): nil {}
+}
+"#;
+    temp.write("src/actors.tua", actors);
+    let a_uri = temp.uri_for("src/a.tua");
+    let b_uri = temp.uri_for("src/b.tua");
+    let actors_uri = temp.uri_for("src/actors.tua");
+    let mut server = TestServer::new();
+
+    server.send(initialize_with_pull_diagnostics(1, temp.uri(), true));
+    server.send(did_open(&a_uri, protocol_a));
+    server.send(did_open(&b_uri, protocol_b));
+    server.send(did_open(&actors_uri, actors));
+    server.send(text_document_diagnostic_request(2, &actors_uri));
+    assert!(document_diagnostic_items(server.output(), 2).is_empty());
+
+    server.send(did_close(&a_uri));
+    temp.remove("src/a.tua");
+    server.send(watched_files_changed([(&a_uri, 3)]));
+    server.send(text_document_diagnostic_request(3, &actors_uri));
+    let diagnostics = document_diagnostic_items(server.output(), 3);
+    assert!(
+        diagnostics.iter().any(|diagnostic| {
+            diagnostic["code"] == "TL4002"
+                && diagnostic["message"]
+                    .as_str()
+                    .is_some_and(|message| message.contains("import file not found: `./a`"))
+        }),
+        "deleting one side of a cyclic graph should report the unresolved import: {diagnostics:#?}"
+    );
+    assert!(
+        diagnostics.iter().all(|diagnostic| {
+            !diagnostic["message"]
+                .as_str()
+                .is_some_and(|message| message.contains("does not satisfy protocol `A.f`"))
+        }),
+        "the consumer must not receive stale conformance diagnostics from the deleted protocol: {diagnostics:#?}"
+    );
+}
+
+#[test]
 fn renaming_a_protocol_dependency_refreshes_importing_class_diagnostics() {
     let temp = TempProject::new("renamed-protocol-dependency-refresh");
     temp.write("tua.toml", "source = \"src\"\n");

@@ -6476,6 +6476,24 @@ end
         ["g"],
         "the other side of the cyclic graph should retain its completion surface"
     );
+
+    host.remove_file("src/a.tua");
+    let removed = host.snapshot();
+    let removed_diagnostics = removed.diagnostics("src/actors.tua");
+    assert!(
+        removed_diagnostics.iter().any(|diagnostic| {
+            diagnostic.code == Some(DiagnosticCode::LINT_MISSING_REQUIRE)
+                && diagnostic.message.contains("import file not found: `./a`")
+        }),
+        "deleting one side of a cyclic protocol graph should invalidate the last-good export and report the missing import: {removed_diagnostics:#?}"
+    );
+    assert!(
+        removed_diagnostics.iter().all(|diagnostic| {
+            !diagnostic.message.contains("Actor.f")
+                || !diagnostic.message.contains("does not satisfy protocol `A.f`")
+        }),
+        "deleted cyclic contracts must not leave stale conformance errors: {removed_diagnostics:#?}"
+    );
 }
 
 #[test]
