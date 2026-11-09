@@ -78,11 +78,13 @@ parameter packs, specialization/monomorphization, and a new runtime.
 - LSP already advertises implementation navigation. Extend its shared query;
   do not add a second unrelated implementation lookup.
 
-Evidence as of November 9, 2026, after the latest audit fixes: the full core
-suite passes (1874 passed, 1 ignored), the full LSP suite passes (423), the
-CLI library suite passes (92 passed, 2 ignored), and the CLI integration target
-passes (136). The core suite used `RUST_MIN_STACK=33554432` because an
-unrelated emitter test overflows the default test-thread stack on this host.
+Evidence as of November 9, 2026, after the latest audit fixes: the last full
+`make verify` passed with 1,874 core tests (1 ignored), 423 LSP tests, 92 CLI
+library tests (2 ignored), and 136 CLI integration tests. The current full LSP
+suite passes with 425 tests after two additional edge regressions, and the
+focused transitive-inheritance core regression passes. The core suite used
+`RUST_MIN_STACK=33554432` because an unrelated emitter test overflows the
+default test-thread stack on this host.
 `CARGO_INCREMENTAL=0 RUST_MIN_STACK=33554432 make verify` completed, including
 Clippy, repository/schema/reference checks, the VS Code extension suite (180),
 and `git diff --check`. The VS Code inspector tests require loopback access;
@@ -97,8 +99,11 @@ protocol-member completion. Additional regressions verify cyclic dependency
 deletion invalidation through AnalysisHost and watched-file/pull-diagnostics
 LSP flow, parser/editor recovery at every character prefix of a nested-type
 protocol fixture, and inherited imported-protocol diagnostic ranges after
-Unicode-prefixed lines. The `source_pipeline` nightly fuzz target ran for 31
-seconds (21,595 executions, no crash; peak RSS about 600 MiB).
+Unicode-prefixed lines, multiple imported source files, transitive class
+inheritance, and create/edit invalidation of missing type-only protocol
+dependencies. The `source_pipeline` nightly fuzz target ran for 31 seconds
+(21,595 executions, no crash; peak RSS about 600 MiB); `protocol_and_paths` ran
+for 31 seconds (711,266 executions, no crash; peak RSS about 533 MiB).
 Prior full-package evidence and its stack-sensitive serial settings are recorded in
 `internal/audits/devex-space-invaders-0.7.0/REPORT.md`. That report contains a
 five-module game exercise, generated-Lua smoke test, exact limitations, and
