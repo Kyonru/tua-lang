@@ -1,5 +1,69 @@
 use super::*;
 
+struct ProtocolSignatureMismatchCase {
+    protocol: &'static str,
+    class: &'static str,
+    method: &'static str,
+    required_params: &'static str,
+    required_return: &'static str,
+    actual_params: &'static str,
+    actual_return: &'static str,
+    detail: &'static str,
+}
+
+const PROTOCOL_SIGNATURE_MISMATCH_CASES: &[ProtocolSignatureMismatchCase] = &[
+    ProtocolSignatureMismatchCase {
+        protocol: "InputContract",
+        class: "NarrowInput",
+        method: "visit",
+        required_params: "value: number",
+        required_return: "nil",
+        actual_params: "value: string",
+        actual_return: "nil",
+        detail: "incompatible parameter `value` 1",
+    },
+    ProtocolSignatureMismatchCase {
+        protocol: "ReturnContract",
+        class: "BroadReturn",
+        method: "read",
+        required_params: "",
+        required_return: "number",
+        actual_params: "",
+        actual_return: "number | string",
+        detail: "incompatible return value 1",
+    },
+    ProtocolSignatureMismatchCase {
+        protocol: "ArityContract",
+        class: "ExtraRequired",
+        method: "apply",
+        required_params: "value: number",
+        required_return: "nil",
+        actual_params: "value: number, extra: string",
+        actual_return: "nil",
+        detail: "implementation requires 2 required arguments",
+    },
+    ProtocolSignatureMismatchCase {
+        protocol: "VarargContract",
+        class: "NoVarargs",
+        method: "write",
+        required_params: "...: string",
+        required_return: "nil",
+        actual_params: "",
+        actual_return: "nil",
+        detail: "protocol requires variadic arguments",
+    },
+    ProtocolSignatureMismatchCase {
+        protocol: "ReturnCountContract",
+        class: "ShortReturn",
+        method: "decode",
+        required_params: "",
+        required_return: "(number, string)",
+        actual_params: "",
+        actual_return: "number",
+        detail: "protocol declares 2 return values",
+    },
+];
+
 #[test]
 fn diagnostic_severities_round_trip_through_lsp() {
     for (severity, expected) in [
@@ -377,6 +441,209 @@ final class Panel extends Actor {
 }
 
 #[test]
+fn protocol_signature_mismatch_matrix_preserves_lsp_ranges_and_requirement_links() {
+    let temp = TempProject::new("protocol-signature-mismatch-ranges");
+    temp.write("tua.toml", "source = \"src\"\n");
+    let mut lines = Vec::new();
+    let mut expected_ranges = Vec::new();
+    for case in PROTOCOL_SIGNATURE_MISMATCH_CASES {
+        let ProtocolSignatureMismatchCase {
+            protocol,
+            class,
+            method,
+            required_params,
+            required_return,
+            actual_params,
+            actual_return,
+            detail,
+        } = *case;
+        lines.push(format!("protocol {protocol} {{"));
+        let requirement_line = lines.len();
+        lines.push(format!("  {method}({required_params}): {required_return}"));
+        lines.push("}".to_owned());
+        lines.push(format!("final class {class} implements {protocol} {{"));
+        let implementation_line = lines.len();
+        let body = if actual_return == "nil" {
+            ""
+        } else {
+            " return 1 "
+        };
+        lines.push(format!(
+            "  {method}({actual_params}): {actual_return} {{{body}}}"
+        ));
+        lines.push("}".to_owned());
+        lines.push(String::new());
+        expected_ranges.push((
+            protocol,
+            class,
+            method,
+            detail,
+            requirement_line,
+            implementation_line,
+        ));
+    }
+
+    let source = lines.join("\n");
+    let uri = temp.uri_for("src/main.tua");
+    let output = run_messages(vec![
+        initialize_with_root(1, temp.uri()),
+        did_open(&uri, &source),
+    ]);
+    let diagnostics = last_published_diagnostics(&output, &uri);
+
+    assert_eq!(
+        diagnostics.len(),
+        expected_ranges.len(),
+        "every malformed implementation should have one actionable diagnostic: {diagnostics:#?}"
+    );
+    for (protocol, class, method, detail, requirement_line, implementation_line) in expected_ranges
+    {
+        let diagnostic = diagnostics
+            .iter()
+            .find(|diagnostic| {
+                diagnostic["message"].as_str().is_some_and(|message| {
+                    message.contains(&format!("{class}.{method}"))
+                        && message.contains(&format!("{protocol}.{method}"))
+                })
+            })
+            .unwrap_or_else(|| panic!("missing {class}.{method} diagnostic: {diagnostics:#?}"));
+        let message = diagnostic["message"]
+            .as_str()
+            .expect("protocol conformance diagnostic should have a message");
+        assert_eq!(diagnostic["code"], "TL1008", "{diagnostic:#?}");
+        assert!(message.contains(detail), "{message}");
+        assert_eq!(diagnostic["range"]["start"]["line"], implementation_line);
+        assert_eq!(diagnostic["range"]["start"]["character"], 2);
+        assert_eq!(diagnostic["range"]["end"]["line"], implementation_line);
+        assert_eq!(
+            diagnostic["range"]["end"]["character"],
+            2 + method.encode_utf16().count()
+        );
+
+        let related = diagnostic["relatedInformation"]
+            .as_array()
+            .expect("protocol mismatch should link to its requirement");
+        assert_eq!(related.len(), 1, "{diagnostic:#?}");
+        assert_eq!(related[0]["location"]["uri"], uri);
+        assert_eq!(
+            related[0]["location"]["range"]["start"]["line"],
+            requirement_line
+        );
+        assert_eq!(related[0]["location"]["range"]["start"]["character"], 2);
+        assert_eq!(
+            related[0]["location"]["range"]["end"]["line"],
+            requirement_line
+        );
+        assert_eq!(
+            related[0]["location"]["range"]["end"]["character"],
+            2 + method.encode_utf16().count()
+        );
+    }
+}
+
+#[test]
+fn inherited_override_signature_matrix_preserves_lsp_ranges_and_requirement_links() {
+    let temp = TempProject::new("inherited-override-signature-ranges");
+    temp.write("tua.toml", "source = \"src\"\n");
+    let mut lines = Vec::new();
+    let mut expected_ranges = Vec::new();
+    for case in PROTOCOL_SIGNATURE_MISMATCH_CASES {
+        let ProtocolSignatureMismatchCase {
+            protocol,
+            class,
+            method,
+            required_params,
+            required_return,
+            actual_params,
+            actual_return,
+            ..
+        } = *case;
+        lines.push(format!("protocol {protocol} {{"));
+        let requirement_line = lines.len();
+        lines.push(format!("  {method}({required_params}): {required_return}"));
+        lines.push("}".to_owned());
+        lines.push(format!("open class {class}Base implements {protocol} {{"));
+        let required_body = match required_return {
+            "nil" => "",
+            "(number, string)" => " return 1, \"done\" ",
+            _ => " return 1 ",
+        };
+        lines.push(format!(
+            "  {method}({required_params}): {required_return} {{{required_body}}}"
+        ));
+        lines.push("}".to_owned());
+        lines.push(format!("final class {class} extends {class}Base {{"));
+        let override_line = lines.len();
+        let actual_body = if actual_return == "nil" {
+            ""
+        } else {
+            " return 1 "
+        };
+        lines.push(format!(
+            "  override {method}({actual_params}): {actual_return} {{{actual_body}}}"
+        ));
+        lines.push("}".to_owned());
+        lines.push(String::new());
+        expected_ranges.push((protocol, class, method, requirement_line, override_line));
+    }
+
+    let source = lines.join("\n");
+    let uri = temp.uri_for("src/main.tua");
+    let output = run_messages(vec![
+        initialize_with_root(1, temp.uri()),
+        did_open(&uri, &source),
+    ]);
+    let diagnostics = last_published_diagnostics(&output, &uri);
+
+    assert_eq!(
+        diagnostics.len(),
+        expected_ranges.len(),
+        "each invalid inherited override should produce one linked diagnostic: {diagnostics:#?}"
+    );
+    for (protocol, class, method, requirement_line, override_line) in expected_ranges {
+        let diagnostic = diagnostics
+            .iter()
+            .find(|diagnostic| {
+                diagnostic["message"].as_str().is_some_and(|message| {
+                    message.contains(&format!("method `{method}`"))
+                        && message.contains("signature incompatible with its parent method")
+                        && message.contains(&format!("`{protocol}.{method}`"))
+                })
+            })
+            .unwrap_or_else(|| {
+                panic!("missing inherited override diagnostic for {class}: {diagnostics:#?}")
+            });
+        assert_eq!(diagnostic["code"], "TL1008", "{diagnostic:#?}");
+        assert_eq!(diagnostic["range"]["start"]["line"], override_line);
+        assert_eq!(diagnostic["range"]["start"]["character"], 11);
+        assert_eq!(diagnostic["range"]["end"]["line"], override_line);
+        assert_eq!(
+            diagnostic["range"]["end"]["character"],
+            11 + method.encode_utf16().count()
+        );
+
+        let related = diagnostic["relatedInformation"]
+            .as_array()
+            .expect("inherited protocol override should link to its requirement");
+        assert_eq!(related.len(), 1, "{diagnostic:#?}");
+        assert_eq!(related[0]["location"]["uri"], uri);
+        assert_eq!(
+            related[0]["location"]["range"]["start"]["line"],
+            requirement_line
+        );
+        assert_eq!(related[0]["location"]["range"]["start"]["character"], 2);
+        assert_eq!(
+            related[0]["location"]["range"]["end"]["line"],
+            requirement_line
+        );
+        assert_eq!(
+            related[0]["location"]["range"]["end"]["character"],
+            2 + method.encode_utf16().count()
+        );
+    }
+}
+
+#[test]
 fn inherited_override_diagnostics_link_to_imported_protocol_requirements() {
     let temp = TempProject::new("inherited-imported-protocol-override-related-info");
     temp.write("tua.toml", "source = \"src\"\n");
@@ -523,6 +790,79 @@ final class Particle implements Updatable {
             message.contains("Particle.update") && message.contains("does not satisfy protocol")
         })
     }), "an unsaved requirement edit should update dependent conformance diagnostics: {diagnostics:#?}");
+}
+
+#[test]
+fn unsaved_consumer_conformance_and_method_edits_refresh_protocol_diagnostics() {
+    let temp = TempProject::new("unsaved-consumer-conformance-refresh");
+    temp.write("tua.toml", "source = \"src\"\n");
+    let contracts = "export protocol Updatable {\n  update(dt: number): nil\n}\n";
+    let implemented = r#"import type { Updatable } from "./contracts"
+final class Particle implements Updatable {
+  update(dt: number): nil {}
+}
+"#;
+    let without_conformance = r#"final class Particle {
+  update(dt: number): nil {}
+}
+"#;
+    let missing_method = r#"import type { Updatable } from "./contracts"
+final class Particle implements Updatable {
+}
+"#;
+    temp.write("src/contracts.tua", contracts);
+    let contracts_uri = temp.uri_for("src/contracts.tua");
+    let consumer_uri = temp.uri_for("src/particle.tua");
+    let mut server = TestServer::new();
+
+    server.send(initialize_with_pull_diagnostics(1, temp.uri(), true));
+    server.send(did_open(&contracts_uri, contracts));
+    server.send(did_open(&consumer_uri, implemented));
+    server.send(text_document_diagnostic_request(2, &consumer_uri));
+    assert!(document_diagnostic_items(server.output(), 2).is_empty());
+
+    server.send(did_change(&consumer_uri, without_conformance, 2));
+    let due = server
+        .next_slow_diagnostics_due()
+        .expect("the consumer edit should schedule project diagnostics");
+    server.drain_due_diagnostics(due);
+    server.send(text_document_diagnostic_request(3, &consumer_uri));
+    let diagnostics = document_diagnostic_items(server.output(), 3);
+    assert!(
+        diagnostics.is_empty(),
+        "removing the conformance clause should remove its protocol obligation: {diagnostics:#?}"
+    );
+
+    server.send(did_change(&consumer_uri, missing_method, 3));
+    let due = server
+        .next_slow_diagnostics_due()
+        .expect("the conformance edit should schedule project diagnostics");
+    server.drain_due_diagnostics(due);
+    server.send(text_document_diagnostic_request(4, &consumer_uri));
+    let diagnostics = document_diagnostic_items(server.output(), 4);
+    assert!(
+        diagnostics.iter().any(|diagnostic| {
+            diagnostic["code"] == "TL1008"
+                && diagnostic["message"].as_str().is_some_and(|message| {
+                    message.contains("Particle")
+                        && message.contains("protocol `Updatable`")
+                        && message.contains("missing method `update`")
+                })
+        }),
+        "reintroducing conformance without its method should report the missing obligation: {diagnostics:#?}"
+    );
+
+    server.send(did_change(&consumer_uri, implemented, 4));
+    let due = server
+        .next_slow_diagnostics_due()
+        .expect("the method edit should schedule project diagnostics");
+    server.drain_due_diagnostics(due);
+    server.send(text_document_diagnostic_request(5, &consumer_uri));
+    let diagnostics = document_diagnostic_items(server.output(), 5);
+    assert!(
+        diagnostics.is_empty(),
+        "restoring the method should clear the conformance diagnostic: {diagnostics:#?}"
+    );
 }
 
 #[test]
@@ -789,6 +1129,92 @@ final class Particle implements Updatable {
                 .is_some_and(|message| message.contains("import file not found"))
         }),
         "the consumer should no longer resolve the old dependency path: {diagnostics:#?}"
+    );
+}
+
+#[test]
+fn unsaved_protocol_dependency_churn_refreshes_through_multiple_reexports() {
+    let temp = TempProject::new("protocol-reexport-dependency-churn");
+    temp.write("tua.toml", "source = \"src\"\n");
+    let contracts = "export protocol Updatable {\n  update(dt: number): nil\n}\n";
+    let changed_contracts = "export protocol Updatable {\n  update(dt: string): nil\n}\n";
+    let relay = "export type { Updatable } from \"./contracts\"\n";
+    let removed_relay = "export type { Missing } from \"./contracts\"\n";
+    let api = "export type { Updatable } from \"./relay\"\n";
+    let consumer = r#"import type { Updatable } from "./api"
+final class Particle implements Updatable {
+  update(dt: number): nil {}
+}
+"#;
+    temp.write("src/contracts.d.tua", contracts);
+    temp.write("src/relay.d.tua", relay);
+    temp.write("src/api.d.tua", api);
+    let contracts_uri = temp.uri_for("src/contracts.d.tua");
+    let relay_uri = temp.uri_for("src/relay.d.tua");
+    let api_uri = temp.uri_for("src/api.d.tua");
+    let consumer_uri = temp.uri_for("src/actors.tua");
+    let mut server = TestServer::new();
+
+    server.send(initialize_with_pull_diagnostics(1, temp.uri(), true));
+    server.send(did_open(&contracts_uri, contracts));
+    server.send(did_open(&relay_uri, relay));
+    server.send(did_open(&api_uri, api));
+    server.send(did_open(&consumer_uri, consumer));
+    server.send(text_document_diagnostic_request(2, &consumer_uri));
+    assert!(document_diagnostic_items(server.output(), 2).is_empty());
+
+    server.send(did_change(&contracts_uri, changed_contracts, 2));
+    let due = server
+        .next_slow_diagnostics_due()
+        .expect("the contract edit should schedule dependent diagnostics");
+    server.drain_due_diagnostics(due);
+    server.send(text_document_diagnostic_request(3, &consumer_uri));
+    let changed = document_diagnostic_items(server.output(), 3);
+    assert!(
+        changed.iter().any(|diagnostic| {
+            diagnostic["code"] == "TL1008"
+                && diagnostic["message"].as_str().is_some_and(|message| {
+                    message.contains("Particle.update") && message.contains("Updatable.update")
+                })
+        }),
+        "the changed source contract should propagate through both re-exports: {changed:#?}"
+    );
+
+    server.send(did_change(&relay_uri, removed_relay, 2));
+    let due = server
+        .next_slow_diagnostics_due()
+        .expect("the intermediate export edit should schedule dependent diagnostics");
+    server.drain_due_diagnostics(due);
+    server.send(text_document_diagnostic_request(4, &consumer_uri));
+    let removed = document_diagnostic_items(server.output(), 4);
+    assert!(
+        removed.iter().all(|diagnostic| diagnostic["code"] != "TL1008"),
+        "stale protocol conformance must be discarded when an intermediate export removes the type: {removed:#?}"
+    );
+    assert!(
+        removed.iter().any(|diagnostic| {
+            diagnostic["message"]
+                .as_str()
+                .is_some_and(|message| message.contains("does not export type `Updatable`"))
+        }),
+        "the consumer should report the missing transitive export: {removed:#?}"
+    );
+
+    server.send(did_change(&relay_uri, relay, 3));
+    let due = server
+        .next_slow_diagnostics_due()
+        .expect("restoring the intermediate export should schedule dependents");
+    server.drain_due_diagnostics(due);
+    server.send(text_document_diagnostic_request(5, &consumer_uri));
+    let restored = document_diagnostic_items(server.output(), 5);
+    assert!(
+        restored.iter().any(|diagnostic| {
+            diagnostic["code"] == "TL1008"
+                && diagnostic["message"].as_str().is_some_and(|message| {
+                    message.contains("Particle.update") && message.contains("Updatable.update")
+                })
+        }),
+        "restoring the re-export should recover the latest changed contract: {restored:#?}"
     );
 }
 
