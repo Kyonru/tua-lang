@@ -1520,6 +1520,53 @@ fn same_name_modules_stay_in_the_importing_workspace() {
 }
 
 #[test]
+fn same_named_generic_aliases_stay_in_their_workspace() {
+    let first = TempProject::new("generic-alias-workspace-first");
+    let second = TempProject::new("generic-alias-workspace-second");
+    for project in [&first, &second] {
+        project.write("tua.toml", "source = \"src\"\n");
+    }
+    first.write("src/box.tua", "export type Box<T> = { value: T }\n");
+    second.write("src/box.tua", "export type Box<T> = { value: T | nil }\n");
+    let source = r#"import type { Box } from "./box"
+local box: Box<number> = { value = 1 }
+local _observed = box.value
+"#;
+    let first_uri = first.uri_for("src/main.tua");
+    let second_uri = second.uri_for("src/main.tua");
+
+    for roots in [[first.uri(), second.uri()], [second.uri(), first.uri()]] {
+        let output = run_messages(vec![
+            initialize_with_workspace_folders(1, roots),
+            did_open(&first_uri, source),
+            did_open(&second_uri, source),
+            hover_request(2, &first_uri, source, "observed = box.value"),
+            hover_request(3, &second_uri, source, "observed = box.value"),
+        ]);
+        let first_hover = hover_contents(&output, 2);
+        let second_hover = hover_contents(&output, 3);
+        assert!(first_hover.contains("number"), "{first_hover}");
+        assert!(
+            !first_hover.contains("nil"),
+            "the first workspace must keep its non-null Box contract: {first_hover}"
+        );
+        assert!(second_hover.contains("number"), "{second_hover}");
+        assert!(
+            second_hover.contains("nil"),
+            "the second workspace must keep its nullable Box contract: {second_hover}"
+        );
+        assert!(
+            last_published_diagnostics(&output, &first_uri).is_empty(),
+            "the first workspace should use its own generic alias: {output:#?}"
+        );
+        assert!(
+            last_published_diagnostics(&output, &second_uri).is_empty(),
+            "the second workspace should use its own generic alias: {output:#?}"
+        );
+    }
+}
+
+#[test]
 fn multi_workspace_type_library_overlays_are_project_local() {
     let first = TempProject::new("type-overlay-first");
     let second = TempProject::new("type-overlay-second");
