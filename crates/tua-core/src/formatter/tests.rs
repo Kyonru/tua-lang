@@ -78,6 +78,24 @@ fn formats_generic_class_headers_and_applied_parent_without_erasure() {
 }
 
 #[test]
+fn formats_protocol_comments_without_changing_method_signatures() {
+    let source = r#"protocol Updatable {
+update(dt:number):nil -- advance one simulation step
+}
+final class Actor implements Updatable {
+update(dt:number):nil {}
+}
+local _actor:Updatable=Actor.new()
+"#;
+    let output = format(source);
+
+    assert!(output.contains("update(dt:number):nil -- advance one simulation step"));
+    assert_eq!(format(&output), output);
+    crate::check_tua_source("src/main.tua", output)
+        .expect("formatted protocol signatures should remain semantically valid");
+}
+
+#[test]
 fn formats_local_function_blocks() {
     let source = r#"local function makePlayer(name:string):Player
 return {name=name,hp=100}

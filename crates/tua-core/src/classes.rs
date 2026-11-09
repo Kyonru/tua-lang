@@ -428,6 +428,7 @@ pub(crate) fn parse_protocol_declarations(
 }
 
 fn parse_protocol_method_line(line: &str) -> (Option<String>, Option<String>, Option<String>) {
+    let line = strip_protocol_line_comment(line).trim();
     let (name, _, name_end) = match take_identifier(line, 0) {
         Some(parts) => parts,
         None => return (None, None, None),
@@ -454,6 +455,21 @@ fn parse_protocol_method_line(line: &str) -> (Option<String>, Option<String>, Op
         return (None, None, None);
     }
     (Some(name), Some(parameters), Some(return_type))
+}
+
+fn strip_protocol_line_comment(line: &str) -> &str {
+    let mut index = 0;
+    while index < line.len() {
+        if line[index..].starts_with("--") {
+            return &line[..index];
+        }
+        if let Some(end) = consume_string_literal(line, index) {
+            index = end;
+            continue;
+        }
+        index += next_char_len(line, index);
+    }
+    line
 }
 
 pub(crate) fn class_lowering_edits(source: &str) -> Vec<ClassLoweringEdit> {

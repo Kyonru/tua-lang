@@ -332,6 +332,30 @@ export protocol Updatable {
 }
 
 #[test]
+fn imported_protocol_conformance_ignores_trailing_method_comments() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+import type { Updatable } from "./contracts"
+final class Actor implements Updatable {
+  update(dt: number): nil {}
+}
+local _actor: Updatable = Actor.new()
+-- file: src/contracts.d.tua
+export protocol Updatable {
+  update(dt: number): nil -- advance one simulation step
+}
+"#,
+    );
+    let host = host_from_fixture(&fixture);
+    let diagnostics = host.snapshot().diagnostics("src/main.tua");
+
+    assert!(
+        diagnostics.is_empty(),
+        "a trailing contract comment must not change its signature: {diagnostics:#?}"
+    );
+}
+
+#[test]
 fn generic_aliases_resolve_in_imported_protocol_requirements_and_class_methods() {
     let fixture = Fixture::parse(
         r#"-- file: src/main.tua

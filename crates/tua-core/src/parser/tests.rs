@@ -435,6 +435,21 @@ fn protocol_declarations_preserve_method_contracts_and_erase_from_lua() {
 }
 
 #[test]
+fn protocol_method_signatures_ignore_trailing_comments_but_keep_comment_text_in_strings() {
+    let source = r#"protocol Marked {
+  update(dt: number): nil -- a normal contract comment
+  marker(): "--this-is-a-type-literal" -- not part of the return type
+}
+"#;
+    let parsed = parse_tua_source("src/marked.tua", source)
+        .expect("trailing comments should not become part of protocol types");
+    let methods = &parsed.protocol_declarations[0].methods;
+
+    assert_eq!(methods[0].return_type, "nil");
+    assert_eq!(methods[1].return_type, "\"--this-is-a-type-literal\"");
+}
+
+#[test]
 fn class_array_fields_parse_after_lowering() {
     let source = r#"final class BeatManager {
   steps: number[]
