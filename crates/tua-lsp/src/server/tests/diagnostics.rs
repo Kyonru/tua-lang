@@ -245,8 +245,7 @@ fn imported_generic_protocol_bound_diagnostics_use_project_conformance() {
     let temp = TempProject::new("imported-generic-protocol-bound");
     temp.write("tua.toml", "source = \"src\"\n");
     let contracts = "export protocol Updatable {\n  update(dt: number): nil\n}\n";
-    let relay =
-        "import type { Updatable } from \"./contracts\"\nexport type { Updatable } from \"./contracts\"\n";
+    let relay = "export type { Updatable } from \"./contracts\"\n";
     let api = "import type { Updatable } from \"./relay\"\nlocal function tick<T: Updatable>(value: T): T\n  value:update(1)\n  return value\nend\nreturn { tick = tick }\n";
     let actors = "import type { Updatable } from \"./contracts\"\nfinal class Actor implements Updatable {\n  update(dt: number): nil { return nil }\n}\nreturn { Actor = Actor }\n";
     let lookalikes = "final class Lookalike {\n  update(dt: number): nil { return nil }\n}\nreturn { Lookalike = Lookalike }\n";

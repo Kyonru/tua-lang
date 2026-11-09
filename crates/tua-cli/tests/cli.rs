@@ -1013,7 +1013,7 @@ fn imported_generic_protocol_bounds_keep_project_conformance_diagnostics() {
         ),
         (
             "src/relay.tua",
-            "import type { Updatable } from \"./contracts\"\nexport type { Updatable } from \"./contracts\"\n",
+            "export type { Updatable } from \"./contracts\"\n",
         ),
         (
             "src/api.tua",
