@@ -2645,11 +2645,44 @@ pub(crate) fn resolve_table_field_type(
     ty: &Type,
     field: &str,
 ) -> Option<Type> {
+    resolve_table_field_type_inner(environment, ty, field, 0)
+}
+
+fn resolve_table_field_type_inner(
+    environment: &TypeEnvironment,
+    ty: &Type,
+    field: &str,
+    depth: usize,
+) -> Option<Type> {
+    const MAX_GENERIC_ALIAS_MEMBER_DEPTH: usize = 64;
+    if depth >= MAX_GENERIC_ALIAS_MEMBER_DEPTH {
+        return None;
+    }
     if let Some(view) = environment.generic_protocol_view(ty) {
-        return resolve_table_field_type(environment, view, field);
+        return resolve_table_field_type_inner(environment, view, field, depth + 1);
+    }
+    // A concrete table shape already exposes its declared fields. Preserve a
+    // generic application at the selected edge instead of recursively
+    // expanding every field in the table first. This keeps recursive generic
+    // edges symbolic while leaving existing alias normalization in place for
+    // other member types (including class `Self`).
+    if let Type::Table(table) = ty {
+        if let Some(field_type) = table
+            .semantic_field(field)
+            .map(|field| field.value_type())
+            .filter(type_contains_generic_alias_application)
+        {
+            return Some(field_type);
+        }
+    }
+    if let Some(body) = environment.generic_alias_body(ty) {
+        return resolve_table_field_type_inner(environment, &body, field, depth + 1);
     }
     match resolve_aliases(environment, ty, 0) {
         Type::Table(table) => table.semantic_field(field).map(|field| field.value_type()),
+        application @ Type::GenericAliasApplication { .. } => environment
+            .generic_alias_body(&application)
+            .and_then(|body| resolve_table_field_type_inner(environment, &body, field, depth + 1)),
         application @ Type::GenericClassApplication { .. } => {
             let Type::Table(members) = environment.generic_class_members(&application)? else {
                 return None;
@@ -2664,10 +2697,48 @@ pub(crate) fn resolve_table_field_type(
             if matches!(resolve_aliases(environment, ty, 0), Type::Any) {
                 Some(Type::Any)
             } else {
-                resolve_table_field_type(environment, ty, field)
+                resolve_table_field_type_inner(environment, ty, field, depth + 1)
             }
         }),
         _ => None,
+    }
+}
+
+fn type_contains_generic_alias_application(ty: &Type) -> bool {
+    match ty {
+        Type::GenericAliasApplication { .. } => true,
+        Type::Array(item) => type_contains_generic_alias_application(item),
+        Type::Dictionary { key, value } => {
+            type_contains_generic_alias_application(key)
+                || type_contains_generic_alias_application(value)
+        }
+        Type::Tuple(items) | Type::Union(items) => {
+            items.iter().any(type_contains_generic_alias_application)
+        }
+        Type::Function(function) => {
+            function
+                .parameters
+                .iter()
+                .any(|parameter| type_contains_generic_alias_application(&parameter.ty))
+                || function
+                    .vararg_type
+                    .as_deref()
+                    .is_some_and(type_contains_generic_alias_application)
+                || function
+                    .return_types_or_any()
+                    .iter()
+                    .any(type_contains_generic_alias_application)
+        }
+        Type::Table(table) => table
+            .semantic_fields()
+            .into_iter()
+            .any(|(_, field)| type_contains_generic_alias_application(&field.ty)),
+        Type::Any
+        | Type::Alias(_)
+        | Type::GenericParameter { .. }
+        | Type::Primitive(_)
+        | Type::StringLiteral(_)
+        | Type::GenericClassApplication { .. } => false,
     }
 }
 

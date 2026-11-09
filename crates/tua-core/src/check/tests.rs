@@ -7425,6 +7425,48 @@ local _count_check: number = count
 }
 
 #[test]
+fn wide_generic_alias_member_keeps_its_type_past_the_work_boundary() {
+    let fields = (0..4_200)
+        .map(|index| format!("f{index}: T, "))
+        .collect::<String>();
+    let source = format!(
+        "type Wide<T> = {{ {fields} }}\nlocal function _check(wide: Wide<number>): nil\n  local _value: string = wide.f4199\nend\n"
+    );
+    let diagnostics = check_tua_source("src/wide_generic_alias_member.tua", source)
+        .expect_err("a field past the former full-expansion work boundary stays typed");
+
+    assert!(
+        diagnostics.iter().any(|diagnostic| {
+            diagnostic.code == Some(DiagnosticCode::TYPE_MISMATCH)
+                && diagnostic.message.contains("expected string, found number")
+        }),
+        "the generic alias member lookup must not degrade to any: {diagnostics:#?}"
+    );
+}
+
+#[test]
+fn generic_alias_member_lookup_stays_typed_after_full_expansion_is_bounded() {
+    let mut source = String::new();
+    for index in 0..12 {
+        source.push_str(&format!(
+            "type Branch{index}<T> = {{ left: Branch{}<T>, right: Branch{}<T> }}\n",
+            index + 1,
+            index + 1
+        ));
+    }
+    source.push_str(
+        "type Branch12<T> = { value: T }\nlocal function _check(root: Branch0<number>): nil\n  local _value: string = root.left.left.left.left.left.left.left.left.left.left.left.left.value\nend\n",
+    );
+    let diagnostics = check_tua_source("src/bounded_generic_alias_member.tua", source)
+        .expect_err("a member query remains precise when full structural expansion is capped");
+
+    assert!(diagnostics.iter().any(|diagnostic| {
+        diagnostic.code == Some(DiagnosticCode::TYPE_MISMATCH)
+            && diagnostic.message.contains("expected string, found number")
+    }), "the lazy member path must preserve the leaf type instead of degrading to any: {diagnostics:#?}");
+}
+
+#[test]
 fn growing_recursive_generic_aliases_keep_a_symbolic_member_type() {
     check_tua_source(
         "src/growing_alias.tua",

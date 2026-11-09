@@ -437,6 +437,47 @@ impl TypeEnvironment {
         self.generic_class_members_inner(ty, &mut HashSet::new(), 0)
     }
 
+    /// Applies the top-level generic alias substitution without recursively
+    /// expanding its body. Member queries use this when a full structural
+    /// expansion reaches its work limit, so one requested field can still
+    /// retain its declared type.
+    pub(crate) fn generic_alias_body(&self, ty: &Type) -> Option<Type> {
+        let Type::GenericAliasApplication {
+            reference,
+            arguments,
+            ..
+        } = ty
+        else {
+            return None;
+        };
+        let definition = match reference {
+            GenericAliasReference::Declaration(id) => self.generic_aliases.get(id),
+            GenericAliasReference::Imported {
+                source_module,
+                name,
+                ..
+            } => self
+                .generic_alias_bindings
+                .get(&(crate::vfs::normalize_path(source_module), name.clone()))
+                .and_then(|id| self.generic_aliases.get(id))
+                .or_else(|| {
+                    self.generic_aliases.values().find(|definition| {
+                        definition.id.module == *source_module && definition.id.name == *name
+                    })
+                }),
+        }?;
+        if definition.parameters.len() != arguments.len() {
+            return None;
+        }
+        let substitutions = definition
+            .parameters
+            .iter()
+            .cloned()
+            .zip(arguments.iter().cloned())
+            .collect::<HashMap<_, _>>();
+        Some(substitute_type_parameters(&definition.body, &substitutions))
+    }
+
     fn generic_class_members_inner(
         &self,
         ty: &Type,
@@ -968,11 +1009,6 @@ struct GenericAliasExpansionContext {
 
 impl GenericAliasExpansionContext {
     fn resolve(&mut self, environment: &TypeEnvironment, ty: &Type) -> Type {
-        if self.work >= MAX_GENERIC_ALIAS_EXPANSION_WORK {
-            self.exhausted = true;
-            return ty.clone();
-        }
-        self.work += 1;
         match ty {
             Type::GenericClassApplication {
                 identity,
@@ -993,6 +1029,11 @@ impl GenericAliasExpansionContext {
                 arguments,
                 span,
             } => {
+                if self.work >= MAX_GENERIC_ALIAS_EXPANSION_WORK {
+                    self.exhausted = true;
+                    return ty.clone();
+                }
+                self.work += 1;
                 let arguments = arguments
                     .iter()
                     .map(|argument| self.resolve(environment, argument))

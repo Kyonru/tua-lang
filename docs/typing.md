@@ -149,7 +149,10 @@ alias declaration, including when that recursive edge changes its type
 arguments. For example, `Grow<T> = { next: Grow<T[]> }` resolves to one record
 whose `next` field is `Grow<T[]>`; it does not expand into a long chain of
 nested records. Separate depth and work limits still protect unusually deep
-chains of distinct aliases.
+chains of distinct aliases. Full structural expansion is bounded by the number
+of generic alias applications in the walk; member queries substitute the
+requested path lazily so known fields keep their concrete types when the full
+record expansion reaches that bound.
 
 Generic class parameters are supported locally and across module boundaries
 when a class exports a generic instance alias:

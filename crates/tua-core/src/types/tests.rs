@@ -2314,7 +2314,7 @@ fn test_generic_parameter(name: &str, ordinal: usize) -> crate::parser::GenericP
 }
 
 #[test]
-fn generic_alias_expansion_work_limit_preserves_the_unexpanded_type() {
+fn wide_generic_alias_members_keep_their_substituted_types() {
     let fields = (0..4_200)
         .map(|index| format!("  field_{index:04}: T,\n"))
         .collect::<String>();
@@ -2325,9 +2325,15 @@ fn generic_alias_expansion_work_limit_preserves_the_unexpanded_type() {
         build_type_environment(&parsed).expect("wide generic alias should build an environment");
     let value = environment.local("value").expect("local type exists");
 
-    assert!(
-        matches!(environment.resolve_aliases(value), Type::GenericAliasApplication { .. }),
-        "when bounded expansion stops, preserve the complete alias application instead of returning a partially substituted table"
+    let Type::Table(table) = environment.resolve_aliases(value) else {
+        panic!(
+            "a wide record alias should resolve without charging each field as an alias expansion"
+        );
+    };
+    assert_eq!(
+        table.semantic_field("field_4199").map(|field| field.ty.clone()),
+        Some(Type::number()),
+        "all fields should retain their substituted type even when the record has more than 4,096 members"
     );
 }
 
@@ -2350,6 +2356,29 @@ fn generic_alias_instantiation_depth_limit_preserves_a_symbolic_edge() {
             Type::GenericAliasApplication { .. }
         ),
         "a deep alias chain should remain symbolic at the expansion bound"
+    );
+}
+
+#[test]
+fn generic_alias_expansion_work_limit_preserves_a_symbolic_application() {
+    let mut source = String::new();
+    for index in 0..12 {
+        source.push_str(&format!(
+            "type Branch{index}<T> = {{ left: Branch{}<T>, right: Branch{}<T> }}\n",
+            index + 1,
+            index + 1
+        ));
+    }
+    source.push_str("type Branch12<T> = { value: T }\nlocal value: Branch0<number>\n");
+    let parsed = parse_tua_source("src/branching_generic_aliases.tua", source)
+        .expect("branching generic aliases should parse");
+    let environment = build_type_environment(&parsed)
+        .expect("branching generic aliases should build an environment");
+    let value = environment.local("value").expect("local type exists");
+
+    assert!(
+        matches!(environment.resolve_aliases(value), Type::GenericAliasApplication { .. }),
+        "bounded full expansion should preserve the complete symbolic application instead of returning a partial tree"
     );
 }
 
