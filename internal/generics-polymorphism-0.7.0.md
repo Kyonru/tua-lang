@@ -79,15 +79,26 @@ parameter packs, specialization/monomorphization, and a new runtime.
   do not add a second unrelated implementation lookup.
 
 Evidence as of November 9, 2026, after the latest audit fixes: the full core
-suite passes (1873 passed, 1 ignored), the full LSP suite passes (421), and the
-CLI integration target passes (136). The core suite used
-`RUST_MIN_STACK=33554432` because an unrelated emitter test overflows the
-default test-thread stack on this host. Core and LSP
+suite passes (1874 passed, 1 ignored), the full LSP suite passes (423), the
+CLI library suite passes (92 passed, 2 ignored), and the CLI integration target
+passes (136). The core suite used `RUST_MIN_STACK=33554432` because an
+unrelated emitter test overflows the default test-thread stack on this host.
+`CARGO_INCREMENTAL=0 RUST_MIN_STACK=33554432 make verify` completed, including
+Clippy, repository/schema/reference checks, the VS Code extension suite (180),
+and `git diff --check`. The VS Code inspector tests require loopback access;
+they initially failed in the restricted sandbox and passed when rerun with
+host loopback access. A transient CLI temporary-workspace failure also passed
+in isolation and on the successful full run. Core and LSP
 editor requests cover imported protocol completion, hover, signature help,
 definition, and implementation navigation; the incomplete-edit completion
 case first establishes last-good project facts. The new regression exercises
 mutually recursive imported contracts, positive and negative conformance, and
-protocol-member completion.
+protocol-member completion. Additional regressions verify cyclic dependency
+deletion invalidation through AnalysisHost and watched-file/pull-diagnostics
+LSP flow, parser/editor recovery at every character prefix of a nested-type
+protocol fixture, and inherited imported-protocol diagnostic ranges after
+Unicode-prefixed lines. The `source_pipeline` nightly fuzz target ran for 31
+seconds (21,595 executions, no crash; peak RSS about 600 MiB).
 Prior full-package evidence and its stack-sensitive serial settings are recorded in
 `internal/audits/devex-space-invaders-0.7.0/REPORT.md`. That report contains a
 five-module game exercise, generated-Lua smoke test, exact limitations, and
