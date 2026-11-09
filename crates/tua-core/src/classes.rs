@@ -251,9 +251,19 @@ fn invalid_class_member_message(source: &str, span: SourceSpan) -> &'static str 
     "unrecognized class member; expected a typed field or method declaration"
 }
 
+#[cfg(test)]
 pub(crate) fn parse_class_declarations(
     path: &Path,
     source: &str,
+) -> (Vec<ClassDeclaration>, Vec<Diagnostic>) {
+    let (protocols, _) = parse_protocol_declarations(path, source);
+    parse_class_declarations_with_protocols(path, source, &protocols)
+}
+
+pub(crate) fn parse_class_declarations_with_protocols(
+    path: &Path,
+    source: &str,
+    protocols: &[ProtocolDeclaration],
 ) -> (Vec<ClassDeclaration>, Vec<Diagnostic>) {
     let mut diagnostics = Vec::new();
     let blocks = class_blocks(source);
@@ -271,7 +281,7 @@ pub(crate) fn parse_class_declarations(
         .map(|block| block.declaration)
         .collect::<Vec<_>>();
 
-    validate_classes(path, &declarations, &mut diagnostics);
+    validate_classes(path, &declarations, protocols, &mut diagnostics);
 
     for (index, declaration) in declarations.iter_mut().enumerate() {
         declaration.type_id = index + 1;
@@ -2045,7 +2055,12 @@ fn inherited_type_ids_with_visited(
     ids
 }
 
-fn validate_classes(path: &Path, classes: &[ClassDeclaration], diagnostics: &mut Vec<Diagnostic>) {
+fn validate_classes(
+    path: &Path,
+    classes: &[ClassDeclaration],
+    protocols: &[ProtocolDeclaration],
+    diagnostics: &mut Vec<Diagnostic>,
+) {
     let mut names = BTreeSet::new();
 
     for class in classes {
@@ -2085,7 +2100,7 @@ fn validate_classes(path: &Path, classes: &[ClassDeclaration], diagnostics: &mut
             ));
         }
 
-        validate_overrides(path, class, classes, diagnostics);
+        validate_overrides(path, class, classes, protocols, diagnostics);
     }
 }
 
@@ -3077,6 +3092,7 @@ fn validate_overrides(
     path: &Path,
     class: &ClassDeclaration,
     classes: &[ClassDeclaration],
+    protocols: &[ProtocolDeclaration],
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     for method in &class.methods {
@@ -3109,18 +3125,89 @@ fn validate_overrides(
             (true, Some(parent_method))
                 if !class_method_signatures_match(classes, class, method, parent_method) =>
             {
-                diagnostics.push(class_diagnostic(
+                let inherited_requirements =
+                    inherited_protocol_requirements(classes, protocols, class, &method.name);
+                let protocol_context = if inherited_requirements.is_empty() {
+                    String::new()
+                } else {
+                    let names = inherited_requirements
+                        .iter()
+                        .map(|(protocol, _)| format!("`{}.{}`", protocol.name, method.name))
+                        .collect::<Vec<_>>();
+                    format!(
+                        "; this override also violates inherited protocol requirement{} {}",
+                        if names.len() == 1 { "" } else { "s" },
+                        names.join(", ")
+                    )
+                };
+                let mut diagnostic = class_diagnostic(
                     path,
                     method.name_span.start,
                     format!(
-                        "method `{}` has a signature incompatible with its parent method",
-                        method.name
+                        "method `{}` has a signature incompatible with its parent method{protocol_context}",
+                        method.name,
                     ),
-                ))
+                );
+                for (protocol, requirement) in inherited_requirements {
+                    diagnostic =
+                        diagnostic.with_related_information(DiagnosticRelatedInformation {
+                            file: path.to_path_buf(),
+                            span: requirement.name_span,
+                            message: format!(
+                                "inherited protocol requirement `{}.{}` is declared here",
+                                protocol.name, requirement.name
+                            ),
+                        });
+                }
+                diagnostics.push(diagnostic);
             }
             _ => {}
         }
     }
+}
+
+fn inherited_protocol_requirements<'a>(
+    classes: &'a [ClassDeclaration],
+    protocols: &'a [ProtocolDeclaration],
+    class: &ClassDeclaration,
+    method_name: &str,
+) -> Vec<(&'a ProtocolDeclaration, &'a ProtocolMethod)> {
+    let mut requirements = Vec::new();
+    let mut seen_protocols = BTreeSet::new();
+    let mut visited_classes = BTreeSet::new();
+    let mut parent_name = class.parent.as_deref();
+
+    while let Some(name) = parent_name {
+        if !visited_classes.insert(name.to_owned()) {
+            break;
+        }
+        let Some(parent) = class_by_name(classes, name) else {
+            break;
+        };
+
+        for (protocol_name, _) in &parent.implemented_protocols {
+            if !seen_protocols.insert(protocol_name.as_str()) {
+                continue;
+            }
+            let Some(protocol) = protocols
+                .iter()
+                .find(|protocol| protocol.name == *protocol_name)
+            else {
+                continue;
+            };
+            if let Some(requirement) = protocol
+                .methods
+                .iter()
+                .find(|requirement| requirement.name == method_name)
+            {
+                requirements.push((protocol, requirement));
+            }
+        }
+
+        parent_name = parent.parent.as_deref();
+    }
+
+    requirements
 }
 
 fn class_method_signatures_match(

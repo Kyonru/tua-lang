@@ -200,6 +200,47 @@ final class Bad implements Updatable {
 }
 
 #[test]
+fn inherited_protocol_override_diagnostics_link_to_the_requirement() {
+    let temp = TempProject::new("inherited-protocol-override-related-info");
+    temp.write("tua.toml", "source = \"src\"\n");
+    let source = r#"protocol Updatable {
+  update(dt: number): nil
+}
+open class Actor implements Updatable {
+  update(dt: number): nil {}
+}
+final class Panel extends Actor {
+  override update(dt: string): nil {}
+}
+"#;
+    let uri = temp.uri_for("src/main.tua");
+    let output = run_messages(vec![
+        initialize_with_root(1, temp.uri()),
+        did_open(&uri, source),
+    ]);
+    let diagnostics = last_published_diagnostics(&output, &uri);
+    let diagnostic = diagnostics
+        .iter()
+        .find(|diagnostic| {
+            diagnostic["message"].as_str().is_some_and(|message| {
+                message.contains("inherited protocol requirement `Updatable.update`")
+            })
+        })
+        .expect("the broken inherited conformance should be diagnosed");
+
+    assert_eq!(diagnostic["range"]["start"]["line"], 7);
+    assert_eq!(diagnostic["range"]["start"]["character"], 11);
+    let related = diagnostic["relatedInformation"]
+        .as_array()
+        .expect("the override error should link to the inherited requirement");
+    assert_eq!(related.len(), 1);
+    assert_eq!(related[0]["location"]["uri"], uri);
+    assert_eq!(related[0]["location"]["range"]["start"]["line"], 1);
+    assert_eq!(related[0]["location"]["range"]["start"]["character"], 2);
+    assert_eq!(related[0]["location"]["range"]["end"]["character"], 8);
+}
+
+#[test]
 fn unsaved_protocol_edit_refreshes_importing_class_diagnostics() {
     let temp = TempProject::new("unsaved-protocol-conformance-refresh");
     temp.write("tua.toml", "source = \"src\"\n");

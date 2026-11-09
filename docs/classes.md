@@ -216,6 +216,9 @@ diagnostics explain when an implementation requires an optional argument,
 omits protocol varargs, or declares the wrong number of return values.
 Missing-method and incompatible-signature diagnostics include a related
 location on the protocol requirement, including when the contract is imported.
+An incompatible subclass override also identifies locally inherited protocol
+requirements and links to each declaration, while keeping the primary range on
+the overriding method name.
 Whitespace and Lua comments may separate `export`, `protocol`, the protocol
 name, and the opening brace in a declaration header.
 

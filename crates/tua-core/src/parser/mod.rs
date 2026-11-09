@@ -181,12 +181,16 @@ pub fn extract_tua_source_model(
         let _profile = crate::profile::span("parse.tua.doc_model");
         doc::collect_lua_doc_annotations(&raw.path, &raw.source)
     };
-    let (class_declarations, class_diagnostics) = {
-        let _profile = crate::profile::span("parse.tua.class_model");
-        classes::parse_class_declarations(&raw.path, &raw.source)
-    };
     let (protocol_declarations, protocol_diagnostics) =
         classes::parse_protocol_declarations(&raw.path, &raw.source);
+    let (class_declarations, class_diagnostics) = {
+        let _profile = crate::profile::span("parse.tua.class_model");
+        classes::parse_class_declarations_with_protocols(
+            &raw.path,
+            &raw.source,
+            &protocol_declarations,
+        )
+    };
     let (sprite_declarations, sprite_diagnostics) = {
         let _profile = crate::profile::span("parse.tua.sprite_model");
         crate::sprite::parse_sprite_declarations(&raw.ast)

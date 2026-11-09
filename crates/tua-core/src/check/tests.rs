@@ -2475,7 +2475,10 @@ fn inherited_protocol_conformance_survives_overrides_and_reports_the_method_span
     let source = r#"protocol Updatable {
   update(dt: number): nil
 }
-open class Actor implements Updatable {
+protocol Tickable {
+  update(dt: number): nil
+}
+open class Actor implements Updatable, Tickable {
   update(dt: number): nil {}
 }
 final class Panel extends Actor {
@@ -2499,11 +2502,35 @@ final class NarrowPanel extends Actor {
             diagnostic.end_line,
             diagnostic.end_column
         ),
-        (11, 12, 11, 18),
+        (14, 12, 14, 18),
         "the inherited protocol violation should point at the overriding method name"
     );
     assert!(
-        diagnostics.iter().all(|diagnostic| diagnostic.line == 11),
+        diagnostic
+            .message
+            .contains("inherited protocol requirements `Updatable.update`"),
+        "the diagnostic should explain which inherited contract the override breaks: {diagnostic:#?}"
+    );
+    assert!(diagnostic.message.contains("`Tickable.update`"));
+    assert_eq!(diagnostic.related_information.len(), 2, "{diagnostic:#?}");
+    assert_eq!(
+        diagnostic.related_information[0].span.start,
+        SourcePosition { line: 2, column: 3 }
+    );
+    assert_eq!(
+        diagnostic.related_information[0].span.end,
+        SourcePosition { line: 2, column: 9 }
+    );
+    assert_eq!(
+        diagnostic.related_information[1].span.start,
+        SourcePosition { line: 5, column: 3 }
+    );
+    assert_eq!(
+        diagnostic.related_information[1].span.end,
+        SourcePosition { line: 5, column: 9 }
+    );
+    assert!(
+        diagnostics.iter().all(|diagnostic| diagnostic.line == 14),
         "the valid inherited override must remain accepted: {diagnostics:#?}"
     );
 }
