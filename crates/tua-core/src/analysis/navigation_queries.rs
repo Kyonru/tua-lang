@@ -433,6 +433,11 @@ impl AnalysisSnapshot {
             .type_database
             .resolve_type(&self.module_graph, source_path, ty)
         {
+            Type::GenericClassApplication { identity, .. } => {
+                let file = self.file(&identity.module)?;
+                let parsed = file.parsed.as_ref().ok()?;
+                class_member_definition_in_parsed(parsed, &identity.name, member, depth + 1)
+            }
             Type::Table(table) => {
                 let identity = table.nominal_identity()?;
 
@@ -485,8 +490,7 @@ impl AnalysisSnapshot {
             | Type::Tuple(_)
             | Type::Dictionary { .. }
             | Type::GenericParameter { .. }
-            | Type::GenericAliasApplication { .. }
-            | Type::GenericClassApplication { .. } => None,
+            | Type::GenericAliasApplication { .. } => None,
         }
     }
 

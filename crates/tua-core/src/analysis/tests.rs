@@ -3230,8 +3230,8 @@ import type { BoxInstance as ImportedBox } from "./box"
 local BoxModule = require("box")
 local box = BoxModule.Box.new(3)
 local typed: <|alias|>ImportedBox<number> = box
-local _value: number = box.value
-local _method_value: number = typed:get(<|signature|>)
+local _value: number = box.<|field_definition|>value
+local _method_value: number = typed:<|method_definition|>get(<|signature|>)
 local _ = box.ge<|members|>
 local _shown = box.<|hover|>value
 -- file: src/box.tua
@@ -3284,6 +3284,22 @@ return { Box = Box }
         .hover("src/main.tua", fixture.position("alias"))
         .expect("an imported generic alias should show its declaration signature");
     assert_eq!(alias_hover.contents, "type ImportedBox<T> = Box<T>");
+    let method_definition = snapshot
+        .definition("src/main.tua", fixture.position("method_definition"))
+        .expect("an imported generic class method should navigate to its declaration");
+    assert_eq!(method_definition.path, PathBuf::from("src/box.tua"));
+    assert_eq!(
+        text_at_span(fixture.source("src/box.tua"), method_definition.span),
+        "get"
+    );
+    let field_definition = snapshot
+        .definition("src/main.tua", fixture.position("field_definition"))
+        .expect("an imported generic class field should navigate to its declaration");
+    assert_eq!(field_definition.path, PathBuf::from("src/box.tua"));
+    assert_eq!(
+        text_at_span(fixture.source("src/box.tua"), field_definition.span),
+        "value"
+    );
     let completions = snapshot.completion("src/main.tua", fixture.position("members"));
     assert!(
         completions.iter().any(|item| {

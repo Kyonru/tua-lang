@@ -54,6 +54,8 @@ language or editor behavior, and migration notes call out those changes.
   method signatures, while continuing to reject incompatible implementations.
 - Diagnose nested class/protocol declaration text in invalid protocol/class
   bodies instead of producing overlapping lowering edits or panicking.
+- Resolve Go to Definition for fields and methods on imported generic class
+  instances, preserving the originating class declaration across modules.
 - Stop generic alias expansion at the first repeated declaration, even when its
   arguments change, so recursive aliases retain a symbolic edge and diagnostics
   avoid expanding into long nested record chains.

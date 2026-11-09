@@ -60,6 +60,37 @@ async function run() {
   );
   assert.match(hoverText(importedGenericHover), /identity<T>\(value: T\): T/);
 
+  const importedGenericDefinitionPosition = positionAfter(
+    document,
+    'Generic.identity("ready")',
+    "Generic.identity",
+  );
+  const importedGenericDefinition = await retry(
+    () =>
+      vscode.commands.executeCommand(
+        "vscode.executeDefinitionProvider",
+        document.uri,
+        importedGenericDefinitionPosition,
+      ),
+    (result) =>
+      Array.isArray(result) &&
+      result.some((location) => locationPath(location) === fixtures.genericPath),
+    "imported generic function definition",
+  );
+  const genericFunctionLocation = importedGenericDefinition.find(
+    (location) => locationPath(location) === fixtures.genericPath,
+  );
+  const genericFunctionDocument = await vscode.workspace.openTextDocument(fixtures.genericPath);
+  const genericFunctionDeclarationOffset = genericFunctionDocument
+    .getText()
+    .indexOf("function identity<T>");
+  assert(genericFunctionDeclarationOffset >= 0);
+  assert.equal(
+    genericFunctionLocation.range.start.line,
+    genericFunctionDocument.positionAt(genericFunctionDeclarationOffset).line,
+    "the imported generic function definition should reach its declaration",
+  );
+
   const importedGenericSignaturePosition = positionAfter(
     document,
     'Generic.identity("ready")',
@@ -209,6 +240,30 @@ async function run() {
   );
   assert.match(importedBoxSignature.signatures[0].label, /get\(\): number/);
 
+  const importedBoxMethodDefinitionPosition = positionAfter(
+    document,
+    "typed_box:get()",
+    "typed_box:",
+  );
+  const importedBoxMethodDefinition = await retry(
+    () =>
+      vscode.commands.executeCommand(
+        "vscode.executeDefinitionProvider",
+        document.uri,
+        importedBoxMethodDefinitionPosition,
+      ),
+    (result) =>
+      Array.isArray(result) &&
+      result.some((location) => locationPath(location) === fixtures.genericClassPath),
+    "imported generic class method definition",
+  );
+  assert(
+    importedBoxMethodDefinition.some(
+      (location) => locationPath(location) === fixtures.genericClassPath,
+    ),
+    "the imported generic class method should navigate to its declaration",
+  );
+
   const importedBoxConstructorSignaturePosition = positionAfter(
     document,
     "BoxModule.Box.new(42)",
@@ -332,6 +387,60 @@ async function run() {
   assert(protocolDefinitions.some((location) => location.uri.fsPath === fixtures.contractsPath));
 
   const contractsDocument = await vscode.workspace.openTextDocument(fixtures.contractsPath);
+  const originalContractsSource = contractsDocument.getText();
+  const nullableContractsSource = originalContractsSource.replace(
+    "value: T }",
+    "value: T | nil }",
+  );
+  assert.notEqual(nullableContractsSource, originalContractsSource);
+  const contractEdit = new vscode.WorkspaceEdit();
+  contractEdit.replace(
+    contractsDocument.uri,
+    new vscode.Range(
+      contractsDocument.positionAt(0),
+      contractsDocument.positionAt(originalContractsSource.length),
+    ),
+    nullableContractsSource,
+  );
+  assert(await vscode.workspace.applyEdit(contractEdit));
+  assert(contractsDocument.isDirty, "the contract edit should remain unsaved");
+
+  const scoreFieldPosition = positionAfter(document, "score.value", "score.");
+  const nullableGenericFieldHover = await retry(
+    () =>
+      vscode.commands.executeCommand(
+        "vscode.executeHoverProvider",
+        document.uri,
+        scoreFieldPosition,
+      ),
+    (result) => /number/.test(hoverText(result)) && /nil/.test(hoverText(result)),
+    "unsaved imported generic alias edit propagation",
+  );
+  assert.match(hoverText(nullableGenericFieldHover), /number/);
+  assert.match(hoverText(nullableGenericFieldHover), /nil/);
+
+  const restoreContracts = new vscode.WorkspaceEdit();
+  restoreContracts.replace(
+    contractsDocument.uri,
+    new vscode.Range(
+      contractsDocument.positionAt(0),
+      contractsDocument.positionAt(contractsDocument.getText().length),
+    ),
+    originalContractsSource,
+  );
+  assert(await vscode.workspace.applyEdit(restoreContracts));
+  const restoredGenericFieldHover = await retry(
+    () =>
+      vscode.commands.executeCommand(
+        "vscode.executeHoverProvider",
+        document.uri,
+        scoreFieldPosition,
+      ),
+    (result) => /number/.test(hoverText(result)) && !/nil/.test(hoverText(result)),
+    "unsaved imported generic alias edit restoration",
+  );
+  assert.match(hoverText(restoredGenericFieldHover), /number/);
+
   const protocolRequirementPosition = positionAfter(
     contractsDocument,
     "update(dt: number)",
@@ -471,6 +580,7 @@ async function run() {
       hover: "Player",
       genericAliasHover: "Box<number>.value: number",
       importedGenericFunctionHover: hoverText(importedGenericHover),
+      importedGenericFunctionDefinition: genericFunctionLocation.uri.fsPath,
       importedGenericFunctionSignature: importedGenericSignature.signatures[0].label,
       importedGenericResultHover: hoverText(importedGenericResultHover),
       importedGenericClassHover: hoverText(importedBoxHover),
@@ -478,6 +588,9 @@ async function run() {
       importedGenericClassFieldHover: hoverText(importedBoxFieldHover),
       importedGenericClassCompletion: importedBoxGetCompletion.detail,
       importedGenericClassMethodSignature: importedBoxSignature.signatures[0].label,
+      importedGenericClassMethodDefinition: importedBoxMethodDefinition.some(
+        (location) => locationPath(location) === fixtures.genericClassPath,
+      ),
       importedGenericClassConstructorSignature:
         importedBoxConstructorSignature.signatures[0].label,
       genericAliasDefinition: genericDefinitions.some(
@@ -486,6 +599,8 @@ async function run() {
       genericBinderDefinition: true,
       genericBinderReferences: genericBinderReferences.length,
       genericBinderRenameEdits: genericBinderRenameEntry[1].length,
+      unsavedGenericFieldTypeUpdated: /nil/.test(hoverText(nullableGenericFieldHover)),
+      unsavedGenericFieldTypeRestored: !/nil/.test(hoverText(restoredGenericFieldHover)),
       inlayHints: hints.length,
       references: references.length,
       server: path.basename(process.env.TUA_REAL_SERVER_PATH),
