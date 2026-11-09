@@ -2,9 +2,10 @@
 
 Date: 2026-11-09  
 Audited base: `06c1065b940622eee2f179b4c7752ce496010b8c`
-Final code revision: `39d2dc4c`; latest editor regression-test revision:
-`f209b882`. The plan update is in the code fix commit. This report records
-verification after the parser and documentation audit fixes.
+Final implementation revision: `39d2dc4c`; latest test/plan revision:
+`6dba2821`; installed-editor regression-test revision: `f209b882`. This report
+records verification after the parser, documentation, and cycle-invalidation
+coverage updates.
 Scope: `internal/generics-polymorphism-0.7.0.md`, protocol contracts, native generics, type inference, editor surfaces, Lua erasure, and the locally shareable VS Code extension.  
 Working tree before audit: clean. No unrelated project changes were present.
 
@@ -213,7 +214,7 @@ Status key: **Exercised** means a focused regression or real request/runtime tes
 | P0 protocol syntax, nominality, colon receiver, mutable views | Exercised | Positive/negative assignments, colon calls, explicit dot/extracted receivers, class array mutation safety, nominal identity, inherited overrides, and contextual identifier compatibility are covered. |
 | P1 parsing, identities, spans, formatting and erasure | Exercised, partial | Local/exported/multiline and comment-separated protocol headers, comments containing braces during recovery, spans, formatting, diagnostics, Lua erasure, contextual words, and editor recovery of unclosed protocol bodies pass. Current-buffer queries retain partial declarations while dependency indexes keep last-good contracts. Broader malformed-edit recovery remains incomplete. |
 | P2 conformance, variance, multiple obligations, inheritance | Exercised, partial | Positive/negative local/imported conformance, inherited satisfaction/override, same-name obligations, optional parameters, varargs, multiple return slots/counts, variance, exact override/parameter/return locations, and related locations for imported protocol requirements are tested; uncommon override/range combinations remain open. |
-| P3 module identity, re-exports, cycles, edits | Exercised, partial | Named/namespace/re-export and cyclic protocol identity, saved/unsaved refresh tests pass; all dependency graph edit patterns are not exhausted. |
+| P3 module identity, re-exports, cycles, edits | Exercised, partial | Named/namespace/re-export and cyclic protocol identity pass. Editing one protocol inside a mutual import cycle refreshes implementing-class diagnostics while completion through the peer protocol remains available in the same analysis snapshot. Saved/unsaved refresh tests pass; delete/rename/workspace-switch and broad dependency graph edit patterns are not exhausted. |
 | P4 completion, hover, signatures, navigation, rename | Exercised on macOS, partial | Core/LSP suites and installed VSIX cover protocol completion, hover, signature, definition, implementation navigation, references/rename; generic alias/class/function completion/hover/signatures, alias definition, and generic binder definition/references/rename. Cross-module alias completion/hover are covered by in-process LSP tests, not a dedicated VS Code scenario. |
 | P5 examples, generated Lua, runtime/source maps/hot reload | Exercised, partial | Feature/game examples build; gameplay polymorphism executes; generic multi-return emitted Lua executes on Lua 5.4. LOVE/LuaJIT, source-map/hot-reload, and visual behavior pending. |
 | G0 design contract and limits | Inspected | Decisions are present in plan and user docs; future generic methods, generic protocols, packs, explicit call-site args, compound bounds, and advanced LuaCATS are explicit limitations. |
@@ -237,6 +238,7 @@ All commands ran from repository root unless noted.
 | `env TUA_TEST_VSIX="$PWD/editors/vscode/tua-0.7.0.vsix" npm --prefix editors/vscode run test:vscode-real` | Passed against the exact latest packaged VSIX on macOS arm64 / VS Code 1.142.0. Installs into an isolated profile and starts the bundled server; asserts protocol implementation navigation, generic binder definition/references/rename (three rename edits), imported generic hovers/completions/signatures. A sandboxed Electron attempt terminated with SIGABRT; the approved local-host retry passed. |
 | `CARGO_INCREMENTAL=0 RUST_MIN_STACK=16777216 RUST_TEST_THREADS=1 cargo test -q -p tua-core` | Passed after the parser fix: 1,864 passed, 0 failed, 1 ignored. |
 | `CARGO_INCREMENTAL=0 RUST_MIN_STACK=16777216 RUST_TEST_THREADS=1 cargo test -p tua-core protocol_` | Passed: 47 protocol-focused core tests, including comment-separated headers and recovery when header comments contain braces, as well as contextual identifiers, explicit receivers, inherited overrides, and optional/variadic/multiple-return contracts. |
+| `CARGO_INCREMENTAL=0 RUST_MIN_STACK=16777216 RUST_TEST_THREADS=1 cargo test -p tua-core --lib cyclic_imported_protocol_signatures_preserve_conformance_identity -- --nocapture` | Passed. The test mutates a protocol in a mutual-import cycle and asserts dependent conformance diagnostics and peer-protocol completion refresh from one snapshot. |
 | `CARGO_INCREMENTAL=0 RUST_MIN_STACK=16777216 RUST_TEST_THREADS=1 cargo test -p tua-lsp` | Passed after the implementation change: 409 passed, 0 failed. |
 | `CARGO_INCREMENTAL=0 RUST_MIN_STACK=16777216 RUST_TEST_THREADS=1 cargo test -p tua-cli` | Passed: 92 unit, 133 CLI integration, 3 gameplay, 1 helper defaults, 3 LOVE example, 1 LSP, and 1 Lua syntax integration tests; runtime-dependent LOVE execution tests use existing gates. |
 | `CARGO_INCREMENTAL=0 RUST_MIN_STACK=16777216 cargo clippy --workspace --all-targets -- -D warnings` | Passed. |
