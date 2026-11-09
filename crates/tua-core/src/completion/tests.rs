@@ -384,6 +384,23 @@ final class Box<T: Updatable> {
         class_parameter.detail.as_deref(),
         Some("generic type parameter; conforms to Updatable")
     );
+
+    for marker in ["value: T", "get(): T"] {
+        let completions = complete_tua_source(
+            "src/generic_completion.tua",
+            class_source,
+            position_after(class_source, marker),
+        )
+        .expect("generic class member type completion should succeed");
+        assert!(
+            completions.iter().any(|completion| {
+                completion.label == "T"
+                    && completion.detail.as_deref()
+                        == Some("generic type parameter; conforms to Updatable")
+            }),
+            "class binder should complete in `{marker}`: {completions:#?}"
+        );
+    }
 }
 
 #[test]
