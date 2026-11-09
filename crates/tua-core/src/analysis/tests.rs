@@ -6427,6 +6427,34 @@ local _view: Cloneable = Thing.new()
 }
 
 #[test]
+fn imported_structural_function_alias_is_not_a_protocol() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/contracts.d.tua
+export type Callable = { run: (x: number) -> nil }
+-- file: src/actors.tua
+import type { Callable } from "./contracts"
+final class Actor implements Callable {
+  run(): nil {}
+}
+local _callable: Callable = Actor.new()
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+
+    let diagnostics = host.snapshot().diagnostics("src/actors.tua");
+    assert!(
+        diagnostics.iter().any(|diagnostic| {
+            diagnostic.message.contains("unknown protocol `Callable`")
+        }),
+        "an imported structural function alias must not become a nominal protocol: {diagnostics:#?}"
+    );
+}
+
+#[test]
 fn generic_protocol_bounds_keep_canonical_identity_through_imported_reexports() {
     let fixture = Fixture::parse(
         r#"-- file: src/contracts.d.tua

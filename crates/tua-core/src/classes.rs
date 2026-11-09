@@ -2024,7 +2024,7 @@ pub(crate) fn class_contract_diagnostics(
                                 || (!import.namespace.is_empty()
                                     && protocol_name.starts_with(&format!("{}.", import.namespace)))
                         });
-                        if is_imported_type {
+                        if is_imported_type && environment.alias(protocol_name).is_none() {
                             // Project analysis resolves imported method contracts
                             // through ProjectTypeDatabase. The fast file-only
                             // checker deliberately defers this cross-file fact.
