@@ -67,7 +67,7 @@ pub(crate) fn bind_protocol_self(ty: &Type, protocol_name: &str) -> Type {
                 .iter()
                 .map(|argument| bind_protocol_self(argument, protocol_name))
                 .collect(),
-            span: span.clone(),
+            span: *span,
         },
         Type::GenericClassApplication {
             identity,
@@ -81,7 +81,7 @@ pub(crate) fn bind_protocol_self(ty: &Type, protocol_name: &str) -> Type {
                 .iter()
                 .map(|argument| bind_protocol_self(argument, protocol_name))
                 .collect(),
-            span: span.clone(),
+            span: *span,
         },
         Type::Union(types) => Type::union(
             types
