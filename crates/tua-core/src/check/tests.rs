@@ -6782,6 +6782,38 @@ fn generic_function_calls_report_conflicts_and_ambiguous_binders() {
 }
 
 #[test]
+fn generic_inference_keeps_related_arguments_order_independent_and_avoids_cascades() {
+    check_tua_source(
+        "src/generic_common_type.tua",
+        r#"
+open class Actor {}
+final class Fighter extends Actor {}
+local function choose<T>(first: T, second: T): T return first end
+local actor: Actor = Actor.new()
+local fighter: Fighter = Fighter.new()
+local _base_first: Actor = choose(actor, fighter)
+local _derived_first: Actor = choose(fighter, actor)
+"#,
+    )
+    .expect("either argument order should infer the common declared base type");
+
+    let diagnostics = check_tua_source(
+        "src/generic_common_type.tua",
+        "local function choose<T>(first: T, second: T): T return first end\nlocal _value: number = choose(1, 'text')\n",
+    )
+    .expect_err("unrelated argument types still conflict");
+    assert!(diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.code == Some(DiagnosticCode::TYPE_GENERIC_INFERENCE)));
+    assert!(
+        !diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == Some(DiagnosticCode::TYPE_MISMATCH)),
+        "the failed call should not produce a secondary mismatch against unresolved T: {diagnostics:#?}"
+    );
+}
+
+#[test]
 fn generic_inference_handles_nil_unions_any_and_empty_tables() {
     check_tua_source(
         "src/generic_unions.tua",

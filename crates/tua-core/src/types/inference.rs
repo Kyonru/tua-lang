@@ -271,6 +271,9 @@ fn collect_constraints(
                     substitutions.insert(id.clone(), actual.clone());
                     return Ok(());
                 }
+                if !invariant_binders.contains(id) && context.is_assignable(actual, previous) {
+                    return Ok(());
+                }
                 return Err(GenericInferenceFailure {
                     parameter: name.clone(),
                     kind: GenericInferenceFailureKind::Conflict {

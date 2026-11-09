@@ -3236,10 +3236,10 @@ impl<'a> Checker<'a> {
                 );
             }
             self.diagnostics.push(diagnostic);
-            return candidates
-                .first()
-                .map(|candidate| candidate.return_types.clone())
-                .unwrap_or_else(|| vec![Type::Any]);
+            // A failed generic instantiation has no trustworthy result type.
+            // Do not leak the unresolved declaration binder into the caller
+            // and report a second, cascading assignment mismatch.
+            return vec![Type::Any];
         }
 
         let best_candidate = candidates
