@@ -4,10 +4,11 @@
 
 The generic/protocol implementation plan is substantially implemented, and the
 existing suite contains broad same-file, cross-file, editor, and runtime
-coverage. This follow-up found two correctness issues: comments inside generic
-class headers were discarded by Lua emission, and deeply nested native array
-type suffixes bypassed the configured parser depth limit. Both are fixed and
-have boundary regressions.
+coverage. This follow-up found three defects: comments inside generic class
+headers were discarded by Lua emission; deeply nested native array type suffixes
+bypassed the configured parser depth limit; and protocol-bounded generic class
+members disappeared from completion during an incomplete edit. All three are
+fixed and have regressions.
 
 The previously identified recursive protocol identity case is now covered by
 same-file and cross-file conformance, hover, and completion tests. The full
@@ -92,6 +93,39 @@ tested editor surfaces.
 - **Files:** `crates/tua-core/src/parser/limits.rs` and
   `crates/tua-core/src/parser/tests.rs`.
 
+### GP-FU-003 — Incomplete generic class edits lost protocol-bound completion
+
+- **Category:** editor recovery / completion consistency
+- **Severity:** Medium
+- **Status:** Fixed and verified
+- **Affected workflow:** typing a member access on a protocol-bounded generic
+  parameter while the containing class has an incomplete edit
+- **Reproduction:** Open a valid file containing
+  `final class Box<T: Readable> implements Readable`, with an
+  `inspect(value: T)` method, then remove the class's final `}` while the cursor
+  is immediately after `value:`. Request completion at that position.
+- **Expected:** Completion offers `read`, using the known protocol bound on
+  `T`.
+- **Actual before fix:** Completion was empty. The current degraded parse could
+  be built after recovering the unfinished class, but its partial method facts
+  did not resolve the class generic parameter. Completion returned that empty
+  result without retrying the last-good file semantics. Diagnostics correctly
+  reported only the unclosed class.
+- **Fix:** For an invalid current document, when current recovered facts and
+  ordinary completion both return no results at a member-access cursor, retry
+  that query against the file's last-good parsed facts and type environment.
+  Successfully parsed documents continue to use current facts only. Last-good
+  semantic facts are memoized per snapshot so successive keystrokes do not
+  rebuild project inference.
+- **Regression coverage:** Core snapshot and actual LSP edit-sequence tests
+  open the valid generic class, remove the final class brace and method call,
+  then assert that `read` is suggested after `value:`. The core test also
+  verifies the unclosed-class diagnostic remains present and that last-good
+  semantic facts reuse the same cached allocation.
+- **Files:** `crates/tua-core/src/analysis/editor_queries.rs`,
+  `crates/tua-core/src/analysis/tests.rs`, and
+  `crates/tua-lsp/src/server/tests/completion.rs`.
+
 The same follow-up adds exact generic alias expansion work-limit coverage at
 4,096 and 4,097 applications, per-character recovery coverage for protocol and
 generic class headers, a stale dependent-diagnostic cancellation case, and
@@ -112,6 +146,7 @@ combinations and broader cancellation permutations remain open.
 | Same-file recursive protocols | Exercised | `same_file_recursive_protocol_signatures_keep_conformance_and_editor_types` and `same_file_recursive_protocol_method_returns_keep_nominal_identity` |
 | Cross-file recursive protocols | Exercised | `cyclic_imported_protocol_signatures_preserve_conformance_identity` and imported recursive method-return identity coverage |
 | Completion/hover agreement for recursive protocols | Exercised | Core analysis tests assert nominal hover and completion members; extension real-server suite covers generic/protocol editor queries |
+| Incomplete generic class completion | Exercised | Core snapshot and LSP edit-sequence regressions verify protocol-bound members remain suggested after an unclosed-class edit |
 | Parser depth and malformed edits | Exercised | Exact 64/65 native array depth boundary, protected comment/string cases, and every character prefix of protocol/generic class headers |
 | Formatter and comment round-trip | Exercised | Generic function-bound formatter regression plus class/function bound Lua-emission regressions |
 | Cross-file invalidation | Exercised | Contract change/restore cancels stale diagnostics; delete/recreate of each node in a three-module type re-export chain and rename/delete/recreate of a direct dependency update dependent diagnostics |
@@ -121,11 +156,11 @@ combinations and broader cancellation permutations remain open.
 
 ## Commands and outcomes
 
-- `RUST_MIN_STACK=33554432 RUST_TEST_THREADS=1 cargo test -p tua-core` —
-  passed: 1,897 passed, 1 ignored, including all generic/protocol and new
+- `RUST_MIN_STACK=16777216 cargo test -p tua-core` — passed: 1,898 passed,
+  1 ignored, including all generic/protocol and new
   comment, type-depth, and exact alias-work-limit regressions.
-- `RUST_MIN_STACK=33554432 RUST_TEST_THREADS=1 cargo test -p tua-lsp` —
-  passed: 432 passed, including protocol cancellation and multi-hop file churn.
+- `RUST_MIN_STACK=16777216 cargo test -p tua-lsp` — passed: 433 tests,
+  including the generic-class bound completion edit sequence.
 - `cargo clippy -p tua-core -p tua-lsp --all-targets -- -D warnings` — passed.
 - `cargo fmt --all -- --check` — passed.
 - `cargo test -p tua-cli --lib shaders::tests -- --nocapture` — passed: four
@@ -137,25 +172,28 @@ combinations and broader cancellation permutations remain open.
   The Makefile's `test` target now sets an overridable 16 MiB default, leaving
   normal parallel test execution enabled.
 - `env -u RUST_MIN_STACK -u RUST_TEST_THREADS make verify` — passed on the
-  current tree using only the Makefile default: workspace tests (core 1,897
-  passed/1 ignored;
-  LSP 432; CLI unit 92 passed/2 ignored; CLI integration 137; gameplay 3;
+  current tree using the Makefile's default 16 MiB stack and parallel tests:
+  workspace tests (core 1,898 passed/1 ignored;
+  LSP 433; CLI unit 92 passed/2 ignored; CLI integration 137; gameplay 3;
   helper-default 1; LOVE examples 3; LSP 1; Lua syntax 1), Clippy, release and
   config consistency, LLM language evaluation, extension checks (180/180),
   JSON validation, and diff checks. LOVE-dependent tests were skipped by their
-  explicit environment guard. The first extension check was denied loopback
-  access by the default sandbox; this full run used local loopback access.
+  explicit environment guard. The first full-gate attempt was denied loopback
+  access by the default sandbox; this full rerun used local loopback access.
 - `make extension-package` with loopback access — passed. The extension check
   reported 180 passed and 0 failed; all 454 tracked JSON files validated, and
   the release server and VSIX were built.
+- `make extension-package` with loopback access — passed on the final cached
+  completion-fallback revision; extension checks reported 180/180 and npm
+  reported zero vulnerabilities. The package contains 40 files and is 8.7 MB.
 - `TUA_TEST_VSIX="$(pwd)/editors/vscode/tua-0.7.0.vsix" make extension-real-server-test`
-  with loopback access — passed after installing the package into a disposable
-  VS Code profile and using its bundled release server; the VS Code extension-host
+  with loopback access — passed on the final package after installing it into
+  a disposable VS Code profile and using its bundled release server; the VS Code extension-host
   process exited with code 0. The suite exercised protocol and generic
   completion, hover, signatures, definitions, rename, unsaved edits, and
   implementation navigation.
 - `unzip -tq editors/vscode/tua-0.7.0.vsix` — passed, no archive errors.
-- VSIX SHA-256: `e8b8455a8074a2fcd27c998ce0b24bf9a9dd521ad1f733c6339e1b3cae1f67e1`.
+- Final VSIX SHA-256: `87c33c1711f5ce22b14ae4809a80719223534dda2a1194740af59f5a746e34eb`.
 
 The generated VSIX is a local macOS arm64 beta artifact. This follow-up does
 not claim cross-platform, LOVE/LuaJIT, visual, or long-session release
