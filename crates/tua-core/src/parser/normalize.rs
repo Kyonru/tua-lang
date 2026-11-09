@@ -68,24 +68,17 @@ pub(super) fn requires_tua_grammar(source: &str) -> bool {
             return true;
         }
 
+        if starts_keyword(&chars, index, "protocol") && starts_protocol_declaration(&chars, index) {
+            return true;
+        }
+
         // Functions can carry typed parameters, return annotations, and Tua
         // default arguments. Keeping all function-bearing modules on the Tua
         // grammar makes this classifier simple and correctness-first; large
         // generated data modules normally contain no executable declarations.
         if [
-            "class",
-            "const",
-            "continue",
-            "enum",
-            "export",
-            "final",
-            "function",
-            "if",
-            "implements",
-            "is",
-            "open",
-            "protocol",
-            "type",
+            "class", "const", "continue", "enum", "export", "final", "function", "if", "is",
+            "open", "type",
         ]
         .iter()
         .any(|keyword| starts_keyword(&chars, index, keyword))
@@ -95,6 +88,36 @@ pub(super) fn requires_tua_grammar(source: &str) -> bool {
     }
 
     false
+}
+
+fn starts_protocol_declaration(chars: &[char], index: usize) -> bool {
+    let line_start = chars[..index]
+        .iter()
+        .rposition(|character| *character == '\n')
+        .map_or(0, |newline| newline + 1);
+    let prefix = chars[line_start..index].iter().collect::<String>();
+    if !matches!(prefix.trim(), "" | "export") {
+        return false;
+    }
+
+    let mut cursor = index + "protocol".chars().count();
+    while chars
+        .get(cursor)
+        .is_some_and(|character| character.is_whitespace())
+    {
+        cursor += 1;
+    }
+    cursor = match consume_identifier_chars(chars, cursor) {
+        Some(cursor) => cursor,
+        None => return false,
+    };
+    while chars
+        .get(cursor)
+        .is_some_and(|character| character.is_whitespace())
+    {
+        cursor += 1;
+    }
+    chars.get(cursor) == Some(&'{')
 }
 
 pub(super) fn is_generated_lua_module(source: &str) -> bool {

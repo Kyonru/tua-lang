@@ -415,6 +415,29 @@ final class QualifiedPanel implements Contracts . Updatable {
 }
 
 #[test]
+fn protocol_and_implements_remain_usable_as_lua_identifiers() {
+    let source = r#"local protocol = "existing value"
+local implements = protocol
+return { protocol = protocol, implements = implements }
+"#;
+    let parsed = parse_tua_source("src/contextual_protocol_keywords.tua", source)
+        .expect("contextual protocol syntax must not reserve existing Lua identifiers");
+
+    assert!(parsed.protocol_declarations.is_empty());
+    assert!(crate::emit::emit_lua(&parsed)
+        .expect("ordinary Lua identifiers should still emit")
+        .contains("local implements = protocol"));
+
+    let mixed_tua_source =
+        "type Label = string\nlocal implements: Label = \"kept\"\nlocal protocol = implements\n";
+    let parsed = parse_tua_source("src/contextual_protocol_keywords.tua", mixed_tua_source)
+        .expect("ordinary identifiers should remain valid next to Tua type syntax");
+    assert!(crate::emit::emit_lua(&parsed)
+        .expect("mixed Tua and Lua syntax should emit")
+        .contains("local implements = \"kept\""));
+}
+
+#[test]
 fn protocol_declarations_preserve_method_contracts_and_erase_from_lua() {
     let source = r#"export protocol Updatable {
   update(dt: number): nil

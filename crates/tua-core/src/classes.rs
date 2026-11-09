@@ -336,6 +336,14 @@ pub(crate) fn parse_protocol_declarations(
             index += next_char_len(source, index);
             continue;
         }
+        let line_start = source[..protocol_start]
+            .rfind('\n')
+            .map_or(0, |newline| newline + 1);
+        let line_prefix = source[line_start..protocol_start].trim();
+        if !matches!(line_prefix, "" | "export") {
+            index = protocol_start + "protocol".len();
+            continue;
+        }
         let start = index;
         let mut cursor = skip_whitespace(source, protocol_start + "protocol".len());
         let Some((name, name_start, name_end)) = take_identifier(source, cursor) else {
