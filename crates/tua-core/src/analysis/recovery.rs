@@ -153,7 +153,7 @@ pub(super) fn parse_degraded_analysis_source(
 ) -> Result<ParsedSource, Vec<Diagnostic>> {
     let source = source_without_recoverable_incomplete_lines(source);
     let recovered = if kind == AnalysisSourceKind::Tua {
-        crate::classes::source_with_closed_class_bodies(&source)
+        crate::classes::source_with_closed_editor_declarations(&source)
     } else {
         None
     };

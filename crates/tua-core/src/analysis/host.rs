@@ -555,17 +555,17 @@ impl AnalysisHost {
                         .as_ref()
                         .ok()
                         .map(Arc::as_ref)
-                        .or_else(|| file.degraded_semantics.as_ref().map(|facts| &facts.parsed))
                         .or_else(|| {
                             last_good_files
                                 .get(path)
                                 .and_then(|last_good| last_good.parsed.as_ref().ok())
                                 .map(Arc::as_ref)
-                        }),
+                        })
+                        .or_else(|| file.degraded_semantics.as_ref().map(|facts| &facts.parsed)),
                     hir: file
                         .hir()
-                        .or_else(|| file.degraded_semantics.as_ref().map(|facts| &facts.hir))
-                        .or_else(|| last_good_files.get(path).and_then(AnalysisFile::hir)),
+                        .or_else(|| last_good_files.get(path).and_then(AnalysisFile::hir))
+                        .or_else(|| file.degraded_semantics.as_ref().map(|facts| &facts.hir)),
                     exports: file.exports.as_ref().or_else(|| {
                         last_good_files
                             .get(path)
@@ -586,13 +586,13 @@ impl AnalysisHost {
                                 .ok()
                                 .map(Arc::as_ref)
                                 .or_else(|| {
-                                    file.degraded_semantics.as_ref().map(|facts| &facts.parsed)
-                                })
-                                .or_else(|| {
                                     last_good_files
                                         .get(path)
                                         .and_then(|last_good| last_good.parsed.as_ref().ok())
                                         .map(Arc::as_ref)
+                                })
+                                .or_else(|| {
+                                    file.degraded_semantics.as_ref().map(|facts| &facts.parsed)
                                 })?;
                             Some((path.as_path(), parsed))
                         }),
@@ -614,31 +614,31 @@ impl AnalysisHost {
                     environment: file
                         .environment()
                         .or_else(|| {
-                            file.degraded_semantics
-                                .as_ref()
-                                .map(|facts| &facts.environment)
-                        })
-                        .or_else(|| {
                             last_good_files
                                 .get(path)
                                 .and_then(AnalysisFile::environment)
+                        })
+                        .or_else(|| {
+                            file.degraded_semantics
+                                .as_ref()
+                                .map(|facts| &facts.environment)
                         }),
                     scope: file
                         .scope()
-                        .or_else(|| file.degraded_semantics.as_ref().map(|facts| &facts.scope))
-                        .or_else(|| last_good_files.get(path).and_then(AnalysisFile::scope)),
+                        .or_else(|| last_good_files.get(path).and_then(AnalysisFile::scope))
+                        .or_else(|| file.degraded_semantics.as_ref().map(|facts| &facts.scope)),
                     parsed: file
                         .parsed
                         .as_ref()
                         .ok()
                         .map(Arc::as_ref)
-                        .or_else(|| file.degraded_semantics.as_ref().map(|facts| &facts.parsed))
                         .or_else(|| {
                             last_good_files
                                 .get(path)
                                 .and_then(|last_good| last_good.parsed.as_ref().ok())
                                 .map(Arc::as_ref)
-                        }),
+                        })
+                        .or_else(|| file.degraded_semantics.as_ref().map(|facts| &facts.parsed)),
                 }),
                 &module_graph,
             )

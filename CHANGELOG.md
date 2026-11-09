@@ -78,6 +78,9 @@ language or editor behavior, and migration notes call out those changes.
   invoked completion keeps imported protocol members after syntax errors.
 - Classify colon-called members before type annotations in semantic tokens, so
   protocol method calls keep their method token class.
+- Recover incomplete protocol bodies for current-buffer editor queries while
+  retaining the unclosed-protocol diagnostic; build/check still reject the
+  original source until its closing brace is present.
 - Do not report a protocol type import as unused when a class uses it in an
   `implements` clause.
 - Identify the incompatible parameter or return slot in protocol method

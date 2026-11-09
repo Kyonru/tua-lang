@@ -539,6 +539,31 @@ fn unclosed_protocol_reports_targeted_syntax_diagnostic() {
 }
 
 #[test]
+fn editor_recovery_closes_an_unfinished_protocol_without_losing_its_contract() {
+    let source =
+        "local label = \"ready\"\nexport protocol Display {\n  render(): { text: string }\n";
+    let recovered = crate::classes::source_with_closed_editor_declarations(source)
+        .expect("editor recovery should close an unfinished protocol declaration");
+    let parsed = parse_tua_source("src/display.tua", recovered)
+        .expect("recovered source should retain the protocol's usable partial contract");
+
+    assert_eq!(parsed.protocol_declarations.len(), 1);
+    assert_eq!(parsed.protocol_declarations[0].name, "Display");
+    assert_eq!(parsed.protocol_declarations[0].methods[0].name, "render");
+    assert!(parsed.ast.to_string().contains("local label"));
+
+    let original_error = parse_tua_source("src/display.tua", source)
+        .expect_err("normal parsing must still reject the user's missing brace");
+    assert!(original_error
+        .iter()
+        .any(|diagnostic| diagnostic.message.contains("unclosed protocol `Display`")));
+    assert!(crate::classes::source_with_closed_editor_declarations(
+        "local text = 'protocol Display {'\n-- protocol Display {\n"
+    )
+    .is_none());
+}
+
+#[test]
 fn class_array_fields_parse_after_lowering() {
     let source = r#"final class BeatManager {
   steps: number[]

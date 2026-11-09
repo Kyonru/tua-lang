@@ -882,6 +882,48 @@ pub(crate) fn source_with_closed_class_bodies(source: &str) -> Option<String> {
     Some(format!("{source}{}", "\n}".repeat(depth)))
 }
 
+/// Editor-only recovery for a protocol declaration whose closing brace has
+/// not been typed yet. Reuse the declaration scanner for lexical boundaries,
+/// then close every unmatched nested table/record and the protocol body.
+pub(crate) fn source_with_closed_protocol_bodies(source: &str) -> Option<String> {
+    let diagnostic = unclosed_protocol_diagnostic(Path::new("<editor-recovery>"), source)?;
+    let start = crate::source_text::byte_for_position(
+        source,
+        SourcePosition {
+            line: diagnostic.line,
+            column: diagnostic.column,
+        },
+    )?;
+    let open = start + source[start..].find('{')?;
+    let depth = matching_delimiter(source, open, '{', '}').err()?;
+    if depth == 0 || depth > 32 {
+        return None;
+    }
+    Some(format!("{source}{}", "\n}".repeat(depth)))
+}
+
+/// Recover incomplete native declarations for editor queries. Build/check
+/// paths continue parsing the user's original source and report missing braces.
+pub(crate) fn source_with_closed_editor_declarations(source: &str) -> Option<String> {
+    let mut recovered = source.to_owned();
+    let mut changed = false;
+
+    // An edit may leave an outer declaration and a nested declaration open.
+    // Two passes cover the class and protocol declaration kinds without
+    // repeatedly appending closers after they have been balanced.
+    for _ in 0..2 {
+        let next = source_with_closed_class_bodies(&recovered)
+            .or_else(|| source_with_closed_protocol_bodies(&recovered));
+        let Some(next) = next else {
+            break;
+        };
+        recovered = next;
+        changed = true;
+    }
+
+    changed.then_some(recovered)
+}
+
 fn class_blocks(source: &str) -> Vec<ClassBlock> {
     let mut blocks = Vec::new();
     let mut index = 0usize;

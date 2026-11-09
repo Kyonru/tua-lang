@@ -9438,6 +9438,25 @@ fn unclosed_native_classes_recover_members_without_erasing_outer_scopes() {
 }
 
 #[test]
+fn unclosed_protocols_keep_current_buffer_semantics_available() {
+    let fixture = Fixture::parse(
+        "-- file: draft.tua\nlocal label = 'ready'\nprotocol Display {\n render(): string\n",
+    );
+    let mut host = AnalysisHost::new();
+    host.set_file("draft.tua", fixture.files()[0].source.clone());
+    let snapshot = host.snapshot();
+
+    let hover = snapshot
+        .hover("draft.tua", SourcePosition { line: 1, column: 8 })
+        .expect("an earlier local should still resolve in the recovered current buffer");
+    assert!(hover.contents.contains("string"), "{hover:?}");
+    assert!(snapshot
+        .diagnostics("draft.tua")
+        .iter()
+        .any(|diagnostic| diagnostic.message.contains("unclosed protocol `Display`")));
+}
+
+#[test]
 fn workspace_declaration_overlays_keep_project_ownership() {
     let mut host = AnalysisHost::new();
     host.set_source_roots([PathBuf::from("first/src"), PathBuf::from("second/src")]);
