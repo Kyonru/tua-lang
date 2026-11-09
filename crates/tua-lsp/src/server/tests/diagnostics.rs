@@ -1130,6 +1130,51 @@ final class Particle implements Updatable {
         }),
         "the consumer should no longer resolve the old dependency path: {diagnostics:#?}"
     );
+
+    // After the consumer adopts the new path, remove and recreate that target
+    // on disk. The deleted file must not leave its last-good contract active;
+    // recreation restores the changed contract, and a compatible edit clears
+    // the dependent conformance diagnostic.
+    server.send(did_close(&renamed_uri));
+    temp.remove("src/api.tua");
+    server.send(watched_files_changed([(&renamed_uri, 3)]));
+    server.send(text_document_diagnostic_request(5, &actors_uri));
+    let deleted = document_diagnostic_items(server.output(), 5);
+    assert!(
+        deleted
+            .iter()
+            .any(|diagnostic| diagnostic["code"] == "TL4002"),
+        "deleting the renamed target should make the new import unresolved: {deleted:#?}"
+    );
+    assert!(
+        deleted
+            .iter()
+            .all(|diagnostic| diagnostic["code"] != "TL1008"),
+        "the deleted target must not leave stale conformance errors: {deleted:#?}"
+    );
+
+    temp.write("src/api.tua", changed_contracts);
+    server.send(watched_files_changed([(&renamed_uri, 1)]));
+    server.send(text_document_diagnostic_request(6, &actors_uri));
+    let recreated = document_diagnostic_items(server.output(), 6);
+    assert!(
+        recreated.iter().any(|diagnostic| {
+            diagnostic["code"] == "TL1008"
+                && diagnostic["message"].as_str().is_some_and(|message| {
+                    message.contains("Particle.update") && message.contains("Updatable.update")
+                })
+        }),
+        "recreating the renamed target should restore its incompatible contract: {recreated:#?}"
+    );
+
+    temp.write("src/api.tua", contracts);
+    server.send(watched_files_changed([(&renamed_uri, 2)]));
+    server.send(text_document_diagnostic_request(7, &actors_uri));
+    let corrected = document_diagnostic_items(server.output(), 7);
+    assert!(
+        corrected.is_empty(),
+        "correcting the recreated target should clear dependent diagnostics: {corrected:#?}"
+    );
 }
 
 #[test]
