@@ -355,6 +355,13 @@ fn line_width_counts_unicode_characters_instead_of_utf8_bytes() {
 }
 
 #[test]
+fn malformed_non_ascii_code_tokens_are_formatter_idempotent() {
+    let source = "#!===�";
+    let once = format(source);
+    assert_eq!(format(&once), once);
+}
+
+#[test]
 fn preserves_multiline_call_indentation_and_grouping_spacing() {
     let source = r#"function draw()
 love.graphics.draw(

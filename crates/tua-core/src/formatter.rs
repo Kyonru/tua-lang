@@ -1001,6 +1001,14 @@ fn normalize_spacing(line: &str, quote_style: QuoteStyle) -> String {
                 .chars()
                 .next()
                 .expect("formatter index should remain on a UTF-8 boundary");
+            if matches!(&state, MaskState::Code)
+                && output
+                    .chars()
+                    .last()
+                    .is_some_and(|previous| !previous.is_whitespace())
+            {
+                output.push(' ');
+            }
             output.push(character);
             index += character.len_utf8();
             continue;
