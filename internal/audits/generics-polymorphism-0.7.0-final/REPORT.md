@@ -26,6 +26,45 @@ The protocol/generic implementation is suitable for **manual beta testing on mac
 
 Repeated local profile measurements (five cold samples, twenty warm and contention samples) on the 1,000-line fixture show cold completion p95 251.10 ms, warm completion p95 6.24 ms, cold hover p95 266.65 ms, warm hover p95 20.03 ms, and completion p95 under contention 153.03 ms. The 100-module project reports cold completion p95 116.04 ms, warm completion 0.40 ms, and warm hover 1.66 ms. These have no before/after baseline; cold latency and large-project contention remain performance opportunities.
 
+## Final verification addendum — November 9, 2026
+
+The earlier checksum and suite counts in this report are historical snapshots.
+After that snapshot, the recursive protocol-signature defect was independently
+reproduced and fixed, then same-file and cross-file identity, conformance, and
+editor-surface regressions were added. Further tests cover deletion of one node
+from a cyclic import graph through both `AnalysisHost` and LSP watched-file /
+pull-diagnostics flow, editor recovery at every character prefix of a nested
+record/union protocol fixture, and imported inherited-override diagnostic
+ranges after Unicode-prefixed source lines.
+
+At revision `2e64b244236bf1878a89c6e670a7ba370fb9eb58`, `CARGO_INCREMENTAL=0
+RUST_MIN_STACK=33554432 make verify` completed successfully on macOS arm64. It
+included 1,874 core tests passed (1 ignored), 423 LSP tests passed, 92 CLI
+library tests passed (2 ignored), 136 CLI integration tests passed, 180 VS Code
+extension tests passed, Clippy, schema/reference/version checks, and
+`git diff --check`. The `source_pipeline` nightly fuzz target completed 21,595
+executions in 31 seconds with no crash (observed peak RSS about 600 MiB). The
+restricted sandbox initially denied VS Code inspector loopback access; the
+suite passed on retry with host loopback access. A transient CLI temporary
+workspace failure also passed in isolation and on the successful full run.
+
+The exact `editors/vscode/tua-0.7.0.vsix` artifact remains version 0.7.0, passes
+archive integrity validation, and has SHA-256
+`cba9f9749d45a7969706962750c7d71746478b7604645fa36196c4b20fc03b57`. Its
+installed real-server replay passed in an isolated VS Code profile on this
+macOS arm64 host. Commits after packaging changed tests, lint cleanup, and
+internal verification notes only; no extension/compiler product source changed
+after that tested package. The artifact is ready for manual beta testing on
+this platform, not general release qualification.
+
+Still pending: LOVE/LuaJIT runtime and visual review; live-game source-map and
+hot-reload qualification; Linux, Windows, and Intel Mac checks; repeated
+release-host performance with a baseline and long-session retained-memory
+measurement; and testing in a second LSP client. These are environment or
+qualification gaps, not evidence of a known implementation defect. Cross-module
+class inheritance, generic methods/protocols, compound bounds, and explicit
+call-site generic arguments remain documented feature limits.
+
 ## Audit findings
 
 ### AUDIT-001 — Generic multi-return behavior lacked a persistent acceptance test
