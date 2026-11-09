@@ -6415,7 +6415,7 @@ final class Wrong implements A, B {
   f(value: A): nil {}
   g(value: B): nil {}
 }
-local function inspect(value: B)
+local function inspect(<|parameter|>value: B)
   value:g<|complete|>()
 end
 "#,
@@ -6432,6 +6432,13 @@ end
         completion_labels(&snapshot.completion("src/actors.tua", fixture.position("complete"))),
         ["g"],
         "cyclic protocol views should still expose their methods to completion"
+    );
+    let parameter_hover = snapshot
+        .hover("src/actors.tua", fixture.position("parameter"))
+        .expect("the parameter should retain its cyclic protocol type in hover");
+    assert_eq!(
+        parameter_hover.contents, "parameter value: B",
+        "hover should preserve the protocol-facing type instead of displaying an expanded structural cycle"
     );
     assert!(
         !diagnostics.iter().any(|diagnostic| {
@@ -6468,6 +6475,64 @@ end
         completion_labels(&changed.completion("src/actors.tua", fixture.position("complete"))),
         ["g"],
         "the other side of the cyclic graph should retain its completion surface"
+    );
+}
+
+#[test]
+fn same_file_recursive_protocol_signatures_keep_conformance_and_editor_types() {
+    let fixture = Fixture::parse(
+        r#"protocol A {
+  f(value: B): nil
+}
+protocol B {
+  g(value: A): nil
+}
+final class Actor implements A, B {
+  f(value: B): nil {}
+  g(value: A): nil {}
+}
+final class Wrong implements A, B {
+  f(value: A): nil {}
+  g(value: B): nil {}
+}
+local function inspect(<|parameter|>value: B)
+  value:g<|complete|>()
+end
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_file("src/main.tua", fixture.source("src/main.tua"));
+    let snapshot = host.snapshot();
+
+    let diagnostics = snapshot.diagnostics("src/main.tua");
+    assert!(
+        !diagnostics.iter().any(|diagnostic| {
+            diagnostic.severity == crate::DiagnosticSeverity::Error
+                && diagnostic.message.contains("Actor.")
+        }),
+        "matching same-file recursive protocol signatures should conform: {diagnostics:#?}"
+    );
+    assert!(
+        diagnostics.iter().any(|diagnostic| {
+            diagnostic.message.contains("Wrong.f")
+                && diagnostic.message.contains("does not satisfy protocol `A.f`")
+        }) && diagnostics.iter().any(|diagnostic| {
+            diagnostic.message.contains("Wrong.g")
+                && diagnostic.message.contains("does not satisfy protocol `B.g`")
+        }),
+        "same-file cycle handling must still reject incompatible method signatures: {diagnostics:#?}"
+    );
+    assert_eq!(
+        completion_labels(&snapshot.completion("src/main.tua", fixture.position("complete"))),
+        ["g"],
+        "same-file protocol completion should expose the declared method"
+    );
+    let parameter_hover = snapshot
+        .hover("src/main.tua", fixture.position("parameter"))
+        .expect("the parameter should retain its same-file protocol type in hover");
+    assert_eq!(
+        parameter_hover.contents, "parameter value: B",
+        "hover and completion should agree on the protocol surface"
     );
 }
 
