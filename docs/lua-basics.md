@@ -157,7 +157,7 @@ method-only class contracts; it does not support JavaScript imports or
 are available on type aliases (`type Box<T> = ...`) and free functions such as
 `local function identity<T>(value: T): T ... end`, and generic classes. Function
 and constructor calls infer parameters from their values. See
-[Typing In Tua](typing.md#generic-type-aliases-and-functions) for the supported
+[Typing In Tua](typing.md#generic-type-aliases) for the supported
 inference and compatibility rules.
 
 Continue with [Learn Tua](learn.md), [Modules And Imports](modules.md), or
