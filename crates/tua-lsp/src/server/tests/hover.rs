@@ -343,6 +343,61 @@ return { identity = identity }
 }
 
 #[test]
+fn imported_luadoc_generic_function_editor_surfaces_preserve_instantiation() {
+    let temp = TempProject::new("imported-luadoc-generic-function-editor");
+    let source = r#"local Generic = require("generic")
+local generic_text = Generic.identity("ready")
+local generic_record = Generic.identity({ label = "ready" })
+generic_record.
+"#;
+    let generic = r#"---@generic T
+---@param value T
+---@return T
+local function identity(value)
+  return value
+end
+return { identity = identity }
+"#;
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/main.tua", source);
+    temp.write("src/generic.lua", generic);
+
+    let uri = temp.uri_for("src/main.tua");
+    let output = run_messages(vec![
+        initialize_with_root(1, temp.uri()),
+        did_open(&uri, source),
+        hover_request(2, &uri, source, "identity(\"ready\""),
+        signature_help_request(3, &uri, source, "identity(\"ready\""),
+        hover_request(4, &uri, source, "generic_text = Generic.identity"),
+        definition_request_at(
+            5,
+            &uri,
+            tua_core::SourcePosition {
+                line: 2,
+                column: 31,
+            },
+        ),
+        completion_request(6, &uri, source, "generic_record."),
+    ]);
+
+    assert_hover_contains(&output, 2, "function Generic.identity<T>(value: T): T");
+    assert_signature_label(
+        &output,
+        3,
+        "function Generic.identity(value: string): string",
+    );
+    assert_hover_contains(&output, 4, "local generic_text: string");
+    assert_eq!(
+        response_with_id(&output, 5)["result"]["uri"],
+        temp.uri_for("src/generic.lua")
+    );
+    assert!(
+        completion_labels(&output, 6).contains(&"label"),
+        "the imported LuaDoc generic result should preserve its record members"
+    );
+}
+
+#[test]
 fn hover_preserves_inferred_ecs_types_from_required_module_exports() {
     let temp = TempProject::new("required-ecs-module-hover");
     let source = r#"local ECS = require("ecs_state")
