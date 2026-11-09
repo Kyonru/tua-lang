@@ -629,6 +629,65 @@ final class Worker implements Applies {
 }
 
 #[test]
+fn protocol_requirements_reject_missing_and_empty_parameter_types() {
+    for (parameters, expected_message, expected_range) in [
+        (
+            "value",
+            "parameter `value` must declare an explicit type",
+            (2, 5, 2, 10),
+        ),
+        (
+            "value:",
+            "parameter `value` must have a non-empty type",
+            (2, 5, 2, 11),
+        ),
+        (
+            "...",
+            "parameter `...` must declare an explicit type",
+            (2, 5, 2, 8),
+        ),
+    ] {
+        let source = format!(
+            "protocol P {{\n  f({parameters}): nil\n}}\nfinal class C implements P {{\n  f(value: string): nil {{}}\n}}\n"
+        );
+        let diagnostics = parse_tua_source("src/invalid_protocol_parameter.tua", source)
+            .expect_err("protocol parameters require explicit, non-empty type annotations");
+
+        assert_eq!(
+            diagnostics.len(),
+            1,
+            "unexpected cascading diagnostics: {diagnostics:#?}"
+        );
+        let diagnostic = &diagnostics[0];
+        assert_eq!(diagnostic.code, Some(DiagnosticCode::SYNTAX_PARSE));
+        assert!(
+            diagnostic.message.contains(expected_message),
+            "{diagnostic:#?}"
+        );
+        assert_eq!(
+            (
+                diagnostic.line,
+                diagnostic.column,
+                diagnostic.end_line,
+                diagnostic.end_column
+            ),
+            expected_range,
+            "the malformed parameter should receive the primary range: {diagnostic:#?}"
+        );
+    }
+
+    let valid = r#"protocol P {
+  f(value: number, ...: string): nil
+}
+final class C implements P {
+  f(value: number, ...: string): nil {}
+}
+"#;
+    crate::check_tua_source("src/valid_protocol_parameters.tua", valid)
+        .expect("explicitly typed positional and variadic parameters should remain valid");
+}
+
+#[test]
 fn protocol_method_signatures_ignore_trailing_comments_but_keep_comment_text_in_strings() {
     let source = r#"protocol Marked {
   update(dt: number): nil -- a normal contract comment

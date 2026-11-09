@@ -172,7 +172,10 @@ name as its bound; compound bounds and generic protocols are not supported.
 ## Protocol Contracts
 
 A protocol describes methods that a class promises to provide. Declare each
-method's parameter and return types, then list the protocol after `implements`:
+method's parameter and return types, then list the protocol after `implements`.
+Every parameter, including a variadic parameter, needs an explicit non-empty
+type annotation; Tua reports a syntax diagnostic on an omitted or empty type
+instead of accepting a malformed contract or cascading into a conformance error.
 
 ```tua
 protocol Updatable {

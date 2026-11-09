@@ -107,6 +107,19 @@ struct ProtocolHeader {
     body_open: usize,
 }
 
+struct ProtocolMethodSignature {
+    name: String,
+    parameters: String,
+    return_type: String,
+}
+
+struct ProtocolParameterTypeError {
+    parameter_name: String,
+    offset: usize,
+    length: usize,
+    missing: bool,
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum ClassMemberKind {
     Field,
@@ -411,15 +424,17 @@ pub(crate) fn parse_protocol_declarations(
                 break;
             }
             let line_end = protocol_method_line_end(source, body_cursor, body_end);
-            let line = &source[body_cursor..line_end];
-            let line = line.trim();
+            let raw_line = &source[body_cursor..line_end];
+            let line_leading = raw_line.len() - raw_line.trim_start().len();
+            let line = raw_line.trim();
             if line == "}" {
                 break;
             }
-            let (method_name, method_params, method_return) = parse_protocol_method_line(line);
-            if let (Some(method_name), Some(parameters), Some(return_type)) =
-                (method_name, method_params, method_return)
-            {
+            match parse_protocol_method_line(line) {
+                Ok(Some(signature)) => {
+                    let method_name = signature.name;
+                    let parameters = signature.parameters;
+                    let return_type = signature.return_type;
                 let method_start = body_cursor
                     + source[body_cursor..line_end]
                         .find(method_name.as_str())
@@ -451,8 +466,35 @@ pub(crate) fn parse_protocol_declarations(
                         },
                     });
                 }
-            } else {
-                diagnostics.push(class_diagnostic(path, positions.position(body_cursor), format!("invalid protocol member in `{}`; expected `method(parameters): ReturnType`", header.name)));
+                }
+                Err(error) => {
+                    let start = body_cursor + line_leading + error.offset;
+                    let end = start + error.length;
+                    let detail = if error.missing {
+                        "must declare an explicit type"
+                    } else {
+                        "must have a non-empty type"
+                    };
+                    diagnostics.push(
+                        Diagnostic::error(
+                            path,
+                            positions.position(start).line,
+                            positions.position(start).column,
+                            format!(
+                                "protocol method parameter `{}` {detail}",
+                                error.parameter_name
+                            ),
+                        )
+                        .with_code(DiagnosticCode::SYNTAX_PARSE)
+                        .with_range(
+                            positions.position(start).line,
+                            positions.position(start).column,
+                            positions.position(end).line,
+                            positions.position(end).column,
+                        ),
+                    );
+                }
+                Ok(None) => diagnostics.push(class_diagnostic(path, positions.position(body_cursor), format!("invalid protocol member in `{}`; expected `method(parameters): ReturnType`", header.name))),
             }
             body_cursor = if line_end < body_end {
                 line_end + 1
@@ -535,35 +577,140 @@ fn protocol_header_at(source: &str, start: usize) -> Option<ProtocolHeader> {
         })
 }
 
-fn parse_protocol_method_line(line: &str) -> (Option<String>, Option<String>, Option<String>) {
+fn parse_protocol_method_line(
+    line: &str,
+) -> Result<Option<ProtocolMethodSignature>, ProtocolParameterTypeError> {
     let line = strip_protocol_comments(line);
     let line = line.trim();
     let (name, _, name_end) = match take_identifier(line, 0) {
         Some(parts) => parts,
-        None => return (None, None, None),
+        None => return Ok(None),
     };
     let open = skip_whitespace(line, name_end);
     if !line[open..].starts_with('(') {
-        return (None, None, None);
+        return Ok(None);
     }
     let close = match find_matching_paren(line, open) {
         Some(close) => close,
-        None => return (None, None, None),
+        None => return Ok(None),
     };
     let colon = skip_whitespace(line, close + 1);
     if !line[colon..].starts_with(':') {
-        return (None, None, None);
+        return Ok(None);
     }
-    let parameters = line[open + 1..close].trim().to_owned();
+    let raw_parameters = &line[open + 1..close];
+    let parameter_leading = raw_parameters.len() - raw_parameters.trim_start().len();
+    let parameters = raw_parameters.trim().to_owned();
+    if let Some(mut error) = protocol_parameter_type_error(&parameters) {
+        error.offset += open + 1 + parameter_leading;
+        return Err(error);
+    }
     let return_type = line[colon + 1..]
         .trim()
         .trim_end_matches(',')
         .trim()
         .to_owned();
     if return_type.is_empty() {
-        return (None, None, None);
+        return Ok(None);
     }
-    (Some(name), Some(parameters), Some(return_type))
+    Ok(Some(ProtocolMethodSignature {
+        name,
+        parameters,
+        return_type,
+    }))
+}
+
+fn protocol_parameter_type_error(parameters: &str) -> Option<ProtocolParameterTypeError> {
+    for range in split_protocol_parameter_ranges(parameters) {
+        let parameter = &parameters[range.clone()];
+        let trimmed_start = parameter.len() - parameter.trim_start().len();
+        let parameter = parameter.trim();
+        if parameter.is_empty() {
+            continue;
+        }
+        let parameter_start = range.start + trimmed_start;
+        let (name, annotation) = protocol_parameter_annotation(parameter);
+        let missing = annotation.is_none();
+        let annotation = annotation.unwrap_or_default();
+        if missing || annotation.trim().is_empty() {
+            return Some(ProtocolParameterTypeError {
+                parameter_name: name,
+                offset: parameter_start,
+                length: parameter.len(),
+                missing,
+            });
+        }
+    }
+    None
+}
+
+fn protocol_parameter_annotation(parameter: &str) -> (String, Option<&str>) {
+    let mut depth = 0usize;
+    let mut quote = None;
+    let mut escaped = false;
+    for (index, character) in parameter.char_indices() {
+        if let Some(current_quote) = quote {
+            if escaped {
+                escaped = false;
+            } else if character == '\\' {
+                escaped = true;
+            } else if character == current_quote {
+                quote = None;
+            }
+            continue;
+        }
+
+        match character {
+            '\'' | '"' => quote = Some(character),
+            '{' | '[' | '(' | '<' => depth += 1,
+            '}' | ']' | ')' | '>' => depth = depth.saturating_sub(1),
+            ':' if depth == 0 => {
+                let name = parameter[..index].trim();
+                return (
+                    name.trim_end_matches('?').trim().to_owned(),
+                    Some(&parameter[index + 1..]),
+                );
+            }
+            _ => {}
+        }
+    }
+
+    (parameter.to_owned(), None)
+}
+
+fn split_protocol_parameter_ranges(parameters: &str) -> Vec<Range<usize>> {
+    let mut ranges = Vec::new();
+    let mut start = 0;
+    let mut depth = 0usize;
+    let mut quote = None;
+    let mut escaped = false;
+
+    for (index, character) in parameters.char_indices() {
+        if let Some(current_quote) = quote {
+            if escaped {
+                escaped = false;
+            } else if character == '\\' {
+                escaped = true;
+            } else if character == current_quote {
+                quote = None;
+            }
+            continue;
+        }
+
+        match character {
+            '\'' | '"' => quote = Some(character),
+            '{' | '[' | '(' | '<' => depth += 1,
+            '}' | ']' | ')' | '>' => depth = depth.saturating_sub(1),
+            ',' if depth == 0 => {
+                ranges.push(start..index);
+                start = index + character.len_utf8();
+            }
+            _ => {}
+        }
+    }
+
+    ranges.push(start..parameters.len());
+    ranges
 }
 
 fn protocol_method_line_end(source: &str, start: usize, body_end: usize) -> usize {

@@ -171,6 +171,45 @@ fn did_open_publishes_actionable_module_scope_diagnostic_for_nested_protocol() {
 }
 
 #[test]
+fn did_open_reports_missing_protocol_parameter_annotations_without_cascade() {
+    let uri = "file:///tmp/protocol-parameter-annotations.tua";
+    let output = run_messages(vec![
+        json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {}
+        }),
+        did_open(
+            uri,
+            "protocol MissingType {\n  decode(input): nil\n}\nprotocol EmptyType {\n  decode(input:): nil\n}\n",
+        ),
+    ]);
+
+    let diagnostics = published_diagnostics(&output, uri);
+    assert_eq!(diagnostics.len(), 2, "{diagnostics:#?}");
+    assert!(diagnostics
+        .iter()
+        .all(|diagnostic| diagnostic["code"] == "TL0001"));
+    assert!(diagnostics.iter().any(|diagnostic| {
+        diagnostic["message"].as_str().is_some_and(|message| {
+            message.contains("parameter `input` must declare an explicit type")
+        })
+    }));
+    assert!(diagnostics.iter().any(|diagnostic| {
+        diagnostic["message"]
+            .as_str()
+            .is_some_and(|message| message.contains("parameter `input` must have a non-empty type"))
+    }));
+    assert!(diagnostics.iter().all(|diagnostic| {
+        diagnostic["code"] != "TL1008"
+            && !diagnostic["message"]
+                .as_str()
+                .is_some_and(|message| message.contains("does not satisfy protocol"))
+    }));
+}
+
+#[test]
 fn imported_protocol_conformance_diagnostics_are_published_in_implementing_file() {
     let temp = TempProject::new("cross-file-protocol-conformance");
     temp.write("tua.toml", "source = \"src\"\n");
