@@ -479,6 +479,70 @@ async function run() {
   assert.match(hoverText(protocolHover), /update.*dt: number/s);
   assert.match(hoverText(protocolHover), /advances the actor by one frame/);
 
+  const cyclicProtocolDocument = await vscode.workspace.openTextDocument(
+    fixtures.cyclicProtocolUsePath,
+  );
+  await vscode.window.showTextDocument(cyclicProtocolDocument, { preview: false });
+  const cyclicProtocolParameterPosition = positionAfter(
+    cyclicProtocolDocument,
+    "function consume(value: B, paired: A)",
+    "function consume(",
+  );
+  const cyclicProtocolParameterHover = await retry(
+    () =>
+      vscode.commands.executeCommand(
+        "vscode.executeHoverProvider",
+        cyclicProtocolDocument.uri,
+        cyclicProtocolParameterPosition,
+      ),
+    (result) => hoverText(result).includes("parameter value: B"),
+    "cyclic imported protocol parameter hover",
+  );
+  assert.match(hoverText(cyclicProtocolParameterHover), /parameter value: B/);
+
+  const cyclicProtocolCompletionPosition = positionAfter(
+    cyclicProtocolDocument,
+    "value:g(paired)",
+    "value:",
+  );
+  const cyclicProtocolCompletion = await retry(
+    () =>
+      vscode.commands.executeCommand(
+        "vscode.executeCompletionItemProvider",
+        cyclicProtocolDocument.uri,
+        cyclicProtocolCompletionPosition,
+        ":",
+      ),
+    (result) => completionLabels(result).includes("g"),
+    "method completion through a recursive imported protocol",
+  );
+  assert(completionLabels(cyclicProtocolCompletion).includes("g"));
+
+  const cyclicProtocolMethodPosition = positionAfter(
+    cyclicProtocolDocument,
+    "value:g(paired)",
+    "value:",
+  );
+  const cyclicProtocolMethodHover = await retry(
+    () =>
+      vscode.commands.executeCommand(
+        "vscode.executeHoverProvider",
+        cyclicProtocolDocument.uri,
+        cyclicProtocolMethodPosition,
+      ),
+    (result) => (result || []).length > 0,
+    "recursive imported protocol method hover",
+  );
+  assert.match(hoverText(cyclicProtocolMethodHover), /g: \(value: A\) -> nil/);
+  assert.deepEqual(
+    vscode.languages
+      .getDiagnostics(cyclicProtocolDocument.uri)
+      .filter((diagnostic) => diagnostic.severity === vscode.DiagnosticSeverity.Error)
+      .map((diagnostic) => `${diagnostic.code}: ${diagnostic.message}`),
+    [],
+    "mutually recursive protocol signatures should not produce false errors in VS Code",
+  );
+
   const protocolDefinitions = await retry(
     () =>
       vscode.commands.executeCommand(
@@ -681,6 +745,9 @@ async function run() {
       protocolImplementations: protocolImplementations.length,
       protocolRenameFiles: protocolRename.entries().map(([uri]) => path.basename(uri.fsPath)),
       protocolHover: "documented update(dt: number)",
+      cyclicProtocolHover: hoverText(cyclicProtocolParameterHover),
+      cyclicProtocolMethodCompletion: completionLabels(cyclicProtocolCompletion).includes("g"),
+      cyclicProtocolMethodHover: hoverText(cyclicProtocolMethodHover),
       protocolStubActionApplied: true,
       formattingEdits: formatting.length,
       hover: "Player",

@@ -89,6 +89,9 @@ function createProject(workspacePath) {
   const genericPath = path.join(sourcePath, "generic.tua");
   const genericClassPath = path.join(sourcePath, "generic_class.tua");
   const protocolStubsPath = path.join(sourcePath, "protocol_stubs.tua");
+  const cyclicProtocolAPath = path.join(sourcePath, "cyclic_a.d.tua");
+  const cyclicProtocolBPath = path.join(sourcePath, "cyclic_b.d.tua");
+  const cyclicProtocolUsePath = path.join(sourcePath, "cyclic_protocol_use.tua");
   const configPath = path.join(workspacePath, "tua.toml");
 
   fs.mkdirSync(sourcePath, { recursive: true });
@@ -186,6 +189,38 @@ function createProject(workspacePath) {
     ].join("\n"),
   );
   fs.writeFileSync(
+    cyclicProtocolAPath,
+    [
+      'import type { B } from "./cyclic_b"',
+      "export protocol A {",
+      "  f(value: B): nil",
+      "}",
+      "",
+    ].join("\n"),
+  );
+  fs.writeFileSync(
+    cyclicProtocolBPath,
+    [
+      'import type { A } from "./cyclic_a"',
+      "export protocol B {",
+      "  --- accepts the paired A protocol",
+      "  g(value: A): nil",
+      "}",
+      "",
+    ].join("\n"),
+  );
+  fs.writeFileSync(
+    cyclicProtocolUsePath,
+    [
+      'import type { B } from "./cyclic_b"',
+      'import type { A } from "./cyclic_a"',
+      "local function consume(value: B, paired: A)",
+      "  value:g(paired)",
+      "end",
+      "",
+    ].join("\n"),
+  );
+  fs.writeFileSync(
     mainPath,
     [
       'import type { Box, Updatable } from "./contracts"',
@@ -235,6 +270,9 @@ function createProject(workspacePath) {
   return {
     actorsPath,
     configPath,
+    cyclicProtocolAPath,
+    cyclicProtocolBPath,
+    cyclicProtocolUsePath,
     contractsPath,
     genericPath,
     genericClassPath,
