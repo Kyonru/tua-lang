@@ -318,6 +318,96 @@ fn workspace_folder_changes_update_workspace_symbol_roots() {
 }
 
 #[test]
+fn removing_a_workspace_root_republishes_diagnostics_for_open_documents() {
+    let removed = TempProject::new("workspace-folder-diagnostics-removed");
+    let remaining = TempProject::new("workspace-folder-diagnostics-remaining");
+    for project in [&removed, &remaining] {
+        project.write("tua.toml", "source = \"src\"\n");
+    }
+    let contract = "export protocol Updatable {\n  update(dt: number): nil\n}\n";
+    let source = r#"import type { Updatable } from "./contracts"
+final class Actor implements Updatable {
+  update(dt: string): nil {}
+}
+"#;
+    removed.write("src/contracts.tua", contract);
+    let contract_uri = removed.uri_for("src/contracts.tua");
+    let actor_uri = removed.uri_for("src/actor.tua");
+    let output = run_messages(vec![
+        initialize_with_workspace_folders(1, [removed.uri(), remaining.uri()]),
+        did_open(&contract_uri, contract),
+        did_open(&actor_uri, source),
+        workspace_folders_changed([], [removed.uri()]),
+    ]);
+
+    let publications = output
+        .iter()
+        .filter(|message| {
+            message["method"] == "textDocument/publishDiagnostics"
+                && message["params"]["uri"] == actor_uri
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        publications.len(),
+        3,
+        "the open document must receive fresh diagnostics after its project root is removed: {output:#?}"
+    );
+    assert!(
+        publications[1]["params"]["diagnostics"]
+            .as_array()
+            .is_some_and(|diagnostics| diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic["code"] == "TL1008")),
+        "initial conformance diagnostics should be present: {publications:#?}"
+    );
+    assert_eq!(
+        publications[2]["params"]["diagnostics"],
+        publications[1]["params"]["diagnostics"],
+        "the post-reindex result should replace the initial fast diagnostics with the current project result"
+    );
+}
+
+#[test]
+fn pull_diagnostics_refresh_after_workspace_folder_change() {
+    let temp = TempProject::new("pull-workspace-folder-refresh");
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write(
+        "src/contracts.tua",
+        "export protocol Updatable {\n  update(dt: number): nil\n}\n",
+    );
+    let source = r#"import type { Updatable } from "./contracts"
+final class Actor implements Updatable {
+  update(dt: string): nil {}
+}
+"#;
+    let uri = temp.uri_for("src/actor.tua");
+    let mut server = TestServer::new();
+
+    server.send(initialize_with_pull_diagnostics(1, temp.uri(), true));
+    server.send(did_open(&uri, source));
+    server.send(text_document_diagnostic_request(2, &uri));
+    assert!(
+        diagnostic_codes(&document_diagnostic_items(server.output(), 2))
+            .iter()
+            .any(|code| code == "TL1008")
+    );
+
+    server.send(workspace_folders_changed([], [temp.uri()]));
+
+    assert_eq!(diagnostic_refresh_requests(server.output()).len(), 1);
+    assert!(server
+        .output()
+        .iter()
+        .all(|message| message["method"] != "textDocument/publishDiagnostics"));
+    server.send(text_document_diagnostic_request(3, &uri));
+    assert!(
+        diagnostic_codes(&document_diagnostic_items(server.output(), 3))
+            .iter()
+            .any(|code| code == "TL1008")
+    );
+}
+
+#[test]
 fn same_named_protocols_and_conformance_stay_project_local() {
     let first = TempProject::new("protocol-project-local-first");
     let second = TempProject::new("protocol-project-local-second");

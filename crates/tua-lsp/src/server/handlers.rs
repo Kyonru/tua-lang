@@ -965,11 +965,17 @@ impl LspServer {
 
         self.analysis
             .reindex_workspace(&self.workspace_folders, &self.settings);
+        self.analysis
+            .refresh_open_documents(&self.workspace_folders, &self.settings);
         self.reset_workspace_warm_queue();
         self.reset_pattern_corpus_queue();
         self.pending_pull_fast_diagnostics.clear();
 
-        self.diagnostic_refresh_notifications()
+        if self.client_pull_diagnostics {
+            self.diagnostic_refresh_notifications()
+        } else {
+            Some(self.publish_all_open_diagnostics())
+        }
     }
 
     fn did_change_configuration_notification(&mut self, message: &Value) -> Option<Vec<Value>> {

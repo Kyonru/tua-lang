@@ -78,6 +78,9 @@ language or editor behavior, and migration notes call out those changes.
 - Resolve protocol imports referenced only by a class `implements` clause, so
   project diagnostics validate cross-file missing and incompatible methods and
   refresh those checks when saved or unsaved protocol requirements change.
+- Reindex project state and republish diagnostics for open documents when
+  workspace folders change, keeping push-diagnostics clients current after
+  project roots are added or removed.
 - Resolve namespace protocol re-exports to the original declaration identity
   during explicit conformance checks.
 - Hide the synthetic receiver parameter from hover on colon-called protocol
