@@ -2,8 +2,9 @@
 
 Date: 2026-11-09  
 Audited base: `06c1065b940622eee2f179b4c7752ce496010b8c`
-Final code and regression-test revision: `12f2a2fa`; the plan update is included
-in that commit. This report records verification after it.
+Final code revision: `12f2a2fa`; latest editor regression-test revision:
+`f209b882`. The plan update is in the code fix commit. This report records
+verification after both.
 Scope: `internal/generics-polymorphism-0.7.0.md`, protocol contracts, native generics, type inference, editor surfaces, Lua erasure, and the locally shareable VS Code extension.  
 Working tree before audit: clean. No unrelated project changes were present.
 
@@ -158,7 +159,8 @@ Repeated local profile measurements (five cold samples, twenty warm and contenti
   `editor_recovery_closes_an_unfinished_protocol_without_losing_its_contract`
   verifies contract/AST preservation and strict-parser rejection;
   `unclosed_protocols_keep_current_buffer_semantics_available` verifies
-  current-buffer hover and the remaining diagnostic.
+  protocol member completion, current-buffer hover, and the remaining
+  diagnostic.
 
 ## Coverage matrix
 
