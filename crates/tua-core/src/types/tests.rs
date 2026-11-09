@@ -2343,7 +2343,7 @@ fn generic_function_instantiation_is_fresh_and_handles_union_any_and_ambiguity()
         .expect("the next call should independently instantiate T as string");
     assert_eq!(number.return_types_or_any(), &[Type::number()]);
     assert_eq!(string.return_types_or_any(), &[Type::string()]);
-    assert_eq!(scheme.return_types_or_any(), &[generic.clone()]);
+    assert_eq!(scheme.return_types_or_any(), std::slice::from_ref(&generic));
     assert_eq!(scheme.generic_parameters, vec![binder.clone()]);
 
     let nullable = Type::union([generic.clone(), Type::nil()]);

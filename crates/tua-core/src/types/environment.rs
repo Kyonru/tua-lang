@@ -2031,11 +2031,12 @@ fn generic_class_definitions(
                 .map(|field| field.name.as_str())
                 .chain(class.methods.iter().map(|method| method.name.as_str()))
                 .collect::<BTreeSet<_>>();
-            let body = TableShape::from_fields(full_body.fields().filter_map(|(name, field)| {
-                declared_fields
-                    .contains(name)
-                    .then(|| (name.to_owned(), field.clone()))
-            }));
+            let body = TableShape::from_fields(
+                full_body
+                    .fields()
+                    .filter(|(name, _)| declared_fields.contains(name))
+                    .map(|(name, field)| (name.to_owned(), field.clone())),
+            );
             let id = generic_class_identity(&parsed.path, class);
             Some((
                 id.clone(),

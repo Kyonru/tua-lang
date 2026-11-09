@@ -6024,11 +6024,11 @@ end
     let implementations = snapshot.implementation("src/main.tua", fixture.position("use"));
     assert_eq!(implementations.len(), 2, "{implementations:#?}");
     assert!(implementations.iter().any(|definition| {
-        definition.path == PathBuf::from("src/actors.tua")
+        definition.path == std::path::Path::new("src/actors.tua")
             && definition.span == fixture.range("particle")
     }));
     assert!(implementations.iter().any(|definition| {
-        definition.path == PathBuf::from("src/actors.tua")
+        definition.path == std::path::Path::new("src/actors.tua")
             && definition.span == fixture.range("clock")
     }));
 
@@ -6036,15 +6036,15 @@ end
         snapshot.references("src/contracts.tua", fixture.position("requirement"), true);
     assert_eq!(references.len(), 6, "{references:#?}");
     assert!(references.iter().any(|reference| {
-        reference.path == PathBuf::from("src/actors.tua")
+        reference.path == std::path::Path::new("src/actors.tua")
             && reference.span == fixture.range("particle")
     }));
     assert!(references.iter().any(|reference| {
-        reference.path == PathBuf::from("src/actors.tua")
+        reference.path == std::path::Path::new("src/actors.tua")
             && reference.span == fixture.range("clock")
     }));
     assert!(references.iter().any(|reference| {
-        reference.path == PathBuf::from("src/main.tua")
+        reference.path == std::path::Path::new("src/main.tua")
             && reference.span.start == fixture.position("use")
     }));
 

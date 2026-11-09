@@ -6882,7 +6882,7 @@ local animal: Animal = Animal.new()
 
     let array_write = check_tua_source(
         "src/generic_mutable_array.tua",
-        &format!(
+        format!(
             r#"{declarations}
 local function overwrite<T>(items: T[], value: T): nil
   items[1] = value
@@ -6905,7 +6905,7 @@ cat:meow()
     );
     let reverse_order = check_tua_source(
         "src/generic_mutable_array.tua",
-        &format!(
+        format!(
             r#"{declarations}
 local function overwrite<T>(value: T, items: T[]): nil
   items[1] = value
@@ -6927,7 +6927,7 @@ overwrite(animal, cats)
 
     let record_write = check_tua_source(
         "src/generic_mutable_record.tua",
-        &format!(
+        format!(
             r#"{declarations}
 local cat_box: {{ value: Cat }} = {{ value = Cat.new() }}
 local function overwrite<T>(box: {{ value: T }}, value: T): nil
@@ -6952,7 +6952,7 @@ cat:meow()
 
     let dictionary_write = check_tua_source(
         "src/generic_mutable_dictionary.tua",
-        &format!(
+        format!(
             r#"{declarations}
 local function overwrite<T>(items: {{ [string]: T }}, value: T): nil
   items["cat"] = value
@@ -6974,7 +6974,7 @@ overwrite(cats_by_name, animal)
 
     check_tua_source(
         "src/generic_mutable_read.tua",
-        &format!(
+        format!(
             r#"{declarations}
 local function first<T>(items: T[]): T return items[1] end
 local function unbox<T>(box: {{ value: T }}): T return box.value end

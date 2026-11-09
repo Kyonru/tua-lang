@@ -1149,13 +1149,10 @@ fn generic_class_parameter_at_position(
     });
 
     for class in classes {
-        let Some(parameter) = class
+        let parameter = class
             .generic_parameters
             .iter()
-            .find(|parameter| parameter.name == identifier)
-        else {
-            return None;
-        };
+            .find(|parameter| parameter.name == identifier)?;
         if span_contains_position(parameter.name_span, position)
             || class.fields.iter().any(|field| {
                 span_contains_position(field.span, position)

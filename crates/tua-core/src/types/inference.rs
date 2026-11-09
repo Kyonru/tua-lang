@@ -19,8 +19,14 @@ pub(crate) enum GenericInferenceFailureKind {
     ReturnOnly,
     Callback,
     Unresolved,
-    Conflict { previous: Type, next: Type },
-    ProtocolBound { actual: Type, protocol: String },
+    Conflict {
+        previous: Box<Type>,
+        next: Box<Type>,
+    },
+    ProtocolBound {
+        actual: Box<Type>,
+        protocol: String,
+    },
 }
 
 impl GenericInferenceFailure {
@@ -174,7 +180,7 @@ pub(crate) fn instantiate_generic_function(
             return Err(GenericInferenceFailure {
                 parameter: parameter.name.clone(),
                 kind: GenericInferenceFailureKind::ProtocolBound {
-                    actual: actual.clone(),
+                    actual: Box::new(actual.clone()),
                     protocol: bound.name.clone(),
                 },
                 argument_index: substitution_arguments.get(&parameter.id).copied(),
@@ -268,8 +274,8 @@ fn collect_constraints(
                 return Err(GenericInferenceFailure {
                     parameter: name.clone(),
                     kind: GenericInferenceFailureKind::Conflict {
-                        previous: previous.clone(),
-                        next: actual.clone(),
+                        previous: Box::new(previous.clone()),
+                        next: Box::new(actual.clone()),
                     },
                     argument_index: None,
                 });
@@ -675,7 +681,7 @@ pub(crate) fn instantiate_generic_function_from_context(
 
     let mut substitutions = HashMap::new();
     for (parameter, actual) in function.parameters.iter().zip(&expected.parameters) {
-        if let Err(failure) = collect_constraints(
+        collect_constraints(
             context,
             &parameter.ty,
             &actual.ty,
@@ -683,9 +689,7 @@ pub(crate) fn instantiate_generic_function_from_context(
             &invariant_binders,
             &mut substitutions,
             0,
-        ) {
-            return Err(failure);
-        }
+        )?;
     }
     if let (Some(pattern), Some(actual)) = (&function.vararg_type, &expected.vararg_type) {
         collect_constraints(
