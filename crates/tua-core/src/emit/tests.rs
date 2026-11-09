@@ -2667,20 +2667,27 @@ assert(holder.f() == "ok")
 
 #[test]
 fn anonymous_nested_default_expressions_preserve_outer_helper_shadows() {
-    let emitted = emit_tua_source(
-        "callbacks.tua",
-        r#"
+    std::thread::Builder::new()
+        .stack_size(8 * 1024 * 1024)
+        .spawn(|| {
+            let emitted = emit_tua_source(
+                "callbacks.tua",
+                r#"
 local image = function(value) return value end
 local f = function(callback = function(value: number = image(7)) return value end)
   return callback()
 end
 assert(f() == 7)
 "#,
-    )
-    .expect("nested anonymous defaults");
-    assert!(emitted.contains("value = image(7)"), "{emitted}");
-    assert!(!emitted.contains("love.graphics"), "{emitted}");
-    crate::parse_lua_source("callbacks.lua", emitted).expect("valid Lua output");
+            )
+            .expect("nested anonymous defaults");
+            assert!(emitted.contains("value = image(7)"), "{emitted}");
+            assert!(!emitted.contains("love.graphics"), "{emitted}");
+            crate::parse_lua_source("callbacks.lua", emitted).expect("valid Lua output");
+        })
+        .expect("spawn emitter regression with the CLI/LSP worker stack")
+        .join()
+        .expect("emitter regression should not panic");
 }
 
 #[test]
