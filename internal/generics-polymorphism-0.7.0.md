@@ -318,10 +318,13 @@ local box: Box<number> = { value = 4 }
   boundary, so this cache cannot survive an edit or cross projects. A generated
   source regression asserts the first over-budget call receives one positioned
   `TL1015`. Alias expansion and recursive constraint walkers also have depth
-  or work guards; direct boundary tests for the alias-expansion work guard and
-  maximum type nesting remain open. No cross-request generic instance cache is
-  retained, so persistent-cache invalidation and retained-instance limits are
-  not applicable until such a cache is introduced.
+  or work guards. Direct tests now pin the generic alias expansion work
+  boundary at 4,096/4,097 applications and the native array type nesting
+  boundary at 64/65 suffixes; protected comment/string text does not count.
+  Generic angle nesting is also bounded by the existing operator budget. No
+  cross-request generic instance cache is retained, so persistent-cache
+  invalidation and retained-instance limits are not applicable until such a
+  cache is introduced.
 - LuaCATS `@generic` is not enabled by G1. The G2 parity gate must name each
   accepted LuaCATS form and normalize it to the same binder model; unsupported
   LuaCATS forms remain diagnosed or documented as unsupported.
@@ -636,3 +639,21 @@ fields in 0.22 seconds; a core stress regression also returns all 4,200
 members. Linux/Windows/Intel Mac, LOVE/LuaJIT, visual, long-session, and
 second-client qualification remain open. The VSIX is ready for manual beta
 testing on this host, not general release qualification.
+
+### Boundary and invalidation follow-up — 2026-11-10
+
+A follow-up added a per-character-prefix recovery matrix for protocol and
+generic class headers, an unsaved contract change/restore cancellation test,
+and deletion/recreation coverage for a declaration file behind two type
+re-export hops. These cases pass in the core and LSP suites. A test-driven
+review of the explicit complexity limit found that contiguous native `[]`
+suffixes were erased before structural-depth counting, allowing arbitrarily
+nested array types through the 64-level limit. The parser now checks native
+array suffix depth before normalization, rejects the 65th suffix at its source
+location, and ignores matching text inside strings/comments. Direct alias
+expansion tests also pin the exact 4,096/4,097 work boundary and verify that
+over-budget public resolution preserves the complete symbolic input. The
+current core suite passes 1,897 tests (1 ignored), the LSP suite passes 432,
+and focused Clippy/format checks pass. The current workspace-wide `make verify`
+attempt still has unrelated CLI shader timeout failures; exact outcomes are in
+`internal/audits/generics-polymorphism-followup-2026-11-10.md`.
