@@ -467,6 +467,55 @@ final class Actor implements A, B {
 }
 
 #[test]
+fn inherited_protocol_override_related_ranges_survive_unicode_file_prefixes() {
+    let temp = TempProject::new("inherited-protocol-override-utf16-ranges");
+    temp.write("tua.toml", "source = \"src\"\n");
+    let contracts = "-- 😀 contract\nexport protocol Updatable {\n  update(dt: string): nil\n}\n";
+    let actors = r#"import type { Updatable } from "./contracts"
+-- 😀 consumer
+open class Parent implements Updatable {
+  update(dt: string): nil {}
+}
+final class Child extends Parent {
+  override update(dt: number): nil {}
+}
+"#;
+    temp.write("src/contracts.tua", contracts);
+    temp.write("src/actors.tua", actors);
+    let contracts_uri = temp.uri_for("src/contracts.tua");
+    let actors_uri = temp.uri_for("src/actors.tua");
+    let mut server = TestServer::new();
+
+    server.send(initialize_with_pull_diagnostics(1, temp.uri(), true));
+    server.send(did_open(&contracts_uri, contracts));
+    server.send(did_open(&actors_uri, actors));
+    server.send(text_document_diagnostic_request(2, &actors_uri));
+    let diagnostics = document_diagnostic_items(server.output(), 2);
+    let diagnostic = diagnostics
+        .iter()
+        .find(|diagnostic| {
+            diagnostic["message"]
+                .as_str()
+                .is_some_and(|message| message.contains("method `update` has a signature"))
+        })
+        .expect("the incompatible inherited override should be diagnosed");
+
+    assert_eq!(diagnostic["range"]["start"]["line"], 6);
+    assert_eq!(diagnostic["range"]["start"]["character"], 11);
+    assert_eq!(diagnostic["range"]["end"]["line"], 6);
+    assert_eq!(diagnostic["range"]["end"]["character"], 17);
+    let related = diagnostic["relatedInformation"]
+        .as_array()
+        .expect("the related protocol declaration should be preserved");
+    assert_eq!(related.len(), 1, "{diagnostic:#?}");
+    assert_eq!(related[0]["location"]["uri"], contracts_uri);
+    assert_eq!(related[0]["location"]["range"]["start"]["line"], 2);
+    assert_eq!(related[0]["location"]["range"]["start"]["character"], 2);
+    assert_eq!(related[0]["location"]["range"]["end"]["line"], 2);
+    assert_eq!(related[0]["location"]["range"]["end"]["character"], 8);
+}
+
+#[test]
 fn renaming_a_protocol_dependency_refreshes_importing_class_diagnostics() {
     let temp = TempProject::new("renamed-protocol-dependency-refresh");
     temp.write("tua.toml", "source = \"src\"\n");
