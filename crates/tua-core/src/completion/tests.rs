@@ -336,6 +336,57 @@ fn completes_scoped_generic_alias_parameters_in_type_positions() {
 }
 
 #[test]
+fn completes_generic_function_and_class_parameters_with_protocol_constraints() {
+    let function_source = r#"protocol Updatable {
+  update(dt: number): nil
+}
+local function tick<T: Updatable>(value: T): T
+  local copy: T
+  return value
+end
+"#;
+    let function_completions = complete_tua_source(
+        "src/generic_completion.tua",
+        function_source,
+        position_after(function_source, "local copy: T"),
+    )
+    .expect("generic function type completion should succeed");
+    let function_parameter = function_completions
+        .iter()
+        .find(|completion| completion.label == "T")
+        .expect("function binder should complete in its body");
+    assert_eq!(
+        function_parameter.detail.as_deref(),
+        Some("generic type parameter; conforms to Updatable")
+    );
+
+    let class_source = r#"protocol Updatable {
+  update(dt: number): nil
+}
+final class Box<T: Updatable> {
+  value: T
+  get(): T { return self.value }
+}
+"#;
+    let class_completions = complete_tua_source(
+        "src/generic_completion.tua",
+        class_source,
+        position_after(class_source, "value: T"),
+    )
+    .expect("generic class type completion should succeed");
+    let class_parameter = class_completions
+        .iter()
+        .find(|completion| completion.label == "T")
+        .unwrap_or_else(|| {
+            panic!("class binder should complete in its members: {class_completions:#?}")
+        });
+    assert_eq!(
+        class_parameter.detail.as_deref(),
+        Some("generic type parameter; conforms to Updatable")
+    );
+}
+
+#[test]
 fn completes_lua_doc_type_names_in_lua_files() {
     let source = r#"---@alias Player { hp: number }
 ---@return Pl

@@ -24,6 +24,7 @@ impl<'a> CompletionQuery<'a> {
     }
 
     pub(super) fn complete(self, context: CompletionContext) -> Vec<Completion> {
+        let context = class_field_type_context(self.parsed, self.source, context);
         let prefix = context.filter_prefix().map(str::to_owned);
         let ranking_context = CompletionRankingContext::from_context(
             &self.parsed.path,
@@ -127,4 +128,61 @@ impl<'a> CompletionQuery<'a> {
     ) -> Vec<Completion> {
         complete_string_argument_values(self.parsed, self.source, self.environment, context)
     }
+}
+
+/// Class fields are parsed outside the Lua AST's ordinary annotation context.
+/// Recognize their type position here so generic class binders and ordinary
+/// type names use the same completion path as other annotations.
+fn class_field_type_context(
+    parsed: &ParsedSource,
+    source: &str,
+    context: CompletionContext,
+) -> CompletionContext {
+    let CompletionContext::Identifier { prefix, position } = &context else {
+        return context;
+    };
+    let Some(line) = crate::source_text::line_at(source, position.line) else {
+        return context;
+    };
+    let cursor = crate::source_text::byte_for_column(line, position.column).min(line.len());
+
+    for field in parsed
+        .class_declarations
+        .iter()
+        .flat_map(|class| &class.fields)
+    {
+        if field.name_span.start.line != position.line
+            || field.name_span.end.column > position.column
+            || !crate::analysis::span_contains_position(field.span, *position)
+        {
+            continue;
+        }
+        let name_end =
+            crate::source_text::byte_for_column(line, field.name_span.end.column).min(line.len());
+        let Some(after_name) = line.get(name_end..cursor) else {
+            continue;
+        };
+        let Some(colon) = after_name.find(':') else {
+            continue;
+        };
+        if after_name[..colon]
+            .chars()
+            .any(|character| !character.is_whitespace())
+        {
+            continue;
+        }
+        let type_text = &after_name[colon + 1..];
+        let typed_prefix = type_text.trim_start();
+        if typed_prefix
+            .chars()
+            .any(|character| !crate::source_text::is_identifier_continue_char(character))
+        {
+            continue;
+        }
+        return CompletionContext::TypeAnnotation {
+            prefix: prefix.clone(),
+            position: *position,
+        };
+    }
+    context
 }
