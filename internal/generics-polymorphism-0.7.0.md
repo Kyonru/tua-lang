@@ -550,10 +550,12 @@ make verify
 make ci-check
 ```
 
-On the current macOS host, prior full debug tests required
-`CARGO_INCREMENTAL=0 RUST_MIN_STACK=16777216 RUST_TEST_THREADS=1` for an existing
-stack-sensitive test. Record those settings if used; do not present them as a
-new generic solver requirement or hide a new recursion regression behind them.
+On the current macOS host, the full workspace gate passes with
+`CARGO_INCREMENTAL=0 RUST_MIN_STACK=33554432 RUST_TEST_THREADS=1`. Plain
+`make verify` can overflow the Rust harness's default test-thread stack in deep
+emitter/linter regressions; the CLI and LSP worker stacks are 8 MiB. Record
+these test settings when used; do not present them as a generic solver
+requirement or hide a new recursion regression behind them.
 Editor/runtime commands depend on local tooling; record exact blockers and
 repeat them in the appropriate release environment.
 
@@ -623,11 +625,13 @@ specific cases; they do not claim exhaustive malformed-header recovery or
 repeated multi-module filesystem rename/delete/create coverage. See AUDIT-029
 and AUDIT-030 in the audit report.
 
-`make docs-build`, the workspace tests, Clippy, extension tests (180/180),
-`make benchmark-smoke`, packaging, and the installed VSIX real-server suite
-passed on macOS arm64. The aggregate `make verify` invocation was stopped by
-the sandbox's loopback restriction; the loopback-dependent extension checks
-passed in a local-access retry. The exact VSIX at that checkpoint was
+At the AUDIT-028 checkpoint, `make docs-build`, the workspace tests, Clippy,
+extension tests (180/180), `make benchmark-smoke`, packaging, and the installed
+VSIX real-server suite passed on macOS arm64. That checkpoint's aggregate
+`make verify` invocation was stopped by the sandbox's loopback restriction;
+the loopback-dependent extension checks passed in a local-access retry. A
+later full serial verification result is recorded in the boundary and
+invalidation follow-up below. The exact VSIX at that checkpoint was
 `editors/vscode/tua-0.7.0.vsix`, SHA-256
 `8de57325a50b0adbbbe2045f1b83fe556dfdbc833a3b1d39c96a89a1db966f46`. The
 updated package after AUDIT-028 is 8.71 MB with SHA-256
@@ -654,6 +658,7 @@ location, and ignores matching text inside strings/comments. Direct alias
 expansion tests also pin the exact 4,096/4,097 work boundary and verify that
 over-budget public resolution preserves the complete symbolic input. The
 current core suite passes 1,897 tests (1 ignored), the LSP suite passes 432,
-and focused Clippy/format checks pass. The current workspace-wide `make verify`
-attempt still has unrelated CLI shader timeout failures; exact outcomes are in
-`internal/audits/generics-polymorphism-followup-2026-11-10.md`.
+and focused Clippy/format checks pass. The documented serial workspace gate
+also passes. The default `make verify` invocation can overflow the Rust test
+harness's smaller stack on a deep linter regression; exact settings and
+outcomes are in `internal/audits/generics-polymorphism-followup-2026-11-10.md`.

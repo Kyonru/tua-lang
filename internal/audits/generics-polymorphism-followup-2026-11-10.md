@@ -124,15 +124,22 @@ delete/recreate churn behind two declaration-file re-export hops.
   passed: 432 passed, including protocol cancellation and multi-hop file churn.
 - `cargo clippy -p tua-core -p tua-lsp --all-targets -- -D warnings` — passed.
 - `cargo fmt --all -- --check` — passed.
-- `make verify` — did not complete successfully. Its initial concurrent run
-  encountered a temporary workspace disappearing during a CLI test. A serial
-  rerun passed that test, then three CLI shader-validator tests failed in this
-  host: two fake-validator/timeout cases and one malformed-response case. The
-  malformed-response case passed when rerun alone; the two timeout-related
-  cases continued to fail individually. These tests are outside the changed
-  parser and lowering paths. The first extension check was denied loopback
-  access by the default sandbox; the same package checks passed on retry with
-  local loopback access enabled.
+- `cargo test -p tua-cli --lib shaders::tests -- --nocapture` — passed: four
+  tests, one LOVE-dependent test ignored. This supersedes the earlier flaky
+  shader-validator failures recorded below; they did not reproduce.
+- Plain `make verify` — the default 2 MiB Rust test-thread stack overflowed in
+  a deep emitter/linter regression. The emitter test now uses an 8 MiB thread,
+  matching the CLI and LSP worker stacks, but the separate linter regression
+  still needs a larger test-thread stack. This is a test-harness limitation;
+  the full gate passes with the documented stack and serial settings below.
+- `CARGO_INCREMENTAL=0 RUST_MIN_STACK=33554432 RUST_TEST_THREADS=1 make verify`
+  — passed on the current tree: workspace tests (core 1,897 passed/1 ignored;
+  LSP 432; CLI unit 92 passed/2 ignored; CLI integration 137; gameplay 3;
+  helper-default 1; LOVE examples 3; LSP 1; Lua syntax 1), Clippy, release and
+  config consistency, LLM language evaluation, extension checks (180/180),
+  JSON validation, and diff checks. LOVE-dependent tests were skipped by their
+  explicit environment guard. The first extension check was denied loopback
+  access by the default sandbox; this full run used local loopback access.
 - `make extension-package` with loopback access — passed. The extension check
   reported 180 passed and 0 failed; all 454 tracked JSON files validated, and
   the release server and VSIX were built.
@@ -158,10 +165,7 @@ suite without a development-server override.
 
 1. Keep the current shared protocol identity and generic substitution paths;
    the audited cycles and cross-file cases now have regression coverage.
-2. Investigate the two flaky/failing CLI shader timeout tests independently;
-   do not attribute them to the generic/class lowering change without a
-   reproduction linking them.
-3. Run the documented LOVE/LuaJIT and cross-platform qualification gates before
+2. Run the documented LOVE/LuaJIT and cross-platform qualification gates before
    calling the 0.7.0 release fully qualified.
-4. Protocol stub generation remains an optional editor capability, not a
+3. Protocol stub generation remains an optional editor capability, not a
    correctness defect or a blocker for the generic/protocol contract.
