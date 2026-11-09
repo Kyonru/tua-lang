@@ -243,6 +243,73 @@ async function run() {
   );
   assert(genericDefinitions.some((location) => location.uri.fsPath === fixtures.contractsPath));
 
+  const genericDocument = await vscode.workspace.openTextDocument(fixtures.genericPath);
+  const genericBinderPosition = positionAfter(
+    genericDocument,
+    "identity<T>(value: T): T",
+    "identity<",
+  );
+  const genericParameterTypePosition = positionAfter(
+    genericDocument,
+    "identity<T>(value: T): T",
+    "identity<T>(value: ",
+  );
+  const genericBinderDefinition = await retry(
+    () =>
+      vscode.commands.executeCommand(
+        "vscode.executeDefinitionProvider",
+        genericDocument.uri,
+        genericParameterTypePosition,
+      ),
+    (result) => Array.isArray(result) && result.length > 0,
+    "generic function binder definition",
+  );
+  assert.equal(genericBinderDefinition[0].uri.fsPath, fixtures.genericPath);
+  assert.equal(
+    genericBinderDefinition[0].range.start.line,
+    genericDocument.positionAt(
+      genericDocument.getText().indexOf("identity<T>") + "identity<".length,
+    ).line,
+  );
+
+  const genericBinderReferences = await retry(
+    () =>
+      vscode.commands.executeCommand(
+        "vscode.executeReferenceProvider",
+        genericDocument.uri,
+        genericBinderPosition,
+      ),
+    (result) => Array.isArray(result) && result.length >= 3,
+    "generic function binder references",
+  );
+  assert(
+    genericBinderReferences.length >= 3,
+    "the binder, parameter, and return type should be references",
+  );
+
+  const genericBinderRename = await retry(
+    () =>
+      vscode.commands.executeCommand(
+        "vscode.executeDocumentRenameProvider",
+        genericDocument.uri,
+        genericParameterTypePosition,
+        "Item",
+      ),
+    (result) =>
+      result &&
+      typeof result.entries === "function" &&
+      result.entries().some(([uri]) => uri.fsPath === fixtures.genericPath),
+    "generic function binder rename",
+  );
+  const genericBinderRenameEntry = genericBinderRename
+    .entries()
+    .find(([uri]) => uri.fsPath === fixtures.genericPath);
+  assert.equal(
+    genericBinderRenameEntry[1].length,
+    3,
+    "renaming T should update its binder, parameter type, and return type",
+  );
+
   const protocolPosition = positionAfter(document, "value:update(dt)", "value:");
   const protocolHover = await retry(
     () => vscode.commands.executeCommand("vscode.executeHoverProvider", document.uri, protocolPosition),
@@ -416,6 +483,9 @@ async function run() {
       genericAliasDefinition: genericDefinitions.some(
         (location) => location.uri.fsPath === fixtures.contractsPath,
       ),
+      genericBinderDefinition: true,
+      genericBinderReferences: genericBinderReferences.length,
+      genericBinderRenameEdits: genericBinderRenameEntry[1].length,
       inlayHints: hints.length,
       references: references.length,
       server: path.basename(process.env.TUA_REAL_SERVER_PATH),
