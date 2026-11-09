@@ -132,7 +132,35 @@ or the packaged VSIX.
 
 - **Category / severity:** Capability gap; Medium, known scope limit.
 - **Status:** Open by design/architecture boundary.
-- **Evidence:** G3 supports local generic inheritance and imported generic classes, but cross-module class inheritance is not currently in the parser/lowering contract. Therefore inherited protocol conformance cannot be qualified through an imported base class.
+- **Reproduction:** Create `src/base.tua`:
+
+  ```tua
+  export open class Base {
+    read(): number { return 1 }
+  }
+  return { Base = Base }
+  ```
+
+  Then create `src/child.tua`:
+
+  ```tua
+  local BaseModule = import("./base")
+  local Base = BaseModule.Base
+  final class Child extends Base {
+    override read(): number { return super.read() + 1 }
+  }
+  ```
+
+  Run `tua check` from the project root. The importer reports
+  ``unknown parent class `Base` `` at the `extends` clause. A separate
+  `BaseModule.Base.new():read()` expression type-checks, confirming that this
+  is the class-parent relation path rather than generic module export
+  visibility. This is an unsupported capability, not an incorrect result for
+  a documented feature.
+- **Evidence:** G3 supports local generic inheritance and imported generic
+  instance metadata, but cross-module class inheritance is not currently in
+  the parser/lowering contract. Therefore inherited protocol conformance
+  cannot be qualified through an imported base class.
 - **Recommended improvement:** Design cross-module class extension as a separate language/module feature. It needs constructor/init behavior, nominal identity, invalidation, emitted `super` behavior, and editor navigation defined before implementation. Do not claim G3 fully supports cross-module inherited conformance.
 
 ### AUDIT-005 — Cold editor requests scale noticeably with a larger source file
