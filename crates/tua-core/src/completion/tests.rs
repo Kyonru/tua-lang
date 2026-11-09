@@ -308,6 +308,34 @@ end
 }
 
 #[test]
+fn completes_scoped_generic_alias_parameters_in_type_positions() {
+    let source = "type Box<T> = { value: T }\ntype Item = Box<T>\n";
+    let completions = complete_tua_source(
+        "src/generic_alias.tua",
+        source,
+        position_after(source, "value: T"),
+    )
+    .expect("generic alias body type completion should succeed");
+    let parameter = completions
+        .iter()
+        .find(|completion| completion.label == "T")
+        .expect("the alias binder should be suggested in its own body");
+    assert_eq!(parameter.kind, CompletionKind::TypeAlias);
+    assert_eq!(parameter.detail.as_deref(), Some("generic type parameter"));
+
+    let outside = complete_tua_source(
+        "src/generic_alias.tua",
+        source,
+        position_after(source, "type Item = Box<T>"),
+    )
+    .expect("completion outside the alias should succeed");
+    assert!(
+        !outside.iter().any(|completion| completion.label == "T"),
+        "generic alias parameters must not leak outside their declaration"
+    );
+}
+
+#[test]
 fn completes_lua_doc_type_names_in_lua_files() {
     let source = r#"---@alias Player { hp: number }
 ---@return Pl

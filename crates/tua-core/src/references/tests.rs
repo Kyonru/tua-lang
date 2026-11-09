@@ -169,6 +169,20 @@ fn table_field_references_can_exclude_shape_field() {
 }
 
 #[test]
+fn generic_alias_parameter_references_follow_binder_identity() {
+    let source = "type Box<T> = { value: T, next: T }\nlocal item: Box<number>\n";
+    let mut position = position_at(source, "Box<T>");
+    position.column += "Box<".len();
+    let references = references_tua_source("src/generic_alias.tua", source, position, true)
+        .expect("generic alias should parse");
+
+    assert_eq!(texts(source, &references), ["T", "T", "T"]);
+    assert!(references
+        .iter()
+        .all(|reference| reference.kind == ReferenceKind::TypeParameter));
+}
+
+#[test]
 fn unknown_symbols_and_any_fields_return_no_references() {
     assert!(references_at("missing", 0, true).is_empty());
     assert!(references_at("payload.value", "payload.".len(), true).is_empty());

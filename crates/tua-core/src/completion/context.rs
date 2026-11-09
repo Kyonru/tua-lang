@@ -11,6 +11,7 @@ pub(crate) enum CompletionContext {
     },
     TypeAnnotation {
         prefix: String,
+        position: SourcePosition,
     },
     FieldAccess {
         receiver_parts: Vec<String>,
@@ -59,11 +60,11 @@ pub(crate) fn completion_context(
 
     annotation_tag_context(line, cursor)
         .or_else(|| documentation_snippet_context(line, cursor, position))
-        .or_else(|| lua_doc_type_annotation_context(line, cursor))
+        .or_else(|| lua_doc_type_annotation_context(line, cursor, position))
         .or_else(|| module_path_context(line, cursor))
         .or_else(|| string_argument_context(source, line, cursor, position))
         .or_else(|| field_access_context(line, cursor, position))
-        .or_else(|| type_annotation_context(line, cursor))
+        .or_else(|| type_annotation_context(line, cursor, position))
         .or_else(|| identifier_context(line, cursor, position))
 }
 
@@ -108,7 +109,7 @@ impl CompletionContext {
     pub(crate) fn filter_prefix(&self) -> Option<&str> {
         match self {
             CompletionContext::AnnotationTag { prefix }
-            | CompletionContext::TypeAnnotation { prefix }
+            | CompletionContext::TypeAnnotation { prefix, .. }
             | CompletionContext::FieldAccess { prefix, .. }
             | CompletionContext::StringArgument { prefix, .. }
             | CompletionContext::RequirePath { prefix }
@@ -121,7 +122,7 @@ impl CompletionContext {
     fn reusable_prefix(&self) -> Option<&str> {
         match self {
             CompletionContext::AnnotationTag { prefix }
-            | CompletionContext::TypeAnnotation { prefix }
+            | CompletionContext::TypeAnnotation { prefix, .. }
             | CompletionContext::FieldAccess { prefix, .. }
             | CompletionContext::Identifier { prefix, .. } => Some(prefix),
             CompletionContext::DocumentationSnippet { .. }
@@ -174,7 +175,11 @@ fn documentation_snippet_context(
     Some(CompletionContext::DocumentationSnippet { position })
 }
 
-fn lua_doc_type_annotation_context(line: &str, cursor: usize) -> Option<CompletionContext> {
+fn lua_doc_type_annotation_context(
+    line: &str,
+    cursor: usize,
+    position: SourcePosition,
+) -> Option<CompletionContext> {
     let cursor = cursor.min(line.len());
     let prefix = &line[..cursor];
     let leading = prefix.len() - prefix.trim_start().len();
@@ -210,6 +215,7 @@ fn lua_doc_type_annotation_context(line: &str, cursor: usize) -> Option<Completi
 
     Some(CompletionContext::TypeAnnotation {
         prefix: prefix.to_owned(),
+        position,
     })
 }
 
@@ -345,7 +351,11 @@ fn string_argument_context(
     })
 }
 
-fn type_annotation_context(line: &str, cursor: usize) -> Option<CompletionContext> {
+fn type_annotation_context(
+    line: &str,
+    cursor: usize,
+    position: SourcePosition,
+) -> Option<CompletionContext> {
     let cursor = cursor.min(line.len());
     let prefix = &line[..cursor];
     let annotation_start = prefix.rfind([':', '|']).map(|index| index + 1)?;
@@ -370,6 +380,7 @@ fn type_annotation_context(line: &str, cursor: usize) -> Option<CompletionContex
 
     Some(CompletionContext::TypeAnnotation {
         prefix: typed_prefix.to_owned(),
+        position,
     })
 }
 

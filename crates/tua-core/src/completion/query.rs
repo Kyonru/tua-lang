@@ -38,8 +38,8 @@ impl<'a> CompletionQuery<'a> {
             CompletionContext::DocumentationSnippet { position } => {
                 complete_documentation_snippet(self.parsed, position)
             }
-            CompletionContext::TypeAnnotation { prefix } => {
-                complete_type_names(self.environment, prefix.as_str())
+            CompletionContext::TypeAnnotation { prefix, position } => {
+                complete_type_names(self.parsed, self.environment, prefix.as_str(), position)
             }
             CompletionContext::FieldAccess {
                 receiver_parts,

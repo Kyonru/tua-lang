@@ -40,6 +40,21 @@ fn renames_type_aliases_within_the_file() {
 }
 
 #[test]
+fn renames_generic_alias_parameters_and_only_their_bound_uses() {
+    let source = "type Box<T> = { value: T, next: T }\ntype Other<T> = { value: T }\n";
+    let mut position = position_at(source, "Box<T>");
+    position.column += "Box<".len();
+    let edit = rename_tua_source("src/generic_alias.tua", source, position, "Item")
+        .expect("generic alias should parse")
+        .expect("generic alias binder should support rename");
+
+    assert_eq!(edit_texts(&edit), ["Item", "Item", "Item"]);
+    let renamed = apply_edit(source, &edit);
+    assert!(renamed.contains("type Box<Item> = { value: Item, next: Item }"));
+    assert!(renamed.contains("type Other<T> = { value: T }"));
+}
+
+#[test]
 fn renames_functions_within_the_file() {
     let edit = rename_at("damage(player", 0, "hurt").expect("edit should exist");
 

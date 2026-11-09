@@ -952,7 +952,7 @@ fn complete_lossy_source(
         CompletionContext::DocumentationSnippet { position } => {
             complete_lossy_documentation_snippet(source, position)
         }
-        CompletionContext::TypeAnnotation { prefix } => {
+        CompletionContext::TypeAnnotation { prefix, .. } => {
             complete_builtin_types(prefix.as_str(), true)
         }
         CompletionContext::FieldAccess {
@@ -1169,7 +1169,12 @@ fn complete_annotation_tags(prefix: &str) -> Vec<Completion> {
         .collect()
 }
 
-fn complete_type_names(environment: &TypeEnvironment, prefix: &str) -> Vec<Completion> {
+fn complete_type_names(
+    parsed: &ParsedSource,
+    environment: &TypeEnvironment,
+    prefix: &str,
+    position: SourcePosition,
+) -> Vec<Completion> {
     let mut completions = BTreeMap::new();
 
     for completion in complete_type_aliases(environment, prefix) {
@@ -1178,6 +1183,58 @@ fn complete_type_names(environment: &TypeEnvironment, prefix: &str) -> Vec<Compl
 
     for completion in complete_builtin_types(prefix, false) {
         completions.insert(completion.label.clone(), completion);
+    }
+
+    let mut scoped_parameters = parsed
+        .type_aliases
+        .iter()
+        .filter_map(|alias| {
+            let span = alias.span?;
+            crate::analysis::span_contains_position(span, position)
+                .then_some((span, &alias.generic_parameters))
+        })
+        .chain(parsed.class_declarations.iter().filter_map(|class| {
+            crate::analysis::span_contains_position(class.span, position)
+                .then_some((class.span, &class.generic_parameters))
+        }))
+        .chain(parsed.function_annotations.iter().filter_map(|function| {
+            let span = function.span?;
+            crate::analysis::span_contains_position(span, position)
+                .then_some((span, &function.generic_parameters))
+        }))
+        .collect::<Vec<_>>();
+    scoped_parameters.sort_by_key(|(span, _)| {
+        (
+            usize::MAX - span.end.line.saturating_sub(span.start.line),
+            usize::MAX - span.end.column.saturating_sub(span.start.column),
+        )
+    });
+    for (_, parameters) in scoped_parameters {
+        for parameter in parameters {
+            if !completion_text_matches(&parameter.name, prefix) {
+                continue;
+            }
+            let detail = parameter.protocol_bound.as_ref().map_or_else(
+                || "generic type parameter".to_owned(),
+                |bound| format!("generic type parameter; conforms to {}", bound.name),
+            );
+            completions.insert(
+                parameter.name.clone(),
+                Completion {
+                    label: parameter.name.clone(),
+                    kind: CompletionKind::TypeAlias,
+                    detail: Some(detail),
+                    documentation: None,
+                    deprecation: None,
+                    insert_text: None,
+                    filter_text: None,
+                    is_snippet: false,
+                    module_path: None,
+                    source_module: None,
+                    additional_text_edits: Vec::new(),
+                },
+            );
+        }
     }
 
     completions.into_values().collect()

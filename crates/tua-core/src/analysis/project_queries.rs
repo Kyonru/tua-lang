@@ -29,7 +29,7 @@ impl AnalysisSnapshot {
         let Some(parsed) = self.file(&path).and_then(|file| file.parsed.as_ref().ok()) else {
             return Vec::new();
         };
-        let Some(crate::completion::context::CompletionContext::TypeAnnotation { prefix }) =
+        let Some(crate::completion::context::CompletionContext::TypeAnnotation { prefix, .. }) =
             crate::completion::context::completion_context(&parsed.source, position)
         else {
             return Vec::new();
@@ -2447,7 +2447,7 @@ impl AnalysisSnapshot {
         source: &str,
         position: SourcePosition,
     ) -> Vec<Completion> {
-        let Some(crate::completion::context::CompletionContext::TypeAnnotation { prefix }) =
+        let Some(crate::completion::context::CompletionContext::TypeAnnotation { prefix, .. }) =
             crate::completion::context::completion_context(source, position)
         else {
             return Vec::new();

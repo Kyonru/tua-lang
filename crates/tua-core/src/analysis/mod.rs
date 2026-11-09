@@ -1082,14 +1082,32 @@ pub(crate) fn generic_type_parameter_at_position(
         .last()?;
     let lua_doc_parameter =
         lua_doc_generic_function_parameter_at_position(parsed, parser_position, &identifier.text);
+    let alias_parameter = parsed
+        .type_aliases
+        .iter()
+        .filter(|alias| {
+            alias
+                .span
+                .is_some_and(|span| span_contains_position(span, parser_position))
+        })
+        .flat_map(|alias| &alias.generic_parameters)
+        .find(|parameter| parameter.name == identifier.text)
+        .cloned();
     let is_binder = parsed
         .function_annotations
         .iter()
         .flat_map(|function| &function.generic_parameters)
         .any(|parameter| span_contains_position(parameter.name_span, parser_position));
+    let is_alias_binder = parsed
+        .type_aliases
+        .iter()
+        .flat_map(|alias| &alias.generic_parameters)
+        .any(|parameter| span_contains_position(parameter.name_span, parser_position));
     let class_parameter = generic_class_parameter_at_position(parsed, position, &identifier.text);
     if !is_binder
+        && !is_alias_binder
         && lua_doc_parameter.is_none()
+        && alias_parameter.is_none()
         && class_parameter.is_none()
         && !is_type_reference_position(parsed, position)
     {
@@ -1124,7 +1142,7 @@ pub(crate) fn generic_type_parameter_at_position(
         }
     }
 
-    lua_doc_parameter.or(class_parameter)
+    lua_doc_parameter.or(class_parameter).or(alias_parameter)
 }
 
 fn generic_class_parameter_at_position(
@@ -1812,7 +1830,7 @@ fn node_span(node: &impl Node) -> Option<SourceSpan> {
         .map(|(start, end)| SourceSpan::from_range(start, end))
 }
 
-fn span_contains_position(span: SourceSpan, position: SourcePosition) -> bool {
+pub(crate) fn span_contains_position(span: SourceSpan, position: SourcePosition) -> bool {
     position_key(span.start) <= position_key(position)
         && position_key(position) <= position_key(span.end)
 }

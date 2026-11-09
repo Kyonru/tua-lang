@@ -131,6 +131,26 @@ local outside: U = "text"
 }
 
 #[test]
+fn resolves_generic_alias_parameter_binders_and_uses() {
+    let source = "type Box<T> = { value: T }\nlocal item: Box<number>\n";
+    let mut binder_position = position_at(source, "Box<T>");
+    binder_position.column += "Box<".len();
+    let binder = definition_tua_source("src/generic_alias.tua", source, binder_position)
+        .expect("source should parse")
+        .expect("generic alias binder should navigate to itself");
+    assert_eq!(binder.kind, DefinitionKind::TypeParameter);
+    assert_eq!(source_text_from(source, binder.span), "T");
+
+    let mut use_position = position_at(source, "value: T");
+    use_position.column += "value: ".len();
+    let definition = definition_tua_source("src/generic_alias.tua", source, use_position)
+        .expect("source should parse")
+        .expect("generic alias body use should navigate to its binder");
+    assert_eq!(definition.kind, DefinitionKind::TypeParameter);
+    assert_eq!(definition.span, binder.span);
+}
+
+#[test]
 fn resolves_global_function_call() {
     let source = r#"function test(a: boolean)
   return ""
