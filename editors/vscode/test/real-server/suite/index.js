@@ -500,6 +500,36 @@ async function run() {
   );
   assert.match(hoverText(cyclicProtocolParameterHover), /parameter value: B/);
 
+  const cyclicProtocolReturnHover = await retry(
+    () =>
+      vscode.commands.executeCommand(
+        "vscode.executeHoverProvider",
+        cyclicProtocolDocument.uri,
+        positionAfter(cyclicProtocolDocument, "local target: B = a:next()", "local "),
+      ),
+    (result) => hoverText(result).includes("local target: B"),
+    "recursive protocol method return hover",
+  );
+  assert.match(hoverText(cyclicProtocolReturnHover), /local target: B/);
+
+  const cyclicProtocolReturnCompletionPosition = positionAfter(
+    cyclicProtocolDocument,
+    "target:previous()",
+    "target:",
+  );
+  const cyclicProtocolReturnCompletion = await retry(
+    () =>
+      vscode.commands.executeCommand(
+        "vscode.executeCompletionItemProvider",
+        cyclicProtocolDocument.uri,
+        cyclicProtocolReturnCompletionPosition,
+        ":",
+      ),
+    (result) => completionLabels(result).includes("previous"),
+    "member completion on a recursively returned protocol",
+  );
+  assert(completionLabels(cyclicProtocolReturnCompletion).includes("previous"));
+
   const cyclicProtocolCompletionPosition = positionAfter(
     cyclicProtocolDocument,
     "value:g(paired)",
@@ -748,6 +778,8 @@ async function run() {
       cyclicProtocolHover: hoverText(cyclicProtocolParameterHover),
       cyclicProtocolMethodCompletion: completionLabels(cyclicProtocolCompletion).includes("g"),
       cyclicProtocolMethodHover: hoverText(cyclicProtocolMethodHover),
+      cyclicProtocolReturnHover: hoverText(cyclicProtocolReturnHover),
+      cyclicProtocolReturnCompletion: completionLabels(cyclicProtocolReturnCompletion).includes("previous"),
       protocolStubActionApplied: true,
       formattingEdits: formatting.length,
       hover: "Player",

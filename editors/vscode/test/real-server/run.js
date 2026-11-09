@@ -91,6 +91,7 @@ function createProject(workspacePath) {
   const protocolStubsPath = path.join(sourcePath, "protocol_stubs.tua");
   const cyclicProtocolAPath = path.join(sourcePath, "cyclic_a.d.tua");
   const cyclicProtocolBPath = path.join(sourcePath, "cyclic_b.d.tua");
+  const cyclicProtocolValuePath = path.join(sourcePath, "cyclic_value.tua");
   const cyclicProtocolUsePath = path.join(sourcePath, "cyclic_protocol_use.tua");
   const configPath = path.join(workspacePath, "tua.toml");
 
@@ -194,6 +195,7 @@ function createProject(workspacePath) {
       'import type { B } from "./cyclic_b"',
       "export protocol A {",
       "  f(value: B): nil",
+      "  next(): B",
       "}",
       "",
     ].join("\n"),
@@ -205,7 +207,23 @@ function createProject(workspacePath) {
       "export protocol B {",
       "  --- accepts the paired A protocol",
       "  g(value: A): nil",
+      "  previous(): A",
       "}",
+      "",
+    ].join("\n"),
+  );
+  fs.writeFileSync(
+    cyclicProtocolValuePath,
+    [
+      'import type { A } from "./cyclic_a"',
+      'import type { B } from "./cyclic_b"',
+      "final class Value implements A, B {",
+      "  f(value: B): nil {}",
+      "  next(): B { return self }",
+      "  g(value: A): nil {}",
+      "  previous(): A { return self }",
+      "}",
+      "return { Value = Value }",
       "",
     ].join("\n"),
   );
@@ -214,6 +232,10 @@ function createProject(workspacePath) {
     [
       'import type { B } from "./cyclic_b"',
       'import type { A } from "./cyclic_a"',
+      'local ValueModule = require("cyclic_value")',
+      "local a: A = ValueModule.Value.new()",
+      "local target: B = a:next()",
+      "local returned_a: A = target:previous()",
       "local function consume(value: B, paired: A)",
       "  value:g(paired)",
       "end",
@@ -272,6 +294,7 @@ function createProject(workspacePath) {
     configPath,
     cyclicProtocolAPath,
     cyclicProtocolBPath,
+    cyclicProtocolValuePath,
     cyclicProtocolUsePath,
     contractsPath,
     genericPath,
