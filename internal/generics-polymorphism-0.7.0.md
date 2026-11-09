@@ -550,12 +550,12 @@ make verify
 make ci-check
 ```
 
-On the current macOS host, the full workspace gate passes with
-`CARGO_INCREMENTAL=0 RUST_MIN_STACK=33554432 RUST_TEST_THREADS=1`. Plain
-`make verify` can overflow the Rust harness's default test-thread stack in deep
-emitter/linter regressions; the CLI and LSP worker stacks are 8 MiB. Record
-these test settings when used; do not present them as a generic solver
-requirement or hide a new recursion regression behind them.
+On the current macOS host, the full workspace gate passes through plain
+`make verify`: its Rust test target sets an overridable `RUST_MIN_STACK=16777216`
+default while retaining parallel tests. Direct `cargo test` still uses Rust's
+2 MiB default and can overflow in a deep linter regression; the CLI and LSP
+worker stacks are 8 MiB. This is a harness setting, not a generic solver
+requirement; keep recording explicit settings for reproducibility.
 Editor/runtime commands depend on local tooling; record exact blockers and
 repeat them in the appropriate release environment.
 
@@ -661,7 +661,6 @@ location, and ignores matching text inside strings/comments. Direct alias
 expansion tests also pin the exact 4,096/4,097 work boundary and verify that
 over-budget public resolution preserves the complete symbolic input. The
 current core suite passes 1,897 tests (1 ignored), the LSP suite passes 432,
-and focused Clippy/format checks pass. The documented serial workspace gate
-also passes. The default `make verify` invocation can overflow the Rust test
-harness's smaller stack on a deep linter regression; exact settings and
-outcomes are in `internal/audits/generics-polymorphism-followup-2026-11-10.md`.
+and focused Clippy/format checks pass. The standard parallel `make verify`
+gate passes with inherited stack/thread settings removed; exact results are in
+`internal/audits/generics-polymorphism-followup-2026-11-10.md`.

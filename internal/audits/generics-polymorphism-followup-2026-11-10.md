@@ -131,13 +131,14 @@ combinations and broader cancellation permutations remain open.
 - `cargo test -p tua-cli --lib shaders::tests -- --nocapture` — passed: four
   tests, one LOVE-dependent test ignored. This supersedes the earlier flaky
   shader-validator failures recorded below; they did not reproduce.
-- Plain `make verify` — the default 2 MiB Rust test-thread stack overflowed in
-  a deep emitter/linter regression. The emitter test now uses an 8 MiB thread,
-  matching the CLI and LSP worker stacks, but the separate linter regression
-  still needs a larger test-thread stack. This is a test-harness limitation;
-  the full gate passes with the documented stack and serial settings below.
-- `CARGO_INCREMENTAL=0 RUST_MIN_STACK=33554432 RUST_TEST_THREADS=1 make verify`
-  — passed on the current tree: workspace tests (core 1,897 passed/1 ignored;
+- `cargo test -p tua-core` with the Rust harness's default 2 MiB test-thread
+  stack — overflows in a deep linter regression. The regression needs a larger
+  stack than the Rust harness default; CLI and LSP workers already use 8 MiB.
+  The Makefile's `test` target now sets an overridable 16 MiB default, leaving
+  normal parallel test execution enabled.
+- `env -u RUST_MIN_STACK -u RUST_TEST_THREADS make verify` — passed on the
+  current tree using only the Makefile default: workspace tests (core 1,897
+  passed/1 ignored;
   LSP 432; CLI unit 92 passed/2 ignored; CLI integration 137; gameplay 3;
   helper-default 1; LOVE examples 3; LSP 1; Lua syntax 1), Clippy, release and
   config consistency, LLM language evaluation, extension checks (180/180),
