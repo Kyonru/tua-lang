@@ -831,6 +831,57 @@ fn protocol_editor_recovery_handles_every_character_prefix_of_nested_types() {
 }
 
 #[test]
+fn protocol_and_generic_class_editor_recovery_handles_every_header_prefix() {
+    let source = r#"local retained = true
+export protocol -- contract with { braces }
+Renderable {
+  render(value: { text: string }): nil
+}
+final class Box<T -- binder comment with >
+  : Renderable> implements Renderable {
+  value: T
+}
+"#;
+
+    for end in source
+        .char_indices()
+        .map(|(end, _)| end)
+        .chain(std::iter::once(source.len()))
+    {
+        let prefix = &source[..end];
+        let has_complete_local = prefix.starts_with("local retained = true\n");
+
+        if let Ok(parsed) = parse_tua_source("src/recovery.tua", prefix) {
+            if has_complete_local {
+                assert!(
+                    parsed.ast.to_string().contains("retained"),
+                    "a valid prefix must preserve unrelated source at byte {end}: {prefix:?}"
+                );
+            }
+        }
+
+        let Some(recovered) = crate::classes::source_with_closed_editor_declarations(prefix) else {
+            continue;
+        };
+        if let Ok(parsed) = parse_tua_source("src/recovery.tua", &recovered) {
+            if has_complete_local {
+                assert!(
+                    parsed.ast.to_string().contains("retained"),
+                    "editor recovery must preserve unrelated source at byte {end}: {recovered:?}"
+                );
+            }
+            if prefix.contains("Renderable {") {
+                assert_eq!(
+                    parsed.protocol_declarations.first().map(|protocol| protocol.name.as_str()),
+                    Some("Renderable"),
+                    "recovery should keep the complete protocol identity at byte {end}: {recovered:?}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
 fn class_array_fields_parse_after_lowering() {
     let source = r#"final class BeatManager {
   steps: number[]
