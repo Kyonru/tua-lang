@@ -1,6 +1,6 @@
 # Tua 0.7.0 Generics and Protocols Final Audit
 
-Date: 2026-11-09  
+Date: 2026-11-10
 Audited base: `06c1065b940622eee2f179b4c7752ce496010b8c`
 Final implementation revision: `dc3413d1` plus the AUDIT-019 concrete generic-
 parent specialization; installed-editor regression-test
@@ -11,7 +11,8 @@ revision: `f209b882`; latest protocol dependency-rename test revision:
 final implementation revisions add imported inherited protocol-requirement
 links to override diagnostics, safely diagnose malformed nested
 protocol/class declaration text, and resolve generic member definitions
-across modules. This report records verification after
+across modules. The November 10 boundary fixes are separate commits
+`17b6b412`, `afd004ba`, and `7efaf29b`. This report records verification after
 protocol-header, diagnostic, documentation, cycle, dependency-deletion,
 dependency-rename, inherited-requirement, multi-workspace isolation, and
 malformed-declaration fuzz coverage.
@@ -22,7 +23,35 @@ Working tree before audit: clean. No unrelated project changes were present.
 
 The documented 0.7.0 slice has strong compiler, project-analysis, LSP, runtime, and installed-editor coverage. The audit fixed the listed parser, inference, documentation, and diagnostic issues; this continuation also fixes inherited override links when a local base class implements an imported protocol, malformed declaration text that could panic during lowering, missing Go to Definition for imported generic class members, and nested class/protocol text being erased as a top-level declaration. The audit added regressions for these behaviors, generic multi-return checker/runtime coverage, and installed VS Code protocol implementation navigation, generic binder references, rename, and unsaved dependency-edit coverage.
 
-The protocol/generic implementation is suitable for **manual beta testing on macOS arm64**. The latest packaged VSIX (40 files, 8.68 MB), including recursive protocol return identity, stale project-diagnostic filtering for imported generic bounds, incomplete-protocol recovery, protocol-requirement links, concrete generic-parent substitution, protocol stub generation, and the generic-function formatter correction, was installed into an isolated VS Code profile and passed the real-server suite using its bundled compiler. The exact package passed archive validation and has SHA-256 `43568a26a7d0a9532fa4e6c81e48c33d9d84b601598f659b249ca0cbf92cbe98`. It is not qualified for a general 0.7.0 release: Linux, Windows, Intel Mac, LuaJIT/LOVE, source-map/hot-reload, visual screenshot review, and long-session checks remain open. A local class hierarchy can inherit an imported protocol's requirements; cross-module class inheritance itself remains outside the parser/lowering contract.
+At the prior checkpoint, the protocol/generic implementation was suitable for **manual beta testing on macOS arm64**. That packaged VSIX (40 files, 8.68 MB) passed the isolated VS Code real-server suite with its bundled compiler. The final focused audit and current artifact are recorded in the November 10 addendum below. General 0.7.0 release qualification remains open for Linux, Windows, Intel Mac, LuaJIT/LOVE, source-map/hot-reload, visual screenshot review, and long-session checks. A local class hierarchy can inherit an imported protocol's requirements; cross-module class inheritance itself remains outside the parser/lowering contract.
+
+### Final focused audit update — November 10, 2026
+
+Three additional defects were confirmed and fixed in this continuation: generic
+alias expansion limits could hide the type of a known field; protocol
+requirements accepted missing or empty parameter annotations; and comments in
+generic function binders disappeared when those binders were erased to Lua.
+The fixes preserve the existing recursive-alias hover behavior and `Self`
+member inference. The exact regenerated 0.7.0 VSIX contains 40 files (8.71 MB),
+has SHA-256
+`8de57325a50b0adbbbe2045f1b83fe556dfdbc833a3b1d39c96a89a1db966f46`, and passed
+the isolated installed-VSIX real-server test on VS Code 1.142.0/macOS arm64.
+The workspace suites and editor tests pass; the combined `make verify` command
+itself stopped when the sandbox denied the extension runtime-inspector's
+loopback bind, and the extension suite passed 180/180 when rerun with local
+loopback access. The benchmark smoke likewise passed with local process
+sampling enabled.
+
+One stress probe remains inconclusive: dot completion on an artificial
+4,200-field generic record did not answer within 30 seconds, while hover on
+the same last field and CLI checking returned the correct `number` type. This
+does not establish a regression or typical-project latency problem; it is
+recorded as a targeted completion scalability follow-up, not a confirmed
+correctness defect.
+
+The latest artifact is suitable for manual beta testing on this host. It is not
+qualified for a general release: cross-platform/runtime qualification, visual
+review, long-session memory behavior, and second-client testing remain open.
 
 Repeated local profile measurements (five cold samples, twenty warm and contention samples) on the 1,000-line fixture show cold completion p95 251.10 ms, warm completion p95 6.24 ms, cold hover p95 266.65 ms, warm hover p95 20.03 ms, and completion p95 under contention 153.03 ms. The 100-module project reports cold completion p95 116.04 ms, warm completion 0.40 ms, and warm hover 1.66 ms. These have no before/after baseline; cold latency and large-project contention remain performance opportunities.
 
@@ -505,6 +534,40 @@ gap in the current checkout.
 - **Scope:** The 4,096 counter covers generic call candidates in the per-source checker. Callback-value specialization and semantic/LSP query instantiations are outside that counter; those paths retain their existing per-operation recursion limits. It is not a whole-process memory ceiling.
 - **Verification:** All new tests pass in the full 1,882-test core suite; full workspace `make verify`, `make benchmark-smoke`, package checks, and installed VSIX checks pass.
 
+### AUDIT-025 — Generic alias work limits erased known member types
+
+- **Category / severity / confidence:** Type-checker soundness at an expansion boundary; Medium; confirmed by minimized CLI and checker reproductions.
+- **Status:** Fixed in the current worktree.
+- **Reproduction:** Define `type Wide<T> = { f1: T, ... }` with more than 4,096 fields, then assign `wide.f4199` from `Wide<number>` to a `string`. A second fixture uses a branching generic alias graph whose full expansion exceeds the budget and reads a field through a 12-member path.
+- **Expected:** A known member retains its substituted type, and the invalid string assignment reports TL1003.
+- **Actual before fix:** The structural-node work counter was exhausted while expanding the table. The resolver retained the symbolic root application, and member lookup degraded the known field to `any`, silently accepting the assignment.
+- **Fix:** Count generic alias applications rather than every record field against the full-expansion work limit. Resolve requested member paths lazily from one substituted alias body with a finite 64-edge depth, and preserve a concrete table's generic application at the selected edge without recursively expanding sibling fields.
+- **Regression coverage:** `wide_generic_alias_members_keep_their_substituted_types`, `generic_alias_member_lookup_stays_typed_after_full_expansion_is_bounded`, `wide_generic_alias_member_keeps_its_type_past_the_work_boundary`, and `generic_alias_expansion_work_limit_preserves_a_symbolic_application` cover large records, incorrect assignments, branching work exhaustion, and fail-closed symbolic expansion. An independent real LSP probe confirmed receiver/member hover types for the 4,200-field alias.
+- **Verification:** Independent CLI checks reject both invalid assignments with TL1003; all 20 generic-alias-focused core tests pass. A 4,200-field completion request exceeded the independent probe's 30-second timeout; it remains a stress follow-up and does not invalidate the checker/hover results.
+
+### AUDIT-026 — Protocol requirements accepted untyped parameters
+
+- **Category / severity / confidence:** Protocol contract validation; Medium; confirmed by CLI, parser, and LSP diagnostics.
+- **Status:** Fixed in the current worktree.
+- **Reproduction:** Declare `protocol P { decode(input): nil }` or `protocol P { decode(input:): nil }` and implement the same method without a parameter annotation.
+- **Expected:** Reject the malformed protocol member at the parameter with one precise syntax diagnostic, and avoid a misleading downstream conformance error.
+- **Actual before fix:** The method signature was accepted with an unknown/`any` parameter type, allowing a contract to be under-specified; some invalid signatures also produced confusing conformance cascades.
+- **Fix:** Parse protocol parameters with balanced delimiter/comment-aware ranges; require explicit, non-empty annotations for named and variadic parameters; omit malformed requirements from the protocol so the parser diagnostic remains authoritative.
+- **Regression coverage:** `protocol_requirements_reject_missing_and_empty_parameter_types` checks ordinary, empty, and variadic parameters plus exact source ranges and a valid multiple-return control. The LSP regression asserts the two TL0001 diagnostics and no TL1008 cascade.
+- **Verification:** Independent CLI probes observed one TL0001 at `main.tua:2:5` for each malformed case and no TL1008; the valid typed variadic/two-return contract checks. Core and LSP focused tests pass.
+
+### AUDIT-027 — Generic function binder comments disappeared during Lua erasure
+
+- **Category / severity / confidence:** Source-preserving code generation; Low; confirmed with emitted-Lua and runtime reproduction.
+- **Status:** Fixed in the current worktree.
+- **Reproduction:** Put line comments between `id<`, `T`, and `>` in a generic function declaration, then run `tua build` and Lua on `print(id(42))`.
+- **Expected:** Erase the generic binder while preserving both user comments exactly once in valid Lua.
+- **Actual before fix:** `with_generics(None)` discarded comment trivia attached to the generic declaration even though the compiled program still printed `42`.
+- **Fix:** Transfer source-ordered comment trivia and required line breaks from erased generic binders into the function parameter span; preserve trivia when no return annotation is present as well.
+- **Regression coverage:** `generic_function_header_comments_survive_type_erasure` asserts both comments survive exactly once, the generic syntax is absent, and the emitted Lua parses. An independent CLI build/run probe printed `42` after the fix.
+
+During AUDIT-025 integration, a first direct-field shortcut changed recursive-alias hover and class `Self` hover behavior. The full core and LSP suites exposed those regressions; the final shortcut only preserves a raw field edge when it contains a generic alias application, and targeted tests for recursive imported `Self` and growing recursive generic aliases now pass.
+
 ## Coverage matrix
 
 Status key: **Exercised** means a focused regression or real request/runtime test ran; **Inspected** means code/docs were reviewed but not independently executed for that specific edge; **Pending** means no qualifying environment or scenario was available.
@@ -512,13 +575,13 @@ Status key: **Exercised** means a focused regression or real request/runtime tes
 | Plan area | Status | Evidence and limits |
 | --- | --- | --- |
 | P0 protocol syntax, nominality, colon receiver, mutable views | Exercised | Positive/negative assignments, colon calls, explicit dot/extracted receivers, class array mutation safety, nominal identity, inherited overrides, and contextual identifier compatibility are covered. |
-| P1 parsing, identities, spans, formatting and erasure | Exercised, partial | Local/exported/multiline and comment-separated protocol headers, bounded generic function formatting and semantic round-trip, comments containing braces during recovery, spans, diagnostics, Lua erasure, contextual words, editor recovery of unclosed protocol bodies, malformed nested class/protocol cases, and declaration rejection inside Lua function/conditional/loop/do/repeat blocks pass. Current-buffer queries retain partial declarations while dependency indexes keep last-good contracts. Broader malformed-edit recovery remains incomplete. |
-| P2 conformance, variance, multiple obligations, inheritance | Exercised, partial | Positive/negative local/imported conformance, inherited satisfaction/override, same-name obligations, optional parameters, varargs, multiple return slots/counts, variance, exact override/parameter/return locations, related locations for imported direct conformance, and multiple imported requirements inherited through local bases are tested. Imported generic bounds accept explicitly conforming classes and reject structural lookalikes in CLI/LSP regressions. Broader malformed-edit and uncommon override/range combinations remain open. Cross-module class inheritance is unsupported by the current class contract. |
+| P1 parsing, identities, spans, formatting and erasure | Exercised, partial | Local/exported/multiline and comment-separated protocol headers, required non-empty protocol parameter annotations with ranged LSP diagnostics, bounded generic function formatting and semantic round-trip, comments containing braces during recovery, generic binder comment preservation during Lua erasure, contextual words, editor recovery of unclosed protocol bodies, malformed nested class/protocol cases, and declaration rejection inside Lua function/conditional/loop/do/repeat blocks pass. Current-buffer queries retain partial declarations while dependency indexes keep last-good contracts. Broader malformed-edit recovery remains incomplete. |
+| P2 conformance, variance, multiple obligations, inheritance | Exercised, partial | Positive/negative local/imported conformance, malformed requirement diagnostics for missing/empty parameter annotations, inherited satisfaction/override, same-name obligations, optional parameters, typed varargs, multiple return slots/counts, variance, exact override/parameter/return locations, related locations for imported direct conformance, and multiple imported requirements inherited through local bases are tested. Imported generic bounds accept explicitly conforming classes and reject structural lookalikes in CLI/LSP regressions. Broader malformed-edit and uncommon override/range combinations remain open. Cross-module class inheritance is unsupported by the current class contract. |
 | P3 module identity, re-exports, cycles, edits | Exercised, partial | Named/namespace/re-export and cyclic protocol identity pass. Same-file and cross-file recursive signatures and method returns retain nominal identity: matching conformance passes, incompatible parameters are rejected, returned `B` remains `B`, and member completion agrees with hover. Editing one protocol inside a mutual import cycle refreshes implementing-class diagnostics while completion through the peer protocol remains available in the same analysis snapshot. Saved/unsaved refresh tests pass. Deleting a contract invalidates its last-good facts, reports the missing import, and removes stale conformance checks. Renaming a contract, changing the consumer import, and requesting diagnostics after the debounce reports the new mismatch. LSP tests prove same-named protocols and generic aliases with different contracts remain isolated across workspace roots in either root ordering. Workspace-folder changes reindex open-document analysis and republish push diagnostics; add/replace-root and broad dependency graph edit patterns are not exhausted. |
 | P4 completion, hover, signatures, navigation, rename | Exercised on macOS, partial | Core/LSP suites and installed VSIX cover protocol completion, hover, signature, definition, implementation navigation, references/rename, and applying the missing-protocol-method quick fix; generic alias/class/function completion/hover/signatures, alias and imported function/class member definitions, generic binder definition/references/rename, and unsaved dependency edits that update and restore dependent generic hover types. Recursive same-file and cross-file protocol fixtures assert exact hover/completion agreement; the installed VSIX real-server test now verifies cyclic signatures through the actual editor adapter. Cross-platform qualification remains open. |
 | P5 examples, generated Lua, runtime/source maps/hot reload | Exercised, partial | Feature/game examples build; gameplay polymorphism and generic multi-return emitted Lua execute on the available Lua runtime. A new end-to-end test builds a generic class and maps a runtime error from its method to the exact Tua source line. CLI and extension suites also cover source maps and hot reload. LOVE/LuaJIT runtime qualification and visual behavior remain pending. |
 | G0 design contract and limits | Inspected | Decisions are present in plan and user docs; future generic methods, generic protocols, packs, explicit call-site args, compound bounds, and advanced LuaCATS are explicit limitations. |
-| G1 aliases, identity, substitution, recursion, imports | Exercised, partial | Exact arity, unknown names, capture-safe substitution, imported/re-exported aliases, same-argument recursion, and growing-argument recursion are tested. The first repeated declaration stays symbolic with substituted arguments; other alias cycles retain work/depth guards. New regressions cover expansion-work and depth boundaries; exhaustive adversarial alias graph shapes remain untested. |
+| G1 aliases, identity, substitution, recursion, imports | Exercised, partial | Exact arity, unknown names, capture-safe substitution, imported/re-exported aliases, same-argument recursion, and growing-argument recursion are tested. The first repeated declaration stays symbolic with substituted arguments; other alias cycles retain work/depth guards. New regressions cover full-expansion budget exhaustion, typed member lookup across a 4,200-field alias and branching graph, and depth boundaries; exhaustive adversarial alias graph shapes remain untested. |
 | G2 functions, inference, callbacks, LuaDoc | Exercised, partial | Independent calls, body checking, conflicts, nil/unions/empty table, callback contexts/ambiguity, bounds, varargs, LuaDoc generic forms, multi-return slot inference/runtime, repeated-call caching, and the 4,096 distinct-call budget are covered. Callback-only/return-only inference and explicit callsite args are deliberately unsupported; callback-value and LSP-query specializations are not charged to the per-source call budget. |
 | G3 classes, constructors, substitution, bounds | Exercised, partial | Local/imported generic instances, constructor/member inference, concrete and transitive applied generic parents, `super`, invariant containers, protocol bounds, hover/completion/navigation covered. An imported protocol inherited through a local base now links from a child override. Cross-module class inheritance and generic methods/protocols remain unsupported. |
 | Real editing and snapshots | Exercised, partial | Unsaved dependency edits, cyclic imports, incomplete consumer edits, warm snapshots and watched changes have core/LSP coverage. Long-session and broad dependency churn remain open. |
@@ -529,6 +592,22 @@ Status key: **Exercised** means a focused regression or real request/runtime tes
 ## Verification log
 
 All commands ran from repository root unless noted.
+
+### November 10 focused audit commands
+
+| Command | Outcome |
+| --- | --- |
+| `cargo fmt --all -- --check`; `git diff --check` | Passed after AUDIT-025 through AUDIT-027; formatting was applied with `cargo fmt --all`. |
+| `CARGO_INCREMENTAL=0 RUST_MIN_STACK=33554432 cargo test -p tua-core generic_alias_` | Passed: 20 tests, including the 4,200-field member boundary, symbolic expansion stop, imports, recursion, and substitution. |
+| Focused core tests for protocol parameter annotations and generic-header comments; focused LSP tests for protocol diagnostics, growing generic aliases, class `Self`, and recursive imported `Self` | Passed individually. The LSP diagnostic response contains exactly two TL0001 errors and no TL1008 cascade. The recursive-alias hover remains symbolic, and class `Self`/guarded-capture completion and hover remain available. |
+| Independent `tua check` reproductions for the 4,200-field and branching generic aliases | Both rejected the invalid string assignment with TL1003 (`expected string, found number`). Independent stdio LSP hover reported `Wide<number>` and `(field) f4199: number`. Dot completion on the artificial 4,200-field shape did not answer within 30 seconds; not classified as a confirmed regression. |
+| Generic-comment CLI reproduction (`tua build`, then Lua 5.4) | Passed: generated Lua retained the binder comments, and the program printed `42`. |
+| `CARGO_INCREMENTAL=0 RUST_MIN_STACK=33554432 RUST_TEST_THREADS=1 make verify` | Rust workspace tests passed: core 1,887 passed/1 ignored; LSP 427 passed; CLI library 92 passed/2 ignored; CLI integration 137 passed; gameplay 3 passed; examples/syntax passed. Clippy, version/config checks, language evaluation, schema/JSON checks passed. The aggregate command exited at extension tests because the sandbox denied a loopback bind; the separately rerun `npm --prefix editors/vscode run check` passed 180/180 with local loopback access. |
+| `make docs-build` | Passed; documentation build reported no issues. |
+| `make benchmark-smoke` | Passed with local process-sampling access. Representative profile: single-1000 cold completion p95 249.47 ms, warm 6.85 ms, contention 154.64 ms; project-100 cold 120.59 ms, warm 0.40 ms, contention 30.42 ms. Memory remained under the configured 1,024 MiB ceiling. This smoke run uses one cold sample and is not a stable release-host baseline. |
+| `make extension-package` | Passed: npm audit found 0 vulnerabilities; extension tests 180/180; generated the 0.7.0 VSIX with 40 files, 8.71 MB (9,129,987 bytes). |
+| `env TUA_TEST_VSIX="$PWD/editors/vscode/tua-0.7.0.vsix" npm --prefix editors/vscode run test:vscode-real` | Passed against the exact packaged VSIX, installed into an isolated profile; bundled Tua server started and the real-server editor suite exited 0 on VS Code 1.142.0/macOS arm64. |
+| `unzip -tq editors/vscode/tua-0.7.0.vsix`; `shasum -a 256 editors/vscode/tua-0.7.0.vsix` | Archive validation passed. SHA-256 `8de57325a50b0adbbbe2045f1b83fe556dfdbc833a3b1d39c96a89a1db966f46`. |
 
 | Command | Outcome |
 | --- | --- |

@@ -583,3 +583,28 @@ explicit feature gap unless designed as its own change. Real installed VS
 Code, LOVE/LuaJIT runtime, source-map/hot-reload, and cross-platform
 qualification remain release gates. Do not treat completion of G3 as
 completion of P0-P5 or R0.
+
+### Final audit update — 2026-11-10
+
+The final implementation audit found and fixed three boundary cases in
+separate commits: protocol method parameters now require explicit non-empty
+types (`17b6b412`); generic member lookup keeps known types after bounded full
+alias expansion (`afd004ba`); and comments inside erased generic function
+binders survive Lua emission (`7efaf29b`). Regression coverage includes exact
+core/LSP diagnostics without conformance cascades, a 4,200-field generic alias
+and an over-budget branching alias graph, recursive generic hover and class
+`Self` consistency, and emitted-Lua parsing/runtime behavior.
+
+`make docs-build`, the workspace tests, Clippy, extension tests (180/180),
+`make benchmark-smoke`, packaging, and the installed VSIX real-server suite
+passed on macOS arm64. The aggregate `make verify` invocation was stopped by
+the sandbox's loopback restriction; the loopback-dependent extension checks
+passed in a local-access retry. The exact VSIX is
+`editors/vscode/tua-0.7.0.vsix`, SHA-256
+`8de57325a50b0adbbbe2045f1b83fe556dfdbc833a3b1d39c96a89a1db966f46`.
+
+An artificial 4,200-field dot-completion request did not return within 30
+seconds; this remains a scalability probe to investigate and is not a
+confirmed correctness defect. Linux/Windows/Intel Mac, LOVE/LuaJIT, visual,
+long-session, and second-client qualification remain open. The VSIX is ready
+for manual beta testing on this host, not general release qualification.

@@ -9,9 +9,13 @@ language or editor behavior, and migration notes call out those changes.
 ### Added
 
 - Method-only protocols with explicit class conformance, protocol-typed
-  parameters and arrays, exported protocol types, and erased type-only imports.
+  parameters and arrays, explicitly typed protocol requirements with ranged
+  diagnostics for omitted or empty parameter types, exported protocol types,
+  and erased type-only imports.
 - Generic type aliases with explicit type applications, exact arity diagnostics,
-  structured substitution, and named/namespace import and re-export support.
+  structured substitution, typed lazy member lookup when full expansion is
+  bounded, and named/namespace import and re-export support. Member queries keep
+  concrete field types when wide aliases exceed the full-expansion budget.
 - Generic free functions with symbolic body checking, independent call-site
   inference, imported/re-exported schemes, and `TL1015` diagnostics for
   conflicting or unsupported inference.
@@ -35,6 +39,7 @@ language or editor behavior, and migration notes call out those changes.
   and return annotations.
 - Formatter preserves compact generic function headers, including bounded
   parameters, as valid Tua syntax.
+- Generic binder comments survive type erasure in emitted Lua.
 - Namespace type imports can qualify protocols in `implements` clauses.
 - Semantic tokens identify protocol declarations and type uses with the LSP
   interface token class.
