@@ -595,6 +595,17 @@ available while the original syntax error remains visible. The full core suite
 passes (1,910 passed, 1 ignored), the full LSP suite passes (446), strict
 core/LSP Clippy passes, and formatting/diff checks pass.
 
+After this fix, `make verify` passed end to end with local loopback access:
+workspace tests (core 1,910 passed/1 ignored; LSP 446; CLI unit 93 passed/2
+ignored; CLI integration 137; gameplay 3; helper defaults 1; LOVE examples 3;
+LSP smoke 1; Lua syntax 1), strict workspace Clippy, version/schema checks,
+language evaluation, all 180 VS Code checks, JSON validation, and diff check.
+`make extension-package` passed on retry with loopback access; the installed
+VSIX real-server suite passed. `editors/vscode/tua-0.7.0.vsix` is 8.71 MB with
+SHA-256 `540848c0dd8df4b2b7d3630256e15efe03075f458794725221e33de1fa05030e`.
+The archive integrity check passed. LOVE runtime, other platforms, and other
+LSP clients remain unqualified.
+
 ### In-flight dependency edit follow-up — November 10, 2026
 
 An LSP scheduler regression holds a completed worker result for an imported

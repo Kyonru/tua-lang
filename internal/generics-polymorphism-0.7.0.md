@@ -735,6 +735,13 @@ opposite final-state direction to the existing incompatible-to-compatible
 stale-error test; filesystem rename/delete/recreate races and other scheduler
 permutations remain open.
 
+The post-fix `make verify` gate passed end to end with local loopback access,
+and the installed VSIX real-server protocol/generic suite passed. The rebuilt
+macOS VSIX is `editors/vscode/tua-0.7.0.vsix` (8.71 MB, SHA-256
+`540848c0dd8df4b2b7d3630256e15efe03075f458794725221e33de1fa05030e`); archive
+integrity passed. LOVE runtime, other platforms, and other LSP clients remain
+unqualified.
+
 ### Closing an unsaved protocol edit — 2026-11-10
 
 An LSP push-diagnostics regression queues consumer conformance work for an
