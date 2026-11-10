@@ -338,6 +338,10 @@ pub fn tuashaderscan_runtime_source() -> &'static str {
     builtin_module::SHADER_SCAN.source
 }
 
+pub fn tuarot_runtime_source() -> &'static str {
+    builtin_module::ROT.source
+}
+
 pub fn baton_runtime_source() -> &'static str {
     input::runtime_source()
 }

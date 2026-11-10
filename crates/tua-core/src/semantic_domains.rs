@@ -154,6 +154,9 @@ impl BuiltinDomainRegistry {
             runtime if runtime == crate::builtin_module::CAMERA.runtime => Some(
                 crate::builtin_module::module_type(&crate::builtin_module::CAMERA),
             ),
+            runtime if runtime == crate::builtin_module::ROT.runtime => Some(
+                crate::builtin_module::module_type(&crate::builtin_module::ROT),
+            ),
             _ => None,
         }
     }

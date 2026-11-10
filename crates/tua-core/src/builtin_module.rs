@@ -53,7 +53,15 @@ pub(crate) const SHADER_SCAN: BuiltinModule = BuiltinModule {
     documentation: "Safely send optional shader uniforms with `ShaderScan.safe_send(shader, name, ...)`; absent or optimized-out uniforms are skipped and reported once.",
 };
 
-pub(crate) const MODULES: &[BuiltinModule] = &[TWEEN, CAMERA, SHADER_SCAN];
+pub(crate) const ROT: BuiltinModule = BuiltinModule {
+    name: "Rot",
+    runtime: "tuarot",
+    source: include_str!("../../../vendor/runtime/tuarot.lua"),
+    summary: "optional procedural game-generation toolkit",
+    documentation: "Use seeded random streams, color helpers, dice, maze generation, grid pathfinding, field of view, simplex noise, grammar expansion, and radial lighting. The runtime is bundled only when `Rot` is referenced.",
+};
+
+pub(crate) const MODULES: &[BuiltinModule] = &[TWEEN, CAMERA, SHADER_SCAN, ROT];
 
 pub(crate) fn module(name: &str) -> Option<&'static BuiltinModule> {
     MODULES.iter().find(|module| module.name == name)
@@ -284,6 +292,10 @@ mod tests {
 
     #[test]
     fn module_types_are_structural_and_carry_their_contracts() {
+        let parsed = crate::parse_lua_source(Path::new("tuarot.lua"), ROT.source.to_owned())
+            .expect("the Rot runtime parses as Lua");
+        crate::types::build_type_environment(&parsed)
+            .unwrap_or_else(|errors| panic!("Rot runtime types fail to build: {errors:#?}"));
         for module in MODULES {
             let ty = module_type(module);
             let Type::Table(_) = &ty else {
@@ -310,6 +322,9 @@ mod tests {
         assert!(tween.to_string().contains("\"quadout\""), "{tween}");
         let camera = module_type(module("Camera").expect("Camera"));
         assert!(camera.to_string().contains("\"platformer\""), "{camera}");
+        let rot = module_type(module("Rot").expect("Rot"));
+        assert!(rot.to_string().contains("\"sidewinder\""), "{rot}");
+        assert!(rot.to_string().contains("astar"), "{rot}");
     }
 
     #[test]
@@ -389,6 +404,23 @@ tween.update(0.016)
         assert!(
             !messages.iter().any(|(line, _)| *line == 4),
             "{messages:#?}"
+        );
+    }
+
+    #[test]
+    fn rot_module_checks_seeded_map_and_dice_contracts() {
+        let diagnostics = crate::check_tua_source(
+            "src/main.tua",
+            "local rng = Rot.Rng.new(4)\nlocal grid = Rot.Map.generate(11, 9, \"digger\", rng)\nlocal roll = Rot.Dice.roll(\"d6\", \"not an rng\")\n",
+        )
+        .expect_err("unsupported map and RNG arguments should be diagnosed");
+        assert!(
+            diagnostics.iter().any(|diagnostic| diagnostic.line == 2),
+            "{diagnostics:#?}"
+        );
+        assert!(
+            diagnostics.iter().any(|diagnostic| diagnostic.line == 3),
+            "{diagnostics:#?}"
         );
     }
 

@@ -8,6 +8,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Added
 
+- Add the opt-in `Rot` runtime module for seeded random streams, dice, colors,
+  maze generation, grid paths, visibility, simplex noise, grammar expansion,
+  and radial lighting. Its runtime is emitted only when a project references it.
 - Add the built-in `ShaderScan.safe_send(shader, name, ...)` helper for optional
   shader uniforms. It skips uniforms removed or unavailable on the current
   renderer, emits one warning per shader/name pair, and reports whether it sent.

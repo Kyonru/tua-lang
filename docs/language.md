@@ -294,6 +294,7 @@ language reference:
 - [Input](input.md)
 - [Tweening](tweening.md)
 - [Camera](camera.md)
+- [Procedural Game Helpers](roguelike.md)
 - [Entity Component Systems](ecs.md)
 - [Object Pooling](object-pooling.md)
 - [Audio Systems](audio.md)

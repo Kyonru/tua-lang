@@ -204,10 +204,11 @@ parameter contract.
 | `ecs` | `local ecs = require("tuaecs")` |
 | `tween` | `local tween = require("tuatween")` |
 | `Camera` | `local Camera = require("tuacamera")` |
+| `Rot` | `local Rot = require("tuarot")` |
 
-Global assignments to `Camera` or `tween` in project source files reserve those
-names for the project across files, suppressing implicit built-in imports and
-built-in editor descriptions. This does not establish runtime initialization
+Global assignments to `Camera`, `tween`, or `Rot` in project source files reserve
+those names for the project across files, suppressing implicit built-in imports
+and built-in editor descriptions. This does not establish runtime initialization
 order or infer an exact cross-file global contract: load the defining file
 before use, or use explicit local imports for typed member access. Computed
 global writes such as `_G[name] = value` do not establish this ownership.

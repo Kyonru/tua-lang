@@ -100,6 +100,13 @@ pub const RUNTIMES: &[BundledRuntime] = &[
         explicit_import: true,
     },
     BundledRuntime {
+        module: "tuarot",
+        file_name: "tuarot.lua",
+        source: crate::tuarot_runtime_source,
+        dependencies: &[],
+        explicit_import: true,
+    },
+    BundledRuntime {
         module: "baton",
         file_name: "baton.lua",
         source: crate::baton_runtime_source,
