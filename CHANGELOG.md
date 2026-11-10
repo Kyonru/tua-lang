@@ -14,6 +14,9 @@ language or editor behavior, and migration notes call out those changes.
 - Add the opt-in `ShaderScan` module's `load_shader(name, path)` support for
   project-root-relative GLSL includes, include cycles, and compiler diagnostics
   mapped back to their original shader file and line.
+- Add `ShaderScan:update(dt)` polling for shader and include changes. It swaps in
+  successful compilations, preserves the last good shader after errors, and
+  avoids repeatedly printing the same failed edit.
 - Method-only protocols with explicit class conformance, protocol-typed
   parameters and arrays, explicitly typed protocol requirements with ranged
   diagnostics for omitted or empty parameter types, exported protocol types,

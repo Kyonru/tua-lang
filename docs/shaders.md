@@ -17,7 +17,19 @@ LÖVE does not expand GLSL `#include` directives itself. The opt-in
 
 ```tua
 local shaders = ShaderScan.new()
-local water = shaders:load_shader("water", "shaders/water.glsl")
+function love.load()
+    shaders:load_shader("water", "shaders/water.glsl")
+end
+
+function love.update(dt)
+    shaders:update(dt)
+end
+
+function love.draw()
+    love.graphics.setShader(shaders.s.water)
+    love.graphics.rectangle("fill", 0, 0, 800, 600)
+    love.graphics.setShader()
+end
 ```
 
 Use project-root-relative include paths:
@@ -40,6 +52,13 @@ source back to the original included file and line.
 `ShaderScan` is a built-in module: using it in Tua adds its runtime to the
 project build. The implementation is independent and follows the feature ideas
 of the [MIT-licensed LÖVE ShaderScan project](https://github.com/idbrii/love-shaderscan).
+
+Call `shaders:update(dt)` from `love.update` to poll the shader and its includes
+for edits. A successful compile replaces `shaders.s.water`; a compile failure
+keeps the previous shader active and prints a source-mapped error. Use the
+shader through `shaders.s.<name>` so drawing code sees the replacement rather
+than a shader value cached before the edit. Polling checks file contents every
+250 ms and does not require `tua dev`.
 
 Included uniforms are currently compiled by LÖVE at runtime. Tua's static
 uniform analysis indexes the loaded shader file itself; declarations that only

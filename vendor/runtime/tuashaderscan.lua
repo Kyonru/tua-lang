@@ -62,7 +62,10 @@ local function expand(path, root_source)
     if source == nil then
       local message
       source, message = read(current_path)
-      if not source then return nil, message end
+      if not source then
+        source_by_path[current_path] = false
+        return nil, message
+      end
     end
     source_by_path[current_path] = source
     stack[#stack + 1] = current_path
@@ -91,7 +94,7 @@ local function expand(path, root_source)
   end
 
   local ok, message = visit(path, root_source)
-  if not ok then return nil, message end
+  if not ok then return nil, source_map, dependencies, source_by_path, message end
   return table.concat(lines, "\n") .. "\n", source_map, dependencies, source_by_path
 end
 
@@ -106,13 +109,29 @@ local function load(name, path)
   path = normalize(path)
   if not path then return nil, "shader path escapes the project root" end
   local source, message = read(path)
-  if not source then return nil, message end
-  local code, source_map, dependencies, source_by_path = expand(path, source)
-  if not code then return nil, source_map end
+  if not source then
+    return nil, message, {
+      path = path,
+      dependencies = { [path] = true },
+      source_by_path = { [path] = false },
+    }
+  end
+  local code, source_map, dependencies, source_by_path, expand_error = expand(path, source)
+  if not code then
+    return nil, expand_error, {
+      path = path,
+      dependencies = dependencies,
+      source_by_path = source_by_path,
+    }
+  end
   local ok, shader = pcall(love.graphics.newShader, code)
   if not ok then
     local location = diagnostic_location(shader, source_map, path)
-    return nil, ("shader %q failed to compile: %s"):format(name, location)
+    return nil, ("shader %q failed to compile: %s"):format(name, location), {
+      path = path,
+      dependencies = dependencies,
+      source_by_path = source_by_path,
+    }
   end
   return {
     shader = shader,
@@ -126,7 +145,7 @@ end
 
 ---@return ShaderScanInstance
 function M.new()
-  return setmetatable({ s = {} }, Scanner)
+  return setmetatable({ s = {}, loaded = {}, elapsed = 0 }, Scanner)
 end
 
 ---@param name string
@@ -135,8 +154,46 @@ end
 function Scanner:load_shader(name, path)
   local loaded, message = load(name, path)
   if not loaded then error(message, 2) end
+  loaded.name = name
+  loaded.failed = nil
   self.s[name] = loaded.shader
+  self.loaded[name] = loaded
   return loaded.shader
+end
+
+---@param dt number
+---@return nil
+function Scanner:update(dt)
+  self.elapsed = self.elapsed + math.max(dt or 0, 0)
+  if self.elapsed < 0.25 then return end
+  self.elapsed = 0
+  for name, previous in pairs(self.loaded) do
+    local observed = previous.failed or previous
+    local changed = false
+    for path in pairs(observed.dependencies) do
+      local source = read(path)
+      if (source or false) ~= observed.source_by_path[path] then
+        changed = true
+        break
+      end
+    end
+    if changed then
+      local replacement, message, failed = load(name, previous.path)
+      if replacement then
+        replacement.name = name
+        self.loaded[name] = replacement
+        self.s[name] = replacement.shader
+        if previous.shader.release then previous.shader:release() end
+        print(("[ShaderScan] reloaded %s (%s)"):format(name, previous.path))
+      else
+        previous.failed = failed or observed
+        if previous.last_error ~= message then
+          print(("[ShaderScan] %s"):format(message))
+          previous.last_error = message
+        end
+      end
+    end
+  end
 end
 
 ---@param name string

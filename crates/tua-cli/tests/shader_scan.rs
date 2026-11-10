@@ -127,6 +127,8 @@ local files = {
   ["shaders/missing.glsl"] = '#include "shaders/lib/nope.glsl"',
 }
 local captured = {}
+local messages = {}
+print = function(message) messages[#messages + 1] = message end
 _G.love = {
   filesystem = { read = function(path) return files[path], "not found" end },
   graphics = {
@@ -135,7 +137,7 @@ _G.love = {
       if code:find("BROKEN", 1, true) then
         error("Error validating pixel shader code:\nLine 1: ERROR: invalid token")
       end
-      return { release = function() end }
+      return { release = function(shader) shader.released = true end }
     end,
   },
 }
@@ -148,6 +150,37 @@ assert(expanded:find("float nested", 1, true))
 assert(not expanded:find("#include", 1, true))
 local _, helper_count = expanded:gsub("float helper", "")
 assert(helper_count == 1)
+
+local original = scanner.s.water
+files["shaders/lib/b.glsl"] = '#include "shaders/lib/a.glsl"\nfloat nested() { return 2.0; }'
+scanner:update(0.3)
+assert(scanner.s.water ~= original and original.released)
+assert(captured[2]:find("return 2.0", 1, true))
+
+local last_good = scanner.s.water
+files["shaders/lib/b.glsl"] = '#include "shaders/lib/a.glsl"\nBROKEN'
+scanner:update(0.3)
+assert(scanner.s.water == last_good)
+scanner:update(0.3)
+assert(scanner.s.water == last_good)
+local error_count = 0
+for _, message in ipairs(messages) do
+  if message:find("shaders/lib/b.glsl:2", 1, true) then error_count = error_count + 1 end
+end
+assert(error_count == 1)
+
+files["shaders/lib/b.glsl"] = '#include "shaders/lib/a.glsl"\nfloat nested() { return 3.0; }'
+scanner:update(0.3)
+assert(scanner.s.water ~= last_good)
+assert(captured[4]:find("return 3.0", 1, true))
+
+local after_fix = scanner.s.water
+files["shaders/root.glsl"] = '#include "shaders/lib/new.glsl"\nvec4 effect() { return vec4(helper()); }'
+scanner:update(0.3)
+assert(scanner.s.water == after_fix)
+files["shaders/lib/new.glsl"] = "float helper() { return 4.0; }"
+scanner:update(0.3)
+assert(scanner.s.water ~= after_fix)
 
 local ok, compile_error = pcall(function()
   scanner:load_shader("broken", "shaders/broken.glsl")

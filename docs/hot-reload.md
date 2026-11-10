@@ -76,6 +76,13 @@ in module tables are replaced; callers that cached the old object directly
 keep that object, so look up the module's shader or call its drawing function.
 Dynamic filenames and assets outside the copied source tree are not tracked.
 
+For an independently managed shader collection, use the built-in
+[`ShaderScan` module](shaders.md). Call `scanner:update(dt)` from `love.update`;
+it watches the shader and its included files, replaces `scanner.s.<name>` only
+after a successful compile, and leaves the previous shader in place on errors.
+This watcher reads tracked shader contents every 250 ms and works without
+`tua dev`.
+
 ## Errors While Playing
 
 An error in `love.update` or `love.draw`, including one introduced by a
