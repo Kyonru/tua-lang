@@ -1175,6 +1175,46 @@ final class Particle implements Updatable {
         corrected.is_empty(),
         "correcting the recreated target should clear dependent diagnostics: {corrected:#?}"
     );
+
+    // Repeat the delete/create cycle after the path migration has settled.
+    // This guards against a stale generation being restored from either the
+    // old path or the first incarnation of the new path.
+    temp.remove("src/api.tua");
+    server.send(watched_files_changed([(&renamed_uri, 3)]));
+    server.send(text_document_diagnostic_request(8, &actors_uri));
+    let deleted_again = document_diagnostic_items(server.output(), 8);
+    assert!(
+        deleted_again.iter().any(|diagnostic| diagnostic["code"] == "TL4002")
+            && deleted_again
+                .iter()
+                .all(|diagnostic| diagnostic["code"] != "TL1008"),
+        "the second deletion should discard the first incarnation's conformance facts: {deleted_again:#?}"
+    );
+
+    temp.write("src/api.tua", changed_contracts);
+    server.send(watched_files_changed([(&renamed_uri, 1)]));
+    server.send(text_document_diagnostic_request(9, &actors_uri));
+    let recreated_again = document_diagnostic_items(server.output(), 9);
+    assert!(
+        recreated_again.iter().any(|diagnostic| {
+            diagnostic["code"] == "TL1008"
+                && diagnostic["message"].as_str().is_some_and(|message| {
+                    message.contains("Particle.update") && message.contains("Updatable.update")
+                })
+        }) && recreated_again
+            .iter()
+            .all(|diagnostic| diagnostic["code"] != "TL4002"),
+        "the second incarnation should expose only its incompatible protocol contract: {recreated_again:#?}"
+    );
+
+    temp.write("src/api.tua", contracts);
+    server.send(watched_files_changed([(&renamed_uri, 2)]));
+    server.send(text_document_diagnostic_request(10, &actors_uri));
+    let restored_again = document_diagnostic_items(server.output(), 10);
+    assert!(
+        restored_again.is_empty(),
+        "restoring a compatible contract after repeated churn should clear all errors: {restored_again:#?}"
+    );
 }
 
 #[test]

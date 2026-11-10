@@ -384,6 +384,17 @@ suite without a development-server override.
   verifies watcher invalidation cancels queued old-snapshot work; rename
   combined with repeated delete/recreate remains open.
 
+### Renamed dependency repeated delete/recreate — November 10, 2026
+
+- Extended `renaming_a_protocol_dependency_refreshes_importing_class_diagnostics`
+  to repeat delete, recreate with an incompatible contract, and restore a
+  compatible contract after the import has moved to the renamed path.
+- `RUST_MIN_STACK=16777216 cargo test -p tua-lsp
+  renaming_a_protocol_dependency_refreshes_importing_class_diagnostics` —
+  passed. The second cycle reports missing import → latest conformance mismatch
+  → no diagnostics. This closes the rename-plus-repeated-file-churn case;
+  broader scheduler cancellation permutations remain open.
+
 ### Full-workspace verification rerun — November 10, 2026
 
 - The first `env -u RUST_MIN_STACK -u RUST_TEST_THREADS make verify` run found
