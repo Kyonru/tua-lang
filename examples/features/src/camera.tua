@@ -1,0 +1,16 @@
+-- Feature: the built-in Camera module is included only when referenced.
+local player = { x = 120, y = 80 }
+local camera = Camera.new({ style = "platformer", smoothing = 8 })
+
+local function update(dt: number)
+  camera:follow(player.x, player.y)
+  camera:update(dt)
+end
+
+local function drawWorld()
+  camera:draw(function()
+    love.graphics.rectangle("fill", player.x - 8, player.y - 16, 16, 32)
+  end)
+end
+
+return { camera = camera, player = player, update = update, drawWorld = drawWorld }

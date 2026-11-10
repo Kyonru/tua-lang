@@ -1,0 +1,23 @@
+-- Feature: behavior trees are bundled only when BehaviorTree is used.
+-- Open this file and run "Tua: Preview Behavior Tree" to inspect the static
+-- hierarchy. Click a node in the preview to return to its constructor.
+local actor = { seesPlayer = false, attacks = 0 }
+
+local tree = BehaviorTree.new(BehaviorTree.selector({
+  BehaviorTree.sequence({
+    BehaviorTree.condition(function(context)
+      return context.seesPlayer
+    end),
+    BehaviorTree.action(function(context)
+      context.attacks = context.attacks + 1
+      return "success"
+    end),
+  }),
+  BehaviorTree.wait(0.25),
+}))
+
+-- Each runner has independent progress, even when it shares a definition.
+local runner = tree:instance(actor)
+local status = runner:update(0.016)
+
+return { tree = tree, runner = runner, status = status, actor = actor }

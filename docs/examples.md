@@ -39,9 +39,12 @@ The feature tour includes placeholder assets under `src/assets/` so static LOVE
 asset validation, asset-path completion, and asset metadata hovers can run
 without depending on real art or audio files.
 
-It also includes focused modules for native protocol contracts, the
-Baton-backed `input({...})` helper, state machines, stores, Signals, ECS,
-object pools, sprite sheets, vectors, and Lua interoperability.
+It also includes focused modules for native generics and protocols, behavior
+trees, camera, tweening, audio, procedural helpers, the Baton-backed
+`input({...})` helper, state machines, stores, Signals, ECS, object pools,
+sprite sheets, vectors, and Lua interoperability. See the
+[`features` file index](https://github.com/Kyonru/tua-lang/blob/main/examples/features/README.md)
+for the source file for each feature.
 `src/protocols.tua` demonstrates unrelated classes implementing a shared
 method contract, bounded generic helpers that preserve concrete result types,
 and runtime dispatch through a protocol-typed array. Its assertions run with

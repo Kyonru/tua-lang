@@ -26,6 +26,12 @@ local Signals = require("signals")
 local StateMachine = require("state_machine")
 local Store = require("store")
 local Input = require("input")
+local Generics = require("generics")
+local BehaviorTree = require("behavior_tree")
+local Camera = require("camera")
+local Tweening = require("tweening")
+local Audio = require("audio")
+local Roguelike = require("roguelike")
 
 return {
   types = Types,
@@ -56,4 +62,10 @@ return {
   state_machine = StateMachine,
   store = Store,
   input = Input,
+  generics = Generics,
+  behavior_tree = BehaviorTree,
+  camera = Camera,
+  tweening = Tweening,
+  audio = Audio,
+  roguelike = Roguelike,
 }

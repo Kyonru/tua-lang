@@ -1,0 +1,12 @@
+-- Feature: procedural helpers use one explicit seeded random stream.
+-- This module is independent of LOVE and can run with Lua after building.
+local rng = Rot.Rng.new(817)
+local maze = Rot.Map.generate(15, 11, "sidewinder", rng)
+local route = Rot.Path.astar(maze, 2, 2, 14, 10)
+local visible = Rot.FOV.compute(15, 11, 2, 2, 5, function(x, y)
+  return not maze:get(x, y)
+end)
+local roll = Rot.Dice.roll("2d6+1", rng)
+local color = Rot.Color.parse("#40a0ff")
+
+return { maze = maze, route = route, visible = visible, roll = roll, color = color }

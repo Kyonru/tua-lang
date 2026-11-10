@@ -1,0 +1,22 @@
+-- Feature: audioSystem derives cue and bus names from a static declaration.
+-- The placeholder WAV asset is for checking and editor completion; use a
+-- playable audio project for listening and music-analysis workflows.
+local audio = audioSystem({
+  buses = {
+    master = { volume = 1 },
+    sfx = { parent = "master", maxVoices = 4 },
+  },
+  cues = {
+    jump = { source = sound("assets/jump.wav"), bus = "sfx", maxVoices = 2 },
+  },
+})
+
+local function jump()
+  audio:play("jump")
+end
+
+local function update(dt: number)
+  audio:update(dt)
+end
+
+return { audio = audio, jump = jump, update = update }

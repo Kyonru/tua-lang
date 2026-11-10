@@ -41,6 +41,8 @@ nested constructor calls appear as nodes with source links. A top-level
 `tree:setRoot(...)` call also supplies the root for a tree created without one.
 Click a node to jump to its constructor. The preview refreshes after edits and
 uses the same opt-in `tua.preview.enabled` setting as the state-machine preview.
+Open the [feature example](https://github.com/Kyonru/tua-lang/blob/main/examples/features/src/behavior_tree.tua)
+to try the preview on a complete tree.
 
 The preview reads source only; it never runs game code. Nodes supplied by a
 variable, helper function, or another module appear as **Computed node** because

@@ -50,6 +50,8 @@ make build-features
 - `src/protocols.tua` covers method-only protocols, explicit class conformance,
   bounded generic helpers, heterogeneous protocol-typed arrays, and checked
   method dispatch. Its assertions can run with Lua without LOVE.
+- `src/generics.tua` covers generic aliases, inferred generic function calls,
+  and generic class constructor inference with concrete member types.
 - `src/polymorphism.tua` and `src/polymorphism/actors.tua` demonstrate imported
   instance types, base-typed collections, virtual dispatch, and explicit typed
   adapters for unrelated objects. After building, run their assertions without
@@ -88,6 +90,18 @@ make build-features
 - `src/object_pool.tua` demonstrates zero-setup object pooling with a typed
   factory, prewarming, reset-on-release behavior, duplicate-release safety,
   item-aware editor support, and on-demand `tuaobjectpool.lua` emission.
+- `src/behavior_tree.tua` demonstrates selectors, sequences, conditions,
+  actions, waits, independent runners, and the source-linked static VS Code
+  preview. Open it and run **Tua: Preview Behavior Tree**.
+- `src/camera.tua` demonstrates the opt-in built-in camera, following a target,
+  updating, and drawing world content through the camera.
+- `src/tweening.tua` demonstrates the opt-in tween module, easing, delay, and
+  per-frame updates.
+- `src/audio.tua` demonstrates a typed audio system with static bus and cue
+  names. Its placeholder WAV supports checking; use `examples/audio-system` to
+  play audio and inspect analysis metadata.
+- `src/roguelike.tua` demonstrates seeded `Rot` generation, pathfinding,
+  visibility, dice, and colors without a LOVE dependency.
 - `src/lua_doc_types.lua` is a plain Lua type provider used by
   `src/project_types.tua`; it demonstrates `---@class`, `---@field`,
   literal-union aliases, `---@overload`, `---@vararg`, and the LuaHelper
@@ -141,6 +155,13 @@ make build-features
 - `src/legacy.lua` is intentionally plain Lua. Builds copy it unchanged into
   `build/`, while the LSP can still infer simple returned module exports from
   it.
+
+Workflow features have their own runnable projects: `examples/unit-testing`
+for Busted, `examples/audio-system` for audio analysis, `examples/linter` for
+diagnostics, `examples/love-minimal` for build/run and hot reload, and
+`examples/starfall` for a complete game. Shader and asset editor behavior is
+in `src/assets.tua` with `src/assets/wave.glsl`; the source-mapping and
+navigation samples are in `src/navigation.tua`.
 
 The `assets/wave.glsl` sample is a compilable LÖVE pixel shader. With LÖVE
 installed, `tua check` validates it; see `[shaders]` in the configuration reference
