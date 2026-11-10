@@ -32,6 +32,9 @@ local Camera = require("camera")
 local Tweening = require("tweening")
 local Audio = require("audio")
 local Roguelike = require("roguelike")
+local ObjectPool = require("object_pool")
+local Comments = require("comments")
+local Shaders = require("shaders")
 
 return {
   types = Types,
@@ -68,4 +71,7 @@ return {
   tweening = Tweening,
   audio = Audio,
   roguelike = Roguelike,
+  object_pool = ObjectPool,
+  comments = Comments,
+  shaders = Shaders,
 }

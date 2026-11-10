@@ -1,0 +1,26 @@
+-- Feature: documentation comments enrich hover and signature help.
+--- Clamp a health value after damage without letting it become negative.
+---@param health number Current health.
+---@param amount number Damage to apply.
+---@return number Health remaining after the hit.
+local function remainingHealth(health: number, amount: number): number
+  return math.max(0, health - amount)
+end
+
+-- Feature: native class methods can carry the same documentation tags.
+final class Health {
+  value: number = 100
+
+  --- Apply damage and report whether health is exhausted.
+  ---@param amount number Incoming damage.
+  ---@return boolean Whether health reached zero.
+  damage(amount: number): boolean {
+    self.value = remainingHealth(self.value, amount)
+    return self.value == 0
+  }
+}
+
+local health = Health.new()
+local exhausted = health:damage(25)
+
+return { health = health, exhausted = exhausted, remainingHealth = remainingHealth }

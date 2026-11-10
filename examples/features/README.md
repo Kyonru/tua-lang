@@ -14,6 +14,12 @@ make check-example EXAMPLE=examples/features
 make build-features
 ```
 
+`coverage.json` maps every guide in the documentation's **Features** section to
+a focused `.tua` file in this tour. Run `make feature-examples-check` from the
+repository root to validate the map, file descriptions, and `src/main.tua`
+imports. The check also runs in `make verify` and `make ci-check` so new feature
+guides cannot silently omit an example.
+
 ## Files
 
 - `src/types.tua` covers primitive types, `any`, aliases, table shapes,
@@ -72,6 +78,8 @@ make build-features
   expanded LuaLS/LuaCATS annotation subset: literal unions, optional shorthand,
   arrays, LuaCATS tuples, dictionaries, function types, shallow metadata tags, and
   resolved deprecation metadata.
+- `src/comments.tua` demonstrates documentation comments on a function and a
+  class method, including parameter and return descriptions for editor hover.
 - `src/inline_ignores.tua` and `src/inline_ignores_file.tua` demonstrate
   default exact-code suppression on the same line, next line, or an entire
   file from its first nonblank line.
@@ -117,6 +125,10 @@ make build-features
   metadata, and edit inside the strings to try helper-specific asset-path
   completion. `ShaderScan.safe_send` demonstrates optional shader uniforms.
   LOVE code actions can also rewrite obvious raw constructors into helper calls.
+- `src/shaders.tua` demonstrates `ShaderScan.new()`, loading a shader by its
+  project-root-relative path, polling for edits, and reading the live shader
+  binding during drawing. `src/assets.tua` covers uniform checking and the
+  `shader` asset helper.
 - `src/game_math.tua` covers the opt-in `math` and `love.math` game helpers:
   `tau`, `clamp`, `lerp`, `inverseLerp`, `remap`, `sign`, `round`,
   `smoothstep`, `rgb`, and `rgba`, including byte-to-LOVE color tables and

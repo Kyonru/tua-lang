@@ -1,0 +1,22 @@
+-- Feature: ShaderScan reloads a shader when the file changes, preserving the
+-- last working shader if a development edit fails to compile.
+-- The path is relative to the project root, unlike shader "assets/wave.glsl".
+local shaders = ShaderScan.new()
+
+local function load()
+  shaders:load_shader("wave", "src/assets/wave.glsl")
+end
+
+local function update(dt: number)
+  shaders:update(dt)
+end
+
+local function draw()
+  local wave = shaders.s.wave
+  if not wave then return end
+  love.graphics.setShader(wave)
+  love.graphics.rectangle("fill", 0, 0, 320, 180)
+  love.graphics.setShader()
+end
+
+return { shaders = shaders, load = load, update = update, draw = draw }

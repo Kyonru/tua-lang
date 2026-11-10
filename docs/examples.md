@@ -39,6 +39,10 @@ The feature tour includes placeholder assets under `src/assets/` so static LOVE
 asset validation, asset-path completion, and asset metadata hovers can run
 without depending on real art or audio files.
 
+The tour's `coverage.json` maps each documentation **Features** guide to a
+buildable `.tua` file. `make feature-examples-check` validates that coverage and
+runs as part of the repository verification gates.
+
 It also includes focused modules for native generics and protocols, behavior
 trees, camera, tweening, audio, procedural helpers, the Baton-backed
 `input({...})` helper, state machines, stores, Signals, ECS, object pools,

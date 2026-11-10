@@ -94,6 +94,8 @@ including methods reached through imported instances. Native class method
 signatures remain the source for their types. Do not assume every LuaDoc tag
 has the same effect on native class syntax as on a Lua function declaration.
 See [Classes](classes.md) for imports, inheritance, and editor support.
+The [feature-tour example](https://github.com/Kyonru/tua-lang/blob/main/examples/features/src/comments.tua)
+shows both documented functions and class methods in one file.
 
 ## Choose The Right Annotation
 

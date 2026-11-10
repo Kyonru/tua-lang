@@ -1,0 +1,15 @@
+{
+  "sprites.md": ["src/sprites.tua"],
+  "vectors.md": ["src/vectors.tua", "src/game_math.tua"],
+  "signals.md": ["src/signals.tua"],
+  "stores.md": ["src/store.tua"],
+  "state-machines.md": ["src/state_machine.tua"],
+  "input.md": ["src/input.tua"],
+  "tweening.md": ["src/tweening.tua"],
+  "camera.md": ["src/camera.tua"],
+  "roguelike.md": ["src/roguelike.tua"],
+  "behavior-trees.md": ["src/behavior_tree.tua"],
+  "ecs.md": ["src/ecs.tua"],
+  "object-pooling.md": ["src/object_pool.tua"],
+  "audio.md": ["src/audio.tua"]
+}

@@ -52,6 +52,8 @@ source back to the original included file and line.
 `ShaderScan` is a built-in module: using it in Tua adds its runtime to the
 project build. The implementation is independent and follows the feature ideas
 of the [MIT-licensed LÖVE ShaderScan project](https://github.com/idbrii/love-shaderscan).
+The [feature-tour example](https://github.com/Kyonru/tua-lang/blob/main/examples/features/src/shaders.tua)
+shows the loading, update, and drawing flow with a bundled shader asset.
 
 Call `shaders:update(dt)` from `love.update` to poll the shader and its includes
 for edits. A successful compile replaces `shaders.s.water`; a compile failure
