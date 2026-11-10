@@ -3,7 +3,7 @@
 const vscode = require("vscode");
 const { COMMANDS } = require("../constants");
 const { isStaleDocumentResponse } = require("../shared/documents");
-const { openLocationMessage } = require("../shared/locations");
+const { displayUriPath, openLocationMessage } = require("../shared/locations");
 const { ensureExperimentalPreviewEnabled } = require("../shared/preview-gate");
 const { escapeHtml, jsonForHtml, webviewDocument } = require("../shared/webview");
 
@@ -137,7 +137,7 @@ function behaviorTreePreviewHtml(webview, uri, trees) {
     const childMarkup = children.map((child, childIndex) => nodeHtml(child, `${path}.${childIndex}`, children.length > 1 ? childIndex + 1 : undefined)).join("");
     return `<li data-path="${key}">${order ? `<span class="edge-order" aria-label="Child ${order}">${order}</span>` : ""}<div class="node-frame${children.length ? " node-frame--branch" : ""}"><button class="node node--${role}" data-index="${index}" type="button" title="Open source at line ${line}" aria-label="Open ${escapeHtml(label)} at line ${line}"><span class="node-copy"><strong>${escapeHtml(label)}</strong><small>${escapeHtml(HINTS[kind] || "computed")} · line ${line}</small></span></button>${children.length ? `<button class="branch-toggle" type="button" data-key="${key}" aria-expanded="true" aria-controls="branch-${index}" aria-label="Collapse ${escapeHtml(label)} children" title="Collapse children"><span class="chevron" aria-hidden="true"></span></button>` : ""}</div>${children.length ? `<ul id="branch-${index}">${childMarkup}</ul>` : ""}</li>`;
   };
-  const body = `<header><div><h1>Behavior trees</h1><p>${escapeHtml(uri)}</p></div><button id="reload" type="button">Reload</button></header><main>${trees.map((tree, treeIndex) => `<section><div class="tree-heading"><h2>${escapeHtml(tree.name)}</h2><span>Children run left to right</span></div>${tree.truncated ? `<p class="note">Preview limited to the first 1,000 nodes.</p>` : ""}${tree.root ? `<div class="tree-scroll" role="region" aria-label="${escapeHtml(tree.name)} behavior tree" tabindex="0"><ul class="tree">${nodeHtml(tree.root, String(treeIndex))}</ul></div>` : `<p class="note">Root not set in this file.</p>`}</section>`).join("")}</main>`;
+  const body = `<header><div><h1>Behavior trees</h1><p title="${escapeHtml(uri)}">${escapeHtml(displayUriPath(uri))}</p></div><button id="reload" type="button">Reload</button></header><main>${trees.map((tree, treeIndex) => `<section><div class="tree-heading"><h2>${escapeHtml(tree.name)}</h2><span>Children run left to right</span></div>${tree.truncated ? `<p class="note">Preview limited to the first 1,000 nodes.</p>` : ""}${tree.root ? `<div class="tree-scroll" role="region" aria-label="${escapeHtml(tree.name)} behavior tree" tabindex="0"><ul class="tree">${nodeHtml(tree.root, String(treeIndex))}</ul></div>` : `<p class="note">Root not set in this file.</p>`}</section>`).join("")}</main>`;
   const script = `const source = ${jsonForHtml(uri)}; const ranges = ${jsonForHtml(ranges)};
     document.getElementById("reload").addEventListener("click", () => vscode.postMessage({command:"reload"}));
     document.querySelectorAll(".node").forEach((button) => button.addEventListener("click", () => {

@@ -2,6 +2,7 @@
 
 const path = require("path");
 const vscode = require("vscode");
+const { displayUriPath } = require("../../shared/locations");
 
 function spritePreviewViewModel(webview, document, inspection) {
   const sprites = inspection.items.map((item) => spriteViewModel(webview, item));
@@ -17,6 +18,7 @@ function spritePreviewViewModel(webview, document, inspection) {
     documentVersion: inspection.documentVersion,
     localResourceRoots,
     source: document.uri.fsPath,
+    sourceLabel: displayUriPath(document.uri.toString()),
     sprites,
     summary: {
       animationCount: sprites.reduce(

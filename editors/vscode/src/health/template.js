@@ -324,6 +324,7 @@ function documentHtml(webview, title, body, script) {
           grid-template-columns: 1fr;
         }
       }
+      button:focus-visible { outline: 2px solid var(--vscode-focusBorder); outline-offset: 2px; }
     `,
   });
 }

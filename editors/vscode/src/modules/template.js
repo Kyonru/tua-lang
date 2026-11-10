@@ -749,6 +749,7 @@ function documentHtml(webview, title, body, script) {
       .graph-band { height: 420px; min-height: 0; border-right: 0; border-bottom: 1px solid var(--vscode-panel-border); }
       .inspector { min-height: 420px; }
     }
+    button:focus-visible, .module-node:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--vscode-focusBorder); outline-offset: 2px; }
   ` });
 }
 

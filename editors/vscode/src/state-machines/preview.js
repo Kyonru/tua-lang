@@ -3,7 +3,7 @@
 const vscode = require("vscode");
 const { COMMANDS } = require("../constants");
 const { isStaleDocumentResponse } = require("../shared/documents");
-const { openLocationMessage } = require("../shared/locations");
+const { displayUriPath, openLocationMessage } = require("../shared/locations");
 const { ensureExperimentalPreviewEnabled } = require("../shared/preview-gate");
 const {
   stateMachinePreviewErrorHtml,
@@ -42,6 +42,7 @@ function registerStateMachinePreviewFeature({
       }
 
       const viewModel = stateMachinePreviewViewModel(document, inspection);
+      viewModel.sourceLabel = displayUriPath(document.uri.toString());
       if (viewModel.machines.length === 0) {
         panel.webview.html = stateMachinePreviewErrorHtml(
           panel.webview,

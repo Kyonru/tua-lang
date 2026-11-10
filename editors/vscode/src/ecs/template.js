@@ -493,6 +493,7 @@ function documentHtml(webview, title, body, script) {
       .catalog { max-height: 40vh; border-right: 0; border-bottom: 1px solid var(--vscode-panel-border); }
       .detail { min-height: 55vh; }
     }
+    button:focus-visible, input:focus-visible { outline: 2px solid var(--vscode-focusBorder); outline-offset: 2px; }
   ` });
 }
 

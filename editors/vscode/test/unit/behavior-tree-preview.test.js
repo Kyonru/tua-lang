@@ -18,10 +18,12 @@ let previewCommand;
 let panel;
 const document = { uri: { toString: () => "file:///game/ai.tua" }, version: 1 };
 const vscode = {
+  Uri: { parse: value => ({ fsPath: new URL(value).pathname }) },
   ViewColumn: { Beside: 2 },
   Disposable: { from: () => ({ dispose() {} }) },
   commands: { registerCommand(_name, handler) { previewCommand = handler; return { dispose() {} }; } },
   workspace: {
+    asRelativePath: uri => uri.fsPath.replace("/game/", ""),
     getConfiguration: () => ({ get: () => true }),
     onDidChangeTextDocument: () => ({ dispose() {} }),
   },
@@ -55,6 +57,7 @@ test("behavior tree preview renders nested and computed nodes with safe source l
   assert.match(html, /Content-Security-Policy/);
   assert.match(html, /tree-scroll/);
   assert.match(html, /tree li::before/);
+  assert.match(html, /title="file:\/\/\/game\/ai\.tua">ai\.tua/);
   assert.match(html, /node--branch/);
 });
 

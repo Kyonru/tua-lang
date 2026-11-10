@@ -492,7 +492,7 @@ function spritePreviewHtml(webview, viewModel) {
     <header>
       <div>
         <h1>Sprite Animation Preview</h1>
-        <div class="source">${escapeHtml(viewModel.source)}</div>
+        <div class="source" title="${escapeHtml(viewModel.source)}">${escapeHtml(viewModel.sourceLabel || viewModel.source)}</div>
       </div>
       <div class="header-actions">
         <div class="summary" id="summary"></div>
