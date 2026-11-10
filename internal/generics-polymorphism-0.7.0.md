@@ -775,3 +775,9 @@ before the result is delivered. The stale result is suppressed and the
 consumer is retried against the latest snapshot. All 443 LSP tests and strict
 LSP Clippy pass. Broader workspace, filesystem, and concurrent scheduler
 interleavings remain open.
+
+The in-flight freshness matrix also covers watched deletion of the imported
+protocol after a worker completes: the old conformance mismatch is suppressed
+and the consumer retry reports the latest missing-import diagnostic. All 444
+LSP tests and strict LSP Clippy pass. In-flight create/recreate, rename, and
+cross-workspace permutations remain unverified.

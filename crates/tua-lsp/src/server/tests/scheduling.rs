@@ -1356,6 +1356,97 @@ final class Particle implements Updatable {
 }
 
 #[test]
+fn in_flight_protocol_diagnostics_are_retried_after_dependency_delete() {
+    let temp = TempProject::new("in-flight-protocol-diagnostics-delete");
+    temp.write("tua.toml", "source = \"src\"\n");
+    let incompatible = "export protocol Updatable {\n  update(dt: string): nil\n}\n";
+    temp.write("src/contracts.tua", incompatible);
+    let actors = r#"import type { Updatable } from "./contracts"
+final class Particle implements Updatable {
+  update(dt: number): nil {}
+}
+"#;
+    temp.write("src/actors.tua", actors);
+    let contracts_uri = temp.uri_for("src/contracts.tua");
+    let actors_uri = temp.uri_for("src/actors.tua");
+    let mut server = LspServer::default();
+    server.handle_message(initialize_with_root(1, temp.uri()));
+    server.handle_message(did_open(&actors_uri, actors));
+    server.drain_all_pending_slow_diagnostics();
+
+    server.handle_message(did_change(&actors_uri, actors, 2));
+    let (event_tx, event_rx) = std::sync::mpsc::sync_channel(EVENT_QUEUE_CAPACITY);
+    let mut scheduler = RequestScheduler::new(event_tx, SharedReceivedInputState::default());
+    let dispatch_at = Instant::now() + Duration::from_secs(1);
+    assert!(scheduler.dispatch_due_slow_diagnostic(&mut server, dispatch_at));
+    let ServerEvent::RequestFinished(stale_result) = event_rx
+        .recv_timeout(Duration::from_secs(5))
+        .expect("the dependent diagnostics worker should finish")
+    else {
+        panic!("expected a diagnostics worker result");
+    };
+    assert!(
+        stale_result.test_response()["result"]
+            .as_array()
+            .is_some_and(|diagnostics| diagnostics.iter().any(|diagnostic| {
+                diagnostic["code"] == "TL1008"
+                    && diagnostic["message"]
+                        .as_str()
+                        .is_some_and(|message| message.contains("Particle.update"))
+            })),
+        "the captured result should contain the old conformance mismatch"
+    );
+
+    temp.remove("src/contracts.tua");
+    let deletion_publications = server
+        .handle_message(watched_files_changed([(&contracts_uri, 3)]))
+        .unwrap_or_default();
+    assert!(deletion_publications.iter().any(|publication| {
+        publication["params"]["uri"] == actors_uri
+            && publication["params"]["diagnostics"]
+                .as_array()
+                .is_some_and(|diagnostics| {
+                    diagnostics.iter().any(|diagnostic| diagnostic["code"] == "TL4002")
+                        && diagnostics.iter().all(|diagnostic| diagnostic["code"] != "TL1008")
+                })
+    }), "deletion should immediately replace conformance errors with the missing-import diagnostic: {deletion_publications:#?}");
+
+    let stale_publications = scheduler.finish(&mut server, *stale_result);
+    assert!(
+        stale_publications.iter().all(|publication| {
+            publication["params"]["uri"] != actors_uri
+                || publication["params"]["diagnostics"]
+                    .as_array()
+                    .is_some_and(|diagnostics| {
+                        diagnostics.iter().all(|diagnostic| diagnostic["code"] != "TL1008")
+                    })
+        }),
+        "the pre-deletion result must not restore a stale conformance diagnostic: {stale_publications:#?}"
+    );
+
+    let retry_at = server
+        .next_slow_diagnostics_due()
+        .expect("the still-open consumer should be retried after dependency deletion");
+    assert!(scheduler.dispatch_due_slow_diagnostic(&mut server, retry_at + Duration::from_secs(1)));
+    let ServerEvent::RequestFinished(fresh_result) = event_rx
+        .recv_timeout(Duration::from_secs(5))
+        .expect("the refreshed diagnostics worker should finish")
+    else {
+        panic!("expected a refreshed diagnostics worker result");
+    };
+    let fresh_diagnostics = fresh_result.test_response()["result"]
+        .as_array()
+        .expect("diagnostics worker should return a diagnostics array");
+    assert!(fresh_diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic["code"] == "TL4002"));
+    assert!(fresh_diagnostics
+        .iter()
+        .all(|diagnostic| diagnostic["code"] != "TL1008"));
+    scheduler.finish(&mut server, *fresh_result);
+}
+
+#[test]
 fn cancel_request_cancels_a_running_analysis_request() {
     let output = run_chunked_messages(vec![
         (

@@ -561,6 +561,18 @@ suite without a development-server override.
 3. Protocol stub generation remains an optional editor capability, not a
    correctness defect or a blocker for the generic/protocol contract.
 
+### In-flight dependency deletion follow-up — November 10, 2026
+
+Added `in_flight_protocol_diagnostics_are_retried_after_dependency_delete`.
+It holds a worker result containing an imported-protocol mismatch, removes the
+dependency from disk, and sends the LSP watched-file deletion event before
+delivering the old worker result. The deletion immediately reports the missing
+import, the old mismatch is suppressed, and the retried consumer diagnostics
+retain the missing-import error. The focused test and all 444 `tua-lsp` tests
+pass; strict LSP Clippy, `cargo fmt --check`, and `git diff --check` pass.
+In-flight create/recreate, rename and cross-workspace permutations remain
+unverified.
+
 ### In-flight dependency edit follow-up — November 10, 2026
 
 An LSP scheduler regression holds a completed worker result for an imported
