@@ -84,7 +84,14 @@ missing methods and unsafe signatures fail at the implementation declaration.
   `TUA_REPRESENTATIVE_COLD_REPEAT=5 TUA_REPRESENTATIVE_WARM_REPEAT=20
   TUA_REPRESENTATIVE_CONTENTION_REPEAT=20 make profile-representative`, then
   profile workspace warming and retained per-file/snapshot data before
-  proposing a code change.
+  proposing a code change. A bounded November 11 replay with one sample per
+  request completed: cold completion was 2.96 seconds, cold hover 2.81 seconds,
+  cold definition 6.91 seconds, and warm completion 9.32 ms; sampled peak RSS
+  was about 1.37 GiB. A direct require-binding lookup experiment left cold
+  completion and hover essentially unchanged and was reverted. The trace points
+  to project semantic-environment work on the entry file; isolate its expensive
+  substeps before changing caches. The one-round contention probe canceled its
+  only valid-document request, so it did not qualify delivery under edits.
 - Extend installed-editor qualification to prolonged real-project editing,
   Test Explorer/coverage interactions, hot reload and full-game visual parity.
   Candidate installation, real-server language features and five graphical
