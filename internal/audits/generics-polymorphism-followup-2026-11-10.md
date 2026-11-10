@@ -315,6 +315,22 @@ was rebuilt: VS Code installed `tua-0.7.0.vsix` in a temporary extensions
 directory, discovered the bundled `bin/tua`, and passed the real-server editor
 suite without a development-server override.
 
+### Installed-editor rerun — November 10, 2026
+
+- `make extension-real-server-test` — the release server built successfully,
+  but the VS Code test process terminated with `SIGABRT` before the extension
+  test suite reported any assertions.
+- Repeated with `TUA_TEST_KEEP_TEMP=1 ELECTRON_ENABLE_LOGGING=1` — same result.
+  The macOS diagnostic report identifies VS Code 1.142.0 on macOS 26.6.1,
+  arm64, aborting during `NSApplication` initialization while resolving menu-bar
+  presentation state. This run does not establish an extension regression or
+  invalidate the earlier passing installed-VSIX run; current installed-editor
+  revalidation is blocked by host startup in this environment.
+- The command rebuilt `target/release/tua` and staged
+  `editors/vscode/bin/tua`; it did not modify tracked source files or rebuild
+  the VSIX. LOVE and LuaJIT are unavailable on this host, so their runtime
+  qualification remains open.
+
 ## Remaining work and recommended order
 
 1. Keep the current shared protocol identity and generic substitution paths;
