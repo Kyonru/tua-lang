@@ -706,7 +706,11 @@ passes. The direct UTF-8 prefix tests still conditionally check strict parsing
 because arbitrary prefixes can include incomplete member syntax.
 The core current-buffer hover/completion case now also includes the partial
 member, and an LSP replay verifies method completion and local hover while the
-unclosed-protocol syntax diagnostic remains visible.
+unclosed-protocol syntax diagnostic remains visible. The LSP replay is table-
+driven over a bare member prefix (`r`), a parameter ending at `:`
+(`render(value:`), and an unfinished record parameter (`render(value: { text`);
+all three preserve the completed requirement, module-local hover, completion,
+and visible syntax diagnostic.
 
 ### Protocol diagnostic cancellation permutation — 2026-11-10
 
