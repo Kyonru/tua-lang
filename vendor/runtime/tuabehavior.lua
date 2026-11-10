@@ -84,6 +84,9 @@ end
 local function finish(runner, current, state, reason)
   if current.kind == "action" and current.exit then current.exit(runner.context, reason) end
   runner.states[current] = nil
+  local count = runner.freeCount + 1
+  runner.freeCount = count
+  runner.freeStates[count] = state
 end
 
 local function clear(runner, current, reason)
@@ -100,7 +103,18 @@ local function visit(runner, current, dt, depth)
   assert(runner.steps <= runner.maxSteps and depth <= runner.maxDepth, "behavior tree tick budget exceeded")
   local state = runner.states[current]
   if not state then
-    state = { cursor = 1, elapsed = 0, repeats = 0 }
+    local count = runner.freeCount
+    if count > 0 then
+      state = runner.freeStates[count]
+      runner.freeStates[count] = nil
+      runner.freeCount = count - 1
+      if state.results then
+        for index in pairs(state.results) do state.results[index] = nil end
+      end
+      state.cursor, state.elapsed, state.repeats = 1, 0, 0
+    else
+      state = { cursor = 1, elapsed = 0, repeats = 0 }
+    end
     runner.states[current] = state
     if current.kind == "action" and current.enter then current.enter(runner.context) end
   end
@@ -187,7 +201,7 @@ end
 function Definition:instance(context)
   assert(self.root, "behavior tree needs a root node")
   self.locked = true
-  return setmetatable({ definition = self, context = context, states = {}, steps = 0, maxSteps = 1000, maxDepth = 64 }, Runner)
+  return setmetatable({ definition = self, context = context, states = {}, freeStates = {}, freeCount = 0, steps = 0, maxSteps = 1000, maxDepth = 64 }, Runner)
 end
 function Definition:setRoot(root)
   assert(type(root) == "table" and root.kind and not self.locked, "root must be a node and cannot change after instancing")

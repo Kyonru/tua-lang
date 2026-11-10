@@ -46,6 +46,8 @@ assert(reactive:update(0) == "success" and exits == 4)
 local parallel = BehaviorTree.new(BehaviorTree.parallelAll({BehaviorTree.wait(0.1), BehaviorTree.wait(0.3)})):instance(first)
 assert(parallel:update(0.1) == "running")
 assert(parallel:update(0.2) == "success")
+assert(parallel:update(0.1) == "running")
+assert(parallel:update(0.2) == "success")
 local any = BehaviorTree.new(BehaviorTree.parallelAny({BehaviorTree.wait(1), BehaviorTree.condition(function() return true end)})):instance(first)
 assert(any:update(0) == "success")
 local repeated = BehaviorTree.new(BehaviorTree.repeatN(2, BehaviorTree.action(function() return "success" end))):instance(first)
@@ -87,6 +89,36 @@ print("behavior-ok")
         String::from_utf8_lossy(&run.stderr)
     );
     assert_eq!(String::from_utf8_lossy(&run.stdout).trim(), "behavior-ok");
+    let steady = Command::new("lua")
+        .args([
+            "-e",
+            r#"
+local BehaviorTree = require("tuabehavior")
+local tree = BehaviorTree.new(BehaviorTree.reactiveSelector({
+  BehaviorTree.condition(function(actor) return actor.alert end),
+  BehaviorTree.action(function() return "running" end),
+}))
+local runners = {}
+for i = 1, 100 do runners[i] = tree:instance({ alert = false }) end
+for i = 1, 100 do runners[i]:update(1 / 60) end
+collectgarbage("collect")
+collectgarbage("stop")
+local before = collectgarbage("count")
+for tick = 1, 100 do
+  for i = 1, 100 do runners[i]:update(1 / 60) end
+end
+assert(collectgarbage("count") - before < 128,
+  "steady behavior updates should reuse node state")
+"#,
+        ])
+        .current_dir(root.join("build"))
+        .output()
+        .unwrap();
+    assert!(
+        steady.status.success(),
+        "{}",
+        String::from_utf8_lossy(&steady.stderr)
+    );
     fs::write(root.join("src/main.tua"), "print(\"plain\")\n").unwrap();
     let unused = Command::new(env!("CARGO_BIN_EXE_tua"))
         .arg("build")

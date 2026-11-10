@@ -40,6 +40,8 @@ No `tua.toml` migration is required for the changes in this release.
 
 ### Fixed
 
+- Behavior-tree runners reuse completed node-state tables, reducing allocation
+  during steady reactive updates while preserving per-actor progress.
 - Go to Definition in large projects no longer repeatedly scans every require
   binding while assembling imported module information.
 - Preview refreshes now keep the newest result in module, signal, ECS,
