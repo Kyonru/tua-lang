@@ -455,8 +455,10 @@ It is never started implicitly.
 ## Runtime Replacement And Explorer
 
 Use **Tua: Show Audio Explorer** to inspect static buses, cues, scenes, layers,
-and effects and navigate to their declaration. The explorer deliberately does
-not connect to a running game; use `snapshot()` for runtime instrumentation.
+and effects, open their declarations, and open assets listed in the generated
+audio analysis index. **Reload** refreshes the index, and a failed refresh
+offers **Retry**. The explorer deliberately does not connect to a running game;
+use `snapshot()` for runtime instrumentation.
 
 `audioSystem` lowers to `require("tuaaudio")`. Builds emit `tuaaudio.lua` plus
 its signal and store dependencies only when used and never overwrite files

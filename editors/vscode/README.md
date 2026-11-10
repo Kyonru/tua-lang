@@ -430,7 +430,8 @@ to refresh source locations. Static previews retain their existing preview setti
 - Object pool explorer showing declarations plus visible `acquire`, `release`,
   `clear`, and `prewarm` lifecycle operations.
 - Audio Explorer showing static buses, cues, effects, music scenes, layers,
-  analysis metadata, and source navigation without running the project.
+  analysis metadata, source and asset navigation, and refresh/retry controls
+  without running the project.
 - State-machine graph preview for static `stateMachine({...})` definitions,
   with live edit refresh and source-linked states and event routes.
 

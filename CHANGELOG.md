@@ -8,6 +8,15 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Preview refreshes now keep the newest result in module, signal, ECS,
+  object-pool, audio, and server-health views when requests finish out of order.
+- Audio Explorer now has themed loading and retry states, source actions using
+  the shared location handler, keyboard focus styling, and a webview CSP.
+- The signal graph shows its empty-state guidance within narrow editor panes.
+- Module, signal, ECS, object-pool, and server-health views use the editor's
+  focus color for keyboard focus indicators.
+- Sprite, state-machine, and behavior-tree previews show workspace-relative
+  source labels where available while retaining full source locations.
 - Imported generic class methods used as final arguments of another call no
   longer produce a false missing-argument diagnostic; unresolved multi-return
   tails retain their possible arity until project analysis.
