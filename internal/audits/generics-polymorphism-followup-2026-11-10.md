@@ -372,6 +372,18 @@ suite without a development-server override.
   existing incompatible → compatible stale-error case. Rename and
   filesystem delete/recreate races remain open.
 
+### Watched dependency cancellation — November 10, 2026
+
+- Added `watched_protocol_churn_cancels_queued_consumer_diagnostics`. It
+  queues consumer conformance work, changes the imported protocol on disk,
+  then sends watcher change, delete, and create events before draining the
+  original due time. The consumer publishes the changed-contract result, then
+  a missing-import diagnostic, then the recreated contract's mismatch.
+- `RUST_MIN_STACK=16777216 cargo test -p tua-lsp
+  watched_protocol_churn_cancels_queued_consumer_diagnostics` — passed. This
+  verifies watcher invalidation cancels queued old-snapshot work; rename
+  combined with repeated delete/recreate remains open.
+
 ### Full-workspace verification rerun — November 10, 2026
 
 - The first `env -u RUST_MIN_STACK -u RUST_TEST_THREADS make verify` run found

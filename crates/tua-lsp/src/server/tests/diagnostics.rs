@@ -1420,6 +1420,91 @@ final class Particle implements Updatable {
 }
 
 #[test]
+fn watched_protocol_churn_cancels_queued_consumer_diagnostics() {
+    let temp = TempProject::new("watched-protocol-churn-cancels-consumer-diagnostics");
+    temp.write("tua.toml", "source = \"src\"\n");
+    let number_protocol = "export protocol Updatable {\n  update(dt: number): nil\n}\n";
+    let string_protocol = "export protocol Updatable {\n  update(dt: string): nil\n}\n";
+    temp.write("src/contracts.tua", number_protocol);
+    let number_actor = r#"import type { Updatable } from "./contracts"
+final class Particle implements Updatable {
+  update(dt: number): nil {}
+}
+"#;
+    let string_actor = number_actor.replace("dt: number", "dt: string");
+    let contract_uri = temp.uri_for("src/contracts.tua");
+    let actor_uri = temp.uri_for("src/actors.tua");
+    let mut server = TestServer::new();
+
+    server.send_without_drain(initialize_with_root(1, temp.uri()));
+    server.send_without_drain(did_open(&actor_uri, number_actor));
+    assert!(diagnostics_publications(server.output(), &actor_uri)
+        .iter()
+        .all(|publication| publication["params"]["diagnostics"]
+            .as_array()
+            .is_some_and(|diagnostics| diagnostics.is_empty())));
+
+    server.send_without_drain(did_change(&actor_uri, &string_actor, 2));
+    let queued_due = server
+        .next_slow_diagnostics_due()
+        .expect("the consumer's incompatible method should schedule project diagnostics");
+
+    // Updating the imported contract should synchronously refresh the consumer
+    // and cancel its queued result before it can publish a stale mismatch.
+    temp.write("src/contracts.tua", string_protocol);
+    server.send_without_drain(watched_files_changed([(&contract_uri, 2)]));
+    assert!(
+        server.next_slow_diagnostics_due().is_none(),
+        "a watched dependency change should cancel queued diagnostics for the old project snapshot"
+    );
+    let after_contract_change = diagnostics_publications(server.output(), &actor_uri);
+    assert!(
+        after_contract_change.last().is_some_and(|publication| {
+            publication["params"]["diagnostics"]
+                .as_array()
+                .is_some_and(|diagnostics| diagnostics.is_empty())
+        }),
+        "the consumer should be valid against the changed on-disk contract: {after_contract_change:#?}"
+    );
+
+    temp.remove("src/contracts.tua");
+    server.send_without_drain(watched_files_changed([(&contract_uri, 3)]));
+    let after_delete = diagnostics_publications(server.output(), &actor_uri);
+    assert!(
+        after_delete.last().is_some_and(|publication| {
+            publication["params"]["diagnostics"]
+                .as_array()
+                .is_some_and(|diagnostics| {
+                    diagnostics.iter().any(|diagnostic| diagnostic["code"] == "TL4002")
+                        && diagnostics.iter().all(|diagnostic| diagnostic["code"] != "TL1008")
+                })
+        }),
+        "deletion should replace conformance checking with the missing-import error: {after_delete:#?}"
+    );
+
+    temp.write("src/contracts.tua", number_protocol);
+    server.send_without_drain(watched_files_changed([(&contract_uri, 1)]));
+    server.drain_due_diagnostics(queued_due);
+    let final_publications = diagnostics_publications(server.output(), &actor_uri);
+    assert!(
+        final_publications.last().is_some_and(|publication| {
+            publication["params"]["diagnostics"]
+                .as_array()
+                .is_some_and(|diagnostics| {
+                    diagnostics.iter().any(|diagnostic| {
+                        diagnostic["code"] == "TL1008"
+                            && diagnostic["message"].as_str().is_some_and(|message| {
+                                message.contains("Particle.update")
+                                    && message.contains("Updatable.update")
+                            })
+                    }) && diagnostics.iter().all(|diagnostic| diagnostic["code"] != "TL4002")
+                })
+        }),
+        "the recreated contract should determine final diagnostics without stale deletion results: {final_publications:#?}"
+    );
+}
+
+#[test]
 fn rapid_protocol_and_reexport_edits_do_not_publish_stale_conformance_errors() {
     let temp = TempProject::new("rapid-protocol-reexport-diagnostic-edits");
     temp.write("tua.toml", "source = \"src\"\n");

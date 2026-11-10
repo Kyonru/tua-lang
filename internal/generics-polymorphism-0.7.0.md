@@ -714,3 +714,13 @@ intermediate compatible snapshot cannot hide the latest error. This adds the
 opposite final-state direction to the existing incompatible-to-compatible
 stale-error test; filesystem rename/delete/recreate races and other scheduler
 permutations remain open.
+
+### Watched dependency cancellation follow-up — 2026-11-10
+
+An LSP push-diagnostics regression queues consumer conformance diagnostics,
+then changes the imported protocol on disk and sends a file-watcher event
+before draining the queued pass. The watcher change cancels the stale work and
+publishes current consumer diagnostics. Deleting the dependency replaces
+conformance checking with a missing-import error; recreating it publishes the
+new signature mismatch without a stale missing-import result. Rename combined
+with repeated delete/recreate remains open.
