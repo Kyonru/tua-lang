@@ -805,3 +805,7 @@ and actual LSP completion while retaining the syntax diagnostic. The core
 suite passes (1,910 passed, 1 ignored), the LSP suite passes (446), and strict
 core/LSP Clippy passes. Broader malformed-header and multiline edit
 permutations remain open.
+
+The LSP recovery regression also covers a partial member before a split,
+commented `export protocol` header; all 446 LSP tests and strict core/LSP
+Clippy pass.

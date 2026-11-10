@@ -115,7 +115,11 @@ fn missing_protocol_closer_does_not_hide_following_protocol_members() {
     let uri = "file:///tmp/missing-protocol-closer-before-next-declaration.tua";
     let source = r#"export protocol Updatable {
   update(dt: number): nil
-export protocol Drawable {
+  r
+export -- public drawable contract
+protocol -- name on the next line
+Drawable -- body follows separately
+{
   draw(): nil
 }
 local function render(value: Drawable): nil

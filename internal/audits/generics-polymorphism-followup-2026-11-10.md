@@ -595,6 +595,10 @@ available while the original syntax error remains visible. The full core suite
 passes (1,910 passed, 1 ignored), the full LSP suite passes (446), strict
 core/LSP Clippy passes, and formatting/diff checks pass.
 
+The LSP reproduction now also places a recoverable partial member before a
+multiline `export protocol` header with comments between its tokens. All 446
+LSP tests and strict core/LSP Clippy pass with that expanded recovery matrix.
+
 After this fix, `make verify` passed end to end with local loopback access:
 workspace tests (core 1,910 passed/1 ignored; LSP 446; CLI unit 93 passed/2
 ignored; CLI integration 137; gameplay 3; helper defaults 1; LOVE examples 3;

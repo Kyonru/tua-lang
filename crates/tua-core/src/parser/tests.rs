@@ -795,7 +795,11 @@ fn editor_recovery_closes_an_unfinished_protocol_without_losing_its_contract() {
 
 #[test]
 fn editor_protocol_recovery_closes_before_the_next_declaration_without_shifting_lines() {
-    let source = "export protocol Updatable {\r\n  update(dt: number): nil -- trailing { comment\r\n-- next contract follows\r\nexport protocol Drawable {\r\n  draw(): nil\r\n}\r\n";
+    let source = "export protocol Updatable {\r\n  update(dt: number): nil -- trailing { comment\r\n-- next contract follows\r\n-- protocol Fake { not a declaration\r\nexport protocol Drawable {\r\n  draw(): nil\r\n}\r\n";
+    assert_eq!(
+        crate::classes::editor_protocol_header_ranges(source).len(),
+        2
+    );
     let recovered = crate::classes::source_with_closed_editor_declarations(source)
         .expect("recovery should close the first protocol before the next declaration");
     assert_eq!(
@@ -814,7 +818,7 @@ fn editor_protocol_recovery_closes_before_the_next_declaration_without_shifting_
             .collect::<Vec<_>>(),
         vec!["Updatable", "Drawable"]
     );
-    assert_eq!(parsed.protocol_declarations[1].span.start.line, 4);
+    assert_eq!(parsed.protocol_declarations[1].span.start.line, 5);
 }
 
 #[test]
