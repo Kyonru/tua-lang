@@ -221,3 +221,69 @@ fn collection_skips_disabled_and_unused_assets_and_deduplicates_targets() {
             .is_empty()
     );
 }
+
+#[test]
+fn validation_expands_includes_and_maps_errors_back_to_the_included_file() {
+    use std::fs;
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let root = std::env::temp_dir().join(format!(
+        "tua-shader-validation-includes-{}-{}",
+        std::process::id(),
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    fs::create_dir_all(root.join("shaders/lib")).unwrap();
+    let entry = root.join("shaders/effect.glsl");
+    let included = root.join("shaders/lib/common.glsl");
+    fs::write(
+        &entry,
+        "#include \"shaders/lib/common.glsl\"\nvec4 effect() { return tint; }\n",
+    )
+    .unwrap();
+    fs::write(&included, "extern vec4 tint;\n").unwrap();
+    let inventory = crate::AssetInventory {
+        assets: vec![crate::ProjectAsset {
+            path: entry.clone(),
+            relative_path: "shaders/effect.glsl".into(),
+            category: crate::AssetCategory::Shader,
+            extension: "glsl".into(),
+            dimensions: None,
+            references: vec![crate::AssetReference {
+                path: root.join("main.tua"),
+                span: SourceSpan {
+                    start: SourcePosition { line: 1, column: 1 },
+                    end: SourcePosition {
+                        line: 1,
+                        column: 10,
+                    },
+                },
+                loader_kind: AssetLoaderKind::Shader,
+            }],
+        }],
+        diagnostics: vec![],
+    };
+    let config = crate::ShadersConfig {
+        targets: vec![ShaderTarget::Desktop],
+        ..Default::default()
+    };
+    let requests = shader_validation_requests(&inventory, &config, |path| {
+        fs::read_to_string(path).map_err(|error| error.to_string())
+    })
+    .unwrap();
+    assert_eq!(requests.len(), 1);
+    assert!(requests[0].source.contains("extern vec4 tint;"));
+    assert_eq!(requests[0].source_map.as_ref().unwrap()[0].path, included);
+    let diagnostics = validation_diagnostics(
+        &requests,
+        &[ShaderValidationOutcome::Invalid(vec![ShaderError {
+            stage: Some(ShaderStage::Pixel),
+            line: Some(1),
+            message: "bad value".into(),
+        }])],
+    );
+    assert_eq!(diagnostics[0].file, included);
+    assert_eq!(diagnostics[0].line, 1);
+    let _ = fs::remove_dir_all(root);
+}

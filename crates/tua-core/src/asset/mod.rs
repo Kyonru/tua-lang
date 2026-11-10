@@ -1,4 +1,5 @@
 mod inline_shaders;
+pub(crate) mod shader_includes;
 mod shader_uniforms;
 pub(crate) use inline_shaders::{inline_shader_call, inline_shaders, map_position, InlineShader};
 #[cfg(test)]
@@ -455,7 +456,23 @@ impl AssetIndex {
                 .and_then(|index| index.entry_for_path(&entry.relative_path))
                 .filter(|old| old.absolute_path == entry.absolute_path)
                 .and_then(|entry| entry.shader.as_ref());
-            if let Some(shader) = ShaderSource::read(&entry.absolute_path, previous) {
+            let shader_root = index
+                .roots
+                .iter()
+                .find(|root| entry.absolute_path.starts_with(root));
+            let shader = shader_root
+                .and_then(|root| {
+                    let relative = entry.absolute_path.strip_prefix(root).ok()?;
+                    let source = fs::read_to_string(&entry.absolute_path).ok()?;
+                    let expanded =
+                        shader_includes::expand_shader_includes(root, relative, &source, |path| {
+                            fs::read_to_string(path).map_err(|error| error.to_string())
+                        })
+                        .ok()?;
+                    ShaderSource::from_expanded(expanded.source, expanded.source_map, previous)
+                })
+                .or_else(|| ShaderSource::read(&entry.absolute_path, previous));
+            if let Some(shader) = shader {
                 if shader.source.len() <= remaining {
                     remaining -= shader.source.len();
                     entry.shader = Some(shader);
@@ -474,24 +491,55 @@ impl AssetIndex {
     }
 
     pub(crate) fn update_shader(&mut self, path: &Path, source: Option<String>) {
-        let Some(relative) = self.by_absolute.get(&normalize_path_components(path)) else {
-            return;
-        };
-        let Some(entry) = self.by_relative.get_mut(relative) else {
-            return;
-        };
-        if entry
-            .extension
-            .as_deref()
-            .and_then(asset_category_for_extension)
-            != Some(AssetCategory::Shader)
-        {
-            return;
+        let changed_path = normalize_path_components(path);
+        let roots = self.roots.clone();
+        for entry in self.by_relative.values_mut().filter(|entry| {
+            entry
+                .extension
+                .as_deref()
+                .and_then(asset_category_for_extension)
+                == Some(AssetCategory::Shader)
+        }) {
+            let Some(root) = roots
+                .iter()
+                .find(|root| entry.absolute_path.starts_with(root))
+            else {
+                continue;
+            };
+            let Ok(relative) = entry.absolute_path.strip_prefix(root) else {
+                continue;
+            };
+            let raw = if entry.absolute_path == changed_path {
+                source
+                    .clone()
+                    .or_else(|| fs::read_to_string(&entry.absolute_path).ok())
+            } else {
+                fs::read_to_string(&entry.absolute_path).ok()
+            };
+            let Some(raw) = raw else {
+                entry.shader = None;
+                continue;
+            };
+            let expanded =
+                shader_includes::expand_shader_includes(root, relative, &raw, |include| {
+                    if normalize_path_components(include) == changed_path {
+                        source
+                            .clone()
+                            .or_else(|| fs::read_to_string(include).ok())
+                            .ok_or_else(|| "overlay unavailable".to_owned())
+                    } else {
+                        fs::read_to_string(include).map_err(|error| error.to_string())
+                    }
+                });
+            entry.shader = match expanded {
+                Ok(expanded) => ShaderSource::from_expanded(
+                    expanded.source,
+                    expanded.source_map,
+                    entry.shader.as_ref(),
+                ),
+                Err(_) => ShaderSource::from_source(raw, entry.shader.as_ref()),
+            };
         }
-        entry.shader = match source {
-            Some(source) => ShaderSource::from_source(source, entry.shader.as_ref()),
-            None => ShaderSource::read(path, entry.shader.as_ref()),
-        };
     }
 
     pub(crate) fn roots(&self) -> &[PathBuf] {

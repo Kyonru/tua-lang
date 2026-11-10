@@ -358,6 +358,7 @@ mod tests;
 #[derive(Clone, Debug)]
 pub struct ShaderValidationRequest {
     pub source_origin: Option<crate::SourcePosition>,
+    pub(crate) source_map: Option<Vec<crate::asset::shader_includes::ShaderSourceLocation>>,
     pub mode: crate::config::ShaderValidationMode,
     pub asset: crate::asset::ProjectAsset,
     pub target: ShaderTarget,
@@ -408,6 +409,20 @@ pub fn shader_validation_requests(
         let Ok(source) = read(&asset.path) else {
             continue;
         };
+        let relative = Path::new(&asset.relative_path);
+        let mut root = asset.path.clone();
+        for _ in relative.components() {
+            root.pop();
+        }
+        let (source, source_map) = match crate::asset::shader_includes::expand_shader_includes(
+            &root,
+            relative,
+            &source,
+            |path| read(path),
+        ) {
+            Ok(expanded) => (expanded.source, Some(expanded.source_map)),
+            Err(_) => (source, None),
+        };
         if crate::asset::ShaderSource::from_source(source.clone(), None)
             .is_some_and(|source| source.missing_entry_point())
         {
@@ -421,6 +436,7 @@ pub fn shader_validation_requests(
         for target in &targets {
             requests.push(ShaderValidationRequest {
                 source_origin: None,
+                source_map: source_map.clone(),
                 mode: config.validate,
                 asset: asset.clone(),
                 target: *target,
@@ -467,6 +483,14 @@ pub fn validation_diagnostics(
                     diagnostic.column = start.column;
                     diagnostic.end_line = end.line;
                     diagnostic.end_column = end.column;
+                } else if let Some(source_map) = request.source_map.as_ref() {
+                    if let Some(location) = source_map.get(diagnostic.line.saturating_sub(1)) {
+                        diagnostic.file = location.path.clone();
+                        diagnostic.line = location.line;
+                        if let Some(end) = source_map.get(diagnostic.end_line.saturating_sub(1)) {
+                            diagnostic.end_line = end.line;
+                        }
+                    }
                 }
                 diagnostic
             })

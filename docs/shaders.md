@@ -60,10 +60,12 @@ shader through `shaders.s.<name>` so drawing code sees the replacement rather
 than a shader value cached before the edit. Polling checks file contents every
 250 ms and does not require `tua dev`.
 
-Included uniforms are currently compiled by LÖVE at runtime. Tua's static
-uniform analysis indexes the loaded shader file itself; declarations that only
-exist in included files are not yet available to completion or static uniform
-diagnostics.
+Tua expands project-root-relative includes for the shared shader index. Uniforms
+declared in included files participate in `Shader:send` diagnostics, completion,
+hover, go to definition, and LOVE-backed shader validation. Diagnostics and
+definitions retain the included file's original path and line. This analysis
+also applies to shaders loaded through the built-in `shader` helper and
+`love.graphics.newShader` when the shader is inside a configured asset root.
 
 ## Optional uniforms
 

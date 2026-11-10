@@ -17,6 +17,9 @@ language or editor behavior, and migration notes call out those changes.
 - Add `ShaderScan:update(dt)` polling for shader and include changes. It swaps in
   successful compilations, preserves the last good shader after errors, and
   avoids repeatedly printing the same failed edit.
+- Expand shader includes in Tua's shared asset index so included uniforms are
+  checked and available to completion, hover, definition, and shader validation.
+  Edits to included files and open shader overlays refresh dependent shaders.
 - Method-only protocols with explicit class conformance, protocol-typed
   parameters and arrays, explicitly typed protocol requirements with ranged
   diagnostics for omitted or empty parameter types, exported protocol types,

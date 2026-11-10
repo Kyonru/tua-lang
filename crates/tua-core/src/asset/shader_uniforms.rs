@@ -1,4 +1,5 @@
 //! Conservative declaration metadata for LOVE GLSL, shared by checking and IDE queries.
+use super::shader_includes::ShaderSourceLocation;
 use crate::{SourcePosition, SourceSpan};
 use std::collections::{BTreeMap, BTreeSet};
 use std::hash::{Hash, Hasher};
@@ -55,6 +56,8 @@ pub(crate) struct ShaderSource {
     pub source: Arc<str>,
     pub fingerprint: u64,
     pub uniforms: Option<Arc<ShaderUniformSet>>,
+    /// Included shader declarations retain the file and line they came from.
+    pub source_map: Option<Arc<Vec<ShaderSourceLocation>>>,
 }
 impl ShaderSource {
     pub(crate) fn missing_entry_point(&self) -> bool {
@@ -83,6 +86,34 @@ impl ShaderSource {
             source: source.into(),
             fingerprint,
             uniforms,
+            source_map: None,
+        })
+    }
+    pub(crate) fn from_expanded(
+        source: String,
+        source_map: Vec<ShaderSourceLocation>,
+        previous: Option<&Self>,
+    ) -> Option<Self> {
+        if source.len() > MAX_SHADER_BYTES {
+            return None;
+        }
+        let mut hash = std::collections::hash_map::DefaultHasher::new();
+        source.hash(&mut hash);
+        source_map.hash(&mut hash);
+        let fingerprint = hash.finish();
+        if let Some(previous) = previous.filter(|old| {
+            old.fingerprint == fingerprint
+                && old.source.as_ref() == source
+                && old.source_map.as_ref().map(|map| map.as_slice()) == Some(source_map.as_slice())
+        }) {
+            return Some(previous.clone());
+        }
+        let uniforms = shader_uniforms(&source).map(Arc::new);
+        Some(Self {
+            source: source.into(),
+            fingerprint,
+            uniforms,
+            source_map: Some(Arc::new(source_map)),
         })
     }
     pub(crate) fn read(path: &Path, previous: Option<&Self>) -> Option<Self> {

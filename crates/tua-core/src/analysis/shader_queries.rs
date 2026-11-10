@@ -8,7 +8,11 @@ impl AnalysisSnapshot {
         parsed: &ParsedSource,
         receiver: &str,
         position: SourcePosition,
-    ) -> Option<(PathBuf, Arc<asset::ShaderUniformSet>)> {
+    ) -> Option<(
+        PathBuf,
+        Arc<asset::ShaderUniformSet>,
+        Option<Arc<Vec<asset::shader_includes::ShaderSourceLocation>>>,
+    )> {
         let fallback_scope;
         let scope = match self.file(&parsed.path).and_then(AnalysisFile::scope) {
             Some(scope) => scope,
@@ -23,7 +27,7 @@ impl AnalysisSnapshot {
                 .iter()
                 .find(|shader| Some(shader.call_span) == node_span(loader.as_ref()))
         }) {
-            return Some((parsed.path.clone(), inline.source.uniforms.clone()?));
+            return Some((parsed.path.clone(), inline.source.uniforms.clone()?, None));
         }
         if !asset::loader_binding_is_builtin(scope, &loader) {
             return None;
@@ -44,8 +48,9 @@ impl AnalysisSnapshot {
             self.effective_asset_roots(),
             self.asset_index.as_deref(),
         )?;
-        let model = self.asset_index.as_ref()?.shader(&path)?.uniforms.clone()?;
-        Some((path, model))
+        let shader = self.asset_index.as_ref()?.shader(&path)?;
+        let model = shader.uniforms.clone()?;
+        Some((path, model, shader.source_map.clone()))
     }
 
     pub(super) fn shader_uniform_completions(
@@ -71,7 +76,7 @@ impl AnalysisSnapshot {
         {
             return None;
         }
-        let (_, model) = self.shader_model_for_receiver(parsed, receiver, position)?;
+        let (_, model, _) = self.shader_model_for_receiver(parsed, receiver, position)?;
         let mut uniforms: Vec<_> = model
             .uniforms
             .values()
@@ -122,7 +127,12 @@ impl AnalysisSnapshot {
         &self,
         path: &Path,
         position: SourcePosition,
-    ) -> Option<(PathBuf, Arc<asset::ShaderUniformSet>, asset::ShaderSendCall)> {
+    ) -> Option<(
+        PathBuf,
+        Arc<asset::ShaderUniformSet>,
+        Option<Arc<Vec<asset::shader_includes::ShaderSourceLocation>>>,
+        asset::ShaderSendCall,
+    )> {
         let file = self.file(path)?;
         // Do no shader traversal for ordinary identifier hovers/definitions.
         if !matches!(
@@ -133,8 +143,9 @@ impl AnalysisSnapshot {
         }
         let parsed = file.parsed.as_ref().ok()?;
         let call = send_at(parsed, position)?;
-        let (shader, model) = self.shader_model_for_receiver(parsed, &call.receiver, position)?;
-        Some((shader, model, call))
+        let (shader, model, source_map) =
+            self.shader_model_for_receiver(parsed, &call.receiver, position)?;
+        Some((shader, model, source_map, call))
     }
 
     pub(super) fn shader_uniform_hover(
@@ -142,7 +153,7 @@ impl AnalysisSnapshot {
         path: &Path,
         position: SourcePosition,
     ) -> Option<Hover> {
-        let (shader, model, call) = self.shader_uniform_at(path, position)?;
+        let (shader, model, source_map, call) = self.shader_uniform_at(path, position)?;
         let uniforms = matching_uniforms(&model, &call.uniform);
         if uniforms.is_empty() {
             return None;
@@ -153,7 +164,16 @@ impl AnalysisSnapshot {
                 let locations = uniform
                     .declarations
                     .iter()
-                    .map(|span| format!("{}:{}", shader.display(), span.start.line))
+                    .map(|span| {
+                        let mapped = source_map
+                            .as_ref()
+                            .and_then(|map| map.get(span.start.line.saturating_sub(1)));
+                        if let Some(location) = mapped {
+                            format!("{}:{}", location.path.display(), location.line)
+                        } else {
+                            format!("{}:{}", shader.display(), span.start.line)
+                        }
+                    })
                     .collect::<Vec<_>>()
                     .join(", ");
                 format!(
@@ -189,16 +209,37 @@ impl AnalysisSnapshot {
         path: &Path,
         position: SourcePosition,
     ) -> Vec<Definition> {
-        let Some((shader, model, call)) = self.shader_uniform_at(path, position) else {
+        let Some((shader, model, source_map, call)) = self.shader_uniform_at(path, position) else {
             return Vec::new();
         };
         matching_uniforms(&model, &call.uniform)
             .into_iter()
             .flat_map(|uniform| {
-                uniform.declarations.iter().map(|span| Definition {
-                    path: shader.clone(),
-                    span: *span,
-                    kind: DefinitionKind::Asset,
+                uniform.declarations.iter().map(|span| {
+                    let (path, start) = source_map
+                        .as_ref()
+                        .and_then(|map| map.get(span.start.line.saturating_sub(1)))
+                        .map(|location| {
+                            (
+                                location.path.clone(),
+                                SourcePosition {
+                                    line: location.line,
+                                    column: span.start.column,
+                                },
+                            )
+                        })
+                        .unwrap_or_else(|| (shader.clone(), span.start));
+                    Definition {
+                        path,
+                        span: SourceSpan {
+                            start,
+                            end: SourcePosition {
+                                line: start.line,
+                                column: span.end.column,
+                            },
+                        },
+                        kind: DefinitionKind::Asset,
+                    }
                 })
             })
             .collect()
@@ -288,6 +329,7 @@ impl AnalysisSnapshot {
                 for target in &targets {
                     requests.push(ShaderValidationRequest {
                         source_origin: Some(shader.origin),
+                        source_map: None,
                         mode: config.validate,
                         target: *target,
                         source: shader.source.source.to_string(),

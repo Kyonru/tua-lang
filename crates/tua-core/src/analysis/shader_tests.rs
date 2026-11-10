@@ -92,6 +92,66 @@ effect:send("un<|unused|>used", {})
 }
 
 #[test]
+fn included_uniforms_share_completion_hover_definition_and_refresh() {
+    let temp = TempProject::new("shader-includes-ide");
+    let fixture = Fixture::parse(
+        "-- file: main.tua\nlocal effect = shader \"shaders/effect.glsl\"\neffect:send(\"<|name|>\")\neffect:send(\"tint<|hover|>\", {})\n",
+    );
+    temp.write("shaders/effect.glsl", "#include \"shaders/lib/uniforms.glsl\"\nvec4 effect(vec4 c, Image t, vec2 uv, vec2 px) { return tint; }\n");
+    let uniforms = temp.write(
+        "shaders/lib/uniforms.glsl",
+        "extern vec4 tint;\nextern float exposure;\n",
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([temp.path().to_path_buf()]);
+    host.set_asset_roots([temp.path().to_path_buf()]);
+    host.set_file(&fixture.files()[0].path, fixture.files()[0].source.clone());
+    host.refresh_asset_index_from_disk();
+
+    let snapshot = host.snapshot();
+    assert_eq!(
+        completion_labels(&snapshot.completion("main.tua", fixture.position("name"))),
+        ["tint", "exposure"]
+    );
+    let hover = snapshot
+        .hover("main.tua", fixture.position("hover"))
+        .unwrap();
+    assert!(hover.contents.contains("uniforms.glsl:1"));
+    let definitions = snapshot.definitions("main.tua", fixture.position("hover"));
+    assert_eq!(definitions.len(), 1);
+    assert_eq!(definitions[0].path, uniforms);
+    assert_eq!(definitions[0].span.start.line, 1);
+
+    host.set_shader_source_overlay(
+        &uniforms,
+        Some("extern vec4 tint;\nextern float brightness;\n".into()),
+    );
+    assert_eq!(
+        completion_labels(
+            &host
+                .snapshot()
+                .completion("main.tua", fixture.position("name"))
+        ),
+        ["tint", "brightness"]
+    );
+    host.set_shader_source_overlay(&uniforms, None);
+
+    temp.write(
+        "shaders/lib/uniforms.glsl",
+        "extern vec4 tint;\nextern float contrast;\n",
+    );
+    host.refresh_asset_index_from_disk();
+    assert_eq!(
+        completion_labels(
+            &host
+                .snapshot()
+                .completion("main.tua", fixture.position("name"))
+        ),
+        ["tint", "contrast"]
+    );
+}
+
+#[test]
 fn shader_uniform_cache_tracks_disk_and_overlay_changes_without_request_io() {
     let temp = TempProject::new("shader-cache");
     let fixture = Fixture::parse(
