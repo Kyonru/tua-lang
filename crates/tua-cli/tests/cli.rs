@@ -1344,6 +1344,7 @@ assert(base:name() == "child")
     assert!(!emitted.contains("Base<number>"));
     assert!(!emitted.contains("extends"));
     assert!(emitted.contains("setmetatable(Child, { __index = Base })"));
+    assert!(emitted.contains("local self = setmetatable({}, Child)"));
 
     let runtime = Command::new(lua)
         .arg(temp.path().join("build/main.lua"))

@@ -46,6 +46,8 @@ workspace latency and memory tuning remain open work.
 
 ### Fixed
 
+- Constructors with repeated writes to a field now preserve initialization
+  order on LuaJIT instead of emitting duplicate table keys.
 - Behavior-tree runners reuse completed node-state tables, reducing allocation
   during steady reactive updates while preserving per-actor progress.
 - Go to Definition in large projects no longer repeatedly scans every require

@@ -2353,7 +2353,7 @@ fn lower_constructor_function(class: &ClassDeclaration, classes: &[ClassDeclarat
         output.push_str(&format!("  }}, {})\n", class.name));
     } else {
         output.push_str(&format!(
-            "  local self = setmetatable({{}}, {})\n",
+            "  local self: any = setmetatable({{}}, {})\n",
             class.name
         ));
         output.push_str(&format!(
@@ -2492,7 +2492,22 @@ fn flatten_class_constructor(
         substitutions.insert(parameter.clone(), parameter.clone());
     }
 
-    flatten_class_constructor_with_substitutions(class, classes, &substitutions, &mut visiting)
+    let fields = flatten_class_constructor_with_substitutions(
+        class,
+        classes,
+        &substitutions,
+        &mut visiting,
+    )?;
+    let mut assigned = BTreeSet::new();
+    if fields
+        .iter()
+        .any(|field| !assigned.insert(field.name.clone()))
+    {
+        // Repeated keys in a Lua table constructor need not preserve assignment
+        // order across runtimes. Use the init path for ordered field writes.
+        return None;
+    }
+    Some(fields)
 }
 
 fn flatten_class_constructor_with_substitutions(

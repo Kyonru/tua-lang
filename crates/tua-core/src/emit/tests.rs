@@ -598,7 +598,7 @@ local box: Box<number> = Box.new(next_number(), next_marker())
 }
 
 #[test]
-fn optimized_class_constructors_apply_field_defaults_after_init_assignments() {
+fn class_constructors_apply_field_defaults_after_init_assignments() {
     let emitted = emit_tua_source(
         "src/classes.tua",
         r#"
@@ -622,8 +622,8 @@ final class Fallback {
     )
     .expect("class constructors should emit");
 
-    assert!(emitted
-        .contains("return setmetatable({\n    value = value,\n    value = 10,\n  }, Optimized)"));
+    assert!(emitted.contains("local self = setmetatable({}, Optimized)"));
+    assert!(!emitted.contains("value = value,\n    value = 10,"));
     assert!(emitted.contains(
         "local function Fallback_init(self, value)\n\n  self.value = value\n\n  self.value = 10\n  self.unrelated = {}\nend"
     ));
