@@ -161,7 +161,10 @@ impl Expansion {
                         if error.path == include_absolute {
                             error.path = absolute.clone();
                             error.line = line_number;
-                            error.message = format!("{}: {}", include.display(), error.message);
+                            let project_path = include
+                                .to_string_lossy()
+                                .replace(std::path::MAIN_SEPARATOR, "/");
+                            error.message = format!("{}: {}", project_path, error.message);
                         }
                         return Err(error);
                     }

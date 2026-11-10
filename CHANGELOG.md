@@ -46,6 +46,8 @@ workspace latency and memory tuning remain open work.
 
 ### Fixed
 
+- Missing shader includes now report project paths with source-style slashes
+  on Windows, matching editor diagnostics across platforms.
 - Constructors with repeated writes to a field now preserve initialization
   order on LuaJIT instead of emitting duplicate table keys.
 - Behavior-tree runners reuse completed node-state tables, reducing allocation
