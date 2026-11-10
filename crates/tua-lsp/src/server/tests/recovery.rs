@@ -66,30 +66,33 @@ local health = player.hp
 #[test]
 fn incomplete_protocol_member_keeps_hover_and_completion_available() {
     let uri = "file:///tmp/incomplete-protocol-member.tua";
-    let source = r#"local label = "ready"
+    let prefix = r#"local label = "ready"
 local function draw(value: Display): nil
   value:
 end
 protocol Display {
   render(): string
-  r
 "#;
-    let output = run_messages(vec![
-        did_open(uri, source),
-        completion_request(2, uri, source, "value:"),
-        hover_request(3, uri, source, "label ="),
-    ]);
-    let diagnostics = last_published_diagnostics(&output, uri);
 
-    assert!(
-        diagnostics.iter().any(|diagnostic| {
-            diagnostic["code"] == "TL0001"
-                || diagnostic["message"]
-                    .as_str()
-                    .is_some_and(|message| message.contains("unclosed protocol `Display`"))
-        }),
-        "the original syntax error should remain visible while editor queries recover: {diagnostics:#?}"
-    );
-    assert_completion_labels(&output, 2, ["render"]);
-    assert_hover_contains(&output, 3, "local label: string");
+    for partial_member in ["r", "render(value:", "render(value: { text"] {
+        let source = format!("{prefix}  {partial_member}\n");
+        let output = run_messages(vec![
+            did_open(uri, &source),
+            completion_request(2, uri, &source, "value:"),
+            hover_request(3, uri, &source, "label ="),
+        ]);
+        let diagnostics = last_published_diagnostics(&output, uri);
+
+        assert!(
+            diagnostics.iter().any(|diagnostic| {
+                diagnostic["code"] == "TL0001"
+                    || diagnostic["message"]
+                        .as_str()
+                        .is_some_and(|message| message.contains("unclosed protocol `Display`"))
+            }),
+            "the original syntax error should remain visible while editor queries recover for `{partial_member}`: {diagnostics:#?}"
+        );
+        assert_completion_labels(&output, 2, ["render"]);
+        assert_hover_contains(&output, 3, "local label: string");
+    }
 }
