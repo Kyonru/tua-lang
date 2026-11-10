@@ -190,6 +190,12 @@ local missing_ok, missing_error = pcall(function()
   scanner:load_shader("missing", "shaders/missing.glsl")
 end)
 assert(not missing_ok and tostring(missing_error):find("shaders/missing.glsl:1", 1, true))
+assert(scanner.s.broken == nil and scanner.s.missing == nil)
+files["shaders/lib/error.glsl"] = "float repaired() { return 1.0; }"
+files["shaders/lib/nope.glsl"] = "float included() { return 1.0; }"
+scanner:update(0.3)
+assert(scanner.s.broken and scanner.s.missing)
+assert(scanner.loaded.broken.failed == nil and scanner.loaded.missing.failed == nil)
 "##,
     )
     .expect("write include expansion source");

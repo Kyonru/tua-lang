@@ -152,8 +152,25 @@ end
 ---@param path string
 ---@return Shader
 function Scanner:load_shader(name, path)
-  local loaded, message = load(name, path)
-  if not loaded then error(message, 2) end
+  local loaded, message, failed = load(name, path)
+  if not loaded then
+    if failed then
+      local previous = self.loaded[name]
+      if previous then
+        previous.failed = failed
+        previous.last_error = message
+      else
+        self.loaded[name] = {
+          path = failed.path,
+          dependencies = failed.dependencies,
+          source_by_path = failed.source_by_path,
+          failed = failed,
+          last_error = message,
+        }
+      end
+    end
+    error(message, 2)
+  end
   loaded.name = name
   loaded.failed = nil
   self.s[name] = loaded.shader
@@ -183,7 +200,7 @@ function Scanner:update(dt)
         replacement.name = name
         self.loaded[name] = replacement
         self.s[name] = replacement.shader
-        if previous.shader.release then previous.shader:release() end
+        if previous.shader and previous.shader.release then previous.shader:release() end
         print(("[ShaderScan] reloaded %s (%s)"):format(name, previous.path))
       else
         previous.failed = failed or observed

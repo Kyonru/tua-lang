@@ -6,6 +6,11 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+### Fixed
+
+- `ShaderScan` now retries a shader whose first load failed when its source or
+  an included file changes, allowing hot reload to recover after a correction.
+
 ### Added
 
 - Add the opt-in `Rot` runtime module for seeded random streams, dice, colors,

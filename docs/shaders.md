@@ -60,6 +60,17 @@ shader through `shaders.s.<name>` so drawing code sees the replacement rather
 than a shader value cached before the edit. Polling checks file contents every
 250 ms and does not require `tua dev`.
 
+If the first load fails during development, catch the load error so the game
+continues to call `update`. The scanner remembers the failed shader and retries
+when its file or an included file changes:
+
+```tua
+local ok, message = pcall(function()
+    shaders:load_shader("water", "shaders/water.glsl")
+end)
+if not ok then print(message) end
+```
+
 Tua expands project-root-relative includes for the shared shader index. Uniforms
 declared in included files participate in `Shader:send` diagnostics, completion,
 hover, go to definition, and LOVE-backed shader validation. Diagnostics and
