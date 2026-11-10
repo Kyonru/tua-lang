@@ -467,9 +467,8 @@ impl AssetIndex {
                     let expanded =
                         shader_includes::expand_shader_includes(root, relative, &source, |path| {
                             fs::read_to_string(path).map_err(|error| error.to_string())
-                        })
-                        .ok()?;
-                    ShaderSource::from_expanded(expanded.source, expanded.source_map, previous)
+                        });
+                    ShaderSource::from_include_result(source, expanded, previous)
                 })
                 .or_else(|| ShaderSource::read(&entry.absolute_path, previous));
             if let Some(shader) = shader {
@@ -532,12 +531,7 @@ impl AssetIndex {
                     }
                 });
             entry.shader = match expanded {
-                Ok(expanded) => ShaderSource::from_expanded(
-                    expanded.source,
-                    expanded.source_map,
-                    entry.shader.as_ref(),
-                ),
-                Err(_) => ShaderSource::from_source(raw, entry.shader.as_ref()),
+                expanded => ShaderSource::from_include_result(raw, expanded, entry.shader.as_ref()),
             };
         }
     }

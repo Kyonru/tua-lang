@@ -149,6 +149,20 @@ fn included_uniforms_share_completion_hover_definition_and_refresh() {
         ),
         ["tint", "contrast"]
     );
+
+    temp.write(
+        "shaders/effect.glsl",
+        "#include \"shaders/lib/missing.glsl\"\nvec4 effect(vec4 c, Image t, vec2 uv, vec2 px) { return c; }\n",
+    );
+    host.refresh_asset_index_from_disk();
+    let diagnostics = host.snapshot().diagnostics("main.tua");
+    assert!(
+        diagnostics.iter().any(|diagnostic| {
+            diagnostic.code == Some(crate::DiagnosticCode::ASSET_SHADER_COMPILE)
+                && diagnostic.message.contains("shaders/lib/missing.glsl")
+        }),
+        "{diagnostics:?}"
+    );
 }
 
 #[test]

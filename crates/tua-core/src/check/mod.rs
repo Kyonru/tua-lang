@@ -2561,6 +2561,23 @@ impl<'a> Checker<'a> {
             if let Some(path) =
                 asset::resolved_asset_path(&metadata, &self.asset_roots, self.asset_index)
             {
+                let include_error = self
+                    .shader_source(&path)
+                    .and_then(|source| source.include_error.clone());
+                if let Some(error) = include_error {
+                    self.push_asset_diagnostic(
+                        Diagnostic::error(
+                            &error.path,
+                            error.line,
+                            1,
+                            format!(
+                                "shader `{}` include error: {}",
+                                asset_call.path, error.message
+                            ),
+                        )
+                        .with_code(DiagnosticCode::ASSET_SHADER_COMPILE),
+                    );
+                }
                 if self
                     .shader_source(&path)
                     .is_some_and(|source| source.missing_entry_point())

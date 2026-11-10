@@ -58,6 +58,7 @@ pub(crate) struct ShaderSource {
     pub uniforms: Option<Arc<ShaderUniformSet>>,
     /// Included shader declarations retain the file and line they came from.
     pub source_map: Option<Arc<Vec<ShaderSourceLocation>>>,
+    pub include_error: Option<super::shader_includes::ShaderIncludeError>,
 }
 impl ShaderSource {
     pub(crate) fn missing_entry_point(&self) -> bool {
@@ -87,6 +88,7 @@ impl ShaderSource {
             fingerprint,
             uniforms,
             source_map: None,
+            include_error: None,
         })
     }
     pub(crate) fn from_expanded(
@@ -114,7 +116,25 @@ impl ShaderSource {
             fingerprint,
             uniforms,
             source_map: Some(Arc::new(source_map)),
+            include_error: None,
         })
+    }
+    pub(crate) fn from_include_result(
+        original: String,
+        result: Result<
+            super::shader_includes::ExpandedShader,
+            super::shader_includes::ShaderIncludeError,
+        >,
+        previous: Option<&Self>,
+    ) -> Option<Self> {
+        match result {
+            Ok(expanded) => Self::from_expanded(expanded.source, expanded.source_map, previous),
+            Err(error) => {
+                let mut source = Self::from_source(original, previous)?;
+                source.include_error = Some(error);
+                Some(source)
+            }
+        }
     }
     pub(crate) fn read(path: &Path, previous: Option<&Self>) -> Option<Self> {
         use std::io::Read;
