@@ -38,6 +38,12 @@ typing mistakes; review those diagnostics and add precise annotations where
 needed. The new game utilities remain opt-in and are emitted only when used.
 No `tua.toml` migration is required for the changes in this release.
 
+For very large projects, cold editor requests can still take several seconds.
+In a synthetic 1,000-module stress test, repeated concurrent edits also pushed
+the language server above 2 GiB of memory. Ordinary-sized projects and a
+separate 17-file LOVE project passed the release performance checks; large
+workspace latency and memory tuning remain open work.
+
 ### Fixed
 
 - Behavior-tree runners reuse completed node-state tables, reducing allocation
