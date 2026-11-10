@@ -401,6 +401,18 @@ suite without a development-server override.
   → no diagnostics. This closes the rename-plus-repeated-file-churn case;
   broader scheduler cancellation permutations remain open.
 
+### Closing an unsaved protocol edit — November 10, 2026
+
+- Added `closing_an_unsaved_protocol_edit_drops_stale_consumer_diagnostics`.
+  It queues dependent diagnostics for an unsaved incompatible protocol edit,
+  closes the protocol document to restore its compatible disk contents, and
+  drains the queued pass. No stale conformance error is published, and the
+  final consumer diagnostics are empty.
+- `RUST_MIN_STACK=16777216 cargo test -p tua-lsp
+  closing_an_unsaved_protocol_edit_drops_stale_consumer_diagnostics` — passed.
+  This covers queue-before-close ordering; actual concurrent worker completion
+  races and broader scheduler permutations remain open.
+
 ### Full-workspace verification rerun — November 10, 2026
 
 - The first `env -u RUST_MIN_STACK -u RUST_TEST_THREADS make verify` run found

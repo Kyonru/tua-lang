@@ -722,6 +722,14 @@ opposite final-state direction to the existing incompatible-to-compatible
 stale-error test; filesystem rename/delete/recreate races and other scheduler
 permutations remain open.
 
+### Closing an unsaved protocol edit — 2026-11-10
+
+An LSP push-diagnostics regression queues consumer conformance work for an
+unsaved incompatible protocol edit, closes that protocol document, then drains
+the queued pass. Closing restores the compatible on-disk contract; the consumer
+must remain diagnostic-free. The focused regression passes. Concurrent worker
+completion races and other scheduler permutations remain open.
+
 ### Watched dependency cancellation follow-up — 2026-11-10
 
 An LSP push-diagnostics regression queues consumer conformance diagnostics,

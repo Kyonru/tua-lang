@@ -1402,6 +1402,62 @@ final class Particle implements Updatable {
 }
 
 #[test]
+fn closing_an_unsaved_protocol_edit_drops_stale_consumer_diagnostics() {
+    let temp = TempProject::new("close-unsaved-protocol-edit-diagnostics");
+    temp.write("tua.toml", "source = \"src\"\n");
+    let compatible = "export protocol Updatable {\n  update(dt: number): nil\n}\n";
+    let incompatible = "export protocol Updatable {\n  update(dt: string): nil\n}\n";
+    temp.write("src/contracts.tua", compatible);
+    let actors = r#"import type { Updatable } from "./contracts"
+final class Particle implements Updatable {
+  update(dt: number): nil {}
+}
+"#;
+    temp.write("src/actors.tua", actors);
+    let contracts_uri = temp.uri_for("src/contracts.tua");
+    let actors_uri = temp.uri_for("src/actors.tua");
+    let mut server = TestServer::new();
+
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&contracts_uri, compatible));
+    server.send(did_open(&actors_uri, actors));
+    assert!(diagnostics_publications(server.output(), &actors_uri)
+        .iter()
+        .all(|publication| publication["params"]["diagnostics"]
+            .as_array()
+            .is_some_and(|diagnostics| diagnostics.is_empty())));
+
+    server.send_without_drain(did_change(&contracts_uri, incompatible, 2));
+    let due = server
+        .next_slow_diagnostics_due()
+        .expect("the incompatible unsaved contract should queue dependent diagnostics");
+    server.send_without_drain(did_close(&contracts_uri));
+    server.drain_due_diagnostics(due);
+
+    let publications = diagnostics_publications(server.output(), &actors_uri);
+    assert!(
+        publications.iter().all(|publication| publication["params"]["diagnostics"]
+            .as_array()
+            .is_some_and(|diagnostics| diagnostics.iter().all(|diagnostic| {
+                diagnostic["code"] != "TL1008"
+                    || !diagnostic["message"].as_str().is_some_and(|message| {
+                        message.contains("Particle.update")
+                            && message.contains("does not satisfy protocol")
+                    })
+            }))),
+        "closing the dependency must not publish conformance errors from its discarded unsaved overlay: {publications:#?}"
+    );
+    assert!(
+        publications.last().is_some_and(|publication| {
+            publication["params"]["diagnostics"]
+                .as_array()
+                .is_some_and(|diagnostics| diagnostics.is_empty())
+        }),
+        "consumer diagnostics should reflect the compatible on-disk contract after close: {publications:#?}"
+    );
+}
+
+#[test]
 fn rapid_protocol_contract_edits_publish_the_latest_incompatible_signature() {
     let temp = TempProject::new("latest-protocol-contract-diagnostics");
     temp.write("tua.toml", "source = \"src\"\n");
