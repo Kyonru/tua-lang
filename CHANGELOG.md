@@ -56,7 +56,8 @@ workspace latency and memory tuning remain open work.
   object-pool, audio, and server-health views when requests finish out of order.
 - Audio Explorer now has themed loading and retry states, source actions using
   the shared location handler, keyboard focus styling, and a webview CSP.
-- The signal graph shows its empty-state guidance within narrow editor panes.
+- The signal graph's controls and empty-state guidance fit within narrow editor
+  panes.
 - Module, signal, ECS, object-pool, and server-health views use the editor's
   focus color for keyboard focus indicators.
 - Sprite, state-machine, and behavior-tree previews show workspace-relative

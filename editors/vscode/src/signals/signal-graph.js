@@ -798,18 +798,22 @@ function documentHtml(webview, title, body, script) {
     .call-row.role-emit { border-left-color: var(--vscode-charts-red, #d35f72); }
     .call-row.role-cleanup { border-left-color: var(--vscode-charts-orange, #c77b30); }
     .call-row.role-query { border-left-color: var(--vscode-charts-blue, #4b91d1); }
-    .empty, .state { display: grid; min-height: 240px; place-content: center; justify-items: center; color: var(--vscode-descriptionForeground); gap: 10px; }
+    .empty, .state { display: grid; min-height: 240px; min-width: 0; place-content: center; justify-items: center; color: var(--vscode-descriptionForeground); text-align: center; overflow-wrap: anywhere; gap: 10px; }
     .state.error strong { color: var(--vscode-errorForeground); }
     .state button { min-height: 30px; padding: 0 12px; border: 0; background: var(--vscode-button-background); color: var(--vscode-button-foreground); }
     .spinner { width: 22px; height: 22px; border: 2px solid var(--vscode-panel-border); border-top-color: var(--vscode-progressBar-background); border-radius: 50%; animation: spin .8s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
     @media (max-width: 760px) {
       .toolbar { align-items: stretch; flex-direction: column; }
+      .title-block { flex-wrap: wrap; }
+      .summary { white-space: normal; }
       .tools { justify-content: flex-start; flex-wrap: wrap; }
       .search { flex: 1 1 200px; }
       .search input { width: 100%; }
       .select-filter { flex: 1 1 150px; }
       .select-filter select { width: 100%; max-width: none; }
+      .segments { min-width: 0; max-width: 100%; }
+      .segments button { flex: 0 1 auto; min-width: 0; padding: 0 4px; overflow: hidden; text-overflow: ellipsis; font-size: 11px; }
       .call-row { grid-template-columns: 70px minmax(0, 1fr); }
       .call-row code, .call-row .payload { grid-column: 1 / -1; }
       .conflict-row { grid-template-columns: minmax(0, 1fr); }

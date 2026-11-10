@@ -184,7 +184,8 @@ async function run() {
       await waitFor(() => evaluate(`Boolean(document.querySelector(${JSON.stringify(focusSelector)}))`), `${title} controls`);
       await workbench.send("Emulation.setDeviceMetricsOverride", { width: 640, height: 900, deviceScaleFactor: 1, mobile: false });
       await waitFor(() => workbench.evaluate("window.innerWidth <= 640"), `${title} narrow viewport`);
-      assert.equal(await evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1"), true, `${title} should fit a narrow editor`);
+      const widths = await evaluate("({ viewport: window.innerWidth, document: document.documentElement.scrollWidth, toolbar: document.querySelector('.toolbar')?.scrollWidth, graph: document.querySelector('.graph')?.scrollWidth })");
+      assert(widths.document <= widths.viewport + 1, `${title} should fit a narrow editor: ${JSON.stringify(widths)}`);
       if (title === "Signal Graph") {
         assert.equal(await evaluate("(() => { const empty = document.querySelector('.graph .empty')?.getBoundingClientRect(); return empty && empty.left >= 0 && empty.left < window.innerWidth && empty.width <= window.innerWidth; })()"), true,
           "the signal empty state must be visible without horizontal scrolling");
