@@ -342,6 +342,10 @@ pub fn tuarot_runtime_source() -> &'static str {
     builtin_module::ROT.source
 }
 
+pub fn tuabehavior_runtime_source() -> &'static str {
+    builtin_module::BEHAVIOR_TREE.source
+}
+
 pub fn baton_runtime_source() -> &'static str {
     input::runtime_source()
 }

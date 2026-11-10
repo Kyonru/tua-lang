@@ -135,6 +135,7 @@ configuration and editor support, and builds include their Lua runtimes when use
 | Animate a sprite sheet | [Sprites And Animation](sprites.md) |
 | Move and interpolate values | [Vectors And Game Math](vectors.md), [Tweening](tweening.md) |
 | Generate seeded maps, routes, visibility, and noise | [Procedural Game Helpers](roguelike.md) |
+| Choose actor behavior each frame | [Behavior Trees](behavior-trees.md) |
 | Follow a player or convert screen coordinates | [Camera](camera.md) |
 | Send typed events between systems | [Signals](signals.md) |
 | Share observable state | [State Stores](stores.md) |

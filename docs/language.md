@@ -295,6 +295,7 @@ language reference:
 - [Tweening](tweening.md)
 - [Camera](camera.md)
 - [Procedural Game Helpers](roguelike.md)
+- [Behavior Trees](behavior-trees.md)
 - [Entity Component Systems](ecs.md)
 - [Object Pooling](object-pooling.md)
 - [Audio Systems](audio.md)

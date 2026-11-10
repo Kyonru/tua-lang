@@ -61,7 +61,15 @@ pub(crate) const ROT: BuiltinModule = BuiltinModule {
     documentation: "Use seeded random streams, color helpers, dice, maze generation, grid pathfinding, field of view, simplex noise, grammar expansion, and radial lighting. The runtime is bundled only when `Rot` is referenced.",
 };
 
-pub(crate) const MODULES: &[BuiltinModule] = &[TWEEN, CAMERA, SHADER_SCAN, ROT];
+pub(crate) const BEHAVIOR_TREE: BuiltinModule = BuiltinModule {
+    name: "BehaviorTree",
+    runtime: "tuabehavior",
+    source: include_str!("../../../vendor/runtime/tuabehavior.lua"),
+    summary: "opt-in behavior tree runtime",
+    documentation: "Create a definition with `BehaviorTree.new(root)`, then call `tree:instance(context)` and `runner:update(dt)` from LOVE's update loop.",
+};
+
+pub(crate) const MODULES: &[BuiltinModule] = &[TWEEN, CAMERA, SHADER_SCAN, ROT, BEHAVIOR_TREE];
 
 pub(crate) fn module(name: &str) -> Option<&'static BuiltinModule> {
     MODULES.iter().find(|module| module.name == name)

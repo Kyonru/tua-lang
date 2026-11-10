@@ -15,6 +15,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Added
 
+- Add the opt-in `BehaviorTree.new()` Lua runtime with actor-specific runners,
+  memory sequence/selector nodes, actions, conditions, waits, inversion,
+  repetition, reactive and parallel composites, cancellation, and bounded updates.
 - Add the opt-in `Rot` runtime module for seeded random streams, dice, colors,
   maze generation, grid paths, visibility, simplex noise, grammar expansion,
   and radial lighting. Its runtime is emitted only when a project references it.

@@ -140,7 +140,7 @@ before the first manifest are preserved on disk but excluded from packages.
 - bundled helper runtimes such as `brinevector.lua`, `anim8.lua`,
   `tuasignal.lua`, `tuaecs.lua`, `tuaobjectpool.lua`, `tuastatemachine.lua`,
   `tuastore.lua`, `tuaaudio.lua`, `baton.lua`, `tuatween.lua`,
-  `tuacamera.lua`, and `tuarot.lua` are written only when generated Lua or a
+  `tuacamera.lua`, `tuarot.lua`, and `tuabehavior.lua` are written only when generated Lua or a
   copied `.lua` source requires them with a static string literal. The audio
   runtime also brings in its `tuasignal.lua` and `tuastore.lua` dependencies;
 - in-place builds are supported when `source` and `out` are the same directory;
