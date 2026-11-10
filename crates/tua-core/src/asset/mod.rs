@@ -530,9 +530,7 @@ impl AssetIndex {
                         fs::read_to_string(include).map_err(|error| error.to_string())
                     }
                 });
-            entry.shader = match expanded {
-                expanded => ShaderSource::from_include_result(raw, expanded, entry.shader.as_ref()),
-            };
+            entry.shader = ShaderSource::from_include_result(raw, expanded, entry.shader.as_ref());
         }
     }
 

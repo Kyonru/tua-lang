@@ -2,17 +2,22 @@ use super::*;
 use crate::completion::context::{completion_context, CompletionContext};
 use full_moon::visitors::Visitor;
 
+type ShaderSourceMap = Option<Arc<Vec<asset::shader_includes::ShaderSourceLocation>>>;
+type ShaderModel = (PathBuf, Arc<asset::ShaderUniformSet>, ShaderSourceMap);
+type ShaderUniformQuery = (
+    PathBuf,
+    Arc<asset::ShaderUniformSet>,
+    ShaderSourceMap,
+    asset::ShaderSendCall,
+);
+
 impl AnalysisSnapshot {
     fn shader_model_for_receiver(
         &self,
         parsed: &ParsedSource,
         receiver: &str,
         position: SourcePosition,
-    ) -> Option<(
-        PathBuf,
-        Arc<asset::ShaderUniformSet>,
-        Option<Arc<Vec<asset::shader_includes::ShaderSourceLocation>>>,
-    )> {
+    ) -> Option<ShaderModel> {
         let fallback_scope;
         let scope = match self.file(&parsed.path).and_then(AnalysisFile::scope) {
             Some(scope) => scope,
@@ -127,12 +132,7 @@ impl AnalysisSnapshot {
         &self,
         path: &Path,
         position: SourcePosition,
-    ) -> Option<(
-        PathBuf,
-        Arc<asset::ShaderUniformSet>,
-        Option<Arc<Vec<asset::shader_includes::ShaderSourceLocation>>>,
-        asset::ShaderSendCall,
-    )> {
+    ) -> Option<ShaderUniformQuery> {
         let file = self.file(path)?;
         // Do no shader traversal for ordinary identifier hovers/definitions.
         if !matches!(
