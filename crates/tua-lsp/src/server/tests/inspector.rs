@@ -16,6 +16,7 @@ tree:setRoot(BehaviorTree.selector({
         initialize_with_root(1, temp.uri()),
         did_open(&uri, source),
         inspector_request(2, &uri, None),
+        inspector_request(3, &uri, Some(lsp_position_after(source, "local tr"))),
     ]);
     let tree = &response_with_id(&output, 2)["result"]["items"][0];
     assert_eq!(tree["kind"], "behaviorTree");
@@ -29,6 +30,10 @@ tree:setRoot(BehaviorTree.selector({
         "dynamic"
     );
     assert_eq!(tree["root"]["children"][0]["range"]["start"]["line"], 2);
+    assert_eq!(
+        response_with_id(&output, 3)["result"]["items"][0]["name"],
+        "tree"
+    );
 }
 
 #[test]

@@ -7,6 +7,7 @@ const vscode = require("vscode");
 const { BrowserSession, waitFor } = require("./cdp");
 const { spritePreviewHtml, spritePreviewErrorHtml } = require("../../src/love/sprite-preview/template");
 const { stateMachinePreviewHtml } = require("../../src/state-machines/template");
+const { behaviorTreePreviewHtml } = require("../../src/behavior-trees/preview");
 
 async function run() {
   const panel = vscode.window.createWebviewPanel("tuaPreviewTest", "Tua Preview Test", vscode.ViewColumn.One, { enableScripts: true });
@@ -140,6 +141,22 @@ async function run() {
     await waitFor(() => evaluate("window.innerWidth <= 640"), "narrow graph viewport");
     assert.equal(await evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1"), true, "narrow graph layout must not overflow the page");
     await screenshot("state-machine-narrow");
+    const behaviorNode = (kind, line, children = []) => ({ kind, range: { start: { line, character: 0 }, end: { line, character: 8 } }, children });
+    const behavior = [{ name: "patrol", root: behaviorNode("selector", 1, [
+      behaviorNode("sequence", 2, [behaviorNode("condition", 3), behaviorNode("action", 4)]),
+      behaviorNode("wait", 5),
+      behaviorNode("dynamic", 6),
+    ]) }];
+    await load(behaviorTreePreviewHtml(panel.webview, "file:///actor.tua", behavior), "Behavior Tree Preview");
+    await waitFor(() => evaluate("document.querySelectorAll('.node').length === 6"), "behavior tree nodes");
+    assert.equal(await evaluate("document.querySelector('.tree > li > .node').getBoundingClientRect().bottom < document.querySelector('.tree ul .node').getBoundingClientRect().top"), true, "children sit below their parent");
+    assert.equal(await evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1"), true, "wide tree stays inside the scroll region");
+    assert.equal(await evaluate("(() => { const region = document.querySelector('.tree-scroll').getBoundingClientRect(); const root = document.querySelector('.tree > li > .node').getBoundingClientRect(); return root.left >= region.left && root.right <= region.right; })()"), true, "root is visible when the tree is wider than the editor");
+    await evaluate("document.querySelector('.node--leaf').click()");
+    await waitFor(() => messages.some((message) => message.command === "openLocation" && message.uri === "file:///actor.tua"), "behavior node source navigation");
+    await screenshot("behavior-tree-narrow");
+    await workbench.send("Emulation.clearDeviceMetricsOverride");
+    await screenshot("behavior-tree");
     for (const [theme, className] of [["Light Modern", "vscode-light"], ["Default High Contrast", "vscode-high-contrast"], ["Default High Contrast Light", "vscode-high-contrast-light"]]) {
       await vscode.workspace.getConfiguration("workbench").update("colorTheme", theme, vscode.ConfigurationTarget.Global);
       await waitFor(() => evaluate(`document.body.classList.contains(${JSON.stringify(className)})`), theme + " theme");

@@ -30,6 +30,10 @@ const INSPECTION_PREVIEWS = {
     command: COMMANDS.previewStateMachine,
     title: (item) => `Preview ${item.name} State Machine`,
   },
+  behaviorTree: {
+    command: COMMANDS.previewBehaviorTree,
+    title: (item) => `Preview ${item.name} Behavior Tree`,
+  },
 };
 
 function registerHoverActions({ getClient, isTuaDocument }) {
@@ -380,5 +384,6 @@ function markdownCommandLink(command, title, args = []) {
 }
 
 module.exports = {
+  hoverActionsAtPosition,
   registerHoverActions,
 };
