@@ -93,8 +93,17 @@ missing methods and unsafe signatures fail at the implementation declaration.
   essentially unchanged, and sampled peak RSS remained about 1.4 GiB. The
   trace points to further project semantic-environment work on the entry file;
   isolate its expensive substeps before changing caches. The one-round
-  contention probe canceled its only valid-document request in both runs, so
-  it did not qualify delivery under edits.
+  one-round contention probe returned only an invalid-document completion in
+  both runs, so it did not qualify valid-document delivery under edits. A
+  November 11 release-candidate
+  replay with matched settings reproduced about 1.40 GiB peak RSS and 2.82-second
+  cold completion. Three contended edits in the same 1,000-module fixture raised
+  sampled peak RSS to 2.52 GiB and post-edit completion p95 to 1.85 seconds;
+  two valid-document completions arrived without stale results. Investigate
+  retained memory before qualifying very large workspaces. The local 17-file
+  LOVE project had 441–457 ms cold cross-file completion and 83–90 ms on later
+  edits. See `internal/audits/0.7.0-release-performance-2026-11-11.md` for
+  methods and limits.
 - Extend installed-editor qualification to prolonged real-project editing,
   Test Explorer/coverage interactions, hot reload and full-game visual parity.
   Candidate installation, real-server language features and five graphical
