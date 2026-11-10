@@ -2,6 +2,8 @@ use std::fs;
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+mod support;
+
 #[test]
 fn behavior_tree_is_typed_bundled_on_use_and_runs_independent_actors() {
     let root = std::env::temp_dir().join(format!(
@@ -78,21 +80,22 @@ print("behavior-ok")
     assert!(root.join("build/tuabehavior.lua").is_file());
     let emitted = fs::read_to_string(root.join("build/main.lua")).unwrap();
     assert!(emitted.contains("require(\"tuabehavior\")"));
-    let run = Command::new("lua")
-        .arg("main.lua")
-        .current_dir(root.join("build"))
-        .output()
-        .unwrap();
-    assert!(
-        run.status.success(),
-        "{}",
-        String::from_utf8_lossy(&run.stderr)
-    );
-    assert_eq!(String::from_utf8_lossy(&run.stdout).trim(), "behavior-ok");
-    let steady = Command::new("lua")
-        .args([
-            "-e",
-            r#"
+    if let Some(lua) = support::lua_executable() {
+        let run = Command::new(&lua)
+            .arg("main.lua")
+            .current_dir(root.join("build"))
+            .output()
+            .unwrap();
+        assert!(
+            run.status.success(),
+            "{}",
+            String::from_utf8_lossy(&run.stderr)
+        );
+        assert_eq!(String::from_utf8_lossy(&run.stdout).trim(), "behavior-ok");
+        let steady = Command::new(&lua)
+            .args([
+                "-e",
+                r#"
 local BehaviorTree = require("tuabehavior")
 local tree = BehaviorTree.new(BehaviorTree.reactiveSelector({
   BehaviorTree.condition(function(actor) return actor.alert end),
@@ -110,15 +113,18 @@ end
 assert(collectgarbage("count") - before < 128,
   "steady behavior updates should reuse node state")
 "#,
-        ])
-        .current_dir(root.join("build"))
-        .output()
-        .unwrap();
-    assert!(
-        steady.status.success(),
-        "{}",
-        String::from_utf8_lossy(&steady.stderr)
-    );
+            ])
+            .current_dir(root.join("build"))
+            .output()
+            .unwrap();
+        assert!(
+            steady.status.success(),
+            "{}",
+            String::from_utf8_lossy(&steady.stderr)
+        );
+    } else {
+        eprintln!("skipping emitted behavior-tree runtime checks: Lua is unavailable");
+    }
     fs::write(root.join("src/main.tua"), "print(\"plain\")\n").unwrap();
     let unused = Command::new(env!("CARGO_BIN_EXE_tua"))
         .arg("build")
