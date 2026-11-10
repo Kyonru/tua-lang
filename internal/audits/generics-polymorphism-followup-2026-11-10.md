@@ -330,6 +330,20 @@ suite without a development-server override.
   `editors/vscode/bin/tua`; it did not modify tracked source files or rebuild
   the VSIX. LOVE and LuaJIT are unavailable on this host, so their runtime
   qualification remains open.
+- `make extension-real-server-test` rerun with host-level launch access —
+  passed. VS Code 1.142.0 launched, loaded the development extension with the
+  freshly staged release server, ran the real-server protocol/generic suite,
+  and exited with code 0. This confirms the earlier SIGABRT was specific to
+  the restricted launch context, not a reproducible extension failure.
+- `make extension-package` — passed: 180/180 extension checks, zero npm
+  vulnerabilities, and a 40-file 0.7.0 VSIX was built with the current release
+  server. `unzip -tq` passed; SHA-256:
+  `98e457b2d5a613f35a1cecd20419c4ac16343fe930957488f73e0a8fd285e67b`.
+- `TUA_TEST_VSIX="$(pwd)/editors/vscode/tua-0.7.0.vsix" make
+  extension-real-server-test` with host-level launch access — passed. VS Code
+  installed the packaged extension into a disposable profile, discovered its
+  bundled server without a development override, and completed the protocol and
+  generic real-server suite with exit code 0.
 
 ## Remaining work and recommended order
 
