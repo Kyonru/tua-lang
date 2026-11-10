@@ -997,7 +997,10 @@ fn compact_text(name: &str, value: &Value) -> String {
 mod tests {
     use super::*;
     use std::fs;
+    use std::sync::atomic::{AtomicU64, Ordering};
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    static NEXT_TEMP_PROJECT_ID: AtomicU64 = AtomicU64::new(0);
 
     #[test]
     fn mcp_exposes_the_pinned_tool_set() {
@@ -1276,9 +1279,12 @@ mod tests {
                 .duration_since(UNIX_EPOCH)
                 .unwrap()
                 .as_nanos();
-            let root =
-                std::env::temp_dir().join(format!("tua-api-test-{}-{nonce}", std::process::id()));
-            fs::create_dir_all(&root).unwrap();
+            let sequence = NEXT_TEMP_PROJECT_ID.fetch_add(1, Ordering::Relaxed);
+            let root = std::env::temp_dir().join(format!(
+                "tua-api-test-{}-{nonce}-{sequence}",
+                std::process::id()
+            ));
+            fs::create_dir(&root).unwrap();
             Self { root }
         }
 
@@ -1289,6 +1295,13 @@ mod tests {
             }
             fs::write(path, content).unwrap();
         }
+    }
+
+    #[test]
+    fn temporary_api_projects_have_unique_roots() {
+        let first = TempProject::new();
+        let second = TempProject::new();
+        assert_ne!(first.root, second.root);
     }
 
     impl Drop for TempProject {

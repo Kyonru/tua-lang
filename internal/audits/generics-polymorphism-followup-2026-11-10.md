@@ -372,6 +372,24 @@ suite without a development-server override.
   existing incompatible → compatible stale-error case. Rename and
   filesystem delete/recreate races remain open.
 
+### Full-workspace verification rerun — November 10, 2026
+
+- The first `env -u RUST_MIN_STACK -u RUST_TEST_THREADS make verify` run found
+  one unrelated flaky CLI test setup: `diagnostics_include_new_unsaved_overlay_files`
+  could not find its temporary `src` directory. It passed when run alone. The
+  CLI API test helper used only PID plus a nanosecond timestamp and
+  `create_dir_all`, allowing concurrent tests to silently share a temp root if
+  the clock returned a duplicate value.
+- Added a process-local atomic sequence to the temporary root and changed its
+  creation to `create_dir`, which rejects collisions. The uniqueness regression
+  and all CLI library tests passed (93 passed, 2 ignored).
+- A second `env -u RUST_MIN_STACK -u RUST_TEST_THREADS make verify` passed:
+  core 1,907 passed/1 ignored; LSP 438 passed; CLI library 93 passed/2 ignored;
+  CLI integration 137 passed; gameplay 3; helper defaults 1; LOVE examples 3;
+  LSP smoke 1; Lua syntax 1; strict workspace Clippy, version/schema checks,
+  language evaluation, all 180 VS Code checks, JSON validation, and diff check.
+  LOVE-dependent tests remained skipped by their explicit environment guards.
+
 ## Remaining work and recommended order
 
 1. Keep the current shared protocol identity and generic substitution paths;
