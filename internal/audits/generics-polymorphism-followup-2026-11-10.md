@@ -4,11 +4,12 @@
 
 The generic/protocol implementation plan is substantially implemented, and the
 existing suite contains broad same-file, cross-file, editor, and runtime
-coverage. This follow-up found four defects: comments inside generic class
+coverage. This follow-up found five defects: comments inside generic class
 headers were discarded by Lua emission; deeply nested native array type suffixes
 bypassed the configured parser depth limit; protocol-bounded generic class
-members disappeared from completion during an incomplete edit; and protocol
-names were missing from incomplete class-header completion. All four are fixed
+members disappeared from completion during an incomplete edit; protocol names
+were missing from incomplete class-header completion; and in-flight dependent
+diagnostics could publish against a closed protocol overlay. All five are fixed
 and have regressions.
 
 The previously identified recursive protocol identity case is now covered by
@@ -179,6 +180,44 @@ or the remaining tested editor surfaces.
   `crates/tua-core/src/completion/mod.rs`, core/LSP completion and parser tests,
   and `docs/classes.md`.
 
+### GP-FU-005 — In-flight dependent diagnostics survived a protocol close
+
+- **Category:** LSP diagnostics freshness / cross-file invalidation
+- **Severity:** Medium
+- **Status:** Fixed and verified
+- **Affected workflow:** editing or closing a protocol module while the
+  importing class has slow project diagnostics in flight
+- **Reproduction:** open an on-disk `Updatable` protocol requiring
+  `update(dt: number)` and a conforming `Particle`; change the protocol in an
+  unsaved buffer to require `update(dt: string)`; change the consumer to queue
+  its slow diagnostics; wait for the worker result containing the mismatch;
+  close the protocol document to restore its compatible disk contents; then
+  deliver the worker result.
+- **Expected:** discard the result computed from the obsolete project snapshot
+  and rerun diagnostics for the still-open consumer using the restored
+  contract.
+- **Actual before the fix:** the scheduler checked only the consumer's own
+  document generation and version. Since closing the dependency did not alter
+  either value, it published the captured `TL1008` mismatch with a related
+  location in the now-closed overlay.
+- **Cause:** slow diagnostic jobs were not stamped with the semantic analysis
+  revision used by their worker.
+- **Fix:** capture the current analysis revision when dispatching each slow
+  diagnostic. If the revision changed before completion, suppress that result
+  and immediately requeue the open consumer. Preserve any newer queued request
+  already present for the same URI.
+- **Regression coverage:**
+  `in_flight_protocol_diagnostics_are_discarded_after_dependency_close`
+  confirms the worker response contains the stale mismatch, closes the
+  dependency before accepting it, verifies the stale result is suppressed, and
+  checks that a fresh consumer pass is dispatched against the current snapshot.
+- **Verification:** `RUST_MIN_STACK=16777216 cargo test -p tua-lsp` — 442
+  passed; strict LSP Clippy, `cargo fmt --check`, and `git diff --check` passed.
+- **Files:** `crates/tua-lsp/src/server/mod.rs`,
+  `crates/tua-lsp/src/server/handlers.rs`,
+  `crates/tua-lsp/src/server/scheduler.rs`, and
+  `crates/tua-lsp/src/server/tests/scheduling.rs`.
+
 The same follow-up adds exact generic alias expansion work-limit coverage at
 4,096 and 4,097 applications, per-character recovery coverage for protocol and
 generic class headers, a stale dependent-diagnostic cancellation case, and
@@ -203,7 +242,7 @@ combinations and broader cancellation permutations remain open.
 | Incomplete generic class completion | Exercised | Core snapshot and LSP edit-sequence regressions verify protocol-bound members remain suggested after an unclosed-class edit |
 | Parser depth and malformed edits | Exercised | Exact 64/65 native array depth boundary and protected comment/string cases. UTF-8 prefix tests include direct assertions that complete protocol and generic class headers recover before their first members; conditional prefix-loop assertions do not claim every malformed prefix recovers. |
 | Formatter and comment round-trip | Exercised | Generic function-bound formatter regression plus class/function bound Lua-emission regressions |
-| Cross-file invalidation | Exercised | Contract change/restore cancels stale diagnostics; a rapid incompatible-contract / re-export-rename / restore sequence does not publish stale consumer errors; delete/recreate of each node in a three-module type re-export chain and rename/delete/recreate of a direct dependency update dependent diagnostics |
+| Cross-file invalidation | Exercised | Contract change/restore cancels queued stale diagnostics; in-flight slow diagnostics are revision-checked and requeued after a dependency changes; a rapid incompatible-contract / re-export-rename / restore sequence does not publish stale consumer errors; delete/recreate of each node in a three-module type re-export chain and rename/delete/recreate of a direct dependency update dependent diagnostics |
 | Cross-platform editor behavior | Not exercised | This run used the local macOS VS Code installation and macOS arm64 release server |
 | LOVE/LuaJIT runtime behavior | Not exercised | The protocol feature-tour runtime test uses system Lua 5.4.8; LOVE/LuaJIT are unavailable or not qualified here |
 | Long-session/performance behavior | Not exercised | No soak test or release-build latency benchmark was run in this follow-up |
@@ -430,6 +469,28 @@ suite without a development-server override.
   LSP smoke 1; Lua syntax 1; strict workspace Clippy, version/schema checks,
   language evaluation, all 180 VS Code checks, JSON validation, and diff check.
   LOVE-dependent tests remained skipped by their explicit environment guards.
+
+### In-flight diagnostics freshness fix — November 10, 2026
+
+- Reproduced GP-FU-005 with a scheduler-level test that waits for the worker to
+  return the old protocol mismatch, closes the protocol document, and only then
+  delivers the result. Before the fix, the stale `TL1008` was published.
+- Slow diagnostic jobs now record the analysis revision at dispatch. Completion
+  discards results if the project revision changed and queues a fresh pass for
+  the still-open document. The regression verifies that the retry reads the
+  restored disk contract and that the stale mismatch is never published.
+- `RUST_MIN_STACK=16777216 cargo test -p tua-lsp` — 442 passed.
+- `make verify` — passed with localhost access: workspace suites (core 1,907
+  passed/1 ignored; LSP 442; CLI unit 93 passed/2 ignored; CLI integration 137;
+  gameplay 3; helper defaults 1; LOVE examples 3; LSP smoke 1; Lua syntax 1),
+  strict workspace Clippy, release/version/schema checks, language evaluation,
+  all 180 VS Code checks, JSON validation, and diff check. The default sandbox
+  attempt failed the two loopback runtime-inspector tests with `EPERM`; the
+  host-access rerun passed them. A separate host-access attempt hit the
+  timing-sensitive CLI glslang timeout regression; it passed in isolation and
+  the subsequent full rerun passed. LOVE-dependent tests were skipped by their
+  explicit environment guards.
+- `cargo fmt --check` and `git diff --check` — passed.
 
 ## Remaining work and recommended order
 

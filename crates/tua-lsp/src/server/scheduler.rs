@@ -77,6 +77,11 @@ impl WorkerResult {
     }
 
     #[cfg(test)]
+    pub(super) fn test_response(&self) -> &Value {
+        &self.response
+    }
+
+    #[cfg(test)]
     pub(super) fn test_result(job_id: u64, workspace_warm: bool) -> Self {
         Self {
             job_id,

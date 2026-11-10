@@ -1103,6 +1103,126 @@ fn did_change_discards_a_stale_background_result() {
         .any(|message| message["id"] == 2 && message.get("result").is_some()));
 }
 #[test]
+fn in_flight_protocol_diagnostics_are_discarded_after_dependency_close() {
+    let temp = TempProject::new("in-flight-protocol-diagnostics-close");
+    temp.write("tua.toml", "source = \"src\"\n");
+    let compatible = "export protocol Updatable {\n  update(dt: number): nil\n}\n";
+    let incompatible = "export protocol Updatable {\n  update(dt: string): nil\n}\n";
+    temp.write("src/contracts.tua", compatible);
+    let actors = r#"import type { Updatable } from "./contracts"
+final class Particle implements Updatable {
+  update(dt: number): nil {}
+}
+"#;
+    temp.write("src/actors.tua", actors);
+    let contracts_uri = temp.uri_for("src/contracts.tua");
+    let actors_uri = temp.uri_for("src/actors.tua");
+    let mut server = LspServer::default();
+    server.handle_message(initialize_with_root(1, temp.uri()));
+    server.handle_message(did_open(&contracts_uri, compatible));
+    server.handle_message(did_open(&actors_uri, actors));
+    server.drain_all_pending_slow_diagnostics();
+
+    server.handle_message(did_change(&contracts_uri, incompatible, 2));
+    server.handle_message(did_change(&actors_uri, actors, 2));
+    let (event_tx, event_rx) = std::sync::mpsc::sync_channel(EVENT_QUEUE_CAPACITY);
+    let mut scheduler = RequestScheduler::new(event_tx, SharedReceivedInputState::default());
+    let dispatch_at = Instant::now() + Duration::from_secs(1);
+    let mut dispatched = 0;
+    while scheduler.dispatch_due_slow_diagnostic(&mut server, dispatch_at) {
+        dispatched += 1;
+    }
+    assert!(
+        dispatched > 0,
+        "the incompatible overlay should dispatch work"
+    );
+
+    // Wait for workers to compute against the incompatible overlay, but hold
+    // their results until after the contract document is closed.
+    let mut results = Vec::new();
+    for _ in 0..dispatched {
+        let ServerEvent::RequestFinished(result) = event_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("each diagnostics worker should finish")
+        else {
+            panic!("expected a diagnostics worker result");
+        };
+        results.push(*result);
+    }
+
+    assert!(
+        results.iter().any(|result| {
+            result.test_response()["result"]
+                .as_array()
+                .is_some_and(|diagnostics| {
+                    diagnostics.iter().any(|diagnostic| {
+                        diagnostic["code"] == "TL1008"
+                            && diagnostic["message"].as_str().is_some_and(|message| {
+                                message.contains("Particle.update")
+                                    && message.contains("does not satisfy protocol")
+                            })
+                    })
+                })
+        }),
+        "at least one captured result must contain the stale conformance diagnostic"
+    );
+
+    server.handle_message(did_close(&contracts_uri));
+    let mut publications = results
+        .into_iter()
+        .flat_map(|result| scheduler.finish(&mut server, result))
+        .collect::<Vec<_>>();
+
+    let retry_at = server
+        .next_slow_diagnostics_due()
+        .expect("stale project diagnostics should be requeued against the current snapshot");
+    let mut retried = 0;
+    while scheduler.dispatch_due_slow_diagnostic(&mut server, retry_at + Duration::from_secs(1)) {
+        retried += 1;
+    }
+    assert_eq!(retried, 1, "only the still-open consumer should be retried");
+    for _ in 0..retried {
+        let ServerEvent::RequestFinished(result) = event_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("the refreshed diagnostics worker should finish")
+        else {
+            panic!("expected a refreshed diagnostics worker result");
+        };
+        assert!(
+            result.test_response()["result"]
+                .as_array()
+                .is_some_and(|diagnostics| diagnostics.iter().all(|diagnostic| {
+                    diagnostic["code"] != "TL1008"
+                        || !diagnostic["message"].as_str().is_some_and(|message| {
+                            message.contains("Particle.update")
+                                && message.contains("does not satisfy protocol")
+                        })
+                })),
+            "the retry must analyze the restored on-disk contract"
+        );
+        publications.extend(scheduler.finish(&mut server, *result));
+    }
+
+    assert!(
+        publications.iter().all(|publication| {
+            publication["params"]["uri"] != actors_uri
+                || publication["params"]["diagnostics"]
+                    .as_array()
+                    .is_some_and(|diagnostics| {
+                        diagnostics.iter().all(|diagnostic| {
+                            diagnostic["code"] != "TL1008"
+                                || !diagnostic["message"].as_str().is_some_and(|message| {
+                                    message.contains("Particle.update")
+                                        && message.contains("does not satisfy protocol")
+                                })
+                        })
+                    })
+        }),
+        "diagnostics computed from the closed overlay must be discarded: {publications:#?}"
+    );
+}
+
+#[test]
 fn cancel_request_cancels_a_running_analysis_request() {
     let output = run_chunked_messages(vec![
         (

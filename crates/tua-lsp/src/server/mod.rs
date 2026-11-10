@@ -647,6 +647,7 @@ struct PatternCorpusBuildState {
 struct PendingDiagnostics {
     generation: u64,
     version: Option<i64>,
+    analysis_revision: u64,
     due_at: Instant,
 }
 

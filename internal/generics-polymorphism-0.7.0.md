@@ -730,6 +730,20 @@ the queued pass. Closing restores the compatible on-disk contract; the consumer
 must remain diagnostic-free. The focused regression passes. Concurrent worker
 completion races and other scheduler permutations remain open.
 
+### In-flight dependent diagnostics freshness — 2026-11-10
+
+The scheduler previously validated a slow diagnostic result against only the
+consumer document's generation/version. Closing an imported protocol overlay
+could therefore leave those fields unchanged and allow a mismatch computed
+from the closed overlay to publish. Slow diagnostic jobs now capture the
+analysis revision when dispatched; if project state changes before completion,
+the result is dropped and the still-open consumer is queued against the current
+snapshot. A regression confirms the stale worker response contains the old
+protocol mismatch, verifies it is not published after close, and checks that
+the consumer is retried. The complete `tua-lsp` suite passes (442 tests), as do
+strict LSP Clippy and formatting checks. Broader multi-workspace and concurrent
+edit/worker interleavings remain qualification work.
+
 ### Watched dependency cancellation follow-up — 2026-11-10
 
 An LSP push-diagnostics regression queues consumer conformance diagnostics,

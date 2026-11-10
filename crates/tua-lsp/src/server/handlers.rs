@@ -816,6 +816,7 @@ impl LspServer {
                 PendingDiagnostics {
                     generation: *self.document_generations.get(&uri)?,
                     version: self.document_versions.get(&uri).copied(),
+                    analysis_revision: self.analysis.revision(),
                     due_at: Instant::now(),
                 },
             );
@@ -1061,6 +1062,7 @@ impl LspServer {
             PendingDiagnostics {
                 generation,
                 version,
+                analysis_revision: self.analysis.revision(),
                 due_at: now + SLOW_DIAGNOSTICS_DEBOUNCE,
             },
         );
@@ -1082,6 +1084,7 @@ impl LspServer {
             PendingDiagnostics {
                 generation,
                 version,
+                analysis_revision: self.analysis.revision(),
                 due_at: now + SLOW_DIAGNOSTICS_DEBOUNCE,
             },
         );
@@ -1139,7 +1142,11 @@ impl LspServer {
             .filter(|(_, pending)| pending.due_at <= now)
             .min_by_key(|(_, pending)| pending.due_at)
             .map(|(uri, _)| uri.clone())?;
-        let pending = self.pending_slow_diagnostics.remove(&uri)?;
+        let mut pending = self.pending_slow_diagnostics.remove(&uri)?;
+        // Bind the worker to the analysis snapshot it will actually read. A
+        // file may have changed while this diagnostic was waiting in the
+        // debounce queue, so the enqueue-time revision is not sufficient.
+        pending.analysis_revision = self.analysis.revision();
 
         Some((uri, pending))
     }
@@ -1158,6 +1165,20 @@ impl LspServer {
             return None;
         }
         if !self.analysis.contains_document(uri) {
+            return None;
+        }
+        let current_analysis_revision = self.analysis.revision();
+        if current_analysis_revision != pending.analysis_revision {
+            // A dependency changed after the worker captured its snapshot.
+            // Do not publish an answer from that old project state; queue a
+            // fresh pass for this still-open document instead.
+            self.pending_slow_diagnostics
+                .entry(uri.to_owned())
+                .or_insert(PendingDiagnostics {
+                    analysis_revision: current_analysis_revision,
+                    due_at: Instant::now(),
+                    ..pending
+                });
             return None;
         }
 
