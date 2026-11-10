@@ -8206,6 +8206,26 @@ fn incomplete_line_recovery_uses_class_placeholder_only_inside_class_bodies() {
 }
 
 #[test]
+fn incomplete_protocol_member_recovery_keeps_prior_contract_and_module_bindings() {
+    let source = "local retained = true\nexport protocol Display {\n  render(value: { text: string }): number | nil\n  r";
+    let recovered = super::recovery::parse_degraded_analysis_source(
+        Path::new("src/display.tua"),
+        source,
+        AnalysisSourceKind::Tua,
+    )
+    .expect("editor recovery should remove the partial member and close the protocol body");
+
+    assert!(
+        recovered.ast.to_string().contains("retained"),
+        "recovery must preserve declarations before the unfinished protocol member"
+    );
+    assert_eq!(recovered.protocol_declarations.len(), 1);
+    assert_eq!(recovered.protocol_declarations[0].name, "Display");
+    assert_eq!(recovered.protocol_declarations[0].methods.len(), 1);
+    assert_eq!(recovered.protocol_declarations[0].methods[0].name, "render");
+}
+
+#[test]
 fn snapshot_chained_factory_uses_final_multiple_returns() {
     let fixture = Fixture::parse(
         r#"-- file: src/main.tua

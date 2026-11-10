@@ -345,6 +345,21 @@ suite without a development-server override.
   bundled server without a development override, and completed the protocol and
   generic real-server suite with exit code 0.
 
+### Incomplete protocol-member recovery — November 10, 2026
+
+- A stricter prefix assertion showed that the delimiter helper by itself can
+  return text that still contains a partially typed protocol member. That is
+  not the analysis entry point: `parse_degraded_analysis_source` first blanks
+  recoverable incomplete lines, then closes the declaration.
+- Added `incomplete_protocol_member_recovery_keeps_prior_contract_and_module_bindings`
+  at that real analysis boundary. It verifies the unfinished `r` line is
+  ignored while the earlier module local and completed `render` requirement
+  remain in the recovered model.
+- `RUST_MIN_STACK=16777216 cargo test -p tua-core
+  incomplete_protocol_member_recovery_keeps_prior_contract_and_module_bindings`
+  — passed. The two direct prefix-matrix tests also pass with their intentional
+  conditional strict-parse checks.
+
 ## Remaining work and recommended order
 
 1. Keep the current shared protocol identity and generic substitution paths;

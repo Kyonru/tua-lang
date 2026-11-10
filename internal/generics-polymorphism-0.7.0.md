@@ -691,3 +691,16 @@ passed the header-completion checks. The current artifact is
 `e7dfc55e3de1383a80336f4b2c07d81753d3ec257d506b926377dcce915464e9`.
 LOVE/LuaJIT, cross-platform, visual, and long-session qualification remain
 open.
+
+### Incomplete protocol-member recovery follow-up — 2026-11-10
+
+The analysis recovery path removes recoverable unfinished lines before it
+closes an unclosed protocol body. A regression exercises a protocol with one
+completed method, a partially typed next member, and a preceding module local;
+the partial line is ignored in the temporary parse while the completed method
+and local remain available. The delimiter helper alone does not promise to
+repair partial member tokens; completion and project analysis apply their
+incomplete-line recovery before using it. `cargo test -p tua-core
+incomplete_protocol_member_recovery_keeps_prior_contract_and_module_bindings`
+passes. The direct UTF-8 prefix tests still conditionally check strict parsing
+because arbitrary prefixes can include incomplete member syntax.
