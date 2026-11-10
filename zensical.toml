@@ -30,6 +30,7 @@ nav = [
     { "Annotation Guide" = "annotations.md" },
     { "Lua Interop" = "lua-interop.md" },
     { "Asset Pipelines" = "asset-pipelines.md" },
+    { "Shaders" = "shaders.md" },
   ] },
   { "Features" = [
     { "Sprites And Animation" = "sprites.md" },
