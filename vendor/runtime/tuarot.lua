@@ -223,7 +223,7 @@ function Dice.roll(expression, rng)
   assert(sides, "invalid dice expression")
   count, sides = tonumber(count == "" and "1" or count), tonumber(sides)
   bonus = tonumber(bonus == "" and "0" or bonus) * (sign == "-" and -1 or 1)
-  assert((sign == "" or expression:match("[+-]%s*%d+%s*$")) and count >= 1 and count <= 1000 and sides >= 1 and sides <= 1000000000, "dice expression is invalid or exceeds supported limits")
+  assert((sign == "" or expression:match("[+-]%s*%d+%s*$")) and count >= 1 and count <= 1000 and sides >= 1 and sides <= 1000000000 and finite(bonus), "dice expression is invalid or exceeds supported limits")
   local rolls, total = {}, bonus
   for i = 1, count do rolls[i] = rng:int(1, sides); total = total + rolls[i] end
   return total, rolls

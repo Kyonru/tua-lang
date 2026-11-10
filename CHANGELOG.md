@@ -8,6 +8,7 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- `Rot.Dice.roll` now rejects a numeric bonus too large to remain finite.
 - Zero-radius `Rot.Lighting` now respects the light's alpha channel.
 - `ShaderScan` now retries a shader whose first load failed when its source or
   an included file changes, allowing hot reload to recover after a correction.
