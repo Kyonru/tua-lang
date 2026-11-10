@@ -53,9 +53,10 @@ for the source file for each feature.
 method contract, bounded generic helpers that preserve concrete result types,
 and runtime dispatch through a protocol-typed array. Its assertions run with
 Lua without LOVE.
-`src/polymorphism.tua` demonstrates cross-module native inheritance and typed
-adapters for unrelated gameplay and UI objects; it also serves as a runnable
-companion to the [migration guidance](lua-interop.md#migrate-singleton-tables-and-mixins).
+`src/polymorphism.tua` imports a class hierarchy declared in one module and
+demonstrates typed adapters for unrelated gameplay and UI objects. It also
+serves as a runnable companion to the
+[migration guidance](lua-interop.md#migrate-singleton-tables-and-mixins).
 
 `src/timer_services.tua` binds an existing handle-based timer to a typed service
 with cancellation closures. `examples/type-libraries/hump/timer.lua` is a
