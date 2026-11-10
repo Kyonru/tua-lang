@@ -359,6 +359,12 @@ suite without a development-server override.
   incomplete_protocol_member_recovery_keeps_prior_contract_and_module_bindings`
   — passed. The two direct prefix-matrix tests also pass with their intentional
   conditional strict-parse checks.
+- Extended the current-buffer core query regression with a partial trailing
+  protocol member and added the actual LSP replay
+  `incomplete_protocol_member_keeps_hover_and_completion_available`. Hover
+  retains the earlier local, completion offers the completed `render` method,
+  and the unclosed declaration diagnostic remains present. Both focused tests
+  passed.
 
 ### Protocol diagnostic cancellation permutation — November 10, 2026
 

@@ -704,6 +704,9 @@ incomplete-line recovery before using it. `cargo test -p tua-core
 incomplete_protocol_member_recovery_keeps_prior_contract_and_module_bindings`
 passes. The direct UTF-8 prefix tests still conditionally check strict parsing
 because arbitrary prefixes can include incomplete member syntax.
+The core current-buffer hover/completion case now also includes the partial
+member, and an LSP replay verifies method completion and local hover while the
+unclosed-protocol syntax diagnostic remains visible.
 
 ### Protocol diagnostic cancellation permutation — 2026-11-10
 
