@@ -1,0 +1,5 @@
+-- Both unrelated actors participate in the same typed update/draw loop.
+export protocol Actor {
+  update(dt: number): nil
+  draw(): nil
+}

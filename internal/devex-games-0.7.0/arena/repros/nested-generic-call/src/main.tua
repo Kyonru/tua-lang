@@ -1,0 +1,5 @@
+import type { BoxInstance } from "./box"
+local BoxModule = require("box")
+local box: BoxInstance<number> = BoxModule.Box.new(3.5)
+local whole: number = math.floor(box:get())
+assert(whole == 3)

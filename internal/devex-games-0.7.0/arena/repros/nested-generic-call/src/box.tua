@@ -1,0 +1,7 @@
+final class Box<T> {
+  value: T
+  init(value: T) { self.value = value }
+  get(): T { return self.value }
+}
+export type BoxInstance<T> = Box<T>
+return { Box = Box }

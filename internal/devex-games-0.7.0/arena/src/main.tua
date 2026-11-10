@@ -1,0 +1,62 @@
+import type { Actor } from "./contracts"
+import type { HeroInstance, MeteorInstance, BoxInstance } from "./entities"
+local Entities = require("entities")
+
+local hero: HeroInstance = Entities.Hero.new(320, 430)
+local meteors: MeteorInstance[] = {
+  Entities.Meteor.new(90, -20, 95, 15),
+  Entities.Meteor.new(220, -170, 125, 18),
+  Entities.Meteor.new(420, -290, 105, 13),
+  Entities.Meteor.new(550, -410, 145, 16),
+}
+local actors: Actor[] = { hero, meteors[1], meteors[2], meteors[3], meteors[4] }
+local score: BoxInstance < number > = Entities.Box.new(0)
+local alive = true
+
+local function updateAll<T: Actor>(items: T[], dt: number): nil
+  for _, item in ipairs(items) do
+    item:update(dt)
+  end
+end
+
+local function reset(): nil
+  hero.x = 320
+  score:set(0)
+  alive = true
+  for index, meteor in ipairs(meteors) do
+    meteor.y = -index * 100
+  end
+end
+
+function love.load(): nil
+  love.window.setMode(640, 480)
+  love.window.setTitle("Tua 0.7.0 · Meteor Dodge")
+end
+
+function love.update(dt: number): nil
+  if alive then
+    updateAll(actors, dt)
+    score:set(score:get() + dt)
+    for _, meteor in ipairs(meteors) do
+      local dx = hero.x - meteor.x
+      local dy = hero.y - meteor.y
+      local reach = hero.radius + meteor.radius
+      if dx * dx + dy * dy < reach * reach then
+        alive = false
+      end
+    end
+  end
+end
+
+function love.draw(): nil
+  love.graphics.clear(0.06, 0.08, 0.14)
+  for _, actor in ipairs(actors) do actor:draw() end
+  love.graphics.setColor(1, 1, 1)
+  love.graphics.print("Dodge with A/D or arrows", 16, 14)
+  love.graphics.print("Survived: " .. math.floor(score:get()), 16, 34)
+  if not alive then love.graphics.print("Hit! Press R to retry", 225, 220) end
+end
+
+function love.keypressed(key: string): nil
+  if key == "r" then reset() end
+end
