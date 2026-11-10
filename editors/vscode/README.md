@@ -410,8 +410,8 @@ to refresh source locations. Static previews retain their existing preview setti
   navigation without executing project code, with reserved routing corridors
   that keep return paths and self-loops clear of state cards. Hover links open
   sprite, state-machine, behavior-tree, and recognized asset previews directly.
-  Behavior-tree previews lay out parent and child nodes with source links and
-  mark computed branches.
+  Behavior-tree previews lay out parent and child nodes with source links,
+  ordered branches that can be collapsed, and computed-branch markers.
   Experimental
   previews are gated by `tua.preview.enabled`.
 

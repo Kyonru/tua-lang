@@ -22,7 +22,7 @@ language or editor behavior, and migration notes call out those changes.
 
 - Add an opt-in static behavior-tree preview with source-linked nested nodes,
   top-level `setRoot` support, computed-branch markers, hover links, a branching
-  tree layout, and edit refresh.
+  tree layout with ordered, collapsible branches, and edit refresh.
 - Add the opt-in `BehaviorTree.new()` Lua runtime with actor-specific runners,
   memory sequence/selector nodes, actions, conditions, waits, inversion,
   repetition, reactive and parallel composites, cancellation, and bounded updates.

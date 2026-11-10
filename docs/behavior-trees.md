@@ -40,8 +40,10 @@ hierarchy of top-level `local tree = BehaviorTree.new(...)` definitions. Direct
 nested constructor calls appear as nodes with source links. A top-level
 `tree:setRoot(...)` call also supplies the root for a tree created without one.
 Hover a tree name to open that tree directly. The preview places child nodes
-below their parents; scroll sideways to explore wide trees. Click a node to
-jump to its constructor. The preview refreshes after edits and
+below their parents and numbers siblings in execution order. Collapse branches
+to focus on part of a tree; that choice survives preview refreshes. Scroll
+sideways to explore wide trees, and click a node to jump to its constructor.
+The preview refreshes after edits and
 uses the same opt-in `tua.preview.enabled` setting as the state-machine preview.
 Open the [feature example](https://github.com/Kyonru/tua-lang/blob/main/examples/features/src/behavior_tree.tua)
 to try the preview on a complete tree.
