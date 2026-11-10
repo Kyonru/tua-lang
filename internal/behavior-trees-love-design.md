@@ -1,6 +1,8 @@
 # Behavior trees for Tua and LOVE
 
-Status: design recommendation, not an implementation contract.
+Status: the core opt-in `BehaviorTree.new()` Lua runtime is implemented. This
+document also records future type and tooling work; see
+[Behavior Trees](../docs/behavior-trees.md) for the current API.
 
 ## Decision
 
@@ -38,11 +40,11 @@ Tua runtime should specify its parallel policy explicitly. See the upstream
 
 ## Recommended Tua API
 
-Start with a regular built-in module named `BehaviorTree`, bundled only when
-referenced, like `Camera` and `tween`. Keep its runtime independent of LOVE
-globals so it also works in headless tests.
+The implemented `BehaviorTree` module is bundled only when referenced, like
+`Camera` and `tween`. Its runtime has no LOVE globals and runs in headless
+tests. The precise generic API sketched below remains future work.
 
-The public type model should express:
+The future generic type model should express:
 
 ```tua
 type Status = "success" | "failure" | "running"
@@ -94,6 +96,14 @@ for typed callback contexts and preserve inference through `sequence` and
   transition, elapsed time, and reset reason without allocating when disabled.
 
 ## Implementation phases
+
+The current core runtime implements memory and reactive sequence/selector,
+action, condition, wait, repeat, invert, explicit all/any parallel policies,
+reset/cancel, per-actor instances, and tick/depth limits. It does not yet
+propagate a concrete context type through the built-in combinators, offer
+tracing or inspector integration, or provide a built-in quorum policy. These
+are separate qualifications before the full design's acceptance criteria are
+met. The public API and current behavior are documented in `docs/behavior-trees.md`.
 
 1. **Type feasibility spike:** wrap or declare Beehive's real combinators and
    compile a small same-file and cross-file example using generic
