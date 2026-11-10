@@ -140,6 +140,8 @@ Prefer tables, modules, or classes when:
 
 Mixing both styles is normal. A scene can be an ordinary Tua module while its
 projectiles and enemies live in an ECS world.
+For enemies with decisions, see the [behavior-tree, ECS, and pool
+example](behavior-trees.md#use-a-tree-with-ecs-and-object-pools).
 
 ## Worlds And Queries
 

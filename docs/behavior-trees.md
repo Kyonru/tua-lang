@@ -11,7 +11,7 @@ not include it. Plain Lua can use `local BehaviorTree = require("tuabehavior")`.
 
 ```tua
 local enemy = { seesPlayer = false, shots = 0 }
-local tree = BehaviorTree.new(BehaviorTree.selector({
+local tree = BehaviorTree.new(BehaviorTree.reactiveSelector({
   BehaviorTree.sequence({
     BehaviorTree.condition(function(actor) return actor.seesPlayer end),
     BehaviorTree.action(function(actor, dt)
@@ -32,6 +32,71 @@ end
 creating a runner. A definition can create many runners. Each runner owns its
 own timer and composite cursor, so actors do not share execution state. Keep
 the definition's nodes unchanged after instancing.
+Use `reactiveSelector` when a running idle branch must yield as soon as an
+earlier condition becomes true. A plain `selector` resumes its running child
+without revisiting earlier branches.
+
+## Use a tree with ECS and object pools
+
+Let ECS own which enemies are active. Give each enemy one runner and one context
+when it spawns, then update the runner through an ECS system. The tree itself is
+shared by every enemy:
+
+```tua
+local Brain = ecs.component("Brain", { context = "any", runner = "any" })
+local Effect = ecs.component("Effect")
+local world = ecs.world()
+local effects = objectPool({
+  create = function() return { age = 0 } end,
+  reset = function(effect) effect.age = 0 end,
+  initial = 32,
+})
+
+local tree = BehaviorTree.new(BehaviorTree.action(function(actor)
+  actor.wantsEffect = true
+  return "success"
+end))
+
+local function spawnEnemy(actor)
+  local entity = world:create()
+  world:add(entity, Brain, { context = actor, runner = tree:instance(actor) })
+  return entity
+end
+
+local brains = ecs.system(world, { Brain }, function(_, brain, dt)
+  brain.runner:update(dt)
+  if brain.context.wantsEffect then
+    brain.context.wantsEffect = false
+    world:add(world:create(), Effect, effects:acquire())
+  end
+end)
+
+local function removeEnemy(entity)
+  local brain = world:get(entity, Brain)
+  if brain then brain.runner:cancel() end
+  world:destroy(entity)
+end
+```
+
+Use an object pool for short-lived effect payloads produced by the tree. Acquire
+an effect when an action requests it, attach it to an ECS entity, then destroy
+that entity and release the payload when its lifetime ends. Do not pool numeric
+entity IDs or create a tree or runner in `love.update`. The complete,
+[runnable ECS and pool example](https://github.com/Kyonru/tua-lang/blob/main/examples/features/src/behavior_tree_ecs.tua)
+shows effect release, a prewarmed pool, and headless updates. Its `Brain`
+component uses `any` for the runner and context because the built-in ECS schema
+does not express a behavior runner's context type; annotate the leaf callbacks
+and local context explicitly to retain checking there.
+
+The brain update path makes one ECS query and one runner update per active
+enemy. Tree nodes and callbacks are allocated once; runner state is per enemy.
+The runtime creates node-state tables lazily and reuses them after completion,
+so steady decisions avoid new node-state tables after warm-up. Spawning effect
+entities and growing a pool can still allocate. Use a cooldown or lower-frequency
+update for decisions that do not need every frame, and profile representative
+enemy counts before adding pooling or changing tick rates. Call `runner:cancel()`
+before removing an enemy; when clearing a whole world, cancel its runners and
+release active pooled values first.
 
 ## Static editor preview
 

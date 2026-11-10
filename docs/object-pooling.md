@@ -159,6 +159,10 @@ ECS and pooling solve different problems:
     Pool payloads only when their measured allocation cost justifies it; entity
     IDs themselves do not need an object pool.
 
+The [behavior-tree and ECS example](behavior-trees.md#use-a-tree-with-ecs-and-object-pools)
+uses a pool for short-lived effect payloads while ECS owns the active enemies
+and effects.
+
 The pool tracks object identity, active state, and ownership. Duplicate and
 foreign releases return `false`, making lifecycle mistakes observable without
 silently corrupting the available stack.

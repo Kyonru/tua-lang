@@ -1,0 +1,100 @@
+-- Feature: one shared behavior tree drives ECS enemies; a pool reuses short-lived effects.
+-- Build the tree, systems, and pool once. Create one runner per enemy, never per frame.
+type EnemyContext = {
+  x: number,
+  y: number,
+  seesPlayer: boolean,
+  cooldown: number,
+  fire: boolean,
+  shots: number,
+}
+
+type Flash = { x: number, y: number, age: number }
+
+local Brain = ecs.component("Brain", { context = "any", runner = "any" })
+local FlashEffect = ecs.component("FlashEffect", {
+  x = "number", y = "number", age = "number",
+})
+local world = ecs.world()
+
+local flashes = objectPool({
+  create = function(): Flash
+    return { x = 0, y = 0, age = 0 }
+  end,
+  reset = function(flash: Flash)
+    flash.x = 0
+    flash.y = 0
+    flash.age = 0
+  end,
+  initial = 32,
+})
+
+-- Leaf callbacks close over no enemy-specific state. The runner passes its
+-- own context, so all enemies can share this immutable tree definition.
+local tree = BehaviorTree.new(BehaviorTree.reactiveSelector({
+  BehaviorTree.sequence({
+    BehaviorTree.condition(function(actor: EnemyContext)
+      return actor.seesPlayer and actor.cooldown <= 0
+    end),
+    BehaviorTree.action(function(actor: EnemyContext)
+      actor.fire = true
+      actor.cooldown = 0.25
+      return "success"
+    end),
+  }),
+  BehaviorTree.action(function() return "running" end),
+}))
+
+local brains = ecs.system(world, { Brain }, function(_, brain, dt)
+  local actor: EnemyContext = brain.context
+  actor.cooldown = math.max(0, actor.cooldown - dt)
+  brain.runner:update(dt)
+  if actor.fire then
+    actor.fire = false
+    actor.shots += 1
+    local flash = flashes:acquire()
+    flash.x = actor.x
+    flash.y = actor.y
+    world:add(world:create(), FlashEffect, flash)
+  end
+end)
+
+local effects = ecs.system(world, { FlashEffect }, function(entity, flash, dt)
+  flash.age += dt
+  if flash.age >= 0.12 then
+    world:destroy(entity)
+    flashes:release(flash)
+  end
+end)
+
+local function spawnEnemy(x: number, y: number): number
+  local entity = world:create()
+  local context: EnemyContext = {
+    x = x, y = y, seesPlayer = false, cooldown = 0, fire = false, shots = 0,
+  }
+  world:add(entity, Brain, { context = context, runner = tree:instance(context) })
+  return entity
+end
+
+local function despawnEnemy(entity: number)
+  local brain = world:get(entity, Brain)
+  if brain then brain.runner:cancel() end
+  world:destroy(entity)
+end
+
+-- In LOVE, call these once per frame from love.update(dt). This headless
+-- simulation makes the feature example runnable without a graphics context.
+local enemy = spawnEnemy(40, 80)
+local brain = world:get(enemy, Brain)
+if brain then brain.context.seesPlayer = true end
+for _ = 1, 20 do
+  brains:update(1 / 60)
+  effects:update(1 / 60)
+end
+local shots = brain and brain.context.shots or 0
+despawnEnemy(enemy)
+for _ = 1, 10 do effects:update(1 / 60) end
+assert(shots >= 2)
+assert(flashes:activeCount() == 0)
+
+return { world = world, tree = tree, flashes = flashes, shots = shots }
