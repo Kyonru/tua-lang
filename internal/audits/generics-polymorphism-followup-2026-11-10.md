@@ -360,6 +360,18 @@ suite without a development-server override.
   — passed. The two direct prefix-matrix tests also pass with their intentional
   conditional strict-parse checks.
 
+### Protocol diagnostic cancellation permutation — November 10, 2026
+
+- Added `rapid_protocol_contract_edits_publish_the_latest_incompatible_signature`.
+  It sends incompatible → compatible → incompatible contract revisions without
+  draining the dependent diagnostics scheduler between edits, then verifies
+  that an actual pull-diagnostics request reports the final parameter mismatch.
+- `RUST_MIN_STACK=16777216 cargo test -p tua-lsp
+  rapid_protocol_contract_edits_publish_the_latest_incompatible_signature`
+  — passed. The reverse final-state direction is now covered alongside the
+  existing incompatible → compatible stale-error case. Rename and
+  filesystem delete/recreate races remain open.
+
 ## Remaining work and recommended order
 
 1. Keep the current shared protocol identity and generic substitution paths;

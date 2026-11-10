@@ -704,3 +704,13 @@ incomplete-line recovery before using it. `cargo test -p tua-core
 incomplete_protocol_member_recovery_keeps_prior_contract_and_module_bindings`
 passes. The direct UTF-8 prefix tests still conditionally check strict parsing
 because arbitrary prefixes can include incomplete member syntax.
+
+### Protocol diagnostic cancellation permutation — 2026-11-10
+
+An LSP regression queues incompatible, compatible, and incompatible protocol
+contract edits before the dependent diagnostics pass runs. Pull diagnostics
+must report the final incompatible parameter signature, proving that a stale
+intermediate compatible snapshot cannot hide the latest error. This adds the
+opposite final-state direction to the existing incompatible-to-compatible
+stale-error test; filesystem rename/delete/recreate races and other scheduler
+permutations remain open.

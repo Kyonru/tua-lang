@@ -1362,6 +1362,64 @@ final class Particle implements Updatable {
 }
 
 #[test]
+fn rapid_protocol_contract_edits_publish_the_latest_incompatible_signature() {
+    let temp = TempProject::new("latest-protocol-contract-diagnostics");
+    temp.write("tua.toml", "source = \"src\"\n");
+    let compatible = "export protocol Updatable {\n  update(dt: number): nil\n}\n";
+    let incompatible = "export protocol Updatable {\n  update(dt: string): nil\n}\n";
+    temp.write("src/contracts.tua", compatible);
+    let actors = r#"import type { Updatable } from "./contracts"
+final class Particle implements Updatable {
+  update(dt: number): nil {}
+}
+"#;
+    let contracts_uri = temp.uri_for("src/contracts.tua");
+    let actors_uri = temp.uri_for("src/actors.tua");
+    let mut server = TestServer::new();
+
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&contracts_uri, compatible));
+    server.send(did_open(&actors_uri, actors));
+    assert!(diagnostics_publications(server.output(), &actors_uri)
+        .iter()
+        .all(|publication| publication["params"]["diagnostics"]
+            .as_array()
+            .is_some_and(|diagnostics| diagnostics.is_empty())));
+
+    // Queue several contract generations before draining dependent diagnostics.
+    server.send_without_drain(did_change(&contracts_uri, incompatible, 2));
+    let first_due = server
+        .next_slow_diagnostics_due()
+        .expect("the incompatible signature should schedule dependent diagnostics");
+    server.send_without_drain(did_change(&contracts_uri, compatible, 3));
+    let compatible_due = server
+        .next_slow_diagnostics_due()
+        .expect("restoring the compatible signature should schedule diagnostics");
+    server.send_without_drain(did_change(&contracts_uri, incompatible, 4));
+    let latest_due = server
+        .next_slow_diagnostics_due()
+        .expect("the latest incompatible signature should schedule diagnostics");
+    assert!(first_due <= compatible_due);
+    assert!(compatible_due <= latest_due);
+
+    server.drain_due_diagnostics(latest_due);
+    server.send(text_document_diagnostic_request(2, &actors_uri));
+    let pull_diagnostics = document_diagnostic_items(server.output(), 2);
+    assert!(
+        pull_diagnostics.iter().any(|diagnostic| {
+            diagnostic["code"] == "TL1008"
+                && diagnostic["message"].as_str().is_some_and(|message| {
+                    message.contains("Particle.update")
+                        && message.contains("Updatable.update")
+                        && message.contains("expected")
+                        && message.contains("found")
+                })
+        }),
+        "pull diagnostics must reflect the latest incompatible contract: {pull_diagnostics:#?}"
+    );
+}
+
+#[test]
 fn rapid_protocol_and_reexport_edits_do_not_publish_stale_conformance_errors() {
     let temp = TempProject::new("rapid-protocol-reexport-diagnostic-edits");
     temp.write("tua.toml", "source = \"src\"\n");
