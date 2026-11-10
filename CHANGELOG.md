@@ -6,6 +6,38 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-11
+
+### Release summary
+
+Tua 0.7.0 adds erased generics and method-only protocols to the typed Lua
+workflow. Generic aliases, functions, and classes retain useful types across
+modules; explicit protocol conformance checks shared behavior without changing
+Lua's runtime dispatch. The compiler still emits Lua 5.1-compatible source,
+and the CLI, language server, and VS Code extension share version 0.7.0.
+
+#### Highlights
+
+- Define reusable generic aliases, functions, and classes, with constructor
+  inference, bounds, and editor support for imported instances.
+- Use protocols for unrelated classes that implement the same methods, with
+  conformance diagnostics, navigation, and missing-method code actions.
+- Add opt-in `BehaviorTree` and `Rot` game utilities, plus a source-linked
+  static behavior-tree preview.
+- Edit shaders with include-aware diagnostics, uniforms, and hot reload through
+  `ShaderScan`, including recovery after a failed first compile.
+- Find and fix problems faster with improved completion, hover, previews, and
+  source navigation across the project.
+
+#### Upgrade notes
+
+Install matching 0.7.0 CLI/server and extension versions. Run `tua check` and
+`tua build` in each project after upgrading. Stricter generic inference,
+protocol conformance, and mutable-array checks can reveal previously accepted
+typing mistakes; review those diagnostics and add precise annotations where
+needed. The new game utilities remain opt-in and are emitted only when used.
+No `tua.toml` migration is required for the changes in this release.
+
 ### Fixed
 
 - Preview refreshes now keep the newest result in module, signal, ECS,
@@ -2146,7 +2178,9 @@ from 0.3.0:
 - Project source and `tua.toml` files require no migration for this coordinated
   release.
 
-[Unreleased]: https://github.com/Kyonru/tua-lang/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/Kyonru/tua-lang/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/Kyonru/tua-lang/compare/v0.6.1...v0.7.0
+[0.6.1]: https://github.com/Kyonru/tua-lang/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/Kyonru/tua-lang/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/Kyonru/tua-lang/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/Kyonru/tua-lang/compare/v0.4.1...v0.5.0
