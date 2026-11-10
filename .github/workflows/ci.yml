@@ -55,6 +55,8 @@ jobs:
         env:
           TUA_DOCS_VENV_DIR: ${{ runner.temp }}/tua-docs
         run: make docs-build
+      - name: Check feature guide examples
+        run: make feature-examples-check
       - name: Check whitespace
         run: make diff-check
 
@@ -159,6 +161,8 @@ jobs:
         run: make extension-check
       - name: Test extension host
         run: xvfb-run --auto-servernum npm --prefix editors/vscode run test:vscode
+      - name: Test preview webviews
+        run: xvfb-run --auto-servernum npm --prefix editors/vscode run test:webviews
       - name: Test extension with the real server
         run: xvfb-run --auto-servernum make extension-real-server-test
 
