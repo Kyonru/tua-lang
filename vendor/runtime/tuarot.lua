@@ -573,7 +573,7 @@ function Lighting.compute(width, height, lights, opaque)
       for x = minX, maxX do
         local distance = math.sqrt((x - light.x) ^ 2 + (y - light.y) ^ 2)
         if distance <= light.radius and (not opaque or lineVisible(math.floor(light.x), math.floor(light.y), x, y, opaque)) then
-          local amount = light.radius == 0 and (distance == 0 and 1 or 0) or (1 - distance / light.radius) * color.a
+          local amount = light.radius == 0 and (distance == 0 and color.a or 0) or (1 - distance / light.radius) * color.a
           local cell = result:get(x, y)
           cell.r = clamp(cell.r + color.r * amount, 0, 1)
           cell.g = clamp(cell.g + color.g * amount, 0, 1)

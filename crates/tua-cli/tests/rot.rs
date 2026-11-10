@@ -99,6 +99,8 @@ local phrase = Rot.StringGenerator.generate({ root = { "a {creature}" }, creatur
 assert(phrase == "a red slime" or phrase == "a blue bat")
 local light = Rot.Lighting.compute(3, 3, { { x = 2, y = 2, radius = 2, color = "#ff0000" } })
 assert(light:get(2, 2).r == 1 and light:get(2, 2).g == 0)
+local transparent = Rot.Lighting.compute(1, 1, { { x = 1, y = 1, radius = 0, color = "#ff000000" } })
+assert(transparent:get(1, 1).r == 0)
 print("rot-ok")
 "##,
     )
