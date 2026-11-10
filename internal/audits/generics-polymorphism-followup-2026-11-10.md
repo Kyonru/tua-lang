@@ -573,6 +573,14 @@ pass; strict LSP Clippy, `cargo fmt --check`, and `git diff --check` pass.
 In-flight create/recreate, rename and cross-workspace permutations remain
 unverified.
 
+Added `in_flight_protocol_diagnostics_are_retried_after_dependency_create`.
+It captures the consumer's missing-import result, creates an incompatible
+protocol on disk, sends the watched-file create event, and then delivers the
+old result. The stale missing-import error is suppressed; retry reports the
+new protocol signature mismatch. The focused test and all 445 `tua-lsp` tests
+pass, as do strict LSP Clippy, `cargo fmt --check`, and `git diff --check`.
+Rename and cross-workspace in-flight interleavings remain unverified.
+
 ### In-flight dependency edit follow-up — November 10, 2026
 
 An LSP scheduler regression holds a completed worker result for an imported

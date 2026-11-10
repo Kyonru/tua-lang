@@ -781,3 +781,9 @@ protocol after a worker completes: the old conformance mismatch is suppressed
 and the consumer retry reports the latest missing-import diagnostic. All 444
 LSP tests and strict LSP Clippy pass. In-flight create/recreate, rename, and
 cross-workspace permutations remain unverified.
+
+The same in-flight freshness matrix covers watched creation after a worker
+captured a missing-import result: the old result is suppressed and retry
+reports the newly created protocol's signature mismatch. All 445 LSP tests
+and strict LSP Clippy pass. Rename and cross-workspace in-flight permutations
+remain unverified.
