@@ -774,6 +774,11 @@ changes and synchronized unsaved shader buffers. Unknown receivers and
 macro-generated declarations stay unchecked. Proven uniform value mismatches report `TL2015`; see
 [shader value checks](language.md).
 
+For an optional uniform that may be optimized out on a target, use
+`ShaderScan.safe_send(shader, name, ...)`. It checks `hasUniform` at runtime,
+skips the send when absent, and warns once for that shader/name pair. Required
+uniforms should use `:send` to retain static diagnostics and editor support.
+
 ### Shader compilation diagnostics
 
 In trusted workspaces, Tua validates statically referenced shaders with the

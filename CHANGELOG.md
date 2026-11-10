@@ -8,6 +8,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Added
 
+- Add the built-in `ShaderScan.safe_send(shader, name, ...)` helper for optional
+  shader uniforms. It skips uniforms removed or unavailable on the current
+  renderer, emits one warning per shader/name pair, and reports whether it sent.
 - Method-only protocols with explicit class conformance, protocol-typed
   parameters and arrays, explicitly typed protocol requirements with ranged
   diagnostics for omitted or empty parameter types, exported protocol types,

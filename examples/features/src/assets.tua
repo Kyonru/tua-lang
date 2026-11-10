@@ -21,6 +21,8 @@ local waveShader = shader "assets/wave.glsl"
 -- Complete or hover "time", or go to its declaration in wave.glsl.
 waveShader:send("time", 0)
 -- Passing a table here would report TL2015: `time` is a scalar number uniform.
+-- Optional uniforms may be missing or optimized out on another renderer.
+ShaderScan.safe_send(waveShader, "mobileOnlyTint", 1)
 -- Inline long-string shaders share uniform completion, navigation, and checks.
 local tintShader = love.graphics.newShader([[
 extern vec4 tint;

@@ -789,6 +789,22 @@ not checked for component count. Numeric strings, raw `Data` sends, matrix
 layout overloads, and extra values ignored by LOVE remain accepted. Texture
 dimensions and raw-data sizes are not statically checked.
 
+For optional or platform-dependent uniforms, `ShaderScan.safe_send` checks
+`Shader:hasUniform` before sending. A missing or optimized-out uniform is
+skipped and warned about once per shader and name; the function returns
+`false`. A successful send returns `true`:
+
+```tua
+local wave = shader "assets/wave.glsl"
+ShaderScan.safe_send(wave, "desktopOnlyGlow", glow)
+```
+
+Using `ShaderScan` bundles its small runtime module into the build. For
+required uniforms, prefer ordinary `:send` so Tua can report misspelled names
+and incompatible values directly. The optional-send behavior is inspired by
+the MIT-licensed [LÖVE ShaderScan project](https://github.com/idbrii/love-shaderscan);
+Tua provides its own implementation and editor integration.
+
 The editor also completes uniform names, shows their declarations and expected
 Lua values on hover, and navigates to GLSL declarations (including both stage
 sections). See [shader uniform editing](lsp.md#shader-uniform-editing).

@@ -45,7 +45,15 @@ pub(crate) const CAMERA: BuiltinModule = BuiltinModule {
         smoothing, bounds, zoom, shake, viewports, and screen/world conversion.",
 };
 
-pub(crate) const MODULES: &[BuiltinModule] = &[TWEEN, CAMERA];
+pub(crate) const SHADER_SCAN: BuiltinModule = BuiltinModule {
+    name: "ShaderScan",
+    runtime: "tuashaderscan",
+    source: include_str!("../../../vendor/runtime/tuashaderscan.lua"),
+    summary: "shader iteration helpers",
+    documentation: "Safely send optional shader uniforms with `ShaderScan.safe_send(shader, name, ...)`; absent or optimized-out uniforms are skipped and reported once.",
+};
+
+pub(crate) const MODULES: &[BuiltinModule] = &[TWEEN, CAMERA, SHADER_SCAN];
 
 pub(crate) fn module(name: &str) -> Option<&'static BuiltinModule> {
     MODULES.iter().find(|module| module.name == name)
