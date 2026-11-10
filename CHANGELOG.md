@@ -40,6 +40,8 @@ No `tua.toml` migration is required for the changes in this release.
 
 ### Fixed
 
+- Go to Definition in large projects no longer repeatedly scans every require
+  binding while assembling imported module information.
 - Preview refreshes now keep the newest result in module, signal, ECS,
   object-pool, audio, and server-health views when requests finish out of order.
 - Audio Explorer now has themed loading and retry states, source actions using

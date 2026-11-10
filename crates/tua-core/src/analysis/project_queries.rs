@@ -655,7 +655,7 @@ impl AnalysisSnapshot {
         }
 
         for binding in require_bindings_for_parsed_source(parsed) {
-            let Some(module_path) = self.indexed_required_module_path(parsed, &binding.alias)
+            let Some(module_path) = self.indexed_module_path_for_specifier(parsed, &binding.module)
             else {
                 continue;
             };
@@ -745,7 +745,8 @@ impl AnalysisSnapshot {
         require_bindings_for_parsed_source(parsed)
             .into_iter()
             .filter_map(|binding| {
-                let module_path = self.indexed_required_module_path(parsed, &binding.alias)?;
+                let module_path =
+                    self.indexed_module_path_for_specifier(parsed, &binding.module)?;
                 let module_type = self.indexed_module_value_type(module_path)?;
                 let ty =
                     self.type_database
@@ -764,7 +765,7 @@ impl AnalysisSnapshot {
     ) -> Vec<(String, (Type, TypedFunction))> {
         let mut signatures = Vec::new();
         for binding in require_bindings_for_parsed_source(parsed) {
-            let Some(path) = self.indexed_required_module_path(parsed, &binding.alias) else {
+            let Some(path) = self.indexed_module_path_for_specifier(parsed, &binding.module) else {
                 continue;
             };
             let Some(raw) = self.file(path).and_then(|file| file.exports.as_ref()) else {
@@ -842,7 +843,8 @@ impl AnalysisSnapshot {
         require_bindings_for_parsed_source(parsed)
             .into_iter()
             .filter_map(|binding| {
-                let module_path = self.indexed_required_module_path(parsed, &binding.alias)?;
+                let module_path =
+                    self.indexed_module_path_for_specifier(parsed, &binding.module)?;
                 let module_type = self.indexed_module_value_type(module_path)?;
                 matches!(
                     self.type_database
@@ -865,7 +867,7 @@ impl AnalysisSnapshot {
         let mut deprecations = Vec::new();
 
         for binding in require_bindings_for_parsed_source(parsed) {
-            let Some(module_path) = self.indexed_required_module_path(parsed, &binding.alias)
+            let Some(module_path) = self.indexed_module_path_for_specifier(parsed, &binding.module)
             else {
                 continue;
             };
@@ -888,7 +890,7 @@ impl AnalysisSnapshot {
         let mut accesses = Vec::new();
 
         for binding in require_bindings_for_parsed_source(parsed) {
-            let Some(module_path) = self.indexed_required_module_path(parsed, &binding.alias)
+            let Some(module_path) = self.indexed_module_path_for_specifier(parsed, &binding.module)
             else {
                 continue;
             };

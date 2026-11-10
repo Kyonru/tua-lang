@@ -87,11 +87,14 @@ missing methods and unsafe signatures fail at the implementation declaration.
   proposing a code change. A bounded November 11 replay with one sample per
   request completed: cold completion was 2.96 seconds, cold hover 2.81 seconds,
   cold definition 6.91 seconds, and warm completion 9.32 ms; sampled peak RSS
-  was about 1.37 GiB. A direct require-binding lookup experiment left cold
-  completion and hover essentially unchanged and was reverted. The trace points
-  to project semantic-environment work on the entry file; isolate its expensive
-  substeps before changing caches. The one-round contention probe canceled its
-  only valid-document request, so it did not qualify delivery under edits.
+  was about 1.37 GiB. A three-sample comparison of direct require-binding
+  lookup reduced average cold definition from 7.23 to 3.82 seconds. Average
+  cold completion (2.79 seconds) and hover (2.75–2.81 seconds) remained
+  essentially unchanged, and sampled peak RSS remained about 1.4 GiB. The
+  trace points to further project semantic-environment work on the entry file;
+  isolate its expensive substeps before changing caches. The one-round
+  contention probe canceled its only valid-document request in both runs, so
+  it did not qualify delivery under edits.
 - Extend installed-editor qualification to prolonged real-project editing,
   Test Explorer/coverage interactions, hot reload and full-game visual parity.
   Candidate installation, real-server language features and five graphical

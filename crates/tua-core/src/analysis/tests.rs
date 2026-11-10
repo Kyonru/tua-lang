@@ -4704,6 +4704,40 @@ return {
 }
 
 #[test]
+fn snapshot_definition_resolves_each_required_module_from_its_own_binding() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+local Left = require("left")
+local Right = require("right")
+local value = Right.<|usage|>get()
+-- file: src/left.tua
+local function get()
+  return 1
+end
+return { get = get }
+-- file: src/right.tua
+local function <|def|>get<|/def|>()
+  return "right"
+end
+return { get = get }
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+
+    let definition = host
+        .snapshot()
+        .definition("src/main.tua", fixture.position("usage"))
+        .expect("second required module export should resolve from its own binding");
+
+    assert_eq!(definition.path, PathBuf::from("src/right.tua"));
+    assert_eq!(definition.span, fixture.range("def"));
+}
+
+#[test]
 fn snapshot_hover_uses_indexed_module_exports_without_reading_files() {
     let fixture = Fixture::parse(
         r#"-- file: src/main.tua
