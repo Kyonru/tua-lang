@@ -188,6 +188,8 @@ LOVE wiki links when available.
 Optional and defaulted parameters are marked with `?` in native hover/signature
 labels; a required parameter accepting `nil` remains required. Member candidates
 that require quoted bracket access are omitted after a dot or colon.
+After a colon, completion lists callable members; use a dot to access data
+fields.
 
 Type auto-imports are offered only in type positions. They reuse existing
 named imports and namespaces, recognize equivalent specifiers for the same

@@ -26,6 +26,10 @@ impl<'a> CompletionQuery<'a> {
     pub(super) fn complete(self, context: CompletionContext) -> Vec<Completion> {
         let context = class_field_type_context(self.parsed, self.source, context);
         let prefix = context.filter_prefix().map(str::to_owned);
+        let separator = match &context {
+            CompletionContext::FieldAccess { separator, .. } => Some(*separator),
+            _ => None,
+        };
         let ranking_context = CompletionRankingContext::from_context(
             &self.parsed.path,
             self.source,
@@ -115,6 +119,10 @@ impl<'a> CompletionQuery<'a> {
             }
         };
 
+        let completions = match separator {
+            Some(separator) => filter_colon_candidates(completions, separator),
+            None => completions,
+        };
         rank_completions_for_context(completions, prefix.as_deref(), ranking_context.as_ref())
     }
 

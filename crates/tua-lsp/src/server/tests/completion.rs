@@ -1,6 +1,28 @@
 use super::*;
 
 #[test]
+fn colon_completion_keeps_callable_members_and_omits_data_fields() {
+    let uri = "file:///tmp/colon-callable-members.tua";
+    let source = r#"final class Thing {
+  value: string
+  init(value: string) { self.value = value }
+  call(amount: number): nil { print(amount) }
+}
+local thing = Thing.new("ready")
+thing:call(1)
+local _value = thing.value
+"#;
+    let output = run_messages(vec![
+        did_open(uri, source),
+        completion_request(2, uri, source, "thing:"),
+        completion_request(3, uri, source, "thing."),
+    ]);
+
+    assert_completion_labels(&output, 2, ["call"]);
+    assert_completion_labels(&output, 3, ["call", "value"]);
+}
+
+#[test]
 fn completion_returns_class_members_for_self_inside_methods() {
     let uri = "file:///tmp/class-self-completion.tua";
     let source = r#"

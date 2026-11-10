@@ -22,6 +22,45 @@ local typed: Pl = nil
 "#;
 
 #[test]
+fn colon_completion_excludes_non_callable_fields() {
+    let source = r#"final class Thing {
+  value: string
+  init(value: string) { self.value = value }
+  call(amount: number): nil { print(amount) }
+}
+
+local thing = Thing.new("ready")
+thing:call(1)
+local _value = thing.value
+"#;
+    let colon = complete_tua_source("src/main.tua", source, position_after(source, "thing:"))
+        .expect("colon completion should succeed");
+    let dot = complete_tua_source("src/main.tua", source, position_after(source, "thing."))
+        .expect("dot completion should succeed");
+
+    assert!(labels(&colon).contains(&"call".to_owned()), "{colon:#?}");
+    assert!(!labels(&colon).contains(&"value".to_owned()));
+    assert!(labels(&dot).contains(&"call".to_owned()));
+    assert!(labels(&dot).contains(&"value".to_owned()));
+}
+
+#[test]
+fn colon_completion_retains_function_valued_table_fields() {
+    let source = r#"type Bag = { value: string, run: (self: any, step: number) -> nil }
+local bag: Bag = {
+  value = "ready",
+  run = function(self: any, step: number) print(step) end,
+}
+bag:run(1)
+"#;
+    let colon = complete_tua_source("src/main.tua", source, position_after(source, "bag:"))
+        .expect("function-valued table field completion should succeed");
+
+    assert!(labels(&colon).contains(&"run".to_owned()), "{colon:#?}");
+    assert!(!labels(&colon).contains(&"value".to_owned()));
+}
+
+#[test]
 fn skips_typed_domain_documentation_for_non_function_fields() {
     let parsed = parse_tua_source("src/main.tua", "").expect("empty source should parse");
     let (environment, _) = build_type_environment_with_diagnostics(&parsed);
@@ -874,6 +913,13 @@ fn completes_typed_state_machine_events_callbacks_and_values() {
         position_after(&method_source, "light:"),
     )
     .expect("state machine method completion should succeed");
+    let field_source = format!("{source}light.\n");
+    let fields = complete_tua_source(
+        "src/state_machine.tua",
+        &field_source,
+        position_after(&field_source, "light."),
+    )
+    .expect("state machine field completion should succeed");
 
     let callback_labels = labels(&callbacks);
     for expected in [
@@ -899,12 +945,14 @@ fn completes_typed_state_machine_events_callbacks_and_values() {
         .is_some_and(|text| text.contains("event: \"panic\" | \"warn\"")));
 
     let method_labels = labels(&methods);
-    for expected in ["warn", "panic", "is", "can", "cannot", "current"] {
+    for expected in ["warn", "panic", "is", "can", "cannot"] {
         assert!(
             method_labels.contains(&expected.to_owned()),
             "missing member {expected}: {method_labels:?}"
         );
     }
+    assert!(!method_labels.contains(&"current".to_owned()));
+    assert!(labels(&fields).contains(&"current".to_owned()));
 
     let state_source = source.replace("initial = \"green\"", "initial = \"gr\"");
     let states = complete_tua_source(

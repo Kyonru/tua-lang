@@ -781,7 +781,10 @@ pub(crate) fn complete_field_access_in_source_with_environment_and_ranking_input
         separator,
         separator_span,
     };
-    let completions = complete_fields(parsed, source, environment, field_context);
+    let completions = filter_colon_candidates(
+        complete_fields(parsed, source, environment, field_context),
+        separator,
+    );
     let ranking_context =
         CompletionRankingContext::from_context(&parsed.path, source, &context, ranking);
 
@@ -847,7 +850,7 @@ pub(crate) fn complete_current_file_field_access_with_environment_and_ranking_in
     }
 
     Some(rank_completions_for_context(
-        completions,
+        filter_colon_candidates(completions, separator),
         Some(&prefix),
         ranking_context.as_ref(),
     ))
@@ -861,12 +864,16 @@ pub(crate) fn complete_current_file_lua_field_access(
         receiver_parts,
         prefix,
         position,
+        separator,
         ..
     }) = completion_context(source, position)
     else {
         return None;
     };
-    let completions = complete_lua_fields(source, &receiver_parts, "", position);
+    let completions = filter_colon_candidates(
+        complete_lua_fields(source, &receiver_parts, "", position),
+        separator,
+    );
 
     if completions.is_empty() {
         return None;
@@ -947,6 +954,10 @@ fn complete_lossy_source(
     context: CompletionContext,
 ) -> Vec<Completion> {
     let prefix = context.filter_prefix().map(str::to_owned);
+    let separator = match &context {
+        CompletionContext::FieldAccess { separator, .. } => Some(*separator),
+        _ => None,
+    };
     let completions = match context {
         CompletionContext::AnnotationTag { prefix } => complete_annotation_tags(prefix.as_str()),
         CompletionContext::DocumentationSnippet { position } => {
@@ -968,7 +979,23 @@ fn complete_lossy_source(
         }
     };
 
+    let completions = match separator {
+        Some(separator) => filter_colon_candidates(completions, separator),
+        None => completions,
+    };
     rank_completions_for_prefix(completions, prefix.as_deref())
+}
+
+fn filter_colon_candidates(
+    mut completions: Vec<Completion>,
+    separator: FieldAccessSeparator,
+) -> Vec<Completion> {
+    // Lua's colon form always calls the selected member with an implicit self.
+    // A data field cannot be used there, even when it is available through dot.
+    if separator == FieldAccessSeparator::Colon {
+        completions.retain(|item| item.kind == CompletionKind::Function);
+    }
+    completions
 }
 
 fn rank_completions_for_prefix(

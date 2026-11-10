@@ -11,6 +11,8 @@ language or editor behavior, and migration notes call out those changes.
 - Imported generic class methods used as final arguments of another call no
   longer produce a false missing-argument diagnostic; unresolved multi-return
   tails retain their possible arity until project analysis.
+- Colon completion now omits non-callable fields while retaining callable
+  members and leaving dot-field completion available.
 - `Rot.Dice.roll` now rejects a numeric bonus too large to remain finite.
 - Zero-radius `Rot.Lighting` now respects the light's alpha channel.
 - `ShaderScan` now retries a shader whose first load failed when its source or
