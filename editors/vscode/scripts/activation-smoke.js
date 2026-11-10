@@ -243,8 +243,8 @@ async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
 
     assert.strictEqual(
       state.documentChangeListeners.length,
-      4,
-      "activation should observe edits for inline-model cancellation, live state-machine previews, shader overlays, and workspace graphs",
+      5,
+      "activation should observe edits for inline-model cancellation, live state-machine and behavior-tree previews, shader overlays, and workspace graphs",
     );
 
     assert.strictEqual(
@@ -1468,8 +1468,8 @@ async function smokeDebugLspLogging(mockServer, workspace) {
 
     assert.strictEqual(
       state.documentChangeListeners.length,
-      4,
-      "debug logging should retain inline-model, state-machine, shader, and workspace graph listeners",
+      5,
+      "debug logging should retain inline-model, state-machine, behavior-tree, shader, and workspace graph listeners",
     );
 
     await extension.deactivate();
@@ -3449,6 +3449,7 @@ function assertRegisteredCommands(state) {
     "tua.previewSprites.reload",
     "tua.previewStateMachine",
     "tua.previewStateMachine.reload",
+    "tua.previewBehaviorTree",
     "tua.assets.refresh",
     "tua.assets.preview",
     "tua.assets.open",

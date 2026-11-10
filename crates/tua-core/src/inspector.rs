@@ -6,6 +6,7 @@ use crate::{AssetValidationStatus, Diagnostic, SourceSpan};
 pub enum InspectorItem {
     SpriteSheet(SpriteSheetInspection),
     StateMachine(StateMachineInspection),
+    BehaviorTree(BehaviorTreeInspection),
 }
 
 impl InspectorItem {
@@ -13,6 +14,7 @@ impl InspectorItem {
         match self {
             Self::SpriteSheet(sprite) => sprite.span,
             Self::StateMachine(machine) => machine.span,
+            Self::BehaviorTree(tree) => tree.span,
         }
     }
 
@@ -20,8 +22,25 @@ impl InspectorItem {
         match self {
             Self::SpriteSheet(sprite) => sprite.name_span,
             Self::StateMachine(machine) => machine.name_span,
+            Self::BehaviorTree(tree) => tree.name_span,
         }
     }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct BehaviorTreeInspection {
+    pub name: String,
+    pub root: Option<BehaviorTreeNodeInspection>,
+    pub truncated: bool,
+    pub span: SourceSpan,
+    pub name_span: SourceSpan,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct BehaviorTreeNodeInspection {
+    pub kind: String,
+    pub children: Vec<BehaviorTreeNodeInspection>,
+    pub span: SourceSpan,
 }
 
 #[derive(Clone, Debug, PartialEq)]

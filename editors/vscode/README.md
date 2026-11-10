@@ -405,11 +405,13 @@ to refresh source locations. Static previews retain their existing preview setti
   conditional breakpoints, and evaluation remain standard Lua debugging. Game
   workspaces can also opt a `lua-local` launch configuration into the same
   preparation pipeline with `tuaProject: true`.
-- Compiler-backed sprite-sheet and state-machine previews. State graphs expose
+- Compiler-backed sprite-sheet, state-machine, and static behavior-tree previews. State graphs expose
   initial states, event routes, wildcard transitions, cycles, and source
   navigation without executing project code, with reserved routing corridors
   that keep return paths and self-loops clear of state cards. Hover links open
-  sprite, state-machine, and recognized asset previews directly. Experimental
+  sprite, state-machine, and recognized asset previews directly. Behavior-tree
+  previews show nested nodes with source links and mark computed branches.
+  Experimental
   previews are gated by `tua.preview.enabled`.
 
 ### Game-Focused Project Tooling

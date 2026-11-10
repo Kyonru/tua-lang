@@ -33,6 +33,20 @@ creating a runner. A definition can create many runners. Each runner owns its
 own timer and composite cursor, so actors do not share execution state. Keep
 the definition's nodes unchanged after instancing.
 
+## Static editor preview
+
+In VS Code, run **Tua: Preview Behavior Tree** from a `.tua` file to see the
+hierarchy of top-level `local tree = BehaviorTree.new(...)` definitions. Direct
+nested constructor calls appear as nodes with source links. A top-level
+`tree:setRoot(...)` call also supplies the root for a tree created without one.
+Click a node to jump to its constructor. The preview refreshes after edits and
+uses the same opt-in `tua.preview.enabled` setting as the state-machine preview.
+
+The preview reads source only; it never runs game code. Nodes supplied by a
+variable, helper function, or another module appear as **Computed node** because
+their structure cannot be known from the local expression. It does not show
+live runner statuses.
+
 `action(callback, enter?, exit?)` callbacks receive `(context, dt)` and return
 `"success"`, `"failure"`, or `"running"`. `enter(context)` runs on first visit;
 `exit(context, reason)` runs when the action finishes or its runner is reset

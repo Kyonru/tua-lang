@@ -1,6 +1,37 @@
 use super::*;
 
 #[test]
+fn inspector_returns_source_linked_behavior_tree_nodes() {
+    let temp = TempProject::new("behavior-tree-inspector");
+    let source = r#"local tree = BehaviorTree.new()
+tree:setRoot(BehaviorTree.selector({
+  BehaviorTree.condition(function(actor) return actor.ready end),
+  BehaviorTree.sequence({ BehaviorTree.wait(0.2), fallback }),
+}))
+"#;
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/ai.tua", source);
+    let uri = temp.uri_for("src/ai.tua");
+    let output = run_messages(vec![
+        initialize_with_root(1, temp.uri()),
+        did_open(&uri, source),
+        inspector_request(2, &uri, None),
+    ]);
+    let tree = &response_with_id(&output, 2)["result"]["items"][0];
+    assert_eq!(tree["kind"], "behaviorTree");
+    assert_eq!(tree["name"], "tree");
+    assert_eq!(tree["truncated"], false);
+    assert_eq!(tree["root"]["kind"], "selector");
+    assert_eq!(tree["root"]["children"][0]["kind"], "condition");
+    assert_eq!(tree["root"]["children"][1]["kind"], "sequence");
+    assert_eq!(
+        tree["root"]["children"][1]["children"][1]["kind"],
+        "dynamic"
+    );
+    assert_eq!(tree["root"]["children"][0]["range"]["start"]["line"], 2);
+}
+
+#[test]
 fn inspector_returns_compiler_backed_sprite_metadata_and_diagnostics() {
     let temp = TempProject::new("sprite-inspector");
     let source = r#"local Player = spriteSheet({

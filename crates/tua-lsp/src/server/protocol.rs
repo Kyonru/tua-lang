@@ -764,9 +764,27 @@ pub(super) fn lsp_inspector_items_from_core(items: Vec<InspectorItem>, source: &
                         "selectionRange": lsp_range_for_source(source, transition.event_span)
                     })).collect::<Vec<_>>()
                 }),
+                InspectorItem::BehaviorTree(tree) => json!({
+                    "kind": "behaviorTree",
+                    "name": tree.name,
+                    "truncated": tree.truncated,
+                    "range": lsp_range_for_source(source, tree.span),
+                    "selectionRange": lsp_range_for_source(source, tree.name_span),
+                    "root": tree.root.map(|root| lsp_behavior_tree_node(root, source))
+                }),
             })
             .collect(),
     )
+}
+
+fn lsp_behavior_tree_node(node: tua_core::BehaviorTreeNodeInspection, source: &str) -> Value {
+    json!({
+        "kind": node.kind,
+        "range": lsp_range_for_source(source, node.span),
+        "children": node.children.into_iter()
+            .map(|child| lsp_behavior_tree_node(child, source))
+            .collect::<Vec<_>>()
+    })
 }
 
 pub(super) fn lsp_type_explanation_from_core(

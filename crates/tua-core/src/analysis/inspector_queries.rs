@@ -28,6 +28,11 @@ impl AnalysisSnapshot {
                 .into_iter()
                 .map(InspectorItem::StateMachine),
         );
+        items.extend(
+            crate::behavior_tree::inspections(parsed)
+                .into_iter()
+                .map(InspectorItem::BehaviorTree),
+        );
 
         items
             .into_iter()

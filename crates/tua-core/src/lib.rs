@@ -3,6 +3,7 @@ mod annotation_tags;
 mod asset;
 mod ast_utils;
 mod audio;
+mod behavior_tree;
 mod builtin_module;
 mod bundled_runtime;
 mod busted;
@@ -180,9 +181,9 @@ pub use inline_completion::{
     ProjectPatternCorpus, RetiredProjectPatternCorpus, RetrievalBuildError, RetrievalLimits,
 };
 pub use inspector::{
-    InspectorItem, SpriteAnimationInspection, SpriteAssetInspection, SpriteFrameInspection,
-    SpriteSheetInspection, StateMachineInspection, StateMachineStateInspection,
-    StateMachineTransitionInspection,
+    BehaviorTreeInspection, BehaviorTreeNodeInspection, InspectorItem, SpriteAnimationInspection,
+    SpriteAssetInspection, SpriteFrameInspection, SpriteSheetInspection, StateMachineInspection,
+    StateMachineStateInspection, StateMachineTransitionInspection,
 };
 pub use lua::builtin_definition_document;
 pub use model_completion::{

@@ -712,7 +712,7 @@ The bundled VS Code extension also uses version-matched Tua requests:
 | Method | Result |
 | --- | --- |
 | `tua/explainType` | Source-linked type inference explanation |
-| `tua/inspect` | Structured document inspector data, including sprite sheets and static state machines |
+| `tua/inspect` | Structured document inspector data, including sprite sheets, static state machines, and static behavior trees |
 | `tua/assetInventory` | Project assets, metadata, references, and hints |
 | `tua/signalGraph` | Typed SignalBus project graph |
 | `tua/moduleGraph` | Module dependency and export graph |

@@ -67,6 +67,7 @@ const expected = [
   "tua.inlayHints.selectMode",
   "tua.previewSprites",
   "tua.previewStateMachine",
+  "tua.previewBehaviorTree",
   "tua.assets.refresh",
   "tua.assets.preview",
   "tua.assets.open",

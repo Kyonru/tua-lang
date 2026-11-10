@@ -52,6 +52,7 @@ const COMMANDS = {
   reloadSpritePreview: "tua.previewSprites.reload",
   previewStateMachine: "tua.previewStateMachine",
   reloadStateMachinePreview: "tua.previewStateMachine.reload",
+  previewBehaviorTree: "tua.previewBehaviorTree",
   refreshAssets: "tua.assets.refresh",
   previewAsset: "tua.assets.preview",
   openAsset: "tua.assets.open",

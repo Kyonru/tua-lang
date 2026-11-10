@@ -29,6 +29,7 @@ const { registerRunActivity } = require("./workspace/activity");
 const { registerWorkspaceSidebar } = require("./workspace/sidebar");
 const { registerSignalDevex } = require("./signals");
 const { registerStateMachineDevex } = require("./state-machines");
+const { registerBehaviorTreePreview } = require("./behavior-trees/preview");
 const { createDebugLogger, DEBUG_LSP_ENV } = require("./shared/debug-log");
 const { isTuaDocument } = require("./shared/documents");
 const { formatError } = require("./shared/errors");
@@ -91,6 +92,11 @@ async function activate(context) {
       isTuaDocument,
     }),
   );
+  context.subscriptions.push(registerBehaviorTreePreview({
+    configurationTarget,
+    getClient: () => client,
+    isTuaDocument,
+  }));
   context.subscriptions.push(registerSignalDevex({ getClient: () => client }));
   context.subscriptions.push(registerModuleDevex({ getClient: () => client }));
   context.subscriptions.push(registerEcsDevex({ getClient: () => client }));
