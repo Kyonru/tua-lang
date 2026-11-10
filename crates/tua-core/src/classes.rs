@@ -1245,11 +1245,74 @@ pub(crate) fn source_with_closed_protocol_bodies(source: &str) -> Option<String>
         },
     )?;
     let open = protocol_header_at(source, start)?.body_open;
+    if let Some(next_header) = next_protocol_header_in_unclosed_body(source, open) {
+        let insertion = protocol_body_close_insertion(source, open, next_header);
+        let mut recovered = String::with_capacity(source.len() + 1);
+        recovered.push_str(&source[..insertion]);
+        recovered.push('}');
+        recovered.push_str(&source[insertion..]);
+        return Some(recovered);
+    }
     let depth = matching_delimiter(source, open, '{', '}').err()?;
     if depth == 0 || depth > 32 {
         return None;
     }
     Some(format!("{source}{}", "\n}".repeat(depth)))
+}
+
+fn next_protocol_header_in_unclosed_body(source: &str, open: usize) -> Option<usize> {
+    let mut index = open + 1;
+    let mut depth = 1usize;
+    while index < source.len() {
+        if source[index..].starts_with("--") {
+            index = consume_comment(source, index);
+            continue;
+        }
+        if let Some(end) = consume_string_literal(source, index) {
+            index = end;
+            continue;
+        }
+
+        let line_start = source[..index].rfind('\n').map_or(0, |newline| newline + 1);
+        if depth == 1
+            && source[line_start..index].trim().is_empty()
+            && protocol_header_at(source, index).is_some()
+        {
+            return Some(index);
+        }
+
+        let character = source[index..]
+            .chars()
+            .next()
+            .expect("index should stay on a valid character boundary");
+        match character {
+            '{' => depth += 1,
+            '}' => depth = depth.saturating_sub(1),
+            _ => {}
+        }
+        index += character.len_utf8();
+    }
+    None
+}
+
+fn protocol_body_close_insertion(source: &str, open: usize, next_header: usize) -> usize {
+    let mut line_start = source[..open].rfind('\n').map_or(0, |newline| newline + 1);
+    let mut last_code_end = None;
+    while line_start < next_header {
+        let line_end = source[line_start..next_header]
+            .find('\n')
+            .map_or(next_header, |offset| line_start + offset);
+        let line = source[line_start..line_end]
+            .strip_suffix('\r')
+            .unwrap_or(&source[line_start..line_end]);
+        let code = strip_protocol_comments(line);
+        let code_end = code.trim_end().len();
+        if code_end > 0 {
+            last_code_end = Some(line_start + code_end);
+        }
+        line_start = line_end.saturating_add(1);
+    }
+    last_code_end.unwrap_or(open + 1)
 }
 
 /// Recover incomplete native declarations for editor queries. Build/check
@@ -1279,23 +1342,36 @@ pub(crate) fn source_with_closed_editor_declarations(source: &str) -> Option<Str
     changed.then_some(recovered)
 }
 
-/// Byte ranges for protocol headers in source that has been closed for editor
-/// analysis. Keeping these ranges intact prevents line-based incomplete-edit
-/// recovery from deleting a declaration keyword or name split across lines.
+/// Byte ranges for lexically complete protocol headers, including headers
+/// below an unfinished declaration. Keeping these ranges intact prevents
+/// line-based incomplete-edit recovery from deleting a later declaration
+/// while it repairs the earlier one.
 pub(crate) fn editor_protocol_header_ranges(source: &str) -> Vec<Range<usize>> {
-    let (declarations, _) = parse_protocol_declarations(Path::new("<editor-recovery>"), source);
+    let mut ranges = Vec::new();
+    let mut index = 0;
+    while index < source.len() {
+        if source[index..].starts_with("--") {
+            index = consume_comment(source, index);
+            continue;
+        }
+        if let Some(end) = consume_string_literal(source, index) {
+            index = end;
+            continue;
+        }
 
-    declarations
-        .into_iter()
-        .filter_map(|declaration| {
-            let start = crate::source_text::byte_for_position(source, declaration.span.start)?;
-            let name_end =
-                crate::source_text::byte_for_position(source, declaration.name_span.end)?;
-            let body_open = skip_protocol_whitespace_and_comments(source, name_end, source.len());
-            (source.as_bytes().get(body_open) == Some(&b'{')).then_some(start..body_open + 1)
-        })
-        .filter(|range| range.start < range.end && range.end <= source.len())
-        .collect()
+        let line_start = source[..index].rfind('\n').map_or(0, |newline| newline + 1);
+        if source[line_start..index].trim().is_empty() {
+            if let Some(header) = protocol_header_at(source, index) {
+                ranges.push(header.declaration_start..header.body_open + 1);
+                index = header.body_open + 1;
+                continue;
+            }
+        }
+
+        index += next_char_len(source, index);
+    }
+
+    ranges
 }
 
 fn source_with_closed_incomplete_class_header(source: &str) -> Option<String> {

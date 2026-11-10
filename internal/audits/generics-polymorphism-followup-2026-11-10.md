@@ -581,6 +581,20 @@ new protocol signature mismatch. The focused test and all 445 `tua-lsp` tests
 pass, as do strict LSP Clippy, `cargo fmt --check`, and `git diff --check`.
 Rename and cross-workspace in-flight interleavings remain unverified.
 
+### Recovery across a missing protocol boundary — November 10, 2026
+
+An actual LSP reproduction found that an unclosed protocol before a second
+protocol declaration swallowed the later declaration during degraded
+analysis, leaving member completion empty. Editor recovery now inserts the
+synthetic closer at the prior member line without shifting subsequent source
+lines, and header protection scans lexically complete declarations even below
+an unclosed body. Core recovery tests assert both declarations, the later
+member, and its original line under CRLF and a trailing comment; core snapshot
+completion and an LSP completion request verify the later member remains
+available while the original syntax error remains visible. The full core suite
+passes (1,910 passed, 1 ignored), the full LSP suite passes (446), strict
+core/LSP Clippy passes, and formatting/diff checks pass.
+
 ### In-flight dependency edit follow-up — November 10, 2026
 
 An LSP scheduler regression holds a completed worker result for an imported

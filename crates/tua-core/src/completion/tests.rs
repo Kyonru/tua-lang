@@ -502,6 +502,26 @@ final class Box<T: Updatable> {
 }
 
 #[test]
+fn completes_methods_on_same_file_protocol_parameters() {
+    let source = r#"protocol Updatable {
+  update(dt: number): nil
+}
+local function tick(value: Updatable)
+  value:
+end
+"#;
+    let completions =
+        complete_tua_source("src/main.tua", source, position_after(source, "  value:"))
+            .expect("same-file protocol member completion should succeed");
+
+    assert!(
+        labels(&completions).contains(&"update".to_owned()),
+        "same-file protocol members should be offered: {:?}",
+        labels(&completions)
+    );
+}
+
+#[test]
 fn completes_lua_doc_type_names_in_lua_files() {
     let source = r#"---@alias Player { hp: number }
 ---@return Pl

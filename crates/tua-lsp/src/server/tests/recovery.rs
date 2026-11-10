@@ -109,3 +109,32 @@ Display -- { contract body }
         assert_hover_contains(&output, 3, "local label: string");
     }
 }
+
+#[test]
+fn missing_protocol_closer_does_not_hide_following_protocol_members() {
+    let uri = "file:///tmp/missing-protocol-closer-before-next-declaration.tua";
+    let source = r#"export protocol Updatable {
+  update(dt: number): nil
+export protocol Drawable {
+  draw(): nil
+}
+local function render(value: Drawable): nil
+  value:
+end
+"#;
+    let output = run_messages(vec![
+        did_open(uri, source),
+        completion_request(2, uri, source, "  value:"),
+    ]);
+    let diagnostics = last_published_diagnostics(&output, uri);
+
+    assert!(
+        diagnostics.iter().any(|diagnostic| diagnostic["message"]
+            .as_str()
+            .is_some_and(|message| message.contains("unclosed protocol `Updatable`"))),
+        "the incomplete first declaration must remain diagnosed: {diagnostics:#?}"
+    );
+    assert!(response_with_id(&output, 2)["result"]
+        .as_array()
+        .is_some_and(|items| items.iter().any(|item| item["label"] == "draw")));
+}

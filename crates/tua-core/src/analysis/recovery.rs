@@ -173,9 +173,7 @@ pub(super) fn parse_degraded_analysis_source(
     kind: AnalysisSourceKind,
 ) -> Result<ParsedSource, Vec<Diagnostic>> {
     let protocol_header_ranges = if kind == AnalysisSourceKind::Tua && source.contains("protocol") {
-        let closed_editor_source = crate::classes::source_with_closed_editor_declarations(source)
-            .unwrap_or_else(|| source.to_owned());
-        crate::classes::editor_protocol_header_ranges(&closed_editor_source)
+        crate::classes::editor_protocol_header_ranges(source)
     } else {
         Vec::new()
     };

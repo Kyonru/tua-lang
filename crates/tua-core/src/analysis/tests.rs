@@ -8226,6 +8226,48 @@ fn incomplete_protocol_member_recovery_keeps_prior_contract_and_module_bindings(
 }
 
 #[test]
+fn incomplete_protocol_does_not_hide_later_protocol_in_degraded_analysis() {
+    let source = r#"export protocol Updatable {
+  update(dt: number): nil
+export protocol Drawable {
+  draw(): nil
+}
+local function render(value: Drawable): nil
+  value:
+end
+"#;
+    let recovered = super::recovery::parse_degraded_analysis_source(
+        Path::new("src/drawable.tua"),
+        source,
+        AnalysisSourceKind::Tua,
+    )
+    .expect("editor recovery should separate the next protocol declaration");
+
+    assert_eq!(
+        recovered
+            .protocol_declarations
+            .iter()
+            .map(|protocol| protocol.name.as_str())
+            .collect::<Vec<_>>(),
+        vec!["Updatable", "Drawable"]
+    );
+    assert_eq!(recovered.protocol_declarations[1].methods[0].name, "draw");
+    assert!(recovered.ast.to_string().contains("render"));
+
+    let path = PathBuf::from("src/drawable.tua");
+    let mut host = AnalysisHost::new();
+    host.open_document(&path, source);
+    let snapshot = host.snapshot();
+    let completions = snapshot.completion(&path, SourcePosition { line: 7, column: 9 });
+    assert!(
+        completions
+            .iter()
+            .any(|completion| completion.label == "draw"),
+        "degraded completion should resolve the following protocol's members: {completions:#?}"
+    );
+}
+
+#[test]
 fn snapshot_chained_factory_uses_final_multiple_returns() {
     let fixture = Fixture::parse(
         r#"-- file: src/main.tua

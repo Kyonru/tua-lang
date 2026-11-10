@@ -794,6 +794,30 @@ fn editor_recovery_closes_an_unfinished_protocol_without_losing_its_contract() {
 }
 
 #[test]
+fn editor_protocol_recovery_closes_before_the_next_declaration_without_shifting_lines() {
+    let source = "export protocol Updatable {\r\n  update(dt: number): nil -- trailing { comment\r\n-- next contract follows\r\nexport protocol Drawable {\r\n  draw(): nil\r\n}\r\n";
+    let recovered = crate::classes::source_with_closed_editor_declarations(source)
+        .expect("recovery should close the first protocol before the next declaration");
+    assert_eq!(
+        recovered.lines().count(),
+        source.lines().count(),
+        "editor recovery must preserve source line positions"
+    );
+
+    let parsed = parse_tua_source("src/recovery.tua", &recovered)
+        .expect("both protocol declarations should parse in the temporary source");
+    assert_eq!(
+        parsed
+            .protocol_declarations
+            .iter()
+            .map(|protocol| protocol.name.as_str())
+            .collect::<Vec<_>>(),
+        vec!["Updatable", "Drawable"]
+    );
+    assert_eq!(parsed.protocol_declarations[1].span.start.line, 4);
+}
+
+#[test]
 fn protocol_editor_recovery_handles_every_character_prefix_of_nested_types() {
     let source = "local retained = true\nexport protocol Display {\n  render(value: { text: string }): number | nil\n}\n";
 

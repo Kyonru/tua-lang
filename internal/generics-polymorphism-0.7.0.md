@@ -787,3 +787,14 @@ captured a missing-import result: the old result is suppressed and retry
 reports the newly created protocol's signature mismatch. All 445 LSP tests
 and strict LSP Clippy pass. Rename and cross-workspace in-flight permutations
 remain unverified.
+
+### Recovery across an unclosed protocol boundary — 2026-11-10
+
+Degraded editor analysis now closes an unfinished protocol before a later
+lexically complete protocol declaration. The synthetic close stays on the
+previous member line, preserving all following source line positions. Tests
+cover both protocol members, CRLF, trailing comments, core snapshot completion,
+and actual LSP completion while retaining the syntax diagnostic. The core
+suite passes (1,910 passed, 1 ignored), the LSP suite passes (446), and strict
+core/LSP Clippy passes. Broader malformed-header and multiline edit
+permutations remain open.
