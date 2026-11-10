@@ -659,3 +659,38 @@ return Dialogue
         temp.uri_for("src/dialog.tua")
     );
 }
+
+#[test]
+fn imported_no_return_class_method_has_nil_completion_hover_and_definition() {
+    let temp = TempProject::new("imported-no-return-method");
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write(
+        "src/dialog.tua",
+        r#"open class Dialogue {
+  insert(key: string) {
+    print(key)
+  }
+}
+export type DialogueInstance = Dialogue
+return { Dialogue = Dialogue }
+"#,
+    );
+    let source = r#"import type { DialogueInstance } from "dialog"
+local DialogueModule = require("dialog")
+local dialogue: DialogueInstance = DialogueModule.Dialogue.new()
+dialogue:insert("Quack")
+"#;
+    let uri = temp.uri_for("src/main.tua");
+    let mut server = TestServer::new();
+    server.send(initialize_with_pull_diagnostics(1, temp.uri(), false));
+    server.send(did_open(&uri, source));
+    server.send(completion_request(2, &uri, source, "dialogue:in"));
+    assert_completion_labels(server.output(), 2, ["insert"]);
+    server.send(hover_request(3, &uri, source, "insert(\"Quack\""));
+    assert_hover_contains(server.output(), 3, "(method) insert: (key: string) -> nil");
+    server.send(definition_request(4, &uri, source, "insert(\"Quack\"", 0));
+    assert_eq!(
+        response_with_id(server.output(), 4)["result"]["uri"],
+        temp.uri_for("src/dialog.tua")
+    );
+}

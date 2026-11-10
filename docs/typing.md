@@ -425,6 +425,13 @@ and LuaDoc local contracts belong to that declaration: reusing its name in
 another function or nested scope does not transfer the contract. This also
 applies to captured locals and imported function return inference.
 
+An unannotated function that reaches its end without returning a value has a
+`nil` return type, including methods and anonymous callbacks. That keeps
+fallthrough distinct from `any`: callers can see that no value is produced,
+and a `nil` result cannot satisfy a non-nil return contract. A function that
+returns a value-producing call whose result Tua cannot resolve remains
+dynamic.
+
 Lua initializes a declaration without a value to `nil`, so declare intended
 optional state explicitly:
 

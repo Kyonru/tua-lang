@@ -1768,9 +1768,11 @@ impl<'a> SemanticModel<'a> {
             Expression::Parentheses { expression, .. }
             | Expression::TypeAssertion { expression, .. } => self
                 .type_of_expression_return_at_depth(expression, position, return_index, depth + 1),
-            Expression::Function(function) => Some(
-                crate::types::function_type_from_body_with_metadata(self.parsed, function.body()),
-            ),
+            Expression::Function(function) => Some(crate::types::inferred_function_type_from_body(
+                self.parsed,
+                self.environment,
+                function.body(),
+            )),
             Expression::Var(var) => self.type_of_var_at_depth(var, position, depth + 1),
             _ => None,
         }

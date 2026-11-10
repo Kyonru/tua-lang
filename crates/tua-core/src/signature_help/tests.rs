@@ -210,7 +210,7 @@ log("hello",
 
     assert_eq!(
         help.signatures[0].label,
-        "function log(message: string, ...: string): any"
+        "function log(message: string, ...: string): nil"
     );
     assert_eq!(
         parameter_labels(&help),

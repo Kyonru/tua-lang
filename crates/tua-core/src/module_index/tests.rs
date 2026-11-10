@@ -51,10 +51,12 @@ return {
     assert_eq!(exports.field("enabled"), Some(&Type::boolean()));
     assert_eq!(exports.field("volume"), Some(&Type::number()));
     assert_eq!(exports.field("name"), Some(&Type::string()));
-    assert_eq!(
-        exports.field("play"),
-        Some(&Type::function([Type::Any], Type::Any))
-    );
+    let Some(Type::Function(play)) = exports.field("play") else {
+        panic!("play should be exported as a function");
+    };
+    assert_eq!(play.parameters[0].ty, Type::Any);
+    assert_eq!(play.parameters[0].name.as_deref(), Some("source"));
+    assert_eq!(play.return_types_or_any(), &[Type::nil()]);
     assert_eq!(exports.fields["play"].parameter_names, vec!["source"]);
 
     let Some(Type::Table(nested)) = exports.field("nested") else {
@@ -405,10 +407,12 @@ return score
         exports.field("get"),
         Some(&Type::function([], Type::number()))
     );
-    assert_eq!(
-        exports.field("add"),
-        Some(&Type::function([Type::number()], Type::Any))
-    );
+    let Some(Type::Function(add)) = exports.field("add") else {
+        panic!("add should be exported as a function");
+    };
+    assert_eq!(add.parameters[0].ty, Type::number());
+    assert_eq!(add.parameters[0].name.as_deref(), Some("amount"));
+    assert_eq!(add.return_types_or_any(), &[Type::nil()]);
 }
 
 #[test]
@@ -473,10 +477,12 @@ return {
     let exports = required_module_exports_for_receiver(&parsed, "audio")
         .expect("required module exports should resolve");
 
-    assert_eq!(
-        exports.field("play"),
-        Some(&Type::function([Type::Any], Type::Any))
-    );
+    let Some(Type::Function(play)) = exports.field("play") else {
+        panic!("play should be exported as a function");
+    };
+    assert_eq!(play.parameters[0].ty, Type::Any);
+    assert_eq!(play.parameters[0].name.as_deref(), Some("source"));
+    assert_eq!(play.return_types_or_any(), &[Type::nil()]);
     assert_eq!(exports.fields["play"].parameter_names, vec!["source"]);
 }
 

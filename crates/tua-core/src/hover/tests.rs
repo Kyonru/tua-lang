@@ -402,6 +402,48 @@ test(false)
 }
 
 #[test]
+fn hovers_nil_return_for_function_that_falls_through() {
+    let source = r#"local function insert(value: string)
+  print(value)
+end
+
+insert("Quack")
+"#;
+    let definition = hover_tua_source("src/main.tua", source, position_at(source, "insert(value"))
+        .expect("hover should succeed")
+        .expect("function definition should hover");
+    let call = hover_tua_source(
+        "src/main.tua",
+        source,
+        position_at(source, "insert(\"Quack\""),
+    )
+    .expect("hover should succeed")
+    .expect("function call should hover");
+
+    assert_eq!(definition.contents, "function insert(value: string): nil");
+    assert_eq!(call.contents, "function insert(value: string): nil");
+}
+
+#[test]
+fn hovers_nil_return_for_anonymous_function_that_falls_through() {
+    let source = r#"local callback = function(value: string)
+  print(value)
+end
+
+callback("Quack")
+"#;
+    let hover = hover_tua_source(
+        "src/main.tua",
+        source,
+        position_at(source, "callback(\"Quack\""),
+    )
+    .expect("hover should succeed")
+    .expect("callback call should hover");
+
+    assert_eq!(hover.contents, "local callback: (value: string) -> nil");
+}
+
+#[test]
 fn hovers_local_function_return_type_inferred_from_parameter() {
     let source = r#"local function incomplete(value: string)
   return value

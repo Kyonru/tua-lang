@@ -3755,6 +3755,26 @@ end
 }
 
 #[test]
+fn inferred_nil_return_does_not_satisfy_a_number_contract() {
+    let diagnostics = check_tua_source(
+        "src/void-return.tua",
+        r#"
+local function noop() end
+
+local function needs_number(): number
+  return noop()
+end
+"#,
+    )
+    .expect_err("a function that falls through returns nil, not any");
+
+    assert_single_mismatch(
+        &diagnostics,
+        "type mismatch at return value 1 of `needs_number`: expected number, found nil",
+    );
+}
+
+#[test]
 fn checks_annotated_anonymous_function_bodies_once() {
     let diagnostics = check_tua_source(
         "src/callback.tua",

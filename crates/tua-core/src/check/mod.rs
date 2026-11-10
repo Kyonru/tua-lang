@@ -1711,8 +1711,9 @@ impl<'a> Checker<'a> {
                 self.infer_expression_return(expression, return_index)
             }
             Expression::Function(function) => {
-                let ty = crate::types::function_type_from_body_with_metadata(
+                let ty = crate::types::inferred_function_type_from_body(
                     self.parsed,
+                    self.environment,
                     function.body(),
                 );
                 let Type::Function(signature) = &ty else {

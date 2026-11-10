@@ -1143,6 +1143,79 @@ end
 }
 
 #[test]
+fn infers_nil_returns_for_functions_that_fall_through_without_returning() {
+    let parsed = parse_tua_source(
+        "src/void-functions.tua",
+        r#"
+local function noop() end
+
+local function unresolved_result()
+  return external_call()
+end
+
+local function maybe_unresolved(flag: boolean)
+  if flag then
+    return external_call()
+  end
+end
+
+function reset()
+  print("reset")
+end
+
+final class Dialogue {
+  insert(value: string) {
+    print(value)
+  }
+}
+"#,
+    )
+    .expect("void functions should parse");
+    let environment = build_type_environment(&parsed).expect("void returns should be inferred");
+
+    for name in ["noop", "reset"] {
+        assert_eq!(
+            environment
+                .function(name)
+                .and_then(|function| function.return_type.clone()),
+            Some(Type::nil()),
+            "{name} should have a nil return type"
+        );
+    }
+    assert_eq!(
+        environment
+            .function("unresolved_result")
+            .expect("function should remain available")
+            .return_types_or_any(),
+        vec![Type::Any],
+        "an unresolved explicit return must stay dynamic"
+    );
+    assert_eq!(
+        environment
+            .function("maybe_unresolved")
+            .expect("function should remain available")
+            .return_types_or_any(),
+        vec![Type::Any],
+        "an unresolved explicit return with a fallthrough path must stay dynamic"
+    );
+
+    let Type::Table(dialogue) = environment
+        .alias("Dialogue")
+        .expect("Dialogue class should have an instance type")
+    else {
+        panic!("Dialogue should have a table-shaped instance type");
+    };
+    let Type::Function(insert) = &dialogue
+        .field("insert")
+        .expect("Dialogue.insert method should be available")
+        .ty
+    else {
+        panic!("Dialogue.insert should be callable");
+    };
+    assert_eq!(insert.return_types_or_any(), &[Type::nil()]);
+}
+
+#[test]
 fn infers_function_return_types_with_flow_sensitive_narrowing() {
     let parsed = parse_tua_source(
         "src/narrowing.tua",

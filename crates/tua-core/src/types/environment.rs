@@ -4233,13 +4233,8 @@ pub(crate) fn inferred_function_type_from_body(
     environment: &TypeEnvironment,
     body: &ast::FunctionBody,
 ) -> Type {
-    let Type::Function(mut function) = super::function_type_from_body_with_metadata(parsed, body)
-    else {
-        return Type::Any;
-    };
-
     if body.return_type().is_some() {
-        return Type::Function(function);
+        return super::function_type_from_body_with_metadata(parsed, body);
     }
 
     let aliases = environment
@@ -4247,7 +4242,7 @@ pub(crate) fn inferred_function_type_from_body(
         .map(|(name, ty)| (name.to_owned(), ty.clone()))
         .collect::<BTreeMap<_, _>>();
     let function_types = function_types_by_name(parsed, environment.functions(), &BTreeMap::new());
-    let mut locals = environment
+    let locals = environment
         .locals()
         .filter_map(|(name, _)| {
             let position = node_span(body)?.start;
@@ -4256,12 +4251,6 @@ pub(crate) fn inferred_function_type_from_body(
                 .map(|ty| (name.to_owned(), ty.clone()))
         })
         .collect::<BTreeMap<_, _>>();
-
-    for parameter in &function.parameters {
-        if let Some(name) = &parameter.name {
-            locals.insert(name.clone(), parameter.ty.clone());
-        }
-    }
 
     let runtime_imports = runtime_import_bindings(parsed);
     let context = InferenceQueryContext::new(
@@ -4274,6 +4263,37 @@ pub(crate) fn inferred_function_type_from_body(
         environment.table_remove_is_overridden(),
     )
     .with_assert_overridden(environment.assert_overridden);
+    infer_function_type_from_context(parsed, body, context, &locals)
+}
+
+fn infer_function_type_from_context(
+    parsed: &ParsedSource,
+    body: &ast::FunctionBody,
+    context: InferenceQueryContext<'_>,
+    outer_locals: &BTreeMap<String, Type>,
+) -> Type {
+    let Type::Function(mut function) = super::function_type_from_body_with_metadata(parsed, body)
+    else {
+        return Type::Any;
+    };
+
+    if body.return_type().is_some() {
+        return Type::Function(function);
+    }
+
+    let mut locals = outer_locals.clone();
+    for parameter in &function.parameters {
+        if let Some(name) = &parameter.name {
+            locals.insert(name.clone(), parameter.ty.clone());
+        }
+    }
+
+    // An anonymous function is not recursive merely because it appears inside
+    // the function currently being inferred.
+    let context = InferenceQueryContext {
+        current_function: "",
+        ..context
+    };
     if let Some(returns) = infer_block_return_types(body.block(), context, &locals) {
         *function.return_type = returns.types.first().cloned().unwrap_or(Type::Any);
         function.return_types = returns.types;
@@ -4640,11 +4660,34 @@ fn infer_block_return_types(
     locals: &BTreeMap<String, Type>,
 ) -> Option<InferredReturns> {
     let mut returns = Vec::new();
+    let mut has_unresolved_return = false;
 
-    collect_return_types_in_block(block, context, locals, &[], &mut returns);
+    collect_return_types_in_block(
+        block,
+        context,
+        locals,
+        &[],
+        &mut returns,
+        &mut has_unresolved_return,
+    );
 
     if returns.is_empty() {
-        return None;
+        if has_unresolved_return {
+            return None;
+        }
+
+        // A body with no return statements and a reachable end implicitly
+        // returns Lua nil. Do not treat an unconditional loop as a nil result;
+        // Tua has no `never` type for bodies that cannot complete normally.
+        return crate::control_flow::block_fallthrough_position(
+            block,
+            crate::parser::SourcePosition { line: 1, column: 1 },
+            &|_| false,
+        )
+        .map(|_| InferredReturns {
+            types: vec![Type::nil()],
+            guarded: None,
+        });
     }
 
     if block_may_fall_through(block) {
@@ -4723,6 +4766,7 @@ fn collect_return_types_in_block(
     locals: &BTreeMap<String, Type>,
     guards: &[ReturnGuard],
     returns: &mut Vec<Vec<Type>>,
+    has_unresolved_return: &mut bool,
 ) {
     let mut scoped_locals = locals.clone();
     let mut guards = guards.to_vec();
@@ -4773,6 +4817,7 @@ fn collect_return_types_in_block(
                 &scoped_locals,
                 &guards,
                 returns,
+                has_unresolved_return,
             ),
             ast::Stmt::GenericFor(for_stmt) => collect_return_types_in_block(
                 for_stmt.block(),
@@ -4780,6 +4825,7 @@ fn collect_return_types_in_block(
                 &scoped_locals,
                 &guards,
                 returns,
+                has_unresolved_return,
             ),
             ast::Stmt::If(if_stmt) => {
                 let branch_locals = locals_with_condition_narrowing(
@@ -4794,6 +4840,7 @@ fn collect_return_types_in_block(
                     &branch_locals,
                     &guards,
                     returns,
+                    has_unresolved_return,
                 );
 
                 if let Some(else_ifs) = if_stmt.else_if() {
@@ -4810,6 +4857,7 @@ fn collect_return_types_in_block(
                             &branch_locals,
                             &guards,
                             returns,
+                            has_unresolved_return,
                         );
                     }
                 }
@@ -4821,6 +4869,7 @@ fn collect_return_types_in_block(
                         &scoped_locals,
                         &guards,
                         returns,
+                        has_unresolved_return,
                     );
                 }
                 if if_stmt.else_if().is_none()
@@ -4842,6 +4891,7 @@ fn collect_return_types_in_block(
                 &scoped_locals,
                 &guards,
                 returns,
+                has_unresolved_return,
             ),
             ast::Stmt::Repeat(repeat) => collect_return_types_in_block(
                 repeat.block(),
@@ -4849,6 +4899,7 @@ fn collect_return_types_in_block(
                 &scoped_locals,
                 &guards,
                 returns,
+                has_unresolved_return,
             ),
             ast::Stmt::While(while_stmt) => collect_return_types_in_block(
                 while_stmt.block(),
@@ -4856,6 +4907,7 @@ fn collect_return_types_in_block(
                 &scoped_locals,
                 &guards,
                 returns,
+                has_unresolved_return,
             ),
             ast::Stmt::LocalFunction(_) => {}
             _ => {}
@@ -4867,6 +4919,8 @@ fn collect_return_types_in_block(
             infer_return_statement_types(return_stmt, context.expression(&scoped_locals))
         {
             returns.push(return_types);
+        } else {
+            *has_unresolved_return = true;
         }
     }
 }
@@ -5308,9 +5362,11 @@ fn infer_expression_return_type(
         | Expression::TypeAssertion { expression, .. } => {
             query.return_type(expression, return_index)
         }
-        Expression::Function(function) => Some(super::function_type_from_body_with_metadata(
+        Expression::Function(function) => Some(infer_function_type_from_context(
             query.context.parsed,
             function.body(),
+            query.context,
+            query.locals,
         )),
         Expression::Var(var) => infer_var_type(query, var),
         _ => None,
