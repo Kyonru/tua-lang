@@ -13,21 +13,20 @@ workflow pages under `docs/`. Completed work belongs in
 ### 0.7.0: Protocol Contracts And Generics
 
 The planned protocol, generic-alias, generic-function, and scoped generic-class
-features are implemented. The recent semantics/editor audit also fixed generic
-callback bound validation, imported protocol views, protocol `Self` variance,
-duplicate protocol methods, related-type inference order, and generic-alias
-navigation/completion. This does not complete every P0–P5/R0 qualification gate
-in `internal/generics-polymorphism-0.7.0.md`.
+features are implemented for the documented 0.7.0 contract. The November 10
+final audit passed the workspace, LSP, CLI, and VS Code checks; an exact local
+macOS arm64 VSIX also passed the installed real-server suite. No unimplemented
+language capability inside that scoped contract is currently known.
 
-Remaining language and project-analysis work includes cross-module class
-inheritance/conformance and broader recovery from malformed or incomplete
-protocol declarations. Generic callback-only
-inference, generic methods, explicit call-site type arguments, and bounded
-LuaDoc generics remain unsupported and should stay explicit feature gaps.
-Protocol and generic behavior still needs installed-editor, runtime, source-map,
-hot-reload, cross-platform, and long-session qualification. Use the shared type
-model across checker, editor, and project analysis; add focused regressions as
-each gap is addressed.
+The remaining work is qualification, not an unfinished implementation of the
+scoped language features: LOVE/LuaJIT runtime and visual checks, non-macOS
+platforms and other LSP clients, long-session memory, and repeated release-host
+performance baselines. Cross-module class inheritance, generic methods and
+protocols, compound bounds, callback-only/return-only generic inference, and
+explicit call-site type arguments remain deliberate limits of this contract;
+do not imply they are supported. See the final audit addendum in
+`internal/audits/generics-polymorphism-0.7.0-final/REPORT.md` for exact evidence
+and environment limits.
 
 Owner: core parser/semantic/checker/emitter and IDE queries; LSP and VS Code
 consume shared results. Each behavior lands with its own tests and documentation.
@@ -76,6 +75,16 @@ missing methods and unsafe signatures fail at the implementation declaration.
 - Measure actual VS Code key-to-menu latency, pull-diagnostic client behavior,
   larger-project imports, and LOVE hot reload. Protocol replay covers dialogue,
   main, combat, import paths and format-apply-save, but not UI/rendering latency.
+- Investigate the November 10 release-build LSP stress result: a synthetic
+  1,000-module workspace did not finish profiling after 270 seconds; its active
+  server was sampled at about 3.75 GiB RSS and 299% CPU. The same profile had
+  sub-millisecond warm completion p95 on the 100-module fixture. The 1,000-file
+  run was stopped before a response or root cause was established; do not
+  generalize the stress result to normal projects. Reproduce with
+  `TUA_REPRESENTATIVE_COLD_REPEAT=5 TUA_REPRESENTATIVE_WARM_REPEAT=20
+  TUA_REPRESENTATIVE_CONTENTION_REPEAT=20 make profile-representative`, then
+  profile workspace warming and retained per-file/snapshot data before
+  proposing a code change.
 - Extend installed-editor qualification to prolonged real-project editing,
   Test Explorer/coverage interactions, hot reload and full-game visual parity.
   Candidate installation, real-server language features and five graphical

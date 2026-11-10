@@ -620,3 +620,21 @@ boolean requirement. The protocol document's own queued diagnostics are also
 allowed to run. The focused regression and all 443 `tua-lsp` tests pass;
 strict LSP Clippy, `cargo fmt --check`, and `git diff --check` pass. Broader
 workspace, filesystem, and concurrent scheduler interleavings remain open.
+
+### Final audit handoff — November 10, 2026
+
+The subsequent final audit passed `make verify` with loopback access, rebuilt
+and installed the exact VSIX, and verified its archive integrity. The final
+package checksum and installed VS Code result are recorded in
+`generics-polymorphism-0.7.0-final/REPORT.md`. No new protocol/generic
+correctness defect was reproduced.
+
+A separate release-build scale profile found a performance issue outside the
+protocol/generic correctness surface: the synthetic 1,000-module LSP workspace
+reached a sampled 3,931,696 KiB RSS and did not finish the full 5/20/20 cold,
+warm, and contention run within 270 seconds. A narrowed one-round run warmed
+in 1.88 seconds but canceled all four contention requests; the CLI check of
+those 1,000 files completed in 6.33 seconds. This is tracked as PERF-001 in the
+final audit report. The cause is not yet established. LOVE/LuaJIT, visual,
+non-macOS, second-client, and long-session checks remain host-dependent and
+unqualified.

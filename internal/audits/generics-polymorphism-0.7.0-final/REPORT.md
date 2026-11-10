@@ -16,6 +16,12 @@ across modules. The November 10 boundary fixes are separate commits
 protocol-header, diagnostic, documentation, cycle, dependency-deletion,
 dependency-rename, inherited-requirement, multi-workspace isolation, and
 malformed-declaration fuzz coverage.
+
+**Current status note (November 10):** The authoritative phase and scope
+reconciliation is at the end of this report. It resolves the old cyclic
+protocol finding, records current host-specific package verification, and adds
+one high-scale LSP performance finding. Earlier issue counts and open labels
+are historical snapshots.
 Scope: `internal/generics-polymorphism-0.7.0.md`, protocol contracts, native generics, type inference, editor surfaces, Lua erasure, and the locally shareable VS Code extension.  
 Working tree before audit: clean. No unrelated project changes were present.
 
@@ -747,17 +753,24 @@ All commands ran from repository root unless noted.
 
 The VS Code/Electron tests require local host access for the editor and language server. A sandboxed first attempt terminated Electron with `SIGABRT`; rerunning with the approved local host access completed and passed. This was a test-environment restriction, not a Tua assertion failure.
 
-## Prioritized backlog
+## Prioritized backlog (reconciled November 10, 2026)
 
-| Priority | Group | Effort | Acceptance criteria |
+No confirmed correctness defect remains open in the scoped 0.7.0 feature set.
+The following are explicit scope boundaries or qualification work, not hidden
+implementation tasks:
+
+| Priority | Category | State | Next evidence or decision |
 | --- | --- | --- | --- |
-| 1 | Cross-module inheritance and inherited protocol conformance design | L | A written contract covers runtime initialization/`super`, nominal identity, imports, cycles/invalidation, navigation, and diagnostics before parser or emitter work begins. |
-| 2 | Cold and long-session performance qualification | M | Repeated release-host cold/warm p50/p95, dependency-edit timing, peak/retained memory, and a documented comparison against an agreed baseline. |
-| 3 | Runtime/platform qualification | M/L | Linux, Windows, Intel Mac, Apple Silicon CI; supported LuaJIT/LOVE smoke; generated behavior and source maps checked; hot reload and long-session results recorded. |
-| 4 | Finish broad protocol malformed-edit, override, and diagnostic-range matrix | M | Table-driven tests cover partial headers, nested comments/types, all inherited overrides, cancellation and exact primary/related ranges across local and imported declarations. |
-| 5 | Generic installed-editor parity expansion | S/M | Completed in this continuation: installed VSIX now checks unsaved generic dependency type refresh/restoration and cross-file generic function and class-member navigation. |
+| 1 | External runtime/platform qualification | Pending environment | Run on Windows, Linux, Intel Mac, supported LOVE/LuaJIT versions, and a second LSP client. The current host has Lua 5.4.8 but no LOVE or LuaJIT. |
+| 2 | Long-session memory and live-editor performance | Pending qualification | Repeat an installed-editor real-game session with retained-memory profiling and multiple cold/warm samples. Current benchmark profile is recorded in this final audit addendum; it has no pre-change baseline. |
+| 3 | Visual LOVE/editor review | Pending environment | Run the game and review rendered behavior and extension UI on a host with LOVE and VS Code. Protocol/generic runtime behavior has system-Lua tests; these do not replace LOVE rendering. |
+| 4 | Cross-module class inheritance | Deliberately outside this contract | Only pursue after a separate design for superclass resolution, initialization/`super`, cycles, invalidation, navigation, and diagnostics. Generic class inheritance across modules remains supported for the documented imported-instance workflow. |
+| 5 | Broader language abstractions | Deliberately unsupported | Generic methods/protocols, compound bounds, callback-only or return-only generic inference, and explicit call-site type arguments remain outside the documented surface. |
+| 6 | Exhaustive malformed-input and scheduler interleavings | Non-exhaustive test boundary | The recovered protocol/class header shapes, UTF-8 boundaries, later declarations, stale dependency results, and create/delete/edit cases have regressions. The test suite does not enumerate every arbitrary edit sequence; no defect was reproduced in the covered cases. |
 
-Recommended sequence: design cross-module class extension separately; expand performance baselines and runtime/platform gates; complete protocol edge-case coverage. Keep the current scoped 0.7.0 beta contract explicit until those workstreams land.
+Recommended sequence for future work: complete host-dependent qualification, then
+make a separate cross-module inheritance design decision. Do not describe the
+current host-specific VSIX as cross-platform or LOVE-qualified.
 
 ## Reproduction fixture
 
@@ -789,3 +802,123 @@ env TUA_TEST_VSIX="$PWD/editors/vscode/tua-0.7.0.vsix" npm --prefix editors/vsco
 ```
 
 This test uses an isolated VS Code profile and does not install into the user's normal profile.
+
+## Final audit reconciliation — November 10, 2026
+
+This section supersedes earlier status snapshots in this report and the
+November 9 phase table. It was checked against the current `main` tree at
+`d5058b1d` and `make verify` was rerun with loopback access. The scoped
+implementation is complete: this audit found no confirmed open compiler,
+project-analysis, LSP, lowering, or VS Code defect in the documented 0.7.0
+contract. This statement is limited to tested behavior; it is not a claim of
+exhaustive proof over all possible programs or editor event interleavings.
+
+| Area | Final status | Evidence and limits |
+| --- | --- | --- |
+| Protocols and polymorphism | Implemented for the documented method-only, explicit-conformance contract | Local and imported conformance, inherited local implementations, multiple obligations, variance, protocol calls, recursive signatures, structured diagnostics, source ranges, related locations, and runtime dispatch are covered. Cross-module class inheritance is deliberately outside the contract. |
+| Generic aliases/functions/classes | Implemented for the documented slice | Substitution, imports/re-exports, recursion limits, direct and contextual inference, callbacks, multi-return slots, constructor/member/parent substitution, protocol bounds, and editor queries have core/CLI/LSP coverage. Generic methods/protocols, compound bounds, callback-only/return-only inference, and explicit call-site arguments are deliberately unsupported. |
+| Malformed edits and dependency freshness | Exercised, not exhaustive | Protocol and generic-class header recovery, comment-aware boundaries, UTF-8 prefix handling, later declarations, last-good facts, create/delete/rename/edit, cyclic imports, workspace changes, and an in-flight stale diagnostic result are tested. Arbitrary edit streams and all cancellation interleavings are not exhaustively enumerated; no defect was reproduced in the covered cases. |
+| Editor behavior | Verified on this host | LSP suite and 180 VS Code checks pass. The exact packaged VSIX is installed and tested with a real server on macOS arm64. Other OSes and LSP clients were not available for this run. |
+| Runtime and emission | Verified with system Lua; LOVE remains unverified | Generated examples, protocol dispatch, generic results, Lua syntax, source maps, and generic-class traceback mapping pass. This host has Lua 5.4.8; `love` and `luajit` are unavailable, so LOVE/LuaJIT, visual behavior, and hot reload inside a running game were not exercised here. |
+| Performance and memory | Representative current-host profile completed; release qualification remains open | The five-cold/twenty-warm/twenty-contention release profile is recorded below. It has no pre-change baseline. A long-session VS Code retained-memory run is still needed. |
+
+`make verify` passed with local loopback access: 1,910 core tests passed (1
+ignored), 446 LSP tests, 93 CLI unit tests passed (2 ignored), 137 CLI
+integration tests, 3 gameplay tests, 1 helper-default test, 3 LOVE-example
+build tests, 1 LSP smoke test, 1 Lua syntax test, and all 180 VS Code checks.
+Workspace Clippy, version/schema checks, language reference and mutant
+validation, JSON checks, and `git diff --check` passed. The three LOVE example
+tests build successfully but skip launching LOVE when it is unavailable.
+
+The restricted run initially failed only because the VS Code inspector checks
+could not bind `127.0.0.1` (`listen EPERM`). The same full command was rerun with
+local loopback access and passed. Representative profiling likewise required
+local process sampling; the sandboxed attempt failed with `spawn EPERM` before
+recording samples, and the loopback/process-enabled retry completed.
+
+The profile ran against the optimized CLI on this macOS arm64 host with five
+cold, twenty warm, and twenty contention samples. It completed `single-1000`,
+`single-5000`, and `project-100`; their p95 values are recorded in PERF-001.
+The attempt to continue through `project-1000` was interrupted after 270
+seconds at a sampled 3.75 GiB RSS, before the profiler wrote a complete JSON
+report. No comparable pre-change baseline is available, and this protocol
+profile is not a substitute for installed-editor key-to-menu latency or
+long-session memory qualification.
+
+The following remain explicitly outside local completion and must not be
+misrepresented as unfinished 0.7.0 implementation bugs: cross-module class
+inheritance is a separate design decision; generic methods/protocols,
+compound bounds, callback-only or return-only inference, and explicit call-site
+type arguments are unsupported by the documented contract. Platform/runtime,
+visual, second-client, and long-session checks require their respective
+external environments. A final VSIX checksum and installed-package result are
+recorded after packaging below.
+
+### PERF-001 — Synthetic 1,000-module LSP workspace did not finish profiling
+
+- **Category / severity:** Performance and memory scalability; High for the
+  tested stress workload, not established for ordinary projects.
+- **Confidence / status:** Confirmed observed symptom; root cause unresolved.
+  This is the one new issue found by the final re-audit, outside language
+  correctness.
+- **Reproduction command:**
+
+  ```sh
+  TUA_REPRESENTATIVE_COLD_REPEAT=5 \
+  TUA_REPRESENTATIVE_WARM_REPEAT=20 \
+  TUA_REPRESENTATIVE_CONTENTION_REPEAT=20 \
+  make profile-representative
+  ```
+
+  The profile visits the generated single-file, multi-module, and dependency
+  graph fixtures in sequence. On `project-1000` it continued for 270 seconds
+  without producing a completed profile result, so I stopped it. A process
+  sample during that stage showed the active `target/release/tua lsp` at
+  3,931,696 KiB RSS (about 3.75 GiB) and 298.6% CPU. The command emits its
+  final JSON only after all selected fixtures finish; this interrupted run
+  therefore has no complete profile artifact.
+- **Completed fixture results (p95):**
+
+  | Fixture | Completion cold / warm | Hover cold / warm | Contention completion | Diagnostics after edit |
+  | --- | ---: | ---: | ---: | ---: |
+  | `single-1000` | 267.54 / 8.59 ms | 274.47 / 23.21 ms | 162.14 ms; 0/640 canceled, 0 stale | 78.97 ms |
+  | `single-5000` | 1,584.78 / 153.84 ms | 1,524.20 / 100.29 ms | 1,102.82 ms; 1/640 canceled, 0 stale | 470.56 ms |
+  | `project-100` | 122.77 / 0.42 ms | 126.65 / 1.60 ms | 32.07 ms; 2/640 canceled, 0 stale | 17.72 ms |
+
+  `project-100` has 100 files and 1,401 lines; `single-1000` and
+  `single-5000` are one source file with exactly the named line count. The
+  single-5000 values show that latency also rises substantially with one very
+  large file. This suggests scale issues in the tested stress shapes, but does
+  not establish a threshold or whether the cause is generic/protocol analysis.
+- **Expected:** A large workspace should either warm and answer requests within
+  a documented resource budget, or report bounded progress/cancellation rather
+  than retain several GiB without a usable profile response.
+- **Likely cause:** Not established. The profile opens the entry document while
+  the server discovers and warms the project; separate parse, semantic,
+  last-good, and snapshot ownership are candidate areas to measure, not a
+  verified root cause.
+- **Recommended next step:** Capture allocator/heap and per-phase workspace-warm
+  data on this fixture, compare against the 100-module case, then reduce the
+  measured largest retained structures. Add a stress regression with an agreed
+  memory ceiling and a completion/freshness acceptance bound. Do not patch
+  caching heuristically from RSS alone.
+- **Related evidence:** The same profile completed `single-1000`,
+  `single-5000`, and `project-100`; values and setup are summarized above.
+  `project-1000` and the later dependency-graph fixtures were not completed.
+
+  A narrowed follow-up used only `project-1000`, one cold/warm/contention
+  round, and a four-request background burst. It completed workspace warming
+  in 1,883.60 ms; one-sample warm completion was 9.04 ms, while cold
+  completion/hover/definition/inlay requests were 2.53/2.64/6.55/2.95 seconds.
+  Peak sampled RSS was 1,106 MiB. All four contention requests were canceled,
+  so the script exited with `no valid-document contention completion was
+  checked`; this does not qualify responsiveness under churn. A separate CLI
+  `tua check` of the generated 1,000-file project completed in 6.33 seconds.
+  This narrows the symptom to LSP cold/query/contention behavior in the tested
+  fixture, but does not establish the cause.
+
+The exact packaged `editors/vscode/tua-0.7.0.vsix` passed installation and the
+isolated real-server VS Code test on VS Code 1.142.0/macOS arm64. `make
+extension-package` passed all 180 extension tests and reported zero npm
+vulnerabilities. `unzip -tq` reported no archive errors. SHA-256:
+`f170759fa748a610a5e4ff36303ed4585016153e84b987e0dac115061ad3303a`.
