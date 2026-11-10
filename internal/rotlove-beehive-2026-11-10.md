@@ -63,15 +63,32 @@ public API is frozen.
 
 ## Verification
 
+### Follow-up verification on 2026-11-10
+
+The post-implementation runtime review reproduced two edge cases directly
+with Lua 5.4: a transparent light with radius zero contributed red light, and
+a 400-digit positive dice bonus returned infinity. The fixes are separate
+commits (`54f55c7c` and `fe981775`). The generated-Lua integration fixture
+now asserts both contracts, and `RUST_MIN_STACK=16777216 cargo test -p tua-cli
+--test rot` passes with both tests. `cargo fmt --all -- --check` and
+`git diff --check` pass. The package was rebuilt after both fixes.
+`make extension-package` passed all
+180 extension checks and produced `editors/vscode/tua-0.7.0.vsix` with SHA-256
+`a53e4fc4113a208ffa6e8f96ae4d7d1829ef623ae3f56849bb9d58197ebac79f`.
+The earlier full workspace test result below predates these two runtime fixes;
+the changed runtime was checked with the focused generated-Lua integration test.
+
 - `RUST_MIN_STACK=16777216 cargo test -p tua-core module_types_are_structural_and_carry_their_contracts` — passed; the bundled runtime parses and exports structural public types.
 - `RUST_MIN_STACK=16777216 cargo test -p tua-core rot_module_checks_seeded_map_and_dice_contracts` — passed; invalid map algorithms and RNG argument types are rejected.
 - `RUST_MIN_STACK=16777216 cargo test -p tua-cli --test rot` — 2 passed. Builds and executes generated
   Lua, checks two maze algorithms across 20 seeds each, deterministic RNG and
   noise, pathing, visibility, color parsing, dice, grammars, lighting, and
   absence of the runtime in an unused project.
-- `lua` is Lua 5.4.8 in this environment. No LuaJIT, Lua 5.1, or LOVE executable
-  is installed, so native runtime compatibility was not executed here; the
-  source uses Lua 5.1 syntax and the test also runs Tua's parser/checker.
+- `lua` is Lua 5.4.8 in this environment. No separate LuaJIT or Lua 5.1
+  executable is installed. LÖVE 11.5 is present, but a temporary headless
+  launch timed out before it produced runtime output even with permission to
+  launch the app. The runtime uses Lua 5.1 syntax; execution under LÖVE's
+  LuaJIT remains unverified here.
 - `make docs-build` — passed after using a theme icon available in the bundled
   icon set.
 - `cargo fmt --all -- --check` and `git diff --check` — passed.
@@ -89,8 +106,8 @@ public API is frozen.
 
 ## Follow-up
 
-1. Test the VSIX in VS Code and run the runtime under LuaJIT and LOVE when
-   those are available.
+1. Test the VSIX in VS Code and run the runtime under LOVE in a working
+   graphical session or with a standalone LuaJIT executable.
 2. Use an actual small roguelike to decide whether precise shadowcasting,
    weighted paths, more dungeon generators, and broader color catalogs should
    become independent follow-up features.
