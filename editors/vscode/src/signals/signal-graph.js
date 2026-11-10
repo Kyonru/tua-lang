@@ -3,10 +3,12 @@
 const vscode = require("vscode");
 const { COMMANDS } = require("../constants");
 const { displayUriPath, openLocationMessage } = require("../shared/locations");
+const { createRenderGate } = require("../shared/render-gate");
 const { escapeHtml, jsonForHtml, webviewDocument } = require("../shared/webview");
 
 let graphPanel;
 let latestGraphViewModel;
+const renderGate = createRenderGate();
 
 function registerSignalGraphFeature({ getClient }) {
   const command = vscode.commands.registerCommand(COMMANDS.showSignalGraph, () =>
@@ -15,6 +17,7 @@ function registerSignalGraphFeature({ getClient }) {
 
   return vscode.Disposable.from(command, {
     dispose() {
+      renderGate.invalidate();
       graphPanel?.dispose?.();
       graphPanel = undefined;
     },
@@ -42,6 +45,7 @@ async function showSignalGraph({ getClient }) {
       },
     );
     graphPanel.onDidDispose?.(() => {
+      renderGate.invalidate();
       graphPanel = undefined;
     });
     graphPanel.webview.onDidReceiveMessage?.((message) =>
@@ -76,15 +80,18 @@ async function handleGraphMessage(message, { getClient }) {
 }
 
 async function renderSignalGraph(panel, client) {
+  const request = renderGate.begin();
   panel.webview.html = signalGraphLoadingHtml(panel.webview);
 
   try {
     const graph = await client.sendRequest("tua/signalGraph", null);
+    if (!renderGate.isCurrent(request) || graphPanel !== panel) return;
     const viewModel = signalGraphViewModel(graph);
     latestGraphViewModel = viewModel;
 
     panel.webview.html = signalGraphHtml(panel.webview, viewModel);
   } catch (error) {
+    if (!renderGate.isCurrent(request) || graphPanel !== panel) return;
     latestGraphViewModel = undefined;
     panel.webview.html = signalGraphErrorHtml(panel.webview, error);
   }
@@ -453,9 +460,13 @@ function signalGraphHtml(webview, graph) {
       root.replaceChildren();
 
       if (events.length === 0) {
+        root.style.minWidth = "0";
+        root.style.height = "auto";
         const empty = document.createElement("div");
         empty.className = "empty";
-        empty.textContent = graphData.events.length === 0 ? "No SignalBus calls found." : "No matching signal calls.";
+        empty.textContent = graphData.events.length === 0
+          ? "No SignalBus calls found. Add an event declaration, listener, or emit call to see it here."
+          : "No signal calls match these filters.";
         root.appendChild(empty);
         inspector.replaceChildren();
         return;
@@ -470,6 +481,7 @@ function signalGraphHtml(webview, graph) {
       }
 
       const width = Math.max(root.clientWidth || 0, 720);
+      root.style.minWidth = "";
       const rowHeight = 62;
       const top = 18;
       const nodeWidth = Math.min(260, Math.max(210, Math.floor(width * 0.31)));
@@ -802,10 +814,12 @@ function documentHtml(webview, title, body, script) {
       .call-row code, .call-row .payload { grid-column: 1 / -1; }
       .conflict-row { grid-template-columns: minmax(0, 1fr); }
     }
+    button:focus-visible, .node:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--vscode-focusBorder); outline-offset: 2px; }
   ` });
 }
 
 module.exports = {
   registerSignalGraphFeature,
+  signalGraphHtml,
   signalGraphViewModel,
 };

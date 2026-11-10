@@ -60,7 +60,9 @@ class BrowserSession {
 
   async documentContext(title) {
     return waitFor(async () => {
-      for (const context of this.contexts.values()) {
+      // Replacing webview.html can leave a detached context alive briefly. The
+      // newest matching document is the one currently displayed by VS Code.
+      for (const context of [...this.contexts.values()].reverse()) {
         try {
           if (await this.evaluate("document.title", context.id) === title) return context.id;
         } catch { /* A replaced webview's execution context may already be gone. */ }

@@ -8,6 +8,13 @@ const { BrowserSession, waitFor } = require("./cdp");
 const { spritePreviewHtml, spritePreviewErrorHtml } = require("../../src/love/sprite-preview/template");
 const { stateMachinePreviewHtml } = require("../../src/state-machines/template");
 const { behaviorTreePreviewHtml } = require("../../src/behavior-trees/preview");
+const { audioExplorerHtml, audioExplorerErrorHtml } = require("../../src/audio");
+const { ecsExplorerHtml } = require("../../src/ecs/template");
+const { moduleGraphHtml } = require("../../src/modules/template");
+const { objectPoolExplorerHtml } = require("../../src/object-pools/template");
+const { signalGraphHtml } = require("../../src/signals/signal-graph");
+const { serverHealthHtml } = require("../../src/health/template");
+const { serverHealthViewModel } = require("../../src/health/view-model");
 
 async function run() {
   const panel = vscode.window.createWebviewPanel("tuaPreviewTest", "Tua Preview Test", vscode.ViewColumn.One, { enableScripts: true });
@@ -96,7 +103,7 @@ async function run() {
     assert.equal(await evaluate("window.dispatchEvent(new MessageEvent('message', { data:{command:'reloadComplete'} })); document.getElementById('reload-preview').disabled"), false, "reload remains available if the server cannot refresh");
     await screenshot("animation");
     await workbench.send("Emulation.setDeviceMetricsOverride", { width: 640, height: 900, deviceScaleFactor: 1, mobile: false });
-    await waitFor(() => evaluate("window.innerWidth <= 640"), "narrow animation viewport");
+    await waitFor(() => workbench.evaluate("window.innerWidth <= 640"), "narrow animation viewport");
     assert.equal(await evaluate("document.querySelector('.stage').getBoundingClientRect().bottom <= document.querySelector('.inspector').getBoundingClientRect().top + 1"), true, "narrow preview must not cover playback controls");
     assert.equal(await evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1"), true, "narrow animation layout must not overflow the page");
     await screenshot("animation-narrow");
@@ -138,7 +145,7 @@ async function run() {
     assert.equal(await evaluate("document.querySelector('#machine-picker').selectedOptions[0].textContent"), "player");
     await screenshot("state-machine");
     await workbench.send("Emulation.setDeviceMetricsOverride", { width: 640, height: 900, deviceScaleFactor: 1, mobile: false });
-    await waitFor(() => evaluate("window.innerWidth <= 640"), "narrow graph viewport");
+    await waitFor(() => workbench.evaluate("window.innerWidth <= 640"), "narrow graph viewport");
     assert.equal(await evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1"), true, "narrow graph layout must not overflow the page");
     await screenshot("state-machine-narrow");
     const behaviorNode = (kind, line, children = []) => ({ kind, range: { start: { line, character: 0 }, end: { line, character: 8 } }, children });
@@ -165,6 +172,42 @@ async function run() {
     await screenshot("behavior-tree-narrow");
     await workbench.send("Emulation.clearDeviceMetricsOverride");
     await screenshot("behavior-tree");
+    const emptyExplorers = [
+      ["Module Graph", moduleGraphHtml(panel.webview, { analysisRevision: 1, modules: [], edges: [], cycles: [] }), "#filter"],
+      ["ECS Explorer", ecsExplorerHtml(panel.webview, { analysisRevision: 1, components: [], systems: [], queries: [], insights: [] }), "#filter"],
+      ["Object Pool Explorer", objectPoolExplorerHtml(panel.webview, { analysisRevision: 1, pools: [], operations: [], insights: [] }), "#filter"],
+      ["Signal Graph", signalGraphHtml(panel.webview, { events: [] }), "#event-filter"],
+      ["Server Health", serverHealthHtml(panel.webview, serverHealthViewModel({ revision: 1 })), "#reload"],
+    ];
+    for (const [title, html, focusSelector] of emptyExplorers) {
+      await load(html, title);
+      await waitFor(() => evaluate(`Boolean(document.querySelector(${JSON.stringify(focusSelector)}))`), `${title} controls`);
+      await workbench.send("Emulation.setDeviceMetricsOverride", { width: 640, height: 900, deviceScaleFactor: 1, mobile: false });
+      await waitFor(() => workbench.evaluate("window.innerWidth <= 640"), `${title} narrow viewport`);
+      assert.equal(await evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1"), true, `${title} should fit a narrow editor`);
+      if (title === "Signal Graph") {
+        assert.equal(await evaluate("(() => { const empty = document.querySelector('.graph .empty')?.getBoundingClientRect(); return empty && empty.left >= 0 && empty.left < window.innerWidth && empty.width <= window.innerWidth; })()"), true,
+          "the signal empty state must be visible without horizontal scrolling");
+      }
+      await screenshot(title.toLowerCase().replaceAll(" ", "-") + "-narrow");
+      await workbench.send("Emulation.clearDeviceMetricsOverride");
+    }
+    const audioGraph = { systems: [{ uri: "file:///game/audio.tua", range: { start: { line: 4 } }, buses: ["master"], cues: ["hit"], musicStates: [], layers: [], effects: [] }] };
+    await load(audioExplorerHtml(panel.webview, audioGraph, [{ path: "assets/hit.ogg", assetUri: "file:///game/assets/hit.ogg", bpm: 120, confidence: 0.9 }]), "Audio Explorer");
+    await waitFor(() => evaluate("document.querySelectorAll('[data-uri]').length === 2"), "audio source and asset actions");
+    await evaluate("document.querySelector('[data-uri]').click()");
+    await waitFor(() => messages.some(message => message.command === "openLocation" && message.uri === "file:///game/audio.tua" && message.range?.start?.line === 4), "audio declaration navigation");
+    await screenshot("audio-explorer");
+    await workbench.send("Emulation.setDeviceMetricsOverride", { width: 640, height: 900, deviceScaleFactor: 1, mobile: false });
+    await waitFor(() => workbench.evaluate("window.innerWidth <= 640"), "narrow audio viewport");
+    assert.equal(await evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1"), true, "audio explorer should fit a narrow editor");
+    await screenshot("audio-explorer-narrow");
+    await workbench.send("Emulation.clearDeviceMetricsOverride");
+    const audioReloadCount = messages.filter(message => message.command === "reload").length;
+    await load(audioExplorerErrorHtml(panel.webview, new Error("Server unavailable")), "Audio Explorer");
+    assert.equal(await evaluate("document.querySelector('[role=alert]').textContent"), "Server unavailable");
+    await evaluate("document.getElementById('reload').click()");
+    await waitFor(() => messages.filter(message => message.command === "reload").length > audioReloadCount, "audio retry action");
     for (const [theme, className] of [["Light Modern", "vscode-light"], ["Default High Contrast", "vscode-high-contrast"], ["Default High Contrast Light", "vscode-high-contrast-light"]]) {
       await vscode.workspace.getConfiguration("workbench").update("colorTheme", theme, vscode.ConfigurationTarget.Global);
       await waitFor(() => evaluate(`document.body.classList.contains(${JSON.stringify(className)})`), theme + " theme");

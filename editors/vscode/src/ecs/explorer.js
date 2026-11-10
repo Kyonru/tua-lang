@@ -3,6 +3,7 @@
 const vscode = require("vscode");
 const { COMMANDS } = require("../constants");
 const { activeFileUri, openLocationMessage } = require("../shared/locations");
+const { createRenderGate } = require("../shared/render-gate");
 const { ecsExplorerViewModel } = require("./view-model");
 const {
   ecsExplorerErrorHtml,
@@ -12,6 +13,7 @@ const {
 
 let explorerPanel;
 let explorerFocusUri;
+const renderGate = createRenderGate();
 
 function registerEcsExplorerFeature({ getClient }) {
   const command = vscode.commands.registerCommand(COMMANDS.showEcsExplorer, () =>
@@ -20,6 +22,7 @@ function registerEcsExplorerFeature({ getClient }) {
 
   return vscode.Disposable.from(command, {
     dispose() {
+      renderGate.invalidate();
       explorerPanel?.dispose?.();
       explorerPanel = undefined;
       explorerFocusUri = undefined;
@@ -50,6 +53,7 @@ async function showEcsExplorer({ getClient, focusUri }) {
       },
     );
     explorerPanel.onDidDispose?.(() => {
+      renderGate.invalidate();
       explorerPanel = undefined;
       explorerFocusUri = undefined;
     });
@@ -75,14 +79,17 @@ async function handleExplorerMessage(message, { getClient }) {
 }
 
 async function renderEcsExplorer(panel, client, focusUri) {
+  const request = renderGate.begin();
   panel.webview.html = ecsExplorerLoadingHtml(panel.webview);
 
   try {
     const response = await client.sendRequest("tua/ecsGraph", null);
+    if (!renderGate.isCurrent(request) || explorerPanel !== panel) return;
     const viewModel = ecsExplorerViewModel(response, focusUri);
 
     panel.webview.html = ecsExplorerHtml(panel.webview, viewModel);
   } catch (error) {
+    if (!renderGate.isCurrent(request) || explorerPanel !== panel) return;
     panel.webview.html = ecsExplorerErrorHtml(panel.webview, error);
   }
 }

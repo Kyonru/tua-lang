@@ -17,7 +17,10 @@ async function main() {
     await runTests({
       extensionDevelopmentPath: path.resolve(__dirname, "../.."),
       extensionTestsPath: path.join(__dirname, "suite.js"),
-      extensionTestsEnv: { TUA_PREVIEW_CDP_PORT: String(port) },
+      extensionTestsEnv: {
+        TUA_PREVIEW_CDP_PORT: String(port),
+        TUA_PREVIEW_SCREENSHOTS: process.env.TUA_PREVIEW_SCREENSHOTS || "",
+      },
       vscodeExecutablePath: localVSCodeExecutable(),
       launchArgs: [
         "--disable-extensions", "--disable-workspace-trust", "--skip-welcome", "--skip-release-notes",

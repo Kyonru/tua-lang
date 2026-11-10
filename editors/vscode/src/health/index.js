@@ -2,6 +2,7 @@
 
 const vscode = require("vscode");
 const { COMMANDS } = require("../constants");
+const { createRenderGate } = require("../shared/render-gate");
 const { serverHealthViewModel } = require("./view-model");
 const {
   serverHealthErrorHtml,
@@ -11,6 +12,7 @@ const {
 
 let healthPanel;
 let lastHealth;
+const renderGate = createRenderGate();
 
 function registerServerHealthFeature({ getClient }) {
   const command = vscode.commands.registerCommand(COMMANDS.showServerHealth, () =>
@@ -19,6 +21,7 @@ function registerServerHealthFeature({ getClient }) {
 
   return vscode.Disposable.from(command, {
     dispose() {
+      renderGate.invalidate();
       healthPanel?.dispose?.();
       healthPanel = undefined;
       lastHealth = undefined;
@@ -47,6 +50,7 @@ async function showServerHealth({ getClient }) {
       },
     );
     healthPanel.onDidDispose?.(() => {
+      renderGate.invalidate();
       healthPanel = undefined;
       lastHealth = undefined;
     });
@@ -75,15 +79,18 @@ async function handleHealthMessage(message, { getClient }) {
 }
 
 async function renderServerHealth(panel, client) {
+  const request = renderGate.begin();
   panel.webview.html = serverHealthLoadingHtml(panel.webview);
 
   try {
     const response = await client.sendRequest("tua/health", null);
+    if (!renderGate.isCurrent(request) || healthPanel !== panel) return;
     const viewModel = serverHealthViewModel(response);
 
     lastHealth = viewModel;
     panel.webview.html = serverHealthHtml(panel.webview, viewModel);
   } catch (error) {
+    if (!renderGate.isCurrent(request) || healthPanel !== panel) return;
     panel.webview.html = serverHealthErrorHtml(panel.webview, error);
   }
 }

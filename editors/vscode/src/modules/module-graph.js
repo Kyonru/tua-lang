@@ -3,6 +3,7 @@
 const vscode = require("vscode");
 const { COMMANDS } = require("../constants");
 const { activeFileUri, openLocationMessage } = require("../shared/locations");
+const { createRenderGate } = require("../shared/render-gate");
 const { moduleGraphViewModel } = require("./view-model");
 const {
   moduleGraphErrorHtml,
@@ -12,6 +13,7 @@ const {
 
 let graphPanel;
 let graphFocus;
+const renderGate = createRenderGate();
 
 function registerModuleGraphFeature({ getClient }) {
   const showCommand = vscode.commands.registerCommand(COMMANDS.showModuleGraph, () =>
@@ -23,6 +25,7 @@ function registerModuleGraphFeature({ getClient }) {
 
   return vscode.Disposable.from(showCommand, whyCommand, {
     dispose() {
+      renderGate.invalidate();
       graphPanel?.dispose?.();
       graphPanel = undefined;
       graphFocus = undefined;
@@ -53,6 +56,7 @@ async function showModuleGraph({ getClient, focusUri, initialTab }) {
       },
     );
     graphPanel.onDidDispose?.(() => {
+      renderGate.invalidate();
       graphPanel = undefined;
       graphFocus = undefined;
     });
@@ -78,14 +82,17 @@ async function handleGraphMessage(message, { getClient }) {
 }
 
 async function renderModuleGraph(panel, client, focus) {
+  const request = renderGate.begin();
   panel.webview.html = moduleGraphLoadingHtml(panel.webview);
 
   try {
     const response = await client.sendRequest("tua/moduleGraph", null);
+    if (!renderGate.isCurrent(request) || graphPanel !== panel) return;
     const viewModel = moduleGraphViewModel(response, focus);
 
     panel.webview.html = moduleGraphHtml(panel.webview, viewModel);
   } catch (error) {
+    if (!renderGate.isCurrent(request) || graphPanel !== panel) return;
     panel.webview.html = moduleGraphErrorHtml(panel.webview, error);
   }
 }
