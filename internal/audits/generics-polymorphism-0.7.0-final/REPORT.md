@@ -918,7 +918,60 @@ recorded after packaging below.
   fixture, but does not establish the cause.
 
 The exact packaged `editors/vscode/tua-0.7.0.vsix` passed installation and the
-isolated real-server VS Code test on VS Code 1.142.0/macOS arm64. `make
-extension-package` passed all 180 extension tests and reported zero npm
-vulnerabilities. `unzip -tq` reported no archive errors. SHA-256:
-`f170759fa748a610a5e4ff36303ed4585016153e84b987e0dac115061ad3303a`.
+isolated real-server VS Code test on VS Code 1.142.0/macOS arm64. The newest
+package evidence is recorded below.
+
+### Emitted Lua runtime audit — November 10, 2026
+
+To check that accepted generic/protocol programs retain their intended runtime
+behavior after lowering, two CLI integration fixtures build complete projects,
+inspect generated modules for erased type-only syntax and preserved runtime
+requires, then execute the generated entry point with the host Lua interpreter.
+The tests are:
+
+- `emitted_lua_preserves_imported_generic_protocol_runtime_behavior`: imports
+  an exported protocol and generic class/instance alias across modules; checks
+  the type-only module does not become a Lua `require`; verifies left-to-right
+  call argument evaluation, generic multiple returns, a bounded generic
+  function, imported generic construction and method chaining, callback
+  argument compatibility, explicit nil return slots, typed varargs, and
+  heterogeneous protocol-array virtual dispatch.
+- `emitted_lua_preserves_generic_override_and_initialization_order`: verifies
+  concrete generic-parent erasure, `super` initialization, field-default
+  initialization order, inherited generic methods, and virtual override
+  dispatch through a base-typed variable.
+
+Both tests passed under Lua 5.4.8. Related runtime integration coverage also
+passed for array invariance, generic multiple-return values, protocol dispatch,
+concrete generic parents, generic class traceback mapping, and full gameplay
+examples. The build path runs the emitter's Lua 5.1 syntax validation, and the
+workspace's `emitted_example_lua_passes_syntax_validation` corpus passed too.
+Reproduce the two focused runtime checks with:
+
+```sh
+cargo test -p tua-cli --test cli emitted_lua_preserves_imported_generic_protocol_runtime_behavior
+cargo test -p tua-cli --test cli emitted_lua_preserves_generic_override_and_initialization_order
+```
+
+Full verification on this source state passed via `make verify`: 1,910 core
+tests passed (1 ignored), 446 LSP tests, 93 CLI unit tests passed (2 ignored),
+139 CLI integration tests, 3 gameplay tests, 1 helper-default test, 3 example
+tests, 1 LSP smoke test, 1 Lua-syntax test, and 180 VS Code checks. Clippy,
+version/schema checks, reference and mutant language evaluation, JSON checks,
+and `git diff --check` also passed. The 3 LOVE example tests build, but LOVE
+was not installed, so they did not launch a game. LuaJIT and LOVE execution
+were unavailable; this is evidence for the emitted semantics on PUC Lua 5.4.8
+and the repository's Lua 5.1 syntax parser, not universal runtime proof.
+
+`make extension-package` then rebuilt the extension and bundled release-mode
+server. It passed all 180 extension checks, found zero npm vulnerabilities, and
+produced a 40-file VSIX. `unzip -tq` passed. The exact package was installed in
+an isolated VS Code profile and passed `test:vscode-real` against VS Code
+1.142.0 on macOS arm64, including cross-file generic/protocol hover, definition,
+signature, edits, and navigation checks. SHA-256:
+`3d0aacc98c9759d2c25c9af80ef6ff7571806ab7efd83adf82a4f966a9d6e218`.
+
+The two CLI runtime regression tests are in `crates/tua-cli/tests/cli.rs`;
+no product source was changed in this runtime audit. This verification
+establishes confidence for the covered constructs,
+not a claim that all possible generated Lua is 100% reliable.

@@ -1115,6 +1115,249 @@ assert(box:get() == 43)
 }
 
 #[test]
+fn emitted_lua_preserves_imported_generic_protocol_runtime_behavior() {
+    let Some(lua) = working_lua_runtime() else {
+        return;
+    };
+    let temp = TempDir::new("generic-protocol-multimodule-runtime");
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).expect("write config");
+    fs::create_dir_all(temp.path().join("src")).expect("create source directory");
+    for (path, source) in [
+        (
+            "src/contracts.tua",
+            r#"
+export protocol Updatable {
+  update(dt: number): nil
+  progress(): number
+}
+
+return {}
+"#,
+        ),
+        (
+            "src/actor.tua",
+            r#"
+import type { Updatable } from "./contracts"
+
+final class Actor implements Updatable {
+  elapsed: number
+
+  init(start: number) { self.elapsed = start }
+  update(dt: number): nil { self.elapsed += dt }
+  progress(): number { return self.elapsed }
+}
+
+export type ActorInstance = Actor
+return { Actor = Actor }
+"#,
+        ),
+        (
+            "src/box.tua",
+            r#"
+final class Box<T> {
+  value: T
+
+  init(value: T) { self.value = value }
+  get(): T { return self.value }
+}
+
+export type BoxInstance<T> = Box<T>
+return { Box = Box }
+"#,
+        ),
+        (
+            "src/main.tua",
+            r#"
+import type { Updatable } from "./contracts"
+import type { ActorInstance } from "./actor"
+import type { BoxInstance } from "./box"
+
+local ActorModule = require("actor")
+local BoxModule = require("box")
+local Actor = ActorModule.Actor
+local evaluation_order = ""
+
+local function make_actor(): ActorInstance
+  evaluation_order = evaluation_order .. "A"
+  return Actor.new(0)
+end
+
+local function make_delta(): number
+  evaluation_order = evaluation_order .. "D"
+  return 0.25
+end
+
+local function pair<T, U>(first: T, second: U): (T, U)
+  return first, second
+end
+
+local actor, delta = pair(make_actor(), make_delta())
+assert(evaluation_order == "AD")
+
+local box: BoxInstance<ActorInstance> = BoxModule.Box.new(actor)
+local function update_one<T: Updatable>(value: T, dt: number): T
+  value:update(dt)
+  return value
+end
+
+local updated: ActorInstance = update_one(box:get(), delta)
+assert(updated == actor)
+assert(box:get():progress() == 0.25)
+
+local function identity<T>(value: T): T
+  return value
+end
+local function apply_number(callback: (number) -> number): number
+  return callback(9)
+end
+assert(apply_number(identity) == 9)
+assert(identity(false) == false)
+
+local function with_nil<T>(value: T): (T, nil)
+  return value, nil
+end
+local same_box, missing = with_nil(box)
+assert(same_box == box and missing == nil)
+
+local function first<T>(...: T): T
+  return ...
+end
+local first_text: string = "first"
+local second_text: string = "second"
+assert(first(first_text, second_text) == "first")
+
+final class Clock implements Updatable {
+  elapsed: number
+  init(start: number) { self.elapsed = start }
+  update(dt: number): nil { self.elapsed += dt }
+  progress(): number { return self.elapsed }
+}
+
+local function update_all(items: Updatable[], dt: number): nil
+  for _, item in ipairs(items) do
+    item:update(dt)
+  end
+  return nil
+end
+
+local items: Updatable[] = { updated, Clock.new(1) }
+update_all(items, 0.5)
+assert(items[1]:progress() == 0.75)
+assert(items[2]:progress() == 1.5)
+assert(package.loaded["contracts"] == nil)
+"#,
+        ),
+    ] {
+        fs::write(temp.path().join(path), source).expect("write runtime project source");
+    }
+
+    let build = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .expect("build imported generic/protocol project");
+    assert!(
+        build.status.success(),
+        "stdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&build.stdout),
+        String::from_utf8_lossy(&build.stderr)
+    );
+
+    let main = fs::read_to_string(temp.path().join("build/main.lua")).expect("read emitted main");
+    let actor =
+        fs::read_to_string(temp.path().join("build/actor.lua")).expect("read emitted actor");
+    let box_module =
+        fs::read_to_string(temp.path().join("build/box.lua")).expect("read emitted box");
+    for emitted in [&main, &actor, &box_module] {
+        assert!(!emitted.contains("import type"));
+        assert!(!emitted.contains("implements"));
+        assert!(!emitted.contains("Updatable"));
+        assert!(!emitted.contains("BoxInstance"));
+    }
+    assert!(main.contains("require(\"actor\")"));
+    assert!(main.contains("require(\"box\")"));
+    assert!(!main.contains("require(\"contracts\")"));
+
+    let runtime = Command::new(lua)
+        .arg("main.lua")
+        .current_dir(temp.path().join("build"))
+        .output()
+        .expect("run emitted project entry point");
+    assert!(
+        runtime.status.success(),
+        "stdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&runtime.stdout),
+        String::from_utf8_lossy(&runtime.stderr)
+    );
+}
+
+#[test]
+fn emitted_lua_preserves_generic_override_and_initialization_order() {
+    let Some(lua) = working_lua_runtime() else {
+        return;
+    };
+    let temp = TempDir::new("generic-inheritance-runtime-order");
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).expect("write config");
+    fs::create_dir_all(temp.path().join("src")).expect("create source directory");
+    fs::write(
+        temp.path().join("src/main.tua"),
+        r#"
+open class Base<T> {
+  value: T
+  init(value: T) { self.value = value }
+  get(): T { return self.value }
+  name(): string { return "base" }
+}
+
+final class Child extends Base<number> {
+  marker: number = 9
+  init(value: number) {
+    super(value)
+    self.marker = value
+  }
+  override name(): string { return "child" }
+}
+
+local child = Child.new(5)
+assert(child.marker == 9)
+assert(child:get() == 5)
+
+local base: Base<number> = child
+assert(base:name() == "child")
+"#,
+    )
+    .expect("write generic inheritance source");
+
+    let build = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .expect("build generic inheritance runtime fixture");
+    assert!(
+        build.status.success(),
+        "stdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&build.stdout),
+        String::from_utf8_lossy(&build.stderr)
+    );
+
+    let emitted = fs::read_to_string(temp.path().join("build/main.lua")).expect("read emitted Lua");
+    assert!(!emitted.contains("Base<number>"));
+    assert!(!emitted.contains("extends"));
+    assert!(emitted.contains("setmetatable(Child, { __index = Base })"));
+
+    let runtime = Command::new(lua)
+        .arg(temp.path().join("build/main.lua"))
+        .output()
+        .expect("run emitted generic inheritance Lua");
+    assert!(
+        runtime.status.success(),
+        "stdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&runtime.stdout),
+        String::from_utf8_lossy(&runtime.stderr)
+    );
+}
+
+#[test]
 fn check_exits_nonzero_for_parse_errors() {
     let temp = TempDir::new("check-parse-error");
 
