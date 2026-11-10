@@ -6609,6 +6609,95 @@ fn final_call_arguments_expand_multiple_returns() {
 }
 
 #[test]
+fn unresolved_final_call_does_not_invent_a_zero_argument_arity_error() {
+    // The file-only pass has not yet resolved a method provided by another
+    // module. The project pass can then check its actual return arity.
+    for source in [
+        "local function consume(x: number): nil end\nconsume(imported:get())",
+        "local function consume(x: number, y: number): nil end\nconsume(imported:pair())",
+    ] {
+        if let Err(diagnostics) = check_tua_source("args.tua", source) {
+            assert!(
+                diagnostics
+                    .iter()
+                    .all(|diagnostic| !diagnostic.message.contains("argument count mismatch")),
+                "{diagnostics:#?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn known_no_return_final_call_still_checks_nil_argument() {
+    let diagnostics = check_tua_source(
+        "args.tua",
+        "local function none() end\nlocal function consume(x: number): nil end\nconsume(none())",
+    )
+    .expect_err("a known no-return call must not become an unknown argument");
+    assert!(
+        diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.message.contains("expected number, found nil")),
+        "{diagnostics:#?}"
+    );
+}
+
+#[test]
+fn known_no_return_chained_call_still_checks_nil_argument() {
+    let diagnostics = check_tua_source(
+        "args.tua",
+        "final class Chain {\n  make(): Self { return self }\n  none() { }\n}\nlocal chain = Chain.new()\nlocal function consume(x: number): nil return nil end\nconsume(chain:make():none())",
+    )
+    .expect_err("a resolved chain ending in no return is still nil");
+    assert!(
+        diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.message.contains("expected number, found nil")),
+        "{diagnostics:#?}"
+    );
+}
+
+#[test]
+fn unresolved_final_call_keeps_known_prefix_diagnostics() {
+    let diagnostics = check_tua_source(
+        "args.tua",
+        "local function choose<T>(fixed: number, value: T): T return value end\nchoose('wrong', imported:unknown())",
+    )
+    .expect_err("a known wrong prefix must still fail a generic call");
+    assert!(
+        diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.message.contains("expected number, found string")),
+        "{diagnostics:#?}"
+    );
+
+    let diagnostics = check_tua_source(
+        "args.tua",
+        "local function consume(x: number): nil return nil end\nconsume(1, 2, imported:unknown())",
+    )
+    .expect_err("known excess arguments cannot be removed by an unknown tail");
+    assert!(
+        diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.message.contains("argument count mismatch")),
+        "{diagnostics:#?}"
+    );
+}
+
+#[test]
+fn unresolved_final_call_does_not_choose_an_ambiguous_overload_return() {
+    check_tua_source(
+        "args.tua",
+        r#"---@overload fun(mode: "a", value: number): number
+---@overload fun(mode: "a", value: string): string
+local function choose(mode, value) return value end
+local result: string = choose("a", imported:unknown())
+"#,
+    )
+    .expect("an unresolved tail cannot pick one overload return yet");
+}
+
+#[test]
 fn shadowed_named_functions_use_lexical_contracts() {
     check_tua_source("shadow.tua", "local function convert(value: number): number return value + 1 end\ndo\nlocal function convert(value: string): string return value .. '!' end\nlocal inner: string = convert('hello')\nend\nlocal outer: number = convert(1)")
         .expect("each declaration supplies its own parameter and return contracts");

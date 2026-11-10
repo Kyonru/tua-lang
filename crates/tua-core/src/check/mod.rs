@@ -3127,7 +3127,15 @@ impl<'a> Checker<'a> {
         function: &FunctionType,
         missing_hint: Option<String>,
     ) {
-        let arguments = self.expand_final_call_argument(arguments);
+        let (mut arguments, unknown_tail) = self.expand_final_call_argument(arguments);
+        if unknown_tail {
+            // An unresolved final call may supply any number of values. Check
+            // the known prefix, then use unknown values for required slots.
+            arguments.pop();
+            while arguments.len() < function.required_parameter_count {
+                arguments.push(CallArgument::Inferred(Type::Any));
+            }
+        }
         if arguments.len() < function.required_parameter_count {
             let mut diagnostic = argument_count_diagnostic(
                 &self.parsed.path,
@@ -3213,7 +3221,10 @@ impl<'a> Checker<'a> {
         arguments: Vec<CallArgument<'_>>,
         function: &TypedFunction,
     ) -> Vec<Type> {
-        let arguments = self.expand_final_call_argument(arguments);
+        let (arguments, unknown_tail) = self.expand_final_call_argument(arguments);
+        if unknown_tail {
+            return self.check_typed_call_with_unknown_tail(node, arguments, function);
+        }
         // Delay anonymous body checking until overload selection supplies its
         // contextual parameter and return contracts.
         let argument_types = arguments
@@ -3303,6 +3314,57 @@ impl<'a> Checker<'a> {
             self.report_typed_call_mismatch(node, &arguments, &argument_types, candidate);
 
             return candidate.return_types.clone();
+        }
+
+        vec![Type::Any]
+    }
+
+    fn check_typed_call_with_unknown_tail(
+        &mut self,
+        node: &impl Node,
+        mut arguments: Vec<CallArgument<'_>>,
+        function: &TypedFunction,
+    ) -> Vec<Type> {
+        arguments.pop();
+        let known_types = self.infer_call_argument_types(&arguments);
+        let candidates = typed_call_candidates(function);
+        let mut matching: Option<TypedCallCandidate> = None;
+        for candidate in &candidates {
+            if !candidate.has_varargs && arguments.len() > candidate.parameters.len() {
+                continue;
+            }
+            let mut candidate_types = known_types.clone();
+            candidate_types.resize(candidate.required_parameter_count, Some(Type::Any));
+            let Ok(candidate) = instantiate_typed_call_candidate(self, candidate, &candidate_types)
+            else {
+                continue;
+            };
+            if typed_call_candidate_matches(self, &candidate_types, &candidate) {
+                if let Some(first) = &matching {
+                    if first.return_types != candidate.return_types {
+                        return vec![Type::Any];
+                    }
+                } else {
+                    matching = Some(candidate);
+                }
+            }
+        }
+        if let Some(candidate) = matching {
+            self.check_contextual_callback_arguments(&arguments, &candidate);
+            return candidate.return_types;
+        }
+
+        if let Some(candidate) = candidates.first() {
+            while arguments.len() < candidate.required_parameter_count {
+                arguments.push(CallArgument::Inferred(Type::Any));
+            }
+            let argument_types = self.infer_call_argument_types(&arguments);
+            self.report_typed_call_mismatch(node, &arguments, &argument_types, candidate);
+            return if candidate.generic_parameters.is_empty() {
+                candidate.return_types.clone()
+            } else {
+                vec![Type::Any]
+            };
         }
 
         vec![Type::Any]
@@ -3443,13 +3505,27 @@ impl<'a> Checker<'a> {
     fn expand_final_call_argument<'b>(
         &mut self,
         mut arguments: Vec<CallArgument<'b>>,
-    ) -> Vec<CallArgument<'b>> {
+    ) -> (Vec<CallArgument<'b>>, bool) {
         if let Some(CallArgument::Expression(Expression::FunctionCall(call))) = arguments.last() {
             let returns = self.check_function_call_returns(call);
             arguments.pop();
-            arguments.extend(returns.into_iter().map(CallArgument::Inferred));
+            let chained = call
+                .suffixes()
+                .filter(|suffix| matches!(suffix, Suffix::Call(_)))
+                .count()
+                > 1;
+            if returns.is_empty() && (chained || self.infer_call_target(call).is_none()) {
+                // An imported callee may be unresolved during the initial
+                // file-only pass and acquire its signature in the project
+                // pass. Its unknown return count must not become a false
+                // zero-argument diagnostic on the enclosing call.
+                arguments.push(CallArgument::Inferred(Type::Any));
+                return (arguments, true);
+            } else {
+                arguments.extend(returns.into_iter().map(CallArgument::Inferred));
+            }
         }
-        arguments
+        (arguments, false)
     }
 
     fn report_typed_call_mismatch(
@@ -3629,7 +3705,38 @@ impl<'a> Checker<'a> {
         arguments: Vec<CallArgument<'_>>,
         function: &ExternalFunctionType,
     ) -> Vec<Type> {
-        let arguments = self.expand_final_call_argument(arguments);
+        let (mut arguments, unknown_tail) = self.expand_final_call_argument(arguments);
+        if unknown_tail {
+            // Select an overload using only arguments that are already known.
+            // The final call's arity becomes precise after project resolution.
+            arguments.pop();
+            let known_types = self.infer_call_argument_types(&arguments);
+            let mut matching = None;
+            for variant in &function.variants {
+                if variant.vararg_type.is_none() && arguments.len() > variant.parameters.len() {
+                    continue;
+                }
+                let mut candidate_types = known_types.clone();
+                candidate_types.resize(variant.required_parameter_count(), Some(Type::Any));
+                if self.external_call_variant_matches(&candidate_types, variant) {
+                    if let Some(first) = &matching {
+                        if first != &variant.return_types {
+                            return vec![Type::Any];
+                        }
+                    } else {
+                        matching = Some(variant.return_types.clone());
+                    }
+                }
+            }
+            if let Some(returns) = matching {
+                return returns;
+            }
+            if let Some(first) = function.variants.first() {
+                while arguments.len() < first.required_parameter_count() {
+                    arguments.push(CallArgument::Inferred(Type::Any));
+                }
+            }
+        }
         let argument_types = self.infer_call_argument_types(&arguments);
 
         for variant in &function.variants {
