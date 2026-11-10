@@ -4,13 +4,14 @@
 
 The generic/protocol implementation plan is substantially implemented, and the
 existing suite contains broad same-file, cross-file, editor, and runtime
-coverage. This follow-up found five defects: comments inside generic class
+coverage. This follow-up found six defects: comments inside generic class
 headers were discarded by Lua emission; deeply nested native array type suffixes
 bypassed the configured parser depth limit; protocol-bounded generic class
 members disappeared from completion during an incomplete edit; protocol names
 were missing from incomplete class-header completion; and in-flight dependent
-diagnostics could publish against a closed protocol overlay. All five are fixed
-and have regressions.
+diagnostics could publish against a closed protocol overlay; and comments in a
+multiline protocol header caused recovery to erase its contextual keywords.
+All six are fixed and have regressions.
 
 The previously identified recursive protocol identity case is now covered by
 same-file and cross-file conformance, hover, and completion tests. The full
@@ -218,6 +219,45 @@ or the remaining tested editor surfaces.
   `crates/tua-lsp/src/server/scheduler.rs`, and
   `crates/tua-lsp/src/server/tests/scheduling.rs`.
 
+### GP-FU-006 — Incomplete-line cleanup erased commented protocol headers
+
+- **Category:** editor recovery / cross-surface type information
+- **Severity:** Medium
+- **Status:** Fixed and verified
+- **Affected workflow:** editing a protocol declaration whose keywords/name
+  are split across lines and followed by comments containing brace characters
+- **Reproduction:**
+
+  ```tua
+  export -- { contract visibility }
+  protocol -- { behavior comment }
+  Display -- { contract body }
+  {
+    render(): string
+  ```
+
+  With a local `value: Display`, invoke completion after `value:` in the same
+  unsaved document. Before the fix, the LSP omitted `render` while the parser's
+  direct recovery helper correctly retained the protocol.
+- **Cause:** degraded analysis removed recoverable bare-identifier lines before
+  running protocol declaration recovery. It treated the standalone `protocol`
+  and `Display` lines as unfinished Lua expressions and replaced them with
+  whitespace, so the later declaration scanner had no header to recover.
+- **Fix:** identify protocol header byte ranges from the editor-closed source
+  and preserve those lines during incomplete-expression cleanup. The normal
+  protocol recovery then closes the body while the user's original source
+  continues to report its missing brace.
+- **Regression coverage:**
+  `incomplete_protocol_member_keeps_hover_and_completion_available` sends
+  actual LSP completion and hover requests against the commented multiline
+  header, across nine partial method signatures. All cases retain `render`,
+  the preceding local, and the visible syntax error.
+- **Verification:** focused LSP recovery and core parser tests passed; latest
+  full workspace verification is recorded below.
+- **Files:** `crates/tua-core/src/classes.rs`,
+  `crates/tua-core/src/analysis/recovery.rs`, and
+  `crates/tua-lsp/src/server/tests/recovery.rs`.
+
 The same follow-up adds exact generic alias expansion work-limit coverage at
 4,096 and 4,097 applications, per-character recovery coverage for protocol and
 generic class headers, a stale dependent-diagnostic cancellation case, and
@@ -240,7 +280,7 @@ combinations and broader cancellation permutations remain open.
 | Completion/hover agreement for recursive protocols | Exercised | Core analysis tests assert nominal hover and completion members; extension real-server suite covers generic/protocol editor queries |
 | Protocol type completion in class headers | Exercised | Core completion covers `implements` and incomplete multiline generic bounds; in-process LSP verifies imported protocol suggestions after edits |
 | Incomplete generic class completion | Exercised | Core snapshot and LSP edit-sequence regressions verify protocol-bound members remain suggested after an unclosed-class edit |
-| Parser depth and malformed edits | Exercised | Exact 64/65 native array depth boundary and protected comment/string cases. UTF-8 prefix tests include direct assertions that complete protocol and generic class headers recover before their first members; the actual LSP recovery matrix exercises nine incomplete protocol-member shapes while preserving earlier locals/methods, hover, completion, and the syntax diagnostic. Broader malformed headers and multiline edit permutations remain open. |
+| Parser depth and malformed edits | Exercised | Exact 64/65 native array depth boundary and protected comment/string cases. UTF-8 prefix tests include direct assertions that complete protocol and generic class headers recover before their first members; the actual LSP recovery matrix exercises nine incomplete protocol-member shapes behind a multiline header with brace-containing comments, preserving earlier locals/methods, hover, completion, and the syntax diagnostic. Broader malformed headers and multiline edit permutations remain open. |
 | Formatter and comment round-trip | Exercised | Generic function-bound formatter regression plus class/function bound Lua-emission regressions |
 | Cross-file invalidation | Exercised | Contract change/restore cancels queued stale diagnostics; in-flight slow diagnostics are revision-checked and requeued after a dependency changes; a rapid incompatible-contract / re-export-rename / restore sequence does not publish stale consumer errors; delete/recreate of each node in a three-module type re-export chain and rename/delete/recreate of a direct dependency update dependent diagnostics |
 | Cross-platform editor behavior | Not exercised | This run used the local macOS VS Code installation and macOS arm64 release server |
@@ -497,6 +537,20 @@ suite without a development-server override.
   the subsequent full rerun passed. LOVE-dependent tests were skipped by their
   explicit environment guards.
 - `cargo fmt --check` and `git diff --check` — passed.
+
+### Commented protocol-header recovery fix — November 10, 2026
+
+- The nine-case LSP recovery matrix now uses a multiline exported protocol
+  header with brace-containing comments between every declaration token. It
+  retains `render` completion, hover for the preceding module local, and the
+  original missing-brace diagnostic across all partial member forms.
+- Focused core parser and LSP recovery tests passed. A fresh `make verify` with
+  localhost access passed: core 1,907 passed/1 ignored; LSP 442; CLI unit 93
+  passed/2 ignored; CLI integration 137; gameplay 3; helper defaults 1; LOVE
+  examples 3; LSP smoke 1; Lua syntax 1; strict workspace Clippy, release and
+  schema checks, language evaluation, all 180 VS Code checks, JSON validation,
+  and diff checks. LOVE-dependent runtime tests remained skipped by their
+  explicit environment guards.
 
 ## Remaining work and recommended order
 

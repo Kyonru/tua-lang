@@ -1279,6 +1279,25 @@ pub(crate) fn source_with_closed_editor_declarations(source: &str) -> Option<Str
     changed.then_some(recovered)
 }
 
+/// Byte ranges for protocol headers in source that has been closed for editor
+/// analysis. Keeping these ranges intact prevents line-based incomplete-edit
+/// recovery from deleting a declaration keyword or name split across lines.
+pub(crate) fn editor_protocol_header_ranges(source: &str) -> Vec<Range<usize>> {
+    let (declarations, _) = parse_protocol_declarations(Path::new("<editor-recovery>"), source);
+
+    declarations
+        .into_iter()
+        .filter_map(|declaration| {
+            let start = crate::source_text::byte_for_position(source, declaration.span.start)?;
+            let name_end =
+                crate::source_text::byte_for_position(source, declaration.name_span.end)?;
+            let body_open = skip_protocol_whitespace_and_comments(source, name_end, source.len());
+            (source.as_bytes().get(body_open) == Some(&b'{')).then_some(start..body_open + 1)
+        })
+        .filter(|range| range.start < range.end && range.end <= source.len())
+        .collect()
+}
+
 fn source_with_closed_incomplete_class_header(source: &str) -> Option<String> {
     let trimmed_end = source.trim_end();
     if trimmed_end.is_empty() {

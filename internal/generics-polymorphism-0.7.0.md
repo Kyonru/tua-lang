@@ -713,6 +713,18 @@ return type. All nine preserve the completed requirement, module-local hover,
 completion, and visible syntax diagnostic. Broader malformed protocol-header
 and multiline edit permutations remain open.
 
+### Commented multiline protocol header recovery — 2026-11-10
+
+An actual LSP replay found that brace-containing comments between `export`,
+`protocol`, the declaration name, and `{` caused degraded analysis to erase
+standalone header lines as incomplete Lua expressions. The parser's direct
+recovery test passed, but editor queries then lost the protocol members.
+Analysis now preserves lexically identified protocol-header byte ranges during
+incomplete-line cleanup, then applies the existing editor-only declaration
+recovery. The nine-case LSP member matrix now uses this commented multiline
+header; hover, `render` completion, and the missing-brace diagnostic all pass.
+Broader malformed-header and multiline edit permutations remain open.
+
 ### Protocol diagnostic cancellation permutation — 2026-11-10
 
 An LSP regression queues incompatible, compatible, and incompatible protocol

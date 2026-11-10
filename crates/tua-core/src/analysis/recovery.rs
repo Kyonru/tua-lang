@@ -172,7 +172,17 @@ pub(super) fn parse_degraded_analysis_source(
     source: &str,
     kind: AnalysisSourceKind,
 ) -> Result<ParsedSource, Vec<Diagnostic>> {
-    let source = source_without_recoverable_incomplete_lines(source);
+    let protocol_header_ranges = if kind == AnalysisSourceKind::Tua && source.contains("protocol") {
+        let closed_editor_source = crate::classes::source_with_closed_editor_declarations(source)
+            .unwrap_or_else(|| source.to_owned());
+        crate::classes::editor_protocol_header_ranges(&closed_editor_source)
+    } else {
+        Vec::new()
+    };
+    let source = source_without_recoverable_incomplete_lines_preserving_headers(
+        source,
+        &protocol_header_ranges,
+    );
     let recovered = if kind == AnalysisSourceKind::Tua {
         crate::classes::source_with_closed_editor_declarations(&source)
     } else {
@@ -187,7 +197,15 @@ pub(super) fn parse_degraded_analysis_source(
     }
 }
 
+#[cfg(test)]
 pub(super) fn source_without_recoverable_incomplete_lines(source: &str) -> String {
+    source_without_recoverable_incomplete_lines_preserving_headers(source, &[])
+}
+
+fn source_without_recoverable_incomplete_lines_preserving_headers(
+    source: &str,
+    protected_ranges: &[std::ops::Range<usize>],
+) -> String {
     let source = source_without_unfinished_member_access(source);
     let class_body_ranges = crate::classes::class_body_ranges(&source);
     let mut recovered = String::with_capacity(source.len());
@@ -210,7 +228,13 @@ pub(super) fn source_without_recoverable_incomplete_lines(source: &str) -> Strin
             ),
             Some(crate::completion::context::CompletionContext::StringArgument { .. })
         );
-        if line_is_recoverable_incomplete_edit(trimmed) || unfinished_argument {
+        let line_end = line_start + content.len();
+        let protected_header = protected_ranges
+            .iter()
+            .any(|range| line_start < range.end && line_end > range.start);
+        if !protected_header
+            && (line_is_recoverable_incomplete_edit(trimmed) || unfinished_argument)
+        {
             if class_body_ranges
                 .iter()
                 .any(|range| range.contains(&line_start))

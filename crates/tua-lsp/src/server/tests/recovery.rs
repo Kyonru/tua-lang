@@ -70,7 +70,10 @@ fn incomplete_protocol_member_keeps_hover_and_completion_available() {
 local function draw(value: Display): nil
   value:
 end
-protocol Display {
+export -- { contract visibility }
+protocol -- { behavior comment }
+Display -- { contract body }
+{
   render(): string
 "#;
 
