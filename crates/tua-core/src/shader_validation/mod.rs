@@ -12,6 +12,7 @@ pub use glslang::{parse_glslang_output, shader_compile_units, ShaderCompileUnit}
 use std::collections::BTreeMap;
 use std::path::Path;
 
+pub use crate::asset::shader_includes::ShaderSourceLocation;
 use crate::asset::AssetReference;
 use crate::{Diagnostic, DiagnosticCode};
 
@@ -358,7 +359,7 @@ mod tests;
 #[derive(Clone, Debug)]
 pub struct ShaderValidationRequest {
     pub source_origin: Option<crate::SourcePosition>,
-    pub(crate) source_map: Option<Vec<crate::asset::shader_includes::ShaderSourceLocation>>,
+    pub source_map: Option<Vec<ShaderSourceLocation>>,
     pub mode: crate::config::ShaderValidationMode,
     pub asset: crate::asset::ProjectAsset,
     pub target: ShaderTarget,
@@ -483,12 +484,15 @@ pub fn validation_diagnostics(
                     diagnostic.column = start.column;
                     diagnostic.end_line = end.line;
                     diagnostic.end_column = end.column;
-                } else if let Some(source_map) = request.source_map.as_ref() {
-                    if let Some(location) = source_map.get(diagnostic.line.saturating_sub(1)) {
-                        diagnostic.file = location.path.clone();
-                        diagnostic.line = location.line;
-                        if let Some(end) = source_map.get(diagnostic.end_line.saturating_sub(1)) {
-                            diagnostic.end_line = end.line;
+                } else if diagnostic.file == request.asset.path {
+                    if let Some(source_map) = request.source_map.as_ref() {
+                        if let Some(location) = source_map.get(diagnostic.line.saturating_sub(1)) {
+                            diagnostic.file = location.path.clone();
+                            diagnostic.line = location.line;
+                            if let Some(end) = source_map.get(diagnostic.end_line.saturating_sub(1))
+                            {
+                                diagnostic.end_line = end.line;
+                            }
                         }
                     }
                 }

@@ -8,7 +8,7 @@ const MAX_EXPANDED_BYTES: usize = 16 * 1024 * 1024;
 const MAX_INCLUDE_DEPTH: usize = 64;
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub(crate) struct ShaderSourceLocation {
+pub struct ShaderSourceLocation {
     pub path: PathBuf,
     pub line: usize,
 }
