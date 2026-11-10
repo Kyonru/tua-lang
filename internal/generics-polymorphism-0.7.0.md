@@ -766,3 +766,12 @@ publishes current consumer diagnostics. Deleting the dependency replaces
 conformance checking with a missing-import error; recreating it publishes the
 new signature mismatch without a stale missing-import result. Rename combined
 with repeated delete/recreate remains open.
+
+### In-flight dependency edit follow-up — 2026-11-10
+
+An LSP scheduler regression changes an imported protocol from a `string`
+requirement to a `boolean` requirement after dependent diagnostics finish but
+before the result is delivered. The stale result is suppressed and the
+consumer is retried against the latest snapshot. All 443 LSP tests and strict
+LSP Clippy pass. Broader workspace, filesystem, and concurrent scheduler
+interleavings remain open.

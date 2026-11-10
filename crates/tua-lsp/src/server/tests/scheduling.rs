@@ -1223,6 +1223,139 @@ final class Particle implements Updatable {
 }
 
 #[test]
+fn in_flight_protocol_diagnostics_are_retried_after_dependency_edit() {
+    let temp = TempProject::new("in-flight-protocol-diagnostics-edit");
+    temp.write("tua.toml", "source = \"src\"\n");
+    let first_contract = "export protocol Updatable {\n  update(dt: string): nil\n}\n";
+    let latest_contract = "export protocol Updatable {\n  update(dt: boolean): nil\n}\n";
+    temp.write("src/contracts.tua", first_contract);
+    let actors = r#"import type { Updatable } from "./contracts"
+final class Particle implements Updatable {
+  update(dt: number): nil {}
+}
+"#;
+    temp.write("src/actors.tua", actors);
+    let contracts_uri = temp.uri_for("src/contracts.tua");
+    let actors_uri = temp.uri_for("src/actors.tua");
+    let mut server = LspServer::default();
+    server.handle_message(initialize_with_root(1, temp.uri()));
+    server.handle_message(did_open(&contracts_uri, first_contract));
+    server.handle_message(did_open(&actors_uri, actors));
+    server.drain_all_pending_slow_diagnostics();
+
+    server.handle_message(did_change(&contracts_uri, first_contract, 2));
+    server.handle_message(did_change(&actors_uri, actors, 2));
+    let (event_tx, event_rx) = std::sync::mpsc::sync_channel(EVENT_QUEUE_CAPACITY);
+    let mut scheduler = RequestScheduler::new(event_tx, SharedReceivedInputState::default());
+    let dispatch_at = Instant::now() + Duration::from_secs(1);
+    let mut dispatched = 0;
+    while scheduler.dispatch_due_slow_diagnostic(&mut server, dispatch_at) {
+        dispatched += 1;
+    }
+    assert!(
+        dispatched > 0,
+        "the first incompatible overlay should dispatch work"
+    );
+
+    let mut results = Vec::new();
+    for _ in 0..dispatched {
+        let ServerEvent::RequestFinished(result) = event_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("each diagnostics worker should finish")
+        else {
+            panic!("expected a diagnostics worker result");
+        };
+        results.push(*result);
+    }
+    let stale_message = results
+        .iter()
+        .flat_map(|result| {
+            result.test_response()["result"]
+                .as_array()
+                .into_iter()
+                .flatten()
+        })
+        .find(|diagnostic| {
+            diagnostic["code"] == "TL1008"
+                && diagnostic["message"]
+                    .as_str()
+                    .is_some_and(|message| message.contains("Particle.update"))
+        })
+        .and_then(|diagnostic| diagnostic["message"].as_str())
+        .expect("the captured result should contain the first contract mismatch")
+        .to_owned();
+
+    // Change the dependency after workers have captured the first mismatch.
+    // The old result must not publish, and retry must analyze this latest
+    // contract even though the consumer itself has not changed.
+    server.handle_message(did_change(&contracts_uri, latest_contract, 3));
+    let publications = results
+        .into_iter()
+        .flat_map(|result| scheduler.finish(&mut server, result))
+        .collect::<Vec<_>>();
+    assert!(
+        publications.iter().all(|publication| {
+            publication["params"]["uri"] != actors_uri
+                || publication["params"]["diagnostics"]
+                    .as_array()
+                    .is_some_and(|diagnostics| {
+                        diagnostics.iter().all(|diagnostic| {
+                            diagnostic["code"] != "TL1008"
+                                || !diagnostic["message"]
+                                    .as_str()
+                                    .is_some_and(|message| message.contains("Particle.update"))
+                        })
+                    })
+        }),
+        "a result based on the first contract must not publish: {publications:#?}"
+    );
+
+    let retry_at = server
+        .next_slow_diagnostics_due()
+        .expect("the still-open consumer should be queued against the latest snapshot");
+    let mut retried = 0;
+    while scheduler.dispatch_due_slow_diagnostic(&mut server, retry_at + Duration::from_secs(1)) {
+        retried += 1;
+    }
+    assert!(retried >= 1, "fresh diagnostics work should be dispatched");
+    let mut fresh_diagnostics = Vec::new();
+    for _ in 0..retried {
+        let ServerEvent::RequestFinished(result) = event_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("each refreshed diagnostics worker should finish")
+        else {
+            panic!("expected a refreshed diagnostics worker result");
+        };
+        fresh_diagnostics.extend(
+            result.test_response()["result"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .cloned(),
+        );
+        scheduler.finish(&mut server, *result);
+    }
+    let fresh_message = fresh_diagnostics
+        .iter()
+        .find(|diagnostic| {
+            diagnostic["code"] == "TL1008"
+                && diagnostic["message"]
+                    .as_str()
+                    .is_some_and(|message| message.contains("Particle.update"))
+        })
+        .and_then(|diagnostic| diagnostic["message"].as_str())
+        .expect("the latest contract should still reject Particle.update");
+    assert_ne!(
+        fresh_message, stale_message,
+        "the retry must report the changed boolean requirement, not the stale string requirement"
+    );
+    assert!(
+        fresh_message.contains("boolean"),
+        "the retried diagnostic should describe the latest requirement: {fresh_message}"
+    );
+}
+
+#[test]
 fn cancel_request_cancels_a_running_analysis_request() {
     let output = run_chunked_messages(vec![
         (

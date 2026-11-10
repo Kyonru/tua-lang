@@ -560,3 +560,14 @@ suite without a development-server override.
    calling the 0.7.0 release fully qualified.
 3. Protocol stub generation remains an optional editor capability, not a
    correctness defect or a blocker for the generic/protocol contract.
+
+### In-flight dependency edit follow-up — November 10, 2026
+
+An LSP scheduler regression holds a completed worker result for an imported
+protocol requiring `string`, changes the open dependency to require `boolean`,
+then delivers the old result. The stale mismatch is not published; the
+consumer is retried against the latest project snapshot and reports the
+boolean requirement. The protocol document's own queued diagnostics are also
+allowed to run. The focused regression and all 443 `tua-lsp` tests pass;
+strict LSP Clippy, `cargo fmt --check`, and `git diff --check` pass. Broader
+workspace, filesystem, and concurrent scheduler interleavings remain open.
