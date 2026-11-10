@@ -1,5 +1,6 @@
 "use strict";
 
+const assert = require("assert/strict");
 const fs = require("fs");
 const vscode = require("vscode");
 
@@ -120,8 +121,12 @@ function ecsExplorerTabs() {
     );
 }
 
-function positionAfter(document, needle, occurrence = 1) {
+function positionAfter(document, needle, prefixOrOccurrence = 1) {
   const text = document.getText();
+  const occurrence = typeof prefixOrOccurrence === "number" ? prefixOrOccurrence : 1;
+  const prefix = typeof prefixOrOccurrence === "string" ? prefixOrOccurrence : needle;
+  assert(Number.isInteger(occurrence) && occurrence > 0, "occurrence must be a positive integer");
+  assert(needle.startsWith(prefix), "position prefix must start the search text");
   let offset = -1;
 
   for (let index = 0; index < occurrence; index += 1) {
@@ -132,7 +137,7 @@ function positionAfter(document, needle, occurrence = 1) {
     throw new Error(`Could not find ${JSON.stringify(needle)} in ${document.uri}`);
   }
 
-  return document.positionAt(offset + needle.length);
+  return document.positionAt(offset + prefix.length);
 }
 
 function delay(milliseconds) {
