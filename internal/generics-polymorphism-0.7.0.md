@@ -707,10 +707,11 @@ because arbitrary prefixes can include incomplete member syntax.
 The core current-buffer hover/completion case now also includes the partial
 member, and an LSP replay verifies method completion and local hover while the
 unclosed-protocol syntax diagnostic remains visible. The LSP replay is table-
-driven over a bare member prefix (`r`), a parameter ending at `:`
-(`render(value:`), and an unfinished record parameter (`render(value: { text`);
-all three preserve the completed requirement, module-local hover, completion,
-and visible syntax diagnostic.
+driven over nine partial signatures, covering a bare member, open parameter
+list, incomplete parameter name/type, unfinished record parameter, and missing
+return type. All nine preserve the completed requirement, module-local hover,
+completion, and visible syntax diagnostic. Broader malformed protocol-header
+and multiline edit permutations remain open.
 
 ### Protocol diagnostic cancellation permutation — 2026-11-10
 

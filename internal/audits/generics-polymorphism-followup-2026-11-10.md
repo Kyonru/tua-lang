@@ -240,7 +240,7 @@ combinations and broader cancellation permutations remain open.
 | Completion/hover agreement for recursive protocols | Exercised | Core analysis tests assert nominal hover and completion members; extension real-server suite covers generic/protocol editor queries |
 | Protocol type completion in class headers | Exercised | Core completion covers `implements` and incomplete multiline generic bounds; in-process LSP verifies imported protocol suggestions after edits |
 | Incomplete generic class completion | Exercised | Core snapshot and LSP edit-sequence regressions verify protocol-bound members remain suggested after an unclosed-class edit |
-| Parser depth and malformed edits | Exercised | Exact 64/65 native array depth boundary and protected comment/string cases. UTF-8 prefix tests include direct assertions that complete protocol and generic class headers recover before their first members; conditional prefix-loop assertions do not claim every malformed prefix recovers. |
+| Parser depth and malformed edits | Exercised | Exact 64/65 native array depth boundary and protected comment/string cases. UTF-8 prefix tests include direct assertions that complete protocol and generic class headers recover before their first members; the actual LSP recovery matrix exercises nine incomplete protocol-member shapes while preserving earlier locals/methods, hover, completion, and the syntax diagnostic. Broader malformed headers and multiline edit permutations remain open. |
 | Formatter and comment round-trip | Exercised | Generic function-bound formatter regression plus class/function bound Lua-emission regressions |
 | Cross-file invalidation | Exercised | Contract change/restore cancels queued stale diagnostics; in-flight slow diagnostics are revision-checked and requeued after a dependency changes; a rapid incompatible-contract / re-export-rename / restore sequence does not publish stale consumer errors; delete/recreate of each node in a three-module type re-export chain and rename/delete/recreate of a direct dependency update dependent diagnostics |
 | Cross-platform editor behavior | Not exercised | This run used the local macOS VS Code installation and macOS arm64 release server |
@@ -403,7 +403,13 @@ suite without a development-server override.
   `incomplete_protocol_member_keeps_hover_and_completion_available`. Hover
   retains the earlier local, completion offers the completed `render` method,
   and the unclosed declaration diagnostic remains present. Both focused tests
-  passed.
+  passed. The LSP replay now covers nine incomplete member lines: a bare name,
+  an open parameter list, incomplete parameter name/type, unfinished record
+  parameter, and missing return type. All preserve the earlier local and
+  requirement while keeping hover, completion, and the syntax diagnostic.
+- `RUST_MIN_STACK=16777216 cargo test -p tua-lsp
+  incomplete_protocol_member_keeps_hover_and_completion_available` — passed
+  for the full nine-case matrix.
 
 ### Protocol diagnostic cancellation permutation — November 10, 2026
 

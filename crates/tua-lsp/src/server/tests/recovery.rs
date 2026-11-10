@@ -74,7 +74,17 @@ protocol Display {
   render(): string
 "#;
 
-    for partial_member in ["r", "render(value:", "render(value: { text"] {
+    for partial_member in [
+        "r",
+        "render(",
+        "render(value",
+        "render(value:",
+        "render(value: number",
+        "render(value: {",
+        "render(value: { text",
+        "render(value: { text: string",
+        "render(value: number):",
+    ] {
         let source = format!("{prefix}  {partial_member}\n");
         let output = run_messages(vec![
             did_open(uri, &source),
