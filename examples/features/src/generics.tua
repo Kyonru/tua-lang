@@ -1,15 +1,15 @@
 -- Feature: aliases and functions preserve concrete types at each use.
-type Box<T> = { value: T }
+type Box < T > = { value: T }
 
 local function identity<T>(value: T): T
   return value
 end
 
-local count: Box<number> = { value = identity(3) }
-local label: Box<string> = { value = identity("ready") }
+local count: Box < number > = { value = identity(3) }
+local label: Box < string > = { value = identity("ready") }
 
 -- Feature: generic class constructor arguments infer instance field types.
-final class Pair<K, V> {
+final class Pair < K, V > {
   first: K
   second: V
 
