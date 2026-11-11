@@ -2,7 +2,7 @@
 
 ## FUP-01 — A second inferred factory hop loses class member completion
 
-**Resolution (November 12, 2026): fixed in the working checkout.** Exported
+**Resolution (November 12, 2026): fixed in `d58f3718`.** Exported
 function signatures now carry imported nominal instance identity through the
 forwarding module. Project completion refreshes the class shape from the current
 snapshot and defers the standalone fast path when another open file has an
@@ -13,7 +13,11 @@ an actual VS Code host displayed all three suggestions in 141 ms in one
 synthetic sample. The same 100-module profile measured warm completion p95 at
 0.46 ms with the fix and 0.50 ms with the pre-fix packaged server. These are
 protocol and synthetic-host measurements, not a real game-session latency
-guarantee. The original finding and its pre-fix evidence follow below.
+guarantee. `make verify` passed with `RUST_MIN_STACK=33554432` (the unchanged
+baseline's Rot runtime test overflows the default test-thread stack on this
+host), as did `make lsp-features-smoke`. The newly packaged 0.7.0 VSIX passed
+both installed real-server suites. The original finding and its pre-fix
+evidence follow below.
 
 **Category:** editor correctness / cross-file type provenance. **Severity:** Medium. **Confidence:** High for the observed symptom; Medium for the inferred root cause. **Verification:** CLI check/build/Lua runtime, direct stdio LSP, and actual VS Code host.
 

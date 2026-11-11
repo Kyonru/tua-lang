@@ -24,6 +24,12 @@ TUA_TEST_VSIX="$PWD/editors/vscode/tua-0.7.0.vsix" \
 
 The installed replay passed twice, with all eight steps in each run. [Captured rows](sidebar-host.json) show `helper.lua` and `added.lua` in Project files, the dependency count changing 1 → 2 → 1 on unsaved edits, `fresh` under the changed Lua module, and `extra.tua` removed after deletion. The VSIX passed `unzip -t`; SHA-256: `ec081f69d80ebf8f301242d4e08f38c70f6245e2868fb143fd6abc868541387a`. These checks verify rendered host state for this fixture, not a large or multi-root game workspace.
 
+The checksum above identifies that historical package. After the separate
+FUP-01 class-completion fix, `tua-0.7.0.vsix` was rebuilt and replaced it.
+The newer package has SHA-256
+`094ecf7d460640f0ab3ca0eb04011bb332e024dfc306330f89ea69b1955fdc9a`;
+both installed real-server suites passed again with the newer package.
+
 ## Inspector retained-memory assertion
 
 The prior ordinary `node editors/vscode/scripts/runtime-inspector-soak.js` run failed its 2 MiB Node heap-range assertion with a 6,988.6 KiB range. Its samples mixed pre-collection and post-collection heap because `global.gc` was unavailable. The same workload with explicit `--expose-gc` passed with a 423 KiB range. This is a test-oracle difference, not evidence of retained-memory growth.
