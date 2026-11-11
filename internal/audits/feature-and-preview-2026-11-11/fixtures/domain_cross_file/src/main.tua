@@ -1,0 +1,17 @@
+local Shared = require("shared")
+local entity = Shared.world:create()
+Shared.world:add(entity, Shared.Position, { x = 3, y = 4 })
+Shared.events:on("move", function(id: number, amount: number)
+  local pos = Shared.world:get(id, Shared.Position)
+  if pos ~= nil then pos.x += amount end
+  Shared.state:update(function(current)
+    current.score.value += amount
+  end)
+end)
+Shared.events:emit("move", entity, 5)
+assert(Shared.state:get().score.value == 7)
+local pos = Shared.world:get(entity, Shared.Position)
+local x = 0
+if pos ~= nil then x = pos.x end
+assert(x == 8)
+return { score = Shared.state:get().score.value, x = x }

@@ -1,0 +1,43 @@
+# Independent coverage reconciliation
+
+Snapshot: 2026-11-11 16:18 JST, after the language and editor lane reports but while the game-domain lane and lead synthesis were still in progress. This is an evidence review, not a new product defect list. Recheck the counts after the lead updates `COVERAGE.md`.
+
+## Inventory completeness
+
+The ledger has all 60 starting L/G/T/P rows from the plan and 201 expanded rows: 14 CLI subcommands, 106 VS Code commands, 74 extension settings, and 7 registered views. At this snapshot **all 60 starting rows still read `pending` in all three layer columns**. The expanded rows mostly read `inspected only`, correctly reflecting manifest/help discovery rather than behavior. This is a reporting gap, even where lane reports already contain test results. The completion standard cannot be met until the lead reconciles statuses with evidence.
+
+The plan says to split grouped rows by syntax form, helper method, diagnostic family, LSP method, preview interaction, and configuration contract. The expanded ledger has not yet done that for:
+
+- Standard LSP methods and the 13 documented `tua/*` custom requests in `docs/lsp.md:718-730`. T09 remains one row despite completion, hover, signatures, rename, tokens, inlays, source maps, and code actions having different oracles.
+- Diagnostic families and individual codes from `docs/luahelper-code-matrix.md`; T02 remains a single row. Avoid treating a passing `tua check` as coverage for suppression, fix-all, and source-range accuracy.
+- The 58 project TOML settings reported by `make config-schema-drift-check`; the ledger lists 74 VS Code settings only. T01 configuration and isolation require separate rows for at least roots/output, test source, diagnostics, shader backend, and workspace trust/path boundaries.
+- Domain helper methods and lifecycle operations, such as SignalBus `on`/`once`/`emit`/unsubscribe, Store `get`/`set`/`update`/`watch`, ECS create/add/get/remove/query/system, pool acquire/release/dispose, and behavior-tree tick/reset. G04–G13 are still grouped.
+- P09 combines Asset Explorer with native media preview; P13 combines offline LOVE, annotation reference, and Explain Type. Their evidence states and user questions differ and should be split. For P01–P13, refresh, source action, error/empty, accessibility, and large-data states are not yet separate subrows.
+
+Do not manufacture hundreds of green cells from source inspection. A compact child-row ledger with a source/test pointer and `inspected only` is acceptable where execution is impractical, provided the larger untested behavior remains visible.
+
+## Evidence by major area
+
+| Area | Current executed evidence | What remains inspected, blocked, or unqualified |
+| --- | --- | --- |
+| L01–L19 language | `LANGUAGE.md` gives failing-before tests and after-fix oracles for imported generic class bounds (L10/L11/L15) and cross-module runtime `is` identity (L07/L12/L15/L18). Core 1,928 pass/1 ignored, LSP 448 pass, CLI 142 pass are reported; `make build-examples` passes. | Those suites are broad regression checks, not new scenario evidence for each syntax/type form. The language lane explicitly says it did not individually exercise all L01–L18 forms. Pure class runtime used Lua 5.4, not standalone LuaJIT. Annotation, metatable, tuple, nil, default, and source-map boundaries need explicit row-level outcomes or `inspected only`. |
+| G01–G15 domains | Current fixtures under `fixtures/domain_interactions` and `fixtures/domain_cross_file` exercise a generic value in a Store plus ECS/Signal payload flow; the domain lane found and fixed a nested cross-file signal arity defect. `make runtime-test LUA=lua` passes bundled vector/sprite/tween/camera/hot-reload/Baton tests. | `DOMAINS.md` and `INTERACTIONS.md` were not yet written at this snapshot. Do not mark every domain tested based on one combined fixture or the older November 7 reports. Negative payloads, unsubscribe/reuse, audio/shader/asset interactions, and LOVE graphics remain separately unqualified until the lane documents them. |
+| T01–T08 toolchain | `VERIFICATION.md` records fresh init/check/lint/fmt/build, invalid check/recovery emission, Busted, watch edits and recovery, `.love` and macOS fused package structure, and API negotiation/path gating. `make docs-build`, feature mapping, schema/version/JSON checks pass. | Test gutter, source-mapped debug, Windows fusion, `dev` under LOVE, and actual app launch are not established. LOVE 11.5 aborts in the restricted graphical host; an independent one-line app also aborts, so this is a host blocker rather than a Tua failure. CLI `traceback` and MCP are help/source inspection at most in this run. |
+| T09–T13 editor | `EDITOR.md` reports installed real-server VS Code checks for generic/protocol completion, hover, definition, rename, signatures, inlays, and unsaved edits. Installed webview suite detected and then verified two fixes. A 100-file protocol replay measured cold/warm requests and contention. | The replay uses the pre-edit release binary and is not key-to-menu timing. Multi-project switching, long-session RSS, populated server health, native asset view, and full commands/settings matrix remain unqualified. T11's API smoke belongs to the lead; MCP and symlink/path adversarial cases are not covered by that smoke. |
+| P01–P13 previews | `PREVIEWS.md` records rendered-host evidence for P01–P04, P06–P08; populated Signal/ECS/pool view models and source actions are now tested, including a before/after Signal label capture. | P05 had only empty/narrow refresh in this run; P09, P10, P12, P13 are source/existing-test inspection only; P11 was empty/narrow. Large graphs, compiler-to-render data parity, native asset appearance, runtime-inspector soak, and accessible interaction across all views remain unqualified. |
+
+## Cross-feature and previous-finding reconciliation
+
+The domain fixtures cover Store generic values and ECS × Signal behavior in same-file and imported-module layouts. The class runtime test covers cross-module identity and inheritance. The proposed behavior-tree × ECS × pool CI regression is a useful additional oracle; `DOCS_DEEP.md` confirms the existing example is built but not executed by trusted CI. The ledger still needs positive, negative, and edit/recovery status for each selected interaction. In particular, nil narrowing × closures, annotations × mixed Lua/Tua, signals × state machines, sprites × assets/shaders, and hot reload × source maps are not evidenced by the new reports at this snapshot. Existing tests may cover pieces; link them rather than infer a pass.
+
+There are 31 historical `internal/audits/features-2026-11-07/*/REPORT.md` reports with about 61 finding headings. Many may already be fixed, and this review does **not** reopen them. The new reports explicitly reconcile only selected generic/class/preview cases and one docs-test gap. The plan's requirement to rerun and close earlier findings needs a prior-ID ledger with `fixed and rechecked`, `still reproducible`, `superseded`, `design gap`, or `blocked`, plus the current regression/test reference. The preview lane names prior populated-graph/native-asset/inspector/large-graph limits and closes only the small populated-view and refresh cases; that is appropriately bounded.
+
+## Highest-value completion work
+
+1. Reconcile the 60 starting rows and the expanded rows with exact evidence. Split only the grouped rows necessary to expose distinct oracles; keep `inspected only` or `blocked` where that is the truth.
+2. Finish `DOMAINS.md` and `INTERACTIONS.md`, especially negative and lifecycle cases for generic Store × Signal/ECS, plus the behavior-tree × ECS × pool runtime CI oracle.
+3. Add a prior-finding status table for the November 7 reports. Prioritize historical High defects and any finding lacking a current regression; do not treat an old report as current proof.
+4. Make the final post-edit `make ci-check`, installed real-server/VSIX checks, and artifact hash explicit. Re-run editor tests with the final packaged server if feasible; the lane's real-server host pass used the pre-edit release binary.
+5. Write the executive README, unified FINDINGS, and prioritized BACKLOG with honest verification limits. At this snapshot those plan deliverables do not exist, so the audit is in progress rather than complete.
+
+The current work has meaningful reproduced fixes and installed-host evidence, but the full plan's inventory, prior-finding reconciliation, cross-feature matrix, and final artifact gates are not yet complete. The strongest response is to finish or explicitly bound those areas, never to label the 60 pending rows green by inference from broad suites.

@@ -1,0 +1,7 @@
+type Box<T> = { value: T }
+local initial: Box<number> = { value = 2 }
+local state = store({ score = initial })
+local events = signal()
+local Position = ecs.component("Position", { x = "number", y = "number" })
+local world = ecs.world()
+return { state = state, events = events, Position = Position, world = world }

@@ -1,0 +1,24 @@
+type Box<T> = { value: T }
+local initial: Box<number> = { value = 2 }
+local state = store({ score = initial })
+local events = signal()
+local PositionComponent = ecs.component("Position", { x = "number", y = "number" })
+local world = ecs.world()
+local entity = world:create()
+world:add(entity, PositionComponent, { x = 3, y = 4 })
+
+events:on("move", function(id: number, amount: number)
+  local pos = world:get(id, PositionComponent)
+  if pos ~= nil then pos.x += amount end
+  state:update(function(current)
+    current.score.value += amount
+  end)
+end)
+
+events:emit("move", entity, 5)
+assert(state:get().score.value == 7)
+local pos = world:get(entity, PositionComponent)
+local x = 0
+if pos ~= nil then x = pos.x end
+assert(x == 8)
+return { score = state:get().score.value, x = x }
