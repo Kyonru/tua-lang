@@ -103,6 +103,11 @@ async function run() {
     };
     assert.equal(report.realModule.renderedNodes, report.realModule.compilerNodes);
     assert.equal(report.realModule.renderedLinks, report.realModule.compilerEdges);
+    const sourceActionsBefore = messages.filter(message => message.command === "openLocation").length;
+    await browser.evaluate('document.querySelector(\'[data-module-uri$="module_119.tua"]\').dispatchEvent(new MouseEvent("dblclick",{bubbles:true}))', context);
+    await waitFor(() => messages.filter(message => message.command === "openLocation").length > sourceActionsBefore, "compiler-produced module source action", 5000);
+    assert.equal(messages.at(-1).uri, world.uri);
+    report.realModule.sourceUriMatchesCompiler = true;
 
     const assetUri = vscode.Uri.joinPath(folder.uri, "src/assets/player.png");
     const previewResult = await vscode.commands.executeCommand("tua.assets.preview", assetUri.toString());
