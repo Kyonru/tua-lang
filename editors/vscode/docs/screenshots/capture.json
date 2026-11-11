@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
   "completed": true,
-  "capturedAt": "2026-11-10T21:05:41.883Z",
+  "capturedAt": "2026-11-11T00:01:28.931Z",
   "extensionVersion": "0.7.0",
   "compilerVersion": "tua 0.7.0",
-  "bundleSha256": "644e510584787bf82401e83022b5b0020a759cf4c280ba675d627b31a21f8839",
+  "bundleSha256": "7b1f3be8798bcddc6f9182d43c6eb86d7017db0f720b405fbf5812b7fabe8812",
   "images": [
     {
       "file": "workspace.png",
@@ -24,8 +24,8 @@
       "file": "sprite-animation.png",
       "width": 1440,
       "height": 960,
-      "bytes": 114183,
-      "sha256": "c3f2af999b615d12759fb0c9a9b19e74ead5d5fa205927beb1b97c0f855b91ac"
+      "bytes": 114296,
+      "sha256": "aa78ed72bc5ef6ad022387cb1f06193e5b354cbac6c29042b2ef00ed7345ca52"
     },
     {
       "file": "module-graph.png",
