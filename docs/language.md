@@ -557,14 +557,16 @@ end
 Emitted Lua:
 
 ```lua
-if getmetatable(value) == Player then
+if getmetatable(value) ~= nil and getmetatable(value).__is ~= nil and getmetatable(value).__is[Player] == true then
   value.health = value.health - 1
 end
 ```
 
 Aliases are erased at runtime, so `is` only accepts an alias when it resolves to
-a supported primitive. Class targets use generated `__type_id` / `__is`
-metadata, so inherited class checks are supported for class syntax. Erased
+a supported primitive. Class targets use their runtime class table as the key
+in generated `__is` metadata, so inherited checks work without confusing
+unrelated classes from separate modules. The numeric `__type_id` metadata is
+local to each compiled file and is not a cross-module identity. Erased
 table-shape aliases, structural checks, manual-metatable inheritance checks, and
 container targets such as `string[]` are not currently runtime-checkable and are
 rejected before Lua is emitted.

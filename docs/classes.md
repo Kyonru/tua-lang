@@ -424,7 +424,9 @@ editor recovery does not modify your file or guess missing Lua `end` keywords.
 ## Initialization Order And Generated Lua
 
 Generated Lua uses ordinary tables, `__index`, local method functions, and
-per-class `__type_id` / `__is` metadata. `Class.new(...)` constructs instances.
+per-class `__type_id` / `__is` metadata. Runtime `is` checks use the class table
+keys in `__is`, including inherited classes; numeric type IDs are local to each
+compiled file. `Class.new(...)` constructs instances.
 Within each class, the `init` body runs before that class's field defaults; this
 ordering is preserved across inheritance and constructor optimization. A default
 therefore overwrites a value assigned to the same field by `init`. For a value

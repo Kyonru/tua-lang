@@ -492,7 +492,7 @@ fn runtime_type_check_sites(parsed: &ParsedSource) -> Vec<SourcePosition> {
 
 fn class_runtime_is_check(value: &str, target: &str) -> String {
     format!(
-        "(getmetatable({value}) ~= nil and getmetatable({value}).__is ~= nil and getmetatable({value}).__is[{target}.__type_id] == true)"
+        "(getmetatable({value}) ~= nil and getmetatable({value}).__is ~= nil and getmetatable({value}).__is[{target}] == true)"
     )
 }
 

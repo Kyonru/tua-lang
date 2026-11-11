@@ -289,6 +289,7 @@ metatable pattern. Create `src/counter.tua` to try one:
     Counter.__type_id = 1
     Counter.__is = {
       [1] = true,
+      [Counter] = true,
     }
 
     local function Counter_init(self, start)

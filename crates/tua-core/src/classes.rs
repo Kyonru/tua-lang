@@ -2224,8 +2224,11 @@ fn lower_class_declaration(
     output.push_str(&format!("{}.__type_id = {}\n", class.name, class.type_id));
     output.push_str(&format!("{}.__is = {{\n", class.name));
 
-    for type_id in inherited_type_ids(class, classes) {
+    for (type_id, class_name) in inherited_type_ids(class, classes) {
         output.push_str(&format!("  [{}] = true,\n", type_id));
+        // Class tables have runtime identity across module boundaries. Numeric
+        // IDs are assigned per source file and can collide after `require`.
+        output.push_str(&format!("  [{}] = true,\n", class_name));
     }
 
     output.push_str("}\n");
@@ -2629,7 +2632,10 @@ fn leading_super_args(body: &str) -> Option<String> {
     None
 }
 
-fn inherited_type_ids(class: &ClassDeclaration, classes: &[ClassDeclaration]) -> Vec<usize> {
+fn inherited_type_ids(
+    class: &ClassDeclaration,
+    classes: &[ClassDeclaration],
+) -> Vec<(usize, String)> {
     inherited_type_ids_with_visited(class, classes, &mut BTreeSet::new())
 }
 
@@ -2637,7 +2643,7 @@ fn inherited_type_ids_with_visited(
     class: &ClassDeclaration,
     classes: &[ClassDeclaration],
     visited: &mut BTreeSet<String>,
-) -> Vec<usize> {
+) -> Vec<(usize, String)> {
     if !visited.insert(class.name.clone()) {
         return Vec::new();
     }
@@ -2652,7 +2658,7 @@ fn inherited_type_ids_with_visited(
         ids.extend(inherited_type_ids_with_visited(parent, classes, visited));
     }
 
-    ids.push(class.type_id);
+    ids.push((class.type_id, class.name.clone()));
     ids
 }
 

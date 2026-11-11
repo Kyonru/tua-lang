@@ -542,7 +542,9 @@ end
     .expect("class syntax should emit optimized Lua");
 
     assert!(emitted.contains("Entity.__type_id = 1"));
-    assert!(emitted.contains("Particle.__is = {\n  [1] = true,\n  [2] = true,\n}"));
+    assert!(emitted.contains(
+        "Particle.__is = {\n  [1] = true,\n  [Entity] = true,\n  [2] = true,\n  [Particle] = true,\n}"
+    ));
     assert!(emitted.contains("local function Particle_update(self, dt)"));
     assert!(emitted.contains(
         "return setmetatable({\n    x = x,\n    y = y,\n    speed = 120,\n  }, Particle)"
@@ -553,7 +555,7 @@ end
     assert!(emitted.contains("Entity_move(particle, 2)"));
     assert!(emitted.contains("entity.update(entity, 0.25)"));
     assert!(emitted.contains("entity:update(0.3)"));
-    assert!(emitted.contains(".__is[Entity.__type_id] == true"));
+    assert!(emitted.contains(".__is[Entity] == true"));
 }
 
 #[test]

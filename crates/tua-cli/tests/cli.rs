@@ -1292,6 +1292,66 @@ assert(package.loaded["contracts"] == nil)
 }
 
 #[test]
+fn runtime_class_checks_use_identity_across_modules() {
+    let Some(lua) = working_lua_runtime() else {
+        return;
+    };
+    let temp = TempDir::new("cross-module-class-is-runtime");
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).expect("write config");
+    fs::create_dir_all(temp.path().join("src")).expect("create source directory");
+    fs::write(
+        temp.path().join("src/foreign.tua"),
+        "final class Foreign {}\nreturn { Foreign = Foreign }\n",
+    )
+    .expect("write foreign class");
+    fs::write(
+        temp.path().join("src/main.tua"),
+        r#"
+local foreign = require("foreign").Foreign.new()
+open class Base {}
+final class Child extends Base {}
+local child = Child.new()
+if foreign is Base then error("unrelated module class matched Base") end
+if foreign is Child then error("unrelated module class matched Child") end
+if child is Base then
+  if child is Child then
+    assert(true)
+  else
+    error("own class identity was lost")
+  end
+else
+  error("inherited class identity was lost")
+end
+"#,
+    )
+    .expect("write class checks");
+
+    let build = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .expect("build cross-module class fixture");
+    assert!(
+        build.status.success(),
+        "stdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&build.stdout),
+        String::from_utf8_lossy(&build.stderr)
+    );
+
+    let runtime = Command::new(lua)
+        .arg("main.lua")
+        .current_dir(temp.path().join("build"))
+        .output()
+        .expect("run emitted class fixture");
+    assert!(
+        runtime.status.success(),
+        "stdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&runtime.stdout),
+        String::from_utf8_lossy(&runtime.stderr)
+    );
+}
+
+#[test]
 fn emitted_lua_preserves_generic_override_and_initialization_order() {
     let Some(lua) = working_lua_runtime() else {
         return;
