@@ -10180,6 +10180,47 @@ print(<|payload|>p)
 }
 
 #[test]
+fn imported_ecs_world_and_component_keep_get_result_schema() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/components.tua
+local Position = ecs.component("Position", { x = "number" })
+local world = ecs.world()
+return { Position = Position, world = world }
+-- file: src/main.tua
+local Shared = require("components")
+local entity = Shared.world:create()
+local added = Shared.world:add(entity, Shared.Position, { x = 1 })
+added.x = "wrong"
+local position = Shared.world:get(entity, Shared.Position)
+print(<|payload|>position)
+position.x = "wrong"
+local removed = Shared.world:remove(entity, Shared.Position)
+removed.x = "wrong"
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+    let snapshot = host.snapshot();
+    let hover = snapshot
+        .hover("src/main.tua", fixture.position("payload"))
+        .expect("the imported ECS result should have hover");
+    assert!(hover.contents.contains("x: number"), "{hover:#?}");
+    let diagnostics = snapshot.pipeline_diagnostics("src/main.tua");
+    for field in ["added.x", "position.x", "removed.x"] {
+        assert!(
+            diagnostics.iter().any(|diagnostic| {
+                diagnostic.code == Some(crate::DiagnosticCode::TYPE_MISMATCH)
+                    && diagnostic.message.contains(field)
+            }),
+            "the imported component field `{field}` must reject a string assignment: {diagnostics:#?}"
+        );
+    }
+}
+
+#[test]
 fn inline_require_inference_respects_shadowed_loader() {
     let fixture = Fixture::parse(
         r#"-- file: src/provider.tua

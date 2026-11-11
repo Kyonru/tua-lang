@@ -1061,6 +1061,32 @@ impl AnalysisSnapshot {
         local_types: &BTreeMap<String, Type>,
     ) -> Option<Type> {
         let parts = field_chain_before_first_call(function_call)?;
+        if self.config.ecs.enabled
+            && parts.len() > 1
+            && matches!(
+                parts.last().map(String::as_str),
+                Some("add" | "get" | "remove")
+            )
+        {
+            let receiver_parts = &parts[..parts.len() - 1];
+            let receiver = self
+                .project_type_for_field_chain(parsed, receiver_parts)
+                .or_else(|| project_local_field_chain_type(local_types, receiver_parts));
+            if let Some(receiver) = receiver {
+                let component =
+                    crate::ecs::component_argument(&receiver, function_call).and_then(|argument| {
+                        self.project_type_for_expression(parsed, argument, 0, local_types)
+                            .or_else(|| project_literal_type(argument))
+                    });
+                if let Some(returns) = crate::ecs::inferred_method_return_types(
+                    &receiver,
+                    function_call,
+                    component.as_ref(),
+                ) {
+                    return returns.get(return_index).cloned();
+                }
+            }
+        }
         let (root, fields) = parts.split_first()?;
         let ty = if fields.is_empty() {
             local_types.get(root).cloned()

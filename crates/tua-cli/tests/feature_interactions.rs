@@ -134,3 +134,47 @@ return score:get().current.value
         );
     }
 }
+
+#[test]
+fn imported_ecs_component_get_keeps_its_field_type() {
+    let temp = TempDir::new("imported-ecs-component-field");
+    fs::write(
+        temp.path().join("tua.toml"),
+        "source = \"src\"\nout = \"build\"\n",
+    )
+    .expect("write config");
+    fs::create_dir_all(temp.path().join("src")).expect("create source directory");
+    fs::write(
+        temp.path().join("src/components.tua"),
+        r#"local Position = ecs.component("Position", { x = "number" })
+local world = ecs.world()
+return { Position = Position, world = world }
+"#,
+    )
+    .expect("write component module");
+    fs::write(
+        temp.path().join("src/main.tua"),
+        r#"local Shared = require("components")
+local entity = Shared.world:create()
+Shared.world:add(entity, Shared.Position, { x = 1 })
+local position = Shared.world:get(entity, Shared.Position)
+position.x = "wrong"
+"#,
+    )
+    .expect("write consumer");
+
+    let check = tua()
+        .arg("check")
+        .current_dir(temp.path())
+        .output()
+        .expect("check project");
+    assert!(
+        !check.status.success(),
+        "imported component payload should reject a string field assignment"
+    );
+    assert!(
+        String::from_utf8_lossy(&check.stderr).contains("expected number, found string"),
+        "expected payload mismatch, got: {}",
+        String::from_utf8_lossy(&check.stderr)
+    );
+}
