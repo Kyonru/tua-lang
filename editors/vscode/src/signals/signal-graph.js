@@ -87,6 +87,10 @@ async function renderSignalGraph(panel, client) {
     const graph = await client.sendRequest("tua/signalGraph", null);
     if (!renderGate.isCurrent(request) || graphPanel !== panel) return;
     const viewModel = signalGraphViewModel(graph);
+    viewModel.workspaceKey = (vscode.workspace.workspaceFolders || [])
+      .map((folder) => folder.uri.toString())
+      .sort()
+      .join("\n");
     latestGraphViewModel = viewModel;
 
     panel.webview.html = signalGraphHtml(panel.webview, viewModel);
@@ -362,7 +366,8 @@ function signalGraphHtml(webview, graph) {
     const busFilterSelect = document.getElementById("bus-filter");
     const fileFilterSelect = document.getElementById("file-filter");
     const segmentButtons = Array.from(document.querySelectorAll("[data-mode]"));
-    const restored = vscode.getState()?.signalGraph;
+    const saved = vscode.getState()?.signalGraph;
+    const restored = saved?.workspaceKey === (graphData.workspaceKey || "") ? saved : null;
     let mode = ["all", "listeners", "emitters"].includes(restored?.mode) ? restored.mode : "all";
     let eventQuery = typeof restored?.eventQuery === "string" ? restored.eventQuery : "";
     let busFilter = typeof restored?.busFilter === "string" ? restored.busFilter : "";
@@ -374,6 +379,7 @@ function signalGraphHtml(webview, graph) {
 
     function persistState() {
       vscode.setState({ ...(vscode.getState() || {}), signalGraph: {
+        workspaceKey: graphData.workspaceKey || "",
         mode, eventQuery, busFilter, fileFilter, selectedEvent, selectedFile,
       } });
     }

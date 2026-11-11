@@ -208,6 +208,18 @@ async function run() {
       assert.equal(await evaluate(`document.querySelector(${JSON.stringify(filterSelector)}).value`), "player", `${title} preserves filtering after refresh`);
       assert.equal(await evaluate(`document.querySelector(${JSON.stringify(modeSelector)}).classList.contains("active")`), true, `${title} preserves mode after refresh`);
     }
+    const projectSignalView = (workspaceKey, name) => ({
+      ...signalGraphViewModel({ events: [{
+        id: name, name, bus: "Events", busUri: `file:///${workspaceKey}/events.tua`,
+        calls: [{ uri: `file:///${workspaceKey}/events.tua`, role: "emit", method: "emit", range }],
+      }] }),
+      workspaceKey,
+    });
+    await load(signalGraphHtml(panel.webview, projectSignalView("one", "enemy.hit")), "Signal Graph");
+    await evaluate('(() => { document.querySelector("[data-mode=all]").click(); const filter = document.querySelector("#event-filter"); filter.value = "enemy"; filter.dispatchEvent(new Event("input")); })()');
+    await load(signalGraphHtml(panel.webview, projectSignalView("two", "player.hit")), "Signal Graph");
+    assert.equal(await evaluate('document.querySelector("#event-filter").value'), "", "Signal Graph clears a filter from another project");
+    assert.equal(await evaluate('document.querySelector(".node.event strong")?.textContent'), "player.hit", "Signal Graph shows the new project's event");
     await load(ecsExplorerHtml(panel.webview, { analysisRevision: 4, focusUri: "file:///one.tua", components: [], systems: [], queries: [], insights: [] }), "ECS Explorer");
     await evaluate('document.querySelector("#filter").value = "old file"; document.querySelector("#filter").dispatchEvent(new Event("input"))');
     await load(ecsExplorerHtml(panel.webview, { analysisRevision: 5, focusUri: "file:///two.tua", components: [], systems: [], queries: [], insights: [] }), "ECS Explorer");
