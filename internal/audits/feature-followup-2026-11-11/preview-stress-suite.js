@@ -48,7 +48,7 @@ async function run() {
     return (await response.json()).find(item => item.type === "iframe" && item.url.startsWith("vscode-webview:"));
   }, "preview target", 15000);
   const browser = await BrowserSession.connect(target.webSocketDebuggerUrl);
-  const report = { vscode: vscode.version, signal: {}, module: {}, nativeAsset: {}, rendererErrors: [] };
+  const report = { vscode: vscode.version, signal: {}, module: {}, realModule: {}, nativeAsset: {}, nativeAssets: {}, rendererErrors: [] };
   let context;
   try {
     let started = performance.now();
@@ -77,6 +77,33 @@ async function run() {
     await waitFor(() => messages.filter(message => message.command === "openLocation").length > 1, "module source action", 5000);
     report.module.sourceAction = messages.at(-1).command;
 
+    const real = JSON.parse(fs.readFileSync(process.env.TUA_REAL_GRAPH_JSON, "utf8"));
+    assert.equal(real.graph.modules.length, 121);
+    assert.equal(real.graph.edges.length, 120);
+    const world = real.graph.modules.find(module => module.uri.endsWith("module_119.tua"));
+    assert(world?.exports.some(field => field.name === "value" && field.type === "number"));
+    started = performance.now();
+    panel.webview.html = moduleGraphHtml(panel.webview, { ...real.graph, analysisRevision: real.analysisRevision });
+    await waitFor(async () => {
+      try {
+        const current = await browser.documentContext("Module Graph");
+        if (await browser.evaluate(`document.querySelectorAll('.module-node').length === ${real.graph.modules.length}`, current)) {
+          context = current;
+          return true;
+        }
+      } catch { /* The previous webview context can be destroyed during replacement. */ }
+      return false;
+    }, "compiler-produced module graph nodes", 30000);
+    report.realModule = {
+      compilerNodes: real.graph.modules.length,
+      compilerEdges: real.graph.edges.length,
+      renderedNodes: await browser.evaluate("document.querySelectorAll('.module-node').length", context),
+      renderedLinks: await browser.evaluate("document.querySelectorAll('.connection').length", context),
+      renderHostMs: performance.now() - started,
+    };
+    assert.equal(report.realModule.renderedNodes, report.realModule.compilerNodes);
+    assert.equal(report.realModule.renderedLinks, report.realModule.compilerEdges);
+
     const assetUri = vscode.Uri.joinPath(folder.uri, "src/assets/player.png");
     const previewResult = await vscode.commands.executeCommand("tua.assets.preview", assetUri.toString());
     await waitFor(() => vscode.window.tabGroups.activeTabGroup.activeTab?.input?.uri?.toString() === assetUri.toString(), "native asset tab", 10000);
@@ -91,6 +118,18 @@ async function run() {
       fs.writeFileSync(path.join(__dirname, "native-asset.png"), Buffer.from(shot.data, "base64"));
       report.nativeAsset.screenshot = "native-asset.png";
       report.nativeAsset.workbenchErrors = workbench.errors.length;
+      for (const name of ["sfx_move.wav", "sfx_bump.ogg", "sniglet.otf", "wave.glsl"]) {
+        const uri = vscode.Uri.joinPath(folder.uri, "src/assets", name);
+        const result = await vscode.commands.executeCommand("tua.assets.preview", uri.toString());
+        await waitFor(() => vscode.window.tabGroups.activeTabGroup.activeTab?.input?.uri?.toString() === uri.toString(), `${name} asset tab`, 10000);
+        const active = vscode.window.tabGroups.activeTabGroup.activeTab;
+        report.nativeAssets[name] = { result, label: active.label, inputType: active.input.constructor.name, uri: active.input.uri.toString() };
+        await new Promise(resolve => setTimeout(resolve, 750));
+        const assetShot = await workbench.send("Page.captureScreenshot");
+        const screenshot = name === "sfx_move.wav" ? "native-audio-wav.png" : `native-${name.replace('.', '-')}.png`;
+        fs.writeFileSync(path.join(__dirname, screenshot), Buffer.from(assetShot.data, "base64"));
+        report.nativeAssets[name].screenshot = screenshot;
+      }
     } finally {
       workbench.dispose();
     }
