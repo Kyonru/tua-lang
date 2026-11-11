@@ -697,6 +697,44 @@ events:emit("player.hit", "Ada", 12)
 }
 
 #[test]
+fn accepts_signal_emit_payloads_through_nested_bus_fields() {
+    check_tua_source(
+        "src/signals.tua",
+        r#"local shared = { events = signal() }
+shared.events:on("move", function(entity: number, amount: number) end)
+shared.events:emit("move", 1, 5)
+"#,
+    )
+    .expect("a nested SignalBus field should retain emit varargs");
+
+    let temp = TempProject::new("nested-required-signal-emit");
+    let source = r#"local shared = require("shared")
+shared.events:on("move", function(entity: number, amount: number) end)
+shared.events:emit("move", 1, 5)
+"#;
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/main.tua", source);
+    temp.write("src/shared.tua", "return { events = signal() }\n");
+    check_tua_source(temp.path.join("src/main.tua"), source)
+        .expect("a required module's nested SignalBus field should retain emit varargs");
+
+    let bad_source = source.replace("emit(\"move\", 1, 5)", "emit(\"move\", 1, \"wrong\")");
+    let diagnostics = check_tua_source(temp.path.join("src/main.tua"), bad_source)
+        .expect_err("required module nested SignalBus payloads should be checked");
+    assert_single_mismatch(&diagnostics, "expected number, found string");
+
+    let diagnostics = check_tua_source(
+        "src/signals.tua",
+        r#"local shared = { events = signal() }
+shared.events:on("move", function(entity: number, amount: number) end)
+shared.events:emit("move", 1, "wrong")
+"#,
+    )
+    .expect_err("nested SignalBus payloads should still be checked");
+    assert_single_mismatch(&diagnostics, "expected number, found string");
+}
+
+#[test]
 fn checks_signal_emit_payloads_from_declare_schema() {
     let diagnostics = check_tua_source(
         "src/signals.tua",

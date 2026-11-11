@@ -12,7 +12,9 @@ use crate::ast_utils::{
 use crate::parser::{ParsedSource, SourcePosition, SourceSpan};
 use crate::scope::ScopeMap;
 use crate::semantic::SemanticModel;
-use crate::types::{widen_inferred_type, FunctionType, TableField, Type, TypeEnvironment};
+use crate::types::{
+    widen_inferred_type, FunctionParameter, FunctionType, TableField, Type, TypeEnvironment,
+};
 use crate::{Diagnostic, DiagnosticCode, TypedFunction, TypedParameter};
 
 pub(crate) const TYPE_NAME: &str = "SignalBus";
@@ -314,12 +316,13 @@ pub(crate) fn method_documentation(method: &str) -> &'static str {
 fn method_function_type(method: &str) -> FunctionType {
     let function = typed_method(method).expect("method name should be known");
 
-    FunctionType::new_returns_with_required(
+    FunctionType::new_signature(
         function
             .parameters
             .iter()
-            .map(|parameter| parameter.ty.clone()),
+            .map(|parameter| FunctionParameter::named(&parameter.name, parameter.ty.clone())),
         function.required_parameter_count,
+        function.vararg_type.clone(),
         function.return_types_or_any(),
     )
 }
