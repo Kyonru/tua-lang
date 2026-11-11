@@ -1,0 +1,4 @@
+local service = require "service_annotated"
+local agent = service.current()
+print(agent.health)
+print(agent)

@@ -1,0 +1,556 @@
+{
+  "version": "0.7.0",
+  "workspaceFiles": 113,
+  "completion": {
+    "coldMs": 296.30000001192093,
+    "warmMs": [
+      156.19999998807907,
+      156.60000002384186,
+      159.30000001192093,
+      153.30000001192093,
+      159.89999997615814,
+      161.30000001192093,
+      171.4000000357628,
+      163.60000002384186,
+      163.39999997615814,
+      169.19999998807907,
+      165.29999995231628,
+      163.80000001192093
+    ],
+    "manualMs": [
+      113.30000001192093,
+      105.40000003576279,
+      106.20000004768372,
+      109.70000004768372,
+      113.09999996423721,
+      110,
+      112.90000003576279,
+      108.89999997615814,
+      110.5,
+      109.80000001192093,
+      108.90000003576279,
+      111.79999995231628
+    ],
+    "javascriptControlMs": [
+      361.69999998807907,
+      114.80000001192093,
+      107.30000001192093,
+      108.30000001192093,
+      109,
+      129.5999999642372,
+      106.60000002384186,
+      110.5,
+      109.19999998807907,
+      108.69999998807907,
+      107.30000001192093,
+      106.90000003576279
+    ],
+    "fileSwitchMs": [
+      165,
+      156.29999995231628
+    ],
+    "warmP50Ms": 161.30000001192093,
+    "warmP95Ms": 171.4000000357628,
+    "manualP50Ms": 109.80000001192093,
+    "manualP95Ms": 113.30000001192093,
+    "javascriptControlP50Ms": 108.69999998807907,
+    "javascriptControlP95Ms": 361.69999998807907
+  },
+  "formatOnSave": {
+    "samplesMs": [
+      17.73883299999943,
+      12.653041000001394,
+      12.883957999998529,
+      17.832916999999725,
+      13.530500000000757,
+      11.433666000000812,
+      7.923166999997193,
+      12.736833999999362,
+      13.270958000000974,
+      17.30750000000262,
+      9.06120799999917,
+      7.788125000002765
+    ],
+    "largeSamplesMs": [
+      32.49041700000089,
+      18.340374999999767,
+      15.607208000001265,
+      18.977374999998574,
+      22.665333000000828
+    ],
+    "p50Ms": 12.736833999999362,
+    "p95Ms": 17.832916999999725,
+    "largeP50Ms": 18.977374999998574,
+    "largeP95Ms": 32.49041700000089
+  },
+  "crossFileClass": {
+    "completionColdMs": 110.5,
+    "completionWarmMs": [
+      107.5,
+      107.60000002384186,
+      106.30000001192093,
+      109.19999998807907,
+      110.79999995231628,
+      105.89999997615814,
+      108,
+      108.69999998807907,
+      105.10000002384186,
+      108.80000001192093,
+      104.90000003576279,
+      105.90000003576279
+    ],
+    "hoverVisibleMs": [
+      71.10000002384186,
+      8.5,
+      12.099999964237213,
+      9.600000023841858,
+      11.299999952316284,
+      9.199999988079071,
+      9.099999964237213,
+      12.600000023841858
+    ],
+    "pointerHoverMs": [
+      325.19999998807907,
+      320.30000001192093,
+      321
+    ],
+    "hoverProtocolMs": 2.8718750000007276,
+    "hoverText": "local agent: AgentReferences · Implementations",
+    "deep": {
+      "visibleError": "Timed out waiting for typed dot to visible typed suggestions: {\"visible\":\"editor-widget suggest-widget\",\"labels\":[],\"text\":\".monaco-list.list_id_5:focus .monaco-list-row.focused { background-color: var(--vscode-list-focusBackground); }\\n.monaco-list.list_id_5:focus .monaco-list-row.focused:is(:hover, .hovered) { background-color: var(--vscode-list-focusBackground); }\\n.monaco-list.list_id_5:focus .monaco-list-row.focused { color: var(--vscode-list-focusForeground); }\\n.monaco-list.list_id_5:focus .monaco-list-row.selected { background-color: var(--vscode-list-activeSelectionBackground); }\\n.monaco-list.list_id_5:focus .monaco-list-row.selected:is(:hover, .hovered) { background-color: var(--vscode-list-activeSelectionBackground); }\\n.monaco-list.list_id_5:focus .monaco-list-row.selected { color: var(--vscode-list-activeSelectionForeground); }\\n.monaco-list.list_id_5:focus .monaco-list-row.selected .codicon { color: va\"}",
+      "widget": {
+        "visible": false,
+        "labels": []
+      },
+      "hoverVisibleMs": [
+        69.30000001192093,
+        11.699999988079071,
+        10,
+        10.800000011920929,
+        7.399999976158142
+      ],
+      "hoverVisibleText": "local agent: AgentInstanceReferences · Implementations",
+      "protocolMs": 3.8727080000026035,
+      "labels": [
+        {
+          "label": "agent",
+          "description": "local"
+        },
+        {
+          "label": "service",
+          "description": "module"
+        },
+        {
+          "label": "ecs",
+          "description": "built-in ECS module"
+        },
+        {
+          "label": "and",
+          "description": "Lua keyword"
+        },
+        {
+          "label": "break",
+          "description": "Lua keyword"
+        },
+        {
+          "label": "else",
+          "description": "Lua keyword"
+        },
+        {
+          "label": "elseif",
+          "description": "Lua keyword"
+        },
+        {
+          "label": "end",
+          "description": "Lua keyword"
+        },
+        {
+          "label": "false",
+          "description": "Lua keyword"
+        },
+        {
+          "label": "in",
+          "description": "Lua keyword"
+        },
+        {
+          "label": "nil",
+          "description": "Lua keyword"
+        },
+        {
+          "label": "not",
+          "description": "Lua keyword"
+        },
+        {
+          "label": "or",
+          "description": "Lua keyword"
+        },
+        {
+          "label": "return",
+          "description": "Lua keyword"
+        },
+        {
+          "label": "then",
+          "description": "Lua keyword"
+        },
+        {
+          "label": "true",
+          "description": "Lua keyword"
+        },
+        {
+          "label": "until",
+          "description": "Lua keyword"
+        },
+        {
+          "label": "_ENV",
+          "description": "global environment table"
+        },
+        {
+          "label": "_G",
+          "description": "global environment table"
+        },
+        {
+          "label": "_VERSION",
+          "description": "Lua version string"
+        },
+        {
+          "label": "arg",
+          "description": "table"
+        },
+        {
+          "label": "bit",
+          "description": "LuaJIT bit library"
+        },
+        {
+          "label": "assert",
+          "description": "function assert(v: any, message?: string): any"
+        },
+        {
+          "label": "collectgarbage",
+          "description": "function collectgarbage(opt?, arg?: number): any"
+        },
+        {
+          "label": "coroutine",
+          "description": "Lua coroutine library"
+        },
+        {
+          "label": "debug",
+          "description": "Lua debug library"
+        },
+        {
+          "label": "dofile",
+          "description": "function dofile(filename?: string): any"
+        },
+        {
+          "label": "error",
+          "description": "function error(message: string, level?: number)"
+        },
+        {
+          "label": "getfenv",
+          "description": "function getfenv(f?): table"
+        },
+        {
+          "label": "getmetatable",
+          "description": "function getmetatable(object: any): table?"
+        },
+        {
+          "label": "io",
+          "description": "Lua io library"
+        },
+        {
+          "label": "ipairs",
+          "description": "function ipairs(t: table)"
+        },
+        {
+          "label": "jit",
+          "description": "LuaJIT compiler control module"
+        },
+        {
+          "label": "load",
+          "description": "function load(chunk, chunkname?: string, mode?, env?): function?"
+        },
+        {
+          "label": "loadfile",
+          "description": "function loadfile(filename?: string, mode?, env?): function?"
+        },
+        {
+          "label": "loadstring",
+          "description": "function loadstring(text: string, chunkname?: string): function"
+        },
+        {
+          "label": "love",
+          "description": "LÖVE framework module"
+        },
+        {
+          "label": "math",
+          "description": "Lua math library"
+        },
+        {
+          "label": "module",
+          "description": "function module(name, ...)"
+        },
+        {
+          "label": "next",
+          "description": "function next(table: table, index?: any): any"
+        },
+        {
+          "label": "os",
+          "description": "Lua os library"
+        },
+        {
+          "label": "package",
+          "description": "Lua package library"
+        },
+        {
+          "label": "pairs",
+          "description": "function pairs(t: table)"
+        },
+        {
+          "label": "pcall",
+          "description": "function pcall(f: function, ...): boolean"
+        },
+        {
+          "label": "print",
+          "description": "function print(...)"
+        },
+        {
+          "label": "rawequal",
+          "description": "function rawequal(v1: any, v2: any): boolean"
+        },
+        {
+          "label": "rawget",
+          "description": "function rawget(table: table, index: any): any"
+        },
+        {
+          "label": "rawlen",
+          "description": "function rawlen(v: string | table): number"
+        },
+        {
+          "label": "rawset",
+          "description": "function rawset(table: table, index: any, value: any): table"
+        },
+        {
+          "label": "require",
+          "description": "function require(modname: string): any"
+        },
+        {
+          "label": "select",
+          "description": "function select(index: number | string, ...): any"
+        },
+        {
+          "label": "setfenv",
+          "description": "function setfenv(target, env)"
+        },
+        {
+          "label": "setmetatable",
+          "description": "function setmetatable(table: table, metatable?: table): table"
+        },
+        {
+          "label": "string",
+          "description": "Lua string library"
+        },
+        {
+          "label": "table",
+          "description": "Lua table library"
+        },
+        {
+          "label": "tonumber",
+          "description": "function tonumber(e: string | number, base?: number): number?"
+        },
+        {
+          "label": "tostring",
+          "description": "function tostring(v: any): string"
+        },
+        {
+          "label": "unpack",
+          "description": "function unpack(list, i?, j?)"
+        },
+        {
+          "label": "warn",
+          "description": "function warn(message: string, ...)"
+        },
+        {
+          "label": "xpcall",
+          "description": "function xpcall(f: function, msgh: function, ...): any"
+        },
+        {
+          "label": "image",
+          "description": "function image(path: string): Image"
+        },
+        {
+          "label": "sound",
+          "description": "function sound(path: string): Source"
+        },
+        {
+          "label": "music",
+          "description": "function music(path: string): Source"
+        },
+        {
+          "label": "font",
+          "description": "function font(path: string, size: number): Font"
+        },
+        {
+          "label": "shader",
+          "description": "function shader(path: string): Shader"
+        },
+        {
+          "label": "imageData",
+          "description": "function imageData(path: string): ImageData"
+        },
+        {
+          "label": "canvas",
+          "description": "function canvas(width: number, height: number): Canvas"
+        },
+        {
+          "label": "quad",
+          "description": "function quad(x: number, y: number, width: number, height: number, sw: number, sh: number): Quad"
+        },
+        {
+          "label": "spriteBatch",
+          "description": "function spriteBatch(image: Image, size: number): SpriteBatch"
+        },
+        {
+          "label": "particles",
+          "description": "function particles(image: Image, count: number): ParticleSystem"
+        },
+        {
+          "label": "vec2",
+          "description": "function vec2(x: number, y: number): Vec2"
+        },
+        {
+          "label": "tween",
+          "description": "built-in tweening module"
+        },
+        {
+          "label": "Camera",
+          "description": "built-in 2D camera module"
+        },
+        {
+          "label": "ShaderScan",
+          "description": "shader iteration helpers"
+        },
+        {
+          "label": "Rot",
+          "description": "optional procedural game-generation toolkit"
+        },
+        {
+          "label": "BehaviorTree",
+          "description": "opt-in behavior tree runtime"
+        },
+        {
+          "label": "local",
+          "description": "Lua local declaration"
+        },
+        {
+          "label": "local function",
+          "description": "Lua local function declaration"
+        },
+        {
+          "label": "function",
+          "description": "Lua function declaration"
+        },
+        {
+          "label": "type",
+          "description": "Tua type alias declaration"
+        },
+        {
+          "label": "class",
+          "description": "Tua class declaration"
+        },
+        {
+          "label": "open class",
+          "description": "Tua inheritable class declaration"
+        },
+        {
+          "label": "final class",
+          "description": "Tua final class declaration"
+        },
+        {
+          "label": "if",
+          "description": "Lua if statement"
+        },
+        {
+          "label": "if else",
+          "description": "Lua if/else statement"
+        },
+        {
+          "label": "for",
+          "description": "Lua numeric for loop"
+        },
+        {
+          "label": "for pairs",
+          "description": "Lua pairs loop"
+        },
+        {
+          "label": "for ipairs",
+          "description": "Lua ipairs loop"
+        },
+        {
+          "label": "while",
+          "description": "Lua while loop"
+        },
+        {
+          "label": "repeat",
+          "description": "Lua repeat/until loop"
+        },
+        {
+          "label": "do",
+          "description": "Lua do/end block"
+        },
+        {
+          "label": "spriteSheet",
+          "description": "Tua sprite sheet helper"
+        },
+        {
+          "label": "signal",
+          "description": "Tua signal bus helper"
+        },
+        {
+          "label": "objectPool",
+          "description": "Tua object pool helper"
+        },
+        {
+          "label": "stateMachine",
+          "description": "Tua finite state machine helper"
+        },
+        {
+          "label": "store",
+          "description": "Tua typed state store helper"
+        },
+        {
+          "label": "input",
+          "description": "Tua Baton input helper"
+        },
+        {
+          "label": "audioSystem",
+          "description": "Tua LÖVE audio system"
+        },
+        {
+          "label": "ecs component",
+          "description": "Tua ECS component and world workflow"
+        }
+      ],
+      "hover": "[References](command:tua.hover.references?%5B%7B%22uri%22%3A%22file%3A%2F%2F%2Fvar%2Ffolders%2Fjl%2Fdhcpl8gs3rv04nzljphszpmc0000gn%2FT%2Ftua-visible-latency-HIGZqW%2Fproject%2Fsrc%2Fcross_file_deep.tua%22%2C%22position%22%3A%7B%22line%22%3A1%2C%22character%22%3A8%7D%7D%5D) · [Implementations](command:tua.hover.implementations?%5B%7B%22uri%22%3A%22file%3A%2F%2F%2Fvar%2Ffolders%2Fjl%2Fdhcpl8gs3rv04nzljphszpmc0000gn%2FT%2Ftua-visible-latency-HIGZqW%2Fproject%2Fsrc%2Fcross_file_deep.tua%22%2C%22position%22%3A%7B%22line%22%3A1%2C%22character%22%3A8%7D%7D%5D)\n```tua\nlocal agent: AgentInstance\n```"
+    },
+    "annotated": {
+      "visibleColdMs": 115.89999997615814,
+      "visibleWarmMs": [
+        109.89999997615814,
+        105.40000003576279,
+        144.69999998807907,
+        138.60000002384186,
+        109.5
+      ]
+    },
+    "hoverProtocol": "[References](command:tua.hover.references?%5B%7B%22uri%22%3A%22file%3A%2F%2F%2Fvar%2Ffolders%2Fjl%2Fdhcpl8gs3rv04nzljphszpmc0000gn%2FT%2Ftua-visible-latency-HIGZqW%2Fproject%2Fsrc%2Fcross_file.tua%22%2C%22position%22%3A%7B%22line%22%3A1%2C%22character%22%3A8%7D%7D%5D) · [Implementations](command:tua.hover.implementations?%5B%7B%22uri%22%3A%22file%3A%2F%2F%2Fvar%2Ffolders%2Fjl%2Fdhcpl8gs3rv04nzljphszpmc0000gn%2FT%2Ftua-visible-latency-HIGZqW%2Fproject%2Fsrc%2Fcross_file.tua%22%2C%22position%22%3A%7B%22line%22%3A1%2C%22character%22%3A8%7D%7D%5D)\n```tua\nlocal agent: Agent\n```",
+    "completionWarmP50Ms": 107.5,
+    "completionWarmP95Ms": 110.79999995231628,
+    "hoverVisibleP50Ms": 9.600000023841858,
+    "hoverVisibleP95Ms": 71.10000002384186
+  },
+  "environment": {
+    "platform": "darwin",
+    "arch": "arm64",
+    "vscode": "1.142.0",
+    "quickSuggestionsDelayMs": 10
+  }
+}

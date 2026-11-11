@@ -1,0 +1,7 @@
+local factory = require "factory"
+
+local function current()
+  return factory.spawn("pilot")
+end
+
+return { current = current }

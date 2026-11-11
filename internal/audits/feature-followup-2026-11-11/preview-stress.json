@@ -1,0 +1,26 @@
+{
+  "vscode": "1.142.0",
+  "signal": {
+    "renderHostMs": 80.96337500000004,
+    "summary": "500 events / 1 files / 1500 calls",
+    "filterMs": 1.399999976158142,
+    "filteredNodes": 1,
+    "sourceAction": "openLocation"
+  },
+  "module": {
+    "renderHostMs": 85.18624999999997,
+    "summary": "500 modules / 499 dependencies / 0 unresolved / 0 cycles",
+    "filterMs": 4.900000035762787,
+    "filteredNodes": 2,
+    "sourceAction": "openLocation"
+  },
+  "nativeAsset": {
+    "result": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-preview-stress-I3yQkW/project/src/assets/player.png",
+    "label": "player.png",
+    "inputType": "bc",
+    "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-preview-stress-I3yQkW/project/src/assets/player.png",
+    "screenshot": "native-asset.png",
+    "workbenchErrors": 0
+  },
+  "rendererErrors": []
+}

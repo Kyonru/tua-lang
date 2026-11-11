@@ -1,0 +1,4 @@
+local factory = require "factory"
+local agent = factory.spawn("pilot")
+print(agent.health)
+print(agent)

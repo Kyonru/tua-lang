@@ -72,9 +72,20 @@ missing methods and unsafe signatures fail at the implementation declaration.
   63 → 24 ms and 44 → 25 ms respectively in the follow-up replay. Repeat the real
   project replay and representative contention gate before accepting another
   optimization.
-- Measure actual VS Code key-to-menu latency, pull-diagnostic client behavior,
-  larger-project imports, and LOVE hot reload. Protocol replay covers dialogue,
-  main, combat, import paths and format-apply-save, but not UI/rendering latency.
+- The November 11 [installed-editor follow-up](internal/audits/feature-followup-2026-11-11/EDITOR_PERFORMANCE.md)
+  measured visible suggestions in a synthetic 113-file project: imported-table
+  completion was about 161 ms warm median; a one-hop imported class factory was
+  about 108 ms. Pointer hover on that class took 320–325 ms including VS Code's
+  hover delay, and format-on-save of 1,001 lines took 16–33 ms. Trace trigger,
+  client send, server response, and widget paint before assigning the visible
+  delay to a component. Repeat on a real game and previous version; also test
+  pull-diagnostic client behavior, larger imports, and LOVE hot reload.
+- Fix [FUP-01](internal/audits/feature-followup-2026-11-11/FINDINGS.md):
+  an unannotated forwarding function two module hops after an imported class
+  preserves `AgentInstance` on hover but loses member completion. Preserve
+  canonical class/alias provenance through inferred module exports, then add a
+  cross-file project/LSP regression with edit recovery. Explicitly importing
+  and annotating the forwarding function's return is the current workaround.
 - Investigate the November 10 release-build LSP stress result: a synthetic
   1,000-module workspace did not finish profiling after 270 seconds; its active
   server was sampled at about 3.75 GiB RSS and 299% CPU. The same profile had

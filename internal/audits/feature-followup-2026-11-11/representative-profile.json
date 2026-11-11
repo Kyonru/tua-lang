@@ -1,0 +1,1327 @@
+{
+  "schemaVersion": 2,
+  "command": "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+  "repository": {
+    "head": "ab1b69c506f962ab239e015d2db4c38764fd592a",
+    "dirty": true
+  },
+  "mode": "full",
+  "baselineCompatibility": false,
+  "configuration": {
+    "coldRepeat": 2,
+    "warmRepeat": 10,
+    "contentionRepeat": 5,
+    "backgroundBurst": 4,
+    "contentionDelayMs": 10,
+    "requestTimeoutMs": 60000,
+    "workspaceWarmTimeoutMs": 120000,
+    "profileEnabled": true,
+    "inlineStatistical": false
+  },
+  "thresholds": {
+    "completionP95BudgetMs": 10000,
+    "warmCompletionP95BudgetMs": 10000,
+    "memoryBudgetMiB": 2048,
+    "inlineServerP95BudgetMs": 10000,
+    "inlineWorkerP95BudgetMs": 20,
+    "inlineBackendP95BudgetMs": 20,
+    "inlineEndToEndP95BudgetMs": 10000,
+    "inlineDeliveryP95BudgetMs": null,
+    "diagnosticsP95BudgetMs": 10000,
+    "minimumReturnedAtMostOneParseRate": 0.5,
+    "maximumStaleResults": 0,
+    "maximumValidationFailures": 0
+  },
+  "fixtureManifest": {
+    "schemaVersion": 1,
+    "fixtures": [
+      {
+        "name": "single-1000",
+        "kind": "single",
+        "root": "target/tua-benchmarks/lsp-representative/single-1000",
+        "sourceFileCount": 1,
+        "sourceLineCount": 1000,
+        "contentHash": "fbb9a9f3e8e36639ada34489dee3c78590c501331c054c1fbe802a009ed457ff"
+      },
+      {
+        "name": "project-100",
+        "kind": "project",
+        "root": "target/tua-benchmarks/lsp-representative/project-100",
+        "sourceFileCount": 100,
+        "sourceLineCount": 1401,
+        "contentHash": "f839b963a86ead5c90b9e1c06e5ce94ea8a81354428c6be74dedf9f35ab6e55e"
+      }
+    ]
+  },
+  "fixtures": [
+    {
+      "name": "single-1000",
+      "memory": {
+        "peakMiB": 256.484375,
+        "samples": 18
+      },
+      "kind": "single",
+      "sourceFileCount": 1,
+      "sourceLineCount": 1000,
+      "contentHash": "fbb9a9f3e8e36639ada34489dee3c78590c501331c054c1fbe802a009ed457ff",
+      "latency": {
+        "completion": {
+          "cold": {
+            "avgMs": 292.102375,
+            "p50Ms": 291.456708,
+            "p95Ms": 292.748042,
+            "p99Ms": 292.748042,
+            "minMs": 291.456708,
+            "maxMs": 292.748042,
+            "runs": 2
+          },
+          "warm": {
+            "avgMs": 6.6378832,
+            "p50Ms": 6.541209,
+            "p95Ms": 7.148917,
+            "p99Ms": 7.148917,
+            "minMs": 6.258666,
+            "maxMs": 7.148917,
+            "runs": 10
+          }
+        },
+        "hover": {
+          "cold": {
+            "avgMs": 305.91650000000004,
+            "p50Ms": 302.721292,
+            "p95Ms": 309.111708,
+            "p99Ms": 309.111708,
+            "minMs": 302.721292,
+            "maxMs": 309.111708,
+            "runs": 2
+          },
+          "warm": {
+            "avgMs": 20.874758300000003,
+            "p50Ms": 20.691042,
+            "p95Ms": 21.668458,
+            "p99Ms": 21.668458,
+            "minMs": 20.350125,
+            "maxMs": 21.668458,
+            "runs": 10
+          }
+        },
+        "definition": {
+          "cold": {
+            "avgMs": 303.863104,
+            "p50Ms": 302.300208,
+            "p95Ms": 305.426,
+            "p99Ms": 305.426,
+            "minMs": 302.300208,
+            "maxMs": 305.426,
+            "runs": 2
+          },
+          "warm": {
+            "avgMs": 0.939396,
+            "p50Ms": 0.928292,
+            "p95Ms": 1.015459,
+            "p99Ms": 1.015459,
+            "minMs": 0.90325,
+            "maxMs": 1.015459,
+            "runs": 10
+          }
+        },
+        "inlayHint": {
+          "cold": {
+            "avgMs": 285.106833,
+            "p50Ms": 283.5635,
+            "p95Ms": 286.650166,
+            "p99Ms": 286.650166,
+            "minMs": 283.5635,
+            "maxMs": 286.650166,
+            "runs": 2
+          },
+          "warm": {
+            "avgMs": 3.409675,
+            "p50Ms": 1.936792,
+            "p95Ms": 16.238542,
+            "p99Ms": 16.238542,
+            "minMs": 1.856875,
+            "maxMs": 16.238542,
+            "runs": 10
+          }
+        }
+      },
+      "requestAge": {
+        "completionAfterChange": {
+          "avgMs": 168.53575,
+          "p50Ms": 163.775666,
+          "p95Ms": 228.445958,
+          "p99Ms": 228.445958,
+          "minMs": 67.679834,
+          "maxMs": 228.445958,
+          "runs": 5
+        },
+        "inlineAfterChange": {
+          "avgMs": 66.037783,
+          "p50Ms": 77.724416,
+          "p95Ms": 82.44025,
+          "p99Ms": 82.44025,
+          "minMs": 14.485333,
+          "maxMs": 82.44025,
+          "runs": 5
+        },
+        "inlineAllAfterChange": {
+          "avgMs": 66.037783,
+          "p50Ms": 77.724416,
+          "p95Ms": 82.44025,
+          "p99Ms": 82.44025,
+          "minMs": 14.485333,
+          "maxMs": 82.44025,
+          "runs": 5
+        },
+        "diagnosticsAfterChange": {
+          "avgMs": 65.6298584,
+          "p50Ms": 77.844583,
+          "p95Ms": 81.166833,
+          "p99Ms": 81.166833,
+          "minMs": 14.643,
+          "maxMs": 81.166833,
+          "runs": 5
+        },
+        "background": {
+          "avgMs": 72.26758310000001,
+          "p50Ms": 88.992666,
+          "p95Ms": 92.031833,
+          "p99Ms": 92.065541,
+          "minMs": 2.823667,
+          "maxMs": 92.065541,
+          "runs": 20
+        }
+      },
+      "cache": {
+        "hitRates": {
+          "parse": 0,
+          "hir": 0,
+          "scope": 0,
+          "typeEnvironment": 0,
+          "diagnostics": 0,
+          "moduleExports": 0,
+          "requireEdges": 0,
+          "symbolIndex": 0,
+          "usageIndex": 0,
+          "completionContext": 0,
+          "inlineCurrentFile": 0
+        },
+        "raw": {
+          "completionContext": {
+            "hits": 0,
+            "misses": 0
+          },
+          "dependentInvalidations": 0,
+          "diagnostics": {
+            "hits": 0,
+            "misses": 0
+          },
+          "hir": {
+            "hits": 0,
+            "misses": 0
+          },
+          "inlineCompletion": {
+            "baselineParses": 0,
+            "cachePeek": {
+              "hitRate": 0,
+              "hits": 0,
+              "misses": 5
+            },
+            "candidateAttempts": 0,
+            "candidateParseDistribution": {
+              "one": 0,
+              "parsesPerAttempt": 0,
+              "two": 0,
+              "zero": 0
+            },
+            "candidateParses": 0,
+            "candidatesReturned": 0,
+            "editedParseSufficiencyRate": 0,
+            "editedParseSufficient": 0,
+            "parsesPerRequest": 0,
+            "requests": 5,
+            "returnedParseDistribution": {
+              "atMostOneRate": 0,
+              "one": 0,
+              "two": 0,
+              "zero": 0
+            },
+            "skippedOversized": 5,
+            "statisticalScopeBytes": 24,
+            "statisticalScopeFiles": 0
+          },
+          "invalidations": 1,
+          "moduleExports": {
+            "hits": 0,
+            "misses": 0
+          },
+          "parse": {
+            "hits": 0,
+            "misses": 0
+          },
+          "patternCorpus": {
+            "adopted": 0,
+            "approximateBytes": 120,
+            "baseFiles": 0,
+            "batchesCompleted": 0,
+            "cancelledBatches": 0,
+            "discovered": 0,
+            "disposalsQueued": 0,
+            "enabled": false,
+            "fileLimit": 0,
+            "files": 0,
+            "filesBuilt": 0,
+            "generation": 2,
+            "generationRejections": 0,
+            "inFlight": 0,
+            "lastBuildMs": 0,
+            "lineageRejections": 0,
+            "overBudget": 0,
+            "overlayFiles": 0,
+            "queued": 0,
+            "remergeInFlight": false,
+            "remergePending": false,
+            "remergeRejections": 0,
+            "remerges": 0,
+            "skipped": 0,
+            "stale": 0,
+            "tombstoned": 0,
+            "tombstones": 0
+          },
+          "requireEdges": {
+            "hits": 0,
+            "misses": 0
+          },
+          "scope": {
+            "hits": 0,
+            "misses": 0
+          },
+          "symbolIndex": {
+            "hits": 0,
+            "misses": 0
+          },
+          "typeEnvironment": {
+            "hits": 0,
+            "misses": 0
+          },
+          "usageIndex": {
+            "hits": 0,
+            "misses": 0
+          },
+          "workspaceWarm": {
+            "discovered": 1,
+            "failed": 0,
+            "queuedHigh": 1,
+            "queuedLow": 0,
+            "snapshotFailedRevision": null,
+            "snapshotReadyRevision": null,
+            "staleResults": 4,
+            "warmed": 0
+          }
+        }
+      },
+      "inlineCompletion": {
+        "responses": 5,
+        "requestErrors": 0,
+        "nonEmptyResponses": 0,
+        "profile": {
+          "queue": {
+            "avgMs": 0.016800000000000002,
+            "p50Ms": 0.017,
+            "p95Ms": 0.021,
+            "p99Ms": 0.021,
+            "minMs": 0.012,
+            "maxMs": 0.021,
+            "runs": 5
+          },
+          "preparation": {
+            "avgMs": 0.0242,
+            "p50Ms": 0.023,
+            "p95Ms": 0.029,
+            "p99Ms": 0.029,
+            "minMs": 0.021,
+            "maxMs": 0.029,
+            "runs": 5
+          },
+          "workerExecution": {
+            "avgMs": 0.007600000000000001,
+            "p50Ms": 0.008,
+            "p95Ms": 0.011,
+            "p99Ms": 0.011,
+            "minMs": 0.005,
+            "maxMs": 0.011,
+            "runs": 5
+          },
+          "coreBackend": {
+            "avgMs": 0,
+            "p50Ms": 0,
+            "p95Ms": 0,
+            "p99Ms": 0,
+            "minMs": 0,
+            "maxMs": 0,
+            "runs": 5
+          },
+          "semantic": {
+            "avgMs": null,
+            "p50Ms": 0,
+            "p95Ms": 0,
+            "p99Ms": 0,
+            "runs": 0
+          },
+          "recall": {
+            "avgMs": null,
+            "p50Ms": 0,
+            "p95Ms": 0,
+            "p99Ms": 0,
+            "runs": 0
+          },
+          "validation": {
+            "avgMs": null,
+            "p50Ms": 0,
+            "p95Ms": 0,
+            "p99Ms": 0,
+            "runs": 0
+          },
+          "coordinatorActive": {},
+          "coordinatorFinish": {}
+        },
+        "serverRequest": {
+          "count": 5,
+          "maxMs": 0,
+          "method": "tua/localInlineCompletion",
+          "p95Ms": 0
+        },
+        "counters": {
+          "baselineParses": 0,
+          "cachePeek": {
+            "hitRate": 0,
+            "hits": 0,
+            "misses": 5
+          },
+          "candidateAttempts": 0,
+          "candidateParseDistribution": {
+            "one": 0,
+            "parsesPerAttempt": 0,
+            "two": 0,
+            "zero": 0
+          },
+          "candidateParses": 0,
+          "candidatesReturned": 0,
+          "editedParseSufficiencyRate": 0,
+          "editedParseSufficient": 0,
+          "parsesPerRequest": 0,
+          "requests": 5,
+          "returnedParseDistribution": {
+            "atMostOneRate": 0,
+            "one": 0,
+            "two": 0,
+            "zero": 0
+          },
+          "skippedOversized": 5,
+          "statisticalScopeBytes": 24,
+          "statisticalScopeFiles": 0
+        }
+      },
+      "diagnostics": {
+        "firstPublishAfterChange": {
+          "avgMs": 65.6298584,
+          "p50Ms": 77.844583,
+          "p95Ms": 81.166833,
+          "p99Ms": 81.166833,
+          "minMs": 14.643,
+          "maxMs": 81.166833,
+          "runs": 5
+        },
+        "samplesMs": [
+          14.643,
+          76.522417,
+          81.166833,
+          77.844583,
+          77.972459
+        ]
+      },
+      "health": {
+        "cache": {
+          "completionContext": {
+            "hitRate": 0,
+            "hits": 0,
+            "misses": 0
+          },
+          "diagnostics": {
+            "hitRate": 0,
+            "hits": 0,
+            "misses": 0
+          },
+          "hir": {
+            "hitRate": 0,
+            "hits": 0,
+            "misses": 0
+          },
+          "hitRate": 0,
+          "hits": 0,
+          "inlineCurrentFile": {
+            "hitRate": 0,
+            "hits": 0,
+            "misses": 5
+          },
+          "misses": 0,
+          "moduleExports": {
+            "hitRate": 0,
+            "hits": 0,
+            "misses": 0
+          },
+          "parse": {
+            "hitRate": 0,
+            "hits": 0,
+            "misses": 0
+          },
+          "requireEdges": {
+            "hitRate": 0,
+            "hits": 0,
+            "misses": 0
+          },
+          "scope": {
+            "hitRate": 0,
+            "hits": 0,
+            "misses": 0
+          },
+          "symbolIndex": {
+            "hitRate": 0,
+            "hits": 0,
+            "misses": 0
+          },
+          "typeEnvironment": {
+            "hitRate": 0,
+            "hits": 0,
+            "misses": 0
+          },
+          "usageIndex": {
+            "hitRate": 0,
+            "hits": 0,
+            "misses": 0
+          }
+        },
+        "documents": {
+          "open": 1,
+          "recentChanges": 1
+        },
+        "inlineCompletion": {
+          "baselineParses": 0,
+          "candidateAttempts": 0,
+          "candidateParseDistribution": {
+            "one": 0,
+            "parsesPerAttempt": 0,
+            "two": 0,
+            "zero": 0
+          },
+          "candidateParses": 0,
+          "candidatesReturned": 0,
+          "editedParseSufficiencyRate": 0,
+          "editedParseSufficient": 0,
+          "parsesPerRequest": 0,
+          "requests": 5,
+          "returnedParseDistribution": {
+            "atMostOneRate": 0,
+            "one": 0,
+            "two": 0,
+            "zero": 0
+          },
+          "skippedOversized": 5
+        },
+        "latency": {
+          "maxMs": 147,
+          "methods": [
+            {
+              "count": 1,
+              "maxMs": 0,
+              "method": "initialize",
+              "p95Ms": 0
+            },
+            {
+              "count": 16,
+              "maxMs": 147,
+              "method": "textDocument/completion",
+              "p95Ms": 147
+            },
+            {
+              "count": 11,
+              "maxMs": 19,
+              "method": "textDocument/definition",
+              "p95Ms": 19
+            },
+            {
+              "count": 11,
+              "maxMs": 98,
+              "method": "textDocument/hover",
+              "p95Ms": 98
+            },
+            {
+              "count": 15,
+              "maxMs": 16,
+              "method": "textDocument/inlayHint",
+              "p95Ms": 16
+            },
+            {
+              "count": 7,
+              "maxMs": 0,
+              "method": "tua/cacheStats",
+              "p95Ms": 0
+            },
+            {
+              "count": 5,
+              "maxMs": 0,
+              "method": "tua/localInlineCompletion",
+              "p95Ms": 0
+            }
+          ],
+          "p50Ms": 2,
+          "p95Ms": 86,
+          "p99Ms": 147,
+          "recentCount": 66
+        },
+        "patternCorpus": {
+          "approximateBytes": 120,
+          "baseFiles": 0,
+          "cancelledBatches": 0,
+          "disposalsQueued": 0,
+          "enabled": false,
+          "files": 0,
+          "generation": 2,
+          "generationRejections": 0,
+          "inFlight": 0,
+          "lastBuildMs": 0,
+          "lineageRejections": 0,
+          "overlayFiles": 0,
+          "queued": 0,
+          "remergeInFlight": false,
+          "remergePending": false,
+          "remergeRejections": 0,
+          "stale": 0,
+          "tombstones": 0
+        },
+        "queue": {
+          "coordinator": 0,
+          "inFlight": 1,
+          "patternCorpus": 0,
+          "total": 2,
+          "workspaceWarmHigh": 1,
+          "workspaceWarmLow": 0
+        },
+        "revision": 15,
+        "staleResults": {
+          "patternCorpus": 0,
+          "requests": 0,
+          "total": 4,
+          "workspaceWarm": 4
+        },
+        "workspaceWarm": {
+          "coveragePercent": 0,
+          "discovered": 1,
+          "enabled": true,
+          "failed": 0,
+          "queued": 1,
+          "queuedHigh": 1,
+          "queuedLow": 0,
+          "snapshotFailedRevision": null,
+          "snapshotReadyRevision": null,
+          "staleResults": 4,
+          "warmed": 0
+        }
+      },
+      "workspaceWarm": {
+        "completed": true,
+        "elapsedMs": 134.116333,
+        "polls": 6,
+        "state": {
+          "discovered": 1,
+          "failed": 0,
+          "queuedHigh": 0,
+          "queuedLow": 0,
+          "snapshotFailedRevision": null,
+          "snapshotReadyRevision": 10,
+          "staleResults": 1,
+          "warmed": 1
+        }
+      },
+      "contention": {
+        "rounds": 5,
+        "backgroundRequests": 20,
+        "cancelledRequests": 16,
+        "contentModifiedResponses": 16,
+        "requestCancelledResponses": 0,
+        "cancellationRate": 0.8,
+        "resultsAfterChange": 0,
+        "staleResultCount": 0,
+        "freshCompletionCount": 5,
+        "validDocumentCompletionCount": 4,
+        "invalidDocumentCompletionCount": 1,
+        "invalidDocumentCompletionSuccesses": 1
+      },
+      "validationFailures": {
+        "byRequest": {
+          "completion": 0,
+          "hover": 0,
+          "definition": 0,
+          "inlayHint": 0,
+          "contentionCompletion": 0
+        },
+        "total": 0
+      }
+    },
+    {
+      "name": "project-100",
+      "memory": {
+        "peakMiB": 286.546875,
+        "samples": 6
+      },
+      "kind": "project",
+      "sourceFileCount": 100,
+      "sourceLineCount": 1401,
+      "contentHash": "f839b963a86ead5c90b9e1c06e5ce94ea8a81354428c6be74dedf9f35ab6e55e",
+      "latency": {
+        "completion": {
+          "cold": {
+            "avgMs": 162.6185625,
+            "p50Ms": 158.039125,
+            "p95Ms": 167.198,
+            "p99Ms": 167.198,
+            "minMs": 158.039125,
+            "maxMs": 167.198,
+            "runs": 2
+          },
+          "warm": {
+            "avgMs": 0.39047099999999996,
+            "p50Ms": 0.37875,
+            "p95Ms": 0.467084,
+            "p99Ms": 0.467084,
+            "minMs": 0.324792,
+            "maxMs": 0.467084,
+            "runs": 10
+          }
+        },
+        "hover": {
+          "cold": {
+            "avgMs": 165.764167,
+            "p50Ms": 158.102084,
+            "p95Ms": 173.42625,
+            "p99Ms": 173.42625,
+            "minMs": 158.102084,
+            "maxMs": 173.42625,
+            "runs": 2
+          },
+          "warm": {
+            "avgMs": 1.4417500000000003,
+            "p50Ms": 1.448625,
+            "p95Ms": 1.5615,
+            "p99Ms": 1.5615,
+            "minMs": 1.308666,
+            "maxMs": 1.5615,
+            "runs": 10
+          }
+        },
+        "definition": {
+          "cold": {
+            "avgMs": 229.2380415,
+            "p50Ms": 227.940458,
+            "p95Ms": 230.535625,
+            "p99Ms": 230.535625,
+            "minMs": 227.940458,
+            "maxMs": 230.535625,
+            "runs": 2
+          },
+          "warm": {
+            "avgMs": 0.17747089999999996,
+            "p50Ms": 0.171583,
+            "p95Ms": 0.21575,
+            "p99Ms": 0.21575,
+            "minMs": 0.158375,
+            "maxMs": 0.21575,
+            "runs": 10
+          }
+        },
+        "inlayHint": {
+          "cold": {
+            "avgMs": 162.7192085,
+            "p50Ms": 162.149292,
+            "p95Ms": 163.289125,
+            "p99Ms": 163.289125,
+            "minMs": 162.149292,
+            "maxMs": 163.289125,
+            "runs": 2
+          },
+          "warm": {
+            "avgMs": 1.1611041,
+            "p50Ms": 1.147333,
+            "p95Ms": 1.324875,
+            "p99Ms": 1.324875,
+            "minMs": 0.973167,
+            "maxMs": 1.324875,
+            "runs": 10
+          }
+        }
+      },
+      "requestAge": {
+        "completionAfterChange": {
+          "avgMs": 35.3996086,
+          "p50Ms": 34.877875,
+          "p95Ms": 54.117417,
+          "p99Ms": 54.117417,
+          "minMs": 12.564625,
+          "maxMs": 54.117417,
+          "runs": 5
+        },
+        "inlineAfterChange": {
+          "avgMs": 17.631174800000004,
+          "p50Ms": 19.91175,
+          "p95Ms": 23.800083,
+          "p99Ms": 23.800083,
+          "minMs": 4.853166,
+          "maxMs": 23.800083,
+          "runs": 5
+        },
+        "inlineAllAfterChange": {
+          "avgMs": 17.631174800000004,
+          "p50Ms": 19.91175,
+          "p95Ms": 23.800083,
+          "p99Ms": 23.800083,
+          "minMs": 4.853166,
+          "maxMs": 23.800083,
+          "runs": 5
+        },
+        "diagnosticsAfterChange": {
+          "avgMs": 15.126450199999999,
+          "p50Ms": 18.2965,
+          "p95Ms": 18.966417,
+          "p99Ms": 18.966417,
+          "minMs": 1.937167,
+          "maxMs": 18.966417,
+          "runs": 5
+        },
+        "background": {
+          "avgMs": 19.094268749999998,
+          "p50Ms": 28.617042,
+          "p95Ms": 30.04075,
+          "p99Ms": 30.044542,
+          "minMs": 1.711667,
+          "maxMs": 30.044542,
+          "runs": 20
+        }
+      },
+      "cache": {
+        "hitRates": {
+          "parse": 0,
+          "hir": 0,
+          "scope": 0,
+          "typeEnvironment": 0,
+          "diagnostics": 0,
+          "moduleExports": 0,
+          "requireEdges": 0,
+          "symbolIndex": 0,
+          "usageIndex": 0,
+          "completionContext": 0,
+          "inlineCurrentFile": 0
+        },
+        "raw": {
+          "completionContext": {
+            "hits": 0,
+            "misses": 0
+          },
+          "dependentInvalidations": 0,
+          "diagnostics": {
+            "hits": 0,
+            "misses": 0
+          },
+          "hir": {
+            "hits": 0,
+            "misses": 0
+          },
+          "inlineCompletion": {
+            "baselineParses": 1,
+            "cachePeek": {
+              "hitRate": 0,
+              "hits": 0,
+              "misses": 5
+            },
+            "candidateAttempts": 5,
+            "candidateParseDistribution": {
+              "one": 4,
+              "parsesPerAttempt": 1.2,
+              "two": 1,
+              "zero": 0
+            },
+            "candidateParses": 5,
+            "candidatesReturned": 5,
+            "editedParseSufficiencyRate": 0.8,
+            "editedParseSufficient": 4,
+            "parsesPerRequest": 1.2,
+            "requests": 5,
+            "returnedParseDistribution": {
+              "atMostOneRate": 0.8,
+              "one": 4,
+              "two": 1,
+              "zero": 0
+            },
+            "skippedOversized": 0,
+            "statisticalScopeBytes": 24,
+            "statisticalScopeFiles": 0
+          },
+          "invalidations": 2,
+          "moduleExports": {
+            "hits": 0,
+            "misses": 0
+          },
+          "parse": {
+            "hits": 0,
+            "misses": 0
+          },
+          "patternCorpus": {
+            "adopted": 0,
+            "approximateBytes": 120,
+            "baseFiles": 0,
+            "batchesCompleted": 0,
+            "cancelledBatches": 0,
+            "discovered": 0,
+            "disposalsQueued": 0,
+            "enabled": false,
+            "fileLimit": 0,
+            "files": 0,
+            "filesBuilt": 0,
+            "generation": 2,
+            "generationRejections": 0,
+            "inFlight": 0,
+            "lastBuildMs": 0,
+            "lineageRejections": 0,
+            "overBudget": 0,
+            "overlayFiles": 0,
+            "queued": 0,
+            "remergeInFlight": false,
+            "remergePending": false,
+            "remergeRejections": 0,
+            "remerges": 0,
+            "skipped": 0,
+            "stale": 0,
+            "tombstoned": 0,
+            "tombstones": 0
+          },
+          "requireEdges": {
+            "hits": 0,
+            "misses": 0
+          },
+          "scope": {
+            "hits": 0,
+            "misses": 0
+          },
+          "symbolIndex": {
+            "hits": 0,
+            "misses": 0
+          },
+          "typeEnvironment": {
+            "hits": 0,
+            "misses": 0
+          },
+          "usageIndex": {
+            "hits": 0,
+            "misses": 0
+          },
+          "workspaceWarm": {
+            "discovered": 100,
+            "failed": 0,
+            "queuedHigh": 0,
+            "queuedLow": 0,
+            "snapshotFailedRevision": null,
+            "snapshotReadyRevision": null,
+            "staleResults": 4,
+            "warmed": 99
+          }
+        }
+      },
+      "inlineCompletion": {
+        "responses": 5,
+        "requestErrors": 0,
+        "nonEmptyResponses": 5,
+        "profile": {
+          "queue": {
+            "avgMs": 0.014000000000000002,
+            "p50Ms": 0.014,
+            "p95Ms": 0.016,
+            "p99Ms": 0.016,
+            "minMs": 0.012,
+            "maxMs": 0.016,
+            "runs": 5
+          },
+          "preparation": {
+            "avgMs": 0.010599999999999998,
+            "p50Ms": 0.009,
+            "p95Ms": 0.014,
+            "p99Ms": 0.014,
+            "minMs": 0.009,
+            "maxMs": 0.014,
+            "runs": 5
+          },
+          "workerExecution": {
+            "avgMs": 2.3211999999999997,
+            "p50Ms": 1.442,
+            "p95Ms": 4.816,
+            "p99Ms": 4.816,
+            "minMs": 1.242,
+            "maxMs": 4.816,
+            "runs": 5
+          },
+          "coreBackend": {
+            "avgMs": 2.3044000000000002,
+            "p50Ms": 1.429,
+            "p95Ms": 4.797,
+            "p99Ms": 4.797,
+            "minMs": 1.228,
+            "maxMs": 4.797,
+            "runs": 5
+          },
+          "semantic": {
+            "avgMs": 0,
+            "p50Ms": 0,
+            "p95Ms": 0,
+            "p99Ms": 0,
+            "minMs": 0,
+            "maxMs": 0,
+            "runs": 5
+          },
+          "recall": {
+            "avgMs": 0.0254,
+            "p50Ms": 0.025,
+            "p95Ms": 0.028,
+            "p99Ms": 0.028,
+            "minMs": 0.024,
+            "maxMs": 0.028,
+            "runs": 5
+          },
+          "validation": {
+            "avgMs": 2.2572,
+            "p50Ms": 1.385,
+            "p95Ms": 4.752,
+            "p99Ms": 4.752,
+            "minMs": 1.179,
+            "maxMs": 4.752,
+            "runs": 5
+          },
+          "coordinatorActive": {},
+          "coordinatorFinish": {
+            "inline.coordinator.finish request": {
+              "avgMs": 0,
+              "p50Ms": 0,
+              "p95Ms": 0,
+              "p99Ms": 0,
+              "minMs": 0,
+              "maxMs": 0,
+              "runs": 4
+            }
+          }
+        },
+        "serverRequest": {
+          "count": 5,
+          "maxMs": 4,
+          "method": "tua/localInlineCompletion",
+          "p95Ms": 4
+        },
+        "counters": {
+          "baselineParses": 1,
+          "cachePeek": {
+            "hitRate": 0,
+            "hits": 0,
+            "misses": 5
+          },
+          "candidateAttempts": 5,
+          "candidateParseDistribution": {
+            "one": 4,
+            "parsesPerAttempt": 1.2,
+            "two": 1,
+            "zero": 0
+          },
+          "candidateParses": 5,
+          "candidatesReturned": 5,
+          "editedParseSufficiencyRate": 0.8,
+          "editedParseSufficient": 4,
+          "parsesPerRequest": 1.2,
+          "requests": 5,
+          "returnedParseDistribution": {
+            "atMostOneRate": 0.8,
+            "one": 4,
+            "two": 1,
+            "zero": 0
+          },
+          "skippedOversized": 0,
+          "statisticalScopeBytes": 24,
+          "statisticalScopeFiles": 0
+        }
+      },
+      "diagnostics": {
+        "firstPublishAfterChange": {
+          "avgMs": 15.126450199999999,
+          "p50Ms": 18.2965,
+          "p95Ms": 18.966417,
+          "p99Ms": 18.966417,
+          "minMs": 1.937167,
+          "maxMs": 18.966417,
+          "runs": 5
+        },
+        "samplesMs": [
+          1.937167,
+          17.466709,
+          18.966417,
+          18.2965,
+          18.965458
+        ]
+      },
+      "health": {
+        "cache": {
+          "completionContext": {
+            "hitRate": 0,
+            "hits": 0,
+            "misses": 0
+          },
+          "diagnostics": {
+            "hitRate": 0,
+            "hits": 0,
+            "misses": 0
+          },
+          "hir": {
+            "hitRate": 0,
+            "hits": 0,
+            "misses": 0
+          },
+          "hitRate": 0,
+          "hits": 0,
+          "inlineCurrentFile": {
+            "hitRate": 0,
+            "hits": 0,
+            "misses": 5
+          },
+          "misses": 0,
+          "moduleExports": {
+            "hitRate": 0,
+            "hits": 0,
+            "misses": 0
+          },
+          "parse": {
+            "hitRate": 0,
+            "hits": 0,
+            "misses": 0
+          },
+          "requireEdges": {
+            "hitRate": 0,
+            "hits": 0,
+            "misses": 0
+          },
+          "scope": {
+            "hitRate": 0,
+            "hits": 0,
+            "misses": 0
+          },
+          "symbolIndex": {
+            "hitRate": 0,
+            "hits": 0,
+            "misses": 0
+          },
+          "typeEnvironment": {
+            "hitRate": 0,
+            "hits": 0,
+            "misses": 0
+          },
+          "usageIndex": {
+            "hitRate": 0,
+            "hits": 0,
+            "misses": 0
+          }
+        },
+        "documents": {
+          "open": 1,
+          "recentChanges": 1
+        },
+        "inlineCompletion": {
+          "baselineParses": 1,
+          "candidateAttempts": 5,
+          "candidateParseDistribution": {
+            "one": 4,
+            "parsesPerAttempt": 1.2,
+            "two": 1,
+            "zero": 0
+          },
+          "candidateParses": 5,
+          "candidatesReturned": 5,
+          "editedParseSufficiencyRate": 0.8,
+          "editedParseSufficient": 4,
+          "parsesPerRequest": 1.2,
+          "requests": 5,
+          "returnedParseDistribution": {
+            "atMostOneRate": 0.8,
+            "one": 4,
+            "two": 1,
+            "zero": 0
+          },
+          "skippedOversized": 0
+        },
+        "latency": {
+          "maxMs": 59,
+          "methods": [
+            {
+              "count": 1,
+              "maxMs": 3,
+              "method": "initialize",
+              "p95Ms": 3
+            },
+            {
+              "count": 16,
+              "maxMs": 40,
+              "method": "textDocument/completion",
+              "p95Ms": 40
+            },
+            {
+              "count": 11,
+              "maxMs": 59,
+              "method": "textDocument/definition",
+              "p95Ms": 59
+            },
+            {
+              "count": 11,
+              "maxMs": 46,
+              "method": "textDocument/hover",
+              "p95Ms": 46
+            },
+            {
+              "count": 19,
+              "maxMs": 6,
+              "method": "textDocument/inlayHint",
+              "p95Ms": 6
+            },
+            {
+              "count": 3,
+              "maxMs": 0,
+              "method": "tua/cacheStats",
+              "p95Ms": 0
+            },
+            {
+              "count": 5,
+              "maxMs": 4,
+              "method": "tua/localInlineCompletion",
+              "p95Ms": 4
+            }
+          ],
+          "p50Ms": 1,
+          "p95Ms": 34,
+          "p99Ms": 59,
+          "recentCount": 66
+        },
+        "patternCorpus": {
+          "approximateBytes": 120,
+          "baseFiles": 0,
+          "cancelledBatches": 0,
+          "disposalsQueued": 0,
+          "enabled": false,
+          "files": 0,
+          "generation": 2,
+          "generationRejections": 0,
+          "inFlight": 0,
+          "lastBuildMs": 0,
+          "lineageRejections": 0,
+          "overlayFiles": 0,
+          "queued": 0,
+          "remergeInFlight": false,
+          "remergePending": false,
+          "remergeRejections": 0,
+          "stale": 0,
+          "tombstones": 0
+        },
+        "queue": {
+          "coordinator": 0,
+          "inFlight": 1,
+          "patternCorpus": 0,
+          "total": 1,
+          "workspaceWarmHigh": 0,
+          "workspaceWarmLow": 0
+        },
+        "revision": 213,
+        "staleResults": {
+          "patternCorpus": 0,
+          "requests": 0,
+          "total": 4,
+          "workspaceWarm": 4
+        },
+        "workspaceWarm": {
+          "coveragePercent": 99,
+          "discovered": 100,
+          "enabled": true,
+          "failed": 0,
+          "queued": 0,
+          "queuedHigh": 0,
+          "queuedLow": 0,
+          "snapshotFailedRevision": null,
+          "snapshotReadyRevision": null,
+          "staleResults": 4,
+          "warmed": 99
+        }
+      },
+      "workspaceWarm": {
+        "completed": true,
+        "elapsedMs": 25.932,
+        "polls": 2,
+        "state": {
+          "discovered": 100,
+          "failed": 0,
+          "queuedHigh": 0,
+          "queuedLow": 0,
+          "snapshotFailedRevision": null,
+          "snapshotReadyRevision": 208,
+          "staleResults": 1,
+          "warmed": 100
+        }
+      },
+      "contention": {
+        "rounds": 5,
+        "backgroundRequests": 20,
+        "cancelledRequests": 12,
+        "contentModifiedResponses": 12,
+        "requestCancelledResponses": 0,
+        "cancellationRate": 0.6,
+        "resultsAfterChange": 0,
+        "staleResultCount": 0,
+        "freshCompletionCount": 5,
+        "validDocumentCompletionCount": 4,
+        "invalidDocumentCompletionCount": 1,
+        "invalidDocumentCompletionSuccesses": 1
+      },
+      "validationFailures": {
+        "byRequest": {
+          "completion": 0,
+          "hover": 0,
+          "definition": 0,
+          "inlayHint": 0,
+          "contentionCompletion": 0
+        },
+        "total": 0
+      }
+    }
+  ],
+  "checks": {
+    "general": {
+      "passed": true,
+      "failures": []
+    },
+    "inlineServerPerformance": {
+      "passed": true,
+      "failures": []
+    },
+    "inlineClientNoStall": {
+      "passed": true,
+      "failures": []
+    },
+    "inlineCachePeekObserved": {
+      "passed": true,
+      "failures": []
+    },
+    "validationParseDistribution": {
+      "passed": true,
+      "failures": []
+    }
+  },
+  "passed": true
+}

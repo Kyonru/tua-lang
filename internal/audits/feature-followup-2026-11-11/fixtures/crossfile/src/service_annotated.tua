@@ -1,0 +1,8 @@
+import type { AgentInstance } from "./classes/agent"
+local factory = require "factory"
+
+local function current(): AgentInstance
+  return factory.spawn("pilot")
+end
+
+return { current = current }
