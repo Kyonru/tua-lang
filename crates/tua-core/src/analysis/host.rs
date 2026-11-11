@@ -1,4 +1,5 @@
 use super::*;
+use full_moon::visitors::Visit;
 
 impl AnalysisHost {
     /// Record a rejected disk input without retaining stale semantic results.
@@ -1058,6 +1059,64 @@ impl AnalysisHost {
                 || copied_from_required_module
             {
                 return None;
+            }
+
+            // A local call result may depend on an imported argument even when
+            // its receiver is local, as in world:get(entity, C.Position).
+            // Leave that hover to the project snapshot, which knows the
+            // imported component's payload schema.
+            if chain.cursor_index == 0 && !required.is_empty() {
+                struct RequiredRootInInitializer<'a> {
+                    names: &'a BTreeSet<String>,
+                    found: bool,
+                }
+                impl Visitor for RequiredRootInInitializer<'_> {
+                    fn visit_var(&mut self, var: &ast::Var) {
+                        if plain_field_chain_from_var(var)
+                            .and_then(|parts| parts.into_iter().next())
+                            .is_some_and(|root| self.names.contains(&root))
+                        {
+                            self.found = true;
+                        }
+                    }
+                    fn visit_function_call(&mut self, call: &FunctionCall) {
+                        if field_chain_before_first_call(call)
+                            .and_then(|parts| parts.into_iter().next())
+                            .is_some_and(|root| self.names.contains(&root))
+                        {
+                            self.found = true;
+                        }
+                    }
+                }
+                let semantic = SemanticModel::new(parsed, &semantics.environment);
+                let imprecise_local = chain.parts.first().is_some_and(|part| {
+                    semantic
+                        .type_of_name(&part.text, position)
+                        .is_some_and(|ty| match ty {
+                            Type::Any => true,
+                            Type::Union(types) => types.contains(&Type::Any),
+                            _ => false,
+                        })
+                });
+                if let Some(expression) = chain
+                    .parts
+                    .first()
+                    .filter(|_| imprecise_local)
+                    .and_then(|part| semantic.local_initializer_expression(&part.text, position))
+                {
+                    let required_names = required
+                        .iter()
+                        .map(|binding| binding.alias.clone())
+                        .collect::<BTreeSet<_>>();
+                    let mut visitor = RequiredRootInInitializer {
+                        names: &required_names,
+                        found: false,
+                    };
+                    expression.visit(&mut visitor);
+                    if visitor.found {
+                        return None;
+                    }
+                }
             }
         }
 

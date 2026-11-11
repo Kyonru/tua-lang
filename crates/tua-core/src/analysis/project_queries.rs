@@ -1071,7 +1071,13 @@ impl AnalysisSnapshot {
             let receiver_parts = &parts[..parts.len() - 1];
             let receiver = self
                 .project_type_for_field_chain(parsed, receiver_parts)
-                .or_else(|| project_local_field_chain_type(local_types, receiver_parts));
+                .or_else(|| project_local_field_chain_type(local_types, receiver_parts))
+                .or_else(|| {
+                    let position = node_span(function_call)?.start;
+                    let environment = self.file(&parsed.path)?.environment()?;
+                    SemanticModel::new(parsed, environment)
+                        .type_of_field_chain(receiver_parts, position)
+                });
             if let Some(receiver) = receiver {
                 let component =
                     crate::ecs::component_argument(&receiver, function_call).and_then(|argument| {

@@ -631,6 +631,31 @@ end)
 }
 
 #[test]
+fn imported_ecs_component_result_hover_keeps_schema_in_project() {
+    let temp = TempProject::new("imported-ecs-component-result-hover");
+    temp.write("tua.toml", "source = \"src\"\nout = \"build\"\n");
+    temp.write(
+        "src/components.tua",
+        "local Position = ecs.component(\"Position\", { x = \"number\" })\nreturn { Position = Position }\n",
+    );
+    let source = r#"local C = require "components"
+local world = ecs.world()
+local entity = world:create()
+local position = world:get(entity, C.Position)
+print(position)
+local unrelated: any = nil
+"#;
+    let uri = temp.uri_for("src/main.tua");
+    let mut server = TestServer::new();
+    server.send(initialize_with_pull_diagnostics(1, temp.uri(), false));
+    server.send(did_open(&uri, source));
+    server.send(hover_request(2, &uri, source, "position)"));
+    assert_hover_contains(server.output(), 2, "local position: { x: number } | nil");
+    server.send(hover_request(3, &uri, source, "unrelated:"));
+    assert_hover_contains(server.output(), 3, "local unrelated: any");
+}
+
+#[test]
 fn imported_class_method_hover_reads_docs_from_the_project_snapshot() {
     let temp = TempProject::new("imported-class-method-docs");
     temp.write("tua.toml", "source = \"src\"\n");

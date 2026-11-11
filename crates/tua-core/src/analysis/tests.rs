@@ -10180,6 +10180,35 @@ print(<|payload|>p)
 }
 
 #[test]
+fn absolute_project_imported_ecs_component_retains_payload_schema() {
+    let temp = TempProject::new("absolute-imported-ecs-component");
+    let provider = temp.write(
+        "src/components.tua",
+        "local Position = ecs.component(\"Position\", { x = \"number\" })\nreturn { Position = Position }\n",
+    );
+    let source = "local C = require \"components\"\nlocal world = ecs.world()\nlocal entity = world:create()\nlocal position = world:get(entity, C.Position)\nprint(position)\nlocal unrelated: any = nil\n";
+    let consumer = temp.write("src/main.tua", source);
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([temp.path().join("src")]);
+    host.set_file(&provider, fs::read_to_string(&provider).unwrap());
+    host.set_file(&consumer, source);
+
+    let snapshot = host.snapshot();
+    let parsed = snapshot.file(&consumer).unwrap().parsed.as_ref().unwrap();
+    assert!(snapshot
+        .project_type_for_field_chain(parsed, &["C".into(), "Position".into()])
+        .is_some());
+    let hover = snapshot
+        .hover(&consumer, SourcePosition { line: 5, column: 8 })
+        .expect("the local should have hover");
+    assert!(hover.contents.contains("x: number"), "{hover:#?}");
+    let unrelated = host
+        .current_file_hover(&consumer, SourcePosition { line: 6, column: 8 })
+        .expect("an unrelated local should retain the fast hover path");
+    assert!(unrelated.contents.contains("local unrelated: any"));
+}
+
+#[test]
 fn imported_ecs_world_and_component_keep_get_result_schema() {
     let fixture = Fixture::parse(
         r#"-- file: src/components.tua

@@ -244,6 +244,14 @@ impl<'a> SemanticModel<'a> {
         plain_field_chain_from_expression(expression)
     }
 
+    pub(crate) fn local_initializer_expression(
+        &self,
+        name: &str,
+        position: SourcePosition,
+    ) -> Option<&'a Expression> {
+        self.local_assignment_value(name, position)?.expression
+    }
+
     pub(crate) fn local_initializer_callee_chain(
         &self,
         name: &str,
