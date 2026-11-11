@@ -178,3 +178,54 @@ position.x = "wrong"
         String::from_utf8_lossy(&check.stderr)
     );
 }
+
+#[test]
+fn ecs_absent_component_results_require_a_nil_guard() {
+    let temp = TempDir::new("ecs-absent-component-guard");
+    fs::write(
+        temp.path().join("tua.toml"),
+        "source = \"src\"\nout = \"build\"\n",
+    )
+    .expect("write config");
+    fs::create_dir_all(temp.path().join("src")).expect("create source directory");
+    let main = temp.path().join("src/main.tua");
+    let prefix = r#"local Position = ecs.component("Position", { x = "number" })
+local world = ecs.world()
+local entity = world:create()
+"#;
+
+    for method in ["get", "remove"] {
+        let guarded = format!(
+            "{prefix}local position = world:{method}(entity, Position)\nif position ~= nil then\n  local x: number = position.x\nend\n"
+        );
+        fs::write(&main, guarded).expect("write guarded access");
+        let check = tua()
+            .arg("check")
+            .current_dir(temp.path())
+            .output()
+            .expect("check guarded access");
+        assert!(
+            check.status.success(),
+            "guarded {method} should check: {}",
+            String::from_utf8_lossy(&check.stderr)
+        );
+
+        let unguarded =
+            format!("{prefix}local position = world:{method}(entity, Position)\nlocal x: number = position.x\n");
+        fs::write(&main, unguarded).expect("write unguarded access");
+        let check = tua()
+            .arg("check")
+            .current_dir(temp.path())
+            .output()
+            .expect("check unguarded access");
+        assert!(
+            !check.status.success(),
+            "unguarded {method} can index nil at runtime"
+        );
+        assert!(
+            String::from_utf8_lossy(&check.stderr).contains("narrow it"),
+            "expected nilable-result diagnostic: {}",
+            String::from_utf8_lossy(&check.stderr)
+        );
+    }
+}

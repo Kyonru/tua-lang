@@ -5513,6 +5513,41 @@ print(active.x)
 }
 
 #[test]
+fn ecs_get_and_remove_results_require_nil_guards() {
+    let diagnostics = check_tua_source(
+        "src/ecs_nullable.tua",
+        r#"local Position = ecs.component("Position", { x = "number" })
+local world = ecs.world()
+local entity = world:create()
+local missing = world:get(entity, Position)
+local x: number = missing.x
+local removed = world:remove(entity, Position)
+local y: number = removed.x
+"#,
+    )
+    .expect_err("component lookup and removal can both return nil");
+    let unsafe_reads = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::TYPE_UNSAFE_UNION_OPERATION))
+        .collect::<Vec<_>>();
+    assert_eq!(unsafe_reads.len(), 2, "{diagnostics:#?}");
+
+    check_tua_source(
+        "src/ecs_guarded.tua",
+        r#"local Position = ecs.component("Position", { x = "number" })
+local world = ecs.world()
+local entity = world:create()
+local maybe = world:get(entity, Position)
+if maybe ~= nil then
+  local x: number = maybe.x
+  print(x)
+end
+"#,
+    )
+    .expect("a nil guard should permit component field access");
+}
+
+#[test]
 fn assignment_after_a_terminating_guard_invalidates_the_postcondition() {
     let diagnostics = check_tua_source(
         "src/game.tua",

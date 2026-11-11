@@ -2290,12 +2290,29 @@ impl<'a> Checker<'a> {
                     return vec![ty];
                 }
 
+                if let Some(returns) = self.checked_ecs_method_return_types(function_call) {
+                    return returns;
+                }
+
                 return_types
             }
             Callable::ExternalFunction(function) => {
                 self.check_external_call_arguments(function_call, &function)
             }
         }
+    }
+
+    fn checked_ecs_method_return_types(
+        &mut self,
+        function_call: &FunctionCall,
+    ) -> Option<Vec<Type>> {
+        self.environment.alias(crate::ecs::WORLD_TYPE)?;
+        let parts = field_chain_before_first_call(function_call)?;
+        let receiver_parts = parts.get(..parts.len().checked_sub(1)?)?;
+        let receiver = self.resolve_field_chain_type(receiver_parts)?;
+        let component = crate::ecs::component_argument(&receiver, function_call)
+            .and_then(|argument| self.infer_expression(argument));
+        crate::ecs::inferred_method_return_types(&receiver, function_call, component.as_ref())
     }
 
     fn report_unsafe_union_call_target(&mut self, function_call: &FunctionCall) {
