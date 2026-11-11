@@ -6963,7 +6963,7 @@ local value: number = box:get():measure()
         fixture
             .files()
             .iter()
-            .find(|file| file.path == PathBuf::from("src/main.tua"))
+            .find(|file| file.path.as_path() == std::path::Path::new("src/main.tua"))
             .expect("main fixture")
             .source
     );
