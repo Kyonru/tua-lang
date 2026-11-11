@@ -37,6 +37,23 @@ test("workspace requests are lazy and invalidate on refresh or server change", a
   assert.equal(calls, 3);
 });
 
+test("workspace graph retries a file event served before the server advances its revision", async () => {
+  let calls = 0;
+  const revisions = [1, 1, 2];
+  const tree = new WorkspaceTree(() => client);
+  const client = { sendRequest: async () => ({ analysisRevision: revisions[Math.min(calls++, 2)], graph: { modules: [] } }) };
+  const node = { id: "modules", kind: "modules", request: "tua/moduleGraph" };
+  await tree.getChildren(node);
+  tree.noteFileEvent();
+  tree.refresh();
+  await tree.getChildren(node);
+  assert.equal(calls, 2, "the first refresh may still see the old server snapshot");
+  await new Promise(resolve => setTimeout(resolve, 180));
+  await tree.getChildren(node);
+  assert.equal(calls, 3, "a later request must observe the advanced snapshot");
+  tree.dispose();
+});
+
 
 test("workspace sidebar invalidates edited and externally changed sources and disposes timers", async () => {
   const events = {};

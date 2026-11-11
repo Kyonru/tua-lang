@@ -20,12 +20,16 @@ function registerWorkspaceSidebar({ getClient }) {
     clearTimeout(refreshTimer);
     refreshTimer = setTimeout(refresh, 150);
   };
+  const scheduleFileRefresh = () => {
+    provider.noteFileEvent();
+    scheduleRefresh();
+  };
   const watcher = vscode.workspace.createFileSystemWatcher("**/*.{tua,lua,toml}");
   return vscode.Disposable.from(provider, view, watcher,
     { dispose: () => clearTimeout(refreshTimer) },
-    watcher.onDidCreate(scheduleRefresh),
-    watcher.onDidChange(scheduleRefresh),
-    watcher.onDidDelete(scheduleRefresh),
+    watcher.onDidCreate(scheduleFileRefresh),
+    watcher.onDidChange(scheduleFileRefresh),
+    watcher.onDidDelete(scheduleFileRefresh),
     vscode.workspace.onDidChangeTextDocument(event => {
       if (/\.(tua|lua|toml)$/i.test(event.document.uri.path)) scheduleRefresh();
     }),
@@ -54,9 +58,42 @@ class WorkspaceTree {
     this.changed = new vscode.EventEmitter();
     this.onDidChangeTreeData = this.changed.event;
     this.cache = new Map();
+    this.revisions = new Map();
+    this.pendingRevisions = new Map();
+    this.retryTimer = undefined;
+    this.retryCount = 0;
   }
   refresh() { this.cache.clear(); this.changed.fire(); }
-  dispose() { this.cache.clear(); this.changed.dispose(); }
+  noteFileEvent() {
+    for (const [kind, revision] of this.revisions) {
+      this.pendingRevisions.set(kind, revision);
+    }
+    this.retryCount = 0;
+  }
+  dispose() {
+    clearTimeout(this.retryTimer);
+    this.cache.clear();
+    this.changed.dispose();
+  }
+  noteGraphResponse(kind, response) {
+    const revision = response?.analysisRevision;
+    if (revision == null) return;
+    this.revisions.set(kind, revision);
+    if (!this.pendingRevisions.has(kind)) return;
+    if (revision !== this.pendingRevisions.get(kind)) {
+      this.pendingRevisions.delete(kind);
+      return;
+    }
+    // The sidebar's watcher can fire before the language client's watcher.
+    // Recheck only while the server still reports the pre-change revision.
+    if (this.retryTimer || this.retryCount >= 5) return;
+    const delay = Math.min(150 * 2 ** this.retryCount, 1200);
+    this.retryCount++;
+    this.retryTimer = setTimeout(() => {
+      this.retryTimer = undefined;
+      this.refresh();
+    }, delay);
+  }
   getTreeItem(node) {
     const item = new vscode.TreeItem(node.label, node.children?.length || node.kind ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None);
     item.id = node.id;
@@ -95,9 +132,15 @@ class WorkspaceTree {
       }
       const client = this.getClient();
       if (!client) return [{ id: `${node.id}:offline`, label: "Start the language server", icon: "debug-restart", command: COMMANDS.restartServer }];
-      if (client !== this.client) { this.cache.clear(); this.client = client; }
+      if (client !== this.client) {
+        this.cache.clear();
+        this.revisions.clear();
+        this.pendingRevisions.clear();
+        this.client = client;
+      }
       if (!this.cache.has(node.kind)) this.cache.set(node.kind, client.sendRequest(node.request, null));
       const response = await this.cache.get(node.kind);
+      this.noteGraphResponse(node.kind, response);
       return graphNodes(node.kind, response);
     } catch (error) {
       this.cache.delete(node.kind);
