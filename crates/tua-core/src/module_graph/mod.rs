@@ -1073,6 +1073,9 @@ fn export_entries_for_module(
     exports: &ModuleExports,
     source_kind: AnalysisSourceKind,
 ) -> Vec<ModuleExportEntry> {
+    let initializer_spans = parsed
+        .map(returned_table_initializer_field_spans)
+        .unwrap_or_default();
     exports
         .fields
         .iter()
@@ -1090,6 +1093,7 @@ fn export_entries_for_module(
                 .and_then(|symbol_id| hir?.symbol(symbol_id).map(|symbol| symbol.name_span))
                 .or_else(|| export_definition_span(hir, public_name))
                 .or_else(|| export.map(|export| export.name_span))
+                .or_else(|| initializer_spans.get(public_name).copied())
                 .or_else(|| returned_class_member_span(parsed?, public_name))?;
             let export_span = export
                 .map(|export| export.name_span)
@@ -1106,6 +1110,52 @@ fn export_entries_for_module(
             })
         })
         .collect()
+}
+
+fn returned_table_initializer_field_spans(parsed: &ParsedSource) -> BTreeMap<String, SourceSpan> {
+    let Some(LastStmt::Return(returned)) = parsed.ast.nodes().last_stmt() else {
+        return BTreeMap::new();
+    };
+    let Some(Expression::Var(ast::Var::Name(returned_name))) = returned.returns().iter().next()
+    else {
+        return BTreeMap::new();
+    };
+    let returned_name = token_text(returned_name);
+    parsed
+        .ast
+        .nodes()
+        .stmts()
+        .filter_map(|stmt| {
+            let ast::Stmt::LocalAssignment(local) = stmt else {
+                return None;
+            };
+            local
+                .names()
+                .iter()
+                .zip(local.expressions())
+                .find_map(|(name, value)| {
+                    if token_text(name) != returned_name {
+                        return None;
+                    }
+                    let Expression::TableConstructor(table) = value else {
+                        return None;
+                    };
+                    Some(
+                        table
+                            .fields()
+                            .iter()
+                            .filter_map(|field| {
+                                let Field::NameKey { key, .. } = field else {
+                                    return None;
+                                };
+                                Some((token_text(key), node_span(key)?))
+                            })
+                            .collect::<BTreeMap<_, _>>(),
+                    )
+                })
+        })
+        .last()
+        .unwrap_or_default()
 }
 
 fn returned_class_member_span(parsed: &ParsedSource, member: &str) -> Option<SourceSpan> {

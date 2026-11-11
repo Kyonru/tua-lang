@@ -70,6 +70,34 @@ return {
 }
 
 #[test]
+fn returned_local_preserves_initializer_fields_after_method_assignments() {
+    let parsed = parse_tua_source(
+        "src/world.tua",
+        "local WIDTH = 2400\nlocal HEIGHT = 1600\nlocal M = { width = WIDTH, height = HEIGHT, stars = {}, meteors = {}, spawnTimer = 0 }\nfunction M.reset()\n  M.stars = {}\n  M.meteors = {}\n  M.spawnTimer = 0\nend\nfunction M.update(dt: number)\n  M.spawnTimer -= dt\nend\nreturn M\n",
+    )
+    .expect("module should parse");
+    let exports = infer_module_exports(&parsed).expect("module should have exports");
+    for name in ["width", "height", "stars", "reset"] {
+        assert!(
+            exports.field(name).is_some(),
+            "{name} missing from {exports:#?}"
+        );
+    }
+    let (environment, _) = crate::types::build_type_environment_with_domain_registry(
+        &parsed,
+        crate::semantic_domains::BuiltinDomainRegistry::with_ecs(true),
+    );
+    let project_exports = infer_module_exports_with_environment(&parsed, &environment)
+        .expect("project module should have exports");
+    for name in ["width", "height", "stars", "reset"] {
+        assert!(
+            project_exports.field(name).is_some(),
+            "{name} missing from {project_exports:#?}"
+        );
+    }
+}
+
+#[test]
 fn infers_root_function_modules_and_anonymous_function_returns() {
     let function_module = parse_lua_source(
         "src/logger.lua",

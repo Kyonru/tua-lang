@@ -1896,6 +1896,61 @@ agent.
 }
 
 #[test]
+fn imported_module_completion_keeps_numeric_fields_inside_callback() {
+    let fixture = Fixture::parse(
+        r#"-- file: tua.toml
+source = "src"
+-- file: src/world.tua
+local WIDTH = 2400
+local HEIGHT = 1600
+local M = { width = WIDTH, height = HEIGHT, stars = {}, meteors = {}, spawnTimer = 0 }
+function M.reset()
+  M.stars = {}
+  M.meteors = {}
+  M.spawnTimer = 0
+end
+function M.update(dt: number)
+  M.spawnTimer -= dt
+end
+return M
+-- file: src/main.tua
+local world = require("world")
+function love.load()
+  world.reset()
+end
+print(world.width)
+"#,
+    );
+    let temp = fixture
+        .write_to_temp("imported-numeric-fields-lsp")
+        .unwrap();
+    let main = fixture.source("src/main.tua");
+    let edited = main.replace("world.reset()", "world.");
+    let main_uri = path_uri(&temp.join("src/main.tua"));
+    let mut server = TestServer::new();
+    server.send(initialize_with_root(1, path_uri(temp.path())));
+    let world = fixture.source("src/world.tua");
+    let world_uri = path_uri(&temp.join("src/world.tua"));
+    server.send(did_open(&world_uri, world));
+    server.send(did_open(&main_uri, main));
+    server.send(did_change(&main_uri, &edited, 2));
+    server.send(completion_request(2, &main_uri, &edited, "world."));
+    assert_completion_labels(
+        server.output(),
+        2,
+        [
+            "height",
+            "meteors",
+            "reset",
+            "spawnTimer",
+            "stars",
+            "update",
+            "width",
+        ],
+    );
+}
+
+#[test]
 fn completion_recovers_unsaved_event_callback_member_inside_call() {
     let fixture = Fixture::parse(
         r#"-- file: tua.toml

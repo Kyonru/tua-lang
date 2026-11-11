@@ -1,6 +1,44 @@
 use super::*;
 
 #[test]
+fn module_graph_keeps_returned_local_initializer_fields_and_source_spans() {
+    let temp = TempProject::new("returned-local-module-graph");
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write(
+        "src/main.tua",
+        "local world = require('world')\nprint(world.width)\n",
+    );
+    temp.write("src/world.tua", "local WIDTH = 2400\nlocal M = { width = WIDTH, height = 1600 }\nfunction M.reset() end\nreturn M\n");
+
+    let output = run_messages(vec![
+        initialize_with_root(1, temp.uri()),
+        module_graph_request(2),
+    ]);
+    let modules = response_with_id(&output, 2)["result"]["graph"]["modules"]
+        .as_array()
+        .expect("modules should be an array");
+    let world = modules
+        .iter()
+        .find(|module| module["uri"] == temp.uri_for("src/world.tua"))
+        .expect("world module should be present");
+    let fields = world["exports"]
+        .as_array()
+        .expect("exports should be an array");
+    for name in ["width", "height", "reset"] {
+        assert!(
+            fields.iter().any(|field| field["name"] == name),
+            "{name} missing from {fields:?}"
+        );
+    }
+    let width = fields
+        .iter()
+        .find(|field| field["name"] == "width")
+        .unwrap();
+    assert_eq!(width["range"]["start"]["line"], 1);
+    assert_eq!(width["range"]["start"]["character"], 12);
+}
+
+#[test]
 fn module_graph_returns_dependencies_cycles_reverse_counts_exports_and_inclusion_paths() {
     let temp = TempProject::new("module-graph-inspection");
 

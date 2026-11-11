@@ -8,6 +8,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Modules returned through a local table now keep initializer fields in the
+  project graph and imported-member completion, with source navigation to each
+  field's declaration.
 - Inferred functions that forward an imported class factory result now retain
   instance member completion across another module boundary, including after
   unsaved edits to the defining class.
