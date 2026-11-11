@@ -3863,6 +3863,92 @@ events:emit("player.hit", "ada", 4)
 }
 
 #[test]
+fn build_refreshes_unchanged_owned_bundled_runtime() {
+    let temp = TempDir::new("refresh-owned-signal-runtime");
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).expect("write config");
+    fs::create_dir_all(temp.path().join("src")).expect("create source");
+    fs::write(
+        temp.path().join("src/main.tua"),
+        "local events = signal()\nevents:declare(\"ready\", function() end)\nreturn events\n",
+    )
+    .expect("write source");
+
+    let first = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .expect("first build");
+    assert!(first.status.success(), "{first:?}");
+
+    // Model a helper emitted by an older Tua binary: its recorded fingerprint
+    // still matches the file, but the bundled source has changed.
+    let old_runtime = "return function() return {} end\n";
+    fs::write(temp.path().join("build/tuasignal.lua"), old_runtime).expect("write old helper");
+    let old_fingerprint = old_runtime
+        .bytes()
+        .fold(0xcbf29ce484222325u64, |hash, byte| {
+            (hash ^ u64::from(byte)).wrapping_mul(0x100000001b3)
+        });
+    let manifest_path = temp.path().join("build/.tua-build-manifest.json");
+    let mut manifest: Value =
+        serde_json::from_slice(&fs::read(&manifest_path).expect("read manifest"))
+            .expect("parse manifest");
+    manifest["tuasignal.lua"] = json!(old_fingerprint);
+    fs::write(
+        &manifest_path,
+        serde_json::to_vec(&manifest).expect("serialize manifest"),
+    )
+    .expect("record previous helper ownership");
+
+    let second = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .expect("second build");
+    assert!(second.status.success(), "{second:?}");
+    assert_eq!(
+        fs::read_to_string(temp.path().join("build/tuasignal.lua")).expect("read refreshed helper"),
+        tua_core::tuasignal_runtime_source(),
+    );
+    let manifest: Value =
+        serde_json::from_slice(&fs::read(&manifest_path).expect("read updated manifest"))
+            .expect("parse updated manifest");
+    assert!(
+        manifest["tuasignal.lua"].is_u64(),
+        "refreshed helper must stay owned"
+    );
+}
+
+#[test]
+fn build_preserves_manually_changed_bundled_runtime_output() {
+    let temp = TempDir::new("preserve-changed-signal-runtime");
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).expect("write config");
+    fs::create_dir_all(temp.path().join("src")).expect("create source");
+    fs::write(temp.path().join("src/main.tua"), "return signal()\n").expect("write source");
+
+    let first = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .expect("first build");
+    assert!(first.status.success(), "{first:?}");
+    let custom = "return function() return { custom = true } end\n";
+    let runtime_path = temp.path().join("build/tuasignal.lua");
+    fs::write(&runtime_path, custom).expect("change output helper");
+
+    let second = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .expect("second build");
+    assert!(second.status.success(), "{second:?}");
+    assert_eq!(
+        fs::read_to_string(runtime_path).expect("read custom helper"),
+        custom
+    );
+}
+
+#[test]
 fn build_does_not_overwrite_project_tuasignal_runtime() {
     let temp = TempDir::new("build-custom-signal-runtime");
 

@@ -383,6 +383,7 @@ impl WatchBuildSession {
 
         write_required_bundled_runtimes(
             &self.output_guard,
+            &self.workspace,
             &self.out_dir,
             &required_bundled_runtimes,
             &mut emitted,

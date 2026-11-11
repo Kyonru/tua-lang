@@ -403,14 +403,9 @@ fn build_project_files(
         }
     }
 
-    let existing_runtimes = BUNDLED_RUNTIMES
-        .iter()
-        .filter(|runtime| required_bundled_runtimes.contains(runtime.module))
-        .map(|runtime| out_dir.join(runtime.file_name))
-        .filter(|path| path.exists() && !owned_outputs.contains(path))
-        .collect::<BTreeSet<_>>();
-    write_required_bundled_runtimes(
+    let existing_runtimes = write_required_bundled_runtimes(
         &output_guard,
+        &workspace,
         &out_dir,
         &required_bundled_runtimes,
         &mut emitted,
@@ -501,35 +496,86 @@ fn collect_required_bundled_runtimes(output: &str, required: &mut BTreeSet<&'sta
 
 fn write_required_bundled_runtimes(
     guard: &OutputGuard,
+    workspace: &ProjectWorkspace,
     out_dir: &Path,
     required: &BTreeSet<&'static str>,
     emitted: &mut usize,
     diagnostics: &mut Vec<Diagnostic>,
-) {
+) -> BTreeSet<PathBuf> {
+    let mut preserved = BTreeSet::new();
+    if required.is_empty() {
+        return preserved;
+    }
+    let previous = match ownership::load(out_dir) {
+        Ok(previous) => previous,
+        Err(error) => {
+            diagnostics.push(io_diagnostic(&out_dir.join(ownership::MANIFEST), error));
+            return preserved;
+        }
+    };
     for runtime in BUNDLED_RUNTIMES {
-        if required.contains(runtime.module) {
-            write_bundled_runtime(guard, runtime, out_dir, emitted, diagnostics);
+        if required.contains(runtime.module)
+            && write_bundled_runtime(
+                guard,
+                workspace,
+                runtime,
+                out_dir,
+                &previous,
+                emitted,
+                diagnostics,
+            )
+        {
+            preserved.insert(out_dir.join(runtime.file_name));
         }
     }
+    preserved
 }
 
 fn write_bundled_runtime(
     guard: &OutputGuard,
+    workspace: &ProjectWorkspace,
     runtime: &BundledRuntime,
     out_dir: &Path,
+    previous: &ownership::Manifest,
     emitted: &mut usize,
     diagnostics: &mut Vec<Diagnostic>,
-) {
+) -> bool {
     let output_path = out_dir.join(runtime.file_name);
 
+    let project_provides_runtime = workspace.source_roots().iter().any(|root| {
+        root.join(runtime.file_name).is_file()
+            || root
+                .join(format!(
+                    "{}.{}",
+                    runtime.module,
+                    workspace.config().extension
+                ))
+                .is_file()
+    });
+    if project_provides_runtime {
+        return output_path.exists();
+    }
+
     if output_path.exists() {
-        return;
+        match ownership::is_owned_unchanged(out_dir, &output_path, previous) {
+            Ok(true) => {
+                if fs::read_to_string(&output_path).ok().as_deref() == Some((runtime.source)()) {
+                    return false;
+                }
+            }
+            Ok(false) => return true,
+            Err(error) => {
+                diagnostics.push(io_diagnostic(&output_path, error));
+                return true;
+            }
+        }
     }
 
     match write_output(guard, &output_path, (runtime.source)().to_owned()) {
         Ok(()) => *emitted += 1,
         Err(diagnostic) => diagnostics.push(diagnostic),
     }
+    false
 }
 
 fn copy_output(

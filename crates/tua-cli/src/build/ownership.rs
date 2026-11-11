@@ -10,7 +10,7 @@ use tua_core::Diagnostic;
 pub(crate) const MANIFEST: &str = ".tua-build-manifest.json";
 // A null fingerprint includes a user-provided runtime in packages without
 // claiming ownership or making it eligible for stale-file deletion.
-type Manifest = BTreeMap<String, Option<u64>>;
+pub(super) type Manifest = BTreeMap<String, Option<u64>>;
 
 pub(crate) fn load(root: &Path) -> io::Result<Manifest> {
     let path = root.join(MANIFEST);
@@ -60,6 +60,25 @@ fn fingerprint(path: &Path) -> io::Result<u64> {
             hash = (hash ^ u64::from(*byte)).wrapping_mul(0x100000001b3);
         }
     }
+}
+
+/// An output can be refreshed only while it still matches a previous build's
+/// fingerprint. A project override or a manually edited output is left alone.
+pub(super) fn is_owned_unchanged(
+    root: &Path,
+    path: &Path,
+    previous: &Manifest,
+) -> io::Result<bool> {
+    let name = path
+        .strip_prefix(root)
+        .map_err(io::Error::other)?
+        .to_string_lossy()
+        .replace('\\', "/");
+    let Some(Some(expected)) = previous.get(&name) else {
+        return Ok(false);
+    };
+    let path = owned_path(root, &name)?;
+    Ok(fingerprint(&path)? == *expected)
 }
 
 /// Remove only unchanged output whose ownership was recorded by a build.

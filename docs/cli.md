@@ -147,6 +147,15 @@ before the first manifest are preserved on disk but excluded from packages.
 - collisions between generated `.lua` and sibling/copied `.lua` files are
   reported as warnings.
 
+For a separate output directory, a later build refreshes a bundled helper when
+the build manifest still identifies its existing file as unchanged output from
+Tua. A helper supplied in the source tree, or an output helper changed by hand,
+is preserved. Older output with no recorded ownership is also preserved; remove
+that stale helper from the output directory to let Tua write the current one.
+In-place builds likewise preserve an existing helper because it may be project
+source. Keep custom implementations in the source tree rather than editing a
+generated helper in the output directory.
+
 When `emit_maps = true`, build writes two source-map sidecars next to each
 generated Lua file:
 
