@@ -6,6 +6,33 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+### Fixed
+
+- Cross-module `is` checks now use class table identity, so unrelated classes
+  cannot match when their generated numeric IDs happen to be the same.
+- Generic class methods retain imported protocol bounds, and nested or imported
+  SignalBus fields retain the payload types for `emit` calls.
+- ECS `get` and `remove` results preserve the possibility of `nil`; imported
+  component schemas remain available to checking and project hover, including
+  when the world is local and the component is imported.
+- Rebuilds refresh unchanged, compiler-owned bundled runtimes while preserving
+  manually edited or project-provided runtime files.
+- Preview filters and modes survive refreshes, Signal Graph state resets when
+  switching workspaces, and long event metadata no longer hides event names.
+
+### Changed
+
+- Reworked the VS Code extension overview and added a focused editor reference.
+- Clarified that `make feature-examples-check` validates the feature-guide
+  mapping and descriptions; compilation is covered by separate build checks.
+
+### Tests and audit
+
+- Added emitted-Lua interaction tests for combined game features and installed
+  editor checks for real Signal, ECS, and object-pool graph data and source links.
+- Recorded the feature and preview audit, reproductions, coverage limits, and
+  independent review under `internal/audits/feature-and-preview-2026-11-11/`.
+
 ## [0.7.0] - 2026-11-11
 
 ### Release summary
