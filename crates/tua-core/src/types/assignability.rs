@@ -282,6 +282,16 @@ impl TypeContext {
         parameter: TypeParameterId,
         bound: GenericProtocolBound,
     ) {
+        // Project resolution attaches a canonical identity to imported bounds.
+        // A method's local signature can also carry the same class parameter,
+        // still in its parser form. Do not replace the resolved bound with it.
+        if self
+            .generic_protocol_bounds
+            .get(&parameter)
+            .is_some_and(|existing| existing.identity.is_some() && bound.identity.is_none())
+        {
+            return;
+        }
         self.generic_protocol_bounds.insert(parameter, bound);
     }
 

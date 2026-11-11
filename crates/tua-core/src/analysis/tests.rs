@@ -6919,6 +6919,70 @@ local invalid = api.tick(lookalikes.Lookalike.new())
 }
 
 #[test]
+fn imported_protocol_bound_accepts_generic_class_methods() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/contracts.d.tua
+export protocol Measurable { measure(): number }
+-- file: src/box.tua
+import type { Measurable } from "./contracts"
+final class Box<T: Measurable> {
+  item: T
+  init(item: T) { self.item = item }
+  get(): T { return self.item }
+}
+return { Box = Box }
+-- file: src/main.tua
+import type { Measurable } from "./contracts"
+local boxes = require("box")
+final class Meter implements Measurable {
+  value: number
+  init(value: number) { self.value = value }
+  measure(): number { return self.value }
+}
+local box = boxes.Box.new(Meter.new(7))
+local value: number = box:get():measure()
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+    let snapshot = host.snapshot();
+    for path in ["src/box.tua", "src/main.tua"] {
+        let errors = snapshot
+            .pipeline_diagnostics(path)
+            .into_iter()
+            .filter(|diagnostic| diagnostic.severity == crate::DiagnosticSeverity::Error)
+            .collect::<Vec<_>>();
+        assert!(errors.is_empty(), "{path} should type-check: {errors:#?}");
+    }
+
+    let invalid_main = format!(
+        "{}\nfinal class Lookalike {{ measure(): number {{ return 7 }} }}\nlocal invalid = boxes.Box.new(Lookalike.new())\n",
+        fixture
+            .files()
+            .iter()
+            .find(|file| file.path == PathBuf::from("src/main.tua"))
+            .expect("main fixture")
+            .source
+    );
+    host.set_file("src/main.tua", invalid_main);
+    let errors = host
+        .snapshot()
+        .pipeline_diagnostics("src/main.tua")
+        .into_iter()
+        .filter(|diagnostic| diagnostic.severity == crate::DiagnosticSeverity::Error)
+        .collect::<Vec<_>>();
+    assert!(
+        errors.len() == 1
+            && errors[0].message.contains("requires explicit conformance")
+            && errors[0].message.contains("Lookalike"),
+        "a same-shaped class without implements must still be rejected: {errors:#?}"
+    );
+}
+
+#[test]
 fn imported_child_classes_keep_inherited_protocol_bounds() {
     let fixture = Fixture::parse(
         r#"-- file: src/contracts.d.tua
