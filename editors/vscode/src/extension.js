@@ -11,6 +11,7 @@ const vscode = require("vscode");
 const { registerAudioDevex } = require("./audio");
 const { COMMANDS, DOCUMENT_SELECTOR, STATUS_SELECTOR } = require("./constants");
 const { registerEditorDevex } = require("./editor");
+const { withCompletionTrace } = require("./editor/completion-trace");
 const { registerEcsDevex } = require("./ecs");
 const { registerServerHealthFeature } = require("./health");
 const { registerLoveDevex } = require("./love");
@@ -318,7 +319,7 @@ async function startLanguageServer() {
     markdown: { isTrusted: { enabledCommands: [ANNOTATION_GUIDE_COMMAND] } },
     documentSelector: DOCUMENT_SELECTOR,
     initializationOptions,
-    middleware: editorDevex?.middleware,
+    middleware: withCompletionTrace(editorDevex?.middleware),
     outputChannel,
     synchronize: {
       configurationSection: "tua",
