@@ -1,0 +1,89 @@
+{
+  "revision": "previous packaged 0.7.0",
+  "vscode": "1.142.0",
+  "project": "examples/starfall (temporary copy)",
+  "samples": [
+    {
+      "totalMs": 171.5,
+      "candidateCount": 7
+    },
+    {
+      "totalMs": 118.699951171875,
+      "candidateCount": 7
+    },
+    {
+      "totalMs": 121.39990234375,
+      "candidateCount": 7
+    },
+    {
+      "totalMs": 115.800048828125,
+      "candidateCount": 7
+    },
+    {
+      "totalMs": 120.5,
+      "candidateCount": 7
+    },
+    {
+      "totalMs": 121.099853515625,
+      "candidateCount": 7
+    },
+    {
+      "totalMs": 121.10009765625,
+      "candidateCount": 7
+    },
+    {
+      "totalMs": 123.39990234375,
+      "candidateCount": 7
+    },
+    {
+      "totalMs": 124.5,
+      "candidateCount": 7
+    },
+    {
+      "totalMs": 125.5,
+      "candidateCount": 7
+    },
+    {
+      "totalMs": 130.199951171875,
+      "candidateCount": 7
+    },
+    {
+      "totalMs": 122.7998046875,
+      "candidateCount": 7
+    }
+  ],
+  "providerLabels": [
+    {
+      "label": "collect",
+      "description": "field: (x: number, y: number, radius: number) -> boolean"
+    },
+    {
+      "label": "draw",
+      "description": "field: () -> nil"
+    },
+    {
+      "label": "hits",
+      "description": "field: (x: number, y: number, radius: number) -> boolean"
+    },
+    {
+      "label": "meteors",
+      "description": "field: Meteor[]"
+    },
+    {
+      "label": "reset",
+      "description": "field: () -> nil"
+    },
+    {
+      "label": "stars",
+      "description": "field: Star[]"
+    },
+    {
+      "label": "update",
+      "description": "field: (dt: number, playerX: number, playerY: number, score: number) -> nil"
+    }
+  ],
+  "widthHover": [
+    "```tua\n(field) world.width: number\n```\n\n---\n\n- kind: field\n- module: /var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-starfall-latency-ErDd6e/starfall/src/world.tua",
+    "[References](command:tua.hover.references?%5B%7B%22uri%22%3A%22file%3A%2F%2F%2Fvar%2Ffolders%2Fjl%2Fdhcpl8gs3rv04nzljphszpmc0000gn%2FT%2Ftua-starfall-latency-ErDd6e%2Fstarfall%2Fsrc%2Fmain.tua%22%2C%22position%22%3A%7B%22line%22%3A11%2C%22character%22%3A38%7D%7D%5D) · [Implementations](command:tua.hover.implementations?%5B%7B%22uri%22%3A%22file%3A%2F%2F%2Fvar%2Ffolders%2Fjl%2Fdhcpl8gs3rv04nzljphszpmc0000gn%2FT%2Ftua-starfall-latency-ErDd6e%2Fstarfall%2Fsrc%2Fmain.tua%22%2C%22position%22%3A%7B%22line%22%3A11%2C%22character%22%3A38%7D%7D%5D)"
+  ]
+}

@@ -6,6 +6,8 @@
 
 **FUP-01 resolution:** The cross-file inferred factory forwarding gap described below is now fixed and rechecked in core, LSP, and an actual VS Code host. See the [finding's resolution note](FINDINGS.md#fup-01--a-second-inferred-factory-hop-loses-class-member-completion).
 
+**November 12 qualification:** The [Starfall, graph, asset, and inspector qualification](NOV12_QUALIFICATION.md) rechecks the remaining recommendations against the bundled game and a previous packaged extension. It also records a separate returned-local module export defect found during the real-game completion run and its fix. The 15-minute Starfall inspector soak passed with 1,725 snapshots and 29 recovered disconnects.
+
 The editor was responsive in the tested synthetic workloads, with a visible warm suggestion median around 161 ms for an imported table and around 108 ms for a one-hop imported class factory. Keyboard-invoked class hover appeared around 10 ms median; pointer hover took 320–325 ms including VS Code's hover delay. Format-on-save took 12.7 ms median for a two-line file and 16–33 ms for a 1,001-line file. These are actual VS Code host timings, not just server replies. The server's 100-module warm completion p95 was 0.47 ms, so the remaining visible delay needs a client/renderer trace before attribution. The native PNG preview rendered; 500-node signal and module graphs filtered and opened source without renderer errors. A ten-minute LOVE inspector soak passed with forced GC, recovering from 19 forced disconnects; the default-Node invocation failed an unreliable heap-range assertion.
 
 **One new Medium editor defect was confirmed:** an unannotated forwarding function in a second module preserves `AgentInstance` on hover but loses class member completion in the consumer. The installed suggestion widget remained hidden. Direct factory use and an explicit return annotation on the forwarding function both worked. [FUP-01](FINDINGS.md) has the fixture, exact outputs, likely cause, and regression direction.
@@ -20,9 +22,10 @@ All 21 earlier unverified IDs were revisited. The 74-item historical ledger now 
 - [Historical recheck](PRIOR_RECHECK.md) — all 21 dispositions.
 - [Verification log](VERIFICATION.md) — commands, raw data links, environment, and limits.
 - [Installed-host and soak recheck](HOST_AND_SOAK_RECHECK.md) — packaged extension filesystem replay and retained-memory measurement.
+- [November 12 qualification](NOV12_QUALIFICATION.md) — Starfall visible completion versus a previous package, compiler-produced graph, non-PNG assets, and extended inspector soak.
 
 ## Recommended next work
 
-1. Instrument trigger → client send → server response → widget paint for visible completion; measure an actual game project and a previous version before setting a latency target.
-2. Compare a real large graph with compiler output and extend native preview qualification to other asset types.
-3. Repeat the now reliable inspector soak in a longer game session.
+1. Close the remaining completion timing gap with exact LSP wire-send/server-receive and widget-paint marks. The new trace measures trigger, completion-provider entry/return, and visible labels in Starfall against a previous package; its final stage includes client scheduling and rendering.
+2. Check graph fidelity and navigation in a hand-authored large game. The new compiler-produced 121-module fixture establishes DOM count parity, but it is generated, and non-PNG qualification found a font-preview gap.
+3. Exercise the inspector in a sustained interactive game session and on other platforms. The 15-minute automated Starfall run passed but can spend time in the game-over scene.

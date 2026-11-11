@@ -1,0 +1,137 @@
+{
+  "revision": "current",
+  "vscode": "1.142.0",
+  "project": "examples/starfall (temporary copy)",
+  "samples": [
+    {
+      "triggerToProviderMs": 169.8095703125,
+      "providerToResponseMs": 0.595703125,
+      "responseToPaintMs": 27.494873046875,
+      "totalMs": 197.900146484375,
+      "candidateCount": 10
+    },
+    {
+      "triggerToProviderMs": 2.419677734375,
+      "providerToResponseMs": 14.070556640625,
+      "responseToPaintMs": 102.809814453125,
+      "totalMs": 119.300048828125,
+      "candidateCount": 10
+    },
+    {
+      "triggerToProviderMs": 2.209228515625,
+      "providerToResponseMs": 14.3876953125,
+      "responseToPaintMs": 102.903076171875,
+      "totalMs": 119.5,
+      "candidateCount": 10
+    },
+    {
+      "triggerToProviderMs": 7.07177734375,
+      "providerToResponseMs": 15.058837890625,
+      "responseToPaintMs": 102.469482421875,
+      "totalMs": 124.60009765625,
+      "candidateCount": 10
+    },
+    {
+      "triggerToProviderMs": 6.0556640625,
+      "providerToResponseMs": 17.433837890625,
+      "responseToPaintMs": 104.910400390625,
+      "totalMs": 128.39990234375,
+      "candidateCount": 10
+    },
+    {
+      "triggerToProviderMs": 2.159912109375,
+      "providerToResponseMs": 14.908935546875,
+      "responseToPaintMs": 102.231201171875,
+      "totalMs": 119.300048828125,
+      "candidateCount": 10
+    },
+    {
+      "triggerToProviderMs": 3.400390625,
+      "providerToResponseMs": 21.1796875,
+      "responseToPaintMs": 103.02001953125,
+      "totalMs": 127.60009765625,
+      "candidateCount": 10
+    },
+    {
+      "triggerToProviderMs": 2.981689453125,
+      "providerToResponseMs": 18.14208984375,
+      "responseToPaintMs": 103.576171875,
+      "totalMs": 124.699951171875,
+      "candidateCount": 10
+    },
+    {
+      "triggerToProviderMs": 5.2490234375,
+      "providerToResponseMs": 21.269775390625,
+      "responseToPaintMs": 102.981201171875,
+      "totalMs": 129.5,
+      "candidateCount": 10
+    },
+    {
+      "triggerToProviderMs": 2.6298828125,
+      "providerToResponseMs": 18.730224609375,
+      "responseToPaintMs": 102.43994140625,
+      "totalMs": 123.800048828125,
+      "candidateCount": 10
+    },
+    {
+      "triggerToProviderMs": 2.4599609375,
+      "providerToResponseMs": 15.800537109375,
+      "responseToPaintMs": 102.53955078125,
+      "totalMs": 120.800048828125,
+      "candidateCount": 10
+    },
+    {
+      "triggerToProviderMs": 5.757568359375,
+      "providerToResponseMs": 19.120849609375,
+      "responseToPaintMs": 104.2216796875,
+      "totalMs": 129.10009765625,
+      "candidateCount": 10
+    }
+  ],
+  "providerLabels": [
+    {
+      "label": "collect",
+      "description": "field: (x: number, y: number, radius: number) -> boolean"
+    },
+    {
+      "label": "draw",
+      "description": "field: () -> nil"
+    },
+    {
+      "label": "height",
+      "description": "field: number"
+    },
+    {
+      "label": "hits",
+      "description": "field: (x: number, y: number, radius: number) -> boolean"
+    },
+    {
+      "label": "meteors",
+      "description": "field: Meteor[]"
+    },
+    {
+      "label": "reset",
+      "description": "field: () -> nil"
+    },
+    {
+      "label": "spawnTimer",
+      "description": "field: number"
+    },
+    {
+      "label": "stars",
+      "description": "field: Star[]"
+    },
+    {
+      "label": "update",
+      "description": "field: (dt: number, playerX: number, playerY: number, score: number) -> nil"
+    },
+    {
+      "label": "width",
+      "description": "field: number"
+    }
+  ],
+  "widthHover": [
+    "```tua\n(field) world.width: number\n```\n\n---\n\n- kind: field\n- module: /var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-starfall-latency-47Xr5f/starfall/src/world.tua",
+    "[References](command:tua.hover.references?%5B%7B%22uri%22%3A%22file%3A%2F%2F%2Fvar%2Ffolders%2Fjl%2Fdhcpl8gs3rv04nzljphszpmc0000gn%2FT%2Ftua-starfall-latency-47Xr5f%2Fstarfall%2Fsrc%2Fmain.tua%22%2C%22position%22%3A%7B%22line%22%3A11%2C%22character%22%3A38%7D%7D%5D) · [Implementations](command:tua.hover.implementations?%5B%7B%22uri%22%3A%22file%3A%2F%2F%2Fvar%2Ffolders%2Fjl%2Fdhcpl8gs3rv04nzljphszpmc0000gn%2FT%2Ftua-starfall-latency-47Xr5f%2Fstarfall%2Fsrc%2Fmain.tua%22%2C%22position%22%3A%7B%22line%22%3A11%2C%22character%22%3A38%7D%7D%5D)"
+  ]
+}

@@ -1,26 +1,64 @@
 {
   "vscode": "1.142.0",
   "signal": {
-    "renderHostMs": 80.96337500000004,
+    "renderHostMs": 80.45054099999993,
     "summary": "500 events / 1 files / 1500 calls",
-    "filterMs": 1.399999976158142,
+    "filterMs": 1.7999999523162842,
     "filteredNodes": 1,
     "sourceAction": "openLocation"
   },
   "module": {
-    "renderHostMs": 85.18624999999997,
+    "renderHostMs": 78.04737499999999,
     "summary": "500 modules / 499 dependencies / 0 unresolved / 0 cycles",
-    "filterMs": 4.900000035762787,
+    "filterMs": 5.399999976158142,
     "filteredNodes": 2,
     "sourceAction": "openLocation"
   },
+  "realModule": {
+    "compilerNodes": 121,
+    "compilerEdges": 120,
+    "renderedNodes": 121,
+    "renderedLinks": 120,
+    "renderHostMs": 68.42033300000003,
+    "sourceUriMatchesCompiler": true
+  },
   "nativeAsset": {
-    "result": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-preview-stress-I3yQkW/project/src/assets/player.png",
+    "result": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-preview-stress-tdmdRp/project/src/assets/player.png",
     "label": "player.png",
     "inputType": "bc",
-    "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-preview-stress-I3yQkW/project/src/assets/player.png",
+    "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-preview-stress-tdmdRp/project/src/assets/player.png",
     "screenshot": "native-asset.png",
     "workbenchErrors": 0
+  },
+  "nativeAssets": {
+    "sfx_move.wav": {
+      "result": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-preview-stress-tdmdRp/project/src/assets/sfx_move.wav",
+      "label": "sfx_move.wav",
+      "inputType": "bc",
+      "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-preview-stress-tdmdRp/project/src/assets/sfx_move.wav",
+      "screenshot": "native-audio-wav.png"
+    },
+    "sfx_bump.ogg": {
+      "result": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-preview-stress-tdmdRp/project/src/assets/sfx_bump.ogg",
+      "label": "sfx_bump.ogg",
+      "inputType": "bc",
+      "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-preview-stress-tdmdRp/project/src/assets/sfx_bump.ogg",
+      "screenshot": "native-sfx_bump-ogg.png"
+    },
+    "sniglet.otf": {
+      "result": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-preview-stress-tdmdRp/project/src/assets/sniglet.otf",
+      "label": "sniglet.otf",
+      "inputType": "yc",
+      "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-preview-stress-tdmdRp/project/src/assets/sniglet.otf",
+      "screenshot": "native-sniglet-otf.png"
+    },
+    "wave.glsl": {
+      "result": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-preview-stress-tdmdRp/project/src/assets/wave.glsl",
+      "label": "wave.glsl",
+      "inputType": "yc",
+      "uri": "file:///var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-preview-stress-tdmdRp/project/src/assets/wave.glsl",
+      "screenshot": "native-wave-glsl.png"
+    }
   },
   "rendererErrors": []
 }
