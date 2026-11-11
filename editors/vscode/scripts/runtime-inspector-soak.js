@@ -12,30 +12,48 @@ if (typeof global.gc !== "function") {
   process.exit(child.status ?? 1);
 }
 const fs = require("node:fs"), os = require("node:os"), path = require("node:path"), net = require("node:net"), assert = require("node:assert/strict");
-const { spawn } = require("node:child_process");
+const { spawn, spawnSync } = require("node:child_process");
 const { ActivityStore } = require("../src/workspace/activity-store");
 const { InspectorSessions } = require("../src/inspector/sessions");
 const { createLauncher } = require("../src/inspector/launcher");
 const { presentObject } = require("../src/inspector/presentation");
 const duration = Number(process.env.TUA_SOAK_SECONDS || 600);
+const workload = process.env.TUA_SOAK_GAME || "fixture";
 const outputFile = path.resolve(process.env.TUA_SOAK_OUTPUT || path.join(os.tmpdir(), "tua-inspector-soak.json"));
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "tua-inspector-soak-")), output = path.join(root, "build");
-fs.mkdirSync(output);
-for (const name of ["tuaecs", "tuastore", "tuasignal"]) fs.copyFileSync(path.resolve(__dirname, "../../../vendor/runtime", name + ".lua"), path.join(output, name + ".lua"));
-fs.copyFileSync(path.join(__dirname, "fixtures/inspector-soak.lua"), path.join(output, "main.lua"));
-fs.writeFileSync(path.join(output, "conf.lua"), 'io.stdout:setvbuf("no")\nfunction love.conf(t) t.window.visible=false; t.window.width=64; t.window.height=64; t.modules.audio=false; t.modules.joystick=false end\n');
+if (workload === "starfall") {
+  const project = path.join(root, "starfall");
+  fs.mkdirSync(project);
+  fs.cpSync(path.resolve(__dirname, "../../../examples/starfall/src"), path.join(project, "src"), { recursive: true });
+  fs.copyFileSync(path.resolve(__dirname, "../../../examples/starfall/tua.toml"), path.join(project, "tua.toml"));
+  const mainPath = path.join(project, "src/main.tua");
+  const main = fs.readFileSync(mainPath, "utf8")
+    .replace('local save = require("save")', 'local save = { load = function() return 0 end, store = function(_) end }')
+    .replace("smokeFrames >= 240", "smokeFrames >= 999999");
+  fs.writeFileSync(mainPath, main);
+  const build = spawnSync(path.resolve(__dirname, "../../../target/release/tua"), ["build"], { cwd: project, encoding: "utf8" });
+  if (build.error || build.status !== 0) throw new Error(`Starfall build failed: ${build.error?.message || build.stderr}`);
+  fs.cpSync(path.join(project, "build"), output, { recursive: true });
+  fs.appendFileSync(path.join(output, "main.lua"), `\n-- Temporary inspector-soak driver; source example is unchanged.\nio.stdout:setvbuf("no")\nlocal originalLoad = love.load\nfunction love.load(_) originalLoad({ "--smoke" }) end\nlocal originalUpdate = love.update\nlocal elapsed, lastSample = 0, 0\nfunction love.update(dt)\n  originalUpdate(dt)\n  elapsed = elapsed + dt\n  if elapsed - lastSample >= 5 then\n    lastSample = elapsed\n    collectgarbage("collect")\n    print(string.format('SOAK {"seconds":%.3f,"heapKiB":%.3f,"frames":%d}', elapsed, collectgarbage("count"), math.floor(elapsed * 60)))\n  end\n  if elapsed >= tonumber(os.getenv("TUA_SOAK_SECONDS") or "600") then print("DONE"); love.event.quit() end\nend\n`);
+  fs.appendFileSync(path.join(output, "conf.lua"), '\nlocal originalConf = love.conf\nfunction love.conf(t) originalConf(t); t.window.visible = false; t.window.width = 64; t.window.height = 64; t.modules.audio = false end\n');
+} else if (workload === "fixture") {
+  fs.mkdirSync(output);
+  for (const name of ["tuaecs", "tuastore", "tuasignal"]) fs.copyFileSync(path.resolve(__dirname, "../../../vendor/runtime", name + ".lua"), path.join(output, name + ".lua"));
+  fs.copyFileSync(path.join(__dirname, "fixtures/inspector-soak.lua"), path.join(output, "main.lua"));
+  fs.writeFileSync(path.join(output, "conf.lua"), 'io.stdout:setvbuf("no")\nfunction love.conf(t) t.window.visible=false; t.window.width=64; t.window.height=64; t.modules.audio=false; t.modules.joystick=false end\n');
+} else throw new Error(`Unknown inspector-soak workload: ${workload}`);
 const activity = new ActivityStore();
 const inspector = new InspectorSessions({ activity, enabled: () => true, assetsDirectory: path.resolve(__dirname, "../assets/inspector") });
-const report = { started: new Date().toISOString(), duration, snapshots: 0, truncated: 0, reconnects: [], samples: [], errors: [], completed: false };
+const report = { started: new Date().toISOString(), duration, workload, snapshots: 0, truncated: 0, reconnects: [], samples: [], errors: [], completed: false };
 const children = [], sockets = new Set(), timers = [];
 let proxy, attempts = 0, entry, lastSequence, lastGeneration, previousSnapshotTime;
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
-const until = async (fn, label) => { for (let i = 0; i < 100; i++) { if (fn()) return; await sleep(50); } throw new Error("Timeout: " + label); };
+const until = async (fn, label) => { for (let i = 0; i < (workload === "starfall" ? 400 : 100); i++) { if (fn()) return; await sleep(50); } throw new Error("Timeout: " + label); };
 const save = () => fs.writeFileSync(outputFile, JSON.stringify(report, null, 2) + "\n");
 function launch(name, directory) {
   const child = spawn(process.env.TUA_LOVE || "/Applications/love.app/Contents/MacOS/love", [directory], { cwd: root, env: { ...process.env, TUA_SOAK_SECONDS: String(duration) }, stdio: ["ignore", "pipe", "pipe"] });
   children.push(child); let text = "", done = false, errors = "";
-  child.stderr.on("data", value => { errors += value; });
+  child.stderr.on("data", value => { errors += value; if (workload === "starfall") console.error(`${name} stderr: ${String(value).trim()}`); });
   child.stdout.on("data", value => {
     text += value; let newline;
     while ((newline = text.indexOf("\n")) >= 0) {
@@ -46,6 +64,7 @@ function launch(name, directory) {
         save();
       }
       if (line === "DONE") done = true;
+      else if (workload === "starfall" && !line.startsWith("SOAK ")) console.log(`${name}: ${line}`);
     }
   });
   return new Promise((resolve, reject) => { child.once("error", reject); child.once("exit", code => code === 0 && done ? resolve() : reject(new Error(`${name} exited ${code}: ${errors}`))); });
