@@ -23,6 +23,7 @@ use protocol_index::ProjectProtocolIndex;
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct ProjectTypeDatabase {
     modules: BTreeMap<PathBuf, ProjectTypeModule>,
+    nominal_classes: BTreeMap<String, (PathBuf, String)>,
     protocols: ProjectProtocolIndex,
 }
 
@@ -95,6 +96,7 @@ pub(crate) fn protocol_nominal_identity(module_path: &Path, name: &str) -> Strin
 struct ProjectTypeResolutionContext {
     aliases: Vec<(PathBuf, String)>,
     generic_aliases: Vec<(TypeAliasId, Vec<Type>)>,
+    nominal_classes: Vec<String>,
     work: usize,
 }
 
@@ -233,6 +235,17 @@ impl ProjectTypeDatabase {
                 }
             }
 
+            for name in &module.class_names {
+                if let Some(Type::Table(table)) =
+                    module.aliases.get(name).map(|binding| &binding.ty)
+                {
+                    if let Some(identity) = table.nominal_identity() {
+                        database
+                            .nominal_classes
+                            .insert(identity.to_owned(), (path.clone(), name.clone()));
+                    }
+                }
+            }
             database.modules.insert(path, module);
         }
 
@@ -765,6 +778,34 @@ impl ProjectTypeDatabase {
                 )
             }
             Type::Table(table) => {
+                let identity = table.nominal_identity();
+                let current = identity
+                    .filter(|identity| {
+                        !context
+                            .nominal_classes
+                            .iter()
+                            .any(|active| active == identity)
+                    })
+                    .and_then(|identity| self.nominal_classes.get(identity))
+                    .and_then(|(path, name)| self.module(path)?.alias(name))
+                    .and_then(|binding| match &binding.ty {
+                        Type::Table(current) => Some(current),
+                        _ => None,
+                    });
+                let table = current.unwrap_or(table);
+                if let Some(identity) = identity {
+                    if context
+                        .nominal_classes
+                        .iter()
+                        .any(|active| active == identity)
+                    {
+                        return table
+                            .nominal_reference()
+                            .map(Type::Table)
+                            .unwrap_or(Type::Any);
+                    }
+                    context.nominal_classes.push(identity.to_owned());
+                }
                 let mut resolved_table =
                     crate::TableShape::from_fields(table.fields().map(|(name, field)| {
                         (
@@ -781,6 +822,9 @@ impl ProjectTypeDatabase {
                         )
                     }));
                 resolved_table.copy_semantic_metadata_from(table);
+                if identity.is_some() {
+                    context.nominal_classes.pop();
+                }
 
                 Type::Table(resolved_table)
             }

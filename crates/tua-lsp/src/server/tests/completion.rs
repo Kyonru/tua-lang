@@ -1837,6 +1837,65 @@ return Player
 }
 
 #[test]
+fn inferred_factory_forwarder_keeps_class_members_across_files_and_edits() {
+    let fixture = Fixture::parse(
+        r#"-- file: tua.toml
+source = "src"
+-- file: src/agent.tua
+final class Agent {
+  health: number = 100
+  takeDamage(amount: number): nil { self.health -= amount }
+}
+export type AgentInstance = Agent
+return { Agent = Agent }
+-- file: src/factory.tua
+import type { AgentInstance } from "./agent"
+local Agent = require("agent").Agent
+local function spawn(): AgentInstance
+  return Agent.new()
+end
+return { spawn = spawn }
+-- file: src/service.tua
+local factory = require "factory"
+local function current()
+  return factory.spawn()
+end
+return { current = current }
+-- file: src/main.tua
+local service = require "service"
+local agent = service.current()
+agent.
+"#,
+    );
+    let temp = fixture
+        .write_to_temp("inferred-class-forwarder-lsp")
+        .expect("fixture should write");
+    let main = fixture.source("src/main.tua");
+    let agent = fixture.source("src/agent.tua");
+    let updated_agent = agent.replace(
+        "health: number = 100",
+        "health: number = 100\n  name: string = \"pilot\"",
+    );
+    let main_uri = path_uri(&temp.join("src/main.tua"));
+    let agent_uri = path_uri(&temp.join("src/agent.tua"));
+    let mut server = TestServer::new();
+    server.send(initialize_with_root(1, path_uri(temp.path())));
+    server.send(did_open(&agent_uri, agent));
+    server.send(did_open(&main_uri, main));
+    server.send(hover_request(2, &main_uri, main, "agent ="));
+    server.send(completion_request(3, &main_uri, main, "agent."));
+    assert_hover_contains(server.output(), 2, "Agent");
+    assert_completion_labels(server.output(), 3, ["health", "takeDamage"]);
+
+    server.send(did_change(&agent_uri, &updated_agent, 2));
+    server.send(completion_request(4, &main_uri, main, "agent."));
+    let after_edit = completion_labels(server.output(), 4);
+    for member in ["health", "name", "takeDamage"] {
+        assert!(after_edit.contains(&member), "{after_edit:?}");
+    }
+}
+
+#[test]
 fn completion_recovers_unsaved_event_callback_member_inside_call() {
     let fixture = Fixture::parse(
         r#"-- file: tua.toml

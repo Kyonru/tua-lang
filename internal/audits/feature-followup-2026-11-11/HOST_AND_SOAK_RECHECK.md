@@ -44,4 +44,4 @@ Its [raw result](inspector-soak-post-gc.json) records 600 seconds, 1,126 snapsho
 - `make extension-package`: passed and produced the tested VSIX.
 - `TUA_REAL_SERVER_PATH=... npm --prefix editors/vscode run test:vscode-real`: passed with the new sidebar replay in the real-server gate.
 
-Still unqualified: visible latency in a real game, large compiler-produced graph fidelity, non-PNG native previews, multi-hour inspector use, and Windows/Linux installed hosts. The cross-file inferred forwarding-function completion finding [FUP-01](FINDINGS.md) remains separate and open.
+Still unqualified: visible latency in a real game, large compiler-produced graph fidelity, non-PNG native previews, multi-hour inspector use, and Windows/Linux installed hosts. The cross-file inferred forwarding-function completion finding [FUP-01](FINDINGS.md) was fixed in a later November 12 pass; its pre-fix evidence remains separate.

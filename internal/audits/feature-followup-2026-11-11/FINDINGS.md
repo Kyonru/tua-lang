@@ -2,6 +2,19 @@
 
 ## FUP-01 — A second inferred factory hop loses class member completion
 
+**Resolution (November 12, 2026): fixed in the working checkout.** Exported
+function signatures now carry imported nominal instance identity through the
+forwarding module. Project completion refreshes the class shape from the current
+snapshot and defers the standalone fast path when another open file has an
+unsaved change. A core regression covers the three-module chain; an LSP test
+covers hover, completion, and an unsaved class-field edit. The original stdio
+probe now returns `health`, `name`, and `takeDamage` for `service.current()`;
+an actual VS Code host displayed all three suggestions in 141 ms in one
+synthetic sample. The same 100-module profile measured warm completion p95 at
+0.46 ms with the fix and 0.50 ms with the pre-fix packaged server. These are
+protocol and synthetic-host measurements, not a real game-session latency
+guarantee. The original finding and its pre-fix evidence follow below.
+
 **Category:** editor correctness / cross-file type provenance. **Severity:** Medium. **Confidence:** High for the observed symptom; Medium for the inferred root cause. **Verification:** CLI check/build/Lua runtime, direct stdio LSP, and actual VS Code host.
 
 The [seven-file fixture](fixtures/crossfile) defines `Agent` in `classes/agent.tua`, exports its instance type, and defines `factory.spawn(): AgentInstance`. A consumer of `factory.spawn()` gets `health`, `name`, and `takeDamage` completion. Another module, `service.tua`, returns `factory.spawn("pilot")` from an **inferred** `current()` function. In the consumer of `service.current()`, hover still says `local agent: AgentInstance`, and `agent.health` checks and runs, but completion after `agent.` returns **zero LSP items**. The installed editor's automatic suggestion widget stayed hidden over a ten-second observation. This creates a particularly confusing state: the type is displayed and a known member is accepted, yet the editor cannot suggest the members.

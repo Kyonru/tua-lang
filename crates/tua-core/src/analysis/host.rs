@@ -1247,6 +1247,11 @@ impl AnalysisHost {
         position: SourcePosition,
     ) -> Option<Vec<Completion>> {
         let path = path.as_ref();
+        // Standalone require inference reads disk. If another open file has an
+        // unsaved value, only the project snapshot can answer its dependents.
+        if self.vfs.has_unsaved_open_file_other_than(path) {
+            return None;
+        }
         let file = self.current_analysis_file(path)?;
         let ranking = || {
             CompletionRankingInputs::from_sources(

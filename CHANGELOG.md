@@ -8,6 +8,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Inferred functions that forward an imported class factory result now retain
+  instance member completion across another module boundary, including after
+  unsaved edits to the defining class.
 - Workspace Modules now retries a filesystem-triggered refresh when the server
   has not yet advanced its analysis revision, so external Lua export changes
   and deleted modules appear without a manual refresh.

@@ -584,7 +584,17 @@ impl AnalysisSnapshot {
             .with_project_module_signatures(self.project_module_signatures(parsed))
             .with_deprecated_accesses(self.project_module_binding_deprecations(parsed))
             .with_must_use_accesses(self.project_module_binding_must_use_accesses(parsed))
-            .with_local_types(project_inference.local_types.clone())
+            .with_local_types(project_inference.local_types.iter().map(|(name, ty)| {
+                (
+                    name.clone(),
+                    match ty {
+                        Type::Table(table) if table.nominal_identity().is_some() => self
+                            .type_database
+                            .resolve_type(&self.module_graph, &parsed.path, ty),
+                        _ => ty.clone(),
+                    },
+                )
+            }))
             .with_local_contract_types(self.project_local_annotation_types(parsed));
 
         if self.config.ecs.enabled {

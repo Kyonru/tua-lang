@@ -370,6 +370,17 @@ impl VirtualFileSystem {
         self.open_files.contains_key(&normalize_path(path))
     }
 
+    pub(crate) fn has_unsaved_open_file_other_than(&self, path: &Path) -> bool {
+        let path = normalize_path(path);
+        self.open_files.iter().any(|(candidate, open)| {
+            candidate != &path
+                && self
+                    .disk_files
+                    .get(candidate)
+                    .is_none_or(|disk| disk != open)
+        })
+    }
+
     pub fn kind(&self, path: impl AsRef<Path>) -> Option<VfsSourceKind> {
         let path = normalize_path(path);
 

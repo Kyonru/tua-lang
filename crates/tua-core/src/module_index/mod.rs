@@ -1254,7 +1254,7 @@ impl<'a> ExportInferer<'a> {
             return ty.clone();
         };
 
-        resolve_export_aliases(environment, ty)
+        resolve_export_aliases(self.parsed, environment, ty)
     }
 }
 
@@ -1412,8 +1412,9 @@ fn table_type_from_export_fields(fields: &BTreeMap<String, ModuleExportField>) -
     )
 }
 
-fn resolve_export_aliases(environment: &TypeEnvironment, ty: &Type) -> Type {
+fn resolve_export_aliases(parsed: &ParsedSource, environment: &TypeEnvironment, ty: &Type) -> Type {
     resolve_export_aliases_inner(
+        parsed,
         environment,
         ty,
         true,
@@ -1422,6 +1423,7 @@ fn resolve_export_aliases(environment: &TypeEnvironment, ty: &Type) -> Type {
 }
 
 fn resolve_export_aliases_inner(
+    parsed: &ParsedSource,
     environment: &TypeEnvironment,
     ty: &Type,
     expand_non_class_alias: bool,
@@ -1435,6 +1437,14 @@ fn resolve_export_aliases_inner(
                 return ty.clone();
             }
             if !environment.is_class(name) && !expand_non_class_alias {
+                // An imported instance alias may occur inside an exported
+                // function signature. Keep ordinary aliases symbolic, but
+                // carry nominal class identity across the next module hop.
+                if !parsed.type_imports.is_empty() {
+                    if let Some(nominal) = resolve_imported_nominal_alias(parsed, name) {
+                        return nominal;
+                    }
+                }
                 return ty.clone();
             }
             if !visiting.insert(name.clone()) {
@@ -1449,7 +1459,7 @@ fn resolve_export_aliases_inner(
             let result = resolved
                 .filter(|resolved| resolved != ty)
                 .map(|resolved| {
-                    resolve_export_aliases_inner(environment, &resolved, false, visiting)
+                    resolve_export_aliases_inner(parsed, environment, &resolved, false, visiting)
                 })
                 .unwrap_or_else(|| ty.clone());
             visiting.remove(name);
@@ -1462,22 +1472,30 @@ fn resolve_export_aliases_inner(
                 .iter()
                 .map(|parameter| FunctionParameter {
                     name: parameter.name.clone(),
-                    ty: resolve_export_aliases_inner(environment, &parameter.ty, false, visiting),
+                    ty: resolve_export_aliases_inner(
+                        parsed,
+                        environment,
+                        &parameter.ty,
+                        false,
+                        visiting,
+                    ),
                 })
                 .collect::<Vec<_>>();
             let vararg_type = function
                 .vararg_type
                 .as_deref()
-                .map(|ty| resolve_export_aliases_inner(environment, ty, false, visiting));
+                .map(|ty| resolve_export_aliases_inner(parsed, environment, ty, false, visiting));
             let return_types = function
                 .return_types_or_any()
                 .iter()
-                .map(|ty| resolve_export_aliases_inner(environment, ty, false, visiting))
+                .map(|ty| resolve_export_aliases_inner(parsed, environment, ty, false, visiting))
                 .collect::<Vec<_>>();
             let guarded = function.guarded_return_types.as_ref().map(|types| {
                 types
                     .iter()
-                    .map(|ty| resolve_export_aliases_inner(environment, ty, false, visiting))
+                    .map(|ty| {
+                        resolve_export_aliases_inner(parsed, environment, ty, false, visiting)
+                    })
                     .collect()
             });
 
@@ -1486,6 +1504,7 @@ fn resolve_export_aliases_inner(
                 .iter()
                 .map(|overload| {
                     let Type::Function(overload) = resolve_export_aliases_inner(
+                        parsed,
                         environment,
                         &Type::Function(overload.clone()),
                         false,
@@ -1515,6 +1534,7 @@ fn resolve_export_aliases_inner(
                         name.to_owned(),
                         TableField {
                             ty: resolve_export_aliases_inner(
+                                parsed,
                                 environment,
                                 &field.ty,
                                 false,
@@ -1529,20 +1549,33 @@ fn resolve_export_aliases_inner(
             Type::Table(resolved)
         }
         Type::Union(types) => Type::union(types.iter().map(|ty| {
-            resolve_export_aliases_inner(environment, ty, expand_non_class_alias, visiting)
+            resolve_export_aliases_inner(parsed, environment, ty, expand_non_class_alias, visiting)
         })),
         Type::Array(item) => Type::array(resolve_export_aliases_inner(
+            parsed,
             environment,
             item,
             expand_non_class_alias,
             visiting,
         )),
         Type::Tuple(items) => Type::tuple(items.iter().map(|ty| {
-            resolve_export_aliases_inner(environment, ty, expand_non_class_alias, visiting)
+            resolve_export_aliases_inner(parsed, environment, ty, expand_non_class_alias, visiting)
         })),
         Type::Dictionary { key, value } => Type::dictionary(
-            resolve_export_aliases_inner(environment, key, expand_non_class_alias, visiting),
-            resolve_export_aliases_inner(environment, value, expand_non_class_alias, visiting),
+            resolve_export_aliases_inner(
+                parsed,
+                environment,
+                key,
+                expand_non_class_alias,
+                visiting,
+            ),
+            resolve_export_aliases_inner(
+                parsed,
+                environment,
+                value,
+                expand_non_class_alias,
+                visiting,
+            ),
         ),
         Type::Any
         | Type::Primitive(_)
@@ -1551,6 +1584,54 @@ fn resolve_export_aliases_inner(
         | Type::GenericAliasApplication { .. }
         | Type::GenericClassApplication { .. } => ty.clone(),
     }
+}
+
+fn resolve_imported_nominal_alias(parsed: &ParsedSource, name: &str) -> Option<Type> {
+    fn resolve(
+        parsed: &ParsedSource,
+        name: &str,
+        visiting: &mut std::collections::BTreeSet<(PathBuf, String)>,
+    ) -> Option<Type> {
+        let key = (parsed.path.clone(), name.to_owned());
+        if visiting.len() >= 32 || !visiting.insert(key.clone()) {
+            return None;
+        }
+        let result = (|| {
+            let binding = parsed
+                .type_imports
+                .iter()
+                .flat_map(|import| import.bindings.iter().map(move |binding| (import, binding)))
+                .find(|(_, binding)| binding.local == name)?;
+            let model = ProjectModel::load_for_path(&parsed.path).ok()?;
+            let path = model.resolve_type_imported_module(&parsed.path, &binding.0.module)?;
+            let source = crate::input_limits::read_source(&path).ok()?;
+            let imported = parse_module_source(&path, source).ok()?;
+            let target = binding.1.imported.as_str();
+            if imported
+                .type_aliases
+                .iter()
+                .any(|alias| alias.name == target && alias.exported)
+            {
+                let environment = build_type_environment(&imported).ok()?;
+                let Type::Table(table) =
+                    environment.resolve_aliases(&Type::Alias(target.to_owned()))
+                else {
+                    return None;
+                };
+                return (table.nominal_identity().is_some()).then_some(Type::Table(table));
+            }
+            imported
+                .type_imports
+                .iter()
+                .any(|import| import.reexport && import.bindings.iter().any(|b| b.local == target))
+                .then(|| resolve(&imported, target, visiting))
+                .flatten()
+        })();
+        visiting.remove(&key);
+        result
+    }
+
+    resolve(parsed, name, &mut std::collections::BTreeSet::new())
 }
 
 fn nominal_alias_stub(environment: &TypeEnvironment, name: &str) -> Option<Type> {

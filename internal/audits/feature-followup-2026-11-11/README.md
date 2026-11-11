@@ -4,6 +4,8 @@
 
 **November 12 follow-up:** The [installed-host and soak recheck](HOST_AND_SOAK_RECHECK.md) closes the two explorer host-evidence gaps, fixes a newly reproduced sidebar refresh race, and replaces the default soak's pre-GC heap oracle. The results below describe the November 11 baseline; use the addendum for the current outcomes.
 
+**FUP-01 resolution:** The cross-file inferred factory forwarding gap described below is now fixed and rechecked in core, LSP, and an actual VS Code host. See the [finding's resolution note](FINDINGS.md#fup-01--a-second-inferred-factory-hop-loses-class-member-completion).
+
 The editor was responsive in the tested synthetic workloads, with a visible warm suggestion median around 161 ms for an imported table and around 108 ms for a one-hop imported class factory. Keyboard-invoked class hover appeared around 10 ms median; pointer hover took 320–325 ms including VS Code's hover delay. Format-on-save took 12.7 ms median for a two-line file and 16–33 ms for a 1,001-line file. These are actual VS Code host timings, not just server replies. The server's 100-module warm completion p95 was 0.47 ms, so the remaining visible delay needs a client/renderer trace before attribution. The native PNG preview rendered; 500-node signal and module graphs filtered and opened source without renderer errors. A ten-minute LOVE inspector soak passed with forced GC, recovering from 19 forced disconnects; the default-Node invocation failed an unreliable heap-range assertion.
 
 **One new Medium editor defect was confirmed:** an unannotated forwarding function in a second module preserves `AgentInstance` on hover but loses class member completion in the consumer. The installed suggestion widget remained hidden. Direct factory use and an explicit return annotation on the forwarding function both worked. [FUP-01](FINDINGS.md) has the fixture, exact outputs, likely cause, and regression direction.
@@ -21,7 +23,6 @@ All 21 earlier unverified IDs were revisited. The 74-item historical ledger now 
 
 ## Recommended next work
 
-1. Fix FUP-01 in shared module type provenance, then add a project/LSP regression for the full chain and edit recovery.
-2. Instrument trigger → client send → server response → widget paint for visible completion; measure an actual game project and a previous version before setting a latency target.
-3. Compare a real large graph with compiler output and extend native preview qualification to other asset types.
-4. Repeat the now reliable inspector soak in a longer game session.
+1. Instrument trigger → client send → server response → widget paint for visible completion; measure an actual game project and a previous version before setting a latency target.
+2. Compare a real large graph with compiler output and extend native preview qualification to other asset types.
+3. Repeat the now reliable inspector soak in a longer game session.

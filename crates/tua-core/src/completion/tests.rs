@@ -3218,6 +3218,7 @@ end
 return {
   loadJumpSound = loadJumpSound,
 }
+
 "#,
     )
     .expect("assets module should be written");
@@ -3237,6 +3238,42 @@ a:
     assert!(labels.contains(&"play".to_owned()), "{labels:?}");
     assert!(labels.contains(&"setVolume".to_owned()), "{labels:?}");
     assert!(labels.contains(&"stop".to_owned()), "{labels:?}");
+
+    fs::remove_dir_all(root).expect("test dir should be removed");
+}
+
+#[test]
+fn completes_class_members_through_inferred_cross_file_factory_forwarder() {
+    let root = temp_project_dir("inferred_class_factory_forwarder_completion");
+    let src = root.join("src");
+    fs::create_dir_all(&src).expect("source dir should be created");
+    fs::write(root.join("tua.toml"), "source = \"src\"\n").expect("config should be written");
+    fs::write(
+        src.join("agent.tua"),
+        "final class Agent {\n  health: number = 100\n  takeDamage(amount: number): nil { self.health -= amount }\n}\nexport type AgentInstance = Agent\nreturn { Agent = Agent }\n",
+    )
+    .expect("class module should be written");
+    fs::write(
+        src.join("factory.tua"),
+        "import type { AgentInstance } from \"./agent\"\nlocal Agent = require(\"agent\").Agent\nlocal function spawn(): AgentInstance\n  return Agent.new()\nend\nreturn { spawn = spawn }\n",
+    )
+    .expect("factory module should be written");
+    fs::write(
+        src.join("service.tua"),
+        "local factory = require \"factory\"\nlocal function current()\n  return factory.spawn()\nend\nreturn { current = current }\n",
+    )
+    .expect("forwarding module should be written");
+
+    let source = "local service = require \"service\"\nlocal agent = service.current()\nagent.\n";
+    let completions = complete_tua_source(
+        src.join("main.tua"),
+        source,
+        position_after(source, "agent."),
+    )
+    .expect("forwarded class completion should succeed");
+    let names = labels(&completions);
+    assert!(names.contains(&"health".to_owned()), "{names:?}");
+    assert!(names.contains(&"takeDamage".to_owned()), "{names:?}");
 
     fs::remove_dir_all(root).expect("test dir should be removed");
 }
