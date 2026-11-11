@@ -10,21 +10,29 @@ language or editor behavior, and migration notes call out those changes.
 
 - Cross-module `is` checks now use class table identity, so unrelated classes
   cannot match when their generated numeric IDs happen to be the same.
-- Generic class methods retain imported protocol bounds, and nested or imported
-  SignalBus fields retain the payload types for `emit` calls.
-- ECS `get` and `remove` results preserve the possibility of `nil`; imported
-  component schemas remain available to checking and project hover, including
-  when the world is local and the component is imported.
+- Generic class methods retain imported protocol bounds instead of reporting a
+  false type mismatch after the constructor.
+- Nested or imported SignalBus fields retain the payload types for `emit`
+  calls, including calls with multiple event arguments.
+- ECS calls through an imported world retain the imported component's field
+  schema during type checking.
+- Project hover shows an imported ECS component's field schema when `get` is
+  called on a local world, instead of showing `any | nil`.
+- ECS `get` and `remove` results preserve the possibility of `nil`, so unsafe
+  field access is diagnosed and guarded access remains valid.
 - Rebuilds refresh unchanged, compiler-owned bundled runtimes while preserving
   manually edited or project-provided runtime files.
-- Preview filters and modes survive refreshes, Signal Graph state resets when
-  switching workspaces, and long event metadata no longer hides event names.
+- Module, Signal, ECS, and object-pool preview filters and modes survive
+  analysis refreshes.
+- Signal Graph event names remain visible when an event has long metadata.
+- Signal Graph filters reset when switching workspaces, so a previous
+  project's filter cannot hide the current project's events.
+- Corrected the `make feature-examples-check` description: it validates guide
+  mappings and descriptions; separate build checks compile the examples.
 
 ### Changed
 
 - Reworked the VS Code extension overview and added a focused editor reference.
-- Clarified that `make feature-examples-check` validates the feature-guide
-  mapping and descriptions; compilation is covered by separate build checks.
 
 ### Tests and audit
 
