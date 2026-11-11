@@ -576,6 +576,10 @@ does not parse Tua or resolve modules and assets independently.
 | **Tua: Preview Sprite Animations** | Resolved sprite frames, timing, loop behavior, and the synchronized source configuration |
 | **Tua: Preview State Machine** | Initial state, statically derived states, source-linked event routes, wildcard transitions, and cycles |
 
+The signal, module, ECS, and object-pool views retain their filters and selected
+mode when refreshed. ECS and object-pool views reset those choices when opened
+for a different source file.
+
 Module, ECS, object-pool, audio, and asset inventory requests run on the background
 lane so completion and document edits remain responsive. Signal, sprite, and
 state-machine inspection still use synchronized compiler snapshots rather than

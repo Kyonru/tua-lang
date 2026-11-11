@@ -57,9 +57,12 @@ function objectPoolExplorerHtml(webview, viewModel) {
       operations: model.operations,
       insights: model.insights,
     };
-    let mode = initialMode();
-    let filter = "";
-    let selectedId = initialSelection(mode);
+    const saved = vscode.getState()?.objectPoolExplorer;
+    const restored = saved?.focusUri === (model.focusUri || "") ? saved : null;
+    let mode = collections[restored?.mode] ? restored.mode : initialMode();
+    let filter = typeof restored?.filter === "string" ? restored.filter : "";
+    let selectedId = restored?.selectedId || initialSelection(mode);
+    filterInput.value = filter;
 
     document.getElementById("pool-count").textContent = model.pools.length;
     document.getElementById("operation-count").textContent = model.operations.length;
@@ -123,6 +126,9 @@ function objectPoolExplorerHtml(webview, viewModel) {
       }
       renderList(items);
       renderDetail(items.find((item) => item.id === selectedId));
+      vscode.setState({ ...(vscode.getState() || {}), objectPoolExplorer: {
+        focusUri: model.focusUri || "", mode, filter, selectedId,
+      } });
     }
 
     function renderList(items) {

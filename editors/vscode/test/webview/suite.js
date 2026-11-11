@@ -193,6 +193,22 @@ async function run() {
       await screenshot(title.toLowerCase().replaceAll(" ", "-") + "-narrow");
       await workbench.send("Emulation.clearDeviceMetricsOverride");
     }
+    for (const [title, createHtml, filterSelector, modeSelector] of [
+      ["ECS Explorer", revision => ecsExplorerHtml(panel.webview, { analysisRevision: revision, components: [], systems: [], queries: [], insights: [] }), "#filter", '[data-mode="systems"]'],
+      ["Object Pool Explorer", revision => objectPoolExplorerHtml(panel.webview, { analysisRevision: revision, pools: [], operations: [], insights: [] }), "#filter", '[data-mode="operations"]'],
+      ["Module Graph", revision => moduleGraphHtml(panel.webview, { analysisRevision: revision, modules: [], edges: [], cycles: [] }), "#filter", '[data-mode="roots"]'],
+      ["Signal Graph", revision => signalGraphHtml(panel.webview, { analysisRevision: revision, events: [] }), "#event-filter", '[data-mode="listeners"]'],
+    ]) {
+      await load(createHtml(2), title);
+      await evaluate(`(() => { const filter = document.querySelector(${JSON.stringify(filterSelector)}); filter.value = "player"; filter.dispatchEvent(new Event("input")); document.querySelector(${JSON.stringify(modeSelector)}).click(); })()`);
+      await load(createHtml(3), title);
+      assert.equal(await evaluate(`document.querySelector(${JSON.stringify(filterSelector)}).value`), "player", `${title} preserves filtering after refresh`);
+      assert.equal(await evaluate(`document.querySelector(${JSON.stringify(modeSelector)}).classList.contains("active")`), true, `${title} preserves mode after refresh`);
+    }
+    await load(ecsExplorerHtml(panel.webview, { analysisRevision: 4, focusUri: "file:///one.tua", components: [], systems: [], queries: [], insights: [] }), "ECS Explorer");
+    await evaluate('document.querySelector("#filter").value = "old file"; document.querySelector("#filter").dispatchEvent(new Event("input"))');
+    await load(ecsExplorerHtml(panel.webview, { analysisRevision: 5, focusUri: "file:///two.tua", components: [], systems: [], queries: [], insights: [] }), "ECS Explorer");
+    assert.equal(await evaluate('document.querySelector("#filter").value'), "", "ECS filtering resets when focus moves to another file");
     const audioGraph = { systems: [{ uri: "file:///game/audio.tua", range: { start: { line: 4 } }, buses: ["master"], cues: ["hit"], musicStates: [], layers: [], effects: [] }] };
     await load(audioExplorerHtml(panel.webview, audioGraph, [{ path: "assets/hit.ogg", assetUri: "file:///game/assets/hit.ogg", bpm: 120, confidence: 0.9 }]), "Audio Explorer");
     await waitFor(() => evaluate("document.querySelectorAll('[data-uri]').length === 2"), "audio source and asset actions");

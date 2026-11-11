@@ -59,9 +59,12 @@ function ecsExplorerHtml(webview, viewModel) {
       queries: model.queries,
       insights: model.insights,
     };
-    let mode = initialMode();
-    let filter = "";
-    let selectedId = initialSelection(mode);
+    const saved = vscode.getState()?.ecsExplorer;
+    const restored = saved?.focusUri === (model.focusUri || "") ? saved : null;
+    let mode = collections[restored?.mode] ? restored.mode : initialMode();
+    let filter = typeof restored?.filter === "string" ? restored.filter : "";
+    let selectedId = restored?.selectedId || initialSelection(mode);
+    filterInput.value = filter;
 
     document.getElementById("component-count").textContent = model.components.length;
     document.getElementById("system-count").textContent = model.systems.length;
@@ -126,6 +129,9 @@ function ecsExplorerHtml(webview, viewModel) {
       }
       renderList(items);
       renderDetail(items.find((item) => item.id === selectedId));
+      vscode.setState({ ...(vscode.getState() || {}), ecsExplorer: {
+        focusUri: model.focusUri || "", mode, filter, selectedId,
+      } });
     }
 
     function renderList(items) {

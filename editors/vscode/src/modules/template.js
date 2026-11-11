@@ -68,10 +68,21 @@ function moduleGraphHtml(webview, viewModel) {
     const revision = document.getElementById("revision");
     const segmentButtons = Array.from(document.querySelectorAll("[data-mode]"));
     const moduleByUri = new Map(graphData.modules.map((module) => [module.uri, module]));
-    let mode = "all";
-    let query = "";
-    let selectedUri = graphData.focusUri || graphData.modules[0]?.uri || null;
-    let selectedTab = graphData.initialTab || "overview";
+    const saved = vscode.getState()?.moduleGraph;
+    const restored = saved?.focusUri === (graphData.focusUri || "") && saved?.initialTab === (graphData.initialTab || "overview") ? saved : null;
+    let mode = ["all", "unresolved", "cycles", "roots"].includes(restored?.mode) ? restored.mode : "all";
+    let query = typeof restored?.query === "string" ? restored.query : "";
+    let selectedUri = moduleByUri.has(restored?.selectedUri) ? restored.selectedUri : graphData.focusUri || graphData.modules[0]?.uri || null;
+    let selectedTab = ["overview", "dependencies", "dependents", "exports", "why"].includes(restored?.selectedTab) ? restored.selectedTab : graphData.initialTab || "overview";
+    filterInput.value = query;
+    for (const button of segmentButtons) button.classList.toggle("active", button.dataset.mode === mode);
+
+    function persistState() {
+      vscode.setState({ ...(vscode.getState() || {}), moduleGraph: {
+        focusUri: graphData.focusUri || "", initialTab: graphData.initialTab || "overview",
+        mode, query, selectedUri, selectedTab,
+      } });
+    }
 
     revision.textContent = "analysis r" + graphData.analysisRevision;
     document.getElementById("reload").addEventListener("click", () => {
@@ -128,6 +139,7 @@ function moduleGraphHtml(webview, viewModel) {
       summary.textContent = graphData.modules.length + " modules / " + graphData.edges.length +
         " dependencies / " + unresolved + " unresolved / " + graphData.cycles.length + " cycles";
       requestAnimationFrame(drawConnections);
+      persistState();
     }
 
     function renderGraph(visible) {
@@ -297,6 +309,7 @@ function moduleGraphHtml(webview, viewModel) {
         button.addEventListener("click", () => {
           selectedTab = id;
           renderInspector();
+          persistState();
         });
         tabs.append(button);
       }

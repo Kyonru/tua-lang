@@ -362,12 +362,21 @@ function signalGraphHtml(webview, graph) {
     const busFilterSelect = document.getElementById("bus-filter");
     const fileFilterSelect = document.getElementById("file-filter");
     const segmentButtons = Array.from(document.querySelectorAll("[data-mode]"));
-    let mode = "all";
-    let eventQuery = "";
-    let busFilter = "";
-    let fileFilter = "";
-    let selectedEvent = graphData.events[0]?.id || null;
-    let selectedFile = null;
+    const restored = vscode.getState()?.signalGraph;
+    let mode = ["all", "listeners", "emitters"].includes(restored?.mode) ? restored.mode : "all";
+    let eventQuery = typeof restored?.eventQuery === "string" ? restored.eventQuery : "";
+    let busFilter = typeof restored?.busFilter === "string" ? restored.busFilter : "";
+    let fileFilter = typeof restored?.fileFilter === "string" ? restored.fileFilter : "";
+    let selectedEvent = restored?.selectedEvent || graphData.events[0]?.id || null;
+    let selectedFile = restored?.selectedFile || null;
+    eventFilterInput.value = eventQuery;
+    for (const button of segmentButtons) button.classList.toggle("active", button.dataset.mode === mode);
+
+    function persistState() {
+      vscode.setState({ ...(vscode.getState() || {}), signalGraph: {
+        mode, eventQuery, busFilter, fileFilter, selectedEvent, selectedFile,
+      } });
+    }
 
     const roleLabels = {
       declaration: "declare",
@@ -379,6 +388,10 @@ function signalGraphHtml(webview, graph) {
 
     populateSelect(busFilterSelect, Array.from(new Set(graphData.events.map((event) => event.bus).filter(Boolean))).sort(), "All buses");
     populateSelect(fileFilterSelect, Array.from(new Set(graphData.events.flatMap((event) => event.calls.map((call) => call.file)))).sort(), "All files");
+    if ([...busFilterSelect.options].some((option) => option.value === busFilter)) busFilterSelect.value = busFilter;
+    else busFilter = "";
+    if ([...fileFilterSelect.options].some((option) => option.value === fileFilter)) fileFilterSelect.value = fileFilter;
+    else fileFilter = "";
 
     document.getElementById("reload").addEventListener("click", () => {
       vscode.postMessage({ command: "reload" });
@@ -469,6 +482,7 @@ function signalGraphHtml(webview, graph) {
           : "No signal calls match these filters.";
         root.appendChild(empty);
         inspector.replaceChildren();
+        persistState();
         return;
       }
 
@@ -561,6 +575,7 @@ function signalGraphHtml(webview, graph) {
           }
           selectedFile = selectedFile === file ? null : file;
           renderInspector(events);
+          persistState();
           for (const candidate of root.querySelectorAll(".node.file")) {
             candidate.classList.toggle("selected", candidate === button && selectedFile === file);
           }
@@ -569,6 +584,7 @@ function signalGraphHtml(webview, graph) {
       }
 
       renderInspector(events);
+      persistState();
     }
 
     function graphNode(kind, label, meta) {
