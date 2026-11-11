@@ -1,4 +1,16 @@
 "use strict";
+// Heap used before a collection is not retained memory. Re-exec with GC
+// available so the ordinary `node runtime-inspector-soak.js` command measures
+// the same post-collection heap as an explicit `node --expose-gc` invocation.
+if (typeof global.gc !== "function") {
+  const { spawnSync } = require("node:child_process");
+  const child = spawnSync(process.execPath, ["--expose-gc", __filename, ...process.argv.slice(2)], {
+    stdio: "inherit",
+    env: process.env,
+  });
+  if (child.error) throw child.error;
+  process.exit(child.status ?? 1);
+}
 const fs = require("node:fs"), os = require("node:os"), path = require("node:path"), net = require("node:net"), assert = require("node:assert/strict");
 const { spawn } = require("node:child_process");
 const { ActivityStore } = require("../src/workspace/activity-store");
@@ -29,7 +41,7 @@ function launch(name, directory) {
     while ((newline = text.indexOf("\n")) >= 0) {
       const line = text.slice(0, newline).trim(); text = text.slice(newline + 1);
       if (line.startsWith("SOAK ")) {
-        if (global.gc) global.gc();
+        global.gc();
         report.samples.push({ mode: name, ...JSON.parse(line.slice(5)), nodeHeapKiB: process.memoryUsage().heapUsed / 1024, snapshots: report.snapshots, generation: entry?.connectionGeneration });
         save();
       }
@@ -106,7 +118,9 @@ function launch(name, directory) {
       assert(report[mode + "HeapGrowthKiB"] < 256, `${mode} retained Lua heap growth exceeded 256 KiB`);
     }
     const retained = report.samples.filter(sample => sample.seconds >= 30).map(sample => sample.nodeHeapKiB);
+    assert(retained.length >= 6, "expected repeated post-GC Node heap samples");
     report.nodeHeapRangeKiB = Math.max(...retained) - Math.min(...retained);
+    report.nodeHeapMeasurement = "post-gc";
     assert(report.nodeHeapRangeKiB < 2048, "retained Node heap drift exceeded 2 MiB");
     assert(report.rate1000 > .5 && report.rate1000 < 1.5); assert(report.rate200 > 3 && report.rate200 < 7);
     report.completed = true; console.log("Soak passed", JSON.stringify({ snapshots: report.snapshots, reconnects: report.reconnects.length, luaGrowthKiB: report.activeHeapGrowthKiB, nodeRangeKiB: report.nodeHeapRangeKiB }));
