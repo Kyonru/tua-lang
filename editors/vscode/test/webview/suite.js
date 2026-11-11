@@ -13,6 +13,9 @@ const { ecsExplorerHtml } = require("../../src/ecs/template");
 const { moduleGraphHtml } = require("../../src/modules/template");
 const { objectPoolExplorerHtml } = require("../../src/object-pools/template");
 const { signalGraphHtml } = require("../../src/signals/signal-graph");
+const { signalGraphViewModel } = require("../../src/signals/signal-graph");
+const { ecsExplorerViewModel } = require("../../src/ecs/view-model");
+const { objectPoolExplorerViewModel } = require("../../src/object-pools/view-model");
 const { serverHealthHtml } = require("../../src/health/template");
 const { serverHealthViewModel } = require("../../src/health/view-model");
 
@@ -209,6 +212,42 @@ async function run() {
     await evaluate('document.querySelector("#filter").value = "old file"; document.querySelector("#filter").dispatchEvent(new Event("input"))');
     await load(ecsExplorerHtml(panel.webview, { analysisRevision: 5, focusUri: "file:///two.tua", components: [], systems: [], queries: [], insights: [] }), "ECS Explorer");
     assert.equal(await evaluate('document.querySelector("#filter").value'), "", "ECS filtering resets when focus moves to another file");
+    const ecsView = ecsExplorerViewModel({ analysisRevision: 6, graph: {
+      components: [{ id: "position", uri: "file:///game/components.tua", range, localName: "Position", runtimeName: "Position", fields: [{ name: "x", type: "number", range }] }],
+      systems: [{ id: "movement", uri: "file:///game/movement.tua", range, name: "Movement", components: [{ reference: "Position", componentId: "position", access: "write", range }] }],
+      queries: [], insights: [],
+    } }, "file:///game/components.tua");
+    await load(ecsExplorerHtml(panel.webview, ecsView), "ECS Explorer");
+    assert.equal(await evaluate('document.querySelector("#detail").textContent.includes("Movement")'), true, "component detail shows the related system");
+    await evaluate('document.querySelector("#detail .detail-header button").click()');
+    await waitFor(() => messages.some(message => message.command === "openLocation" && message.uri === "file:///game/components.tua"), "populated ECS source action");
+    await screenshot("ecs-explorer-populated");
+    const poolView = objectPoolExplorerViewModel({ analysisRevision: 7, graph: {
+      pools: [{ id: "bullets", uri: "file:///game/pools.tua", range, name: "bullets", itemType: "Bullet" }],
+      operations: [{ id: "take", uri: "file:///game/pools.tua", range, poolId: "bullets", poolName: "bullets", kind: "acquire", itemName: "bullet" }],
+      insights: [],
+    } }, "file:///game/pools.tua");
+    await load(objectPoolExplorerHtml(panel.webview, poolView), "Object Pool Explorer");
+    assert.equal(await evaluate('document.querySelector("#detail").textContent.includes("Bullet") && document.querySelector("#detail").textContent.includes("acquire")'), true, "pool detail shows item type and lifecycle");
+    await evaluate('document.querySelector("#detail .detail-header button").click()');
+    await waitFor(() => messages.some(message => message.command === "openLocation" && message.uri === "file:///game/pools.tua"), "populated pool source action");
+    await screenshot("object-pool-explorer-populated");
+    const signalView = signalGraphViewModel({ events: [{
+      id: "hit", name: "enemy.hit", bus: "EnemyEvents", busUri: "file:///game/events.tua",
+      resolvedPayload: [{ name: "damage", type: "number" }], schemaConflict: false,
+      calls: [
+        { uri: "file:///game/events.tua", receiver: "EnemyEvents", method: "declare", role: "declaration", range, payload: [{ name: "damage", type: "number" }] },
+        { uri: "file:///game/combat.tua", receiver: "EnemyEvents", method: "on", role: "listener", range, payload: [{ name: "damage", type: "number" }] },
+        { uri: "file:///game/enemy.tua", receiver: "EnemyEvents", method: "emit", role: "emit", range, inferredPayload: [{ name: "value1", type: "number" }] },
+      ],
+    }] });
+    await load(signalGraphHtml(panel.webview, signalView), "Signal Graph");
+    await evaluate('(() => { const filter = document.querySelector("#event-filter"); filter.value = ""; filter.dispatchEvent(new Event("input")); document.querySelector("[data-mode=all]").click(); })()');
+    assert.equal(await evaluate('document.querySelectorAll(".call-row").length'), 3, "signal detail lists declaration, listener, and emit call");
+    assert.equal(await evaluate('(() => { const label = document.querySelector(".node.event strong"); return label.textContent === "enemy.hit" && label.getBoundingClientRect().width >= 50; })()'), true, "signal graph keeps the event name visible beside long bus metadata");
+    await evaluate('document.querySelector(".call-row.role-emit").click()');
+    await waitFor(() => messages.some(message => message.command === "openLocation" && message.uri === "file:///game/enemy.tua"), "populated signal source action");
+    await screenshot("signal-graph-populated");
     const audioGraph = { systems: [{ uri: "file:///game/audio.tua", range: { start: { line: 4 } }, buses: ["master"], cues: ["hit"], musicStates: [], layers: [], effects: [] }] };
     await load(audioExplorerHtml(panel.webview, audioGraph, [{ path: "assets/hit.ogg", assetUri: "file:///game/assets/hit.ogg", bpm: 120, confidence: 0.9 }]), "Audio Explorer");
     await waitFor(() => evaluate("document.querySelectorAll('[data-uri]').length === 2"), "audio source and asset actions");

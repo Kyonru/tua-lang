@@ -591,6 +591,7 @@ function signalGraphHtml(webview, graph) {
       const button = document.createElement("button");
       button.type = "button";
       button.className = "node " + kind;
+      button.title = label + " / " + meta;
       const name = document.createElement("strong");
       name.textContent = label;
       const detail = document.createElement("span");
@@ -776,11 +777,11 @@ function documentHtml(webview, title, body, script) {
     .role-cleanup { stroke: var(--vscode-charts-orange, #c77b30); }
     .role-query { stroke: var(--vscode-charts-blue, #4b91d1); }
     .role-mixed { stroke: var(--vscode-descriptionForeground); }
-    .node { position: absolute; z-index: 2; display: flex; align-items: center; justify-content: space-between; height: 44px; min-width: 0; padding: 0 10px; border: 1px solid var(--vscode-panel-border); border-radius: 4px; background: var(--vscode-sideBar-background, var(--vscode-editor-background)); text-align: left; gap: 10px; }
+    .node { position: absolute; z-index: 2; display: flex; flex-direction: column; align-items: stretch; justify-content: center; height: 44px; min-width: 0; padding: 0 10px; border: 1px solid var(--vscode-panel-border); border-radius: 4px; background: var(--vscode-sideBar-background, var(--vscode-editor-background)); text-align: left; gap: 2px; }
     .node:hover { border-color: var(--vscode-focusBorder); }
     .node.selected { outline: 1px solid var(--vscode-focusBorder); border-color: var(--vscode-focusBorder); }
     .node strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
-    .node span { flex: 0 0 auto; color: var(--vscode-descriptionForeground); font-size: 11px; }
+    .node span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--vscode-descriptionForeground); font-size: 11px; }
     .node.event { border-left: 3px solid var(--vscode-charts-purple, #9b70c7); }
     .node.file { border-left: 3px solid var(--vscode-charts-blue, #4b91d1); }
     .node.conflict { border-left-color: var(--vscode-editorWarning-foreground, var(--vscode-charts-orange, #c77b30)); }
