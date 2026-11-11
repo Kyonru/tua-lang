@@ -3,6 +3,7 @@
 const assert = require("assert/strict");
 const path = require("path");
 const vscode = require("vscode");
+const { verifyGraphPreviews } = require("./graph-previews");
 
 const fixtures = JSON.parse(process.env.TUA_REAL_SERVER_FIXTURES);
 
@@ -781,6 +782,8 @@ async function run() {
   await vscode.commands.executeCommand("tua.copyCacheStats");
   const cacheStats = JSON.parse(await vscode.env.clipboard.readText());
   assert(cacheStats.parse, "the real server should answer custom cache-stat requests");
+
+  await verifyGraphPreviews(fixtures.graphPath);
 
   console.log(
     `REAL_SERVER_EVIDENCE ${JSON.stringify({

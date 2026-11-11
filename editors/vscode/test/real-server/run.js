@@ -1,6 +1,7 @@
 "use strict";
 
 const fs = require("fs");
+const net = require("net");
 const os = require("os");
 const path = require("path");
 const { runTests, downloadAndUnzipVSCode } = require("@vscode/test-electron");
@@ -8,6 +9,10 @@ const { spawnSync } = require("child_process");
 const { localVSCodeExecutable, localVSCodeCliArgs } = require("../vscode-executable");
 
 async function main() {
+  const portServer = net.createServer();
+  await new Promise((resolve) => portServer.listen(0, "127.0.0.1", resolve));
+  const cdpPort = portServer.address().port;
+  await new Promise((resolve) => portServer.close(resolve));
   let extensionDevelopmentPath = path.resolve(__dirname, "..", "..");
   const extensionTestsPath = path.resolve(__dirname, "suite", "index.js");
   let serverPath = path.resolve(
@@ -46,6 +51,7 @@ async function main() {
       extensionTestsEnv: {
         TUA_REAL_SERVER_FIXTURES: JSON.stringify(fixtures),
         TUA_REAL_SERVER_PATH: serverPath,
+        TUA_REAL_SERVER_CDP_PORT: String(cdpPort),
         ...(vsix ? {} : { TUA_SERVER_PATH: serverPath }),
       },
       launchArgs: [
@@ -54,6 +60,7 @@ async function main() {
         "--disable-workspace-trust",
         `--user-data-dir=${path.join(tempRoot, "user-data")}`,
         `--extensions-dir=${path.join(tempRoot, "extensions")}`,
+        `--remote-debugging-port=${cdpPort}`,
       ],
       reuseMachineInstall: true,
       vscodeExecutablePath,
@@ -90,6 +97,7 @@ function createProject(workspacePath) {
   const genericClassPath = path.join(sourcePath, "generic_class.tua");
   const headerCompletionPath = path.join(sourcePath, "header_completion.tua");
   const protocolStubsPath = path.join(sourcePath, "protocol_stubs.tua");
+  const graphPath = path.join(sourcePath, "graph_workflow.tua");
   const cyclicProtocolAPath = path.join(sourcePath, "cyclic_a.d.tua");
   const cyclicProtocolBPath = path.join(sourcePath, "cyclic_b.d.tua");
   const cyclicProtocolValuePath = path.join(sourcePath, "cyclic_value.tua");
@@ -116,6 +124,28 @@ function createProject(workspacePath) {
       "",
     ].join("\n"),
   );
+  fs.writeFileSync(graphPath, [
+    'local Position = ecs.component("Position", { x = "number" })',
+    'local world = ecs.world()',
+    'local entity = world:create()',
+    'world:add(entity, Position, { x = 1 })',
+    'local movement = ecs.system(world, { Position }, function(_, position, dt)',
+    '  position.x += dt',
+    'end)',
+    'local bullets = objectPool({',
+    '  create = function() return { x = 0 } end,',
+    '  reset = function(item) item.x = 0 end,',
+    '  initial = 1,',
+    '})',
+    'local bullet = bullets:acquire()',
+    'bullets:release(bullet)',
+    'local EnemyEvents = signal()',
+    'EnemyEvents:declare("enemy.hit", function(damage: number) end)',
+    'EnemyEvents:on("enemy.hit", function(damage: number) end)',
+    'EnemyEvents:emit("enemy.hit", 3)',
+    'return { movement = movement, bullets = bullets, events = EnemyEvents }',
+    '',
+  ].join("\n"));
   fs.writeFileSync(
     contractsPath,
     [
@@ -310,6 +340,7 @@ function createProject(workspacePath) {
     contractsPath,
     genericPath,
     genericClassPath,
+    graphPath,
     headerCompletionPath,
     helperPath,
     mainPath,
