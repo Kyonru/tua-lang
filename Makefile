@@ -132,7 +132,7 @@ diff-check: ## Check the git diff for whitespace errors.
 	git diff --check
 
 .PHONY: feature-examples-check
-feature-examples-check: ## Ensure every Features guide has a buildable feature-tour file.
+feature-examples-check: ## Check Features guide-to-example mappings and tour imports.
 	node scripts/check-feature-examples.js
 
 .PHONY: docs

@@ -40,8 +40,9 @@ asset validation, asset-path completion, and asset metadata hovers can run
 without depending on real art or audio files.
 
 The tour's `coverage.json` maps each documentation **Features** guide to a
-buildable `.tua` file. `make feature-examples-check` validates that coverage and
-runs as part of the repository verification gates.
+`.tua` source file. `make feature-examples-check` checks those mappings and
+their imports from `src/main.tua`; `make build-features` compiles the sources.
+Both run in repository CI.
 
 It also includes focused modules for native generics and protocols, behavior
 trees, camera, tweening, audio, procedural helpers, the Baton-backed
