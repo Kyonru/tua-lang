@@ -107,9 +107,10 @@ fn diagnostic_ranges_round_trip_through_lsp() {
 #[test]
 fn related_diagnostic_ranges_use_utf16_columns() {
     let source = "-- 😀 update";
-    let diagnostic = Diagnostic::error("src/main.tua", 1, 1, "method does not satisfy protocol")
+    let path = std::env::temp_dir().join("related-utf16.tua");
+    let diagnostic = Diagnostic::error(&path, 1, 1, "method does not satisfy protocol")
         .with_related_information(tua_core::DiagnosticRelatedInformation {
-            file: PathBuf::from("src/main.tua"),
+            file: path.clone(),
             span: tua_core::SourceSpan {
                 start: SourcePosition { line: 1, column: 6 },
                 end: SourcePosition {
@@ -130,7 +131,7 @@ fn related_diagnostic_ranges_use_utf16_columns() {
         12
     );
 
-    let round_tripped = protocol::core_diagnostic_from_lsp(Path::new("src/main.tua"), &lsp, source)
+    let round_tripped = protocol::core_diagnostic_from_lsp(&path, &lsp, source)
         .expect("related diagnostic should round-trip");
     assert_eq!(round_tripped.related_information.len(), 1);
     assert_eq!(
