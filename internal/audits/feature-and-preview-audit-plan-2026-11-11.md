@@ -2,7 +2,7 @@
 
 Plan date: 2026-11-11 (Asia/Tokyo)
 Planning baseline: c08edbca; worktree clean when inventoried.
-Status: executed with bounded coverage. Evidence, ten locally fixed findings, remaining qualification, and the 391-row coverage ledger are recorded in `internal/audits/feature-and-preview-2026-11-11/`. Twenty-four of 74 historical finding IDs were not individually rechecked; this plan does not establish universal feature or release qualification.
+Status: executed with bounded coverage. Evidence, ten locally fixed findings, remaining qualification, and the 391-row coverage ledger are recorded in `internal/audits/feature-and-preview-2026-11-11/`. Twenty-one of 74 historical finding IDs were not individually rechecked; this plan does not establish universal feature or release qualification.
 
 ## Goal
 
