@@ -1,5 +1,7 @@
 # Preview and information-surface review
 
+For later installed-host Project files/Modules filesystem-event evidence and a ten-minute inspector soak using post-collection Node heap samples, see the [November 12 recheck](../feature-followup-2026-11-11/HOST_AND_SOAK_RECHECK.md). The results below are the original audit baseline.
+
 Starting revision: `c08edbca`; local macOS arm64 VS Code extension host. “Rendered” below means `npm --prefix editors/vscode run test:webviews` loaded the production template inside a VS Code webview controlled through CDP. “Inspected” means source/tests or existing gallery were reviewed without a new populated-host check. The captures under `captures/` are from this run; see `EDITOR.md` for commands and test limits.
 
 | ID | Question and observed help | Evidence status | Remaining qualification |

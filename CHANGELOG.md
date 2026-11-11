@@ -8,6 +8,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Workspace Modules now retries a filesystem-triggered refresh when the server
+  has not yet advanced its analysis revision, so external Lua export changes
+  and deleted modules appear without a manual refresh.
 - Cross-module `is` checks now use class table identity, so unrelated classes
   cannot match when their generated numeric IDs happen to be the same.
 - Generic class methods retain imported protocol bounds instead of reporting a
@@ -36,6 +39,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Tests and audit
 
+- Added an installed-VSIX filesystem replay for Project files and Modules,
+  covering create/change/delete events and unsaved dependency edits.
+- The ordinary inspector soak command now measures post-collection Node heap,
+  making its retained-memory assertion comparable to an explicit forced-GC run.
 - Added emitted-Lua interaction tests for combined game features and installed
   editor checks for real Signal, ECS, and object-pool graph data and source links.
 - Recorded the feature and preview audit, reproductions, coverage limits, and

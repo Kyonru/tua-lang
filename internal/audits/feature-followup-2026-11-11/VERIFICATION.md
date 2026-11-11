@@ -1,5 +1,7 @@
 # Verification log and performance qualification
 
+The [November 12 installed-host and soak recheck](HOST_AND_SOAK_RECHECK.md) adds packaged-VSIX filesystem-event replay and a passing ten-minute default-command inspector soak with post-GC heap sampling. The table below preserves the November 11 baseline, including its failed default-command assertion.
+
 Baseline: `ab1b69c506f962ab239e015d2db4c38764fd592a`, tracked tree clean before this audit. Product source was not edited. Host: macOS arm64, VS Code 1.142.0, Tua extension 0.7.0, release `target/release/tua` (`tua 0.7.0`, built 17:31 local time after the last product-code commit at 17:20), Lua 5.4, LOVE 11.5 at `/Applications/love.app`. The follow-up directory is ignored by Git; only selected small scripts, fixture, raw results, screenshot, and reports are intended as audit artifacts. Raw host logs were written under `/tmp`.
 
 | Check | Command / method | Outcome |
