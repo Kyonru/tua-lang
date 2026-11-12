@@ -2306,7 +2306,15 @@ impl<'a> Checker<'a> {
                 return_types
             }
             Callable::ExternalFunction(function) => {
-                self.check_external_call_arguments(function_call, &function)
+                let returns = self.check_external_call_arguments(function_call, &function);
+                if matches!(field_chain_before_first_call(function_call).as_deref(), Some([root, member]) if root == "os" && member == "date")
+                    && self.infer_named_value("os").is_none()
+                    && self.environment.function("os.date").is_none()
+                {
+                    vec![crate::lua::os_date_return_type(function_call)]
+                } else {
+                    returns
+                }
             }
         }
     }

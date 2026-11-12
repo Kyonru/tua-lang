@@ -285,6 +285,21 @@ fn returns_lua_and_love_builtin_signatures() {
 }
 
 #[test]
+fn os_date_signature_explains_optional_format_and_result() {
+    let signature = signature_at("local date = os.date(\n", "os.date(")
+        .expect("os.date should have signature help");
+    assert_eq!(
+        signature.signatures[0].label,
+        "function os.date(format?: string | nil, time?: number | nil): string | OsDateTable"
+    );
+    assert!(signature.signatures[0]
+        .documentation
+        .as_deref()
+        .unwrap_or("")
+        .contains("*t"));
+}
+
+#[test]
 fn returns_game_math_helper_signatures() {
     let help = signature_at("local value = math.lerp(0, 10, \n", "math.lerp(0, 10, ")
         .expect("math.lerp should have signature help");

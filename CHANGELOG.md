@@ -8,6 +8,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- `os.date` now infers formatted strings and `*t`/`!*t` date tables separately,
+  exposes the `OsDateTable` type, and types its arguments for checking and
+  editor assistance.
 - State-machine previews now separate arrows that converge on the same state
   and support canvas pan, pinch/Control-wheel zoom, keyboard zoom, and Fit.
 - State-machine arrows can be hovered, selected, and opened at their source

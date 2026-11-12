@@ -5598,6 +5598,14 @@ fn infer_first_function_call_return_types(
             .unwrap_or_default();
     }
 
+    if parts.as_slice() == ["os", "date"]
+        && !query.locals.contains_key("os")
+        && !query.context.function_types.contains_key("os")
+        && !query.context.function_types.contains_key("os.date")
+    {
+        return vec![lua::os_date_return_type(function_call)];
+    }
+
     if parts.as_slice() == ["table", "remove"]
         && !query.context.table_remove_overridden
         && !query.locals.contains_key("table")

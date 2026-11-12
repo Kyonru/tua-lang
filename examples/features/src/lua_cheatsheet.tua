@@ -597,6 +597,8 @@ end
 
 local currentTime = os.time()
 local currentDate = os.date("*t", currentTime)
+local currentYear: number = currentDate.year
+local currentLabel: string = os.date("%Y-%m-%d", currentTime)
 
 -- Feature: custom environments in Lua 5.1 style.
 local sandbox = {

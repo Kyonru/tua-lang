@@ -1689,6 +1689,47 @@ local checked_ranged: number = ranged
 }
 
 #[test]
+fn os_date_distinguishes_date_tables_from_formatted_strings() {
+    check_tua_source(
+        "src/date.tua",
+        r#"
+local localDate: OsDateTable = os.date("*t", os.time())
+local utcDate: OsDateTable = os.date("!*t")
+local year: number = localDate.year
+local directYear: number = os.date("*t").year
+local daylight: boolean = utcDate.isdst
+local formatted: string = os.date("%Y-%m-%d")
+local defaultFormat: string = os.date()
+local nilFormat: string = os.date(nil)
+local format: string = "%Y"
+local uncertain: string | OsDateTable = os.date(format)
+"#,
+    )
+    .expect("literal date-table formats and formatted strings should have distinct types");
+
+    let errors = check_tua_source("src/date.tua", "local wrong: number = os.date(\"%Y\")\n")
+        .expect_err("a formatted date is a string");
+    assert!(errors
+        .iter()
+        .any(|error| error.code == Some(DiagnosticCode::TYPE_MISMATCH)));
+
+    let invalid_format = check_tua_source("src/date.tua", "os.date(99)\n")
+        .expect_err("a numeric format should be rejected");
+    assert!(invalid_format
+        .iter()
+        .any(|error| error.code == Some(DiagnosticCode::TYPE_MISMATCH)));
+
+    check_tua_source(
+        "src/shadow.tua",
+        r#"
+local os = { date = function(_format: string): number return 7 end }
+local result: number = os.date("*t")
+"#,
+    )
+    .expect("a local os table must not use the standard-library return type");
+}
+
+#[test]
 fn untyped_standard_library_parameter_names_remain_permissive() {
     check_tua_source(
         "src/catalog.tua",

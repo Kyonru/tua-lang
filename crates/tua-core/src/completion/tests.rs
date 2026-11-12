@@ -2120,6 +2120,16 @@ fn completes_lua_standard_library_fields() {
 }
 
 #[test]
+fn completes_fields_of_os_date_table_result() {
+    let source = "local when = os.date(\"*t\")\nlocal year = when.\n";
+    let completions = complete_tua_source("src/main.tua", source, position_after(source, "when."))
+        .expect("date fields should complete");
+    let fields = labels(&completions);
+    assert!(fields.contains(&"year".to_owned()));
+    assert!(fields.contains(&"isdst".to_owned()));
+}
+
+#[test]
 fn completes_game_math_helpers_in_math_and_love_math() {
     let math_source = "local value = math.cl\n";
     let math_position = position_after(math_source, "math.cl");

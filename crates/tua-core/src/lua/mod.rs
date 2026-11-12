@@ -1,6 +1,6 @@
 use crate::{
     asset, audio, game_math, input, love_api, love_api_extra, love_api_signatures, object_pool,
-    signal, sprite, state_machine, store, vector, Type,
+    signal, sprite, state_machine, store, vector, TableField, Type,
 };
 
 pub(crate) fn global_name_is_assigned(parsed: &crate::ParsedSource, name: &str) -> bool {
@@ -152,6 +152,45 @@ pub(crate) fn first_call_argument(
         return None;
     };
     arguments.iter().next()
+}
+
+pub(crate) const OS_DATE_TABLE_TYPE: &str = "OsDateTable";
+
+pub(crate) fn os_date_table_type() -> Type {
+    Type::table([
+        ("year", TableField::required(Type::number())),
+        ("month", TableField::required(Type::number())),
+        ("day", TableField::required(Type::number())),
+        ("hour", TableField::required(Type::number())),
+        ("min", TableField::required(Type::number())),
+        ("sec", TableField::required(Type::number())),
+        ("wday", TableField::required(Type::number())),
+        ("yday", TableField::required(Type::number())),
+        ("isdst", TableField::required(Type::boolean())),
+    ])
+}
+
+/// Lua returns a date table only for the exact *t format (with an optional UTC
+/// prefix). Other literal formats return strings; unknown formats may do either.
+pub(crate) fn os_date_return_type(call: &full_moon::ast::FunctionCall) -> Type {
+    use full_moon::ast::Expression;
+
+    let Some(format) = first_call_argument(call) else {
+        return Type::string();
+    };
+    if matches!(format, Expression::Symbol(token) if crate::ast_utils::token_text(token) == "nil") {
+        return Type::string();
+    }
+    if let Expression::String(token) = format {
+        if let Some(value) = crate::ast_utils::string_literal_runtime_bytes(token) {
+            return if value == b"*t" || value == b"!*t" {
+                Type::alias(OS_DATE_TABLE_TYPE)
+            } else {
+                Type::string()
+            };
+        }
+    }
+    Type::union([Type::string(), Type::alias(OS_DATE_TABLE_TYPE)])
 }
 
 pub(crate) fn table_remove_return_type(collection: Type) -> Option<Type> {
@@ -2721,8 +2760,8 @@ const OS_ITEMS: &[LuaItem] = &[
     item(
         "date",
         LuaItemKind::Function,
-        "function os.date(format?, time?)",
-        "Formats date/time.",
+        "function os.date(format?: string | nil, time?: number | nil): string | OsDateTable",
+        "Formats date/time. `*t` (or `!*t` for UTC) returns an OsDateTable; other formats return a string.",
     ),
     item(
         "difftime",

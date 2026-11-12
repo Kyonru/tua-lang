@@ -456,6 +456,13 @@ impl<'a> SemanticModel<'a> {
                 .unwrap_or_default();
         };
 
+        if parts == ["os", "date"]
+            && self.is_unshadowed_lua_root("os")
+            && self.environment.function("os.date").is_none()
+        {
+            return vec![lua::os_date_return_type(function_call)];
+        }
+
         if parts == ["require"] && self.is_unshadowed_lua_root("require") {
             if let Some(Expression::String(module)) = lua::first_call_argument(function_call) {
                 let name = module.to_string();

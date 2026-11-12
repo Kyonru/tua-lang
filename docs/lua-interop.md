@@ -52,6 +52,24 @@ Tua analyzes them with LuaJIT syntax, so a Lua module that uses `goto`,
 labels, or LuaJIT number suffixes keeps its inferred exports. `.tua` source
 does not accept `goto`.
 
+## Use Typed Lua Standard Libraries
+
+Tua supplies types for common Lua and LuaJIT globals. For `os.date`, the
+result depends on the literal format: `"*t"` and `"!*t"` return an
+`OsDateTable`, while an ordinary format or no format returns a string.
+
+```tua
+local date: OsDateTable = os.date("*t")
+local year: number = date.year
+local daylightSaving: boolean = date.isdst
+local label: string = os.date("%Y-%m-%d")
+```
+
+`OsDateTable` has numeric `year`, `month`, `day`, `hour`, `min`, `sec`, `wday`,
+and `yday` fields, plus boolean `isdst`. A format supplied through a dynamic
+string can return either a string or a date table, so its result is
+`string | OsDateTable`. Tua leaves Lua's runtime date formatting to the host.
+
 ## Migrate Singleton Tables And Mixins
 
 Keep existing modules running while adding types at their public boundaries.

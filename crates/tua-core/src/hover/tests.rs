@@ -1116,6 +1116,19 @@ fn hovers_lua_standard_library_items() {
 }
 
 #[test]
+fn hovers_typed_os_date_and_date_table_fields() {
+    let source = "local when = os.date(\"*t\")\nlocal year = when.year\n";
+    let date = hover_tua_source("src/main.tua", source, position_at(source, "date"))
+        .expect("hover should succeed")
+        .expect("os.date should hover");
+    assert!(date.contents.contains("string | OsDateTable"));
+    let year = hover_tua_source("src/main.tua", source, position_at(source, "year"))
+        .expect("hover should succeed")
+        .expect("date field should hover");
+    assert!(year.contents.contains("number"));
+}
+
+#[test]
 fn hovers_game_math_helpers() {
     let source = "local color = love.math.rgb(255, 128, 0)\n";
     let hover = hover_tua_source("src/main.tua", source, position_at(source, "rgb"))
