@@ -3,6 +3,7 @@ local M = {}
 local objects = setmetatable({}, { __mode = "k" })
 local serial, sequence = 0, 0
 local LIMIT = 3000
+local storeHistory = false
 
 local function quote(value)
   return '"' .. value:gsub('[%z\1-\31\\"]', function(c)
@@ -69,15 +70,31 @@ function M.register(kind, object, reader, label)
   return object
 end
 
+function M.configure(options)
+  storeHistory = options and options.storeHistory == true or false
+end
+
 local function clock()
   return love and love.timer and love.timer.getTime and love.timer.getTime() or os.clock()
 end
 
-function M.storeUpdated(object)
+function M.storeUpdated(object, operation)
   local entry = objects[object]
   if not entry then return end
   entry.updates = (entry.updates or 0) + 1
   entry.lastUpdate = clock()
+  if storeHistory then
+    local budget = { left = 96, truncated = false }
+    local state = encode(object._state, budget, {}, 0)
+    local truncated = budget.truncated or #state > 1024
+    if #state > 1024 then state = "<state limit (1024 bytes)>" end
+    entry.history = entry.history or {}
+    entry.historyHead = (entry.historyHead or 0) % 20 + 1
+    entry.history[entry.historyHead] = {
+      operation = operation, sequence = entry.updates, time = entry.lastUpdate,
+      state = state, truncated = truncated,
+    }
+  end
 end
 
 function M.signal(object, name)
@@ -115,6 +132,16 @@ function M.snapshot()
     if entry.kind == "stores" then
       data.updates = entry.updates or 0
       data.secondsSinceUpdate = entry.lastUpdate and math.max(0, clock() - entry.lastUpdate) or "Never"
+      if storeHistory then
+        data.history = {}
+        local history = entry.history or {}
+        for i = 1, #history do
+          local update = history[((entry.historyHead - i) % 20) + 1]
+          data.history[i] = { operation = update.operation, sequence = update.sequence,
+            secondsAgo = math.max(0, clock() - update.time), state = update.state,
+            truncated = update.truncated }
+        end
+      end
     end
     if entry.kind == "signals" then
       data.emitted, data.recent = entry.emitted, {}

@@ -55,11 +55,12 @@ function fixture(t) {
 test("development launcher leaves build output untouched and follows new hot-reload files", async t => {
   const output = fixture(t);
   const before = fs.readdirSync(output).map(name => [name, fs.readFileSync(path.join(output, name), "utf8")]);
-  const launcher = createLauncher(output, "/extension/assets/inspector", { port: 1234, token: "a".repeat(64) });
+  const launcher = createLauncher(output, "/extension/assets/inspector", { port: 1234, token: "a".repeat(64) }, { storeHistory: true });
   t.after(() => launcher.dispose());
   assert.notEqual(launcher.directory, output);
   assert.equal(path.basename(launcher.directory), path.basename(output), "preserve default save identity");
   assert(fs.lstatSync(path.join(launcher.directory, "main.lua")).isFile());
+  assert.match(fs.readFileSync(path.join(launcher.directory, "conf.lua"), "utf8"), /storeHistory = true/);
   fs.writeFileSync(path.join(output, "new.lua"), "return 42");
   await until(() => fs.existsSync(path.join(launcher.directory, "new.lua")));
   for (const [name, data] of before) assert.equal(fs.readFileSync(path.join(output, name), "utf8"), data);
@@ -163,10 +164,40 @@ io.write(inspect.snapshot(), "\\n")`;
   assert.equal(first.objects[0].data.secondsSinceUpdate, 2);
   assert.equal(first.objects[0].data.subscribers, 1);
   assert.equal(first.objects[0].data.watchers, 1);
+  assert.equal(first.objects[0].data.history, undefined, "history remains opt-in");
   assert.equal(second.objects[0].data.subscribers, 0);
   assert.equal(second.objects[0].data.watchers, 0);
   assert.equal(second.objects[0].data.state.nested.health, 5);
   assert.equal(second.objects[0].data.updates, 2, "direct mutations are not successful API calls");
+});
+
+test("opt-in store history retains only bounded post-update copies", t => {
+  const { spawnSync } = require("node:child_process");
+  const lua = ["lua", "luajit"].find(command => spawnSync(command, ["-v"]).status === 0);
+  if (!lua) return t.skip("Lua interpreter unavailable");
+  const script = `local assets, runtime = arg[1], arg[2]
+package.path = runtime .. '/?.lua;' .. package.path
+local originalLoadfile = loadfile
+loadfile = function(filename)
+  if filename == assets .. '/transport.lua' then return function() return function() return function() end end end end
+  return originalLoadfile(filename)
+end
+local inspect = assert(loadfile(assets .. '/shim.lua'))(assets, 1, 'token', { categories = { stores = true }, storeHistory = true })
+local store = require('tuastore')({ score = 0 })
+for i = 1, 25 do store:update(function(state) state.score = i end) end
+store:set({ score = 26 })
+store:get().score = 99
+io.write(inspect.snapshot())`;
+  const result = spawnSync(lua, ["-", path.resolve(__dirname, "../../assets/inspector"), path.resolve(__dirname, "../../../../vendor/runtime")], { input: script, encoding: "utf8" });
+  assert.equal(result.status, 0, result.stderr);
+  const data = JSON.parse(result.stdout).objects[0].data;
+  assert.equal(data.state.score, 99);
+  assert.equal(data.updates, 26);
+  const history = Object.values(data.history).sort((a, b) => b.sequence - a.sequence);
+  assert.equal(history.length, 20);
+  assert.deepEqual([history[0].operation, history[0].sequence, history[0].state], ["set", 26, '{"score":26}']);
+  assert.equal(history[19].sequence, 7);
+  assert.equal(history[19].state, '{"score":7}');
 });
 
 test("pool inspection records bounded lifetime pressure without changing pool behavior", t => {
@@ -229,7 +260,8 @@ io.write(inspect.snapshot())`;
 
 test("empty categories skip launchers and intervals are clamped", async t => {
   const { normalizeOptions } = require("../../src/inspector/options");
-  assert.deepEqual(normalizeOptions({ categories: ["stores", "unknown", "stores"], updateInterval: 1 }), { categories: ["stores"], updateInterval: 100 });
+  assert.deepEqual(normalizeOptions({ categories: ["stores", "unknown", "stores"], updateInterval: 1 }), { categories: ["stores"], updateInterval: 100, storeHistory: false });
+  assert.equal(normalizeOptions({ storeHistory: true }).storeHistory, true);
   assert.equal(normalizeOptions({ updateInterval: 999999 }).updateInterval, 10000);
   const activity = new ActivityStore();
   const inspector = new InspectorSessions({ activity, enabled: () => true, options: () => ({ categories: [] }) });

@@ -6,6 +6,11 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+### Added
+
+- The development Runtime Inspector can optionally retain the latest 20
+  successful updates per store as bounded, reference-free state snapshots.
+
 ### Fixed
 
 - The opt-in development Runtime Inspector now shows each pool's peak active

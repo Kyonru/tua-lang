@@ -86,6 +86,15 @@ function presentObject(object, prefix, previous) {
       }
       if (data.secondsSinceUpdate !== undefined) details.push({ id: prefix + "/secondsSinceUpdate", label: "Last update", description: duration(data.secondsSinceUpdate), tooltip: `Seconds since successful set/update: ${data.secondsSinceUpdate}` });
       if (data.watcherLimitReached) details.push({ id: prefix + "/watcherLimitReached", label: "Watcher count sampled", description: `${data.watcherKeysSampled} keys`, icon: "info" });
+      if (data.history && typeof data.history === "object") {
+        const history = Object.values(data.history).filter(update => update && typeof update === "object").sort((a, b) => b.sequence - a.sequence).slice(0, 20);
+        details.push({ id: prefix + "/history", label: "Recent updates", description: `${history.length} of 20`, children: history.map(update => ({
+        id: `${prefix}/history/${update.sequence}`,
+        label: `${update.operation === "set" ? "Set" : "Update"} #${update.sequence}`,
+        description: duration(update.secondsAgo),
+        tooltip: `State after ${update.operation}: ${update.state}${update.truncated ? " (truncated)" : ""}`,
+        })) });
+      }
       break;
     }
     case "pools":

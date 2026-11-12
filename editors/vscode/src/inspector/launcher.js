@@ -10,7 +10,7 @@ function luaString(value) { return '"' + [...Buffer.from(value)].map(byte => "\\
 
 function createLauncher(outputDirectory, assetsDirectory, connection, settings) {
   const options = normalizeOptions(settings);
-  const luaOptions = `{ updateInterval = ${options.updateInterval}, categories = { ${options.categories.map(kind => `[${luaString(kind)}] = true`).join(", ")} } }`;
+  const luaOptions = `{ updateInterval = ${options.updateInterval}, storeHistory = ${options.storeHistory}, categories = { ${options.categories.map(kind => `[${luaString(kind)}] = true`).join(", ")} } }`;
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "tua-inspector-"));
   const directory = path.join(root, path.basename(outputDirectory));
   let watcher, timer, reconciliation, disposed = false;

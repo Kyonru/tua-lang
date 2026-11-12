@@ -171,6 +171,18 @@ test("type-specific rows replace raw runtime field dumps without losing essentia
   assert.equal(state.details[0].label, "Async phase");
 });
 
+test("opt-in store history appears as bounded update details", () => {
+  const { presentObject } = require("../../src/inspector/presentation");
+  const store = presentObject({ kind: "stores", data: { state: { score: 26 }, history: [
+    { operation: "set", sequence: 26, secondsAgo: 0.2, state: '{"score":26}', truncated: false },
+    { operation: "update", sequence: 25, secondsAgo: 2, state: '{"score":25}', truncated: false },
+  ] } }, "store");
+  const history = store.details.find(node => node.label === "Recent updates");
+  assert.equal(history.description, "2 of 20");
+  assert.deepEqual(history.children.map(node => node.label), ["Set #26", "Update #25"]);
+  assert.match(history.children[0].tooltip, /"score":26/);
+});
+
 test("empty snapshots and sampling limits remain explicit", () => {
   const tree = new InspectorTree({ entries: new Map([["host", { session: { id: "host", active: true }, snapshot: { objects: [], truncated: true } }]]) });
   assert.deepEqual(tree.getChildren().map(node => node.label), ["No runtime objects yet", "Snapshot limits reached"]);

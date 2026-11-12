@@ -751,6 +751,11 @@
           "maximum": 10000,
           "default": 500,
           "description": "Milliseconds between runtime snapshots. Applies to connected players immediately. Lower values increase collection overhead."
+        },
+        "tua.runtimeInspector.storeHistory": {
+          "type": "boolean",
+          "default": false,
+          "description": "In new inspected development runs, retain the latest 20 successful store updates as bounded state snapshots. Off by default; never included in build or package output."
         }
       }
     },

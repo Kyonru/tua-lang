@@ -137,6 +137,11 @@ not runtime progress.
 Store changes compare consecutive snapshots. Update counters count successful
 `set`/`update` calls; direct mutations through `get()` change the displayed state
 but do not increment that counter. A new connection starts a fresh comparison.
+To inspect the sequence of store updates, enable **Store change history** in
+**Configure Runtime Inspection** or set `tua.runtimeInspector.storeHistory` to
+`true`, then start a new run. The inspector keeps the latest 20 successful
+`set`/`update` calls per store, with a bounded copy of the resulting state.
+History is off by default and does not retain references to game tables.
 Pool pressure counts are lifetime values for each inspected pool. A rejected
 release is a `release` call that returned `false`, including a foreign or
 already released object; a call that raises an error is not counted.

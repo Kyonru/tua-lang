@@ -3,6 +3,7 @@ local directory, port, token, options = ...
 options = options or {}
 local categories = options.categories or { ecs = true, states = true, signals = true, pools = true, stores = true }
 local inspect = assert(loadfile(directory .. "/snapshot.lua"))()
+inspect.configure(options)
 local tick = assert(loadfile(directory .. "/transport.lua"))()(port, token, inspect.snapshot, options.updateInterval)
 local originalRequire = require
 local wrapped = setmetatable({}, { __mode = "k" })
@@ -57,7 +58,7 @@ local function constructor(original, kind, reader)
         local method = object[name]
         object[name] = function(self, ...)
           local result = method(self, ...)
-          inspect.storeUpdated(self)
+          inspect.storeUpdated(self, name)
           return result
         end
       end
