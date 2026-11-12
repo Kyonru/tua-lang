@@ -16,10 +16,10 @@ const inspector = new InspectorSessions({ describeObject: (entry, object) => ori
 const children = []; let logs = "";
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 async function until(predicate) { for (let i = 0; i < 300; i++) { if (predicate()) return; await sleep(50); } throw new Error("Native inspector timed out\n" + logs); }
-const kind = (entry, name) => entry.snapshot?.objects.find(object => object.kind === name)?.data;
+const kind = (entry, name, binding) => entry.snapshot?.objects.find(object => object.kind === name && (!binding || object.origin?.name === binding))?.data;
 async function main() {
   fs.mkdirSync(output);
-  for (const name of ["tuaecs", "tuastatemachine", "tuasignal", "tuaobjectpool", "tuastore", "baton", "tuabehavior"]) fs.copyFileSync(path.resolve(__dirname, "../../../vendor/runtime", name + ".lua"), path.join(output, name + ".lua"));
+  for (const name of ["tuaecs", "tuastatemachine", "tuasignal", "tuaobjectpool", "tuastore", "baton", "tuabehavior", "tuaaudio"]) fs.copyFileSync(path.resolve(__dirname, "../../../vendor/runtime", name + ".lua"), path.join(output, name + ".lua"));
   fs.writeFileSync(path.join(output, "conf.lua"), `io.stdout:setvbuf("no")
 function love.conf(t)
   t.window.visible = false; t.window.width = 64; t.window.height = 64
@@ -46,6 +46,8 @@ local controls = __tua_input({ controls = { confirm = { "key:space" } } })
 local BehaviorTree = require("tuabehavior")
 local tree = BehaviorTree.new(BehaviorTree.sequence({ BehaviorTree.wait(10) }))
 local runner = tree:instance({})
+local __tua_audio_system = require("tuaaudio")
+local audio = __tua_audio_system({ buses = { sfx = { parent = "master", volume = 0.5 } } })
 store:subscribe(function() end)
 store:watch("score", function() end)
 store:set({ score = 1 })
@@ -55,6 +57,7 @@ function love.load(args) player = args[1] or "unknown" end
 function love.update(dt)
   controls:update()
   assert(runner:update(dt) == "running")
+  audio:update(dt)
   data.player = player
   local changed = love.filesystem.read("change.txt")
   if changed then data.x = tonumber(changed) or 42 end
@@ -78,29 +81,31 @@ end
     child.on("exit", code => activity.finish(session, code || 0));
     players.push({ session, child, launch, entry: inspector.entries.get(session.id) });
   }
-  await until(() => players.every(player => kind(player.entry, "signals")?.emitted > 0));
+  await until(() => players.every(player => kind(player.entry, "signals", "bus")?.emitted > 0));
   for (const player of players) {
-    for (const [kindName, name] of Object.entries({ ecs: "world", states: "machine", signals: "bus", pools: "pool", stores: "store", inputs: "controls" })) {
-      const object = player.entry.snapshot.objects.find(item => item.kind === kindName);
+    for (const [kindName, name] of Object.entries({ ecs: "world", states: "machine", signals: "bus", pools: "pool", stores: "store", inputs: "controls", audio: "audio" })) {
+      const object = player.entry.snapshot.objects.find(item => item.kind === kindName && item.origin?.name === name);
       assert.equal(object.origin?.name, name, JSON.stringify(object));
       assert.equal(object.origin.path, path.join(output, "main.lua"));
       assert(object.origin.line > 0);
     }
     assert.equal(kind(player.entry, "states").current, "walking");
-    assert.equal(kind(player.entry, "stores").state.score, 2);
-    assert.equal(kind(player.entry, "stores").state.player, player.session.title);
-    assert.equal(kind(player.entry, "stores").updates, 2);
-    assert.equal(kind(player.entry, "stores").subscribers, 1);
-    assert.equal(kind(player.entry, "stores").watchers, 1);
-    assert.deepEqual(kind(player.entry, "pools"), { active: 1, available: 3, capacity: 4, highWater: 1, failedReleases: 0 });
-    assert.equal(kind(player.entry, "inputs").controls.confirm.value, 0);
-    assert.equal(kind(player.entry, "inputs").controls.confirm.sources, "key:space");
+    assert.equal(kind(player.entry, "stores", "store").state.score, 2);
+    assert.equal(kind(player.entry, "stores", "store").state.player, player.session.title);
+    assert.equal(kind(player.entry, "stores", "store").updates, 2);
+    assert.equal(kind(player.entry, "stores", "store").subscribers, 1);
+    assert.equal(kind(player.entry, "stores", "store").watchers, 1);
+    assert.deepEqual(kind(player.entry, "pools", "pool"), { active: 1, available: 3, capacity: 4, highWater: 1, failedReleases: 0 });
+    assert.equal(kind(player.entry, "inputs", "controls").controls.confirm.value, 0);
+    assert.equal(kind(player.entry, "inputs", "controls").controls.confirm.sources, "key:space");
     const behavior = kind(player.entry, "behaviors");
     assert.equal(behavior.lastStatus, "running");
     assert(behavior.ticks > 0);
     assert(Object.values(behavior.active).some(value => value.includes("0.0 · wait")));
     assert.equal(Object.values(behavior.history)[0].status, "running");
-    const component = Object.values(kind(player.entry, "ecs").entities["1"])[0];
+    assert.equal(kind(player.entry, "audio", "audio").buses.sfx.gain, 0.5);
+    assert.equal(kind(player.entry, "audio", "audio").activeVoices, 0);
+    const component = Object.values(kind(player.entry, "ecs", "world").entities["1"])[0];
     assert.equal(component.player, player.session.title); assert.equal(component.self, "<cycle>");
     assert(component.huge.length < 250);
   }
@@ -140,7 +145,7 @@ end
   assert(!contents.stdout.includes("Tua editor-only inspector"));
   assert(!contents.stdout.includes("shim.lua"));
   assert(!contents.stdout.includes("127.0.0.1"));
-  console.log("Native runtime inspector passed: two players, ECS/state/signal/pool/store/input/behavior snapshots, pause/refresh/resume, live files, independent exit, cleanup, and inspector-free package.");
+  console.log("Native runtime inspector passed: two players, ECS/state/signal/pool/store/input/behavior/audio snapshots, pause/refresh/resume, live files, independent exit, cleanup, and inspector-free package.");
 }
 main().catch(error => { console.error([...inspector.entries.values()].map(entry => ({ title: entry.session.title, status: entry.status, sequence: entry.snapshot?.sequence }))); console.error(error); process.exitCode = 1; }).finally(async () => {
   for (const child of children) if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");

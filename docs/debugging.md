@@ -157,7 +157,7 @@ already released object; a call that raises an error is not counted.
 
 Use **Configure Runtime Inspection** (gear) to choose categories and update
 frequency. `tua.runtimeInspector.categories` accepts `ecs`, `states`, `signals`,
-`pools`, `stores`, `inputs`, and `behaviors` (all enabled by default). Only selected categories receive
+`pools`, `stores`, `inputs`, `behaviors`, and `audio` (all enabled by default). Only selected categories receive
 runtime wrappers; restart running games to change collection. An empty array
 skips the shim entirely on new launches.
 
@@ -172,6 +172,11 @@ and keeps the latest 20 root results with step counts. A completed tree has no
 active nodes; the history still shows its result. This is sampled runtime state,
 not a trace of every node visited during a tick. The shim wraps runners only
 in the temporary editor launcher and never changes packaged games.
+
+The Audio systems category shows effective bus gains, voice counts, music
+state, started/stolen/rejected totals, and up to 64 active cue records. The
+source-linked **Open static Audio Workbench** action shows authored cues and
+scenes separately. The inspector retains no LÖVE Source objects.
 
 `tua.runtimeInspector.updateInterval` sets milliseconds between snapshots:
 100–10,000, default 500 (twice per second). Changes apply to connected players

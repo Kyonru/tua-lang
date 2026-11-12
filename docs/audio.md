@@ -485,6 +485,13 @@ retained when the item still exists. A failed request offers **Retry**. A
 trusted workspace and a configured LÖVE executable are required. Use
 `snapshot()` in your game for runtime voice counts and bus state.
 
+During an opt-in inspected development run, **Audio systems** in the Runtime
+Inspector shows the bus and music snapshot along with up to 64 active cue
+records. Select a running system to see effective gain, active voices, and
+started/stolen/rejected counts. Its **Open static Audio Workbench** action
+returns to authored cues and scenes. Inspection uses the editor's temporary
+launcher and is absent from packaged games.
+
 ## Render A Short Cue With Code
 
 For a short sound effect, use the typed `AudioDesign` global. Render once

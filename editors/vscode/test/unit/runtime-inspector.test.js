@@ -260,6 +260,43 @@ io.write(inspect.snapshot(), '\\n')`;
   assert.equal(Object.keys(reset.active).length, 0);
 });
 
+test("audio inspection samples buses and active cue records without changing playback", t => {
+  const { spawnSync } = require("node:child_process");
+  const lua = ["lua", "luajit"].find(command => spawnSync(command, ["-v"]).status === 0);
+  if (!lua) return t.skip("Lua interpreter unavailable");
+  const script = `local assets, runtime = arg[1], arg[2]
+package.path = runtime .. '/?.lua;' .. package.path
+local originalLoadfile = loadfile
+loadfile = function(filename)
+  if filename == assets .. '/transport.lua' then return function() return function() return function() end end end end
+  return originalLoadfile(filename)
+end
+local inspect = assert(loadfile(assets .. '/shim.lua'))(assets, 1, 'token', { categories = { audio = true } })
+local source = { playing = false }
+function source:clone() return self end
+function source:setPitch(value) self.pitch = value end
+function source:setLooping(value) self.looping = value end
+function source:play() self.playing = true end
+function source:isPlaying() return self.playing end
+function source:setVolume(value) self.volume = value end
+function source:stop() self.playing = false end
+local audio = require('tuaaudio')({ buses = { sfx = { parent = 'master', volume = 0.5 } },
+  cues = { jump = { source = source, bus = 'sfx', priority = 3 } } })
+local voice, result = audio:play('jump')
+assert(result == 'started' and voice:isPlaying() and source.looping == false)
+audio:update(0.01)
+io.write(inspect.snapshot())`;
+  const result = spawnSync(lua, ["-", path.resolve(__dirname, "../../assets/inspector"), path.resolve(__dirname, "../../../../vendor/runtime")], { input: script, encoding: "utf8" });
+  assert.equal(result.status, 0, result.stderr);
+  const objects = JSON.parse(result.stdout).objects;
+  assert.equal(objects.length, 1);
+  const audio = objects[0].data;
+  assert.equal(audio.activeVoices, 1);
+  assert.equal(audio.buses.sfx.gain, 0.5);
+  assert.equal(audio.voices["1"].cue, "jump");
+  assert.equal(audio.voices["1"].bus, "sfx");
+});
+
 test("collection options exclude disabled wrappers and preserve enabled store inspection", t => {
   const { spawnSync } = require("node:child_process");
   const lua = ["lua", "luajit"].find(command => spawnSync(command, ["-v"]).status === 0);

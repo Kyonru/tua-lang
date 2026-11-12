@@ -1,7 +1,7 @@
 -- Loaded exclusively by the editor's temporary development launcher.
 local directory, port, token, options = ...
 options = options or {}
-local categories = options.categories or { ecs = true, states = true, signals = true, pools = true, stores = true, inputs = true, behaviors = true }
+local categories = options.categories or { ecs = true, states = true, signals = true, pools = true, stores = true, inputs = true, behaviors = true, audio = true }
 local inspect = assert(loadfile(directory .. "/snapshot.lua"))()
 inspect.configure(options)
 local tick = assert(loadfile(directory .. "/transport.lua"))()(port, token, inspect.snapshot, options.updateInterval)
@@ -86,6 +86,21 @@ local function behaviorData(runner)
   return { active = active, steps = runner.steps, maxSteps = runner.maxSteps,
     maxDepth = runner.maxDepth, limited = limited }
 end
+local function audioData(system)
+  local data = system:snapshot()
+  local voices = {}
+  for _, record in ipairs(system._voices) do
+    if record.active then
+      voices[#voices + 1] = { cue = record.cueName, bus = record.bus,
+        priority = record.priority, volume = record.volume, pitch = record.pitch,
+        paused = record.paused, stopping = record.stopping }
+      if #voices >= 64 then break end
+    end
+  end
+  data.voices = voices
+  data.voicesLimited = data.activeVoices > 64
+  return data
+end
 local function constructor(original, kind, reader)
   if wrapped[original] then return original end
   local fn = function(...)
@@ -163,6 +178,9 @@ local function instrument(name, module)
       return definition
     end
     wrapped[module.new] = true
+  elseif categories.audio and name == "tuaaudio" and type(module) == "function" then
+    module = constructor(module, "audio", audioData)
+    package.loaded[name] = module
   end
   return module
 end

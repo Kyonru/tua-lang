@@ -173,6 +173,23 @@ test("behavior runner view separates active paths from bounded root-result histo
   assert.deepEqual(behavior.details.at(-1).children.map(node => node.label), ["Tick 3", "Tick 2"]);
 });
 
+test("audio systems show bus gain, active cue records, and link to authored workbench", () => {
+  const origin = { path: "/game/src/audio.tua", file: "src/audio.tua", line: 2, name: "audio", generated: false };
+  const object = { id: 1, kind: "audio", label: "audio 1", origin, data: {
+    activeVoices: 1, started: 1, stolen: 0, rejected: 0, pooledVoices: 0,
+    buses: { sfx: { gain: 0.4, activeVoices: 1, muted: false, fading: false } },
+    voices: { 1: { cue: "jump", bus: "sfx", priority: 3, volume: 0.8, pitch: 1 } },
+    music: { state: "exploration", position: 2 },
+  } };
+  const tree = new InspectorTree({ entries: new Map([["game", { session: { id: "game", active: true }, snapshot: { objects: [object] } }]]) });
+  const item = tree.getChildren()[0].children[0];
+  assert.equal(item.description, "1 active voices · exploration");
+  assert.equal(item.children[0].children[0].description, "1 voices · gain 0.4");
+  assert.equal(item.children[1].children[0].label, "jump #1");
+  const staticLink = item.children.find(node => node.label === "Details").children.find(node => node.label === "Open static Audio Workbench");
+  assert.equal(tree.getTreeItem(staticLink).command.command, "tua.inspector.openStaticPreview");
+});
+
 
 test("inspector can be re-enabled from its toolbar while a retained snapshot hides welcome content", () => {
   const entry = { session: { id: "host", active: false }, status: "disabled", snapshot: { objects: [] } };

@@ -7,12 +7,13 @@ const { matchingInstances } = require("../editor/declaration-target");
 const { RuntimeOrigins } = require("./origins");
 const { loadSourceMapForGeneratedPath } = require("../editor/source-maps");
 const { valueNodes, storeNodes, presentObject } = require("./presentation");
-const GROUPS = [["ecs", "Entities and components", "symbol-struct"], ["states", "State machines", "type-hierarchy"], ["signals", "Signal activity", "radio-tower"], ["pools", "Object pools", "database"], ["stores", "Stores", "symbol-variable"], ["inputs", "Input", "game"], ["behaviors", "Behavior runners", "type-hierarchy"]];
+const GROUPS = [["ecs", "Entities and components", "symbol-struct"], ["states", "State machines", "type-hierarchy"], ["signals", "Signal activity", "radio-tower"], ["pools", "Object pools", "database"], ["stores", "Stores", "symbol-variable"], ["inputs", "Input", "game"], ["behaviors", "Behavior runners", "type-hierarchy"], ["audio", "Audio systems", "unmute"]];
 const STATIC_VIEWS = {
   states: { label: "Open static state diagram", description: "Declared transitions", command: "tua.previewStateMachine" },
   signals: { label: "Open static signal graph", description: "Declared events and uses", command: "tua.showSignalGraph" },
   ecs: { label: "Open static ECS explorer", description: "Declared components and systems", command: "tua.showEcsExplorer" },
   pools: { label: "Open static pool explorer", description: "Declared pools and uses", command: "tua.showObjectPoolExplorer" },
+  audio: { label: "Open static Audio Workbench", description: "Authored cues, buses, and scenes", command: "tua.showAudioExplorer" },
 };
 
 class InspectorTree {

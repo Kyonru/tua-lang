@@ -1,7 +1,7 @@
 "use strict";
 const fs = require("node:fs");
 const path = require("node:path");
-const HELPERS = { stores: ["store", "__tua_store"], pools: ["objectPool", "__tua_object_pool"], signals: ["signal", "__tua_signal", "new"], states: ["stateMachine", "__tua_state_machine", "create"], ecs: ["world"], inputs: ["input", "__tua_input"] };
+const HELPERS = { stores: ["store", "__tua_store"], pools: ["objectPool", "__tua_object_pool"], signals: ["signal", "__tua_signal", "new"], states: ["stateMachine", "__tua_state_machine", "create"], ecs: ["world"], inputs: ["input", "__tua_input"], audio: ["audioSystem", "__tua_audio_system"] };
 
 function inside(root, file) {
   if (!root) return false;

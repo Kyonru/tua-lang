@@ -169,6 +169,30 @@ function presentObject(object, prefix, previous) {
           tooltip: `Root result after tick ${item.tick}; no per-node outcome is inferred` })) });
       break;
     }
+    case "audio": {
+      const buses = data.buses && typeof data.buses === "object" ? data.buses : {};
+      const voices = Object.values(data.voices || {}).filter(value => value && typeof value === "object").slice(0, 64);
+      const music = data.music && typeof data.music === "object" ? data.music : {};
+      summary = `${data.activeVoices ?? 0} active voices · ${music.state || "no music"}`;
+      children = [
+        { id: prefix + "/buses", label: "Buses", description: String(Object.keys(buses).length),
+          children: Object.entries(buses).sort(([a], [b]) => compareKeys(a, b)).map(([name, bus]) => ({
+            id: `${prefix}/buses/${encodeURIComponent(name)}`, label: name,
+            description: `${bus.activeVoices ?? 0} voices · gain ${shortValue(bus.gain)}${bus.muted ? " · muted" : ""}${bus.fading ? " · fading" : ""}`,
+            children: valueNodes(bus, `${prefix}/buses/${encodeURIComponent(name)}`),
+          })) },
+        { id: prefix + "/voices", label: "Active voices", description: `${voices.length}${data.voicesLimited ? "+" : ""}`,
+          children: voices.map((voice, index) => ({ id: `${prefix}/voices/${index}`, label: `${voice.cue || "Unnamed cue"} #${index + 1}`,
+            description: `${voice.bus || "master"} · priority ${shortValue(voice.priority)}${voice.paused ? " · paused" : voice.stopping ? " · stopping" : ""}`,
+            children: [row(`${prefix}/voices/${index}`, "volume", "Volume", voice.volume),
+              row(`${prefix}/voices/${index}`, "pitch", "Pitch", voice.pitch)] })) },
+        { id: prefix + "/music", label: "Music", description: String(music.state || "No scene"), children: valueNodes(music, prefix + "/music") },
+      ];
+      for (const [key, label] of [["started", "Started"], ["stolen", "Stolen"], ["rejected", "Rejected"], ["pooledVoices", "Pooled records"]]) {
+        if (data[key] !== undefined) details.push(row(prefix, key, label, data[key]));
+      }
+      break;
+    }
     default: children = valueNodes(data, prefix);
   }
   return { summary, children, details };
