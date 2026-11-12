@@ -11,5 +11,5 @@
   "behavior-trees.md": ["src/behavior_tree.tua"],
   "ecs.md": ["src/ecs.tua"],
   "object-pooling.md": ["src/object_pool.tua"],
-  "audio.md": ["src/audio.tua"]
+  "audio.md": ["src/audio.tua", "src/audio_design.tua"]
 }

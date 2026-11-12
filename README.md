@@ -132,6 +132,6 @@ Makefile for specialized test and benchmark workflows, and
 - `examples/love-tua` is a mixed Tua/Lua bullet-hell showcase combining ECS,
   object pools, stores, state machines, typed input, and vendored Feel feedback.
 - `examples/audio-system` demonstrates typed audio buses, cues, music scenes,
-  cached waveform and tempo analysis, and the VS Code Audio Explorer data.
+  cached waveform and tempo analysis, and the VS Code Audio Workbench data.
 - `examples/project-model` demonstrates config-aware source/output roots,
   module resolution, and mixed `.tua`/`.lua` builds.
