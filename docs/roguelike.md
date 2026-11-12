@@ -59,6 +59,21 @@ the search to domain-specific grid data. Current paths use unit movement costs;
 Dijkstra is useful when you want an uninformed search or a baseline to compare
 against A-star.
 
+### Preview a seeded map in the editor
+
+Run **Tua: Preview Seeded Map and Route** from the VS Code Command Palette (or
+the Tua editor context menu). The preview uses a small, isolated Tua project and
+your configured LÖVE executable to generate a sample with the bundled `Rot`
+runtime. Change the algorithm, odd map dimensions, seed, or sight radius and
+select **Generate**. The grid marks walls, the route from `(2, 2)` to the
+opposite interior corner, and cells visible from the start. Select a cell or
+use arrow keys to read its coordinates and state. The sample does not execute
+your game or modify its build. Workspace trust and experimental previews must
+be enabled; the configured LÖVE executable must be available.
+
+This view is a way to inspect the helper algorithms. It is not a preview of
+your game's own map, path callback, or current runtime state.
+
 ## Visibility, noise, grammars, and lights
 
 - `Rot.FOV.compute(width, height, x, y, radius, opaque)` returns a visibility

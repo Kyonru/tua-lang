@@ -45,7 +45,7 @@ The extension bundles its server for your platform. A separate CLI is useful for
 
 ## See your project before you run it
 
-The following views were captured from the extension running in VSCodium with its optional Indigo Carbon theme. The [Starfall example](https://github.com/Kyonru/tua-lang/tree/main/examples/starfall) supplies the game source. Static previews read source without executing the game; enable experimental previews with `tua.preview.enabled`.
+The following views were captured from the extension running in VSCodium with its optional Indigo Carbon theme. The [Starfall example](https://github.com/Kyonru/tua-lang/tree/main/examples/starfall) supplies the game source. Static previews read source without executing the game; enable experimental previews with `tua.preview.enabled`. The seeded procedural-map preview runs only its own temporary sample project and never executes your game.
 
 <details>
 <summary><strong>State machine</strong> · Follow states and event routes</summary>

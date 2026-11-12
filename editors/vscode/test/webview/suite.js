@@ -18,6 +18,7 @@ const { ecsExplorerViewModel } = require("../../src/ecs/view-model");
 const { objectPoolExplorerViewModel } = require("../../src/object-pools/view-model");
 const { serverHealthHtml } = require("../../src/health/template");
 const { serverHealthViewModel } = require("../../src/health/view-model");
+const { proceduralPreviewHtml } = require("../../src/procedural/preview");
 
 async function run() {
   const panel = vscode.window.createWebviewPanel("tuaPreviewTest", "Tua Preview Test", vscode.ViewColumn.One, { enableScripts: true });
@@ -359,6 +360,26 @@ async function run() {
     assert.equal(await evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1"), true, "audio explorer should fit a narrow editor");
     await screenshot("audio-explorer-narrow");
     await workbench.send("Emulation.clearDeviceMetricsOverride");
+    const mapRows = ["00000000000", ...Array(9).fill("01111111110"), "00000000000"];
+    const sightRows = ["00000000000", ...Array(9).fill("01111000000"), "00000000000"];
+    const mapOptions = { algorithm: "sidewinder", seed: 817, width: 11, height: 11, radius: 4 };
+    await load(proceduralPreviewHtml(panel.webview, mapOptions, {
+      ...mapOptions, map: mapRows, visible: sightRows, path: [{ x: 2, y: 2 }, { x: 3, y: 2 }],
+    }, "Generated with the bundled Rot runtime."), "Procedural Map Preview");
+    assert.equal(await evaluate("document.querySelectorAll('.cell').length"), 121, "map grid matches dimensions");
+    assert.equal(await evaluate("document.querySelector('.summary').textContent.includes('1 step')"), true, "route length is visible");
+    assert.equal(await evaluate("document.querySelector('.summary').textContent.includes('seed 817')"), true, "displayed data keeps its seed when controls are edited");
+    await evaluate("document.querySelector('.cell[data-x=\"2\"][data-y=\"2\"]').click()");
+    assert.equal(await evaluate("document.getElementById('cell-detail').textContent.includes('2, 2: floor')"), true, "cell detail includes coordinates and terrain");
+    await evaluate("document.activeElement.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true}))");
+    assert.equal(await evaluate("document.activeElement.dataset.x"), "3", "arrow keys move map focus");
+    const mapGenerateCount = messages.filter(message => message.command === "generate").length;
+    await evaluate("document.querySelector('input[name=seed]').value='818';document.getElementById('controls').dispatchEvent(new Event('submit',{cancelable:true,bubbles:true}))");
+    await waitFor(() => messages.filter(message => message.command === "generate").length > mapGenerateCount, "procedural regenerate action");
+    assert.equal(messages.at(-1).options.seed, 818);
+    await screenshot("procedural-map-populated");
+    await load(proceduralPreviewHtml(panel.webview, mapOptions, undefined, "LÖVE unavailable"), "Procedural Map Preview");
+    assert.equal(await evaluate("document.querySelector('[role=status]').textContent"), "LÖVE unavailable");
     const audioReloadCount = messages.filter(message => message.command === "reload").length;
     await load(audioExplorerErrorHtml(panel.webview, new Error("Server unavailable")), "Audio Workbench");
     assert.equal(await evaluate("document.querySelector('[role=alert]').textContent"), "Server unavailable");

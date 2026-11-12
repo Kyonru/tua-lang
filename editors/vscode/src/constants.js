@@ -53,6 +53,7 @@ const COMMANDS = {
   previewStateMachine: "tua.previewStateMachine",
   reloadStateMachinePreview: "tua.previewStateMachine.reload",
   previewBehaviorTree: "tua.previewBehaviorTree",
+  previewProceduralMap: "tua.previewProceduralMap",
   refreshAssets: "tua.assets.refresh",
   previewAsset: "tua.assets.preview",
   openAsset: "tua.assets.open",

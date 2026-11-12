@@ -8,6 +8,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Added
 
+- An experimental seeded procedural-map preview runs a bounded `Rot` sample in
+  a temporary Tua/LÖVE project and shows maze cells, route, and visibility
+  without executing game code or adding preview helpers to release builds.
 - The opt-in development Runtime Inspector now shows live audio bus gains,
   music state, voice counts, and up to 64 active cue records, linked to the
   static Audio Workbench.
