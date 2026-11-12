@@ -8,6 +8,8 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Added
 
+- The opt-in development Runtime Inspector now shows Baton's active input
+  device, bindings, control values, directional pairs, and pointer position.
 - A selected development-inspector state machine can open its static diagram
   with a labeled, age-stamped overlay of its last sampled state.
 - Recent events in the development Runtime Inspector now open their matching

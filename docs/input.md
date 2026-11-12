@@ -84,6 +84,12 @@ Tua completes these names in pair declarations and in `get`, `getRaw`, `down`,
 `pressed`, and `released` calls. Unknown static names and pair references are
 reported before the game runs.
 
+For an inspected development run, enable the **Input** category in the Runtime
+Inspector to see the active device, bindings, and sampled control and pair
+values. The monitor reads the current Baton player; it does not change input
+polling or add instrumentation to game builds and packages. Short press and
+release edges can occur between snapshots.
+
 !!! warning "Pair order is significant"
     Baton calculates x and y from `{ left, right, up, down }`. Tua validates
     that exactly four known controls are present but does not reinterpret their

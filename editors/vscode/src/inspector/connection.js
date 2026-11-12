@@ -3,7 +3,7 @@ const net = require("node:net");
 const { randomBytes, timingSafeEqual } = require("node:crypto");
 const { normalizeOptions } = require("./options");
 const MAX_FRAME = 1024 * 1024;
-const KINDS = new Set(["ecs", "states", "signals", "pools", "stores"]);
+const KINDS = new Set(["ecs", "states", "signals", "pools", "stores", "inputs"]);
 
 function validSnapshot(value) {
   return value?.version === 1 && Number.isSafeInteger(value.sequence) && value.sequence > 0 &&

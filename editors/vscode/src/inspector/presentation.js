@@ -127,6 +127,31 @@ function presentObject(object, prefix, previous) {
       children = valueNodes(entities, prefix + "/entities").map(node => ({ ...node, label: /^\d+$/.test(node.label) ? `Entity ${node.label}` : node.label, description: node.children ? `${node.children.length} ${node.children.length === 1 ? "component" : "components"}` : node.description }));
       break;
     }
+    case "inputs": {
+      const controls = data.controls && typeof data.controls === "object" ? data.controls : {};
+      const pairs = data.pairs && typeof data.pairs === "object" ? data.pairs : {};
+      const held = [...Object.values(controls), ...Object.values(pairs)]
+        .filter(value => value && typeof value === "object" && value.down === true).length;
+      summary = `${data.device || "none"} · ${held} held`;
+      const inputRows = (items, category) => Object.entries(items).sort(([a], [b]) => compareKeys(a, b)).map(([name, value]) => {
+        if (!value || typeof value !== "object") return row(prefix + "/" + category, name, name, value);
+        const scalar = category === "controls" ? shortValue(value.value) : `${shortValue(value.x)}, ${shortValue(value.y)}`;
+        const binding = category === "controls" ? value.sources : value.controls;
+        const sources = typeof binding === "string" ? binding : Array.isArray(binding) ? binding.join(", ") : "";
+        return { id: `${prefix}/${category}/${encodeURIComponent(name)}`, label: name,
+          description: `${scalar}${value.down ? " · held" : ""}`,
+          tooltip: `${name}: ${scalar}${sources ? `\n${category === "controls" ? "Sources" : "Controls"}: ${sources}` : ""}`,
+          children: [row(prefix + "/" + category + "/" + name, "raw", "Raw", category === "controls" ? value.raw : `${shortValue(value.rawX)}, ${shortValue(value.rawY)}`),
+            ...(sources ? [{ id: `${prefix}/${category}/${encodeURIComponent(name)}/bindings`, label: category === "controls" ? "Sources" : "Controls", description: sources }] : [])] };
+      });
+      children = [
+        { id: prefix + "/controls", label: "Controls", description: String(Object.keys(controls).length), children: inputRows(controls, "controls") },
+        { id: prefix + "/pairs", label: "Directional pairs", description: String(Object.keys(pairs).length), children: inputRows(pairs, "pairs") },
+      ];
+      if (data.pointer && typeof data.pointer === "object") children.push({ id: prefix + "/pointer", label: "Pointer", description: `${shortValue(data.pointer.x)}, ${shortValue(data.pointer.y)}`, children: valueNodes(data.pointer, prefix + "/pointer") });
+      if (data.deadzone !== undefined) details.push(row(prefix, "deadzone", "Deadzone", data.deadzone));
+      break;
+    }
     default: children = valueNodes(data, prefix);
   }
   return { summary, children, details };

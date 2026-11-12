@@ -732,7 +732,8 @@
               "states",
               "signals",
               "pools",
-              "stores"
+              "stores",
+              "inputs"
             ]
           },
           "uniqueItems": true,
@@ -741,7 +742,8 @@
             "states",
             "signals",
             "pools",
-            "stores"
+            "stores",
+            "inputs"
           ],
           "description": "Runtime categories instrumented in new inspected runs. Disabled categories receive no wrappers. Restart running games after changing; an empty list loads no shim."
         },
@@ -2114,7 +2116,7 @@
     "viewsWelcome": [
       {
         "view": "tua.inspector",
-        "contents": "Inspect live entities, state machines, signal activity, object pools, and stores.\n[Enable Runtime Inspection](command:tua.inspector.enable)\nApplies to new local development runs. No inspector code is added to packaged games.",
+        "contents": "Inspect live entities, state machines, signal activity, object pools, stores, and input.\n[Enable Runtime Inspection](command:tua.inspector.enable)\nApplies to new local development runs. No inspector code is added to packaged games.",
         "when": "!config.tua.runtimeInspector.enabled"
       },
       {

@@ -7,7 +7,7 @@ const { matchingInstances } = require("../editor/declaration-target");
 const { RuntimeOrigins } = require("./origins");
 const { loadSourceMapForGeneratedPath } = require("../editor/source-maps");
 const { valueNodes, storeNodes, presentObject } = require("./presentation");
-const GROUPS = [["ecs", "Entities and components", "symbol-struct"], ["states", "State machines", "type-hierarchy"], ["signals", "Signal activity", "radio-tower"], ["pools", "Object pools", "database"], ["stores", "Stores", "symbol-variable"]];
+const GROUPS = [["ecs", "Entities and components", "symbol-struct"], ["states", "State machines", "type-hierarchy"], ["signals", "Signal activity", "radio-tower"], ["pools", "Object pools", "database"], ["stores", "Stores", "symbol-variable"], ["inputs", "Input", "game"]];
 const STATIC_VIEWS = {
   states: { label: "Open static state diagram", description: "Declared transitions", command: "tua.previewStateMachine" },
   signals: { label: "Open static signal graph", description: "Declared events and uses", command: "tua.showSignalGraph" },

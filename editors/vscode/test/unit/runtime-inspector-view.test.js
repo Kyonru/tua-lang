@@ -134,6 +134,22 @@ test("recent live signal events open their matching static graph entry", () => {
   assert.deepEqual(command.arguments, [{ eventName: "hit", busName: "enemy", busUri: "file:///game/src/events.tua" }]);
 });
 
+test("input monitor shows sampled values, bindings, and active device", () => {
+  const object = { id: 1, kind: "inputs", label: "inputs 1", data: {
+    device: "kbm", deadzone: 0.25,
+    controls: { confirm: { value: 1, raw: 1, down: true, sources: "key:space, button:a" } },
+    pairs: { move: { x: 0.5, y: 0, rawX: 0.5, rawY: 0, down: true, controls: "left, right, up, down" } },
+  } };
+  const tree = new InspectorTree({ entries: new Map([["host", { session: { id: "host", active: true }, snapshot: { objects: [object] } }]]) });
+  const group = tree.getChildren()[0];
+  assert.equal(group.label, "Input");
+  const input = group.children[0];
+  assert.equal(input.description, "kbm · 2 held");
+  assert.equal(input.children[0].children[0].description, "1 · held");
+  assert.match(input.children[0].children[0].tooltip, /key:space, button:a/);
+  assert.equal(input.children[1].children[0].description, "0.5, 0 · held");
+});
+
 
 test("inspector can be re-enabled from its toolbar while a retained snapshot hides welcome content", () => {
   const entry = { session: { id: "host", active: false }, status: "disabled", snapshot: { objects: [] } };

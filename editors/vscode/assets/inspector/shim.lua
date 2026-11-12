@@ -1,7 +1,7 @@
 -- Loaded exclusively by the editor's temporary development launcher.
 local directory, port, token, options = ...
 options = options or {}
-local categories = options.categories or { ecs = true, states = true, signals = true, pools = true, stores = true }
+local categories = options.categories or { ecs = true, states = true, signals = true, pools = true, stores = true, inputs = true }
 local inspect = assert(loadfile(directory .. "/snapshot.lua"))()
 inspect.configure(options)
 local tick = assert(loadfile(directory .. "/transport.lua"))()(port, token, inspect.snapshot, options.updateInterval)
@@ -47,6 +47,27 @@ local function storeData(value)
   end
   return { state = value._state, subscribers = #value._listeners,
     watchers = watchers, watcherKeysSampled = keys, watcherLimitReached = keys >= 128 }
+end
+local function inputData(player)
+  local controls, pairs = {}, {}
+  local count = 0
+  for name, control in next, player._controls do
+    if count >= 64 then controls["<remaining>"] = "Control limit (64)"; break end
+    count = count + 1
+    controls[name] = { value = control.value, raw = control.rawValue, down = control.down,
+      sources = table.concat(control.sources, ", ") }
+  end
+  count = 0
+  for name, pair in next, player._pairs do
+    if count >= 64 then pairs["<remaining>"] = "Pair limit (64)"; break end
+    count = count + 1
+    pairs[name] = { x = pair.x, y = pair.y, rawX = pair.rawX, rawY = pair.rawY,
+      down = pair.down, controls = table.concat(pair.controls, ", ") }
+  end
+  local pointer = player.config.pointer and { x = player._pointerX, y = player._pointerY,
+    dx = player._pointerDX, dy = player._pointerDY } or nil
+  return { device = player:getActiveDevice(), deadzone = player.config.deadzone,
+    controls = controls, pairs = pairs, pointer = pointer }
 end
 local function constructor(original, kind, reader)
   if wrapped[original] then return original end
@@ -101,6 +122,8 @@ local function instrument(name, module)
   elseif categories.pools and name == "tuaobjectpool" and type(module) == "function" then
     module = constructor(module, "pools", poolData)
     package.loaded[name] = module
+  elseif categories.inputs and name == "baton" and type(module) == "table" and type(module.new) == "function" then
+    module.new = constructor(module.new, "inputs", inputData)
   end
   return module
 end

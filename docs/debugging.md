@@ -157,9 +157,15 @@ already released object; a call that raises an error is not counted.
 
 Use **Configure Runtime Inspection** (gear) to choose categories and update
 frequency. `tua.runtimeInspector.categories` accepts `ecs`, `states`, `signals`,
-`pools`, and `stores` (all enabled by default). Only selected categories receive
+`pools`, `stores`, and `inputs` (all enabled by default). Only selected categories receive
 runtime wrappers; restart running games to change collection. An empty array
 skips the shim entirely on new launches.
+
+The Input category samples each Baton's active device, configured control
+sources, post-deadzone values, directional pairs, and pointer position when
+enabled. Values are sampled at the inspector interval, so one-frame press and
+release edges may fall between snapshots. No input data is collected unless
+runtime inspection is enabled for a development run.
 
 `tua.runtimeInspector.updateInterval` sets milliseconds between snapshots:
 100–10,000, default 500 (twice per second). Changes apply to connected players

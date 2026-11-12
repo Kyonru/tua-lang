@@ -7,7 +7,7 @@ const path = require("node:path");
 const { RuntimeOrigins, bindingAtLine } = require("../../src/inspector/origins");
 
 test("runtime binding names cover typed stores, pools, signals, states, worlds and multiline arguments", () => {
-  for (const [kind, helper] of [["stores", "store"], ["pools", "objectPool"], ["signals", "signal"], ["states", "stateMachine"], ["ecs", "ecs.world"]]) {
+  for (const [kind, helper] of [["stores", "store"], ["pools", "objectPool"], ["signals", "signal"], ["states", "stateMachine"], ["ecs", "ecs.world"], ["inputs", "input"]]) {
     assert.deepEqual(bindingAtLine(`local player: any = ${helper}({\n  score = 0\n})\n`, 3, kind), { name: "player", line: 1, character: 6 });
     assert.equal(bindingAtLine(`shared.player = ${helper}({})`, 1, kind).name, "shared.player");
   }

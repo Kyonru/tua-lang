@@ -1,5 +1,5 @@
 "use strict";
-const CATEGORIES = ["ecs", "states", "signals", "pools", "stores"];
+const CATEGORIES = ["ecs", "states", "signals", "pools", "stores", "inputs"];
 function normalizeOptions(value = {}) {
   const categories = Array.isArray(value.categories) ? CATEGORIES.filter(kind => value.categories.includes(kind)) : [...CATEGORIES];
   const interval = Number(value.updateInterval);
