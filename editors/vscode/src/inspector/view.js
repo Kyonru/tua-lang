@@ -49,6 +49,17 @@ class InspectorTree {
           const origin = object.origin;
           const { summary, children, details } = presentObject(object, id,
             entry.previousSnapshot?.objects.find(previous => previous.kind === kind && previous.id === object.id)?.data);
+          if (kind === "signals") {
+            const recent = children.find(child => child.label === "Recent events");
+            for (const event of recent?.children || []) {
+              event.icon = "link-external";
+              event.command = "tua.showSignalGraph";
+              event.arguments = [{ eventName: event.label,
+                busName: origin?.name,
+                busUri: origin?.path && !origin.generated ? vscode.Uri.file(origin.path).toString() : undefined }];
+              event.tooltip += "\nOpen declarations and handlers in the static Signal Graph";
+            }
+          }
           const name = origin?.name || object.label;
           const duplicate = objects.some(other => other.id !== object.id && (other.origin?.name || other.label) === name);
           if (origin) details.unshift({ id: id + ":source", label: "Creation site", description: `${origin.file}:${origin.line}`, tooltip: `${origin.path}:${origin.line}`, icon: "go-to-file", command: "tua.inspector.goToSource", arguments: [{ origin }] });

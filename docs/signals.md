@@ -227,6 +227,11 @@ the scene can't leak handlers onto a shared bus.
   across the project. It filters by bus, file, listener, or emitter, shows
   conflicting payload schemas, and can create a typed listener or an empty
   `declare` from a known payload.
+- **Live-to-source navigation:** with the optional development
+  [Runtime Inspector](debugging.md#live-runtime-inspector) enabled, select a
+  recent emitted event to open its declaration, listeners, and emitters in the
+  static Signal Graph. When several buses use the same name and the source
+  cannot disambiguate them, the graph filters to that name for you to choose.
 
 ## Runtime And Overrides
 

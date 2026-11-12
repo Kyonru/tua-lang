@@ -8,6 +8,7 @@ Module._load = function(id, ...args) {
     EventEmitter: class { constructor() { this.event = () => {}; } dispose() {} },
     TreeItem: class { constructor(label) { this.label = label; } },
     TreeItemCollapsibleState: { Collapsed: 1, Expanded: 2, None: 0 }, ThemeIcon: class {},
+    Uri: { file: path => ({ toString: () => `file://${path}` }) },
   };
   return original.call(this, id, ...args);
 };
@@ -118,6 +119,18 @@ test("source-mapped signal, ECS and pool entries link to their static explorers"
     const link = item.children.find(node => node.label === "Details").children.find(node => node.label === label);
     assert.deepEqual(tree.getTreeItem(link).command.arguments, [{ origin, kind }]);
   }
+});
+
+test("recent live signal events open their matching static graph entry", () => {
+  const origin = { path: "/game/src/events.tua", file: "src/events.tua", line: 2, name: "enemy", generated: false };
+  const entry = { session: { id: "host", active: true }, snapshot: { objects: [{ id: 1, kind: "signals", label: "signals 1", origin,
+    data: { listeners: { hit: 1 }, emitted: 1, recent: { 1: { name: "hit", sequence: 1 } } } }] } };
+  const tree = new InspectorTree({ entries: new Map([["host", entry]]) });
+  const object = tree.getChildren()[0].children[0];
+  const recent = object.children.find(node => node.label === "Recent events");
+  const command = tree.getTreeItem(recent.children[0]).command;
+  assert.equal(command.command, "tua.showSignalGraph");
+  assert.deepEqual(command.arguments, [{ eventName: "hit", busName: "enemy", busUri: "file:///game/src/events.tua" }]);
 });
 
 

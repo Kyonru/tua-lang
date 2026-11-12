@@ -6,14 +6,15 @@ const { displayUriPath, openLocationMessage } = require("../shared/locations");
 const { createRenderGate } = require("../shared/render-gate");
 const { createGraphViewport } = require("../shared/graph-viewport");
 const { escapeHtml, jsonForHtml, webviewDocument } = require("../shared/webview");
+const { signalEventFocus } = require("./focus");
 
 let graphPanel;
 let latestGraphViewModel;
 const renderGate = createRenderGate();
 
 function registerSignalGraphFeature({ getClient }) {
-  const command = vscode.commands.registerCommand(COMMANDS.showSignalGraph, () =>
-    showSignalGraph({ getClient }),
+  const command = vscode.commands.registerCommand(COMMANDS.showSignalGraph, (selection) =>
+    showSignalGraph({ getClient }, selection),
   );
 
   return vscode.Disposable.from(command, {
@@ -25,7 +26,7 @@ function registerSignalGraphFeature({ getClient }) {
   });
 }
 
-async function showSignalGraph({ getClient }) {
+async function showSignalGraph({ getClient }, selection) {
   const client = getClient();
 
   if (!client) {
@@ -54,7 +55,7 @@ async function showSignalGraph({ getClient }) {
     );
   }
 
-  await renderSignalGraph(graphPanel, client);
+  await renderSignalGraph(graphPanel, client, selection);
 }
 
 async function handleGraphMessage(message, { getClient }) {
@@ -80,7 +81,7 @@ async function handleGraphMessage(message, { getClient }) {
   await openLocationMessage(message);
 }
 
-async function renderSignalGraph(panel, client) {
+async function renderSignalGraph(panel, client, selection) {
   const request = renderGate.begin();
   panel.webview.html = signalGraphLoadingHtml(panel.webview);
 
@@ -88,6 +89,7 @@ async function renderSignalGraph(panel, client) {
     const graph = await client.sendRequest("tua/signalGraph", null);
     if (!renderGate.isCurrent(request) || graphPanel !== panel) return;
     const viewModel = signalGraphViewModel(graph);
+    Object.assign(viewModel, signalEventFocus(viewModel.events, selection));
     viewModel.workspaceKey = (vscode.workspace.workspaceFolders || [])
       .map((folder) => folder.uri.toString())
       .sort()
@@ -371,12 +373,12 @@ function signalGraphHtml(webview, graph) {
     const segmentButtons = Array.from(document.querySelectorAll("[data-mode]"));
     const saved = vscode.getState()?.signalGraph;
     const restored = saved?.workspaceKey === (graphData.workspaceKey || "") ? saved : null;
-    let mode = ["all", "listeners", "emitters"].includes(restored?.mode) ? restored.mode : "all";
-    let eventQuery = typeof restored?.eventQuery === "string" ? restored.eventQuery : "";
-    let busFilter = typeof restored?.busFilter === "string" ? restored.busFilter : "";
-    let fileFilter = typeof restored?.fileFilter === "string" ? restored.fileFilter : "";
-    let selectedEvent = restored?.selectedEvent || graphData.events[0]?.id || null;
-    let selectedFile = restored?.selectedFile || null;
+    let mode = graphData.focusEventName ? "all" : ["all", "listeners", "emitters"].includes(restored?.mode) ? restored.mode : "all";
+    let eventQuery = graphData.focusEventName || (typeof restored?.eventQuery === "string" ? restored.eventQuery : "");
+    let busFilter = graphData.focusEventName ? "" : typeof restored?.busFilter === "string" ? restored.busFilter : "";
+    let fileFilter = graphData.focusEventName ? "" : typeof restored?.fileFilter === "string" ? restored.fileFilter : "";
+    let selectedEvent = graphData.focusEventId || restored?.selectedEvent || graphData.events[0]?.id || null;
+    let selectedFile = graphData.focusEventName ? null : restored?.selectedFile || null;
     let viewportScale = Number.isFinite(restored?.scale) ? restored.scale : 1;
     const viewport = createGraphViewport(graphScroll, root, {
       initialScale: viewportScale,
