@@ -70,8 +70,9 @@ async function runSpritePreviewTests() {
   assert.match(hoverText(assetHovers), /command:tua\.assets\.preview/);
   assert(assetHoverLink?.isTrusted.enabledCommands.includes("tua.assets.preview"));
   await waitForEvent(
-    (event) => event.type === "assetInventory.request" && event.count > 0,
-    "asset hover action inventory lookup",
+    (event) => event.type === "definition.request" && event.uri === document.uri.toString() &&
+      event.docVersion === document.version,
+    "asset hover action definition lookup",
     beforeAssetHover,
   );
 

@@ -355,7 +355,7 @@ function hover(message) {
 
 function definition(message) {
   const context = requestContext(message);
-  const declaration = declarationLocation(context.uri, context.word);
+  const declaration = assetDefinition(context) || declarationLocation(context.uri, context.word);
 
   log({
     type: "definition.request",
@@ -363,6 +363,22 @@ function definition(message) {
     id: message.id,
   });
   respond(message.id, declaration);
+}
+
+function assetDefinition(context) {
+  const quotedAsset = /(["'])(assets\/[A-Za-z0-9_./-]+\.(?:png|jpg|jpeg|wav|ogg))\1/g;
+  let match;
+  while ((match = quotedAsset.exec(context.line))) {
+    const start = match.index + 1;
+    if (context.position.character < start || context.position.character > start + match[2].length) continue;
+    const source = fileURLToPath(context.uri);
+    const asset = path.resolve(path.dirname(source), match[2]);
+    if (!fs.existsSync(asset)) return null;
+    return { uri: pathToFileURL(asset).toString(), range: {
+      start: { line: 0, character: 0 }, end: { line: 0, character: 0 },
+    } };
+  }
+  return null;
 }
 
 function references(message) {
