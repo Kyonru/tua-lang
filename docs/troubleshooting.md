@@ -30,6 +30,8 @@ version; it does not identify a separately selected editor server.
   For example, `Text:set(...)` returns no receiver; use a separate `text:getWidth()`
   call instead of `text:set(...):getWidth()`.
 - Run **Tua: Show Language Server Health** to inspect queues and warming state.
+  A rate or latency shown as **No samples** has not been measured yet; it does
+  not mean the operation took zero time or achieved a zero-percent hit rate.
   Note whether the delay happens on first open, after every edit, after changing
   an import, or only while saving. Cold and warm requests exercise different work.
 - If testing optional inline completion, distinguish normal menu completion,

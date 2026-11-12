@@ -197,6 +197,10 @@ async function run() {
         assert.equal(await evaluate("(() => { const segments = document.querySelector('.segments'); return window.innerWidth >= 650 || segments.scrollWidth <= segments.clientWidth + 1; })()"), true,
           "module filters must wrap instead of scrolling when the webview is narrow");
       }
+      if (title === "Server Health") {
+        assert.equal(await evaluate("[...document.querySelectorAll('.metric')].find(item => item.textContent.includes('Recent p95'))?.querySelector('strong')?.textContent"),
+          "No samples", "unmeasured latency must not appear as zero milliseconds");
+      }
       await screenshot(title.toLowerCase().replaceAll(" ", "-") + "-narrow");
       await workbench.send("Emulation.clearDeviceMetricsOverride");
     }

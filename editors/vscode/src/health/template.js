@@ -38,11 +38,11 @@ function serverHealthHtml(webview, viewModel) {
     <main>
       <section class="metrics" aria-label="Server health summary">
         ${metric("Revision", viewModel.revision)}
-        ${metric("Warm coverage", `${viewModel.warm.coveragePercent}%`)}
+        ${metric("Warm coverage", viewModel.warm.discovered ? `${viewModel.warm.coveragePercent}%` : "No files")}
         ${metric("Queue depth", viewModel.queue.total)}
-        ${metric("Cache hit rate", `${viewModel.cache.hitRate}%`)}
+        ${metric("Cache hit rate", rateLabel(viewModel.cache))}
         ${metric("Stale results", viewModel.stale.total)}
-        ${metric("Recent p95", `${viewModel.latency.p95Ms}ms`)}
+        ${metric("Recent p95", latencyLabel(viewModel.latency.p95Ms, viewModel.latency.recentCount))}
       </section>
       <section class="grid">
         <article>
@@ -70,10 +70,10 @@ function serverHealthHtml(webview, viewModel) {
         <article>
           <h2>Latency</h2>
           ${kv("Samples", viewModel.latency.recentCount)}
-          ${kv("p50", `${viewModel.latency.p50Ms}ms`)}
-          ${kv("p95", `${viewModel.latency.p95Ms}ms`)}
-          ${kv("p99", `${viewModel.latency.p99Ms}ms`)}
-          ${kv("Max", `${viewModel.latency.maxMs}ms`)}
+          ${kv("p50", latencyLabel(viewModel.latency.p50Ms, viewModel.latency.recentCount))}
+          ${kv("p95", latencyLabel(viewModel.latency.p95Ms, viewModel.latency.recentCount))}
+          ${kv("p99", latencyLabel(viewModel.latency.p99Ms, viewModel.latency.recentCount))}
+          ${kv("Max", latencyLabel(viewModel.latency.maxMs, viewModel.latency.recentCount))}
         </article>
       </section>
       <section class="tables">
@@ -110,6 +110,14 @@ function kv(label, value) {
   return `<div class="kv"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`;
 }
 
+function rateLabel({ hits, misses, hitRate }) {
+  return hits + misses > 0 ? `${hitRate}%` : "No samples";
+}
+
+function latencyLabel(milliseconds, count) {
+  return count > 0 ? `${milliseconds}ms` : "No samples";
+}
+
 function snapshotLabel(viewModel) {
   if (viewModel.warm.snapshotReadyRevision !== null) {
     return `ready r${viewModel.warm.snapshotReadyRevision}`;
@@ -118,7 +126,7 @@ function snapshotLabel(viewModel) {
     return `failed r${viewModel.warm.snapshotFailedRevision}`;
   }
 
-  return "pending";
+  return viewModel.warm.enabled ? "pending" : "not enabled";
 }
 
 function cacheTable(rows) {
@@ -128,7 +136,7 @@ function cacheTable(rows) {
       row.label,
       row.hits,
       row.misses,
-      `${row.hitRate}%`,
+      rateLabel(row),
     ]),
   );
 }
@@ -139,8 +147,8 @@ function latencyTable(rows) {
     rows.map((row) => [
       row.method,
       row.count,
-      `${row.p95Ms}ms`,
-      `${row.maxMs}ms`,
+      latencyLabel(row.p95Ms, row.count),
+      latencyLabel(row.maxMs, row.count),
     ]),
   );
 }
