@@ -755,6 +755,134 @@ fn package_web_copies_only_player_files_and_embeds_the_game_archive() {
     );
 }
 
+#[test]
+fn custom_package_helper() {
+    if std::env::var("TUA_TEST_PACKAGE_HELPER").ok().as_deref() != Some("1") {
+        return;
+    }
+    let Ok(output) = std::env::var("TUA_PACKAGE_OUTPUT_DIR") else {
+        return;
+    };
+    let mode = std::env::var("TUA_TEST_PACKAGE_MODE").unwrap_or_default();
+    if mode == "timeout" {
+        thread::sleep(Duration::from_secs(2));
+        return;
+    }
+    if mode == "empty" {
+        return;
+    }
+    let archive = std::env::var("TUA_PACKAGE_ARCHIVE").unwrap();
+    let archive_bytes = fs::read(&archive).unwrap();
+    assert!(archive_bytes.starts_with(b"PK"));
+    assert_eq!(std::env::var("TUA_PACKAGE_NAME").unwrap(), "Custom Game");
+    assert_eq!(std::env::var("TUA_PACKAGE_TARGET").unwrap(), "portable");
+    fs::write(
+        Path::new(&output).join("result.txt"),
+        format!("{} bytes", archive_bytes.len()),
+    )
+    .unwrap();
+    if mode == "fail" {
+        panic!("simulated package failure");
+    }
+}
+
+#[test]
+fn custom_package_targets_list_and_publish_atomically() {
+    let temp = TempDir::new("package-custom");
+    write_packaging_project(&temp);
+    let executable = std::env::current_exe().unwrap();
+    let program = serde_json::to_string(&executable.to_string_lossy().to_string()).unwrap();
+    let pipeline = format!("[[package_pipelines]]\nname = \"portable\"\nlabel = \"Portable port\"\ncommand = [{program}, \"--exact\", \"custom_package_helper\", \"--nocapture\"]\n");
+    let config_path = temp.path().join(CONFIG_FILE);
+    let config = fs::read_to_string(&config_path)
+        .unwrap()
+        .replace("package_pipelines = []", &pipeline);
+    fs::write(&config_path, config).unwrap();
+
+    let listed = tua()
+        .args(["package", "--list-targets"])
+        .current_dir(temp.path())
+        .output()
+        .unwrap();
+    assert!(listed.status.success(), "{listed:?}");
+    let targets: Value = serde_json::from_slice(&listed.stdout).unwrap();
+    assert_eq!(targets[0]["target"], "custom:portable");
+    assert_eq!(targets[0]["label"], "Portable port");
+    assert!(
+        !temp.path().join("build/main.lua").exists(),
+        "listing must not build"
+    );
+
+    let missing = tua()
+        .args(["package", "--target", "custom:unknown"])
+        .current_dir(temp.path())
+        .output()
+        .unwrap();
+    assert!(!missing.status.success());
+    assert!(
+        !temp.path().join("build/main.lua").exists(),
+        "unknown target must fail before building"
+    );
+    let default = tua()
+        .arg("package")
+        .current_dir(temp.path())
+        .env("TUA_TEST_PACKAGE_HELPER", "1")
+        .output()
+        .unwrap();
+    assert!(default.status.success(), "{default:?}");
+    assert!(
+        !temp.path().join("dist/custom/portable").exists(),
+        "the default target must not run the custom command"
+    );
+
+    let package = || {
+        let mut command = tua();
+        command
+            .args([
+                "package",
+                "--target",
+                "custom:portable",
+                "--name",
+                "Custom Game",
+            ])
+            .current_dir(temp.path())
+            .env("TUA_TEST_PACKAGE_HELPER", "1");
+        command
+    };
+    let success = package().output().unwrap();
+    assert!(success.status.success(), "{success:?}");
+    let destination = temp
+        .path()
+        .join("dist/custom/portable/Custom Game/result.txt");
+    let original = fs::read(&destination).unwrap();
+    assert!(String::from_utf8_lossy(&success.stdout)
+        .contains("packaged dist/custom/portable/Custom Game"));
+
+    for mode in ["fail", "empty"] {
+        let failed = package()
+            .env("TUA_TEST_PACKAGE_MODE", mode)
+            .output()
+            .unwrap();
+        assert!(!failed.status.success(), "{mode}: {failed:?}");
+        assert_eq!(
+            fs::read(&destination).unwrap(),
+            original,
+            "{mode} must preserve the previous package"
+        );
+    }
+    let short_timeout = fs::read_to_string(&config_path)
+        .unwrap()
+        .replace("command = [", "timeout_ms = 10\ncommand = [");
+    fs::write(&config_path, short_timeout).unwrap();
+    let timed_out = package()
+        .env("TUA_TEST_PACKAGE_MODE", "timeout")
+        .output()
+        .unwrap();
+    assert!(!timed_out.status.success());
+    assert!(String::from_utf8_lossy(&timed_out.stderr).contains("timed out"));
+    assert_eq!(fs::read(&destination).unwrap(), original);
+}
+
 #[cfg(unix)]
 #[test]
 fn dev_prepares_a_hot_reloadable_build_and_exits_with_the_game() {

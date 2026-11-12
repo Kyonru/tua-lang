@@ -33,6 +33,7 @@ extension = \"tua\"
 emit_maps = true
 type_libraries = []
 asset_pipelines = []
+package_pipelines = []
 
 [test]
 source = \"\"
@@ -118,6 +119,7 @@ pub struct ProjectConfig {
     pub test: TestConfig,
     pub type_libraries: Vec<TypeLibraryConfig>,
     pub asset_pipelines: Vec<AssetPipelineConfig>,
+    pub package_pipelines: Vec<PackagePipelineConfig>,
     pub emit: EmitConfig,
     pub format: FormatConfig,
     pub jit: JitConfig,
@@ -138,6 +140,7 @@ impl Default for ProjectConfig {
             test: TestConfig::default(),
             type_libraries: Vec::new(),
             asset_pipelines: Vec::new(),
+            package_pipelines: Vec::new(),
             emit: EmitConfig::default(),
             format: FormatConfig::default(),
             jit: JitConfig::default(),
@@ -196,6 +199,23 @@ pub struct AssetPipelineConfig {
     pub max_stderr_bytes: u64,
     #[serde(default)]
     pub options: BTreeMap<String, serde_json::Value>,
+}
+
+/// A package command selected explicitly with `tua package --target custom:<name>`.
+/// It receives the built archive and an empty staging directory through env vars.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct PackagePipelineConfig {
+    pub name: String,
+    #[serde(default)]
+    pub label: String,
+    pub command: Vec<String>,
+    #[serde(default = "default_package_pipeline_timeout_ms")]
+    pub timeout_ms: u64,
+}
+
+const fn default_package_pipeline_timeout_ms() -> u64 {
+    300_000
 }
 
 const fn default_asset_pipeline_timeout_ms() -> u64 {

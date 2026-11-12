@@ -69,6 +69,60 @@ fn parse_config_inner(input: &str) -> Result<ProjectConfig, ConfigParseError> {
 
     let config: ProjectConfig =
         toml::from_str(input).map_err(|error| parse_error(input, error.span(), error.message()))?;
+    if config.package_pipelines.len() > 64 {
+        return Err(parse_error(
+            input,
+            None,
+            "at most 64 package pipelines are supported",
+        ));
+    }
+    let mut package_names = BTreeSet::new();
+    for pipeline in &config.package_pipelines {
+        if pipeline.name.is_empty()
+            || pipeline.name.len() > 64
+            || !pipeline
+                .name
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
+        {
+            return Err(parse_error(
+                input,
+                None,
+                "package pipeline names must use ASCII letters, digits, `-`, or `_`",
+            ));
+        }
+        if !package_names.insert(pipeline.name.as_str()) {
+            return Err(parse_error(
+                input,
+                None,
+                "package pipeline names must be unique",
+            ));
+        }
+        if pipeline.label.len() > 100 || pipeline.label.chars().any(char::is_control) {
+            return Err(parse_error(
+                input,
+                None,
+                "package pipeline label must be at most 100 characters without controls",
+            ));
+        }
+        if pipeline.command.is_empty()
+            || pipeline.command[0].is_empty()
+            || pipeline.command.iter().any(|arg| arg.contains('\0'))
+        {
+            return Err(parse_error(
+                input,
+                None,
+                "package pipeline command needs a program and cannot contain NUL",
+            ));
+        }
+        if pipeline.timeout_ms == 0 || pipeline.timeout_ms > 1_800_000 {
+            return Err(parse_error(
+                input,
+                None,
+                "package pipeline timeout_ms must be between 1 and 1800000",
+            ));
+        }
+    }
     if config.test.source.components().any(|part| {
         !matches!(
             part,
@@ -530,6 +584,22 @@ mod tests {
                 "schema default should match {}",
                 setting.path
             );
+        }
+    }
+
+    #[test]
+    fn package_pipelines_require_safe_unique_names_and_commands() {
+        let configured = "[[package_pipelines]]\nname = \"switch\"\nlabel = \"Switch homebrew\"\ncommand = [\"python3\", \"scripts/package.py\"]\n";
+        let parsed = parse_config(configured).unwrap();
+        assert_eq!(parsed.package_pipelines[0].name, "switch");
+        assert_eq!(parsed.package_pipelines[0].timeout_ms, 300_000);
+        for invalid in [
+            "[[package_pipelines]]\nname = \"../escape\"\ncommand = [\"tool\"]\n",
+            "[[package_pipelines]]\nname = \"switch\"\ncommand = []\n",
+            "[[package_pipelines]]\nname = \"switch\"\ncommand = [\"tool\"]\n[[package_pipelines]]\nname = \"switch\"\ncommand = [\"tool\"]\n",
+            "[[package_pipelines]]\nname = \"switch\"\ncommand = [\"tool\"]\ntimeout_ms = 0\n",
+        ] {
+            assert!(parse_config(invalid).is_err(), "{invalid}");
         }
     }
 

@@ -4,13 +4,16 @@
 //! player use runtimes supplied by the developer, so packaging never downloads
 //! anything.
 
+use std::ffi::OsString;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::thread;
+use std::time::{Duration, Instant};
 
 use sha2::{Digest, Sha256};
-use tua_core::{LoadedConfig, ProjectWorkspace, CONFIG_FILE};
+use tua_core::{LoadedConfig, PackagePipelineConfig, ProjectWorkspace, CONFIG_FILE};
 
 use crate::build::run_build;
 use crate::error::CliError;
@@ -21,13 +24,14 @@ mod zip;
 /// Where packages are written, relative to the project root.
 const DIST_DIRECTORY: &str = "dist";
 
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub enum PackageTarget {
     #[default]
     Love,
     Windows,
     Macos,
     Web,
+    Custom(String),
 }
 
 impl PackageTarget {
@@ -37,6 +41,9 @@ impl PackageTarget {
             "windows" => Some(Self::Windows),
             "macos" => Some(Self::Macos),
             "web" => Some(Self::Web),
+            other if other.starts_with("custom:") && other.len() > "custom:".len() => {
+                Some(Self::Custom(other["custom:".len()..].to_owned()))
+            }
             _ => None,
         }
     }
@@ -45,6 +52,7 @@ impl PackageTarget {
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct PackageOptions {
     pub target: PackageTarget,
+    pub list_targets: bool,
     pub love: Option<PathBuf>,
     pub web_player: Option<PathBuf>,
     pub name: Option<String>,
@@ -58,20 +66,44 @@ pub(crate) fn run_package(
 ) -> Result<String, CliError> {
     let cwd = cwd.as_ref();
     let workspace = ProjectWorkspace::from_loaded(cwd, loaded.clone());
-    let target_runtime = match options.target {
+    if options.list_targets {
+        let targets = workspace.config().package_pipelines.iter().map(|pipeline| {
+            serde_json::json!({
+                "target": format!("custom:{}", pipeline.name),
+                "label": if pipeline.label.is_empty() { &pipeline.name } else { &pipeline.label },
+                "description": "Custom pipeline from tua.toml",
+            })
+        }).collect::<Vec<_>>();
+        return serde_json::to_string(&targets)
+            .map_err(|error| CliError::usage(format!("cannot list package targets: {error}")));
+    }
+    if let PackageTarget::Custom(target) = &options.target {
+        if !workspace
+            .config()
+            .package_pipelines
+            .iter()
+            .any(|pipeline| pipeline.name == *target)
+        {
+            return Err(CliError::usage(format!(
+                "unknown custom package target `{target}`; configure it in [[package_pipelines]]"
+            )));
+        }
+    }
+    let target_runtime = match &options.target {
         PackageTarget::Love => None,
         PackageTarget::Windows | PackageTarget::Macos => Some(
             options
                 .love
                 .clone()
-                .ok_or_else(|| missing_runtime(options.target))?,
+                .ok_or_else(|| missing_runtime(&options.target))?,
         ),
         PackageTarget::Web => Some(
             options
                 .web_player
                 .clone()
-                .ok_or_else(|| missing_runtime(options.target))?,
+                .ok_or_else(|| missing_runtime(&options.target))?,
         ),
+        PackageTarget::Custom(_) => None,
     };
 
     let mut lines = vec![run_build(cwd, loaded, false)?];
@@ -92,7 +124,7 @@ pub(crate) fn run_package(
         human_size(archive.len())
     ));
 
-    match (options.target, target_runtime) {
+    match (&options.target, target_runtime) {
         (PackageTarget::Windows, Some(runtime)) => {
             let directory = fuse_windows(&runtime, &archive, workspace.root(), &dist, &name)?;
             lines.push(format!("packaged {}", display(cwd, &directory)));
@@ -122,13 +154,27 @@ pub(crate) fn run_package(
             let directory = package_web(&player, &archive, workspace.root(), &dist, &name)?;
             lines.push(format!("packaged {}", display(cwd, &directory)));
         }
+        (PackageTarget::Custom(target), _) => {
+            let pipeline = workspace.config().package_pipelines.iter()
+                .find(|pipeline| pipeline.name == *target)
+                .ok_or_else(|| CliError::usage(format!("unknown custom package target `{target}`; configure it in [[package_pipelines]]")))?;
+            let directory = package_custom(
+                pipeline,
+                &love_path,
+                workspace.root(),
+                &out_dir,
+                &dist,
+                &name,
+            )?;
+            lines.push(format!("packaged {}", display(cwd, &directory)));
+        }
         _ => {}
     }
 
     Ok(lines.join("\n"))
 }
 
-fn missing_runtime(target: PackageTarget) -> CliError {
+fn missing_runtime(target: &PackageTarget) -> CliError {
     let hint = match target {
         PackageTarget::Windows => {
             "download the 64-bit zipped LOVE 11.5 for Windows from https://love2d.org, extract it, and pass its directory, which contains love.exe"
@@ -139,7 +185,7 @@ fn missing_runtime(target: PackageTarget) -> CliError {
         PackageTarget::Web => {
             return CliError::usage("`--target web` needs `--web-player PATH`: download the LÖVE 11.5 standalone player from https://github.com/2dengine/love.js and pass its root directory");
         }
-        PackageTarget::Love => unreachable!("the portable archive needs no runtime"),
+        PackageTarget::Love | PackageTarget::Custom(_) => unreachable!("this target needs no supplied runtime"),
     };
     CliError::usage(format!("`--target` needs `--love PATH`: {hint}"))
 }
@@ -219,6 +265,131 @@ fn web_index_html(name: &str, game_file: &str) -> String {
 }
 
 const WEB_HOSTING_README: &str = "This directory is a LÖVE 11.5 web game. Serve it from an HTTP(S) server; opening index.html with file:// will not work.\n\nThe 2dengine standalone player requires these response headers for this directory:\nCross-Origin-Opener-Policy: same-origin\nCross-Origin-Embedder-Policy: require-corp\nContent-Security-Policy: script-src 'self' 'unsafe-eval'\n\nApache can use the copied .htaccess when AllowOverride and mod_headers are enabled. Configure equivalent headers on other hosts. Browser audio and fullscreen may require a user gesture. See https://github.com/2dengine/love.js for player limitations and licenses.\n";
+
+fn package_custom(
+    pipeline: &PackagePipelineConfig,
+    archive: &Path,
+    project_root: &Path,
+    build_dir: &Path,
+    dist: &Path,
+    name: &str,
+) -> Result<PathBuf, CliError> {
+    let destination = dist.join("custom").join(&pipeline.name).join(name);
+    check_package_path(project_root, &destination)?;
+    let stage = crate::atomic_fs::DirectoryStage::new(&destination)
+        .map_err(|error| io_error(&destination, error))?;
+    let configured_program = &pipeline.command[0];
+    let program = if Path::new(configured_program).is_absolute() {
+        PathBuf::from(configured_program)
+    } else if configured_program.contains('/') || configured_program.contains('\\') {
+        project_root.join(configured_program)
+    } else {
+        PathBuf::from(configured_program)
+    };
+    let arguments = pipeline.command[1..]
+        .iter()
+        .map(|argument| {
+            package_argument(
+                argument,
+                archive,
+                stage.path(),
+                build_dir,
+                project_root,
+                name,
+                &pipeline.name,
+            )
+        })
+        .collect::<Vec<_>>();
+    let mut child = Command::new(&program)
+        .args(arguments)
+        .current_dir(project_root)
+        .env("TUA_PACKAGE_ARCHIVE", archive)
+        .env("TUA_PACKAGE_OUTPUT_DIR", stage.path())
+        .env("TUA_PACKAGE_BUILD_DIR", build_dir)
+        .env("TUA_PACKAGE_PROJECT_ROOT", project_root)
+        .env("TUA_PACKAGE_NAME", name)
+        .env("TUA_PACKAGE_TARGET", &pipeline.name)
+        .spawn()
+        .map_err(|error| {
+            CliError::usage(format!(
+                "package pipeline `{}` could not start `{}`: {error}",
+                pipeline.name,
+                program.display()
+            ))
+        })?;
+    let deadline = Instant::now() + Duration::from_millis(pipeline.timeout_ms);
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break status,
+            Ok(None) if Instant::now() >= deadline => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(CliError::usage(format!(
+                    "package pipeline `{}` timed out after {} ms",
+                    pipeline.name, pipeline.timeout_ms
+                )));
+            }
+            Ok(None) => thread::sleep(Duration::from_millis(20)),
+            Err(error) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(CliError::usage(format!(
+                    "package pipeline `{}` failed while waiting: {error}",
+                    pipeline.name
+                )));
+            }
+        }
+    };
+    if !status.success() {
+        return Err(CliError::usage(format!(
+            "package pipeline `{}` exited with {status}",
+            pipeline.name
+        )));
+    }
+    let output_metadata =
+        fs::symlink_metadata(stage.path()).map_err(|error| io_error(stage.path(), error))?;
+    if !output_metadata.file_type().is_dir() {
+        return Err(CliError::usage(format!(
+            "package pipeline `{}` replaced its output directory",
+            pipeline.name
+        )));
+    }
+    if fs::read_dir(stage.path())
+        .map_err(|error| io_error(stage.path(), error))?
+        .next()
+        .is_none()
+    {
+        return Err(CliError::usage(format!(
+            "package pipeline `{}` left TUA_PACKAGE_OUTPUT_DIR empty",
+            pipeline.name
+        )));
+    }
+    check_package_path(project_root, &destination)?;
+    stage
+        .publish(&destination)
+        .map_err(|error| io_error(&destination, error))?;
+    Ok(destination)
+}
+
+fn package_argument(
+    argument: &str,
+    archive: &Path,
+    output: &Path,
+    build: &Path,
+    root: &Path,
+    name: &str,
+    target: &str,
+) -> OsString {
+    match argument {
+        "{archive}" => archive.as_os_str().to_owned(),
+        "{output}" => output.as_os_str().to_owned(),
+        "{build}" => build.as_os_str().to_owned(),
+        "{root}" => root.as_os_str().to_owned(),
+        "{name}" => OsString::from(name),
+        "{target}" => OsString::from(target),
+        _ => OsString::from(argument),
+    }
+}
 
 /// The `.love` archive for the build output: every output file except source
 /// maps, Tua sources, configuration, packages, and hidden files.
@@ -560,6 +731,28 @@ fn check_package_path(project_root: &Path, path: &Path) -> Result<(), CliError> 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn custom_command_placeholders_are_exact_arguments() {
+        let archive = Path::new("archive.love");
+        let output = Path::new("output");
+        let build = Path::new("build");
+        let root = Path::new("project");
+        let expand = |argument| {
+            package_argument(argument, archive, output, build, root, "My Game", "switch")
+        };
+        for (argument, expected) in [
+            ("{archive}", "archive.love"),
+            ("{output}", "output"),
+            ("{build}", "build"),
+            ("{root}", "project"),
+            ("{name}", "My Game"),
+            ("{target}", "switch"),
+            ("--input={archive}", "--input={archive}"),
+        ] {
+            assert_eq!(expand(argument), OsString::from(expected));
+        }
+    }
 
     #[test]
     fn failed_bundle_preparation_preserves_previous_release() {

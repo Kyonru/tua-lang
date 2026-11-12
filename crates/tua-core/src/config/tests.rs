@@ -46,6 +46,7 @@ fn default_config_matches_spec() {
             test: TestConfig::default(),
             type_libraries: Vec::new(),
             asset_pipelines: Vec::new(),
+            package_pipelines: Vec::new(),
             emit: EmitConfig {
                 annotation_mode: AnnotationMode::Off,
             },
@@ -273,6 +274,7 @@ severity = { TL1003 = "warning", TL4035 = "allow" }
             test: TestConfig::default(),
             type_libraries: Vec::new(),
             asset_pipelines: Vec::new(),
+            package_pipelines: Vec::new(),
             emit: EmitConfig {
                 annotation_mode: AnnotationMode::Luacats,
             },

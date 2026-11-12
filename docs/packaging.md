@@ -5,8 +5,8 @@ icon: lucide/package
 # Packaging Games
 
 `tua package` builds the project and packages the output for players. It
-always writes a `.love` archive, and it can also build a standalone Windows or
-macOS app or a static web site with a runtime you provide.
+always writes a `.love` archive. It can also build a standalone Windows or
+macOS app, a static web site, or a configured custom package.
 
 ```bash
 tua package
@@ -32,6 +32,8 @@ it asks which one to package. Then choose a target:
 - **macOS app (.app):** a fused app bundle. Select `love.app` when prompted.
 - **Web (HTML5):** a static site. Select the root of the LÖVE 11.5 standalone
   web player when prompted. You must serve the site with the headers below.
+- **Custom targets:** named commands from `[[package_pipelines]]` in `tua.toml`.
+  The picker reads their names from the project after you select it.
 
 Desktop and web builds reuse `tua.love.windowsRuntime`, `tua.love.macosApp`,
 or `tua.love.webPlayer` when set.
@@ -102,8 +104,8 @@ app is damaged or from an unidentified developer.
 ## Other Platforms
 
 Players on Linux, or anyone with LOVE installed, can run the `.love` file
-directly with `love my-game.love`. Mobile and web builds use LOVE's own
-Android and iOS toolchains take the `.love` archive as input.
+directly with `love my-game.love`. Android and iOS toolchains can use the
+`.love` archive as input.
 
 ## Web
 
@@ -135,3 +137,81 @@ with `mod_headers` and `AllowOverride`. Other hosts need equivalent headers.
 Opening `index.html` with `file://` is insufficient. Browser audio and
 fullscreen need user interaction; LuaSocket and native desktop dependencies
 may not work. Test your game in its target browsers before distributing it.
+
+## Custom Package Pipelines
+
+Replace `package_pipelines = []` in `tua.toml` with a named pipeline when a
+target needs its own packaging tool.
+Tua builds the game and passes the `.love` archive to your command. The command
+writes its finished files into an empty staging directory; Tua publishes that
+directory at `dist/custom/<target>/<game-name>/` only after a successful exit.
+If the command fails, times out, or leaves that directory empty, the previous package is
+kept. Pipelines run only when you explicitly select their target; `check`,
+`build`, and the default `tua package` command do not run them.
+
+```toml title="tua.toml"
+[[package_pipelines]]
+name = "portable-port"
+label = "Portable port"
+command = ["python3", "scripts/package_port.py"]
+timeout_ms = 300000
+```
+
+```bash
+tua package --list-targets
+tua package --target custom:portable-port --name "My Game"
+```
+
+The command runs from the project root without an implicit shell. A program
+path containing `/` or `\` is resolved from that root; a bare program name
+uses `PATH`. It receives these absolute paths and values through the
+environment:
+
+| Variable | Value |
+| --- | --- |
+| `TUA_PACKAGE_ARCHIVE` | Built `.love` archive |
+| `TUA_PACKAGE_OUTPUT_DIR` | Empty staging directory for finished files |
+| `TUA_PACKAGE_BUILD_DIR` | Generated Lua build directory |
+| `TUA_PACKAGE_PROJECT_ROOT` | Project root and command working directory |
+| `TUA_PACKAGE_NAME` | Sanitized game name |
+| `TUA_PACKAGE_TARGET` | Configured pipeline name |
+
+Arguments that are exactly `{archive}`, `{output}`, `{build}`, `{root}`, `{name}`,
+or `{target}` are replaced with the matching value. This lets a CLI tool use
+the handoff directly, for example
+`command = ["port-packer", "{archive}", "{output}"]`. Other arguments are passed
+literally; there is no shell expansion.
+
+For a minimal script that proves the handoff, put this in
+`scripts/package_port.py`. Replace the zip operation with the packaging steps
+required by your target runtime:
+
+```python
+import os
+from pathlib import Path
+from zipfile import ZipFile
+
+archive = Path(os.environ["TUA_PACKAGE_ARCHIVE"])
+output = Path(os.environ["TUA_PACKAGE_OUTPUT_DIR"])
+name = os.environ["TUA_PACKAGE_NAME"]
+with ZipFile(output / f"{name}.zip", "w") as bundle:
+    bundle.write(archive, arcname="game.love")
+```
+
+Names use ASCII letters, digits, `-`, and `_`; they must be unique. Commands
+are arrays of program and argument strings, and `timeout_ms` defaults to five
+minutes (maximum 30 minutes). `label` is optional and defaults to the name.
+**Treat configured commands as executable code.**
+The VS Code command requires a trusted workspace. Tua does not download a
+port toolchain or assert that a `.love` archive runs unchanged on that port.
+
+Projects you might investigate for custom targets include
+[LÖVE Potion](https://github.com/lovebrew/lovepotion),
+[LOVE-WrapLua](https://github.com/LukeZGD/LOVE-WrapLua),
+[lovejs-player](https://codeberg.org/alexjgriffith/lovejs-player),
+[LoveDos](https://github.com/rxi/lovedos), and
+[Lutro](https://lutro.libretro.com/). Their APIs and packaging contracts differ.
+[LÖVR](https://github.com/bjornbytes/lovr) is a separate VR framework and may
+require code migration; the historical
+[LoveFTW](https://bitbucket.org/T-BoneISS/l-veftw) project likewise needs
+independent compatibility checks.

@@ -2,6 +2,7 @@
 
 const fs = require("fs");
 const path = require("path");
+const { execFile } = require("child_process");
 const vscode = require("vscode");
 const { isPathInside, projectLayoutForWorkspaceRoot } = require("../editor/project-layout");
 const { normalizeInstances } = require("../workspace/run-options");
@@ -80,7 +81,7 @@ class TuaCommandTerminal extends LoveProjectTerminal {
   }
 }
 
-function registerGameCommands({ appendOutputLine, getClient, getServerCommand, activity, inspector }) {
+function registerGameCommands({ appendOutputLine, getClient, getServerCommand, activity, inspector, listPackageTargets = listCustomPackageTargets }) {
   return vscode.Disposable.from(
     vscode.commands.registerCommand("tua.testProject", () => runTuaTask({
       appendOutputLine, activity, getClient, getServerCommand,
@@ -121,8 +122,18 @@ function registerGameCommands({ appendOutputLine, getClient, getServerCommand, a
         vscode.window.showWarningMessage("No Tua project was found. Open a workspace containing tua.toml before packaging.");
         return undefined;
       }
-      const choice = options?.target ? PACKAGE_TARGETS.find(item => item.target === options.target) : await vscode.window.showQuickPick(
-        PACKAGE_TARGETS.map(item => ({ ...item, detail: packageTargetDetail(item) })),
+      let customTargets = [];
+      try { customTargets = await listPackageTargets(layout, getServerCommand?.() || "tua"); }
+      catch (error) {
+        if (options?.target?.startsWith("custom:")) {
+          vscode.window.showErrorMessage(`Could not load custom package targets: ${error.message}`);
+          return undefined;
+        }
+        vscode.window.showWarningMessage(`Custom package targets are unavailable: ${error.message}`);
+      }
+      const targets = [...PACKAGE_TARGETS, ...customTargets];
+      const choice = options?.target ? targets.find(item => item.target === options.target) : await vscode.window.showQuickPick(
+        targets.map(item => ({ ...item, detail: packageTargetDetail(item) })),
         { title: `Package ${path.basename(layout.configDirectory)} · target platform`, placeHolder: "Choose a platform or portable archive · output in this project's dist/" },
       );
       if (options?.target && !choice) {
@@ -278,7 +289,31 @@ function packageTargetDetail(choice) {
   if (choice.target === "windows") return "Creates an app folder in dist/windows/ · requires an extracted Windows LÖVE runtime";
   if (choice.target === "macos") return "Creates an app bundle in dist/macos/ · requires love.app";
   if (choice.target === "web") return "Creates a static site in dist/web/ · requires a standalone LÖVE 11.5 web player";
+  if (choice.target.startsWith("custom:")) return `Runs the configured command · output in dist/custom/${choice.target.slice(7)}/`;
   return "Creates a .love archive in dist/ · no extra runtime needed to build";
+}
+
+function listCustomPackageTargets(layout, command, run = execFile) {
+  return new Promise((resolve, reject) => run(command, ["package", "--list-targets"], {
+    cwd: layout.configDirectory, timeout: 5000, maxBuffer: 65536, windowsHide: true,
+  }, (error, stdout) => {
+    if (error) return reject(error);
+    try {
+      const data = JSON.parse(stdout);
+      if (!Array.isArray(data) || data.length > 64) throw new Error("invalid target list");
+      const seen = new Set();
+      const targets = data.map(item => {
+        if (typeof item?.target !== "string" || !/^custom:[A-Za-z0-9_-]+$/u.test(item.target) || seen.has(item.target)) throw new Error("invalid custom target");
+        seen.add(item.target);
+        return {
+          target: item.target,
+          label: typeof item.label === "string" && item.label ? item.label : item.target.slice(7),
+          description: "Custom pipeline from tua.toml",
+        };
+      });
+      resolve(targets);
+    } catch (failure) { reject(failure); }
+  }));
 }
 
 function validLoveRuntime(choice, candidate) {
@@ -329,6 +364,7 @@ module.exports = {
   packagedArtifactFromLine,
   packageProjectLayout,
   packageTargetDetail,
+  listCustomPackageTargets,
   notifyPackageResult,
   validLoveRuntime,
   registerGameCommands,

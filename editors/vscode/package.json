@@ -685,12 +685,8 @@
               },
               "packageTarget": {
                 "type": "string",
-                "enum": [
-                  "love",
-                  "windows",
-                  "macos",
-                  "web"
-                ]
+                "pattern": "^(love|windows|macos|web|custom:[A-Za-z0-9_-]+)$",
+                "description": "Built-in platform, or custom:<name> from tua.toml package_pipelines."
               },
               "instances": {
                 "type": "array",

@@ -43,7 +43,7 @@ Module._load = function load(request, parent, isMain) {
   }
   return originalLoad.call(this, request, parent, isMain);
 };
-const { PACKAGE_TARGETS, TuaCommandTerminal, notifyPackageResult, packagedArtifactFromLine, packageProjectLayout, packageTargetDetail, registerGameCommands, validLoveRuntime } = require("../../src/love/game-commands");
+const { PACKAGE_TARGETS, TuaCommandTerminal, notifyPackageResult, packagedArtifactFromLine, packageProjectLayout, packageTargetDetail, listCustomPackageTargets, registerGameCommands, validLoveRuntime } = require("../../src/love/game-commands");
 Module._load = originalLoad;
 
 test("unit testing refuses to execute code in an untrusted workspace", async () => {
@@ -123,6 +123,20 @@ test("package picker explains the selectable platforms and their outputs", () =>
   assert.match(packageTargetDetail(PACKAGE_TARGETS[1]), /dist\/windows/u);
   assert.match(packageTargetDetail(PACKAGE_TARGETS[2]), /dist\/macos/u);
   assert.match(packageTargetDetail(PACKAGE_TARGETS[3]), /dist\/web/u);
+});
+
+test("custom targets are discovered through the CLI and reject malformed responses", async () => {
+  const layout = { configDirectory: "/project" };
+  const run = (command, args, options, callback) => {
+    assert.equal(command, "tua");
+    assert.deepEqual(args, ["package", "--list-targets"]);
+    assert.equal(options.cwd, "/project");
+    callback(null, '[{"target":"custom:switch","label":"Switch homebrew"}]');
+  };
+  const targets = await listCustomPackageTargets(layout, "tua", run);
+  assert.deepEqual(targets, [{ target: "custom:switch", label: "Switch homebrew", description: "Custom pipeline from tua.toml" }]);
+  assert.match(packageTargetDetail(targets[0]), /dist\/custom\/switch/u);
+  await assert.rejects(listCustomPackageTargets(layout, "tua", (_c, _a, _o, callback) => callback(null, '[{"target":"../../escape"}]')), /invalid custom target/u);
 });
 
 test("runtime selection accepts the expected LÖVE bundle for each fused target", () => {
@@ -249,13 +263,13 @@ test("package command resolves the project before offering target platforms", as
       requestedLayout = true;
       return { projectUri: asUri(root), sourceUri: asUri(path.join(root, "src")), outputUri: asUri(path.join(root, "build")), workspaceUri: asUri(root) };
     } };
-    registerGameCommands({ getClient: () => client, getServerCommand: () => process.execPath });
+    registerGameCommands({ getClient: () => client, getServerCommand: () => process.execPath, listPackageTargets: async () => [{ target: "custom:switch", label: "Switch homebrew", description: "Custom pipeline from tua.toml" }] });
     // A selected fused target asks for its runtime; use the portable target in
     // this task check to keep the test independent of platform installations.
     vscodeMock.window.showQuickPick = async (items, picker) => {
       assert(requestedLayout, "project resolution comes before target selection");
       assert.match(picker.title, /target platform/u);
-      assert.deepEqual(items.map(item => item.target), ["love", "windows", "macos", "web"]);
+      assert.deepEqual(items.map(item => item.target), ["love", "windows", "macos", "web", "custom:switch"]);
       offeredPlatforms = true;
       return items[0];
     };
@@ -280,6 +294,8 @@ test("package command resolves the project before offering target platforms", as
     vscodeMock.workspace.getConfiguration = () => ({ get: (key, fallback) => key === "love.webPlayer" ? web : fallback });
     const webResult = await commands.get("tua.packageGame")({ target: "web" });
     assert.deepEqual(webResult.args, ["package", "--target", "web", "--web-player", web]);
+    const customResult = await commands.get("tua.packageGame")({ target: "custom:switch" });
+    assert.deepEqual(customResult.args, ["package", "--target", "custom:switch"]);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
     vscodeMock.commands.registerCommand = saved.registerCommand;

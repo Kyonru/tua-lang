@@ -34,7 +34,8 @@ Options:
   --strict          With lint, enable all lint diagnostics
   --deny-warnings   With check, fail when warning diagnostics are present
   --maps <path>     With traceback, source-map directory or .lua.map.json file
-  --target <kind>   With package, love (default), windows, macos, or web
+  --target <kind>   With package, love (default), windows, macos, web, or custom:<name>
+  --list-targets    With package, print configured custom targets as JSON without building
   --love <path>     With package, the LOVE for Windows directory or love.app to fuse with;
                     with dev or check, the LOVE executable to run
   --web-player <path> With package --target web, the LÖVE 11.5 standalone player directory
@@ -61,7 +62,7 @@ pub struct CommandOptions {
     pub love_executable: Option<PathBuf>,
     pub dev_no_launch: bool,
     pub emit_on_error: bool,
-    pub package: PackageOptions,
+    pub package: Box<PackageOptions>,
     pub fmt_check: bool,
     pub lint_strict: bool,
     pub deny_warnings: bool,
@@ -120,7 +121,7 @@ pub fn command_help(command: CommandName) -> &'static str {
         CommandName::Fmt => "tua fmt - format project source files\n\nUsage:\n  tua fmt [--check]\n",
         CommandName::Lint => "tua lint - run lint rules\n\nUsage:\n  tua lint [--strict]\n",
         CommandName::Build => "tua build - check and emit Lua output\n\nUsage:\n  tua build [--emit-on-error]\n",
-        CommandName::Package => "tua package - build and package a LOVE game\n\nUsage:\n  tua package [--target love|windows|macos|web] [--love PATH] [--web-player PATH] [--name NAME] [--identifier ID]\n",
+        CommandName::Package => "tua package - build and package a LOVE game\n\nUsage:\n  tua package [--target love|windows|macos|web|custom:<name>] [--love PATH] [--web-player PATH] [--name NAME] [--identifier ID]\n  tua package --list-targets\n",
         CommandName::Traceback => "tua traceback - remap generated Lua traceback lines\n\nUsage:\n  tua traceback [--maps PATH] [FILE]\n",
         CommandName::Watch => "tua watch - rebuild when source files change\n\nUsage:\n  tua watch\n",
         CommandName::Dev => "tua dev - rebuild and hot reload a LOVE game\n\nUsage:\n  tua dev [--love PATH] [--no-launch]\n",
@@ -192,6 +193,9 @@ where
                 }
             }
             "--no-launch" if command == CommandName::Dev => options.dev_no_launch = true,
+            "--list-targets" if command == CommandName::Package => {
+                options.package.list_targets = true
+            }
             "--emit-on-error" if command == CommandName::Build => options.emit_on_error = true,
             "--love" if matches!(command, CommandName::Dev | CommandName::Check) => {
                 index += 1;
@@ -211,7 +215,7 @@ where
                     "--target" => {
                         options.package.target = PackageTarget::parse(value).ok_or_else(|| {
                             CliError::usage(format!(
-                                "unknown package target `{value}`; use love, windows, macos, or web"
+                                "unknown package target `{value}`; use love, windows, macos, web, or custom:<name>"
                             ))
                         })?;
                     }

@@ -615,7 +615,7 @@ messages. Configure a non-standard LOVE executable with `tua.love.command`.
 
 **Tua: Run LOVE Project With Hot Reload** runs [`tua dev`](hot-reload.md) in
 a task: the game reloads changed modules each time you save. **Tua: Package
-Game...** asks for a `.love`, Windows, macOS, or web build and runs
+Game...** asks for a `.love`, Windows, macOS, web, or configured custom build and runs
 [`tua package`](packaging.md). Platform builds use the runtime in
 `tua.love.windowsRuntime`, `tua.love.macosApp`, or `tua.love.webPlayer`;
 when that is empty, the command asks for it and can remember the choice.

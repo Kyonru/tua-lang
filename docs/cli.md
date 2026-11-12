@@ -188,6 +188,8 @@ tua package
 tua package --target windows --love path/to/love-11.5-win64
 tua package --target macos --love /Applications/love.app
 tua package --target web --web-player path/to/love.js
+tua package --target custom:portable-port
+tua package --list-targets
 ```
 
 Builds the project, then writes `dist/<name>.love`. `--target windows` or
@@ -196,6 +198,8 @@ Builds the project, then writes `dist/<name>.love`. `--target windows` or
 player. Packaging never downloads anything. `--name` sets the game name
 (default: the project directory's name) and `--identifier` the macOS bundle
 identifier. See [Packaging Games](packaging.md).
+Custom targets come from `[[package_pipelines]]` in `tua.toml`; listing them
+does not build or execute a pipeline.
 
 ## `traceback`
 

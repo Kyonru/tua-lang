@@ -42,6 +42,7 @@ extension = "tua"
 emit_maps = true
 type_libraries = []
 asset_pipelines = []
+package_pipelines = []
 
 [emit]
 annotation_mode = "off"
@@ -110,6 +111,7 @@ the behavior and tradeoffs of each option.
 | `test.exclude_specs` | boolean | `true` | - |
 | `type_libraries` | array | `[]` | - |
 | `asset_pipelines` | array | `[]` | - |
+| `package_pipelines` | array | `[]` | - |
 | `emit.annotation_mode` | string | `"off"` | - |
 | `format.indent_style` | string | `"spaces"` | `tua.format.indentStyle` |
 | `format.indent_width` | integer | `2` | `tua.format.indentWidth` |
@@ -251,6 +253,14 @@ under `[asset_pipelines.options]`; see [Audio Systems](audio.md#cached-audio-ana
 See [Asset Pipelines](asset-pipelines.md) for field definitions, importer
 environment variables, the manifest protocol, diagnostics, caching, watch
 behavior, and security guidance.
+
+## Package Pipelines
+
+`package_pipelines` declares named, opt-in commands for custom platform
+packages. They run only through `tua package --target custom:<name>` or the
+matching editor picker item. See [Packaging Games](packaging.md#custom-package-pipelines)
+for the command contract, output location, and example. Replace the default
+`package_pipelines = []` line before adding `[[package_pipelines]]` tables.
 
 ## Emit
 

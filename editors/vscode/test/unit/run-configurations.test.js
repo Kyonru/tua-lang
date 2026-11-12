@@ -7,6 +7,7 @@ test("named run configurations accept supported modes and strip unrelated fields
   assert.deepEqual(normalizeConfigurations(DEFAULT_CONFIGURATIONS), DEFAULT_CONFIGURATIONS);
   assert.deepEqual(normalizeConfigurations([{ name: " Release ", mode: "package", packageTarget: "macos", command: "unexpected" }]), [{ name: "Release", mode: "package", packageTarget: "macos" }]);
   assert.deepEqual(normalizeConfigurations([{ name: "Web", mode: "package", packageTarget: "web" }]), [{ name: "Web", mode: "package", packageTarget: "web" }]);
+  assert.deepEqual(normalizeConfigurations([{ name: "Switch", mode: "package", packageTarget: "custom:switch" }]), [{ name: "Switch", mode: "package", packageTarget: "custom:switch" }]);
 });
 
 test("ambiguous names and unsupported actions cannot be selected for execution", () => {

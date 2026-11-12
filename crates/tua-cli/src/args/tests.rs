@@ -244,13 +244,14 @@ fn package_accepts_a_target_runtime_name_and_identifier() {
         Ok(CliAction::Command {
             name: CommandName::Package,
             options: CommandOptions {
-                package: crate::package::PackageOptions {
+                package: Box::new(crate::package::PackageOptions {
                     target: crate::package::PackageTarget::Macos,
+                    list_targets: false,
                     love: Some("/Applications/love.app".into()),
                     web_player: None,
                     name: Some("Star Dust".to_owned()),
                     identifier: Some("io.example.stardust".to_owned()),
-                },
+                }),
                 ..CommandOptions::default()
             },
         })
@@ -260,20 +261,25 @@ fn package_accepts_a_target_runtime_name_and_identifier() {
     assert!(parse_args(["build", "--target", "love"]).is_err());
     let web = parse_args(["package", "--target", "web", "--web-player", "/tmp/love.js"])
         .expect("web target and player are accepted");
-    assert!(matches!(
-        web,
-        CliAction::Command {
-            options: CommandOptions {
-                package: crate::package::PackageOptions {
-                    target: crate::package::PackageTarget::Web,
-                    web_player: Some(_),
-                    ..
-                },
-                ..
-            },
-            ..
-        }
-    ));
+    let CliAction::Command { options, .. } = web else {
+        panic!("expected package command")
+    };
+    assert_eq!(options.package.target, crate::package::PackageTarget::Web);
+    assert_eq!(options.package.web_player, Some("/tmp/love.js".into()));
+    let custom = parse_args(["package", "--target", "custom:switch"]).unwrap();
+    let CliAction::Command { options, .. } = custom else {
+        panic!("expected package command")
+    };
+    assert_eq!(
+        options.package.target,
+        crate::package::PackageTarget::Custom("switch".to_owned())
+    );
+    assert!(parse_args(["package", "--target", "custom:"]).is_err());
+    let listed = parse_args(["package", "--list-targets"]).unwrap();
+    let CliAction::Command { options, .. } = listed else {
+        panic!("expected package command")
+    };
+    assert!(options.package.list_targets);
 }
 
 #[test]

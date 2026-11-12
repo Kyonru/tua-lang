@@ -8,6 +8,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Added
 
+- Project-defined `[[package_pipelines]]` add explicit custom packaging targets
+  to the CLI and VS Code picker. Tua passes the built archive to a command and
+  publishes its output only after success; failed runs keep the previous package.
 - VS Code packaging now selects the project before the target platform, explains
   portable, Windows, macOS, and web outputs, checks supplied LÖVE runtimes, and offers
   to reveal or copy the finished package path from a Run view action.

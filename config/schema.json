@@ -62,6 +62,12 @@
       "description": "Opt-in external importers with content-addressed cached generated modules and structured diagnostics."
     },
     {
+      "path": "package_pipelines",
+      "type": "array",
+      "default": [],
+      "description": "Named, explicitly invoked commands that turn a built LOVE archive into a custom platform package."
+    },
+    {
       "path": "emit.annotation_mode",
       "type": "string",
       "default": "off",
