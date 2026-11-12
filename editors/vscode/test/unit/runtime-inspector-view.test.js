@@ -162,6 +162,17 @@ test("sampled ECS components link to all matching static system relationships", 
   assert.equal(components.find(component => component.label === "Health #2").children.at(-1).description, "Health");
 });
 
+test("behavior runner view separates active paths from bounded root-result history", () => {
+  const { presentObject } = require("../../src/inspector/presentation");
+  const behavior = presentObject({ kind: "behaviors", data: {
+    lastStatus: "running", ticks: 3, steps: 4, active: { 1: "0 · sequence", 2: "0.0 · wait" },
+    history: { 1: { tick: 3, status: "running", steps: 4 }, 2: { tick: 2, status: "failure", steps: 2 } },
+  } }, "runner");
+  assert.equal(behavior.summary, "running · 2 active nodes");
+  assert.deepEqual(behavior.children[0].children.map(node => node.label), ["0 · sequence", "0.0 · wait"]);
+  assert.deepEqual(behavior.details.at(-1).children.map(node => node.label), ["Tick 3", "Tick 2"]);
+});
+
 
 test("inspector can be re-enabled from its toolbar while a retained snapshot hides welcome content", () => {
   const entry = { session: { id: "host", active: false }, status: "disabled", snapshot: { objects: [] } };

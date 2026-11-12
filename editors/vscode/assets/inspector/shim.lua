@@ -1,7 +1,7 @@
 -- Loaded exclusively by the editor's temporary development launcher.
 local directory, port, token, options = ...
 options = options or {}
-local categories = options.categories or { ecs = true, states = true, signals = true, pools = true, stores = true, inputs = true }
+local categories = options.categories or { ecs = true, states = true, signals = true, pools = true, stores = true, inputs = true, behaviors = true }
 local inspect = assert(loadfile(directory .. "/snapshot.lua"))()
 inspect.configure(options)
 local tick = assert(loadfile(directory .. "/transport.lua"))()(port, token, inspect.snapshot, options.updateInterval)
@@ -69,6 +69,23 @@ local function inputData(player)
   return { device = player:getActiveDevice(), deadzone = player.config.deadzone,
     controls = controls, pairs = pairs, pointer = pointer }
 end
+local function behaviorData(runner)
+  local active, visited, limited = {}, 0, false
+  local function visit(node, path)
+    if visited >= 256 then limited = true; return end
+    visited = visited + 1
+    if runner.states[node] then
+      if #active < 64 then active[#active + 1] = path .. " · " .. node.kind
+      else limited = true end
+    end
+    if node.children then
+      for index, child in ipairs(node.children) do visit(child, path .. "." .. (index - 1)) end
+    elseif node.child then visit(node.child, path .. ".0") end
+  end
+  visit(runner.definition.root, "0")
+  return { active = active, steps = runner.steps, maxSteps = runner.maxSteps,
+    maxDepth = runner.maxDepth, limited = limited }
+end
 local function constructor(original, kind, reader)
   if wrapped[original] then return original end
   local fn = function(...)
@@ -124,6 +141,28 @@ local function instrument(name, module)
     package.loaded[name] = module
   elseif categories.inputs and name == "baton" and type(module) == "table" and type(module.new) == "function" then
     module.new = constructor(module.new, "inputs", inputData)
+  elseif categories.behaviors and name == "tuabehavior" and type(module) == "table" and type(module.new) == "function" and not wrapped[module.new] then
+    local original = module.new
+    module.new = function(...)
+      local definition = original(...)
+      if not wrapped[definition] then
+        local instance = definition.instance
+        definition.instance = function(self, ...)
+          local runner = instance(self, ...)
+          inspect.register("behaviors", runner, behaviorData)
+          local update = runner.update
+          runner.update = function(self, ...)
+            local result = update(self, ...)
+            inspect.behaviorUpdated(self, result)
+            return result
+          end
+          return runner
+        end
+        wrapped[definition] = true
+      end
+      return definition
+    end
+    wrapped[module.new] = true
   end
   return module
 end

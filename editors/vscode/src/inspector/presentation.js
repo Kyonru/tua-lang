@@ -152,6 +152,23 @@ function presentObject(object, prefix, previous) {
       if (data.deadzone !== undefined) details.push(row(prefix, "deadzone", "Deadzone", data.deadzone));
       break;
     }
+    case "behaviors": {
+      const active = Object.values(data.active || {}).filter(value => typeof value === "string").slice(0, 64);
+      const history = Object.values(data.history || {}).filter(value => value && typeof value === "object")
+        .sort((a, b) => b.tick - a.tick).slice(0, 20);
+      summary = `${data.lastStatus || "Not ticked"} · ${active.length}${data.limited ? "+" : ""} active nodes`;
+      children = [{ id: prefix + "/active", label: "Active after last tick", description: String(active.length),
+        tooltip: "Node paths are sampled runtime state, not static execution traces",
+        children: active.map((value, index) => row(prefix + "/active", index, value, "active")) }];
+      details.push(row(prefix, "ticks", "Ticks", data.ticks ?? 0));
+      details.push(row(prefix, "steps", "Steps in last tick", data.steps ?? 0));
+      if (data.limited) details.push({ id: prefix + "/limited", label: "Active path scan limited", description: "First 256 nodes", icon: "info" });
+      details.push({ id: prefix + "/history", label: "Recent root results", description: `${history.length} of 20`,
+        children: history.map(item => ({ id: `${prefix}/history/${item.tick}`, label: `Tick ${item.tick}`,
+          description: `${item.status} · ${item.steps} steps`,
+          tooltip: `Root result after tick ${item.tick}; no per-node outcome is inferred` })) });
+      break;
+    }
     default: children = valueNodes(data, prefix);
   }
   return { summary, children, details };

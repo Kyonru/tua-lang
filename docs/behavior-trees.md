@@ -120,6 +120,12 @@ variable, helper function, or another module appear as **Computed node** because
 their structure cannot be known from the local expression. It does not show
 live runner statuses.
 
+For a running game, enable the **Behavior runners** category in the optional
+development Runtime Inspector. Each runner shows its latest root result,
+active node paths after the last tick, step count, and a bounded history of 20
+root results. Completed trees have no active nodes. This runtime sample is
+separate from the static preview and is absent from production builds.
+
 `action(callback, enter?, exit?)` callbacks receive `(context, dt)` and return
 `"success"`, `"failure"`, or `"running"`. `enter(context)` runs on first visit;
 `exit(context, reason)` runs when the action finishes or its runner is reset

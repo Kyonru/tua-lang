@@ -8,6 +8,8 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Added
 
+- The opt-in development Runtime Inspector now samples behavior runner active
+  paths and retains the latest 20 root results with step counts.
 - Sampled ECS entity components now open all same-name static component
   declarations and their system and query relationships from the inspector.
 - The opt-in development Runtime Inspector now shows Baton's active input

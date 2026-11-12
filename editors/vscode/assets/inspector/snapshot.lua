@@ -120,6 +120,16 @@ function M.poolReleased(object, released)
   if released == false then entry.failedReleases = (entry.failedReleases or 0) + 1 end
 end
 
+function M.behaviorUpdated(object, status)
+  local entry = objects[object]
+  if not entry then return end
+  entry.ticks = (entry.ticks or 0) + 1
+  entry.lastStatus = status
+  entry.history = entry.history or {}
+  entry.historyHead = (entry.historyHead or 0) % 20 + 1
+  entry.history[entry.historyHead] = { tick = entry.ticks, status = status, steps = object.steps }
+end
+
 
 function M.snapshot()
   local budget = { left = LIMIT, truncated = false }
@@ -152,6 +162,13 @@ function M.snapshot()
     if entry.kind == "pools" then
       data.highWater = entry.highWater or 0
       data.failedReleases = entry.failedReleases or 0
+    end
+    if entry.kind == "behaviors" then
+      data.ticks, data.lastStatus, data.history = entry.ticks or 0, entry.lastStatus, {}
+      local history = entry.history or {}
+      for i = 1, #history do
+        data.history[i] = history[((entry.historyHead - i) % 20) + 1]
+      end
     end
     -- Reserve the protocol envelope before encoding game data. Truncation must
     -- never remove required identity fields or replace data with a string.

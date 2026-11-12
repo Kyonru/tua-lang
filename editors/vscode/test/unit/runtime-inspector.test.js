@@ -230,6 +230,36 @@ io.write(inspect.snapshot(), '\\n')`;
   assert.deepEqual([second.active, second.available, second.capacity, second.highWater, second.failedReleases], [0, 0, 0, 2, 3]);
 });
 
+test("behavior runner inspection bounds history and leaves runtime results intact", t => {
+  const { spawnSync } = require("node:child_process");
+  const lua = ["lua", "luajit"].find(command => spawnSync(command, ["-v"]).status === 0);
+  if (!lua) return t.skip("Lua interpreter unavailable");
+  const script = `local assets, runtime = arg[1], arg[2]
+package.path = runtime .. '/?.lua;' .. package.path
+local originalLoadfile = loadfile
+loadfile = function(filename)
+  if filename == assets .. '/transport.lua' then return function() return function() return function() end end end end
+  return originalLoadfile(filename)
+end
+local inspect = assert(loadfile(assets .. '/shim.lua'))(assets, 1, 'token', { categories = { behaviors = true } })
+local BehaviorTree = require('tuabehavior')
+local tree = BehaviorTree.new(BehaviorTree.sequence({ BehaviorTree.wait(100) }))
+local runner = tree:instance({})
+for i = 1, 25 do assert(runner:update(0) == 'running') end
+io.write(inspect.snapshot(), '\\n')
+runner:reset()
+io.write(inspect.snapshot(), '\\n')`;
+  const result = spawnSync(lua, ["-", path.resolve(__dirname, "../../assets/inspector"), path.resolve(__dirname, "../../../../vendor/runtime")], { input: script, encoding: "utf8" });
+  assert.equal(result.status, 0, result.stderr);
+  const [running, reset] = result.stdout.trim().split("\n").map(line => JSON.parse(line).objects[0].data);
+  assert.equal(running.ticks, 25);
+  assert.equal(running.lastStatus, "running");
+  assert.deepEqual(Object.values(running.active), ["0 · sequence", "0.0 · wait"]);
+  assert.equal(Object.keys(running.history).length, 20);
+  assert.equal(running.history["1"].tick, 25);
+  assert.equal(Object.keys(reset.active).length, 0);
+});
+
 test("collection options exclude disabled wrappers and preserve enabled store inspection", t => {
   const { spawnSync } = require("node:child_process");
   const lua = ["lua", "luajit"].find(command => spawnSync(command, ["-v"]).status === 0);
