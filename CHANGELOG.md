@@ -8,6 +8,8 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Added
 
+- Web packages now include static-host `_headers`, a fallback Apache
+  `.htaccess`, and local testing instructions for the headers required by love.js.
 - Project-defined `[[package_pipelines]]` add explicit custom packaging targets
   to the CLI and VS Code picker. Tua passes the built archive to a command and
   publishes its output only after success; failed runs keep the previous package.

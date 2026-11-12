@@ -117,8 +117,8 @@ tua package --target web --web-player ~/Downloads/love.js --name my-game
 ```
 
 This writes `dist/web/my-game/` with `index.html`, a content-named
-`game-<hash>.love` archive, the player,
-its licenses, and a `README.txt`. The web player is supplied separately;
+`game-<hash>.love` archive, the player, its licenses, hosting header files,
+and a `README.txt`. The web player is supplied separately;
 Tua does not download it or include it in the extension. Only known runtime
 files are copied, so other files in the player folder do not enter the build.
 The archive name changes when its contents change, avoiding the player's
@@ -132,11 +132,69 @@ Cross-Origin-Embedder-Policy: require-corp
 Content-Security-Policy: script-src 'self' 'unsafe-eval'
 ```
 
-The upstream `.htaccess` is copied when present for Apache hosts configured
-with `mod_headers` and `AllowOverride`. Other hosts need equivalent headers.
-Opening `index.html` with `file://` is insufficient. Browser audio and
-fullscreen need user interaction; LuaSocket and native desktop dependencies
-may not work. Test your game in its target browsers before distributing it.
+Tua includes `_headers` for static deployments on
+[Netlify](https://docs.netlify.com/manage/routing/headers/) and
+[Cloudflare Pages](https://developers.cloudflare.com/pages/configuration/headers/).
+Publish `dist/web/my-game/` as the site's root so `_headers` is in the
+published directory.
+It keeps the player's `.htaccess` when present, otherwise writes one with the
+headers above and the `application/wasm` MIME type. Apache must allow
+`.htaccess` overrides and enable `mod_headers`; verify the policy actually
+appears in HTTP responses. Other hosts need equivalent configuration.
+
+### Test locally
+
+The [miniserve](https://github.com/svenstaro/miniserve) static server accepts
+the required headers directly. From the packaged directory:
+
+```bash
+cd dist/web/my-game
+miniserve -i 127.0.0.1 --index index.html \
+  --header 'Cross-Origin-Opener-Policy:same-origin' \
+  --header 'Cross-Origin-Embedder-Policy:require-corp' \
+  --header "Content-Security-Policy:script-src 'self' 'unsafe-eval'" .
+```
+
+Open `http://127.0.0.1:8080/`, then inspect the Network panel for these
+headers and `Content-Type: application/wasm` on `11.5/love.wasm`.
+The generated `README.txt` carries the same local test command with the site.
+Opening `index.html` with `file://`, or serving it with a server that does not
+send the headers, is insufficient.
+
+### Other hosts
+
+For a dedicated Nginx location serving this directory:
+
+```nginx
+add_header Cross-Origin-Opener-Policy "same-origin" always;
+add_header Cross-Origin-Embedder-Policy "require-corp" always;
+add_header Content-Security-Policy "script-src 'self' 'unsafe-eval'" always;
+```
+
+For a dedicated Caddy site:
+
+```caddyfile
+header {
+  Cross-Origin-Opener-Policy same-origin
+  Cross-Origin-Embedder-Policy require-corp
+  Content-Security-Policy "script-src 'self' 'unsafe-eval'"
+}
+```
+
+Configure your server's `.wasm` MIME type as `application/wasm`. The
+[HTML section of the LÖVE project template guide](https://github.com/Oval-Tutu/bootstrap-love2d-project/blob/main/USAGE.md#html)
+has additional deployment examples.
+
+On itch.io, upload the web directory as an HTML game and enable
+[SharedArrayBuffer support](https://itch.io/t/2025776/experimental-sharedarraybuffer-support)
+in the game's Embed Options. `_headers` and `.htaccess` do not configure
+itch.io's CDN. Test the actual hosted page, since the embedding policy and
+browser behavior can differ from local hosting.
+
+Browser audio and fullscreen need user interaction; LuaSocket and native
+desktop dependencies may not work. Cross-origin isolation can also block
+third-party resources that do not opt in. Test your game in its target browsers
+before distributing it. [The player documents its limitations](https://github.com/2dengine/love.js).
 
 ## Custom Package Pipelines
 

@@ -686,6 +686,17 @@ fn package_web_copies_only_player_files_and_embeds_the_game_archive() {
     assert!(site.join("lua/normalize1.lua").exists());
     assert!(site.join("license.txt").exists());
     assert!(!site.join("private-game.love").exists());
+    let headers = fs::read_to_string(site.join("_headers")).unwrap();
+    assert!(headers.starts_with("/*\n"));
+    assert!(headers.contains("Cross-Origin-Opener-Policy: same-origin"));
+    assert!(headers.contains("Cross-Origin-Embedder-Policy: require-corp"));
+    assert!(headers.contains("script-src 'self' 'unsafe-eval'"));
+    let apache = fs::read_to_string(site.join(".htaccess")).unwrap();
+    assert!(apache.contains("Header set Cross-Origin-Opener-Policy"));
+    assert!(apache.contains("AddType application/wasm .wasm"));
+    let hosting = fs::read_to_string(site.join("README.txt")).unwrap();
+    assert!(hosting.contains("miniserve -i 127.0.0.1"));
+    assert!(hosting.contains("SharedArrayBuffer support"));
     let html = fs::read_to_string(site.join("index.html")).unwrap();
     assert!(html.contains("<title>Star Dust</title>"), "{html}");
     assert!(
@@ -728,6 +739,7 @@ fn package_web_copies_only_player_files_and_embeds_the_game_archive() {
         fs::remove_file(player.join("11.5/love.wasm")).unwrap();
     }
     fs::write(player.join("11.5/love.wasm"), b"fixture wasm").unwrap();
+    fs::write(player.join(".htaccess"), "# supplied by the player\n").unwrap();
     fs::write(
         temp.path().join("src/main.tua"),
         "function love.draw()\n  love.graphics.print(\"changed\", 10, 10)\nend\n",
@@ -747,6 +759,11 @@ fn package_web_copies_only_player_files_and_embeds_the_game_archive() {
         .output()
         .unwrap();
     assert!(updated.status.success(), "{updated:?}");
+    assert_eq!(
+        fs::read_to_string(site.join(".htaccess")).unwrap(),
+        "# supplied by the player\n",
+        "an upstream Apache policy must be preserved"
+    );
     let updated_html = fs::read_to_string(site.join("index.html")).unwrap();
     assert!(!updated_html.contains(game_file), "{updated_html}");
     assert!(

@@ -240,6 +240,12 @@ fn package_web(
                 .map_err(|error| io_error(&source, error))?;
         }
     }
+    if !stage.path().join(".htaccess").exists() {
+        fs::write(stage.path().join(".htaccess"), WEB_APACHE_HEADERS)
+            .map_err(|error| io_error(stage.path(), error))?;
+    }
+    fs::write(stage.path().join("_headers"), WEB_STATIC_HOST_HEADERS)
+        .map_err(|error| io_error(stage.path(), error))?;
     let game_file = format!("game-{:x}.love", Sha256::digest(archive));
     fs::write(stage.path().join(&game_file), archive)
         .map_err(|error| io_error(stage.path(), error))?;
@@ -264,7 +270,9 @@ fn web_index_html(name: &str, game_file: &str) -> String {
     )
 }
 
-const WEB_HOSTING_README: &str = "This directory is a LÖVE 11.5 web game. Serve it from an HTTP(S) server; opening index.html with file:// will not work.\n\nThe 2dengine standalone player requires these response headers for this directory:\nCross-Origin-Opener-Policy: same-origin\nCross-Origin-Embedder-Policy: require-corp\nContent-Security-Policy: script-src 'self' 'unsafe-eval'\n\nApache can use the copied .htaccess when AllowOverride and mod_headers are enabled. Configure equivalent headers on other hosts. Browser audio and fullscreen may require a user gesture. See https://github.com/2dengine/love.js for player limitations and licenses.\n";
+const WEB_APACHE_HEADERS: &str = include_str!("web_apache.htaccess");
+const WEB_STATIC_HOST_HEADERS: &str = include_str!("web_static_headers.txt");
+const WEB_HOSTING_README: &str = include_str!("web_hosting_readme.txt");
 
 fn package_custom(
     pipeline: &PackagePipelineConfig,
