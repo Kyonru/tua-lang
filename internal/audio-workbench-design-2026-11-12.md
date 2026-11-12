@@ -1,8 +1,8 @@
 # Code-first audio workbench design
 
-Status: implementation in progress, 2026-11-12. The cue and scene workbench,
-isolated LÖVE audition, and `AudioDesign` global are implemented; verification
-and package qualification are recorded below.
+Status: implemented, 2026-11-12. The cue and scene workbench, isolated LÖVE
+audition, and `AudioDesign` global are implemented. Pattern scheduling remains
+a separate design decision; verification limits are recorded below.
 
 ## What a game developer should be able to do
 
