@@ -29,6 +29,7 @@ test("audition uses the audioSystem runtime and static authored routing", () => 
   assert.match(source, /looping = false/);
   assert.match(source, /audio:play\("audition", \{ volume = 0\.6 \}\)/);
   assert.match(source, /TUA_AUDIO_EFFECT_UNSUPPORTED/);
+  assert.match(source, /tostring\(event\.reason\)/, "optional effect reasons must compile in Tua");
   assert.match(source, /elapsed >= 3/);
 });
 
@@ -61,6 +62,11 @@ test("scene audition uses streamed layers and actual quantized runtime transitio
   assert.match(model.source, /signature = \{ 4, 4 \}/);
   assert.match(model.source, /audio:setMusicState\("combat", \{ quantize = "bar" \}\)/);
   assert.match(model.source, /elapsed >= 6/);
+  assert.match(model.source, /tostring\(event\.reason\)/);
+  for (const mode of ["immediate", "beat", "bar"]) {
+    assert.match(sceneSource(system, exploration, combat, mode).source,
+      new RegExp(`quantize = "${mode}"`));
+  }
   assert.equal(sceneSource(system, exploration, combat, "random"), undefined);
   assert.equal(sceneSource(system, { ...exploration, layers: [layer("bad", "assets/no.ogg"), { source: { kind: "computed" } }] }), undefined);
 });

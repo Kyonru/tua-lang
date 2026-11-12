@@ -168,6 +168,28 @@ do
   assert(system:snapshot().music.state == 'two')
 end
 
+-- The workbench's three transition modes use the same runtime behavior.
+do
+  local scenes = {one={bpm=60,layers={main={source=source}}},
+    two={bpm=120,layers={main={source=source}}}}
+  local immediate = audioSystem({music=scenes})
+  assert(immediate:setMusicState('one') == 'started')
+  assert(immediate:setMusicState('two',{quantize='immediate'}) == 'started')
+  assert(immediate:snapshot().music.state == 'two')
+
+  local onBeat = audioSystem({music=scenes})
+  onBeat:setMusicState('one'); onBeat:update(0)
+  assert(onBeat:setMusicState('two',{quantize='beat'}) == 'scheduled')
+  onBeat._musicRuntime.layers.main._record.source.position = 1.1
+  onBeat:update(1.1)
+  assert(onBeat:snapshot().music.state == 'two')
+
+  local pending = audioSystem({music={one={layers={main={source=source}}},
+    two={layers={main={source=source}}}}})
+  pending:setMusicState('one')
+  assert(pending:setMusicState('two',{quantize='bar'}) == 'analysis-pending')
+end
+
 -- Natural Source clock wraps continue beat delivery on every cycle.
 do
   local system = audioSystem({music={one={bpm=60,layers={main={source=source}}}}})
