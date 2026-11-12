@@ -8,6 +8,8 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Tween fluent chains now keep their instance type after each setter, so later
+  arguments are checked and setter completion remains available.
 - LuaDoc function fields now retain all comma-separated return types, so
   Camera coordinate methods check and describe every returned number.
 - Slow asset-inventory refreshes now show progress in the Assets view and clear

@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use full_moon::ast::{
     self, Call, Expression, Field, FunctionArgs, FunctionCall, Index, LastStmt, Prefix, Suffix, Var,
@@ -1663,7 +1663,10 @@ pub(crate) fn build_type_environment_with_domain_registry(
     parsed: &ParsedSource,
     domains: BuiltinDomainRegistry,
 ) -> (TypeEnvironment, Vec<Diagnostic>) {
-    let builtin_aliases = domains.builtin_aliases();
+    let mut builtin_aliases = domains.builtin_aliases();
+    let module_aliases = crate::builtin_module::builtin_type_aliases();
+    let has_module_aliases = !module_aliases.is_empty();
+    builtin_aliases.extend(module_aliases);
     let mut diagnostics = Vec::new();
     let mut alias_names = collect_alias_names(parsed, &mut diagnostics);
     collect_class_names(parsed, &mut alias_names);
@@ -2019,7 +2022,24 @@ pub(crate) fn build_type_environment_with_domain_registry(
         })
         .collect();
 
-    let shared_aliases = domains.shared_builtin_aliases();
+    let shared_aliases = if has_module_aliases {
+        static STANDARD: OnceLock<Arc<BTreeMap<String, Type>>> = OnceLock::new();
+        static WITH_ECS: OnceLock<Arc<BTreeMap<String, Type>>> = OnceLock::new();
+        let cache = if domains == BuiltinDomainRegistry::standard() {
+            &STANDARD
+        } else {
+            &WITH_ECS
+        };
+        cache
+            .get_or_init(|| {
+                let mut aliases = (*domains.shared_builtin_aliases()).clone();
+                aliases.extend(crate::builtin_module::builtin_type_aliases());
+                Arc::new(aliases)
+            })
+            .clone()
+    } else {
+        domains.shared_builtin_aliases()
+    };
     let aliases = if aliases == *shared_aliases {
         shared_aliases
     } else {

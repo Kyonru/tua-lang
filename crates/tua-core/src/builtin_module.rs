@@ -80,6 +80,8 @@ pub(crate) const AUDIO_DESIGN: BuiltinModule = BuiltinModule {
 pub(crate) const MODULES: &[BuiltinModule] =
     &[TWEEN, CAMERA, SHADER_SCAN, ROT, BEHAVIOR_TREE, AUDIO_DESIGN];
 
+pub(crate) const TWEEN_INSTANCE_TYPE: &str = "tween.Tween";
+
 pub(crate) fn module(name: &str) -> Option<&'static BuiltinModule> {
     MODULES.iter().find(|module| module.name == name)
 }
@@ -161,14 +163,22 @@ fn inline_aliases(ty: &Type, environment: &TypeEnvironment, visiting: &mut Vec<S
                 return ty.clone();
             }
             if visiting.contains(name) {
+                if name == "Tween" {
+                    return Type::alias(TWEEN_INSTANCE_TYPE);
+                }
                 return Type::Any;
             }
             let Some(definition) = environment.alias(name) else {
                 return ty.clone();
             };
             visiting.push(name.clone());
-            let inlined = inline_aliases(definition, environment, visiting);
+            let mut inlined = inline_aliases(definition, environment, visiting);
             visiting.pop();
+            if name == "Tween" {
+                if let Type::Table(table) = &mut inlined {
+                    table.mark_nominal("builtin:tween.Tween", "Tween", std::iter::empty());
+                }
+            }
             inlined
         }
         Type::Union(types) => Type::union(
@@ -230,6 +240,34 @@ fn inline_aliases(ty: &Type, environment: &TypeEnvironment, visiting: &mut Vec<S
 
 thread_local! {
     static INFERRING: Cell<bool> = const { Cell::new(false) };
+}
+
+/// The public tween instance contract is finite: its fluent return edges use
+/// a namespaced alias instead of dropping to `any` when the LuaDoc recurses.
+pub(crate) fn builtin_type_aliases() -> Vec<(String, Type)> {
+    if INFERRING.with(Cell::get) {
+        return Vec::new();
+    }
+    static TWEEN_INSTANCE: OnceLock<Type> = OnceLock::new();
+    let instance = TWEEN_INSTANCE.get_or_init(|| {
+        let Type::Table(module) = module_type(&TWEEN) else {
+            return Type::Any;
+        };
+        let Some(to) = module.field("to") else {
+            return Type::Any;
+        };
+        let Type::Function(to) = &to.ty else {
+            return Type::Any;
+        };
+        match *to.return_type.clone() {
+            Type::Table(mut table) => {
+                table.mark_nominal("builtin:tween.Tween", "Tween", std::iter::empty());
+                Type::Table(table)
+            }
+            other => other,
+        }
+    });
+    vec![(TWEEN_INSTANCE_TYPE.to_owned(), instance.clone())]
 }
 
 /// Locals that make the built-in modules visible in `parsed`. A module whose
@@ -338,6 +376,53 @@ mod tests {
     }
 
     #[test]
+    fn tween_fluent_setters_keep_their_type_across_chains() {
+        let source = "local t = tween.to({ x = 0 }, 1, { x = 1 }):ease(\"linear\"):delay(0.1)\nt:oncomplete(function() end)\n";
+        let diagnostics = crate::check_tua_source("src/main.tua", source)
+            .err()
+            .unwrap_or_default();
+        assert!(
+            diagnostics
+                .iter()
+                .all(|error| error.code != Some(crate::DiagnosticCode::TYPE_MISMATCH)),
+            "{diagnostics:?}"
+        );
+        for call in [
+            "tween.to({x=0}, 1, {x=1}):ease(\"linear\"):delay(\"slow\")",
+            "tween.to({x=0}, 1, {x=1}):ease(\"linear\"):delay(0.1):ease(\"bounce\")",
+        ] {
+            let errors = crate::check_tua_source("src/main.tua", call)
+                .expect_err("invalid later setter must be checked");
+            assert!(
+                errors
+                    .iter()
+                    .any(|error| error.code == Some(crate::DiagnosticCode::TYPE_MISMATCH)),
+                "{call}: {errors:?}"
+            );
+        }
+        let completions = crate::complete_tua_source(
+            "src/main.tua",
+            "local t = tween.to({x=0}, 1, {x=1}):ease(\"linear\")\nt:",
+            crate::SourcePosition { line: 2, column: 3 },
+        )
+        .expect("completion");
+        assert!(
+            completions.iter().any(|item| item.label == "delay"),
+            "{completions:?}"
+        );
+        let shadowed_type = "type Tween = number\nlocal t = tween.to({x=0}, 1, {x=1}):ease(\"linear\")\nt:delay(0.1)\n";
+        let diagnostics = crate::check_tua_source("src/main.tua", shadowed_type)
+            .err()
+            .unwrap_or_default();
+        assert!(
+            diagnostics
+                .iter()
+                .all(|error| error.code != Some(crate::DiagnosticCode::TYPE_MISMATCH)),
+            "{diagnostics:?}"
+        );
+    }
+
+    #[test]
     fn camera_coordinate_methods_type_every_return_value() {
         let source = "local cam = Camera.new()\nlocal x, y = cam:toWorld(10, 20)\nlocal left, top, width, height = cam:visibleBounds()\nlocal good: number = y\nlocal alsoGood: number = height\nprint(x, left, top, width, good, alsoGood)\n";
         let diagnostics = crate::check_tua_source("src/main.tua", source)
@@ -388,6 +473,9 @@ mod tests {
                 "CameraOptions",
                 "CameraRect",
             ] {
+                if module.name == TWEEN.name && internal == "Tween" {
+                    continue;
+                }
                 assert!(
                     !rendered.contains(&format!(": {internal}"))
                         && !rendered.contains(&format!("-> {internal}")),
@@ -398,7 +486,16 @@ mod tests {
         }
 
         let tween = module_type(module("tween").expect("tween"));
-        assert!(tween.to_string().contains("\"quadout\""), "{tween}");
+        let tween_instance = builtin_type_aliases();
+        assert!(matches!(tween, Type::Table(_)));
+        let Type::Table(instance) = &tween_instance[0].1 else {
+            panic!("tween instance must be a table")
+        };
+        let easing = &instance.field("ease").expect("ease method").ty;
+        assert!(
+            easing.to_string().contains("\"quadout\""),
+            "{easing}"
+        );
         let camera = module_type(module("Camera").expect("Camera"));
         assert!(camera.to_string().contains("\"platformer\""), "{camera}");
         let rot = module_type(module("Rot").expect("Rot"));

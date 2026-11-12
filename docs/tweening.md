@@ -107,10 +107,10 @@ tween.to(box, 1, { x = 10 }):ease("bounce") -- error: not an easing name
 tween.update("fast")                    -- error: dt expects number
 ```
 
-The first setter after `to(...)` is checked. A tween's type refers to itself,
-so the setters return a dynamic value, and later links in the same chain are
-accepted without checking. Calling setters on a local, as in `t:delay(0.5)`,
-checks each one.
+Every setter in a fluent chain is checked, including later links such as
+`tween.to(box, 1, { x = 10 }):ease("quadout"):delay(0.5)`. The inferred
+Tween instance type keeps completion and hover available for setter methods
+available after each call.
 
 Fields not named in a tween are left alone, and flux never checks that a field
 exists before the tween starts. Use typed tables for the objects you animate,
