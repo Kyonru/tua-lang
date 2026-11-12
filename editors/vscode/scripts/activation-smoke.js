@@ -2812,6 +2812,10 @@ function createMockState(workspace, options = {}) {
         });
       }
 
+      if (method === "textDocument/definition" && params?.textDocument?.uri?.endsWith("/sprites.tua") && params?.position?.line === 1) {
+        return Promise.resolve({ uri: `file://${path.join(workspace, "src", "assets", "player.png")}`, range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } } });
+      }
+
       if (method === "tua/inspect") {
         return Promise.resolve(mockInspection(activeTextEditor?.document));
       }

@@ -121,9 +121,10 @@ Lua debug configurations need `tuaProject: true` for Tua launch preparation.
 Object rows show a name and a short summary. Expand one to inspect its data;
 **Details** contains bookkeeping and source information. Empty categories are
 hidden until supported objects appear.
-For a source-mapped state machine, **Open static state diagram** opens the
-declared transitions beside the editor. The inspector continues to show the
-live current state; the diagram shows source structure, not runtime progress.
+For source-mapped state machines, signals, ECS worlds, and object pools, open
+the corresponding static diagram or explorer from **Details**. The inspector
+continues to show live values; these other views show declared relationships,
+not runtime progress.
 
 | Category | Main data | Additional detail |
 | --- | --- | --- |

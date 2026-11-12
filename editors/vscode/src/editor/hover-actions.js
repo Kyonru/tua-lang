@@ -276,36 +276,18 @@ async function assetAtStringLiteral({ document, getClient, position, stringLiter
   }
 
   try {
-    const response = await client.sendRequest("tua/assetInventory", null);
-    const assets = Array.isArray(response?.inventory?.assets) ? response.inventory.assets : [];
-
-    return assets.find((asset) => assetMatchesLiteral(asset, document, position, stringLiteral));
+    const response = await client.sendRequest("textDocument/definition", {
+      textDocument: { uri: document.uri.toString() },
+      position: { line: position.line, character: position.character },
+    });
+    const location = Array.isArray(response) ? response.length === 1 ? response[0] : undefined : response;
+    const uri = vscodeUri(location?.uri || location?.targetUri);
+    if (uri?.scheme === "file" && ASSET_PATH_PATTERN.test(uri.fsPath || uri.path || "")) {
+      return { uri: uri.toString() };
+    }
   } catch {
     return undefined;
   }
-}
-
-function assetMatchesLiteral(asset, document, position, stringLiteral) {
-  if (!asset?.uri) {
-    return false;
-  }
-
-  if (normalizedAssetPath(asset.path) === normalizedAssetPath(stringLiteral.value)) {
-    return true;
-  }
-
-  return (asset.references || []).some((reference) => {
-    if (reference?.uri !== document.uri.toString()) {
-      return false;
-    }
-
-    const range = lspRangeToVscode(reference.range);
-    return range ? rangeContainsPosition(range, position) : false;
-  });
-}
-
-function normalizedAssetPath(value) {
-  return typeof value === "string" ? value.replaceAll("\\", "/") : "";
 }
 
 function looksLikeAssetPath(value) {

@@ -556,10 +556,13 @@ Static state-machine configurations use the same preview gate for
 state, expands multi-source and wildcard event routes, follows source edits,
 and navigates back to state and event declarations. Sprite sheets and state
 machines link directly to their previews from hover; recognized asset-path
-hovers link to the native asset preview and reveal the indexed asset in the
-Explorer. Preview links trust only
+hovers link to the native asset preview and reveal the resolved asset in the
+Explorer. These actions use source navigation, so unrelated strings that merely
+look like asset paths do not acquire asset links. Preview links trust only
 their registered Tua commands. The graph never runs the project or claims to
 show the machine's live runtime state.
+The Assets view shows a refresh message when inventory analysis takes more than
+a moment and replaces it with the result or an error when the request finishes.
 
 ### Project Explorers
 

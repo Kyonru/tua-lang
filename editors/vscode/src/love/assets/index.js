@@ -100,6 +100,11 @@ class AssetExplorerController {
     }
 
     const serial = ++this.requestSerial;
+    const loading = setTimeout(() => {
+      if (!this.disposed && serial === this.requestSerial && client === this.getClient()) {
+        this.view.message = "Refreshing asset inventory…";
+      }
+    }, 250);
 
     try {
       const response = await client.sendRequest("tua/assetInventory", null);
@@ -119,6 +124,8 @@ class AssetExplorerController {
       }
 
       return undefined;
+    } finally {
+      clearTimeout(loading);
     }
   }
 }

@@ -70,3 +70,16 @@ test("an older inventory cannot replace a newer result", async () => {
   assert.match(controller.view.message, /No supported assets/);
   controller.dispose();
 });
+
+test("a slow asset refresh shows progress in its view and clears it on completion", async () => {
+  let resolve;
+  const client = { sendRequest: () => new Promise(done => { resolve = done; }) };
+  const controller = new AssetExplorerController({ getClient: () => client });
+  const refresh = controller.refresh();
+  await new Promise(done => setTimeout(done, 275));
+  assert.match(controller.view.message, /Refreshing asset inventory/);
+  resolve({ inventory: { assets: [], diagnostics: [] } });
+  await refresh;
+  assert.match(controller.view.message, /No supported assets/);
+  controller.dispose();
+});

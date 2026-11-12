@@ -11,6 +11,7 @@ Module._load = function (name, ...args) {
     Hover: class { constructor(contents) { this.contents = contents; } },
     Position: class { constructor(line, character) { this.line = line; this.character = character; } },
     Range: class { constructor(start, end) { this.start = start; this.end = end; } },
+    Uri: { parse: value => ({ scheme: value.startsWith("file:") ? "file" : "tua", fsPath: value.replace(/^file:\/\//, ""), toString: () => value }) },
   };
   return load.call(this, name, ...args);
 };
@@ -47,11 +48,20 @@ test("asset hover opens or reveals the indexed asset at the reference", async ()
   };
   const hover = await hoverActionsAtPosition({
     document, position: { line: 0, character: 25 }, isTuaDocument: () => true,
-    getClient: () => ({ sendRequest: async method => method === "tua/assetInventory"
-      ? { inventory: { assets: [{ path: "assets/hero.png", uri: "file:///game/assets/hero.png" }] } }
+    getClient: () => ({ sendRequest: async method => method === "textDocument/definition"
+      ? { uri: "file:///game/assets/hero.png", range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } } }
       : { documentVersion: 1, items: [] } }),
   });
   assert.match(hover.contents.value, /Preview Asset/);
   assert.match(hover.contents.value, /Reveal Asset/);
   assert(hover.contents.isTrusted.enabledCommands.includes("tua.assets.reveal"));
+});
+
+test("asset-like text without an asset definition gets no asset actions", async () => {
+  const document = { uri: { toString: () => "file:///game/main.tua" }, version: 1,
+    getWordRangeAtPosition: () => undefined, lineAt: () => ({ text: 'print("missing.png")' }) };
+  const hover = await hoverActionsAtPosition({ document, position: { line: 0, character: 12 },
+    isTuaDocument: () => true, getClient: () => ({ sendRequest: async method => method === "textDocument/definition"
+      ? null : { documentVersion: 1, items: [] } }) });
+  assert.equal(hover, undefined);
 });

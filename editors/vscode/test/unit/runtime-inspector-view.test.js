@@ -104,8 +104,20 @@ test("live state machines link to their source-derived diagram without calling i
   const staticLink = details.find(node => node.label === "Open static state diagram");
   assert.equal(staticLink.description, "Declared transitions");
   assert.deepEqual(tree.getTreeItem(staticLink).command, {
-    command: "tua.inspector.openStaticPreview", title: staticLink.label, arguments: [{ origin }],
+    command: "tua.inspector.openStaticPreview", title: staticLink.label, arguments: [{ origin, kind: "states" }],
   });
+});
+
+test("source-mapped signal, ECS and pool entries link to their static explorers", () => {
+  const origin = { path: "/game/src/main.tua", file: "src/main.tua", line: 2, name: "world", generated: false };
+  const cases = [["signals", "Signal activity", "Open static signal graph"], ["ecs", "Entities and components", "Open static ECS explorer"], ["pools", "Object pools", "Open static pool explorer"]];
+  for (const [kind, group, label] of cases) {
+    const entry = { session: { id: kind, active: true }, snapshot: { objects: [{ id: 1, kind, label: kind, data: {}, origin }] } };
+    const tree = new InspectorTree({ entries: new Map([[kind, entry]]) });
+    const item = tree.getChildren().find(node => node.label === group).children[0];
+    const link = item.children.find(node => node.label === "Details").children.find(node => node.label === label);
+    assert.deepEqual(tree.getTreeItem(link).command.arguments, [{ origin, kind }]);
+  }
 });
 
 

@@ -8,6 +8,12 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Slow asset-inventory refreshes now show progress in the Assets view and clear
+  that state when the latest request finishes.
+- Source-mapped live signal, ECS, and pool entries now open their static
+  project views from the Runtime Inspector.
+- Asset hover actions now resolve the specific source reference instead of
+  requesting the full project asset inventory on each hover.
 - Type explanations now offer the editor's available quick fixes at the
   explained expression. Live state-machine entries link to their static
   source diagram, and asset-reference hover can reveal the indexed asset.
