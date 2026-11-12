@@ -4,6 +4,7 @@ const vscode = require("vscode");
 const { COMMANDS } = require("../constants");
 const { displayUriPath, openLocationMessage } = require("../shared/locations");
 const { createRenderGate } = require("../shared/render-gate");
+const { createGraphViewport } = require("../shared/graph-viewport");
 const { escapeHtml, jsonForHtml, webviewDocument } = require("../shared/webview");
 
 let graphPanel;
@@ -351,8 +352,8 @@ function signalGraphHtml(webview, graph) {
     </header>
     <main class="layout">
       <section class="graph-band" aria-label="Signal event and file graph">
-        <div class="column-labels"><span>Events</span><span>Files</span></div>
-        <div id="graph" class="graph"></div>
+        <div class="column-labels"><span>Events → Files</span><div class="graph-zoom" role="group" aria-label="Signal graph zoom"><button id="zoom-out" type="button" aria-label="Zoom out">−</button><output id="zoom-level">100%</output><button id="zoom-in" type="button" aria-label="Zoom in">+</button><button id="zoom-fit" type="button" aria-label="Fit graph to view">Fit</button></div></div>
+        <div id="graph-scroll" class="graph-scroll" tabindex="0" role="region" aria-label="Signal graph; drag to pan, pinch or Control and wheel to zoom, plus and minus keys to zoom"><div id="graph" class="graph"></div></div>
       </section>
       <aside id="inspector" class="inspector" aria-live="polite"></aside>
     </main>`;
@@ -360,6 +361,8 @@ function signalGraphHtml(webview, graph) {
   const script = `
     const graphData = ${graphJson};
     const root = document.getElementById("graph");
+    const graphScroll = document.getElementById("graph-scroll");
+    const createGraphViewport = (${createGraphViewport.toString()});
     const inspector = document.getElementById("inspector");
     const summary = document.getElementById("summary");
     const eventFilterInput = document.getElementById("event-filter");
@@ -374,13 +377,25 @@ function signalGraphHtml(webview, graph) {
     let fileFilter = typeof restored?.fileFilter === "string" ? restored.fileFilter : "";
     let selectedEvent = restored?.selectedEvent || graphData.events[0]?.id || null;
     let selectedFile = restored?.selectedFile || null;
+    let viewportScale = Number.isFinite(restored?.scale) ? restored.scale : 1;
+    const viewport = createGraphViewport(graphScroll, root, {
+      initialScale: viewportScale,
+      onScale: (scale) => {
+        viewportScale = scale;
+        document.getElementById("zoom-level").textContent = Math.round(scale * 100) + "%";
+        persistState();
+      },
+    });
+    document.getElementById("zoom-in").addEventListener("click", () => viewport.zoom(viewport.scale() * 1.2));
+    document.getElementById("zoom-out").addEventListener("click", () => viewport.zoom(viewport.scale() / 1.2));
+    document.getElementById("zoom-fit").addEventListener("click", () => viewport.fit());
     eventFilterInput.value = eventQuery;
     for (const button of segmentButtons) button.classList.toggle("active", button.dataset.mode === mode);
 
     function persistState() {
       vscode.setState({ ...(vscode.getState() || {}), signalGraph: {
         workspaceKey: graphData.workspaceKey || "",
-        mode, eventQuery, busFilter, fileFilter, selectedEvent, selectedFile,
+        mode, eventQuery, busFilter, fileFilter, selectedEvent, selectedFile, scale: viewportScale,
       } });
     }
 
@@ -477,10 +492,10 @@ function signalGraphHtml(webview, graph) {
       const callCount = events.reduce((total, event) => total + event.calls.length, 0);
       summary.textContent = events.length + " events / " + files.length + " files / " + callCount + " calls";
       root.replaceChildren();
+      graphScroll.classList.toggle("is-empty", events.length === 0);
 
       if (events.length === 0) {
-        root.style.minWidth = "0";
-        root.style.height = "auto";
+        viewport.setSize(Math.max(1, graphScroll.clientWidth), 240);
         const empty = document.createElement("div");
         empty.className = "empty";
         empty.textContent = graphData.events.length === 0
@@ -500,14 +515,13 @@ function signalGraphHtml(webview, graph) {
         selectedFile = null;
       }
 
-      const width = Math.max(root.clientWidth || 0, 720);
-      root.style.minWidth = "";
+      const width = Math.max(graphScroll.clientWidth || 0, 720);
       const rowHeight = 62;
       const top = 18;
       const nodeWidth = Math.min(260, Math.max(210, Math.floor(width * 0.31)));
       const fileX = width - nodeWidth - 18;
       const height = Math.max(events.length, files.length) * rowHeight + top * 2;
-      root.style.height = height + "px";
+      viewport.setSize(width, height);
 
       const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
       svg.setAttribute("viewBox", "0 0 " + width + " " + height);
@@ -771,9 +785,16 @@ function documentHtml(webview, title, body, script) {
     .icon-button { display: grid; place-items: center; width: 30px; height: 30px; padding: 0; border: 1px solid var(--vscode-panel-border); background: transparent; font-size: 18px; }
     .segments button:hover:not(.active), .icon-button:hover { background: var(--vscode-toolbar-hoverBackground); }
     .layout { min-width: 0; }
-    .graph-band { padding: 12px 14px 18px; border-bottom: 1px solid var(--vscode-panel-border); overflow-x: auto; }
-    .column-labels { display: flex; justify-content: space-between; min-width: 720px; padding: 0 18px 8px; color: var(--vscode-descriptionForeground); font-size: 11px; font-weight: 600; text-transform: uppercase; }
-    .graph { position: relative; min-width: 720px; border: 1px solid var(--vscode-panel-border); background: var(--vscode-editorWidget-background, var(--vscode-editor-background)); overflow: hidden; }
+    .graph-band { min-width: 0; padding: 12px 14px 18px; border-bottom: 1px solid var(--vscode-panel-border); overflow-x: hidden; }
+    .column-labels { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px; min-width: 0; padding: 0 4px 8px; color: var(--vscode-descriptionForeground); font-size: 11px; font-weight: 600; text-transform: uppercase; }
+    .graph-zoom { display: flex; align-items: center; gap: 4px; }
+    .graph-zoom button { min-width: 26px; height: 24px; border: 1px solid var(--vscode-panel-border); border-radius: 3px; color: var(--vscode-foreground); background: var(--vscode-editorWidget-background); cursor: pointer; }
+    .graph-zoom output { min-width: 40px; text-align: center; font-variant-numeric: tabular-nums; }
+    .graph-scroll { overflow: auto; max-height: 65vh; min-height: 240px; touch-action: none; cursor: grab; }
+    .graph-scroll.is-panning { cursor: grabbing; }
+    .graph-scroll.is-empty .graph-viewport-stage, .graph-scroll.is-empty .graph { width: 100% !important; }
+    .graph-scroll:focus-visible, .graph-zoom button:focus-visible { outline: 2px solid var(--vscode-focusBorder); outline-offset: -2px; }
+    .graph { position: relative; border: 1px solid var(--vscode-panel-border); background: var(--vscode-editorWidget-background, var(--vscode-editor-background)); overflow: hidden; }
     .edges { position: absolute; inset: 0; overflow: visible; pointer-events: none; }
     .edge { fill: none; opacity: .58; pointer-events: stroke; cursor: pointer; }
     .edge:hover { opacity: 1; stroke-width: 5; }

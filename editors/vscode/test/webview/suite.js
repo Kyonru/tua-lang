@@ -207,8 +207,9 @@ async function run() {
       const widths = await evaluate("({ viewport: window.innerWidth, document: document.documentElement.scrollWidth, toolbar: document.querySelector('.toolbar')?.scrollWidth, graph: document.querySelector('.graph')?.scrollWidth })");
       assert(widths.document <= widths.viewport + 1, `${title} should fit a narrow editor: ${JSON.stringify(widths)}`);
       if (title === "Signal Graph") {
-        assert.equal(await evaluate("(() => { const empty = document.querySelector('.graph .empty')?.getBoundingClientRect(); return empty && empty.left >= 0 && empty.left < window.innerWidth && empty.width <= window.innerWidth; })()"), true,
-          "the signal empty state must be visible without horizontal scrolling");
+        const emptyBounds = await evaluate("(() => { const empty = document.querySelector('.graph .empty')?.getBoundingClientRect(); const scroll = document.getElementById('graph-scroll')?.getBoundingClientRect(); return empty && {left:empty.left,width:empty.width,viewport:window.innerWidth,scrollLeft:scroll?.left,scrollWidth:scroll?.width}; })()");
+        assert(emptyBounds && emptyBounds.left >= 0 && emptyBounds.left < emptyBounds.viewport && emptyBounds.width <= emptyBounds.viewport,
+          "the signal empty state must be visible without horizontal scrolling: " + JSON.stringify(emptyBounds));
       }
       if (title === "Module Graph") {
         assert.equal(await evaluate("(() => { const segments = document.querySelector('.segments'); return window.innerWidth >= 650 || segments.scrollWidth <= segments.clientWidth + 1; })()"), true,
@@ -229,7 +230,7 @@ async function run() {
     ]) {
       await load(createHtml(2), title);
       await evaluate(`(() => { const filter = document.querySelector(${JSON.stringify(filterSelector)}); filter.value = "player"; filter.dispatchEvent(new Event("input")); document.querySelector(${JSON.stringify(modeSelector)}).click(); })()`);
-      if (title === "Module Graph") {
+      if (title === "Module Graph" || title === "Signal Graph") {
         await evaluate("document.getElementById('zoom-in').click()");
         assert.equal(await evaluate("document.getElementById('zoom-level').textContent"), "120%");
       }
@@ -237,6 +238,7 @@ async function run() {
       assert.equal(await evaluate(`document.querySelector(${JSON.stringify(filterSelector)}).value`), "player", `${title} preserves filtering after refresh`);
       assert.equal(await evaluate(`document.querySelector(${JSON.stringify(modeSelector)}).classList.contains("active")`), true, `${title} preserves mode after refresh`);
       if (title === "Module Graph") assert.equal(await evaluate("document.getElementById('zoom-level').textContent"), "120%", "module graph preserves zoom after refresh");
+      if (title === "Signal Graph") assert.equal(await evaluate("document.getElementById('zoom-level').textContent"), "120%", "signal graph preserves zoom after refresh");
     }
     const projectSignalView = (workspaceKey, name) => ({
       ...signalGraphViewModel({ events: [{

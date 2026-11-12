@@ -12,6 +12,8 @@ language or editor behavior, and migration notes call out those changes.
   and support canvas pan, pinch/Control-wheel zoom, keyboard zoom, and Fit.
 - Module graphs support the same pan and zoom controls and retain zoom after
   analysis refreshes.
+- Signal graphs support canvas pan and zoom while keeping event, file, and edge
+  selection available.
 - Sprite grids now treat `frame.border` as spacing between cells, matching the
   editor preview and allowing atlases with no leading border to use their last
   row and column without clipping. The bundled astronaut example now selects
