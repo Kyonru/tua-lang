@@ -1,7 +1,7 @@
 "use strict";
 
 function restoreGraphState(preview, saved) {
-  const empty = { machineIndex: 0, selection: { kind: "machine" }, left: 0, top: 0 };
+  const empty = { machineIndex: 0, selection: { kind: "machine" }, left: 0, top: 0, scale: 1 };
   if (saved?.source !== preview.source) return empty;
   const machineIndex = preview.machines.findIndex((machine) => machine.name === saved.machine);
   if (machineIndex < 0) return empty;
@@ -21,6 +21,7 @@ function restoreGraphState(preview, saved) {
     selection,
     left: Number.isFinite(saved.left) ? Math.max(0, saved.left) : 0,
     top: Number.isFinite(saved.top) ? Math.max(0, saved.top) : 0,
+    scale: Number.isFinite(saved.scale) ? Math.max(0.25, Math.min(2.5, saved.scale)) : 1,
   };
 }
 

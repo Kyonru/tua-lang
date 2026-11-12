@@ -155,6 +155,14 @@ async function run() {
     await evaluate("drawConnections()");
     await waitFor(() => evaluate("document.querySelector('.edge-label.selected')?.textContent === 'start'"), "restored transition selection");
     assert.equal(await evaluate("document.querySelector('#machine-picker').selectedOptions[0].textContent"), "player");
+    const pathBeforeZoom = await evaluate("document.querySelector('path.connection')?.getAttribute('d')");
+    await evaluate("document.getElementById('zoom-in').click(); drawConnections()");
+    assert.equal(await evaluate("document.getElementById('zoom-level').textContent"), "120%");
+    assert.equal(await evaluate("document.querySelector('path.connection')?.getAttribute('d')"), pathBeforeZoom, "zoom keeps graph routes aligned with states");
+    await evaluate("document.getElementById('graph-scroll').dispatchEvent(new WheelEvent('wheel', {deltaY:-40, ctrlKey:true, bubbles:true, cancelable:true, clientX:200, clientY:200}))");
+    assert.equal(await evaluate("viewport.scale() > 1.2"), true, "Control-wheel gesture zooms the graph");
+    await evaluate("document.getElementById('zoom-fit').click()");
+    assert.equal(await evaluate("viewport.scale() <= 1"), true, "Fit keeps the whole graph visible");
     await screenshot("state-machine");
     await workbench.send("Emulation.setDeviceMetricsOverride", { width: 640, height: 900, deviceScaleFactor: 1, mobile: false });
     await waitFor(() => workbench.evaluate("window.innerWidth <= 640"), "narrow graph viewport");

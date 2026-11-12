@@ -17,18 +17,20 @@ const preview = {
 
 test("graph selection follows names when machines and transition indices change", () => {
   const restored = restoreGraphState(preview, {
-    source: preview.source, machine: "player", left: 180, top: 60,
+    source: preview.source, machine: "player", left: 180, top: 60, scale: 1.5,
     selection: { kind: "transition", id: "old-id", event: "start", source: "idle", to: "running" },
   });
   assert.equal(restored.machineIndex, 1);
   assert.deepEqual(restored.selection, { kind: "transition", id: "player:start:5", source: "idle" });
   assert.equal(restored.left, 180);
   assert.equal(restored.top, 60);
+  assert.equal(restored.scale, 1.5);
 });
 
 test("graph restoration rejects other files and removed selections", () => {
   const saved = { source: preview.source, machine: "player", selection: { kind: "state", name: "deleted" }, left: -10, top: Infinity };
-  assert.deepEqual(restoreGraphState(preview, saved), { machineIndex: 1, selection: { kind: "machine" }, left: 0, top: 0 });
+  assert.deepEqual(restoreGraphState(preview, saved), { machineIndex: 1, selection: { kind: "machine" }, left: 0, top: 0, scale: 1 });
+  assert.equal(restoreGraphState(preview, { ...saved, scale: 99 }).scale, 2.5);
   assert.equal(restoreGraphState(preview, { ...saved, source: "file:///other.tua" }).machineIndex, 0);
   assert.equal(restoreGraphState(preview, { ...saved, machine: "deleted" }).machineIndex, 0);
 });

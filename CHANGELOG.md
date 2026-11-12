@@ -8,6 +8,8 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- State-machine previews now separate arrows that converge on the same state
+  and support canvas pan, pinch/Control-wheel zoom, keyboard zoom, and Fit.
 - Sprite grids now treat `frame.border` as spacing between cells, matching the
   editor preview and allowing atlases with no leading border to use their last
   row and column without clipping. The bundled astronaut example now selects

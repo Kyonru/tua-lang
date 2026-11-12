@@ -59,3 +59,29 @@ test("backward transitions remain inside the layout when the canvas stretches", 
   assert.ok(stretched.labelY > rect("over").bottom);
   assert.ok(stretched.points.every(point => point.y >= 0 && point.y < layout.height));
 });
+
+test("crowded state-machine routes keep distinct source and target ports", () => {
+  const { stateLayout, connectionRoutes, connectionGeometry, GRAPH_LAYOUT: config } = bundled("state-machines/template.js");
+  const machine = { initial: "idle", states: [{ name: "idle" }, { name: "run" }] };
+  const edges = Array.from({ length: 9 }, (_, index) => ({
+    source: "idle", target: "run", transition: { event: `event${index}` },
+  }));
+  const layout = stateLayout(machine, edges, config);
+  assert.equal(new Set(layout.routes.map(route => route.sourceOffset)).size, edges.length);
+  assert.equal(new Set(layout.routes.map(route => route.targetOffset)).size, edges.length);
+  const rect = name => {
+    const state = layout.states.find(item => item.name === name);
+    return { left: state.x, right: state.x + config.nodeWidth, top: state.y,
+      bottom: state.y + config.nodeHeight, centerY: state.y + config.nodeHeight / 2 };
+  };
+  const paths = edges.map((edge, index) => connectionGeometry(edge, layout.routes[index],
+    rect("idle"), rect("run"), layout, layout, config).pathData);
+  assert.equal(new Set(paths).size, edges.length);
+
+  const converging = Array.from({ length: 9 }, (_, index) => ({
+    source: `source${index}`, target: "run", transition: { event: `event${index}` },
+  }));
+  const depth = new Map([...converging.map(edge => [edge.source, 0]), ["run", 1]]);
+  const incoming = connectionRoutes(converging, depth);
+  assert.equal(new Set(incoming.map(route => route.targetOffset)).size, converging.length);
+});

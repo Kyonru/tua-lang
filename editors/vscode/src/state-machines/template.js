@@ -3,6 +3,7 @@
 const { escapeHtml, jsonForHtml, webviewDocument } = require("../shared/webview");
 
 const { restoreGraphState } = require("./selection");
+const { createGraphViewport } = require("../shared/graph-viewport");
 
 const GRAPH_LAYOUT = {
   columnWidth: 320,
@@ -74,8 +75,9 @@ function connectionRoutes(edges, depth) {
         leftIndex - rightIndex;
     });
 
+    const spacing = Math.min(36, 120 / Math.max(1, group.length - 1));
     for (const [laneIndex, edgeIndex] of group.entries()) {
-      routes[edgeIndex].offset = (laneIndex - (group.length - 1) / 2) * 36;
+      routes[edgeIndex].offset = (laneIndex - (group.length - 1) / 2) * spacing;
     }
   }
 
@@ -103,6 +105,38 @@ function connectionRoutes(edges, depth) {
     route.lane = Math.floor(lane / 2);
     route.side = lane % 2 === 0 ? "right" : "left";
     verticalLanes.set(route.sourceDepth, lane + 1);
+  }
+
+  // Edges may share a node and direction without sharing an arrowhead. Give
+  // each endpoint a stable port within the node instead of clamping several
+  // routes to the same +/-20px position when the graph becomes crowded.
+  const ports = new Map();
+  for (const [index, edge] of edges.entries()) {
+    const route = routes[index];
+    if (route.kind === "loop") continue;
+    const sourceSide = route.kind === "backward" ? "left" :
+      route.kind === "vertical" ? route.side : "right";
+    const targetSide = route.kind === "backward" ? "right" :
+      route.kind === "vertical" ? route.side : "left";
+    for (const [key, property] of [
+      [edge.source + "\u0000" + sourceSide + "\u0000source", "sourceOffset"],
+      [edge.target + "\u0000" + targetSide + "\u0000target", "targetOffset"],
+    ]) {
+      const group = ports.get(key) || [];
+      group.push({ index, property, edge });
+      ports.set(key, group);
+    }
+  }
+  for (const group of ports.values()) {
+    group.sort((left, right) =>
+      left.edge.source.localeCompare(right.edge.source) ||
+      left.edge.target.localeCompare(right.edge.target) ||
+      left.edge.transition.event.localeCompare(right.edge.transition.event) ||
+      left.index - right.index);
+    const spacing = Math.min(12, 48 / Math.max(1, group.length - 1));
+    group.forEach(({ index, property }, position) => {
+      routes[index][property] = (position - (group.length - 1) / 2) * spacing;
+    });
   }
 
   return routes;
@@ -256,7 +290,8 @@ function orthogonalPath(points, radius = 10) {
 }
 
 function connectionGeometry(edge, route, source, target, layout, canvas, config) {
-  const anchorOffset = Math.max(-20, Math.min(20, route.offset * 0.4));
+  const sourceOffset = route.sourceOffset || 0;
+  const targetOffset = route.targetOffset || 0;
   let labelX;
   let labelY;
   let pathData;
@@ -281,8 +316,8 @@ function connectionGeometry(edge, route, source, target, layout, canvas, config)
     labelY = source.top + 12 + route.loopIndex * 26;
   } else if (route.kind === "longForward") {
     const corridorY = 24 + route.lane * config.routeGap;
-    const start = { x: source.right, y: source.centerY + anchorOffset };
-    const end = { x: target.left, y: target.centerY + anchorOffset };
+    const start = { x: source.right, y: source.centerY + sourceOffset };
+    const end = { x: target.left, y: target.centerY + targetOffset };
     points = [
       start,
       { x: start.x + 32, y: start.y },
@@ -298,8 +333,8 @@ function connectionGeometry(edge, route, source, target, layout, canvas, config)
     // CSS may stretch the canvas beyond the graph. Keep return routes in
     // the reserved layout corridor rather than below the visible graph.
     const corridorY = Math.min(layout.height, canvas.height) - 24 - route.lane * config.routeGap;
-    const start = { x: source.left, y: source.centerY + anchorOffset };
-    const end = { x: target.right, y: target.centerY + anchorOffset };
+    const start = { x: source.left, y: source.centerY + sourceOffset };
+    const end = { x: target.right, y: target.centerY + targetOffset };
     points = [
       start,
       { x: start.x - 32, y: start.y },
@@ -321,8 +356,8 @@ function connectionGeometry(edge, route, source, target, layout, canvas, config)
         ? Math.min(source.left, target.left)
         : Math.max(source.right, target.right)) +
       direction * (36 + route.lane * 18);
-    const start = { x: startX, y: source.centerY + anchorOffset };
-    const end = { x: endX, y: target.centerY + anchorOffset };
+    const start = { x: startX, y: source.centerY + sourceOffset };
+    const end = { x: endX, y: target.centerY + targetOffset };
     points = [
       start,
       { x: corridorX, y: start.y },
@@ -335,9 +370,9 @@ function connectionGeometry(edge, route, source, target, layout, canvas, config)
   } else {
     const offset = route.offset;
     const x1 = source.right;
-    const y1 = source.centerY + anchorOffset;
+    const y1 = source.centerY + sourceOffset;
     const x2 = target.left;
-    const y2 = target.centerY + anchorOffset;
+    const y2 = target.centerY + targetOffset;
     const bend = Math.max(56, Math.abs(x2 - x1) * 0.44);
     pathData = "M " + x1 + " " + y1 + " C " + (x1 + bend) + " " +
       (y1 + offset) + ", " + (x2 - bend) + " " + (y2 + offset) +
@@ -392,8 +427,14 @@ function stateMachinePreviewHtml(webview, viewModel) {
           <span><i class="legend-dot initial"></i>Initial state</span>
           <span><i class="legend-line"></i>Transition event</span>
           <span><i class="legend-dot wildcard"></i>Any state</span>
+          <div class="graph-zoom" role="group" aria-label="Graph zoom">
+            <button id="zoom-out" type="button" aria-label="Zoom out">−</button>
+            <output id="zoom-level" aria-live="polite">100%</output>
+            <button id="zoom-in" type="button" aria-label="Zoom in">+</button>
+            <button id="zoom-fit" type="button" aria-label="Fit graph to view">Fit</button>
+          </div>
         </div>
-        <div id="graph-scroll" class="graph-scroll">
+        <div id="graph-scroll" class="graph-scroll" tabindex="0" role="region" aria-label="State transition graph; drag to pan, pinch or Control and wheel to zoom, plus and minus keys to zoom">
           <div id="graph" class="graph">
             <svg id="connections" class="connections" aria-hidden="true">
               <defs>
@@ -416,6 +457,7 @@ function stateMachinePreviewHtml(webview, viewModel) {
     const summary = document.getElementById("summary");
     const graph = document.getElementById("graph");
     const graphScroll = document.getElementById("graph-scroll");
+    const createGraphViewport = (${createGraphViewport.toString()});
     const nodes = document.getElementById("nodes");
     const connections = document.getElementById("connections");
     const edgeLabels = document.getElementById("edge-labels");
@@ -428,6 +470,17 @@ function stateMachinePreviewHtml(webview, viewModel) {
     let positionedNodes = new Map();
     let renderedEdges = [];
     let renderedLayout;
+    const viewport = createGraphViewport(graphScroll, graph, {
+      initialScale: restored.scale,
+      onScale: (scale) => {
+        document.getElementById("zoom-level").textContent = Math.round(scale * 100) + "%";
+        if (renderedLayout) requestAnimationFrame(drawConnections);
+        if (renderedLayout) requestAnimationFrame(saveState);
+      },
+    });
+    document.getElementById("zoom-in").addEventListener("click", () => viewport.zoom(viewport.scale() * 1.2));
+    document.getElementById("zoom-out").addEventListener("click", () => viewport.zoom(viewport.scale() / 1.2));
+    document.getElementById("zoom-fit").addEventListener("click", () => viewport.fit());
 
     const graphLayoutConfig = ${jsonForHtml(GRAPH_LAYOUT)};
     const { statePastelHue, connectionRoutes, stateLayout, orthogonalPath, connectionGeometry } = (${graphHelpers.toString()})();
@@ -468,7 +521,7 @@ function stateMachinePreviewHtml(webview, viewModel) {
       vscode.setState({
         source: preview.source, machine: machine.name,
         selection: transition ? { ...selection, event: transition.event, to: transition.to } : selection,
-        left: graphScroll.scrollLeft, top: graphScroll.scrollTop,
+        left: graphScroll.scrollLeft, top: graphScroll.scrollTop, scale: viewport.scale(),
       });
     }
 
@@ -515,8 +568,7 @@ function stateMachinePreviewHtml(webview, viewModel) {
 
       const layout = stateLayout(machine, renderedEdges, graphLayoutConfig);
       renderedLayout = layout;
-      graph.style.width = layout.width + "px";
-      graph.style.height = layout.height + "px";
+      viewport.setSize(layout.width, layout.height);
 
       for (const state of layout.states) {
         const button = document.createElement("button");
@@ -636,14 +688,16 @@ function stateMachinePreviewHtml(webview, viewModel) {
     }
 
     function relativeRect(rect, graphRect) {
-      const left = rect.left - graphRect.left;
-      const top = rect.top - graphRect.top;
+      const scale = viewport.scale();
+      const coordinate = (value) => Math.round(value / scale * 1000) / 1000;
+      const left = coordinate(rect.left - graphRect.left);
+      const top = coordinate(rect.top - graphRect.top);
       return {
-        bottom: rect.bottom - graphRect.top,
-        centerX: left + rect.width / 2,
-        centerY: top + rect.height / 2,
+        bottom: coordinate(rect.bottom - graphRect.top),
+        centerX: coordinate(rect.left + rect.width / 2 - graphRect.left),
+        centerY: coordinate(rect.top + rect.height / 2 - graphRect.top),
         left,
-        right: rect.right - graphRect.left,
+        right: coordinate(rect.right - graphRect.left),
         top,
       };
     }
@@ -936,13 +990,19 @@ const STYLES = `
     min-height: 38px;
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
     gap: 16px;
     padding: 6px 16px;
     color: var(--muted);
     border-bottom: 1px solid var(--border);
     font-size: 11px;
+    min-width: 0;
   }
   .graph-legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .graph-zoom { margin-left: auto; display: flex; align-items: center; gap: 4px; }
+  .graph-zoom button { min-width: 28px; height: 26px; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 4px; cursor: pointer; }
+  .graph-zoom button:focus-visible, .graph-scroll:focus-visible { outline: 2px solid var(--vscode-focusBorder); outline-offset: -2px; }
+  .graph-zoom output { min-width: 42px; text-align: center; font-variant-numeric: tabular-nums; }
   .legend-dot {
     width: 9px;
     height: 9px;
@@ -958,8 +1018,11 @@ const STYLES = `
     min-height: 420px;
     overflow: auto;
     background: var(--canvas);
+    touch-action: none;
+    cursor: grab;
   }
-  .graph { position: relative; min-width: 100%; min-height: 100%; }
+  .graph-scroll.is-panning { cursor: grabbing; }
+  .graph { position: relative; }
   .connections, .nodes, .edge-labels { position: absolute; inset: 0; }
   .connections { overflow: visible; pointer-events: none; }
   .connection {

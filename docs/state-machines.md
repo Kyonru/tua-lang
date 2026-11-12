@@ -90,8 +90,11 @@ source-linked inspector; double-clicking it jumps to the declaration.
 
 The layout keeps states in ordered columns and reserves separate corridors for
 long forward routes, return routes, same-column transitions, and self-loops.
-This keeps transition paths outside state cards and separates repeated loops as
-the graph becomes denser. Each real state receives a distinct, theme-aware
+Transitions sharing a state get separate attachment points so their arrowheads
+remain traceable in a dense graph. Drag empty canvas space to pan; pinch or use
+Control/Command + wheel to zoom. The graph also has Zoom in, Zoom out, and Fit
+buttons, plus `+`, `-`, and `0` shortcuts when the canvas has keyboard focus.
+Each real state receives a distinct, theme-aware
 pastel color for quick visual tracking; the wildcard source stays neutral.
 
 The preview follows edits and can switch between multiple machines in one
