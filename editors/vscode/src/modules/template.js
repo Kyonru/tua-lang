@@ -757,7 +757,9 @@ function documentHtml(webview, title, body, script) {
       body { display: block; overflow: auto; }
       .toolbar { position: sticky; top: 0; z-index: 4; flex-direction: column; }
       .tools { width: 100%; justify-content: flex-start; }
-      .segments { max-width: 100%; overflow-x: auto; }
+      .segments { width: 100%; height: auto; flex-wrap: wrap; overflow: visible; }
+      .segments button { flex: 1 1 45%; border-bottom: 1px solid var(--vscode-panel-border); }
+      .segments button:nth-last-child(-n + 2) { border-bottom: 0; }
       .layout { height: auto; min-height: calc(100vh - 100px); grid-template-columns: 1fr; grid-template-rows: auto; }
       .graph-band { height: 420px; min-height: 0; border-right: 0; border-bottom: 1px solid var(--vscode-panel-border); }
       .inspector { min-height: 420px; }

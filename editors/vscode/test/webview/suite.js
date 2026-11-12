@@ -193,6 +193,10 @@ async function run() {
         assert.equal(await evaluate("(() => { const empty = document.querySelector('.graph .empty')?.getBoundingClientRect(); return empty && empty.left >= 0 && empty.left < window.innerWidth && empty.width <= window.innerWidth; })()"), true,
           "the signal empty state must be visible without horizontal scrolling");
       }
+      if (title === "Module Graph") {
+        assert.equal(await evaluate("(() => { const segments = document.querySelector('.segments'); return window.innerWidth >= 650 || segments.scrollWidth <= segments.clientWidth + 1; })()"), true,
+          "module filters must wrap instead of scrolling when the webview is narrow");
+      }
       await screenshot(title.toLowerCase().replaceAll(" ", "-") + "-narrow");
       await workbench.send("Emulation.clearDeviceMetricsOverride");
     }
