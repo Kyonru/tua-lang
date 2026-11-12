@@ -85,7 +85,7 @@ end
     assert.equal(kind(player.entry, "stores").updates, 2);
     assert.equal(kind(player.entry, "stores").subscribers, 1);
     assert.equal(kind(player.entry, "stores").watchers, 1);
-    assert.deepEqual(kind(player.entry, "pools"), { active: 1, available: 3, capacity: 4 });
+    assert.deepEqual(kind(player.entry, "pools"), { active: 1, available: 3, capacity: 4, highWater: 1, failedReleases: 0 });
     const component = Object.values(kind(player.entry, "ecs").entities["1"])[0];
     assert.equal(component.player, player.session.title); assert.equal(component.self, "<cycle>");
     assert(component.huge.length < 250);
@@ -124,6 +124,7 @@ end
   const contents = spawnSync("unzip", ["-p", path.join(root, "dist", archives[0])], { encoding: "utf8", maxBuffer: 10 * 1024 * 1024 });
   assert.equal(contents.status, 0);
   assert(!contents.stdout.includes("Tua editor-only inspector"));
+  assert(!contents.stdout.includes("shim.lua"));
   assert(!contents.stdout.includes("127.0.0.1"));
   console.log("Native runtime inspector passed: two players, ECS/state/signal/pool/store snapshots, pause/refresh/resume, live files, independent exit, cleanup, and inspector-free package.");
 }
