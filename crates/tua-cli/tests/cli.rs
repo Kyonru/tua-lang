@@ -228,6 +228,7 @@ fn init_creates_default_project_files() {
         fs::read_to_string(temp.path().join(CONFIG_FILE)).expect("failed to read config"),
         DEFAULT_CONFIG_TEXT
     );
+    assert!(!DEFAULT_CONFIG_TEXT.contains("package_pipelines = []"));
     assert!(temp.path().join("src").is_dir());
     assert_eq!(
         fs::read_to_string(temp.path().join("src/main.tua")).expect("failed to read main"),
@@ -237,6 +238,76 @@ fn init_creates_default_project_files() {
         fs::read_to_string(temp.path().join(".gitignore")).expect("failed to read gitignore"),
         "# Tua generated files\n/build/\n/dist/\n/.tua/\n"
     );
+}
+
+#[test]
+fn actions_init_adds_a_reviewable_workflow_without_overwriting_it() {
+    let temp = TempDir::new("actions-init");
+    let missing = tua()
+        .args(["actions", "init"])
+        .current_dir(temp.path())
+        .output()
+        .unwrap();
+    assert!(!missing.status.success());
+    assert!(String::from_utf8_lossy(&missing.stderr).contains("tua init"));
+
+    let initialized = tua().arg("init").current_dir(temp.path()).output().unwrap();
+    assert!(initialized.status.success(), "{initialized:?}");
+    let added = tua()
+        .args(["actions", "init"])
+        .current_dir(temp.path())
+        .output()
+        .unwrap();
+    assert!(added.status.success(), "{added:?}");
+    let workflow_path = temp.path().join(".github/workflows/tua-game.yml");
+    let workflow = fs::read_to_string(&workflow_path).unwrap();
+    assert!(workflow.contains("--tag v0.7.0 --locked --root \"$RUNNER_TEMP/tua\" tua-cli"));
+    assert!(workflow.contains("\"$RUNNER_TEMP/tua/bin/tua\" package --target love"));
+    assert!(workflow.contains("actions/upload-artifact@"));
+    assert!(workflow.contains("actions/download-artifact@"));
+    assert!(workflow.contains("gh release create"));
+    assert!(workflow.contains("--draft --generate-notes --verify-tag"));
+    assert!(workflow.contains("if: startsWith(github.ref, 'refs/tags/v')"));
+    assert!(workflow.contains("contents: read"));
+    assert!(workflow.contains("contents: write"));
+
+    fs::write(&workflow_path, "# my own workflow\n").unwrap();
+    let repeated = tua()
+        .args(["actions", "init"])
+        .current_dir(temp.path())
+        .output()
+        .unwrap();
+    assert!(repeated.status.success(), "{repeated:?}");
+    assert!(String::from_utf8_lossy(&repeated.stdout).contains("left unchanged"));
+    assert_eq!(
+        fs::read_to_string(workflow_path).unwrap(),
+        "# my own workflow\n"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn actions_init_refuses_a_symlinked_workflow_directory() {
+    use std::os::unix::fs::symlink;
+
+    let temp = TempDir::new("actions-symlink");
+    let outside = TempDir::new("actions-outside");
+    assert!(tua()
+        .arg("init")
+        .current_dir(temp.path())
+        .output()
+        .unwrap()
+        .status
+        .success());
+    symlink(outside.path(), temp.path().join(".github")).unwrap();
+    let result = tua()
+        .args(["actions", "init"])
+        .current_dir(temp.path())
+        .output()
+        .unwrap();
+    assert!(!result.status.success());
+    assert!(String::from_utf8_lossy(&result.stderr).contains("symbolic link"));
+    assert!(!outside.path().join("workflows/tua-game.yml").exists());
 }
 
 #[test]
@@ -811,9 +882,7 @@ fn custom_package_targets_list_and_publish_atomically() {
     let program = serde_json::to_string(&executable.to_string_lossy().to_string()).unwrap();
     let pipeline = format!("[[package_pipelines]]\nname = \"portable\"\nlabel = \"Portable port\"\ncommand = [{program}, \"--exact\", \"custom_package_helper\", \"--nocapture\"]\n");
     let config_path = temp.path().join(CONFIG_FILE);
-    let config = fs::read_to_string(&config_path)
-        .unwrap()
-        .replace("package_pipelines = []", &pipeline);
+    let config = format!("{}\n{pipeline}", fs::read_to_string(&config_path).unwrap());
     fs::write(&config_path, config).unwrap();
 
     let listed = tua()

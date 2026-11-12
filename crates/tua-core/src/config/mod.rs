@@ -33,7 +33,6 @@ extension = \"tua\"
 emit_maps = true
 type_libraries = []
 asset_pipelines = []
-package_pipelines = []
 
 [test]
 source = \"\"

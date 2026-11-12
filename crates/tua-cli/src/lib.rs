@@ -9,6 +9,7 @@ mod dev;
 mod diagnostics;
 mod error;
 mod formatter;
+mod github_actions;
 mod linter;
 mod love;
 mod package;

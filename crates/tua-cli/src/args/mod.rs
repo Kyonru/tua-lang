@@ -12,6 +12,7 @@ Usage:
 
 Commands:
   init      Create a default tua.toml and src/ directory
+  actions   Add GitHub Actions for game packaging and draft releases
   check     Parse and type-check the project
   fmt       Format project source files
   lint      Run standard and configured lint rules
@@ -75,6 +76,7 @@ pub struct CommandOptions {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CommandName {
     Init,
+    Actions,
     Check,
     Fmt,
     Lint,
@@ -95,6 +97,7 @@ impl CommandName {
         Some(match raw {
             "test" => Self::Test,
             "init" => Self::Init,
+            "actions" => Self::Actions,
             "check" => Self::Check,
             "fmt" => Self::Fmt,
             "lint" => Self::Lint,
@@ -117,6 +120,7 @@ pub fn command_help(command: CommandName) -> &'static str {
         CommandName::Test => "tua test - build and run unit tests with Busted\n\nUsage:\n  tua test [SOURCE-PATH] [--busted PATH] [--filter PATTERN] [--tags TAGS] [--lua PATH] [--list] [--report PATH] [--coverage PATH]\n\n--list returns JSON discovery without executing tests.\n--report writes structured JSON results with mapped source locations.\n--coverage writes source-mapped JSON line coverage (requires LuaCov).\n\nDiscovers *_spec.tua and *_spec.lua below [test].source or source.\nSOURCE-PATH is relative to that discovery root. Builds into temporary .tua output,\nthen runs an installed Busted executable (TUA_BUSTED or busted on PATH).\nTests run with the generated output as their working directory.\n",
         CommandName::ShaderTools => "tua shader-tools - test installed shader validators\n\nUsage:\n  tua shader-tools\n\nReports JSON using a built-in shader in an isolated directory; does not load the project.\n",
         CommandName::Init => "tua init - create a Tua project\n\nUsage:\n  tua init\n\nCreates tua.toml and src/main.tua without overwriting existing files, and adds generated folders to .gitignore.\n",
+        CommandName::Actions => "tua actions - add GitHub Actions to a Tua project\n\nUsage:\n  tua actions init\n\nAdds .github/workflows/tua-game.yml without overwriting an existing workflow.\nThe workflow builds a .love archive, uploads an Actions artifact, and creates a draft release for v* tags.\n",
         CommandName::Check => "tua check - parse and type-check the project\n\nUsage:\n  tua check [--deny-warnings] [--love PATH]\n",
         CommandName::Fmt => "tua fmt - format project source files\n\nUsage:\n  tua fmt [--check]\n",
         CommandName::Lint => "tua lint - run lint rules\n\nUsage:\n  tua lint [--strict]\n",
@@ -158,6 +162,17 @@ where
 
     let command = CommandName::parse(&args[0])
         .ok_or_else(|| CliError::usage(format!("unknown command `{}`", args[0])))?;
+
+    if command == CommandName::Actions {
+        return if args.get(1).map(String::as_str) == Some("init") && args.len() == 2 {
+            Ok(CliAction::Command {
+                name: command,
+                options: CommandOptions::default(),
+            })
+        } else {
+            Err(CliError::usage("usage: tua actions init"))
+        };
+    }
 
     let mut options = CommandOptions::default();
 

@@ -22,6 +22,21 @@ fn command_help_is_contextual() {
 }
 
 #[test]
+fn actions_requires_the_init_subcommand() {
+    assert_eq!(
+        parse_args(["actions", "init"]),
+        Ok(CliAction::Command {
+            name: CommandName::Actions,
+            options: CommandOptions::default(),
+        })
+    );
+    assert!(parse_args(["actions"]).is_err());
+    assert!(parse_args(["actions", "download"]).is_err());
+    assert!(parse_args(["actions", "init", "--force"]).is_err());
+    assert!(command_help(CommandName::Actions).contains("tua actions init"));
+}
+
+#[test]
 fn version_flag_prints_version() {
     assert_eq!(parse_args(["--version"]), Ok(CliAction::Version));
     assert!(version_text().starts_with("tua "));

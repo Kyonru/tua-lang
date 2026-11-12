@@ -196,9 +196,49 @@ desktop dependencies may not work. Cross-origin isolation can also block
 third-party resources that do not opt in. Test your game in its target browsers
 before distributing it. [The player documents its limitations](https://github.com/2dengine/love.js).
 
+## GitHub Actions Packaging
+
+From an initialized Tua project, run:
+
+```bash
+tua actions init
+```
+
+This creates `.github/workflows/tua-game.yml` if it is absent. Review and
+commit that file in your game repository. The generated workflow uses a pinned
+Tua `v0.7.0` source tag and Cargo to install the CLI, then runs `tua check` and
+`tua package --target love`. It does not need Tua on GitHub Packages, a
+personal access token, or a separate Tua action. The pinned version supports
+the generated portable `.love` workflow; update the pin only after verifying a
+newer Tua release. Projects using language or configuration features introduced
+after `v0.7.0` need a newer published Tua source revision for this workflow.
+
+Every push and manual run uploads the `.love` file as an Actions artifact named
+`love-game` for 14 days. Download it from the workflow run's **Artifacts** area,
+or with the [GitHub CLI](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/download-workflow-artifacts?tool=cli):
+
+```bash
+gh run download RUN_ID -n love-game
+```
+
+A pushed game tag beginning with `v` also runs a release job. That job downloads
+the artifact from the **same run** and attaches it to a **draft** GitHub Release.
+Review the draft and publish it when ready. Only the release job receives
+`contents: write`; ordinary builds have read-only repository permissions.
+The command leaves any existing workflow unchanged, including your edits.
+
+The workflow packages the portable `.love` target immediately. Windows,
+macOS, web, mobile, and custom targets have separate runtime or toolchain
+requirements. Add jobs for them using the [target commands above](#packaging-games)
+and the relevant toolchains, then verify those jobs on GitHub-hosted runners.
+For web builds, supply the standalone player and use a Tua CLI version with
+`--target web`; the generated `v0.7.0` pin predates that target. GitHub Release
+CLI archives can replace the source installation after a suitable version is
+published and verified.
+
 ## Custom Package Pipelines
 
-Replace `package_pipelines = []` in `tua.toml` with a named pipeline when a
+Add a named `[[package_pipelines]]` table to `tua.toml` when a
 target needs its own packaging tool.
 Tua builds the game and passes the `.love` archive to your command. The command
 writes its finished files into an empty staging directory; Tua publishes that

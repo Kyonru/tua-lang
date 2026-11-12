@@ -201,6 +201,18 @@ identifier. See [Packaging Games](packaging.md).
 Custom targets come from `[[package_pipelines]]` in `tua.toml`; listing them
 does not build or execute a pipeline.
 
+## `actions init`
+
+```bash
+tua actions init
+```
+
+Adds `.github/workflows/tua-game.yml` to an initialized Tua project without
+overwriting an existing workflow. The generated GitHub Actions workflow checks
+and packages a `.love` game on pushes or manual runs, retains a downloadable
+artifact, and prepares a draft GitHub Release when a `v*` tag is pushed.
+See [GitHub Actions packaging](packaging.md#github-actions-packaging).
+
 ## `traceback`
 
 ```bash

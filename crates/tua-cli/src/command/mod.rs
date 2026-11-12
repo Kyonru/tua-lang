@@ -26,6 +26,7 @@ pub fn run_command(
         CommandName::Init => tua_core::init_project(cwd)
             .map(format_init_result)
             .map_err(CliError::from_config_error),
+        CommandName::Actions => crate::github_actions::init_game_workflow(cwd.as_ref()),
         CommandName::Build => {
             let loaded =
                 tua_core::load_config_from_dir(&cwd).map_err(CliError::from_config_error)?;
