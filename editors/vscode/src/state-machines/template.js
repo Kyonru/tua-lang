@@ -665,6 +665,15 @@ function stateMachinePreviewHtml(webview, viewModel) {
         );
         path.setAttribute("marker-end", "url(#arrow)");
         connections.append(path);
+        const hit = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        hit.setAttribute("d", geometry.pathData);
+        hit.setAttribute("class", "connection-hit");
+        hit.setAttribute("aria-label", edge.transition.event + ": " + edge.source + " to " + edge.target);
+        hit.addEventListener("mouseenter", () => path.classList.add("hovered"));
+        hit.addEventListener("mouseleave", () => path.classList.remove("hovered"));
+        hit.addEventListener("click", () => select({ kind: "transition", id: edge.transition.id, source: edge.source }));
+        hit.addEventListener("dblclick", () => openLocation(edge.transition.selectionRange));
+        connections.append(hit);
 
         const label = document.createElement("button");
         label.type = "button";
@@ -703,7 +712,7 @@ function stateMachinePreviewHtml(webview, viewModel) {
     }
 
     function clearConnectionPaths() {
-      for (const path of connections.querySelectorAll("path.connection")) {
+      for (const path of connections.querySelectorAll("path.connection, path.connection-hit")) {
         path.remove();
       }
     }
@@ -1032,6 +1041,7 @@ const STYLES = `
     vector-effect: non-scaling-stroke;
   }
   .connection.wildcard { stroke-dasharray: 5 4; }
+  .connection-hit { fill: none; stroke: transparent; stroke-width: 12; vector-effect: non-scaling-stroke; pointer-events: stroke; cursor: pointer; }
   .connection.hovered, .connection.selected {
     stroke: var(--accent);
     stroke-width: 2;

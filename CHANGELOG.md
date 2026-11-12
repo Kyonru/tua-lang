@@ -10,6 +10,8 @@ language or editor behavior, and migration notes call out those changes.
 
 - State-machine previews now separate arrows that converge on the same state
   and support canvas pan, pinch/Control-wheel zoom, keyboard zoom, and Fit.
+- State-machine arrows can be hovered, selected, and opened at their source
+  directly, with a larger pointer target than the visible stroke.
 - Module graphs support the same pan and zoom controls and retain zoom after
   analysis refreshes.
 - Signal graphs support canvas pan and zoom while keeping event, file, and edge

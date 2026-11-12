@@ -91,7 +91,8 @@ source-linked inspector; double-clicking it jumps to the declaration.
 The layout keeps states in ordered columns and reserves separate corridors for
 long forward routes, return routes, same-column transitions, and self-loops.
 Transitions sharing a state get separate attachment points so their arrowheads
-remain traceable in a dense graph. Drag empty canvas space to pan; pinch or use
+remain traceable in a dense graph. Hover or click an arrow to inspect its
+transition, or double-click it to open the source. Drag empty canvas space to pan; pinch or use
 Control/Command + wheel to zoom. The graph also has Zoom in, Zoom out, and Fit
 buttons, plus `+`, `-`, and `0` shortcuts when the canvas has keyboard focus.
 Each real state receives a distinct, theme-aware

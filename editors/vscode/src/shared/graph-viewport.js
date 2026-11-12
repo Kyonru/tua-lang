@@ -67,7 +67,7 @@ function createGraphViewport(scroll, content, options = {}) {
 
   scroll.addEventListener("pointerdown", (event) => {
     if (event.pointerType === "mouse" && event.button !== 0) return;
-    if (event.target.closest("button, input, select, a, .edge")) return;
+    if (event.target.closest("button, input, select, a, .edge, .connection-hit")) return;
     scroll.setPointerCapture(event.pointerId);
     pointers.set(event.pointerId, point(event));
     scroll.classList.add("is-panning");

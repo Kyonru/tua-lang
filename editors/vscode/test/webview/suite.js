@@ -145,6 +145,11 @@ async function run() {
     // Run the normal layout callback explicitly when macOS occlusion suspends rAF.
     await evaluate("drawConnections()");
     await waitFor(() => evaluate("document.querySelectorAll('.edge-label').length === 2"), "state graph routes");
+    assert.equal(await evaluate("document.querySelectorAll('.connection-hit').length"), 2, "each arrow has a pointer target");
+    await evaluate("document.querySelector('.connection-hit').dispatchEvent(new MouseEvent('mouseenter'))");
+    assert.equal(await evaluate("document.querySelector('path.connection').classList.contains('hovered')"), true, "arrow hover highlights its route");
+    await evaluate("document.querySelector('.connection-hit').dispatchEvent(new MouseEvent('click', {bubbles:true}))");
+    assert.equal(await evaluate("document.querySelector('.edge-label.selected')?.textContent"), "start", "arrow click selects its transition");
     assert.equal(await evaluate("globalThis.node = document.querySelector('[data-state=running]'); node.focus(); node.click(); node.isConnected && document.activeElement === node"), true, "graph selection preserves focus");
     await evaluate("node.dispatchEvent(new MouseEvent('dblclick', { bubbles:true }))");
     await waitFor(() => messages.some((message) => message.command === "openLocation"), "double-click source navigation");
