@@ -26,6 +26,8 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Opening generated Lua beside Tua now selects the line mapped from the
+  source cursor after rebuilding, making vector lowering inspectable on demand.
 - Sprite previews now mark every out-of-bounds frame in the timeline and show
   its exact source rectangle when selected, instead of waiting for playback.
 - The opt-in development Runtime Inspector now shows each pool's peak active

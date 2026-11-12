@@ -71,6 +71,8 @@ async function testOpenGeneratedLuaBesideSource() {
     "local answer = 99\nreturn answer\n",
   );
   assert.equal(vscode.window.activeTextEditor?.viewColumn, vscode.ViewColumn.Two);
+  assert.equal(vscode.window.activeTextEditor?.selection.active.line, 1,
+    "generated Lua opens at the source line selected before the build");
   await closeActiveEditor();
 
   let reopenedSourceEditor = await vscode.window.showTextDocument(sourceDocument, {

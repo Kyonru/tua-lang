@@ -193,6 +193,13 @@ doesn't need to mention `vec2` or `Vec2` itself: vectors that come from a
 required Tua module, or from an annotated Lua module, are fused when their type
 resolves to the built-in `Vec2`.
 
+To inspect a particular expression, put the cursor on its Tua line and run
+**Tua: Open Generated Lua Beside Tua**. The command rebuilds and opens the
+mapped generated line. A fused expression contains a single `__tua_vec2(...)`
+construction; an unfused expression keeps BrineVector operators. This shows
+the actual lowering for the current project types without adding a runtime
+allocation probe.
+
 ## Game Math Helpers
 
 `math` and `love.math` both offer the same small set of game-math helpers:

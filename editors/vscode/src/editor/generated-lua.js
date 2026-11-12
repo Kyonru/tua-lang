@@ -40,6 +40,7 @@ async function openGeneratedLuaBesideActiveDocument({
   isTuaDocument,
 }) {
   const document = vscode.window.activeTextEditor?.document;
+  const sourceLine = activeLineOneBased();
   if (!document || !isTuaDocument(document)) {
     vscode.window.showWarningMessage("Open a Tua source file to open generated Lua.");
     return undefined;
@@ -95,9 +96,18 @@ async function openGeneratedLuaBesideActiveDocument({
     }
 
     const luaDocument = await vscode.workspace.openTextDocument(vscode.Uri.file(generated.path));
+    let sourceMap;
+    try {
+      sourceMap = loadSourceMapForGeneratedPath(generated.path);
+    } catch (error) {
+      appendOutputLine?.(`[tua] Generated Lua source map unavailable: ${formatError(error)}`);
+    }
+    const generatedLine = nearestMapping(sourceMap?.lineMappings || [], "sourceLine", sourceLine)?.generatedLine;
+    const position = generatedLine ? new vscode.Position(generatedLine - 1, 0) : undefined;
     await vscode.window.showTextDocument(luaDocument, {
       preview: true,
       viewColumn: vscode.ViewColumn.Beside,
+      ...(position ? { selection: new vscode.Range(position, position) } : {}),
     });
     await vscode.commands.executeCommand("workbench.action.files.revert");
 
