@@ -1730,6 +1730,40 @@ local result: number = os.date("*t")
 }
 
 #[test]
+fn os_time_accepts_date_input_and_other_os_results_are_typed() {
+    check_tua_source(
+        "src/os.tua",
+        r#"
+local input: OsDateInput = { year = 2026, month = 11, day = 12 }
+local timestamp: number | nil = os.time(input)
+if timestamp then
+  local roundTrip: number | nil = os.time(os.date("*t", timestamp))
+  if roundTrip then
+    local duration: number = os.difftime(timestamp, roundTrip)
+  end
+end
+local temporary: string = os.tmpname()
+local locale: string | nil = os.setlocale(nil, "time")
+local shellStatus: number = os.execute(nil)
+local removed, removeError, removeCode = os.remove("unused.tmp")
+local success: boolean | nil = removed
+local failure: string | nil = removeError
+local errorCode: number | nil = removeCode
+"#,
+    )
+    .expect("OS date input and common result contracts should check");
+
+    let missing_day = check_tua_source(
+        "src/os.tua",
+        "local timestamp = os.time({ year = 2026, month = 11 })\n",
+    )
+    .expect_err("os.time requires a day field when given a table");
+    assert!(missing_day
+        .iter()
+        .any(|error| error.code == Some(DiagnosticCode::TYPE_MISMATCH)));
+}
+
+#[test]
 fn untyped_standard_library_parameter_names_remain_permissive() {
     check_tua_source(
         "src/catalog.tua",
@@ -1738,7 +1772,7 @@ local substring = string.sub("abcdef", 2, 4)
 local worker = coroutine.create(function() return "done" end)
 local timestamp = os.time()
 local checked_substring: string = substring
-local checked_timestamp: number = timestamp
+local checked_timestamp: number | nil = timestamp
 print(worker)
 "#,
     )

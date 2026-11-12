@@ -68,7 +68,16 @@ local label: string = os.date("%Y-%m-%d")
 `OsDateTable` has numeric `year`, `month`, `day`, `hour`, `min`, `sec`, `wday`,
 and `yday` fields, plus boolean `isdst`. A format supplied through a dynamic
 string can return either a string or a date table, so its result is
-`string | OsDateTable`. Tua leaves Lua's runtime date formatting to the host.
+`string | OsDateTable`. `os.time` accepts `OsDateInput`, which requires
+`year`, `month`, and `day` and permits optional clock and daylight-saving
+fields. An `OsDateTable` can be passed back to `os.time`. Tua leaves Lua's
+runtime date formatting to the host. See the
+[Lua 5.1 OS library reference](https://www.lua.org/manual/5.1/manual.html#5.8)
+for runtime details.
+
+`os.time` can return `nil` if the host cannot represent the requested time.
+Guard its result before using it as a number. `os.remove` and `os.rename`
+return a success flag, or `nil` followed by an error message and error code.
 
 ## Migrate Singleton Tables And Mixins
 

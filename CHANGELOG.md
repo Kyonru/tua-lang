@@ -11,6 +11,8 @@ language or editor behavior, and migration notes call out those changes.
 - `os.date` now infers formatted strings and `*t`/`!*t` date tables separately,
   exposes the `OsDateTable` type, and types its arguments for checking and
   editor assistance.
+- The Lua `os` catalog now types `os.time` input tables and common OS function
+  arguments and results, including `setlocale` and `tmpname` completion.
 - State-machine previews now separate arrows that converge on the same state
   and support canvas pan, pinch/Control-wheel zoom, keyboard zoom, and Fit.
 - State-machine arrows can be hovered, selected, and opened at their source

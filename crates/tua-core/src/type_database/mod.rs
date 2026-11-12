@@ -1239,6 +1239,7 @@ fn builtin_type(name: &str) -> Option<Type> {
         "number" | "string" | "boolean" | "nil" | "any" => Some(Type::named(name)),
         vector::TYPE_NAME => Some(vector::vec2_type()),
         crate::lua::OS_DATE_TABLE_TYPE => Some(crate::lua::os_date_table_type()),
+        crate::lua::OS_DATE_INPUT_TYPE => Some(crate::lua::os_date_input_type()),
         crate::signal::TYPE_NAME => Some(crate::signal::signal_bus_type()),
         name if store::builtin_type_names().contains(&name) => store::builtin_aliases()
             .into_iter()

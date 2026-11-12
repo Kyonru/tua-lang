@@ -2130,6 +2130,15 @@ fn completes_fields_of_os_date_table_result() {
 }
 
 #[test]
+fn completes_os_time_input_type_and_missing_os_functions() {
+    let source =
+        "local date: OsDateInput = { year = 2026, month = 11, day = 12 }\nlocal tmp = os.tmp\n";
+    let completions = complete_tua_source("src/main.tua", source, position_after(source, "os.tmp"))
+        .expect("OS member completion should succeed");
+    assert!(labels(&completions).contains(&"tmpname".to_owned()));
+}
+
+#[test]
 fn completes_game_math_helpers_in_math_and_love_math() {
     let math_source = "local value = math.cl\n";
     let math_position = position_after(math_source, "math.cl");

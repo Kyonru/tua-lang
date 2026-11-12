@@ -67,7 +67,11 @@ impl BuiltinDomainRegistry {
     pub(crate) fn builtin_type_names(self) -> Vec<&'static str> {
         self.domains()
             .flat_map(BuiltinDomain::builtin_type_names)
-            .chain(["LoveColor", crate::lua::OS_DATE_TABLE_TYPE])
+            .chain([
+                "LoveColor",
+                crate::lua::OS_DATE_TABLE_TYPE,
+                crate::lua::OS_DATE_INPUT_TYPE,
+            ])
             .collect()
     }
 
@@ -79,6 +83,10 @@ impl BuiltinDomainRegistry {
                 (
                     crate::lua::OS_DATE_TABLE_TYPE.to_owned(),
                     crate::lua::os_date_table_type(),
+                ),
+                (
+                    crate::lua::OS_DATE_INPUT_TYPE.to_owned(),
+                    crate::lua::os_date_input_type(),
                 ),
             ])
             .collect()

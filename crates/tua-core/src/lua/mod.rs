@@ -155,6 +155,7 @@ pub(crate) fn first_call_argument(
 }
 
 pub(crate) const OS_DATE_TABLE_TYPE: &str = "OsDateTable";
+pub(crate) const OS_DATE_INPUT_TYPE: &str = "OsDateInput";
 
 pub(crate) fn os_date_table_type() -> Type {
     Type::table([
@@ -167,6 +168,18 @@ pub(crate) fn os_date_table_type() -> Type {
         ("wday", TableField::required(Type::number())),
         ("yday", TableField::required(Type::number())),
         ("isdst", TableField::required(Type::boolean())),
+    ])
+}
+
+pub(crate) fn os_date_input_type() -> Type {
+    Type::table([
+        ("year", TableField::required(Type::number())),
+        ("month", TableField::required(Type::number())),
+        ("day", TableField::required(Type::number())),
+        ("hour", TableField::optional(Type::number())),
+        ("min", TableField::optional(Type::number())),
+        ("sec", TableField::optional(Type::number())),
+        ("isdst", TableField::optional(Type::boolean())),
     ])
 }
 
@@ -2766,43 +2779,55 @@ const OS_ITEMS: &[LuaItem] = &[
     item(
         "difftime",
         LuaItemKind::Function,
-        "function os.difftime(t2, t1): number",
+        "function os.difftime(t2: number, t1: number): number",
         "Returns a time difference.",
     ),
     item(
         "execute",
         LuaItemKind::Function,
-        "function os.execute(command?)",
+        "function os.execute(command?: string | nil): number",
         "Executes an operating-system command.",
     ),
     item(
         "exit",
         LuaItemKind::Function,
-        "function os.exit(code?)",
+        "function os.exit(code?: number | nil)",
         "Terminates the host program.",
     ),
     item(
         "getenv",
         LuaItemKind::Function,
-        "function os.getenv(name): string?",
+        "function os.getenv(name: string): string | nil",
         "Reads an environment variable.",
     ),
     item(
         "remove",
         LuaItemKind::Function,
-        "function os.remove(filename)",
+        "function os.remove(filename: string): boolean | nil, string | nil, number | nil",
         "Removes a file.",
     ),
     item(
         "rename",
         LuaItemKind::Function,
-        "function os.rename(oldname, newname)",
+        "function os.rename(oldname: string, newname: string): boolean | nil, string | nil, number | nil",
         "Renames a file.",
+    ),
+    item(
+        "setlocale",
+        LuaItemKind::Function,
+        "function os.setlocale(locale?: string | nil, category?: string | nil): string | nil",
+        "Sets or queries the process locale.",
+    ),
+    item(
+        "tmpname",
+        LuaItemKind::Function,
+        "function os.tmpname(): string",
+        "Returns a temporary filename; the file must still be opened and removed by the caller.",
     ),
     item(
         "time",
         LuaItemKind::Function,
-        "function os.time(table?): number",
+        "function os.time(date?: OsDateInput | nil): number | nil",
         "Returns a timestamp.",
     ),
 ];
