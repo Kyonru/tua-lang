@@ -287,6 +287,20 @@ done
         assert!(!directory.exists());
     }
     #[test]
+    fn stop_closes_the_love_process_after_a_batch() {
+        let (_fake, mut validator) = fake(
+            "printf 'READY 11.5.0\\n'\nwhile read -r command id target size; do\n  dd bs=1 count=\"$size\" of=/dev/null 2>/dev/null\n  printf 'RESULT %s valid\\n' \"$id\"\ndone\n",
+        );
+        validator.validate(&[request("valid")]).unwrap();
+        let directory = validator.session.as_ref().unwrap()._directory.0.clone();
+        validator.stop();
+        assert!(validator.session.is_none());
+        assert!(
+            !directory.exists(),
+            "stopping the session removes its process directory"
+        );
+    }
+    #[test]
     fn hung_validator_is_killed_and_session_discarded() {
         let (_fake, mut validator) = fake("printf 'READY 11.5.0\\n'\nwhile :; do :; done\n");
         validator.timeout = Duration::from_millis(100);

@@ -57,9 +57,6 @@ impl ShaderWorker {
             while let Ok(job) = receiver.recv() {
                 let result = (|| {
                     let requests = job.snapshot.shader_requests(&job.overlays)?;
-                    if requests.is_empty() {
-                        validator.stop();
-                    }
                     let inputs: Vec<_> = requests
                         .iter()
                         .map(|request| {
@@ -98,6 +95,10 @@ impl ShaderWorker {
                     }
                     Ok(diagnostics)
                 })();
+                // The validator may own a LOVE process. A job is the full batch
+                // of work, so release it before publishing results or waiting
+                // for the next edit. Cached outcomes still avoid revalidation.
+                validator.stop();
                 let (diagnostics, note) = match result {
                     Ok(diagnostics) => (diagnostics, None),
                     Err(note) => (BTreeMap::new(), Some(note)),

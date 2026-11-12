@@ -84,8 +84,9 @@ impl ShaderValidator for ProjectShaderValidator {
             .join("|")
     }
     fn stop(&mut self) {
+        // A stopped batch should not retry a validator that already failed.
+        // A changed executable identity clears this state in validate().
         self.love.stop();
-        self.love_unavailable = None;
     }
     fn validate(
         &mut self,

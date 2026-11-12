@@ -8,6 +8,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- The language server closes its LÖVE shader validator after each changed
+  shader batch, while retaining cached results and avoiding repeated failed
+  launches when the validator is unavailable.
 - `os.date` now infers formatted strings and `*t`/`!*t` date tables separately,
   exposes the `OsDateTable` type, and types its arguments for checking and
   editor assistance.

@@ -790,11 +790,12 @@ uniforms should use `:send` to retain static diagnostics and editor support.
 In trusted workspaces, Tua validates statically referenced shaders with the
 installed LÖVE, falling back to `glslangValidator` in `auto` mode when LÖVE
 cannot validate. Set `[shaders].validate` to `love` or `glslang` to select one
-explicitly. A separate worker waits for 500 ms of idle time, reuses a single
-LÖVE process, and caches unchanged inputs, validator selections, and executable
-identity. Installing or replacing a validator invalidates cached outcomes when
-validation next runs. Interactive completion and
-hover requests do not wait for compilation. Stale results are discarded.
+explicitly. A separate worker waits for 500 ms of idle time, starts LÖVE only
+when shader validation needs it, and closes the process after each batch. It
+caches unchanged inputs, validator selections, and executable identity.
+Installing or replacing a validator invalidates cached outcomes when validation
+next runs. Interactive completion and hover requests do not wait for
+compilation. Stale results are discarded.
 
 `TL2016` appears on shader lines and loader calls. Open shader buffers are
 validated before saving; saving, closing, changing references, or changing

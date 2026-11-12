@@ -1,6 +1,6 @@
 use super::*;
 use std::sync::{
-    atomic::{AtomicUsize, Ordering},
+    atomic::{AtomicBool, AtomicUsize, Ordering},
     Arc,
 };
 use tua_core::shader_validation::{
@@ -135,6 +135,79 @@ fn untrusted_workspace_never_calls_shader_validator() {
         calls.clone(),
     );
     assert_eq!(calls.load(Ordering::Relaxed), 0);
+}
+
+#[test]
+fn shader_worker_closes_validator_after_each_changed_batch() {
+    struct LifecycleValidator {
+        active: Arc<AtomicBool>,
+        starts: Arc<AtomicUsize>,
+        stops: Arc<AtomicUsize>,
+    }
+    impl ShaderValidator for LifecycleValidator {
+        fn stop(&mut self) {
+            if self.active.swap(false, Ordering::SeqCst) {
+                self.stops.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+        fn validate(
+            &mut self,
+            requests: &[ShaderValidationRequest],
+        ) -> Result<Vec<ShaderValidationOutcome>, String> {
+            if !requests.is_empty() {
+                assert!(!self.active.swap(true, Ordering::SeqCst));
+                self.starts.fetch_add(1, Ordering::SeqCst);
+            }
+            Ok(vec![ShaderValidationOutcome::Valid; requests.len()])
+        }
+    }
+
+    let temp = TempProject::new("shader-process-lifecycle");
+    temp.write("tua.toml", "source = \".\"\n");
+    let source = "local effect = shader \"effect.glsl\"\nprint(effect)\n";
+    temp.write("main.tua", source);
+    temp.write("effect.glsl", "vec4 effect() {}");
+    let mut initialize = initialize_with_root(1, temp.uri());
+    initialize["params"]["initializationOptions"] = json!({"workspaceTrusted": true});
+    let active = Arc::new(AtomicBool::new(false));
+    let starts = Arc::new(AtomicUsize::new(0));
+    let stops = Arc::new(AtomicUsize::new(0));
+    let chunks = vec![
+        (
+            Duration::ZERO,
+            encode_messages(vec![
+                initialize,
+                did_open(&temp.uri_for("main.tua"), source),
+                did_open(&temp.uri_for("effect.glsl"), "vec4 effect() {}"),
+            ]),
+        ),
+        (
+            Duration::from_millis(900),
+            encode_messages(vec![did_change(
+                &temp.uri_for("effect.glsl"),
+                "vec4 effect() { return vec4(1.0); }",
+                2,
+            )]),
+        ),
+        (
+            Duration::from_millis(900),
+            encode_messages(vec![json!({"jsonrpc":"2.0","method":"exit"})]),
+        ),
+    ];
+    let mut output = Vec::new();
+    super::super::run_with_shader_validator(
+        DelayedChunks::new(chunks),
+        &mut output,
+        Some(Box::new(LifecycleValidator {
+            active: active.clone(),
+            starts: starts.clone(),
+            stops: stops.clone(),
+        })),
+    )
+    .unwrap();
+    assert_eq!(starts.load(Ordering::SeqCst), 2);
+    assert_eq!(stops.load(Ordering::SeqCst), 2);
+    assert!(!active.load(Ordering::SeqCst));
 }
 
 #[test]
