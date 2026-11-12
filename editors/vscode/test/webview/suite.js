@@ -229,9 +229,14 @@ async function run() {
     ]) {
       await load(createHtml(2), title);
       await evaluate(`(() => { const filter = document.querySelector(${JSON.stringify(filterSelector)}); filter.value = "player"; filter.dispatchEvent(new Event("input")); document.querySelector(${JSON.stringify(modeSelector)}).click(); })()`);
+      if (title === "Module Graph") {
+        await evaluate("document.getElementById('zoom-in').click()");
+        assert.equal(await evaluate("document.getElementById('zoom-level').textContent"), "120%");
+      }
       await load(createHtml(3), title);
       assert.equal(await evaluate(`document.querySelector(${JSON.stringify(filterSelector)}).value`), "player", `${title} preserves filtering after refresh`);
       assert.equal(await evaluate(`document.querySelector(${JSON.stringify(modeSelector)}).classList.contains("active")`), true, `${title} preserves mode after refresh`);
+      if (title === "Module Graph") assert.equal(await evaluate("document.getElementById('zoom-level').textContent"), "120%", "module graph preserves zoom after refresh");
     }
     const projectSignalView = (workspaceKey, name) => ({
       ...signalGraphViewModel({ events: [{

@@ -1,5 +1,7 @@
 "use strict";
 
+const { createGraphViewport } = require("../shared/graph-viewport");
+
 const { escapeHtml, jsonForHtml, webviewDocument } = require("../shared/webview");
 
 function moduleGraphLoadingHtml(webview) {
@@ -45,9 +47,10 @@ function moduleGraphHtml(webview, viewModel) {
       <section class="graph-band" aria-label="Module dependency graph">
         <div class="graph-heading">
           <span>Dependency flow</span>
+          <div class="graph-zoom" role="group" aria-label="Module graph zoom"><button id="zoom-out" type="button" aria-label="Zoom out">−</button><output id="zoom-level">100%</output><button id="zoom-in" type="button" aria-label="Zoom in">+</button><button id="zoom-fit" type="button" aria-label="Fit graph to view">Fit</button></div>
           <span id="revision" class="revision"></span>
         </div>
-        <div id="graph-scroll" class="graph-scroll">
+        <div id="graph-scroll" class="graph-scroll" tabindex="0" role="region" aria-label="Module graph; drag to pan, pinch or Control and wheel to zoom, plus and minus keys to zoom">
           <div id="graph" class="graph">
             <svg id="connections" class="connections" aria-hidden="true"></svg>
             <div id="nodes" class="nodes"></div>
@@ -60,6 +63,8 @@ function moduleGraphHtml(webview, viewModel) {
   const script = `
     const graphData = ${graphJson};
     const graphRoot = document.getElementById("graph");
+    const graphScroll = document.getElementById("graph-scroll");
+    const createGraphViewport = (${createGraphViewport.toString()});
     const nodesRoot = document.getElementById("nodes");
     const connections = document.getElementById("connections");
     const inspector = document.getElementById("inspector");
@@ -74,13 +79,26 @@ function moduleGraphHtml(webview, viewModel) {
     let query = typeof restored?.query === "string" ? restored.query : "";
     let selectedUri = moduleByUri.has(restored?.selectedUri) ? restored.selectedUri : graphData.focusUri || graphData.modules[0]?.uri || null;
     let selectedTab = ["overview", "dependencies", "dependents", "exports", "why"].includes(restored?.selectedTab) ? restored.selectedTab : graphData.initialTab || "overview";
+    let viewportScale = Number.isFinite(restored?.scale) ? restored.scale : 1;
+    const viewport = createGraphViewport(graphScroll, graphRoot, {
+      initialScale: viewportScale,
+      onScale: (scale) => {
+        viewportScale = scale;
+        document.getElementById("zoom-level").textContent = Math.round(scale * 100) + "%";
+        if (graphRoot.querySelector(".module-node")) requestAnimationFrame(drawConnections);
+        persistState();
+      },
+    });
+    document.getElementById("zoom-in").addEventListener("click", () => viewport.zoom(viewport.scale() * 1.2));
+    document.getElementById("zoom-out").addEventListener("click", () => viewport.zoom(viewport.scale() / 1.2));
+    document.getElementById("zoom-fit").addEventListener("click", () => viewport.fit());
     filterInput.value = query;
     for (const button of segmentButtons) button.classList.toggle("active", button.dataset.mode === mode);
 
     function persistState() {
       vscode.setState({ ...(vscode.getState() || {}), moduleGraph: {
         focusUri: graphData.focusUri || "", initialTab: graphData.initialTab || "overview",
-        mode, query, selectedUri, selectedTab,
+        mode, query, selectedUri, selectedTab, scale: viewportScale,
       } });
     }
 
@@ -165,16 +183,14 @@ function moduleGraphHtml(webview, viewModel) {
       const depths = Array.from(rowsByDepth.keys()).sort((left, right) => left - right);
       if (depths.length === 0) {
         nodesRoot.append(emptyState("No modules match this view."));
-        graphRoot.style.minWidth = "0";
-        graphRoot.style.minHeight = "320px";
+        viewport.setSize(620, 320);
         return;
       }
 
       const columnWidth = 250;
       const rowHeight = 118;
       const maxRows = Math.max(...depths.map((depth) => rowsByDepth.get(depth).length));
-      graphRoot.style.minWidth = Math.max(620, (Math.max(...depths) + 1) * columnWidth + 100) + "px";
-      graphRoot.style.minHeight = Math.max(360, maxRows * rowHeight + 100) + "px";
+      viewport.setSize(Math.max(620, (Math.max(...depths) + 1) * columnWidth + 100), Math.max(360, maxRows * rowHeight + 100));
 
       for (const depth of depths) {
         const column = element("section", "graph-column");
@@ -262,10 +278,11 @@ function moduleGraphHtml(webview, viewModel) {
         if (!source || !target) continue;
         const sourceRect = source.getBoundingClientRect();
         const targetRect = target.getBoundingClientRect();
-        const x1 = sourceRect.right - graphRect.left;
-        const y1 = sourceRect.top + sourceRect.height / 2 - graphRect.top;
-        const x2 = targetRect.left - graphRect.left;
-        const y2 = targetRect.top + targetRect.height / 2 - graphRect.top;
+        const coordinate = (value) => Math.round(value / viewport.scale() * 1000) / 1000;
+        const x1 = coordinate(sourceRect.right - graphRect.left);
+        const y1 = coordinate(sourceRect.top + sourceRect.height / 2 - graphRect.top);
+        const x2 = coordinate(targetRect.left - graphRect.left);
+        const y2 = coordinate(targetRect.top + targetRect.height / 2 - graphRect.top);
         const bend = Math.max(26, Math.abs(x2 - x1) * 0.42);
         const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
         path.setAttribute("d", "M " + x1 + " " + y1 + " C " + (x1 + bend) + " " + y1 + ", " +
@@ -639,8 +656,13 @@ function documentHtml(webview, title, body, script) {
     .icon-button:hover { background: var(--vscode-toolbar-hoverBackground); }
     .layout { flex: 1; min-height: 0; display: grid; grid-template-rows: minmax(0, 1fr); grid-template-columns: minmax(420px, 1fr) minmax(320px, 38%); }
     .graph-band { min-width: 0; min-height: 0; display: flex; flex-direction: column; border-right: 1px solid var(--vscode-panel-border); }
-    .graph-heading { flex: none; min-height: 32px; padding: 7px 13px; display: flex; justify-content: space-between; border-bottom: 1px solid var(--vscode-panel-border); font-size: 11px; font-weight: 600; text-transform: uppercase; }
-    .graph-scroll { min-height: 0; flex: 1; overflow: auto; background: var(--vscode-editor-background); }
+    .graph-heading { flex: none; min-height: 32px; min-width: 0; padding: 7px 13px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px; justify-content: space-between; border-bottom: 1px solid var(--vscode-panel-border); font-size: 11px; font-weight: 600; text-transform: uppercase; }
+    .graph-zoom { display: flex; align-items: center; gap: 4px; margin-left: auto; }
+    .graph-zoom button { min-width: 26px; height: 24px; border: 1px solid var(--vscode-panel-border); border-radius: 3px; color: var(--vscode-foreground); background: var(--vscode-editorWidget-background); cursor: pointer; }
+    .graph-zoom output { min-width: 40px; text-align: center; font-variant-numeric: tabular-nums; }
+    .graph-scroll { min-height: 0; flex: 1; overflow: auto; background: var(--vscode-editor-background); touch-action: none; cursor: grab; }
+    .graph-scroll.is-panning { cursor: grabbing; }
+    .graph-scroll:focus-visible, .graph-zoom button:focus-visible { outline: 2px solid var(--vscode-focusBorder); outline-offset: -2px; }
     .graph { position: relative; min-height: 360px; isolation: isolate; }
     .connections { position: absolute; inset: 0; z-index: 0; pointer-events: none; overflow: visible; }
     .connection { fill: none; stroke: var(--vscode-editorWidget-border); stroke-width: 1.5; opacity: .9; }
