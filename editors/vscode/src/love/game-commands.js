@@ -38,6 +38,13 @@ const PACKAGE_TARGETS = [
     setting: "love.macosApp",
     pick: { canSelectFolders: true, canSelectFiles: true, title: "Select love.app" },
   },
+  {
+    target: "web",
+    label: "Web (HTML5)",
+    description: "Static browser build · needs a LÖVE 11.5 web player and hosting headers",
+    setting: "love.webPlayer",
+    pick: { canSelectFolders: true, canSelectFiles: false, title: "Select the LÖVE 11.5 standalone web player folder" },
+  },
 ];
 
 // Run one `tua` command in a task terminal, with LOVE traceback remapping
@@ -131,7 +138,7 @@ function registerGameCommands({ appendOutputLine, getClient, getServerCommand, a
         if (!runtime) {
           return undefined;
         }
-        args.push("--love", runtime);
+        args.push(choice.target === "web" ? "--web-player" : "--love", runtime);
       }
       return runTuaTask({
         appendOutputLine,
@@ -229,7 +236,7 @@ async function loveRuntime(choice) {
     const picked = await vscode.window.showOpenDialog({
       ...choice.pick,
       canSelectMany: false,
-      openLabel: "Use This LÖVE",
+      openLabel: choice.target === "web" ? "Use This Web Player" : "Use This LÖVE",
     });
     const selected = picked?.[0]?.fsPath;
     if (!selected) return undefined;
@@ -270,19 +277,23 @@ async function packageProjectLayout(getClient) {
 function packageTargetDetail(choice) {
   if (choice.target === "windows") return "Creates an app folder in dist/windows/ · requires an extracted Windows LÖVE runtime";
   if (choice.target === "macos") return "Creates an app bundle in dist/macos/ · requires love.app";
+  if (choice.target === "web") return "Creates a static site in dist/web/ · requires a standalone LÖVE 11.5 web player";
   return "Creates a .love archive in dist/ · no extra runtime needed to build";
 }
 
 function validLoveRuntime(choice, candidate) {
   if (!candidate || !fs.existsSync(candidate)) return false;
   if (choice.target === "windows") return fs.existsSync(path.join(candidate, "love.exe"));
+  if (choice.target === "web") return ["player.js", "style.css", "license.txt", "11.5/love.js", "11.5/love.wasm", "11.5/license.txt", "lua/normalize1.lua", "lua/normalize2.lua"].every(file => fs.existsSync(path.join(candidate, file)));
   return choice.target === "macos" && candidate.endsWith(".app") && fs.existsSync(path.join(candidate, "Contents/Info.plist"));
 }
 
 function runtimeRequirement(choice) {
   return choice.target === "windows"
     ? "Choose the extracted 64-bit LÖVE for Windows folder containing love.exe."
-    : "Choose a love.app bundle containing Contents/Info.plist.";
+    : choice.target === "web"
+      ? "Choose the LÖVE 11.5 standalone player folder containing player.js and 11.5/love.wasm."
+      : "Choose a love.app bundle containing Contents/Info.plist.";
 }
 
 function packagedArtifactFromLine(line, projectDirectory) {

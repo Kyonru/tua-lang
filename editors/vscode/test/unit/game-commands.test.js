@@ -111,16 +111,18 @@ test("fused package targets name the setting that holds their LOVE runtime", () 
       ["love", undefined],
       ["windows", "love.windowsRuntime"],
       ["macos", "love.macosApp"],
+      ["web", "love.webPlayer"],
     ],
   );
 });
 
 test("package picker explains the selectable platforms and their outputs", () => {
-  assert.deepEqual(PACKAGE_TARGETS.map(item => item.target), ["love", "windows", "macos"]);
+  assert.deepEqual(PACKAGE_TARGETS.map(item => item.target), ["love", "windows", "macos", "web"]);
   assert.match(PACKAGE_TARGETS[0].description, /Linux, Windows, or macOS/u);
   assert.match(packageTargetDetail(PACKAGE_TARGETS[0]), /\.love archive in dist/u);
   assert.match(packageTargetDetail(PACKAGE_TARGETS[1]), /dist\/windows/u);
   assert.match(packageTargetDetail(PACKAGE_TARGETS[2]), /dist\/macos/u);
+  assert.match(packageTargetDetail(PACKAGE_TARGETS[3]), /dist\/web/u);
 });
 
 test("runtime selection accepts the expected LÖVE bundle for each fused target", () => {
@@ -128,14 +130,23 @@ test("runtime selection accepts the expected LÖVE bundle for each fused target"
   try {
     const windows = path.join(root, "love-win64");
     const macos = path.join(root, "love.app");
+    const web = path.join(root, "love-web");
     fs.mkdirSync(windows);
     fs.mkdirSync(path.join(macos, "Contents"), { recursive: true });
     fs.writeFileSync(path.join(windows, "love.exe"), "");
     fs.writeFileSync(path.join(macos, "Contents/Info.plist"), "");
+    for (const file of ["player.js", "style.css", "license.txt", "11.5/love.js", "11.5/love.wasm", "11.5/license.txt", "lua/normalize1.lua", "lua/normalize2.lua"]) {
+      const target = path.join(web, file);
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      fs.writeFileSync(target, "");
+    }
     assert(validLoveRuntime(PACKAGE_TARGETS[1], windows));
     assert(!validLoveRuntime(PACKAGE_TARGETS[1], macos));
     assert(validLoveRuntime(PACKAGE_TARGETS[2], macos));
     assert(!validLoveRuntime(PACKAGE_TARGETS[2], windows));
+    assert(validLoveRuntime(PACKAGE_TARGETS[3], web));
+    fs.rmSync(path.join(web, "11.5/love.wasm"));
+    assert(!validLoveRuntime(PACKAGE_TARGETS[3], web));
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -244,7 +255,7 @@ test("package command resolves the project before offering target platforms", as
     vscodeMock.window.showQuickPick = async (items, picker) => {
       assert(requestedLayout, "project resolution comes before target selection");
       assert.match(picker.title, /target platform/u);
-      assert.deepEqual(items.map(item => item.target), ["love", "windows", "macos"]);
+      assert.deepEqual(items.map(item => item.target), ["love", "windows", "macos", "web"]);
       offeredPlatforms = true;
       return items[0];
     };
@@ -260,6 +271,15 @@ test("package command resolves the project before offering target platforms", as
     vscodeMock.window.showQuickPick = async items => items[1];
     const windowsResult = await commands.get("tua.packageGame")();
     assert.deepEqual(windowsResult.args, ["package", "--target", "windows", "--love", windows]);
+    const web = path.join(root, "love-web");
+    for (const file of ["player.js", "style.css", "license.txt", "11.5/love.js", "11.5/love.wasm", "11.5/license.txt", "lua/normalize1.lua", "lua/normalize2.lua"]) {
+      const target = path.join(web, file);
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      fs.writeFileSync(target, "");
+    }
+    vscodeMock.workspace.getConfiguration = () => ({ get: (key, fallback) => key === "love.webPlayer" ? web : fallback });
+    const webResult = await commands.get("tua.packageGame")({ target: "web" });
+    assert.deepEqual(webResult.args, ["package", "--target", "web", "--web-player", web]);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
     vscodeMock.commands.registerCommand = saved.registerCommand;

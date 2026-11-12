@@ -1,14 +1,15 @@
 //! `tua package`: build the project and package the output for players.
 //!
-//! The `.love` archive is always written. Fused Windows and macOS builds
-//! combine it with a LOVE runtime the developer supplies with `--love`, so
-//! packaging never downloads anything.
+//! The `.love` archive is always written. Fused desktop builds and the web
+//! player use runtimes supplied by the developer, so packaging never downloads
+//! anything.
 
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use sha2::{Digest, Sha256};
 use tua_core::{LoadedConfig, ProjectWorkspace, CONFIG_FILE};
 
 use crate::build::run_build;
@@ -26,6 +27,7 @@ pub enum PackageTarget {
     Love,
     Windows,
     Macos,
+    Web,
 }
 
 impl PackageTarget {
@@ -34,6 +36,7 @@ impl PackageTarget {
             "love" => Some(Self::Love),
             "windows" => Some(Self::Windows),
             "macos" => Some(Self::Macos),
+            "web" => Some(Self::Web),
             _ => None,
         }
     }
@@ -43,6 +46,7 @@ impl PackageTarget {
 pub struct PackageOptions {
     pub target: PackageTarget,
     pub love: Option<PathBuf>,
+    pub web_player: Option<PathBuf>,
     pub name: Option<String>,
     pub identifier: Option<String>,
 }
@@ -54,11 +58,17 @@ pub(crate) fn run_package(
 ) -> Result<String, CliError> {
     let cwd = cwd.as_ref();
     let workspace = ProjectWorkspace::from_loaded(cwd, loaded.clone());
-    let love_runtime = match options.target {
+    let target_runtime = match options.target {
         PackageTarget::Love => None,
         PackageTarget::Windows | PackageTarget::Macos => Some(
             options
                 .love
+                .clone()
+                .ok_or_else(|| missing_runtime(options.target))?,
+        ),
+        PackageTarget::Web => Some(
+            options
+                .web_player
                 .clone()
                 .ok_or_else(|| missing_runtime(options.target))?,
         ),
@@ -82,7 +92,7 @@ pub(crate) fn run_package(
         human_size(archive.len())
     ));
 
-    match (options.target, love_runtime) {
+    match (options.target, target_runtime) {
         (PackageTarget::Windows, Some(runtime)) => {
             let directory = fuse_windows(&runtime, &archive, workspace.root(), &dist, &name)?;
             lines.push(format!("packaged {}", display(cwd, &directory)));
@@ -108,6 +118,10 @@ pub(crate) fn run_package(
                 ));
             }
         }
+        (PackageTarget::Web, Some(player)) => {
+            let directory = package_web(&player, &archive, workspace.root(), &dist, &name)?;
+            lines.push(format!("packaged {}", display(cwd, &directory)));
+        }
         _ => {}
     }
 
@@ -119,12 +133,92 @@ fn missing_runtime(target: PackageTarget) -> CliError {
         PackageTarget::Windows => {
             "download the 64-bit zipped LOVE 11.5 for Windows from https://love2d.org, extract it, and pass its directory, which contains love.exe"
         }
-        _ => {
+        PackageTarget::Macos => {
             "download LOVE 11.5 for macOS from https://love2d.org and pass its love.app"
         }
+        PackageTarget::Web => {
+            return CliError::usage("`--target web` needs `--web-player PATH`: download the LÖVE 11.5 standalone player from https://github.com/2dengine/love.js and pass its root directory");
+        }
+        PackageTarget::Love => unreachable!("the portable archive needs no runtime"),
     };
     CliError::usage(format!("`--target` needs `--love PATH`: {hint}"))
 }
+
+const WEB_PLAYER_FILES: [&str; 8] = [
+    "player.js",
+    "style.css",
+    "license.txt",
+    "11.5/love.js",
+    "11.5/love.wasm",
+    "11.5/license.txt",
+    "lua/normalize1.lua",
+    "lua/normalize2.lua",
+];
+
+/// Pair the archive with the LÖVE 11.5 standalone player. Only the known
+/// runtime files are copied; a supplied player directory may also contain
+/// games, repository metadata, or other files that must stay out of the build.
+fn package_web(
+    player: &Path,
+    archive: &[u8],
+    project_root: &Path,
+    dist: &Path,
+    name: &str,
+) -> Result<PathBuf, CliError> {
+    for relative in WEB_PLAYER_FILES {
+        let source = player.join(relative);
+        reject_symlink_path(player, &source).map_err(CliError::usage)?;
+        if !source.is_file() {
+            return Err(CliError::usage(format!(
+                "{} is missing; pass the root of the 2dengine LÖVE 11.5 standalone player",
+                source.display()
+            )));
+        }
+    }
+    let destination = dist.join("web").join(name);
+    check_package_path(project_root, &destination)?;
+    let stage = crate::atomic_fs::DirectoryStage::new(&destination)
+        .map_err(|error| io_error(&destination, error))?;
+    for relative in WEB_PLAYER_FILES {
+        let source = player.join(relative);
+        let target = stage.path().join(relative);
+        fs::create_dir_all(target.parent().expect("runtime file has a parent"))
+            .map_err(|error| io_error(&target, error))?;
+        fs::copy(&source, &target).map_err(|error| io_error(&source, error))?;
+    }
+    for optional in [".htaccess", "readme.md"] {
+        let source = player.join(optional);
+        if source.is_file() {
+            reject_symlink_path(player, &source).map_err(CliError::usage)?;
+            fs::copy(&source, stage.path().join(optional))
+                .map_err(|error| io_error(&source, error))?;
+        }
+    }
+    let game_file = format!("game-{:x}.love", Sha256::digest(archive));
+    fs::write(stage.path().join(&game_file), archive)
+        .map_err(|error| io_error(stage.path(), error))?;
+    fs::write(
+        stage.path().join("index.html"),
+        web_index_html(name, &game_file),
+    )
+    .map_err(|error| io_error(stage.path(), error))?;
+    fs::write(stage.path().join("README.txt"), WEB_HOSTING_README)
+        .map_err(|error| io_error(stage.path(), error))?;
+    check_package_path(project_root, &destination)?;
+    stage
+        .publish(&destination)
+        .map_err(|error| io_error(&destination, error))?;
+    Ok(destination)
+}
+
+fn web_index_html(name: &str, game_file: &str) -> String {
+    format!(
+        "<!doctype html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n<title>{}</title>\n<link rel=\"stylesheet\" href=\"style.css\">\n</head>\n<body>\n<canvas id=\"canvas\" tabindex=\"0\"></canvas>\n<div id=\"spinner\" class=\"pending\" role=\"status\" aria-label=\"Loading game\"></div>\n<script src=\"player.js?g={game_file}&amp;v=11.5\"></script>\n</body>\n</html>\n",
+        xml_escape(name),
+    )
+}
+
+const WEB_HOSTING_README: &str = "This directory is a LÖVE 11.5 web game. Serve it from an HTTP(S) server; opening index.html with file:// will not work.\n\nThe 2dengine standalone player requires these response headers for this directory:\nCross-Origin-Opener-Policy: same-origin\nCross-Origin-Embedder-Policy: require-corp\nContent-Security-Policy: script-src 'self' 'unsafe-eval'\n\nApache can use the copied .htaccess when AllowOverride and mod_headers are enabled. Configure equivalent headers on other hosts. Browser audio and fullscreen may require a user gesture. See https://github.com/2dengine/love.js for player limitations and licenses.\n";
 
 /// The `.love` archive for the build output: every output file except source
 /// maps, Tua sources, configuration, packages, and hidden files.

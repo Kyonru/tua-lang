@@ -13,7 +13,7 @@ function normalizeConfigurations(value) {
     const name = typeof item?.name === "string" ? item.name.trim() : "";
     if (!name || names.has(name)) throw new Error("Run configurations need unique, non-empty names.");
     if (!["run", "debug", "hotReload", "package"].includes(item.mode)) throw new Error(`Unknown run mode for ${name}.`);
-    if (item.packageTarget && !["love", "windows", "macos"].includes(item.packageTarget)) throw new Error(`Unknown package target for ${name}.`);
+    if (item.packageTarget && !["love", "windows", "macos", "web"].includes(item.packageTarget)) throw new Error(`Unknown package target for ${name}.`);
     if (item.instances !== undefined && item.mode === "package") throw new Error(`Instances are not supported in Package mode (${name}).`);
     const instances = item.instances === undefined ? undefined : normalizeInstances(item.instances);
     names.add(name);

@@ -9,8 +9,10 @@ language or editor behavior, and migration notes call out those changes.
 ### Added
 
 - VS Code packaging now selects the project before the target platform, explains
-  portable, Windows, and macOS outputs, checks fused LÖVE runtimes, and offers
+  portable, Windows, macOS, and web outputs, checks supplied LÖVE runtimes, and offers
   to reveal or copy the finished package path from a Run view action.
+- `tua package --target web --web-player PATH` creates a static LÖVE 11.5 web
+  site from the game archive and a separately supplied standalone player.
 - An experimental seeded procedural-map preview runs a bounded `Rot` sample in
   a temporary Tua/LÖVE project and shows maze cells, route, and visibility
   without executing game code or adding preview helpers to release builds.

@@ -247,6 +247,7 @@ fn package_accepts_a_target_runtime_name_and_identifier() {
                 package: crate::package::PackageOptions {
                     target: crate::package::PackageTarget::Macos,
                     love: Some("/Applications/love.app".into()),
+                    web_player: None,
                     name: Some("Star Dust".to_owned()),
                     identifier: Some("io.example.stardust".to_owned()),
                 },
@@ -257,6 +258,22 @@ fn package_accepts_a_target_runtime_name_and_identifier() {
     assert!(parse_args(["package", "--target", "linux"]).is_err());
     assert!(parse_args(["package", "--love"]).is_err());
     assert!(parse_args(["build", "--target", "love"]).is_err());
+    let web = parse_args(["package", "--target", "web", "--web-player", "/tmp/love.js"])
+        .expect("web target and player are accepted");
+    assert!(matches!(
+        web,
+        CliAction::Command {
+            options: CommandOptions {
+                package: crate::package::PackageOptions {
+                    target: crate::package::PackageTarget::Web,
+                    web_player: Some(_),
+                    ..
+                },
+                ..
+            },
+            ..
+        }
+    ));
 }
 
 #[test]

@@ -5,8 +5,8 @@ icon: lucide/package
 # Packaging Games
 
 `tua package` builds the project and packages the output for players. It
-always writes a `.love` archive, and it can also fuse a standalone Windows or
-macOS build with a LOVE runtime you provide.
+always writes a `.love` archive, and it can also build a standalone Windows or
+macOS app or a static web site with a runtime you provide.
 
 ```bash
 tua package
@@ -30,8 +30,11 @@ it asks which one to package. Then choose a target:
 - **Windows app (.exe):** a fused app folder. Select an extracted LÖVE for
   Windows directory containing `love.exe` when prompted.
 - **macOS app (.app):** a fused app bundle. Select `love.app` when prompted.
+- **Web (HTML5):** a static site. Select the root of the LÖVE 11.5 standalone
+  web player when prompted. You must serve the site with the headers below.
 
-Fused builds reuse `tua.love.windowsRuntime` or `tua.love.macosApp` when set.
+Desktop and web builds reuse `tua.love.windowsRuntime`, `tua.love.macosApp`,
+or `tua.love.webPlayer` when set.
 The package runs in a VS Code task. On success, the extension offers to reveal
 the generated file or folder or copy its path. On failure, read the **Package
 Game** task output for the compiler or packaging error. Files are written to
@@ -100,4 +103,35 @@ app is damaged or from an unidentified developer.
 
 Players on Linux, or anyone with LOVE installed, can run the `.love` file
 directly with `love my-game.love`. Mobile and web builds use LOVE's own
-Android, iOS, and love.js toolchains, which take the `.love` archive as input.
+Android and iOS toolchains take the `.love` archive as input.
+
+## Web
+
+Download the [LÖVE 11.5 standalone web player](https://github.com/2dengine/love.js)
+and pass its root directory (the one containing `player.js` and `11.5/love.wasm`):
+
+```bash
+tua package --target web --web-player ~/Downloads/love.js --name my-game
+```
+
+This writes `dist/web/my-game/` with `index.html`, a content-named
+`game-<hash>.love` archive, the player,
+its licenses, and a `README.txt`. The web player is supplied separately;
+Tua does not download it or include it in the extension. Only known runtime
+files are copied, so other files in the player folder do not enter the build.
+The archive name changes when its contents change, avoiding the player's
+URL-based cache serving an old game after redeployment.
+
+Serve the directory over HTTP(S), with these response headers:
+
+```text
+Cross-Origin-Opener-Policy: same-origin
+Cross-Origin-Embedder-Policy: require-corp
+Content-Security-Policy: script-src 'self' 'unsafe-eval'
+```
+
+The upstream `.htaccess` is copied when present for Apache hosts configured
+with `mod_headers` and `AllowOverride`. Other hosts need equivalent headers.
+Opening `index.html` with `file://` is insufficient. Browser audio and
+fullscreen need user interaction; LuaSocket and native desktop dependencies
+may not work. Test your game in its target browsers before distributing it.

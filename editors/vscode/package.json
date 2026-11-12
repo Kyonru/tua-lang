@@ -29,6 +29,7 @@
         "tua.love.command",
         "tua.love.windowsRuntime",
         "tua.love.macosApp",
+        "tua.love.webPlayer",
         "tua.shaders.glslangPath"
       ]
     }
@@ -119,6 +120,12 @@
           "default": "",
           "scope": "machine",
           "description": "Path to love.app used by Tua: Package Game to build a fused macOS game. When empty, /Applications/love.app is used if present, otherwise the command asks for it."
+        },
+        "tua.love.webPlayer": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "description": "Root folder of the LÖVE 11.5 standalone web player used by Tua: Package Game for Web. Download it from 2dengine/love.js; when empty, the command asks for it."
         },
         "tua.trace.server": {
           "type": "string",
@@ -681,7 +688,8 @@
                 "enum": [
                   "love",
                   "windows",
-                  "macos"
+                  "macos",
+                  "web"
                 ]
               },
               "instances": {

@@ -629,6 +629,132 @@ fn package_fuses_a_windows_build_with_the_supplied_runtime() {
     assert!(!game.join("lovec.exe").exists());
 }
 
+#[test]
+fn package_web_copies_only_player_files_and_embeds_the_game_archive() {
+    let temp = TempDir::new("package-web");
+    write_packaging_project(&temp);
+    let missing = tua()
+        .args(["package", "--target", "web"])
+        .current_dir(temp.path())
+        .output()
+        .unwrap();
+    assert!(!missing.status.success());
+    assert!(String::from_utf8_lossy(&missing.stderr).contains("--web-player"));
+    let player = temp.path().join("love-web");
+    for file in [
+        "player.js",
+        "style.css",
+        "license.txt",
+        "11.5/love.js",
+        "11.5/love.wasm",
+        "11.5/license.txt",
+        "lua/normalize1.lua",
+        "lua/normalize2.lua",
+    ] {
+        let path = player.join(file);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, format!("fixture {file}")).unwrap();
+    }
+    fs::write(player.join("private-game.love"), b"do not copy").unwrap();
+    let package = tua()
+        .args([
+            "package",
+            "--target",
+            "web",
+            "--name",
+            "Star Dust",
+            "--web-player",
+        ])
+        .arg(&player)
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to package web game");
+    assert!(package.status.success(), "{package:?}");
+    let site = temp.path().join("dist/web/Star Dust");
+    let game_files = fs::read_dir(&site)
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+        .filter(|name| name.starts_with("game-") && name.ends_with(".love"))
+        .collect::<Vec<_>>();
+    assert_eq!(game_files.len(), 1, "{game_files:?}");
+    let game_file = &game_files[0];
+    assert_eq!(
+        fs::read(site.join(game_file)).unwrap(),
+        fs::read(temp.path().join("dist/Star Dust.love")).unwrap()
+    );
+    assert!(site.join("11.5/love.wasm").exists());
+    assert!(site.join("lua/normalize1.lua").exists());
+    assert!(site.join("license.txt").exists());
+    assert!(!site.join("private-game.love").exists());
+    let html = fs::read_to_string(site.join("index.html")).unwrap();
+    assert!(html.contains("<title>Star Dust</title>"), "{html}");
+    assert!(
+        html.contains(&format!("player.js?g={game_file}&amp;v=11.5")),
+        "{html}"
+    );
+    fs::remove_file(player.join("11.5/love.wasm")).unwrap();
+    let failed = tua()
+        .args([
+            "package",
+            "--target",
+            "web",
+            "--name",
+            "Star Dust",
+            "--web-player",
+        ])
+        .arg(&player)
+        .current_dir(temp.path())
+        .output()
+        .unwrap();
+    assert!(!failed.status.success());
+    assert!(String::from_utf8_lossy(&failed.stderr).contains("love.wasm"));
+    assert_eq!(
+        fs::read(site.join(game_file)).unwrap(),
+        fs::read(temp.path().join("dist/Star Dust.love")).unwrap()
+    );
+
+    #[cfg(unix)]
+    {
+        std::os::unix::fs::symlink(player.join("player.js"), player.join("11.5/love.wasm"))
+            .unwrap();
+        let linked = tua()
+            .args(["package", "--target", "web", "--web-player"])
+            .arg(&player)
+            .current_dir(temp.path())
+            .output()
+            .unwrap();
+        assert!(!linked.status.success());
+        assert!(String::from_utf8_lossy(&linked.stderr).contains("symbolic link"));
+        fs::remove_file(player.join("11.5/love.wasm")).unwrap();
+    }
+    fs::write(player.join("11.5/love.wasm"), b"fixture wasm").unwrap();
+    fs::write(
+        temp.path().join("src/main.tua"),
+        "function love.draw()\n  love.graphics.print(\"changed\", 10, 10)\nend\n",
+    )
+    .unwrap();
+    let updated = tua()
+        .args([
+            "package",
+            "--target",
+            "web",
+            "--name",
+            "Star Dust",
+            "--web-player",
+        ])
+        .arg(&player)
+        .current_dir(temp.path())
+        .output()
+        .unwrap();
+    assert!(updated.status.success(), "{updated:?}");
+    let updated_html = fs::read_to_string(site.join("index.html")).unwrap();
+    assert!(!updated_html.contains(game_file), "{updated_html}");
+    assert!(
+        !site.join(game_file).exists(),
+        "stale game URL must be removed"
+    );
+}
+
 #[cfg(unix)]
 #[test]
 fn dev_prepares_a_hot_reloadable_build_and_exits_with_the_game() {

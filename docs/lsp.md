@@ -615,10 +615,10 @@ messages. Configure a non-standard LOVE executable with `tua.love.command`.
 
 **Tua: Run LOVE Project With Hot Reload** runs [`tua dev`](hot-reload.md) in
 a task: the game reloads changed modules each time you save. **Tua: Package
-Game...** asks for a `.love`, Windows, or macOS build and runs
-[`tua package`](packaging.md). Fused builds use the LOVE runtime in
-`tua.love.windowsRuntime` or `tua.love.macosApp`; when that is empty, the
-command asks for it and can remember the choice.
+Game...** asks for a `.love`, Windows, macOS, or web build and runs
+[`tua package`](packaging.md). Platform builds use the runtime in
+`tua.love.windowsRuntime`, `tua.love.macosApp`, or `tua.love.webPlayer`;
+when that is empty, the command asks for it and can remember the choice.
 
 **Tua: Debug LOVE Project** provides source-mapped LOVE debugging through an
 external Lua adapter. See [Debugging](debugging.md) for setup, runtime behavior,
@@ -671,6 +671,7 @@ contain a value.
 | `tua.love.command` | Select the LOVE executable used by run tasks |
 | `tua.love.windowsRuntime` | Extracted LOVE for Windows folder used for fused Windows packages |
 | `tua.love.macosApp` | `love.app` used for fused macOS packages |
+| `tua.love.webPlayer` | LÖVE 11.5 standalone player folder used for web packages |
 | `tua.trace.server` | Show `off`, `messages`, or `verbose` protocol traces |
 | `tua.log.verbosity` | Show `off`, `error`, `info`, `debug`, or `trace` server logs |
 | `tua.format.*` | Override formatter settings from `tua.toml` |

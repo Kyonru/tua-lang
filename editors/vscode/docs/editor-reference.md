@@ -71,7 +71,7 @@ The choice is remembered per workspace and drives the compact toolbar Run button
 which opens the game console. Run uses a green play icon and Stop a red square,
 with light/dark variants. Direct run commands retain their task terminal.
 Customize names and modes in `tua.run.configurations`; packaging configurations
-can specify `packageTarget` (`love`, `windows`, or `macos`). Existing launch
+can specify `packageTarget` (`love`, `windows`, `macos`, or `web`). Existing launch
 configurations and direct commands still work. Run and Debug use the project of
 the active file; in a multi-root workspace, open a file from the desired project.
 For ad hoc packaging, use the package icon in the Run Configuration header or

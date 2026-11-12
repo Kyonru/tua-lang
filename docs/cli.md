@@ -187,11 +187,13 @@ emitted runtime files.
 tua package
 tua package --target windows --love path/to/love-11.5-win64
 tua package --target macos --love /Applications/love.app
+tua package --target web --web-player path/to/love.js
 ```
 
 Builds the project, then writes `dist/<name>.love`. `--target windows` or
-`--target macos` also fuses a standalone game with the LOVE runtime passed to
-`--love`; packaging never downloads anything. `--name` sets the game name
+`--target macos` fuses a standalone game with the LOVE runtime passed to
+`--love`; `--target web` pairs the archive with a supplied LÖVE 11.5 web
+player. Packaging never downloads anything. `--name` sets the game name
 (default: the project directory's name) and `--identifier` the macOS bundle
 identifier. See [Packaging Games](packaging.md).
 

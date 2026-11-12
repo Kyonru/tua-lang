@@ -112,7 +112,7 @@ suggestions and the local Ollama fallback are separate opt-in features.
 | Debug | Use **Tua: Debug LOVE Project** with the optional [Second Local Lua Debugger](https://marketplace.visualstudio.com/items?itemName=ismoh-games.second-local-lua-debugger-vscode). Breakpoints and stopped locations map back to Tua source. |
 | Test | Discover and run Tua/Busted specs in the Testing view, including file and case runs. Install Busted for the interpreter you use. |
 | Inspect | Enable the development-only Runtime Inspector, then start a new run. Pause or refresh snapshots without pausing the game. |
-| Package | Select the package icon in Tua’s Run view, choose a portable `.love`, Windows, or macOS target, then reveal the finished package. |
+| Package | Select the package icon in Tua’s Run view, choose a portable `.love`, Windows, macOS, or web target, then reveal the finished package. |
 
 The **Tua** Activity Bar view groups project files, assets, signals, modules, ECS, pools, audio, run sessions, and project checks. Right-click a Tua file or declaration for relevant previews and source actions.
 
