@@ -643,7 +643,7 @@ Open the command palette and type **Tua**. The most useful commands are:
 | **Tua: Jump Between Tua and Generated Lua** | Navigate through the generated source map |
 | **Tua: Run LOVE Project** / **Stop LOVE Project** / **Restart LOVE Project** | Build, stop, or restart LOVE in a focused VS Code task terminal |
 | **Tua: Run LOVE Project With Hot Reload** | Run the game and reload code changes while it plays |
-| **Tua: Package Game...** | Build a `.love`, fused Windows, or fused macOS package |
+| **Tua: Package Game...** | Choose the project and target platform, build a `.love` or fused Windows/macOS package, then reveal its output |
 | **Tua: Debug LOVE Project** | Build and debug generated Lua with breakpoints mapped to Tua |
 | **Tua: Workspace Symbols by Module** | Browse compiler symbols grouped by module |
 | **Tua: Why Is This Module Included?** | Show the active module's shortest root-to-module path |

@@ -72,8 +72,13 @@ which opens the game console. Run uses a green play icon and Stop a red square,
 with light/dark variants. Direct run commands retain their task terminal.
 Customize names and modes in `tua.run.configurations`; packaging configurations
 can specify `packageTarget` (`love`, `windows`, or `macos`). Existing launch
-configurations and direct commands still work. Each action uses the project of
+configurations and direct commands still work. Run and Debug use the project of
 the active file; in a multi-root workspace, open a file from the desired project.
+For ad hoc packaging, use the package icon in the Run Configuration header or
+**Tua: Package Game...**. Choose the target platform from the picker. If no
+project file is active in a multi-root workspace, packaging asks which project
+to build. After a successful package task, use **Reveal Package** or **Copy Path**
+from the result notification.
 
 ### Multiple local players
 

@@ -8,6 +8,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Added
 
+- VS Code packaging now selects the project before the target platform, explains
+  portable, Windows, and macOS outputs, checks fused LÖVE runtimes, and offers
+  to reveal or copy the finished package path from a Run view action.
 - An experimental seeded procedural-map preview runs a bounded `Rot` sample in
   a temporary Tua/LÖVE project and shows maze cells, route, and visibility
   without executing game code or adding preview helpers to release builds.

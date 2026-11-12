@@ -20,9 +20,23 @@ packaged dist/my-game.love (184.2 KiB)
 Packages go to `dist/` in the project root. `tua init` adds this directory to
 `.gitignore`.
 
-In VS Code, **Tua: Package Game...** asks which package to build and runs the
-same command in a task. For fused builds it uses `tua.love.windowsRuntime` or
-`tua.love.macosApp`, and asks for the runtime when the setting is empty.
+In VS Code, select the package icon in the **Tua → Run Configuration** view or
+run **Tua: Package Game...** from the Command Palette. Tua uses the active
+file's project; if several projects are open and no project file is active,
+it asks which one to package. Then choose a target:
+
+- **Any desktop (.love):** a portable archive for Linux, Windows, or macOS;
+  players need LÖVE installed.
+- **Windows app (.exe):** a fused app folder. Select an extracted LÖVE for
+  Windows directory containing `love.exe` when prompted.
+- **macOS app (.app):** a fused app bundle. Select `love.app` when prompted.
+
+Fused builds reuse `tua.love.windowsRuntime` or `tua.love.macosApp` when set.
+The package runs in a VS Code task. On success, the extension offers to reveal
+the generated file or folder or copy its path. On failure, read the **Package
+Game** task output for the compiler or packaging error. Files are written to
+the selected project's `dist/` directory. The macOS signing and notarization
+requirements below still apply before distribution.
 
 ## What Goes In
 

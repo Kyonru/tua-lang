@@ -1743,6 +1743,11 @@
           "group": "navigation@2"
         },
         {
+          "command": "tua.packageGame",
+          "when": "view == tua.run && workspaceFolderCount > 0",
+          "group": "navigation@3"
+        },
+        {
           "command": "tua.console.level",
           "when": "view == tua.console",
           "group": "navigation@0"
