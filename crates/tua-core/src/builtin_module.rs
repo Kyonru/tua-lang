@@ -492,10 +492,7 @@ mod tests {
             panic!("tween instance must be a table")
         };
         let easing = &instance.field("ease").expect("ease method").ty;
-        assert!(
-            easing.to_string().contains("\"quadout\""),
-            "{easing}"
-        );
+        assert!(easing.to_string().contains("\"quadout\""), "{easing}");
         let camera = module_type(module("Camera").expect("Camera"));
         assert!(camera.to_string().contains("\"platformer\""), "{camera}");
         let rot = module_type(module("Rot").expect("Rot"));
