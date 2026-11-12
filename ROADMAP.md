@@ -145,6 +145,12 @@ results.
 
 ### Unit testing follow-ups
 
+- Add a Test Explorer Debug profile only after `tua test` can prepare a
+  persistent, source-mapped test build for a debugger to launch. Preserve the
+  selected Busted case filter, use the configured Lua interpreter, keep the
+  output alive until the debug session ends, and clean it on cancellation.
+  Verify breakpoints in both a `.tua` spec and its subject in an installed host;
+  a profile that merely launches Busted without mapped breakpoints is not done.
 - Design an explicit LOVE runtime test mode with clear discovery, launch,
   cancellation, exit-status, and result-reporting behavior. The Busted backend
   currently tests headless Lua logic and needs doubles for LOVE-dependent code.
