@@ -49,6 +49,20 @@ class InspectorTree {
           const origin = object.origin;
           const { summary, children, details } = presentObject(object, id,
             entry.previousSnapshot?.objects.find(previous => previous.kind === kind && previous.id === object.id)?.data);
+          if (kind === "ecs") {
+            for (const entity of children) {
+              for (const component of entity.children || []) {
+                const match = /^(.*) #\d+$/.exec(component.label);
+                if (!match) continue;
+                component.children = [...(component.children || []), {
+                  id: component.id + "/static", label: "Find static systems and queries",
+                  description: match[1], icon: "type-hierarchy",
+                  tooltip: `Show all indexed ECS components named ${match[1]} and their system and query relationships`,
+                  command: "tua.showEcsExplorer", arguments: [{ componentName: match[1] }],
+                }];
+              }
+            }
+          }
           if (kind === "signals") {
             const recent = children.find(child => child.label === "Recent events");
             for (const event of recent?.children || []) {

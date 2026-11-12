@@ -13,11 +13,12 @@ const {
 
 let explorerPanel;
 let explorerFocusUri;
+let explorerComponentName;
 const renderGate = createRenderGate();
 
 function registerEcsExplorerFeature({ getClient }) {
-  const command = vscode.commands.registerCommand(COMMANDS.showEcsExplorer, () =>
-    showEcsExplorer({ getClient, focusUri: activeFileUri() }),
+  const command = vscode.commands.registerCommand(COMMANDS.showEcsExplorer, target =>
+    showEcsExplorer({ getClient, focusUri: target?.focusUri || activeFileUri(), componentName: target?.componentName }),
   );
 
   return vscode.Disposable.from(command, {
@@ -26,11 +27,12 @@ function registerEcsExplorerFeature({ getClient }) {
       explorerPanel?.dispose?.();
       explorerPanel = undefined;
       explorerFocusUri = undefined;
+      explorerComponentName = undefined;
     },
   });
 }
 
-async function showEcsExplorer({ getClient, focusUri }) {
+async function showEcsExplorer({ getClient, focusUri, componentName }) {
   const client = getClient();
 
   if (!client) {
@@ -39,6 +41,7 @@ async function showEcsExplorer({ getClient, focusUri }) {
   }
 
   explorerFocusUri = focusUri;
+  explorerComponentName = typeof componentName === "string" ? componentName : undefined;
 
   if (explorerPanel) {
     explorerPanel.reveal?.(vscode.ViewColumn.Beside, false);
@@ -56,13 +59,14 @@ async function showEcsExplorer({ getClient, focusUri }) {
       renderGate.invalidate();
       explorerPanel = undefined;
       explorerFocusUri = undefined;
+      explorerComponentName = undefined;
     });
     explorerPanel.webview.onDidReceiveMessage?.((message) =>
       handleExplorerMessage(message, { getClient }),
     );
   }
 
-  await renderEcsExplorer(explorerPanel, client, explorerFocusUri);
+  await renderEcsExplorer(explorerPanel, client, explorerFocusUri, explorerComponentName);
 }
 
 async function handleExplorerMessage(message, { getClient }) {
@@ -70,7 +74,7 @@ async function handleExplorerMessage(message, { getClient }) {
     const client = getClient();
 
     if (client && explorerPanel) {
-      await renderEcsExplorer(explorerPanel, client, explorerFocusUri);
+      await renderEcsExplorer(explorerPanel, client, explorerFocusUri, explorerComponentName);
     }
     return;
   }
@@ -78,14 +82,14 @@ async function handleExplorerMessage(message, { getClient }) {
   await openLocationMessage(message);
 }
 
-async function renderEcsExplorer(panel, client, focusUri) {
+async function renderEcsExplorer(panel, client, focusUri, componentName) {
   const request = renderGate.begin();
   panel.webview.html = ecsExplorerLoadingHtml(panel.webview);
 
   try {
     const response = await client.sendRequest("tua/ecsGraph", null);
     if (!renderGate.isCurrent(request) || explorerPanel !== panel) return;
-    const viewModel = ecsExplorerViewModel(response, focusUri);
+    const viewModel = ecsExplorerViewModel(response, focusUri, componentName);
 
     panel.webview.html = ecsExplorerHtml(panel.webview, viewModel);
   } catch (error) {

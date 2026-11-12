@@ -61,8 +61,9 @@ function ecsExplorerHtml(webview, viewModel) {
     };
     const saved = vscode.getState()?.ecsExplorer;
     const restored = saved?.focusUri === (model.focusUri || "") ? saved : null;
-    let mode = collections[restored?.mode] ? restored.mode : initialMode();
-    let filter = typeof restored?.filter === "string" ? restored.filter : "";
+    let mode = model.focusComponentName ? "components" : collections[restored?.mode] ? restored.mode : initialMode();
+    let filter = typeof model.focusComponentName === "string" ? model.focusComponentName.toLowerCase() :
+      typeof restored?.filter === "string" ? restored.filter : "";
     let selectedId = restored?.selectedId || initialSelection(mode);
     filterInput.value = filter;
 
@@ -102,6 +103,9 @@ function ecsExplorerHtml(webview, viewModel) {
     function visibleItems() {
       const items = collections[mode] || [];
       if (!filter) return items;
+      if (mode === "components" && model.focusComponentName && filter === model.focusComponentName.toLowerCase()) {
+        return items.filter((item) => item.runtimeName.toLowerCase() === filter);
+      }
       return items.filter((item) => searchableText(item).includes(filter));
     }
 

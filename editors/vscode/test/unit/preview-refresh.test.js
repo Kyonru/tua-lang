@@ -83,3 +83,14 @@ for (const [name, register, response] of cases) {
     }
   });
 }
+
+test("ECS explorer command carries an inspected component name into its view", async () => {
+  const client = { sendRequest: async () => ({ analysisRevision: 1, graph: { components: [], systems: [], queries: [], insights: [] } }) };
+  const feature = registerEcsExplorerFeature({ getClient: () => client });
+  try {
+    await commands.get("tua.showEcsExplorer")({ componentName: "Position" });
+    assert.match(panel.webview.html, /"focusComponentName":"Position"/);
+  } finally {
+    feature.dispose();
+  }
+});

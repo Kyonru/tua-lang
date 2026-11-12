@@ -8,6 +8,8 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Added
 
+- Sampled ECS entity components now open all same-name static component
+  declarations and their system and query relationships from the inspector.
 - The opt-in development Runtime Inspector now shows Baton's active input
   device, bindings, control values, directional pairs, and pointer position.
 - A selected development-inspector state machine can open its static diagram

@@ -2,7 +2,7 @@
 
 const { displayUriPath } = require("../shared/locations");
 
-function ecsExplorerViewModel(response, focusUri) {
+function ecsExplorerViewModel(response, focusUri, componentName) {
   const graph = response?.graph || {};
   const components = array(graph.components)
     .filter(hasIdentityAndLocation)
@@ -20,6 +20,7 @@ function ecsExplorerViewModel(response, focusUri) {
   return {
     analysisRevision: Number(response?.analysisRevision) || 0,
     focusUri: typeof focusUri === "string" ? focusUri : undefined,
+    focusComponentName: typeof componentName === "string" ? componentName : undefined,
     components,
     systems,
     queries,

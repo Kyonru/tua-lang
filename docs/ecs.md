@@ -89,6 +89,13 @@ standalone or system-owned queries without reparsing source in the extension.
 Selecting a component shows its schema, every resolved system access, and every
 relevant query; each relationship opens the exact component reference.
 
+With the opt-in development Runtime Inspector enabled, expand a sampled entity
+and choose **Find static systems and queries** under a component. The explorer
+filters to every declaration with that runtime component name, then shows the
+systems and queries indexed for each one. If several declarations share a
+name, it shows all of them instead of assuming which one the running entity
+uses. The runtime snapshot and the static relationships remain separate.
+
 System access is inferred conservatively from callback parameters:
 
 - `filter` means the component participates in matching but its callback value

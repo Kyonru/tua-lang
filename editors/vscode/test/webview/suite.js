@@ -296,6 +296,15 @@ async function run() {
     await evaluate('document.querySelector("#detail .detail-header button").click()');
     await waitFor(() => messages.some(message => message.command === "openLocation" && message.uri === "file:///game/components.tua"), "populated ECS source action");
     await screenshot("ecs-explorer-populated");
+    const focusedEcs = { ...ecsView, focusComponentName: "Position", components: [
+      ecsView.components[0],
+      { ...ecsView.components[0], id: "position-ui", uri: "file:///game/ui.tua" },
+      { ...ecsView.components[0], id: "position-texture", runtimeName: "PositionTexture" },
+    ] };
+    await load(ecsExplorerHtml(panel.webview, focusedEcs), "ECS Explorer");
+    assert.equal(await evaluate('document.querySelector("#filter").value'), "position");
+    assert.equal(await evaluate('document.querySelectorAll(".list-row").length'), 2,
+      "runtime component lookup keeps same-name declarations visible without guessing identity");
     const poolView = objectPoolExplorerViewModel({ analysisRevision: 7, graph: {
       pools: [{ id: "bullets", uri: "file:///game/pools.tua", range, name: "bullets", itemType: "Bullet" }],
       operations: [{ id: "take", uri: "file:///game/pools.tua", range, poolId: "bullets", poolName: "bullets", kind: "acquire", itemName: "bullet" }],

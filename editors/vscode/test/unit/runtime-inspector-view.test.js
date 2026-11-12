@@ -150,6 +150,18 @@ test("input monitor shows sampled values, bindings, and active device", () => {
   assert.equal(input.children[1].children[0].description, "0.5, 0 · held");
 });
 
+test("sampled ECS components link to all matching static system relationships", () => {
+  const object = { id: 1, kind: "ecs", label: "ecs 1", data: {
+    sampledEntities: 1, entities: { 42: { "Position #1": { x: 4 }, "Health #2": { value: 9 } } },
+  } };
+  const tree = new InspectorTree({ entries: new Map([["game", { session: { id: "game", active: true }, snapshot: { objects: [object] } }]]) });
+  const components = tree.getChildren()[0].children[0].children[0].children;
+  const action = components.find(component => component.label === "Position #1").children.find(child => child.label === "Find static systems and queries");
+  assert.deepEqual(tree.getTreeItem(action).command.arguments, [{ componentName: "Position" }]);
+  assert.match(action.tooltip, /all indexed ECS components/);
+  assert.equal(components.find(component => component.label === "Health #2").children.at(-1).description, "Health");
+});
+
 
 test("inspector can be re-enabled from its toolbar while a retained snapshot hides welcome content", () => {
   const entry = { session: { id: "host", active: false }, status: "disabled", snapshot: { objects: [] } };
