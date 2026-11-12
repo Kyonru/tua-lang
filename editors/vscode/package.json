@@ -1027,7 +1027,7 @@
       },
       {
         "command": "tua.showAudioExplorer",
-        "title": "Show Audio Explorer",
+        "title": "Show Audio Workbench",
         "category": "Tua",
         "icon": "$(unmute)"
       },

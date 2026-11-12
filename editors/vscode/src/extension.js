@@ -102,7 +102,7 @@ async function activate(context) {
   context.subscriptions.push(registerModuleDevex({ getClient: () => client }));
   context.subscriptions.push(registerEcsDevex({ getClient: () => client }));
   context.subscriptions.push(registerObjectPoolDevex({ getClient: () => client }));
-  context.subscriptions.push(registerAudioDevex({ getClient: () => client }));
+  context.subscriptions.push(registerAudioDevex({ getClient: () => client, getServerCommand: () => currentServerInfo?.command || configuredServerPath(context) }));
   context.subscriptions.push(registerServerHealthFeature({ getClient: () => client }));
   context.subscriptions.push(await registerProjectContext());
   context.subscriptions.push(vscode.workspace.onDidChangeConfiguration(handleConfigurationChange));

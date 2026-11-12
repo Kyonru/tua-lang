@@ -5,7 +5,7 @@ use full_moon::ast::{
 };
 use full_moon::node::Node;
 
-use crate::ast_utils::{field_chain_before_first_call, token_text};
+use crate::ast_utils::{field_chain_before_first_call, string_literal_runtime_bytes, token_text};
 use crate::types::{FunctionParameter, FunctionType, TableField, Type, TypeEnvironment};
 use crate::{Diagnostic, DiagnosticCode, ParsedSource, SourceSpan, TypedFunction, TypedParameter};
 
@@ -54,6 +54,37 @@ pub struct AudioGraphSystem {
     pub effects: Vec<String>,
     pub music_states: Vec<String>,
     pub layers: Vec<String>,
+    pub bus_items: Vec<AudioGraphItem>,
+    pub cue_items: Vec<AudioGraphItem>,
+    pub effect_items: Vec<AudioGraphItem>,
+    pub scene_items: Vec<AudioGraphItem>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AudioGraphItem {
+    pub id: String,
+    pub name: String,
+    pub span: SourceSpan,
+    pub properties: BTreeMap<String, AudioGraphProperty>,
+    pub source: Option<AudioGraphSource>,
+    pub layers: Vec<AudioGraphItem>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AudioGraphProperty {
+    /// `string`, `number`, `boolean`, `authoredExpression`, or `dynamic`.
+    /// Dynamic expressions are never evaluated.
+    pub kind: &'static str,
+    pub value: Option<String>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AudioGraphSource {
+    /// `asset`, `computed`, or `unknown`.
+    pub kind: &'static str,
+    pub asset_path: Option<String>,
+    pub loader: Option<String>,
+    pub span: SourceSpan,
 }
 
 pub(crate) fn audio_graph<'a>(parsed: impl IntoIterator<Item = &'a ParsedSource>) -> AudioGraph {
@@ -62,6 +93,7 @@ pub(crate) fn audio_graph<'a>(parsed: impl IntoIterator<Item = &'a ParsedSource>
         let mut visitor = AudioGraphVisitor {
             source,
             graph: &mut graph,
+            next_system: 0,
         };
         full_moon::visitors::Visitor::visit_ast(&mut visitor, &source.ast);
     }
@@ -623,6 +655,115 @@ fn named_keys(table: &TableConstructor) -> Vec<String> {
     named_table_fields(table).map(|(name, _)| name).collect()
 }
 
+fn graph_items(config: &TableConstructor, section: &str, system_id: &str) -> Vec<AudioGraphItem> {
+    let Some(table) = named_field(config, section).and_then(table_expression) else {
+        return Vec::new();
+    };
+    table
+        .fields()
+        .iter()
+        .filter_map(|field| {
+            let (name, value, span) = graph_field(field)?;
+            let item_id = format!("{system_id}:{section}:{name}");
+            let mut item = AudioGraphItem {
+                id: item_id.clone(),
+                name,
+                span,
+                properties: BTreeMap::new(),
+                source: None,
+                layers: Vec::new(),
+            };
+            if let Some(options) = table_expression(value) {
+                for (key, property) in named_table_fields(options) {
+                    if key == "source" {
+                        item.source = graph_source(property);
+                    } else if key != "layers" {
+                        item.properties.insert(key, graph_property(property));
+                    }
+                }
+                if section == "music" {
+                    item.layers = graph_items(options, "layers", &item_id);
+                }
+            }
+            Some(item)
+        })
+        .collect()
+}
+
+fn graph_field(field: &Field) -> Option<(String, &Expression, SourceSpan)> {
+    match field {
+        Field::NameKey { key, value, .. } => {
+            let (start, end) = key.range()?;
+            Some((token_text(key), value, SourceSpan::from_range(start, end)))
+        }
+        Field::ExpressionKey { key, value, .. } => {
+            let name = string_expression(key)?;
+            let (start, end) = key.range()?;
+            Some((name, value, SourceSpan::from_range(start, end)))
+        }
+        _ => None,
+    }
+}
+
+fn graph_property(expression: &Expression) -> AudioGraphProperty {
+    match expression {
+        Expression::String(_) => AudioGraphProperty {
+            kind: "string",
+            value: string_expression(expression),
+        },
+        Expression::Number(token) => AudioGraphProperty {
+            kind: "number",
+            value: Some(token_text(token)),
+        },
+        Expression::Symbol(token) if matches!(token_text(token).as_str(), "true" | "false") => {
+            AudioGraphProperty {
+                kind: "boolean",
+                value: Some(token_text(token)),
+            }
+        }
+        Expression::TableConstructor(_) => AudioGraphProperty {
+            kind: "authoredExpression",
+            value: Some(expression.to_string().trim().to_owned()),
+        },
+        _ => AudioGraphProperty {
+            kind: "dynamic",
+            value: None,
+        },
+    }
+}
+
+fn graph_source(expression: &Expression) -> Option<AudioGraphSource> {
+    let (start, end) = expression.range()?;
+    let span = SourceSpan::from_range(start, end);
+    let Expression::FunctionCall(call) = expression else {
+        return Some(AudioGraphSource {
+            kind: "unknown",
+            asset_path: None,
+            loader: None,
+            span,
+        });
+    };
+    let chain = field_chain_before_first_call(call).unwrap_or_default();
+    let loader = match chain.join(".").as_str() {
+        "sound" | "music" => Some(chain[0].to_owned()),
+        "love.audio.newSource" => Some("love.audio.newSource".to_owned()),
+        _ => None,
+    };
+    let asset_path = loader
+        .as_ref()
+        .and_then(|_| first_parenthesized_argument(call).and_then(string_expression));
+    Some(AudioGraphSource {
+        kind: if asset_path.is_some() {
+            "asset"
+        } else {
+            "computed"
+        },
+        asset_path,
+        loader,
+        span,
+    })
+}
+
 fn table_expression(expression: &Expression) -> Option<&TableConstructor> {
     match expression {
         Expression::TableConstructor(table) => Some(table),
@@ -632,7 +773,7 @@ fn table_expression(expression: &Expression) -> Option<&TableConstructor> {
 
 fn string_expression(expression: &Expression) -> Option<String> {
     match expression {
-        Expression::String(token) => Some(token_text(token).trim_matches(['\'', '"']).to_owned()),
+        Expression::String(token) => String::from_utf8(string_literal_runtime_bytes(token)?).ok(),
         _ => None,
     }
 }
@@ -862,6 +1003,7 @@ fn audio_error(path: &std::path::Path, message: String) -> Diagnostic {
 struct AudioGraphVisitor<'a, 'b> {
     source: &'a ParsedSource,
     graph: &'b mut AudioGraph,
+    next_system: usize,
 }
 
 impl full_moon::visitors::Visitor for AudioGraphVisitor<'_, '_> {
@@ -874,13 +1016,10 @@ impl full_moon::visitors::Visitor for AudioGraphVisitor<'_, '_> {
         };
         let span = SourceSpan::from_range(start, end);
         let spec = spec_from_config(config);
+        let id = format!("{}:audio:{}", self.source.path.display(), self.next_system);
+        self.next_system += 1;
         self.graph.systems.push(AudioGraphSystem {
-            id: format!(
-                "{}:{}:{}",
-                self.source.path.display(),
-                span.start.line,
-                span.start.column
-            ),
+            id: id.clone(),
             path: self.source.path.clone(),
             span,
             buses: spec.buses,
@@ -888,6 +1027,32 @@ impl full_moon::visitors::Visitor for AudioGraphVisitor<'_, '_> {
             effects: spec.effects,
             music_states: spec.music_states,
             layers: spec.layers,
+            bus_items: graph_items(config, "buses", &id),
+            cue_items: graph_items(config, "cues", &id),
+            effect_items: graph_items(config, "effects", &id),
+            scene_items: graph_items(config, "music", &id),
         });
+    }
+}
+
+#[cfg(test)]
+mod graph_tests {
+    use super::*;
+
+    #[test]
+    fn declaration_ids_survive_edits_above_audio_system() {
+        let source =
+            "local audio = audioSystem({ cues = { hit = { source = sound('hit.wav') } } })\n";
+        let original = crate::parse_tua_source("src/audio.tua", source).expect("parse");
+        let edited = crate::parse_tua_source("src/audio.tua", format!("-- edit\n{source}"))
+            .expect("parse edited");
+        let before = audio_graph([&original]);
+        let after = audio_graph([&edited]);
+        assert_eq!(before.systems[0].id, after.systems[0].id);
+        assert_eq!(
+            before.systems[0].cue_items[0].id,
+            after.systems[0].cue_items[0].id
+        );
+        assert_ne!(before.systems[0].span, after.systems[0].span);
     }
 }

@@ -17,7 +17,7 @@ const vscode = {
     activeTextEditor: undefined,
     createWebviewPanel: () => {
       panel = {
-        webview: { cspSource: "vscode-resource:", onDidReceiveMessage(handler) { panel.onMessage = handler; } },
+        webview: { cspSource: "vscode-resource:", postMessage() {}, onDidReceiveMessage(handler) { panel.onMessage = handler; } },
         onDidDispose(handler) { panel.onDispose = handler; },
         reveal() {},
         dispose() { panel.onDispose?.(); },
@@ -25,7 +25,12 @@ const vscode = {
       return panel;
     },
   },
-  workspace: { findFiles: async () => [] },
+  workspace: {
+    findFiles: async () => [],
+    asRelativePath: uri => uri.fsPath,
+    onDidChangeTextDocument: () => ({ dispose() {} }),
+    createFileSystemWatcher: () => ({ onDidChange: () => ({ dispose() {} }), onDidCreate: () => ({ dispose() {} }), onDidDelete: () => ({ dispose() {} }), dispose() {} }),
+  },
   Uri: { parse: (uri) => ({ scheme: "file", fsPath: new URL(uri).pathname }) },
 };
 const load = Module._load;

@@ -260,19 +260,36 @@ async function run() {
     await evaluate('document.querySelector(".call-row.role-emit").click()');
     await waitFor(() => messages.some(message => message.command === "openLocation" && message.uri === "file:///game/enemy.tua"), "populated signal source action");
     await screenshot("signal-graph-populated");
-    const audioGraph = { systems: [{ uri: "file:///game/audio.tua", range: { start: { line: 4 } }, buses: ["master"], cues: ["hit"], musicStates: [], layers: [], effects: [] }] };
-    await load(audioExplorerHtml(panel.webview, audioGraph, [{ path: "assets/hit.ogg", assetUri: "file:///game/assets/hit.ogg", bpm: 120, confidence: 0.9 }]), "Audio Explorer");
-    await waitFor(() => evaluate("document.querySelectorAll('[data-uri]').length === 2"), "audio source and asset actions");
+    const audioGraph = { systems: [{ uri: "file:///game/audio.tua", displayPath: "src/audio.tua", range: { start: { line: 4 } },
+      buses: ["master"], cues: ["hit"], musicStates: ["combat"], layers: ["drums"], effects: [],
+      cueItems: [{ id: "cue:hit", name: "hit", range: { start: { line: 6 } }, source: { kind: "asset", loader: "sound", assetPath: "assets/hit.ogg" }, assetUri: "file:///game/assets/hit.ogg", assetState: "present", properties: { bus: { kind: "string", value: "sfx" }, maxVoices: { kind: "number", value: "4" } } }],
+      sceneItems: [{ id: "scene:combat", name: "combat", range: { start: { line: 10 } }, properties: { bpm: { kind: "number", value: "120" } }, layers: [{ id: "layer:drums", name: "drums", range: { start: { line: 11 } }, source: { kind: "asset", loader: "music", assetPath: "assets/drums.ogg" }, assetState: "present", assetUri: "file:///game/assets/drums.ogg", properties: {} }] },
+        { id: "scene:quiet", name: "quiet", range: { start: { line: 14 } }, properties: { bpm: { kind: "number", value: "120" } }, layers: [{ id: "layer:pad", name: "pad", range: { start: { line: 15 } }, source: { kind: "asset", loader: "music", assetPath: "assets/pad.ogg" }, assetState: "present", assetUri: "file:///game/assets/pad.ogg", properties: {} }] }],
+      busItems: [{ name: "sfx", properties: {} }], effectItems: [] }] };
+    await load(audioExplorerHtml(panel.webview, audioGraph, [{ path: "assets/hit.ogg", assetUri: "file:///game/assets/hit.ogg", bpm: 120, confidence: 0.9,
+      duration: 0.18, channels: 1, sampleRate: 44100, peak: 0.82, energy: [0.1, 0.8, 0.3, 0.05] }]), "Audio Workbench");
+    await waitFor(() => evaluate("document.querySelectorAll('[data-uri]').length >= 4"), "audio source and asset actions");
+    assert.equal(await evaluate('document.querySelector(".detail").textContent.includes("Cue voice limit") && document.querySelector(".detail").textContent.includes("assets/hit.ogg")'), true, "cue detail exposes authored source and voice policy");
+    assert.equal(await evaluate('document.querySelector(".detail").textContent.includes("0.18 s") && document.querySelector(".energy[aria-label]") !== null'), true, "cue detail ties bounded analysis to its asset");
+    assert.equal(await evaluate('document.querySelector("[data-play]").disabled'), false, "static asset cue can be auditioned");
     await evaluate("document.querySelector('[data-uri]').click()");
     await waitFor(() => messages.some(message => message.command === "openLocation" && message.uri === "file:///game/audio.tua" && message.range?.start?.line === 4), "audio declaration navigation");
     await screenshot("audio-explorer");
+    await load(audioExplorerHtml(panel.webview, audioGraph, [], { mode: "scenes", selectedId: "scene:combat", revision: 42 }), "Audio Workbench");
+    assert.equal(await evaluate('document.querySelector(".detail").textContent.includes("Authored BPM") && document.querySelector(".detail").textContent.includes("drums")'), true, "music scene shows authored timing and layer ownership");
+    assert.equal(await evaluate('document.querySelector("[data-play-scene]").disabled'), false, "static scene is auditionable");
+    await evaluate('document.querySelector("#transition-quantize").value="bar"; document.querySelector("[data-transition]").click()');
+    await waitFor(() => messages.some(message => message.command === "transition" && message.targetId === "scene:quiet" && message.quantize === "bar"), "scene transition action");
+    await evaluate('document.querySelector(".layers button").click()');
+    await waitFor(() => messages.some(message => message.command === "openLocation" && message.range?.start?.line === 11), "audio layer source navigation");
+    await screenshot("audio-scenes");
     await workbench.send("Emulation.setDeviceMetricsOverride", { width: 640, height: 900, deviceScaleFactor: 1, mobile: false });
     await waitFor(() => workbench.evaluate("window.innerWidth <= 640"), "narrow audio viewport");
     assert.equal(await evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1"), true, "audio explorer should fit a narrow editor");
     await screenshot("audio-explorer-narrow");
     await workbench.send("Emulation.clearDeviceMetricsOverride");
     const audioReloadCount = messages.filter(message => message.command === "reload").length;
-    await load(audioExplorerErrorHtml(panel.webview, new Error("Server unavailable")), "Audio Explorer");
+    await load(audioExplorerErrorHtml(panel.webview, new Error("Server unavailable")), "Audio Workbench");
     assert.equal(await evaluate("document.querySelector('[role=alert]').textContent"), "Server unavailable");
     await evaluate("document.getElementById('reload').click()");
     await waitFor(() => messages.filter(message => message.command === "reload").length > audioReloadCount, "audio retry action");

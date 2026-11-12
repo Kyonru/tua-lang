@@ -243,8 +243,8 @@ async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
 
     assert.strictEqual(
       state.documentChangeListeners.length,
-      5,
-      "activation should observe edits for inline-model cancellation, live state-machine and behavior-tree previews, shader overlays, and workspace graphs",
+      6,
+      "activation should observe edits for inline-model cancellation, live previews, shader overlays, workspace graphs, and the audio workbench",
     );
 
     assert.strictEqual(
@@ -1468,8 +1468,8 @@ async function smokeDebugLspLogging(mockServer, workspace) {
 
     assert.strictEqual(
       state.documentChangeListeners.length,
-      5,
-      "debug logging should retain inline-model, state-machine, behavior-tree, shader, and workspace graph listeners",
+      6,
+      "debug logging should retain inline-model, preview, shader, workspace graph, and audio workbench listeners",
     );
 
     await extension.deactivate();

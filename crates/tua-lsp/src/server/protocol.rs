@@ -607,7 +607,29 @@ pub(super) fn lsp_audio_graph_from_core(
             "effects": system.effects,
             "musicStates": system.music_states,
             "layers": system.layers,
+            "busItems": system.bus_items.into_iter().map(|item| lsp_audio_item(item, snapshot.source(&system.path).unwrap_or(""))).collect::<Vec<_>>(),
+            "cueItems": system.cue_items.into_iter().map(|item| lsp_audio_item(item, snapshot.source(&system.path).unwrap_or(""))).collect::<Vec<_>>(),
+            "effectItems": system.effect_items.into_iter().map(|item| lsp_audio_item(item, snapshot.source(&system.path).unwrap_or(""))).collect::<Vec<_>>(),
+            "sceneItems": system.scene_items.into_iter().map(|item| lsp_audio_item(item, snapshot.source(&system.path).unwrap_or(""))).collect::<Vec<_>>(),
         })).collect::<Vec<_>>()
+    })
+}
+
+fn lsp_audio_item(item: tua_core::AudioGraphItem, source: &str) -> Value {
+    json!({
+        "id": item.id,
+        "name": item.name,
+        "range": lsp_range_for_source(source, item.span),
+        "properties": item.properties.into_iter().map(|(name, property)| {
+            (name, json!({"kind": property.kind, "value": property.value}))
+        }).collect::<serde_json::Map<String, Value>>(),
+        "source": item.source.map(|source_item| json!({
+            "kind": source_item.kind,
+            "assetPath": source_item.asset_path,
+            "loader": source_item.loader,
+            "range": lsp_range_for_source(source, source_item.span),
+        })),
+        "layers": item.layers.into_iter().map(|layer| lsp_audio_item(layer, source)).collect::<Vec<_>>(),
     })
 }
 

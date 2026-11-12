@@ -90,7 +90,9 @@ pub use asset::{
     AssetCategory, AssetInventory, AssetLoaderKind, AssetMetadata, AssetReference,
     AssetValidationStatus, ProjectAsset,
 };
-pub use audio::{AudioGraph, AudioGraphSystem};
+pub use audio::{
+    AudioGraph, AudioGraphItem, AudioGraphProperty, AudioGraphSource, AudioGraphSystem,
+};
 pub use bundled_runtime::{
     bundled_runtime, bundled_runtime_requirements, is_bundled_runtime_module, BundledRuntime,
     RUNTIMES as BUNDLED_RUNTIMES,

@@ -11,6 +11,7 @@ use tua_core::{
 };
 
 mod assets;
+mod audio_graph;
 mod code_actions;
 mod completion;
 mod config;
