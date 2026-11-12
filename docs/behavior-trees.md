@@ -107,7 +107,9 @@ nested constructor calls appear as nodes with source links. A top-level
 Hover a tree name to open that tree directly. The preview places child nodes
 below their parents and numbers siblings in execution order. Collapse branches
 to focus on part of a tree; that choice survives preview refreshes. Scroll
-sideways to explore wide trees, and click a node to jump to its constructor.
+sideways or drag empty canvas space to explore wide trees. Pinch or use
+Control/Command + wheel to zoom; the header also has Zoom in, Zoom out, and Fit
+buttons. Click a node to jump to its constructor.
 The preview refreshes after edits and
 uses the same opt-in `tua.preview.enabled` setting as the state-machine preview.
 Open the [feature example](https://github.com/Kyonru/tua-lang/blob/main/examples/features/src/behavior_tree.tua)

@@ -5,6 +5,7 @@ const { COMMANDS } = require("../constants");
 const { isStaleDocumentResponse } = require("../shared/documents");
 const { displayUriPath, openLocationMessage } = require("../shared/locations");
 const { ensureExperimentalPreviewEnabled } = require("../shared/preview-gate");
+const { createGraphViewport } = require("../shared/graph-viewport");
 const { escapeHtml, jsonForHtml, webviewDocument } = require("../shared/webview");
 
 const REFRESH_DELAY_MS = 180;
@@ -137,14 +138,20 @@ function behaviorTreePreviewHtml(webview, uri, trees) {
     const childMarkup = children.map((child, childIndex) => nodeHtml(child, `${path}.${childIndex}`, children.length > 1 ? childIndex + 1 : undefined)).join("");
     return `<li data-path="${key}">${order ? `<span class="edge-order" aria-label="Child ${order}">${order}</span>` : ""}<div class="node-frame${children.length ? " node-frame--branch" : ""}"><button class="node node--${role}" data-index="${index}" type="button" title="Open source at line ${line}" aria-label="Open ${escapeHtml(label)} at line ${line}"><span class="node-copy"><strong>${escapeHtml(label)}</strong><small>${escapeHtml(HINTS[kind] || "computed")} · line ${line}</small></span></button>${children.length ? `<button class="branch-toggle" type="button" data-key="${key}" aria-expanded="true" aria-controls="branch-${index}" aria-label="Collapse ${escapeHtml(label)} children" title="Collapse children"><span class="chevron" aria-hidden="true"></span></button>` : ""}</div>${children.length ? `<ul id="branch-${index}">${childMarkup}</ul>` : ""}</li>`;
   };
-  const body = `<header><div><h1>Behavior trees</h1><p title="${escapeHtml(uri)}">${escapeHtml(displayUriPath(uri))}</p></div><button id="reload" type="button">Reload</button></header><main>${trees.map((tree, treeIndex) => `<section><div class="tree-heading"><h2>${escapeHtml(tree.name)}</h2><span>Children run left to right</span></div>${tree.truncated ? `<p class="note">Preview limited to the first 1,000 nodes.</p>` : ""}${tree.root ? `<div class="tree-scroll" role="region" aria-label="${escapeHtml(tree.name)} behavior tree" tabindex="0"><ul class="tree">${nodeHtml(tree.root, String(treeIndex))}</ul></div>` : `<p class="note">Root not set in this file.</p>`}</section>`).join("")}</main>`;
+  const body = `<header><div><h1>Behavior trees</h1><p title="${escapeHtml(uri)}">${escapeHtml(displayUriPath(uri))}</p></div><button id="reload" type="button">Reload</button></header><main>${trees.map((tree, treeIndex) => `<section><div class="tree-heading"><h2>${escapeHtml(tree.name)}</h2><span>Children run left to right</span>${tree.root ? `<div class="tree-zoom" role="group" aria-label="${escapeHtml(tree.name)} tree zoom"><button type="button" data-zoom="out" aria-label="Zoom out">−</button><output>100%</output><button type="button" data-zoom="in" aria-label="Zoom in">+</button><button type="button" data-zoom="fit" aria-label="Fit tree to view">Fit</button></div>` : ""}</div>${tree.truncated ? `<p class="note">Preview limited to the first 1,000 nodes.</p>` : ""}${tree.root ? `<div class="tree-scroll" data-tree="${treeIndex}" role="region" aria-label="${escapeHtml(tree.name)} behavior tree; drag to pan, pinch or Control and wheel to zoom" tabindex="0"><ul class="tree">${nodeHtml(tree.root, String(treeIndex))}</ul></div>` : `<p class="note">Root not set in this file.</p>`}</section>`).join("")}</main>`;
   const script = `const source = ${jsonForHtml(uri)}; const ranges = ${jsonForHtml(ranges)};
+    const createGraphViewport = (${createGraphViewport.toString()});
     document.getElementById("reload").addEventListener("click", () => vscode.postMessage({command:"reload"}));
     document.querySelectorAll(".node").forEach((button) => button.addEventListener("click", () => {
       vscode.postMessage({command:"openLocation", uri:source, range:ranges[Number(button.dataset.index)]});
     }));
     const previous = vscode.getState();
     const collapsed = new Set(previous?.source === source && Array.isArray(previous.collapsed) ? previous.collapsed : []);
+    const viewports = new Map();
+    function saveTreeState() {
+      const zoom = Object.fromEntries([...viewports].map(([key, viewport]) => [key, viewport.scale()]));
+      vscode.setState({source, collapsed:[...collapsed], zoom});
+    }
     const setBranch = (button, isCollapsed) => {
       const children = document.getElementById(button.getAttribute("aria-controls"));
       if (!children) return;
@@ -168,11 +175,31 @@ function behaviorTreePreviewHtml(webview, uri, trees) {
         const isCollapsed = button.getAttribute("aria-expanded") === "true";
         if (isCollapsed) collapsed.add(key); else collapsed.delete(key);
         setBranch(button, isCollapsed);
-        vscode.setState({source, collapsed:[...collapsed]});
+        const region = button.closest(".tree-scroll");
+        const tree = region.querySelector(".tree");
+        tree.style.width = "max-content";
+        viewports.get(region.dataset.tree)?.setSize(tree.scrollWidth, tree.scrollHeight);
+        saveTreeState();
         centerNode(button.closest(".tree-scroll"), button.parentElement);
       });
     });
     document.querySelectorAll(".tree-scroll").forEach((region) => {
+      const tree = region.querySelector(".tree");
+      const key = region.dataset.tree;
+      const heading = region.parentElement.querySelector(".tree-zoom");
+      const viewport = createGraphViewport(region, tree, {
+        initialScale: previous?.source === source ? previous.zoom?.[key] : 1,
+        onScale: (scale) => {
+          heading.querySelector("output").textContent = Math.round(scale * 100) + "%";
+          if (viewports.has(key)) saveTreeState();
+        },
+      });
+      tree.style.width = "max-content";
+      viewport.setSize(tree.scrollWidth, tree.scrollHeight);
+      viewports.set(key, viewport);
+      heading.querySelector('[data-zoom="in"]').addEventListener("click", () => viewport.zoom(viewport.scale() * 1.2));
+      heading.querySelector('[data-zoom="out"]').addEventListener("click", () => viewport.zoom(viewport.scale() / 1.2));
+      heading.querySelector('[data-zoom="fit"]').addEventListener("click", () => viewport.fit());
       const root = region.querySelector(".tree > li > .node-frame .node");
       centerNode(region, root);
     });`;
@@ -180,10 +207,11 @@ function behaviorTreePreviewHtml(webview, uri, trees) {
     *{box-sizing:border-box}body{margin:0;color:var(--vscode-foreground);background:var(--vscode-editor-background);font:var(--vscode-font-size) var(--vscode-font-family)}
     header{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:18px 24px;border-bottom:1px solid var(--vscode-panel-border)}
     h1{font-size:1.25rem;margin:0}h2{font-size:1.05rem;margin:0}p{margin:4px 0;color:var(--vscode-descriptionForeground);overflow-wrap:anywhere}
-    main{padding:20px 24px}section+section{margin-top:28px}.tree-heading{display:flex;align-items:baseline;gap:12px;padding-bottom:10px;border-bottom:1px solid var(--vscode-panel-border)}
+    main{padding:20px 24px}section+section{margin-top:28px}.tree-heading{display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding-bottom:10px;border-bottom:1px solid var(--vscode-panel-border)}
     .tree-heading span,.node small{color:var(--vscode-descriptionForeground);font-size:0.85em}.note{padding:12px 0}
+    .tree-zoom{display:flex;align-items:center;gap:4px;margin-left:auto}.tree-zoom button{min-width:26px;height:26px;border:1px solid var(--vscode-panel-border);border-radius:4px;background:var(--vscode-editorWidget-background);color:var(--vscode-foreground)}.tree-zoom output{min-width:42px;text-align:center;font-variant-numeric:tabular-nums}
     button{font:inherit;cursor:pointer}#reload{padding:6px 10px;color:var(--vscode-button-foreground);background:var(--vscode-button-background);border:0}
-    .tree-scroll{overflow:auto;padding:24px 16px 32px;min-height:144px}.tree-scroll:focus-visible{outline:2px solid var(--vscode-focusBorder);outline-offset:-2px}
+    .tree-scroll{overflow:auto;padding:24px 16px 32px;min-height:144px;max-height:65vh;touch-action:none;cursor:grab}.tree-scroll.is-panning{cursor:grabbing}.tree-scroll:focus-visible,.tree-zoom button:focus-visible{outline:2px solid var(--vscode-focusBorder);outline-offset:-2px}
     .tree,.tree ul{display:flex;justify-content:center;list-style:none;margin:0;padding:0;min-width:max-content}.tree ul{position:relative;padding-top:32px}.tree ul[hidden]{display:none}
     .tree ul::before{content:"";position:absolute;left:50%;top:0;height:32px;border-left:1px solid var(--vscode-panel-border)}
     .tree li{display:flex;flex-direction:column;align-items:center;position:relative;padding:32px 8px 0}

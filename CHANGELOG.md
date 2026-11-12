@@ -14,6 +14,8 @@ language or editor behavior, and migration notes call out those changes.
   analysis refreshes.
 - Signal graphs support canvas pan and zoom while keeping event, file, and edge
   selection available.
+- Behavior-tree previews support pan and zoom without losing branch collapse
+  or source navigation.
 - Sprite grids now treat `frame.border` as spacing between cells, matching the
   editor preview and allowing atlases with no leading border to use their last
   row and column without clipping. The bundled astronaut example now selects
