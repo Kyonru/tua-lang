@@ -377,7 +377,9 @@ function Audio:play(cueName, options)
   record.pitch = options.pitch or cue.pitch or 1
   record.paused, record.stopping = false, false
   sourceCall(source, "setPitch", record.pitch)
-  sourceCall(source, "setLooping", options.looping == nil and cue.looping or options.looping)
+  local looping = options.looping
+  if looping == nil then looping = cue.looping end
+  sourceCall(source, "setLooping", looping == true)
   configureSpatial(source, options)
   self:_applyEffects(record, cue, options)
   local handle = setmetatable({ _record = record, _generation = record.generation, _active = true }, Voice)

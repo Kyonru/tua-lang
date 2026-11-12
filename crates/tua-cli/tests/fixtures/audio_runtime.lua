@@ -10,7 +10,10 @@ function Source:pause() self.playing = false end
 function Source:isPlaying() return self.playing end
 function Source:setVolume(value) self.volume = value end
 function Source:setPitch(value) self.pitch = value end
-function Source:setLooping(value) self.looping = value end
+function Source:setLooping(value)
+  assert(type(value) == "boolean", "LOVE Source:setLooping needs a boolean")
+  self.looping = value
+end
 function Source:tell() return self.position end
 function Source:seek(value) self.position = value end
 
@@ -25,6 +28,18 @@ love = {
 
 local audioSystem = require("tuaaudio")
 local source = setmetatable({}, Source)
+
+do
+  local plain = audioSystem({ cues = { hit = { source = source } } })
+  local voice = assert(plain:play("hit"))
+  assert(voice._record.source.looping == false, "omitted looping defaults to false")
+  voice:stop()
+  local looped = assert(plain:play("hit", { looping = true }))
+  assert(looped._record.source.looping == true, "play option enables looping")
+  looped:stop()
+  local stopped = assert(plain:play("hit", { looping = false }))
+  assert(stopped._record.source.looping == false, "play option overrides cue looping")
+end
 
 -- Hash iteration must not decide which equal-priority voice is oldest.
 -- Force newest-first candidates, then exercise repeated pooled-record reuse
