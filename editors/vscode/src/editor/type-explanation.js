@@ -4,6 +4,7 @@ const vscode = require("vscode");
 const { COMMANDS } = require("../constants");
 const { isStaleDocumentResponse } = require("../shared/documents");
 const { formatError } = require("../shared/errors");
+const { lspRangeToVscode } = require("../shared/locations");
 
 const STEP_ICONS = {
   annotation: "symbol-type-parameter",
@@ -58,8 +59,21 @@ async function explainTypeAtCursor({ getClient, isTuaDocument, onInspect }) {
       return undefined;
     }
 
+    const items = explanation.steps.map(stepQuickPickItem);
+    if (validRange(explanation.range)) {
+      const range = lspRangeToVscode(explanation.range);
+      let fixes;
+      try {
+        fixes = await vscode.commands.executeCommand("vscode.executeCodeActionProvider", document.uri, range, "quickfix");
+      } catch { /* Explanation is still useful when code actions are unavailable. */ }
+      if (Array.isArray(fixes) && fixes.length) items.push({
+        label: "$(lightbulb) Review available quick fixes",
+        detail: "Show fixes for this expression in the editor",
+        action: "quickfix",
+      });
+    }
     const selected = await vscode.window.showQuickPick(
-      explanation.steps.map(stepQuickPickItem),
+      items,
       {
         title: explanation.isAny
           ? `Why is ${explanation.expression} any?`
@@ -73,7 +87,12 @@ async function explainTypeAtCursor({ getClient, isTuaDocument, onInspect }) {
       },
     );
 
-    if (selected && hasLocation(selected)) {
+    if (selected?.action === "quickfix") {
+      if (isStaleDocumentResponse(response, document)) throw new Error("The explanation is stale. Try again after document synchronization.");
+      const shown = await vscode.window.showTextDocument(document);
+      shown.selection = new vscode.Selection(position, position);
+      await vscode.commands.executeCommand("editor.action.quickFix");
+    } else if (selected && hasLocation(selected)) {
       await openStepLocation(selected);
     }
 
@@ -151,4 +170,5 @@ function validRange(range) {
 
 module.exports = {
   registerTypeExplanation,
+  explainTypeAtCursor,
 };

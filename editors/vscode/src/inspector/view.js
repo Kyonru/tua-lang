@@ -46,6 +46,7 @@ class InspectorTree {
           const name = origin?.name || object.label;
           const duplicate = objects.some(other => other.id !== object.id && (other.origin?.name || other.label) === name);
           if (origin) details.unshift({ id: id + ":source", label: "Creation site", description: `${origin.file}:${origin.line}`, tooltip: `${origin.path}:${origin.line}`, icon: "go-to-file", command: "tua.inspector.goToSource", arguments: [{ origin }] });
+          if (kind === "states" && origin && !origin.generated) details.push({ id: id + ":static", label: "Open static state diagram", description: "Declared transitions", tooltip: "Open the source-derived diagram; live state remains in this inspector", icon: "type-hierarchy", command: "tua.inspector.openStaticPreview", arguments: [{ origin }] });
           details.push({ id: id + ":runtimeId", label: "Runtime ID", description: String(object.id) });
           children.push({ id: id + ":details", label: "Details", icon: "info", children: details });
           return { id, label: duplicate ? `${name} #${object.id}` : name, origin,
@@ -126,6 +127,17 @@ function registerRuntimeInspector(context, activity) {
         const character = Math.min(node.origin.character || 0, document.lineAt(line).text.length);
         await vscode.window.showTextDocument(document, { preview: true, selection: new vscode.Range(line, character, line, character) });
       } catch { await vscode.window.showInformationMessage("The creation source is no longer available. Start a new run to refresh its location."); }
+    }),
+    vscode.commands.registerCommand("tua.inspector.openStaticPreview", async node => {
+      const origin = node?.origin;
+      if (!origin?.path || origin.generated || !Number.isSafeInteger(origin.line) || origin.line < 1) return;
+      try {
+        const document = await vscode.workspace.openTextDocument(vscode.Uri.file(origin.path));
+        const line = Math.min(origin.line - 1, document.lineCount - 1);
+        const character = Math.min(origin.character || 0, document.lineAt(line).text.length);
+        await vscode.window.showTextDocument(document, { preview: true, selection: new vscode.Range(line, character, line, character) });
+        await vscode.commands.executeCommand("tua.previewStateMachine", { uri: document.uri.toString(), position: { line, character } });
+      } catch { await vscode.window.showInformationMessage("The state-machine source is no longer available. Start a new run to refresh its location."); }
     }),
     vscode.commands.registerCommand("tua.inspector.forDeclaration", async target => {
       if (!target?.path || !target.kind) return;

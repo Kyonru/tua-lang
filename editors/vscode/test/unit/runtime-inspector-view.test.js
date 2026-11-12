@@ -95,6 +95,19 @@ test("named runtime objects expose creation-site actions and retain separate run
   assert.deepEqual(link.command.arguments, [{ origin }]);
 });
 
+test("live state machines link to their source-derived diagram without calling it live", () => {
+  const origin = { path: "/game/src/state.tua", file: "src/state.tua", line: 2, character: 6, name: "player", generated: false };
+  const entry = { session: { id: "host", active: true }, snapshot: { objects: [{ id: 1, kind: "states", label: "states 1", data: { current: "idle" }, origin }] } };
+  const tree = new InspectorTree({ entries: new Map([["host", entry]]) });
+  const state = tree.getChildren().find(node => node.label === "State machines").children[0];
+  const details = state.children.find(node => node.label === "Details").children;
+  const staticLink = details.find(node => node.label === "Open static state diagram");
+  assert.equal(staticLink.description, "Declared transitions");
+  assert.deepEqual(tree.getTreeItem(staticLink).command, {
+    command: "tua.inspector.openStaticPreview", title: staticLink.label, arguments: [{ origin }],
+  });
+});
+
 
 test("inspector can be re-enabled from its toolbar while a retained snapshot hides welcome content", () => {
   const entry = { session: { id: "host", active: false }, status: "disabled", snapshot: { objects: [] } };

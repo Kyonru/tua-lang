@@ -93,6 +93,8 @@ async function hoverActionsAtPosition({ document, getClient, isTuaDocument, posi
   if (asset?.uri) {
     actions.push(markdownCommandLink(COMMANDS.previewAsset, "Preview Asset", [{ uri: asset.uri }]));
     enabledCommands.push(COMMANDS.previewAsset);
+    actions.push(markdownCommandLink(COMMANDS.revealAsset, "Reveal Asset", [{ asset: { uri: asset.uri } }]));
+    enabledCommands.push(COMMANDS.revealAsset);
   }
 
   if (identifierRange || signalEvent || asset) {

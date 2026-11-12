@@ -1322,6 +1322,12 @@
         "icon": "$(go-to-file)"
       },
       {
+        "command": "tua.inspector.openStaticPreview",
+        "title": "Open Static State Diagram",
+        "category": "Tua",
+        "icon": "$(type-hierarchy)"
+      },
+      {
         "command": "tua.setup.applyShaders",
         "title": "Use LÖVE Shader Associations",
         "category": "Tua"

@@ -8,6 +8,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Type explanations now offer the editor's available quick fixes at the
+  explained expression. Live state-machine entries link to their static
+  source diagram, and asset-reference hover can reveal the indexed asset.
 - The language server closes its LÖVE shader validator after each changed
   shader batch, while retaining cached results and avoiding repeated failed
   launches when the validator is unavailable.

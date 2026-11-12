@@ -556,7 +556,8 @@ Static state-machine configurations use the same preview gate for
 state, expands multi-source and wildcard event routes, follows source edits,
 and navigates back to state and event declarations. Sprite sheets and state
 machines link directly to their previews from hover; recognized asset-path
-hovers likewise link to the native asset preview. Preview links trust only
+hovers link to the native asset preview and reveal the indexed asset in the
+Explorer. Preview links trust only
 their registered Tua commands. The graph never runs the project or claims to
 show the machine's live runtime state.
 
@@ -633,7 +634,7 @@ Open the command palette and type **Tua**. The most useful commands are:
 | Command | Purpose |
 | --- | --- |
 | **Tua: Initialize Tua Project** | Create the minimum `tua.toml` and source layout without overwriting existing files |
-| **Tua: Explain Type / Why Is This Any?** | Trace annotations, inference, narrowing, module resolution, and dynamic fallback points |
+| **Tua: Explain Type / Why Is This Any?** | Trace annotations, inference, narrowing, module resolution, and dynamic fallback points; review available quick fixes at the expression |
 | **Tua: Select Inlay Hint Mode** | Choose full, compact, filtered, or disabled hints |
 | **Tua: Open Generated Lua Beside Tua** | Rebuild and inspect emitted Lua for the active source |
 | **Tua: Jump Between Tua and Generated Lua** | Navigate through the generated source map |
