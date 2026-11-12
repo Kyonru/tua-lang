@@ -210,6 +210,11 @@ compiler runtimes, normal build output, and packaged games remain unchanged.
 Disabling inspection disconnects immediately; the launcher stays until game exit
 so asset loading continues. Save identity and player arguments are preserved.
 
+The State Machine preview can show the last sampled current state when opened
+from a selected inspected instance. Its routes still come from source analysis;
+the runtime state is labeled with its session and sample age. This overlay is
+available only in the development editor session.
+
 For extension development, `npm run test:inspector` checks two native LÖVE players
 and inspector-free packaging. `TUA_INSPECTOR_TEST=1 npm run test:multiplayer`
 also checks hot reload and independent debug sessions with inspection enabled.

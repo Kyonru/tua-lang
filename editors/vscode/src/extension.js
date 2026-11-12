@@ -90,6 +90,7 @@ async function activate(context) {
     registerStateMachineDevex({
       configurationTarget,
       getClient: () => client,
+      inspector: runtimeInspector.sessions,
       isTuaDocument,
     }),
   );

@@ -104,6 +104,14 @@ does not execute project code or simulate the machine's current runtime state.
 Computed configurations remain valid Tua, but cannot produce a graph until
 their states and events are visible in a direct table literal.
 
+With the optional development Runtime Inspector enabled, open a particular
+state-machine instance's **Open static state diagram** action to overlay its
+last sampled current state. The banner names the inspected game session and
+shows the sample age. The transitions remain compiler-derived; the outlined
+state is a sample from that one running instance. If the state is absent from
+the diagram, the banner says so instead of claiming a matching route. Ordinary
+previews have no runtime overlay, and packaged games contain no inspector code.
+
 ## Configure Events
 
 Each event entry has three fields:

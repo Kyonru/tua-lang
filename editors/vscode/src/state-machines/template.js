@@ -427,6 +427,7 @@ function stateMachinePreviewHtml(webview, viewModel) {
           <span><i class="legend-dot initial"></i>Initial state</span>
           <span><i class="legend-line"></i>Transition event</span>
           <span><i class="legend-dot wildcard"></i>Any state</span>
+          <span id="runtime-status" class="runtime-status" role="status" aria-live="polite" hidden></span>
           <div class="graph-zoom" role="group" aria-label="Graph zoom">
             <button id="zoom-out" type="button" aria-label="Zoom out">−</button>
             <output id="zoom-level" aria-live="polite">100%</output>
@@ -462,6 +463,8 @@ function stateMachinePreviewHtml(webview, viewModel) {
     const connections = document.getElementById("connections");
     const edgeLabels = document.getElementById("edge-labels");
     const inspector = document.getElementById("inspector");
+    const runtimeStatus = document.getElementById("runtime-status");
+    let liveRuntime = preview.runtime;
     const restoreGraphState = (${restoreGraphState.toString()});
     const restored = restoreGraphState(preview, vscode.getState());
     let machineIndex = restored.machineIndex;
@@ -505,6 +508,12 @@ function stateMachinePreviewHtml(webview, viewModel) {
       vscode.postMessage({ command: "reload" });
     });
     window.addEventListener("resize", debounce(() => requestAnimationFrame(drawConnections), 80));
+    window.addEventListener("message", (event) => {
+      if (event.data?.command !== "tua/liveStateMachine") return;
+      liveRuntime = event.data.runtime;
+      updateLiveState();
+    });
+    setInterval(updateLiveState, 1000);
 
     graphScroll.addEventListener("scroll", debounce(saveState, 100));
     window.addEventListener("beforeunload", saveState);
@@ -555,6 +564,7 @@ function stateMachinePreviewHtml(webview, viewModel) {
       summary.textContent = machine.states.length + " states / " +
         machine.transitions.length + " transitions";
       renderGraph(machine);
+      updateLiveState();
       renderInspector(machine);
       requestAnimationFrame(drawConnections);
     }
@@ -607,6 +617,28 @@ function stateMachinePreviewHtml(webview, viewModel) {
 
         positionedNodes.set(state.name, { element: button, state });
         nodes.append(button);
+      }
+    }
+
+    function updateLiveState() {
+      runtimeStatus.hidden = !liveRuntime;
+      if (!liveRuntime) return;
+      const state = liveRuntime.state;
+      const age = Number.isFinite(liveRuntime.receivedAt)
+        ? Math.max(0, Math.floor((Date.now() - liveRuntime.receivedAt) / 1000)) + "s ago"
+        : "awaiting a sample";
+      const status = liveRuntime.status === "connected" ? "Live sample" :
+        liveRuntime.status === "ended" ? "Ended sample" : "Inspector " + liveRuntime.status;
+      const inDiagram = state && currentMachine().states.some(candidate => candidate.name === state);
+      runtimeStatus.textContent = status + " · " + (liveRuntime.sessionTitle || "selected instance") +
+        (state ? " · " + state + (inDiagram ? "" : " (not in diagram)") : "") + " · " + age;
+      for (const [name, entry] of positionedNodes) {
+        const current = Boolean(state && name === state);
+        entry.element.classList.toggle("live-current", current);
+        if (current) entry.element.setAttribute("aria-current", "true");
+        else entry.element.removeAttribute("aria-current");
+        entry.element.title = current ? "Current inspected state " + name + " · sampled " + age :
+          entry.state.wildcard ? "Wildcard transition source" : "State " + name;
       }
     }
 
@@ -1008,6 +1040,8 @@ const STYLES = `
     min-width: 0;
   }
   .graph-legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .graph-legend .runtime-status[hidden] { display: none; }
+  .runtime-status { color: var(--vscode-debugIcon-startForeground, var(--accent)); font-variant-numeric: tabular-nums; }
   .graph-zoom { margin-left: auto; display: flex; align-items: center; gap: 4px; }
   .graph-zoom button { min-width: 28px; height: 26px; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 4px; cursor: pointer; }
   .graph-zoom button:focus-visible, .graph-scroll:focus-visible { outline: 2px solid var(--vscode-focusBorder); outline-offset: -2px; }
@@ -1082,6 +1116,7 @@ const STYLES = `
     outline: 1px solid var(--accent);
     outline-offset: 1px;
   }
+  .state-node.live-current { outline: 3px solid var(--vscode-debugIcon-startForeground, var(--vscode-focusBorder)); outline-offset: 3px; }
   .state-name {
     font-size: 14px;
     font-weight: 600;

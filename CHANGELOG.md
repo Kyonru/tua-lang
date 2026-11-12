@@ -8,6 +8,8 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Added
 
+- A selected development-inspector state machine can open its static diagram
+  with a labeled, age-stamped overlay of its last sampled state.
 - Recent events in the development Runtime Inspector now open their matching
   Signal Graph entry, or filter the graph when multiple buses share a name.
 - The development Runtime Inspector can optionally retain the latest 20

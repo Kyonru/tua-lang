@@ -63,7 +63,7 @@ class InspectorTree {
           const name = origin?.name || object.label;
           const duplicate = objects.some(other => other.id !== object.id && (other.origin?.name || other.label) === name);
           if (origin) details.unshift({ id: id + ":source", label: "Creation site", description: `${origin.file}:${origin.line}`, tooltip: `${origin.path}:${origin.line}`, icon: "go-to-file", command: "tua.inspector.goToSource", arguments: [{ origin }] });
-          if (STATIC_VIEWS[kind] && origin && !origin.generated) details.push({ id: id + ":static", label: STATIC_VIEWS[kind].label, description: STATIC_VIEWS[kind].description, tooltip: "Open the source-derived view; live values remain in this inspector", icon: "type-hierarchy", command: "tua.inspector.openStaticPreview", arguments: [{ origin, kind }] });
+          if (STATIC_VIEWS[kind] && origin && !origin.generated) details.push({ id: id + ":static", label: STATIC_VIEWS[kind].label, description: STATIC_VIEWS[kind].description, tooltip: kind === "states" ? "Open the source-derived diagram with this inspected instance overlaid" : "Open the source-derived view; live values remain in this inspector", icon: "type-hierarchy", command: "tua.inspector.openStaticPreview", arguments: [{ origin, kind, ...(kind === "states" ? { runtime: { sessionId: entry.session.id, objectId: object.id } } : {}) }] });
           details.push({ id: id + ":runtimeId", label: "Runtime ID", description: String(object.id) });
           children.push({ id: id + ":details", label: "Details", icon: "info", children: details });
           return { id, label: duplicate ? `${name} #${object.id}` : name, origin,
@@ -160,7 +160,7 @@ function registerRuntimeInspector(context, activity) {
         const line = Math.min(origin.line - 1, document.lineCount - 1);
         const character = Math.min(origin.character || 0, document.lineAt(line).text.length);
         await vscode.window.showTextDocument(document, { preview: true, selection: new vscode.Range(line, character, line, character) });
-        await vscode.commands.executeCommand(view.command, { uri: document.uri.toString(), position: { line, character } });
+        await vscode.commands.executeCommand(view.command, { uri: document.uri.toString(), position: { line, character }, ...(node.runtime ? { runtime: node.runtime } : {}) });
       } catch { await vscode.window.showInformationMessage("The runtime object's source is no longer available. Start a new run to refresh its location."); }
     }),
     vscode.commands.registerCommand("tua.inspector.forDeclaration", async target => {

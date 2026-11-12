@@ -11,18 +11,21 @@ const {
   stateMachinePreviewLoadingHtml,
 } = require("./template");
 const { stateMachinePreviewViewModel } = require("./view-model");
+const { liveStateMachineSnapshot } = require("./live");
 
 const REFRESH_DELAY_MS = 180;
 
 function registerStateMachinePreviewFeature({
   configurationTarget,
   getClient,
+  inspector,
   isTuaDocument,
 }) {
   let panel;
   let document;
   let renderSequence = 0;
   let refreshTimer;
+  let liveTarget;
 
   const render = async ({ reveal = false, position, loading = false } = {}) => {
     const client = getClient();
@@ -43,6 +46,7 @@ function registerStateMachinePreviewFeature({
 
       const viewModel = stateMachinePreviewViewModel(document, inspection);
       viewModel.sourceLabel = displayUriPath(document.uri.toString());
+      viewModel.runtime = liveStateMachineSnapshot(inspector, liveTarget);
       if (viewModel.machines.length === 0) {
         panel.webview.html = stateMachinePreviewErrorHtml(
           panel.webview,
@@ -99,6 +103,7 @@ function registerStateMachinePreviewFeature({
     }
 
     document = activeDocument;
+    liveTarget = target?.runtime;
     if (!panel) {
       panel = createPanel(async (message) => {
         if (message?.command === "reload") {
@@ -109,6 +114,7 @@ function registerStateMachinePreviewFeature({
       panel.onDidDispose?.(() => {
         panel = undefined;
         document = undefined;
+        liveTarget = undefined;
         renderSequence += 1;
         clearTimeout(refreshTimer);
       });
@@ -138,13 +144,18 @@ function registerStateMachinePreviewFeature({
     }, REFRESH_DELAY_MS);
   });
 
-  return vscode.Disposable.from(command, reload, changes, {
+  const liveUpdates = inspector?.subscribe(() => {
+    if (panel && liveTarget) void panel.webview.postMessage({ command: "tua/liveStateMachine", runtime: liveStateMachineSnapshot(inspector, liveTarget) });
+  });
+
+  return vscode.Disposable.from(command, reload, changes, liveUpdates || { dispose() {} }, {
     dispose() {
       clearTimeout(refreshTimer);
       renderSequence += 1;
       panel?.dispose?.();
       panel = undefined;
       document = undefined;
+      liveTarget = undefined;
     },
   });
 }

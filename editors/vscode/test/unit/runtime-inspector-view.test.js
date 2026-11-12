@@ -105,7 +105,8 @@ test("live state machines link to their source-derived diagram without calling i
   const staticLink = details.find(node => node.label === "Open static state diagram");
   assert.equal(staticLink.description, "Declared transitions");
   assert.deepEqual(tree.getTreeItem(staticLink).command, {
-    command: "tua.inspector.openStaticPreview", title: staticLink.label, arguments: [{ origin, kind: "states" }],
+    command: "tua.inspector.openStaticPreview", title: staticLink.label,
+    arguments: [{ origin, kind: "states", runtime: { sessionId: "host", objectId: 1 } }],
   });
 });
 

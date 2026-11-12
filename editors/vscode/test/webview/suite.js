@@ -142,6 +142,17 @@ async function run() {
     const graph = { source: "file:///actor.tua", sourceLabel: "actor.tua", machines: [machine("menu"), machine("player")] };
     await load(stateMachinePreviewHtml(panel.webview, graph), "Tua State Machine Preview");
     await evaluate("(() => { const picker = document.getElementById('machine-picker'); picker.value = '1'; picker.dispatchEvent(new Event('change')); })()");
+    await panel.webview.postMessage({ command: "tua/liveStateMachine", runtime: {
+      status: "connected", sessionTitle: "Player 1", state: "running", receivedAt: Date.now(),
+    } });
+    await waitFor(() => evaluate("document.querySelector('[data-state=running]').classList.contains('live-current')"), "selected live state overlay");
+    assert.equal(await evaluate("document.querySelector('[data-state=running]').getAttribute('aria-current')"), "true");
+    assert.equal(await evaluate("document.getElementById('runtime-status').textContent.includes('Live sample')"), true);
+    await panel.webview.postMessage({ command: "tua/liveStateMachine", runtime: {
+      status: "ended", sessionTitle: "Player 1", state: "deleted", receivedAt: Date.now(),
+    } });
+    await waitFor(() => evaluate("document.getElementById('runtime-status').textContent.includes('not in diagram')"), "unmatched runtime state notice");
+    assert.equal(await evaluate("document.querySelectorAll('.state-node.live-current').length"), 0);
     // Run the normal layout callback explicitly when macOS occlusion suspends rAF.
     await evaluate("drawConnections()");
     await waitFor(() => evaluate("document.querySelectorAll('.edge-label').length === 2"), "state graph routes");
