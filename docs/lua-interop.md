@@ -206,8 +206,9 @@ parameter contract.
 | `Camera` | `local Camera = require("tuacamera")` |
 | `Rot` | `local Rot = require("tuarot")` |
 | `BehaviorTree` | `local BehaviorTree = require("tuabehavior")` |
+| `AudioDesign` | `local AudioDesign = require("tua.audio.design")` |
 
-Global assignments to `Camera`, `tween`, `Rot`, or `BehaviorTree` in project source files reserve
+Global assignments to `Camera`, `tween`, `Rot`, `BehaviorTree`, or `AudioDesign` in project source files reserve
 those names for the project across files, suppressing implicit built-in imports
 and built-in editor descriptions. This does not establish runtime initialization
 order or infer an exact cross-file global contract: load the defining file

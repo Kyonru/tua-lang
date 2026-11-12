@@ -4,14 +4,16 @@ This self-contained LOVE project demonstrates Tua's compiler-aware audio
 workflow:
 
 - `audioSystem({...})` derives typed bus, cue, effect, and music-scene names;
+- the opt-in `AudioDesign` renderer creates each short sine cue once as a
+  reusable static Source;
 - cue playback uses priority and per-cue voice limits;
 - music scenes consume generated tempo and beat-grid metadata;
 - beat and bar events use the same typed signal API as other Tua events;
 - the built-in `audio-analysis` asset pipeline caches waveform, envelope, and
   tempo analysis under `.tua/cache` and materializes a typed catalog under
   `src/generated/audio`;
-- `tua build` emits `tuaaudio.lua` and its `tuasignal.lua` and `tuastore.lua`
-  runtime dependencies only because this project uses the audio helper.
+- `tua build` emits `tuaaudio.lua`, `tua/audio/design.lua`, and the signal/store
+  runtime dependencies only because this project references those helpers.
 
 Build or run it from the repository root:
 

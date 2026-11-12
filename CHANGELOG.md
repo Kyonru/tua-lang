@@ -8,6 +8,11 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Audio cues without a `looping` setting now pass a boolean to LÖVE's
+  `Source:setLooping`, so ordinary static cues play instead of raising a
+  runtime argument error. The checker now uses the same typed bundled-module
+  import path as hover and completion.
+
 - Modules returned through a local table now keep initializer fields in the
   project graph and imported-member completion, with source navigation to each
   field's declaration.
@@ -40,6 +45,13 @@ language or editor behavior, and migration notes call out those changes.
   mappings and descriptions; separate build checks compile the examples.
 
 ### Changed
+
+- The Audio Explorer is now a cue and music-scene workbench with source-linked
+  authored settings, asset status, isolated LÖVE audition, and transition
+  checks. `tua/audioGraph` provides the shared compiler-backed detail.
+- Added the opt-in `AudioDesign` global for bounded, seeded procedural
+  SoundData cues. Referencing it emits its Lua import and bundles the helper;
+  no source-level `require` is needed.
 
 - Reworked the VS Code extension overview and added a focused editor reference.
 

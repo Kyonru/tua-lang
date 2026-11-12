@@ -111,6 +111,8 @@ guides cannot silently omit an example.
 - `src/audio.tua` demonstrates a typed audio system with static bus and cue
   names. Its placeholder WAV supports checking; use `examples/audio-system` to
   play audio and inspect analysis metadata.
+- `src/audio_design.tua` renders a short, seeded SoundData cue with the opt-in
+  `AudioDesign` global and gives the result a `Source` type.
 - `src/roguelike.tua` demonstrates seeded `Rot` generation, pathfinding,
   visibility, dice, and colors without a LOVE dependency.
 - `src/lua_doc_types.lua` is a plain Lua type provider used by

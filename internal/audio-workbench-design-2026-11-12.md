@@ -1,6 +1,8 @@
 # Code-first audio workbench design
 
-Status: design proposal, 2026-11-12. No new audio API or editor behavior is implemented by this document.
+Status: implementation in progress, 2026-11-12. The cue and scene workbench,
+isolated LÖVE audition, and `AudioDesign` global are implemented; verification
+and package qualification are recorded below.
 
 ## What a game developer should be able to do
 
@@ -66,11 +68,9 @@ The list should remain usable at narrow width: selected detail moves below the l
 
 ## Code-owned sound creation
 
-Start with a **typed, opt-in runtime module**, built on LÖVE `SoundData` and `Source`, not new compiler syntax. A proposed API shape (not implemented):
+Start with a **typed, opt-in runtime module**, built on LÖVE `SoundData` and `Source`, not new compiler syntax. The implemented source-level API is:
 
 ```tua
-local AudioDesign = require("tua.audio.design")
-
 local hit = AudioDesign.render({
   waveform = "noise",
   duration = 0.18,
@@ -112,3 +112,31 @@ For every slice, test empty/loading/error/stale/narrow/light/dark/high-contrast 
 - Strudel REPL and live feedback: <https://strudel.cc/technical-manual/repl/>; mini-notation: <https://strudel.cc/learn/mini-notation/>.
 - LÖVE Source and SoundData: <https://love2d.org/wiki/Source>, <https://love2d.org/wiki/SoundData>, <https://love2d.org/wiki/love.audio.newSource>.
 - LÖVE effects: <https://love2d.org/wiki/love.audio.setEffect>.
+
+## Implementation outcome
+
+The workbench uses compiler-derived item spans, static properties, source
+classification, and scene layers. It keeps the authored declaration as the
+source of truth and shows analyzed tempo separately. A selected static cue can
+be played in a disposable LÖVE project through `audioSystem:play`; static
+streamed scenes can be played and transitioned through `setMusicState` with
+immediate, beat, or bar quantization. Source or asset changes stop audition.
+The editor never executes arbitrary project modules for playback. Dynamic
+Sources and settings are shown but cannot be auditioned in isolation.
+
+`AudioDesign.render({...})` is a typed global for short procedural cues. Tua
+emits its `require("tua.audio.design")` once where referenced and the build
+copies the Lua helper only when used. Rendering is bounded, deterministic for
+a seed, and returns a reusable static `Source`.
+
+The existing audio analysis index supplies duration, channels, sample rate,
+peak, and a bounded energy envelope where a cue asset matches it. The envelope
+is not a decoded waveform or a live meter. The view does not claim native bus
+DSP, effect availability, or live voice counts.
+
+Pattern composition remains a separate design question. The implemented
+scene/layer system covers authored streamed music and quantized transitions;
+no step sequencer or mini-notation was added without evidence from a soundtrack
+prototype. Live inspector integration, audible quality judgments on varied
+hardware, and long-session performance remain qualification work rather than
+claims established by this implementation.

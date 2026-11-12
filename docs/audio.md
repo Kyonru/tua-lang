@@ -285,7 +285,7 @@ The three files serve different consumers:
 | --- | --- | --- | --- |
 | `catalog.tua` | Tua compiler and game | Small typed facade. It gives catalog entries completion and checking, then emits a Lua module that loads the runtime data. | Yes, as `catalog.lua` |
 | `catalog_data.lua` | Game runtime | Immutable analysis records and numeric envelopes. `require("generated.audio.catalog")` loads this table. | Yes |
-| `audio-index.json` | Diagnostics and VS Code Audio Explorer | Editor-friendly duplicate with paths, warnings, candidates, and preview data. Lua never imports it. | No |
+| `audio-index.json` | Diagnostics and VS Code Audio Workbench | Editor-friendly duplicate with paths, warnings, candidates, and preview data. Lua never imports it. | No |
 
 Consequently, the JSON index does not affect Lua startup or runtime memory. It
 is materialized under the source tree so editor tooling can refresh without a
@@ -452,13 +452,70 @@ decodes and scans on a LÖVE worker thread, delivers the result during `update`,
 and caches it under LÖVE's save directory by file hash and analyzer version.
 It is never started implicitly.
 
-## Runtime Replacement And Explorer
+## Audio Workbench
 
-Use **Tua: Show Audio Explorer** to inspect static buses, cues, scenes, layers,
-and effects, open their declarations, and open assets listed in the generated
-audio analysis index. **Reload** refreshes the index, and a failed refresh
-offers **Retry**. The explorer deliberately does not connect to a running game;
-use `snapshot()` for runtime instrumentation.
+Open **Tua: Show Audio Workbench** to inspect cues and music scenes while you
+edit. The cue view shows the source kind, resolved asset when
+static, bus, effect, gain, pitch, voice limit, overflow, and fade. The scene
+view shows authored tempo, signature, loop region, and its own layers. Each
+source item opens at its declaration. When generated analysis matches a cue
+asset, the view shows its duration, channels, sample rate, peak, and bounded
+energy envelope. That plot is analysis data, not a waveform or live meter.
+Tempo analysis appears separately with its confidence; it does not replace
+authored BPM. Computed values are labeled as such, and this static view does
+not invent a live playhead or voice meter.
+
+**Play cue** builds a disposable Tua project and auditions the selected static
+asset through `audioSystem:play` in an isolated LÖVE process. **Play scene**
+auditions static streamed layers. **Test transition** starts the selected
+scene, then requests an immediate, beat, or bar transition to another scene
+using `setMusicState`. The status line reports a scheduled or analysis-pending
+transition. Audition is limited to three seconds for a cue and six seconds for
+a scene; the cue play request uses volume 0.6. It never runs your module's
+top-level code. A cue with a computed Source or settings that cannot be reproduced
+statically has its Play button disabled. Scene audition omits the generated
+analysis catalog; when no authored tempo exists, a beat/bar request can report
+`analysis-pending`. An effect rejected by the current LÖVE runtime is reported
+in the status line. Audition is an editing aid, not a measurement of the live
+game's mix.
+
+**Stop audition** terminates the child process. Editing an audio declaration
+or changing an audio asset stops playback and refreshes the view. Selection is
+retained when the item still exists. A failed request offers **Retry**. A
+trusted workspace and a configured LÖVE executable are required. Use
+`snapshot()` in your game for runtime voice counts and bus state.
+
+## Render A Short Cue With Code
+
+For a short sound effect, use the typed `AudioDesign` global. Render once
+during setup, keep the returned static `Source`, and pass it to an audio cue.
+Tua emits `require("tua.audio.design")` and copies the helper into the build
+only when `AudioDesign` is referenced.
+
+```tua
+local hit: Source = AudioDesign.render({
+  waveform = "noise",
+  duration = 0.18,
+  gain = 0.35,
+  seed = 7,
+  envelope = { attack = 0.002, decay = 0.13, sustain = 0, release = 0.04 },
+  filter = { type = "lowpass", frequency = 1400 },
+})
+
+local audio = audioSystem({ cues = { enemyHit = { source = hit } } })
+```
+
+Supported waveforms are `sine`, `triangle`, `square`, `saw`, and `noise`.
+Square, saw, and triangle use a bounded harmonic sum; noise uses a local
+deterministic seed. Duration is 0.001–2 seconds, sample rate is an integer from
+22,050 to 48,000 Hz, and a render allocates at most 96,000 mono 16-bit
+samples. Optional ADSR stages must fit within the duration; the optional
+offline filter is a lowpass cutoff below Nyquist. Samples are capped to the
+valid range, and the returned Source can be cloned by `audioSystem` for voices.
+Rendering is a setup-time operation: do not call it each frame. See the
+[focused feature example](examples.md#examplesfeatures).
+
+## Runtime Replacement
 
 `audioSystem` lowers to `require("tuaaudio")`. Builds emit `tuaaudio.lua` plus
 its signal and store dependencies only when used and never overwrite files
