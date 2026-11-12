@@ -91,6 +91,18 @@ function M.signal(object, name)
   entry.events[entry.eventHead] = event
 end
 
+function M.poolAcquired(object, active)
+  local entry = objects[object]
+  if not entry then return end
+  entry.highWater = math.max(entry.highWater or 0, active)
+end
+
+function M.poolReleased(object, released)
+  local entry = objects[object]
+  if not entry then return end
+  if released == false then entry.failedReleases = (entry.failedReleases or 0) + 1 end
+end
+
 
 function M.snapshot()
   local budget = { left = LIMIT, truncated = false }
@@ -109,6 +121,10 @@ function M.snapshot()
       for i = 1, #entry.events do
         data.recent[i] = entry.events[((entry.eventHead - i) % 20) + 1]
       end
+    end
+    if entry.kind == "pools" then
+      data.highWater = entry.highWater or 0
+      data.failedReleases = entry.failedReleases or 0
     end
     -- Reserve the protocol envelope before encoding game data. Truncation must
     -- never remove required identity fields or replace data with a string.

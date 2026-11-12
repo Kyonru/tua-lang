@@ -8,6 +8,8 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- The opt-in development Runtime Inspector now shows each pool's peak active
+  count and rejected release count without changing release builds.
 - Tween fluent chains now keep their instance type after each setter, so later
   arguments are checked and setter completion remains available.
 - LuaDoc function fields now retain all comma-separated return types, so

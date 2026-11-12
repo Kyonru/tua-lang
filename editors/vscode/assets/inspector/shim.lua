@@ -69,6 +69,19 @@ local function constructor(original, kind, reader)
         return emit(self, name, ...)
       end
     end
+    if kind == "pools" then
+      local acquire, release = object.acquire, object.release
+      object.acquire = function(self, ...)
+        local value = acquire(self, ...)
+        inspect.poolAcquired(self, self:activeCount())
+        return value
+      end
+      object.release = function(self, ...)
+        local released = release(self, ...)
+        inspect.poolReleased(self, released)
+        return released
+      end
+    end
     return object
   end
   wrapped[fn] = true

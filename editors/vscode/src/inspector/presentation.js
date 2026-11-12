@@ -91,6 +91,8 @@ function presentObject(object, prefix, previous) {
     case "pools":
       summary = `${data.active ?? "?"} active · ${data.available ?? "?"} available`;
       children = [["active", "Active"], ["available", "Available"], ["capacity", "Capacity"]].filter(([key]) => data[key] !== undefined).map(([key, label]) => row(prefix, key, label, data[key]));
+      if (data.highWater !== undefined) details.push(row(prefix, "highWater", "Peak active", data.highWater, "Highest simultaneous active count since this pool was created"));
+      if (data.failedReleases !== undefined) details.push(row(prefix, "failedReleases", "Rejected releases", data.failedReleases, "Calls to release that returned false"));
       break;
     case "states":
       summary = String(data.current ?? "Unknown state");

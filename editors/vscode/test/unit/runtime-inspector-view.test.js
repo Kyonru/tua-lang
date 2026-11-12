@@ -155,9 +155,10 @@ test("inspector exposes store values directly and collapses bookkeeping", () => 
 
 test("type-specific rows replace raw runtime field dumps without losing essentials", () => {
   const { presentObject } = require("../../src/inspector/presentation");
-  const pool = presentObject({ kind: "pools", data: { active: 2, available: 6, capacity: 8 } }, "pool");
+  const pool = presentObject({ kind: "pools", data: { active: 2, available: 6, capacity: 8, highWater: 5, failedReleases: 1 } }, "pool");
   assert.equal(pool.summary, "2 active · 6 available");
   assert.deepEqual(pool.children.map(node => node.label), ["Active", "Available", "Capacity"]);
+  assert.deepEqual(pool.details.map(node => node.label), ["Peak active", "Rejected releases"]);
   const signal = presentObject({ kind: "signals", data: { emitted: 20, listeners: { hit: 2, jump: 1 }, recent: { 1: { name: "hit", sequence: 20 }, 2: { name: "jump", sequence: 19 } } } }, "signal");
   assert.equal(signal.summary, "3 listeners · 20 emitted");
   assert.deepEqual(signal.children[1].children.map(node => node.label), ["hit", "jump"]);

@@ -169,6 +169,36 @@ io.write(inspect.snapshot(), "\\n")`;
   assert.equal(second.objects[0].data.updates, 2, "direct mutations are not successful API calls");
 });
 
+test("pool inspection records bounded lifetime pressure without changing pool behavior", t => {
+  const { spawnSync } = require("node:child_process");
+  const lua = ["lua", "luajit"].find(command => spawnSync(command, ["-v"]).status === 0);
+  if (!lua) return t.skip("Lua interpreter unavailable");
+  const script = `local assets, runtime = arg[1], arg[2]
+package.path = runtime .. '/?.lua;' .. package.path
+local originalLoadfile = loadfile
+loadfile = function(filename)
+  if filename == assets .. '/transport.lua' then return function() return function() return function() end end end end
+  return originalLoadfile(filename)
+end
+local inspect = assert(loadfile(assets .. '/shim.lua'))(assets, 1, 'token', { categories = { pools = true } })
+local create = require('tuaobjectpool')
+local pool = create({ create = function() return {} end, initial = 1 })
+local a, b = pool:acquire(), pool:acquire()
+assert(pool:activeCount() == 2 and pool:capacity() == 2)
+assert(pool:release({}) == false)
+assert(pool:release(a) == true)
+assert(pool:release(a) == false)
+io.write(inspect.snapshot(), '\\n')
+pool:clear()
+assert(pool:activeCount() == 0 and pool:release(b) == false)
+io.write(inspect.snapshot(), '\\n')`;
+  const result = spawnSync(lua, ["-", path.resolve(__dirname, "../../assets/inspector"), path.resolve(__dirname, "../../../../vendor/runtime")], { input: script, encoding: "utf8" });
+  assert.equal(result.status, 0, result.stderr);
+  const [first, second] = result.stdout.trim().split("\n").map(line => JSON.parse(line).objects[0].data);
+  assert.deepEqual([first.active, first.available, first.capacity, first.highWater, first.failedReleases], [1, 1, 2, 2, 2]);
+  assert.deepEqual([second.active, second.available, second.capacity, second.highWater, second.failedReleases], [0, 0, 0, 2, 3]);
+});
+
 test("collection options exclude disabled wrappers and preserve enabled store inspection", t => {
   const { spawnSync } = require("node:child_process");
   const lua = ["lua", "luajit"].find(command => spawnSync(command, ["-v"]).status === 0);

@@ -132,11 +132,14 @@ not runtime progress.
 | State machines | Current state and pending transition | Async phase |
 | Entities and components | Entity IDs and component values | Counts represent sampled entities |
 | Signals | Listeners and recent events, newest first | Latest 20 event names; no payloads |
-| Object pools | Active, available, and capacity counts | Creation site and runtime ID |
+| Object pools | Active, available, and capacity counts | Peak simultaneous active count and rejected releases since creation; creation site and runtime ID |
 
 Store changes compare consecutive snapshots. Update counters count successful
 `set`/`update` calls; direct mutations through `get()` change the displayed state
 but do not increment that counter. A new connection starts a fresh comparison.
+Pool pressure counts are lifetime values for each inspected pool. A rejected
+release is a `release` call that returned `false`, including a foreign or
+already released object; a call that raises an error is not counted.
 
 ### Control updates
 
