@@ -122,6 +122,15 @@ async function run() {
     await evaluate("document.querySelectorAll('.frame-chip')[1].click()");
     assert.equal(await evaluate("document.querySelector('.rect-value').textContent"), "17,0 16x16",
       "sprite preview treats border as spacing between cells");
+    const oversized = { ...model, source: "oversized.tua", sprites: [{ ...model.sprites[0],
+      animations: [animation("oversized", 0, 13, true)],
+    }] };
+    await load(spritePreviewHtml(panel.webview, oversized), "Tua Sprite Preview");
+    await waitFor(() => evaluate("document.querySelector('.frame-chip.invalid') !== null"), "out-of-bounds frame preflight");
+    assert.equal(await evaluate("document.querySelector('.frame-count').textContent.includes('outside image')"), true);
+    assert.equal(await evaluate("document.querySelector('.frame-chip.invalid').getAttribute('aria-label').includes('outside image')"), true);
+    await evaluate("document.querySelector('.frame-chip.invalid').click()");
+    assert.equal(await evaluate("document.querySelector('.stage-status').textContent.includes('outside the')"), true);
     const broken = { ...model, sprites: [{ ...model.sprites[0], imageUri: "data:image/png;base64,bm90LWFuLWltYWdl" }] };
     await load(spritePreviewHtml(panel.webview, broken), "Tua Sprite Preview");
     await waitFor(() => evaluate("document.querySelector('.stage-status')?.textContent.includes('Could not decode')"), "corrupt image feedback");

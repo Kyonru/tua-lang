@@ -414,6 +414,9 @@ function spritePreviewHtml(webview, viewModel) {
       border-color: var(--accent);
     }
 
+    .frame-chip.invalid { border-color: var(--danger); color: var(--danger); }
+    .frame-chip.invalid.active { background: var(--panel-raised); outline: 2px solid var(--danger); outline-offset: 1px; }
+
     .sheet {
       display: grid;
       gap: 8px;

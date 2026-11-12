@@ -305,7 +305,10 @@ leaf players that share an image.
   callback. Fixed fields navigate to their schema definitions.
 - `background.animations.green` is typed as `SpriteAnimation`, completes known
   animation names, and navigates to the `green` entry in the configuration.
-- The VS Code preview renders the sheet's frames and animations.
+- The VS Code preview renders the sheet's frames and animations. Frames whose
+  source rectangles extend outside the image are marked in the frame strip
+  before playback reaches them; selecting one shows the exact rectangle and
+  image dimensions.
 
 ## Runtime And Overrides
 

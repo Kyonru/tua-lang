@@ -17,6 +17,8 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Sprite previews now mark every out-of-bounds frame in the timeline and show
+  its exact source rectangle when selected, instead of waiting for playback.
 - The opt-in development Runtime Inspector now shows each pool's peak active
   count and rejected release count without changing release builds.
 - Tween fluent chains now keep their instance type after each setter, so later

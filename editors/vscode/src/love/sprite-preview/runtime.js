@@ -379,7 +379,6 @@ function spritePreviewRuntime(sprites, source) {
         rangeValue.textContent = ranges.map((range) => range.from + ".." + range.to + " @ " + range.row).join("; ");
         fpsValue.textContent = animation.durations || (animation.fps + " fps");
         modeValue.textContent = animation.loop ? "Loop" : "Pause at end";
-        frameCount.textContent = frames.length + " frame" + (frames.length === 1 ? "" : "s");
       }
 
       function stepFrame(direction) {
@@ -396,10 +395,12 @@ function spritePreviewRuntime(sprites, source) {
         const metadata = currentMetadata();
 
         context.clearRect(0, 0, canvas.width, canvas.height);
-        if (rect.x < 0 || rect.y < 0 || rect.x + frame.width > image.naturalWidth || rect.y + frame.height > image.naturalHeight) {
+        if (frameOutOfBounds(rect, frame)) {
           playing = false;
           status.classList.add("error");
-          status.textContent = "This frame extends outside the image. Check its range and frame dimensions.";
+          status.textContent = "Frame " + (frameOffset + 1) + " uses " + rect.x + "," + rect.y + " " +
+            frame.width + "x" + frame.height + " outside the " + image.naturalWidth + "x" +
+            image.naturalHeight + " image. Check its range and frame dimensions.";
           return;
         }
         status.classList.remove("error");
@@ -449,12 +450,21 @@ function spritePreviewRuntime(sprites, source) {
         timelineAnimation = animation;
         activeChip = undefined;
         const frames = animationFrames(animation);
+        const geometry = animationFrame();
+        let invalid = 0;
         timeline.replaceChildren(...frames.map((frame, index) => {
           const entry = document.createElement("button");
           entry.type = "button";
           entry.className = "frame-chip";
           entry.setAttribute("aria-pressed", "false");
           entry.textContent = frame.column + "," + frame.row;
+          const rect = sourceRect(frame);
+          if (frameOutOfBounds(rect, geometry)) {
+            invalid += 1;
+            entry.classList.add("invalid");
+            entry.title = "Frame " + (index + 1) + " is outside the " + image.naturalWidth + "x" + image.naturalHeight + " image";
+            entry.setAttribute("aria-label", "Frame " + (index + 1) + ", " + frame.column + "," + frame.row + ", outside image");
+          }
           entry.addEventListener("click", () => {
             frameOffset = index;
             elapsed = 0;
@@ -463,6 +473,8 @@ function spritePreviewRuntime(sprites, source) {
           });
           return entry;
         }));
+        frameCount.textContent = frames.length + " frame" + (frames.length === 1 ? "" : "s") +
+          (invalid ? " · " + invalid + " outside image" : "");
       }
 
       function currentFrame() {
@@ -480,6 +492,11 @@ function spritePreviewRuntime(sprites, source) {
           x: geometry.left + frame.column * (geometry.width + geometry.border),
           y: geometry.top + frame.row * (geometry.height + geometry.border),
         };
+      }
+
+      function frameOutOfBounds(rect, frame) {
+        return rect.x < 0 || rect.y < 0 || rect.x + frame.width > image.naturalWidth ||
+          rect.y + frame.height > image.naturalHeight;
       }
 
       function frameDuration(index) {
