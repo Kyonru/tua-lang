@@ -2808,9 +2808,13 @@ fn grid_constructor(frame: SpriteFrame, image_local: &str) -> String {
     );
 
     if frame.left != 0 || frame.top != 0 || frame.border != 0 {
+        // anim8 adds one border before its first cell. Tua's border is the
+        // gap between cells, so offset the grid origin for the bundled API.
         arguments.push_str(&format!(
             ", {}, {}, {}",
-            frame.left, frame.top, frame.border
+            i64::from(frame.left) - i64::from(frame.border),
+            i64::from(frame.top) - i64::from(frame.border),
+            frame.border
         ));
     }
 
@@ -3007,10 +3011,10 @@ mod tests {
             .expect("advanced sprite should lower");
 
         assert!(lowered.contains(
-            "anim8.newGrid(256, 256, BackgroundImage:getWidth(), BackgroundImage:getHeight(), 2, 4, 1)"
+            "anim8.newGrid(256, 256, BackgroundImage:getWidth(), BackgroundImage:getHeight(), 1, 3, 1)"
         ));
         assert!(lowered.contains(
-            "anim8.newGrid(128, 64, BackgroundImage:getWidth(), BackgroundImage:getHeight(), 8, 16, 2)"
+            "anim8.newGrid(128, 64, BackgroundImage:getWidth(), BackgroundImage:getHeight(), 6, 14, 2)"
         ));
         assert!(lowered
             .contains("orange = anim8.newAnimation(BackgroundGrid(2, 1), 1, \"pauseAtEnd\")"));
@@ -3021,6 +3025,20 @@ mod tests {
         assert!(lowered.contains("completedLoops = completedLoops + 1"));
         assert!(!lowered.contains("animation: any"));
         assert!(!lowered.contains("+="));
+    }
+
+    #[test]
+    fn lowers_intercell_border_without_shifting_the_first_frame() {
+        let source = r#"local Player = spriteSheet({
+  image = "assets/player.png",
+  frame = { width = 128, height = 128, border = 1 },
+  animations = { idle = { from = 0, to = 6, row = 0, fps = 8 } },
+})"#;
+        let lowered = crate::emit_tua_source("src/sprites.tua", source)
+            .expect("bordered sprite should lower");
+        assert!(lowered.contains(
+            "anim8.newGrid(128, 128, PlayerImage:getWidth(), PlayerImage:getHeight(), -1, -1, 1)"
+        ));
     }
 
     #[test]

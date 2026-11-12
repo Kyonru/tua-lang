@@ -113,6 +113,15 @@ async function run() {
     await workbench.send("Emulation.clearDeviceMetricsOverride");
     await load(spritePreviewHtml(panel.webview, { ...model, source: "other.tua" }), "Tua Sprite Preview");
     await waitFor(() => evaluate("document.querySelector('.animation-tabs .active')?.textContent === 'idle'"), "independent source selection");
+    const bordered = { ...model, source: "bordered.tua", sprites: [{ ...model.sprites[0],
+      frame: { width: 16, height: 16, border: 1, left: 0, top: 0 },
+      animations: [animation("spaced", 0, 2, true)],
+    }] };
+    await load(spritePreviewHtml(panel.webview, bordered), "Tua Sprite Preview");
+    await waitFor(() => evaluate("document.querySelectorAll('.frame-chip').length === 3"), "bordered sprite frames");
+    await evaluate("document.querySelectorAll('.frame-chip')[1].click()");
+    assert.equal(await evaluate("document.querySelector('.rect-value').textContent"), "17,0 16x16",
+      "sprite preview treats border as spacing between cells");
     const broken = { ...model, sprites: [{ ...model.sprites[0], imageUri: "data:image/png;base64,bm90LWFuLWltYWdl" }] };
     await load(spritePreviewHtml(panel.webview, broken), "Tua Sprite Preview");
     await waitFor(() => evaluate("document.querySelector('.stage-status')?.textContent.includes('Could not decode')"), "corrupt image feedback");

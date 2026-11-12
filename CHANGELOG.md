@@ -8,6 +8,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Sprite grids now treat `frame.border` as spacing between cells, matching the
+  editor preview and allowing atlases with no leading border to use their last
+  row and column without clipping. The bundled astronaut example now selects
+  all five color animations from the correct 128-pixel cells.
 - Audio cues without a `looping` setting now pass a boolean to LÖVE's
   `Source:setLooping`, so ordinary static cues play instead of raising a
   runtime argument error. The checker now uses the same typed bundled-module

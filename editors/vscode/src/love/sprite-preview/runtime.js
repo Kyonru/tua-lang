@@ -477,8 +477,8 @@ function spritePreviewRuntime(sprites, source) {
         const geometry = animationFrame();
 
         return {
-          x: geometry.left + frame.column * geometry.width + (frame.column + 1) * geometry.border,
-          y: geometry.top + frame.row * geometry.height + (frame.row + 1) * geometry.border,
+          x: geometry.left + frame.column * (geometry.width + geometry.border),
+          y: geometry.top + frame.row * (geometry.height + geometry.border),
         };
       }
 

@@ -46,6 +46,11 @@ sheet declares `jump`, and completion only offers `idle` and `run`. Calling
 `play` with the animation that is already playing keeps its place, so calling
 it every frame is fine.
 
+The bundled [sprite feature example](https://github.com/Kyonru/tua-lang/blob/main/examples/features/src/sprites.tua)
+uses the included 902 × 902 astronaut atlas. Its five nine-frame color
+animations cross row boundaries; the one-pixel `border` separates cells and
+does not shift the first frame.
+
 ## Declare A Sheet
 
 A sheet names an image, a default frame size, and its animations. Grid rows,
@@ -87,7 +92,7 @@ local background = spriteSheet({
 | --- | --- |
 | `frame.width`, `frame.height` | The default grid cell size, in pixels. |
 | `frame.left`, `frame.top` | Offset of the grid from the image's top-left corner. |
-| `frame.border` | Spacing between adjacent cells. |
+| `frame.border` | Spacing between adjacent cells; there is no gap before the first cell. |
 | `origin.x`, `origin.y` | The registration point: the pixel inside a frame that lands on the position you draw at. |
 
 An animation may override `frame` when part of the image uses a different cell
@@ -306,5 +311,9 @@ leaf players that share an image.
 
 Builds write the bundled `anim8.lua` and `tuasprite.lua` only when a file uses
 `spriteSheet`, and never overwrite copies that already exist in your project.
+The emitted `anim8.newGrid` call subtracts `border` from its `left` and `top`
+arguments because anim8 adds one border before the first cell internally.
+That adjustment keeps the generated quads aligned with Tua's between-cell
+spacing and the editor preview; the source configuration is unchanged.
 If you replace `anim8.lua`, players use that runtime's public `clone()` for
 each animation, which copies the arrays instead of sharing them.

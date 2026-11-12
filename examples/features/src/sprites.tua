@@ -1,42 +1,57 @@
--- Feature: experimental sprite sheet helper.
--- First-class sprite analysis validates the image path and animation metadata,
--- then build output lowers this normal Tua call to readable anim8-backed Lua.
--- `tua build` writes bundled anim8.lua when generated Lua requires it.
+-- Feature: sprite sheet animations spanning multiple atlas rows.
+-- This 902x902 image has 7 columns of 128px cells, with 1px between cells.
+-- Each astronaut color occupies nine frames, continuing onto the next row.
+-- Tua validates the image and animation metadata, then bundles anim8 on use.
 local Player = spriteSheet({
   image = "assets/player.png",
-  frame = { width = 128, height = 128, left = 0, top = 0, border = 0 },
+  frame = { width = 128, height = 128, border = 1 },
   origin = { x = 64, y = 128 },
   animations = {
-    orange = { column = 1, row = 0, durations = 1 },
-    blue = {
+    white = {
       frames = {
-        { from = 0, to = 3, row = 1 },
-        { from = 0, to = 1, row = 2 },
+        { from = 0, to = 6, row = 0 },
+        { from = 0, to = 1, row = 1 },
       },
       fps = 8,
-      onLoop = "pauseAtEnd",
-      markers = { { frame = 2, name = "accent" } },
     },
     green = {
-      from = 0,
-      to = 3,
-      row = 2,
-      frame = { width = 64, height = 64, left = 4, top = 8, border = 1 },
-      durations = { 0.1, 0.5, 0.1, 0.1 },
-      onLoop = function(animation, loops)
-        if loops > 1 then
-          animation:pause()
-        end
-      end,
+      frames = {
+        { from = 2, to = 6, row = 1 },
+        { from = 0, to = 3, row = 2 },
+      },
+      fps = 8,
+      markers = { { frame = 5, name = "step" } },
+    },
+    pink = {
+      frames = {
+        { from = 4, to = 6, row = 2 },
+        { from = 0, to = 5, row = 3 },
+      },
+      fps = 8,
+    },
+    purple = {
+      frames = {
+        { column = 6, row = 3 },
+        { from = 0, to = 6, row = 4 },
+        { column = 0, row = 5 },
+      },
+      fps = 8,
+    },
+    yellow = {
+      frames = {
+        { from = 1, to = 6, row = 5 },
+        { from = 0, to = 2, row = 6 },
+      },
+      fps = 8,
     },
   },
 })
 
-local preview = Player:player("orange")
-preview:gotoAndStop("blue", 3)
-preview:on("accent", function(player, marker, animation, frame)
+local preview = Player:player("white")
+preview:on("step", function(player, marker, animation, frame)
   print(marker, animation, frame)
 end)
+preview:gotoAndPlay("green", 1)
 
 return {
   Player = Player,

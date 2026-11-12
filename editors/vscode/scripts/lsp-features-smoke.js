@@ -395,26 +395,31 @@ request("initialize", {
           (sprite.animations || []).map((animation) => [animation.name, animation]),
         );
         const frame = sprite.frame;
-        const orange = animations.orange;
-        const blue = animations.blue;
-        const green = animations.green;
+        const expectedRanges = {
+          white: [[0, 6, 0], [0, 1, 1]],
+          green: [[2, 6, 1], [0, 3, 2]],
+          pink: [[4, 6, 2], [0, 5, 3]],
+          purple: [[6, 6, 3], [0, 6, 4], [0, 0, 5]],
+          yellow: [[1, 6, 5], [0, 2, 6]],
+        };
+        const rangesMatch = Object.entries(expectedRanges).every(([name, ranges]) => {
+          const actual = animations[name]?.frames?.map(({ from, to, row }) => [from, to, row]);
+          return JSON.stringify(actual) === JSON.stringify(ranges) &&
+            animations[name].durationValues?.length === 9;
+        });
 
         if (
           frame?.width !== 128 ||
           frame.height !== 128 ||
           frame.left !== 0 ||
           frame.top !== 0 ||
-          frame.border !== 0 ||
-          sprite.animations?.length !== 3 ||
-          orange?.column !== 1 ||
-          orange.durations !== "1" ||
-          blue?.row !== 1 ||
-          blue.onLoop !== "pauseAtEnd" ||
-          blue.loop !== false ||
-          green?.frame?.width !== 64 ||
-          green.frame.height !== 64 ||
-          !green.durations?.includes("0.5") ||
-          !green.onLoop?.startsWith("function(")
+          frame.border !== 1 ||
+          sprite.image.dimensions?.width !== 902 ||
+          sprite.image.dimensions?.height !== 902 ||
+          sprite.animations?.length !== 5 ||
+          !rangesMatch ||
+          animations.green.markers?.[0]?.frame !== 5 ||
+          animations.green.markers?.[0]?.name !== "step"
         ) {
           fail(`sprite inspection returned invalid animation metadata: ${JSON.stringify(sprite)}`);
         }
