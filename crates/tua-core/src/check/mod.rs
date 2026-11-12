@@ -2229,6 +2229,15 @@ impl<'a> Checker<'a> {
         self.check_dot_love_method_call(function_call);
         self.check_shader_send_call(function_call);
 
+        // Keep checker locals on the same built-in runtime type path as hover
+        // and completion. Otherwise a `require` initializer becomes `any`
+        // during checking even while the editor shows the typed module.
+        if let Some(ty) =
+            BuiltinDomainRegistry::standard().runtime_module_type_from_call(function_call)
+        {
+            return vec![ty];
+        }
+
         if let Some(ty) = self.setmetatable_return_type(function_call) {
             return vec![ty];
         }

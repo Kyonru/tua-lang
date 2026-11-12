@@ -79,6 +79,13 @@ pub const RUNTIMES: &[BundledRuntime] = &[
         explicit_import: true,
     },
     BundledRuntime {
+        module: "tua.audio.design",
+        file_name: "tua/audio/design.lua",
+        source: crate::tua_audio_design_runtime_source,
+        dependencies: &[],
+        explicit_import: true,
+    },
+    BundledRuntime {
         module: "tuatween",
         file_name: "tuatween.lua",
         source: crate::tuatween_runtime_source,
@@ -196,6 +203,15 @@ local ignored = "require(\"brinevector\")"
         assert_eq!(
             required,
             BTreeSet::from(["tuaaudio", "tuasignal", "tuastore"])
+        );
+    }
+
+    #[test]
+    fn procedural_audio_runtime_is_included_only_when_imported() {
+        assert!(bundled_runtime_requirements("return 1").is_empty());
+        assert_eq!(
+            bundled_runtime_requirements("local design = require('tua.audio.design')\n"),
+            BTreeSet::from(["tua.audio.design"])
         );
     }
 }

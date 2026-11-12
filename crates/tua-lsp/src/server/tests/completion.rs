@@ -1,6 +1,20 @@
 use super::*;
 
 #[test]
+fn audio_design_global_completes_and_hovers_without_a_source_import() {
+    let uri = "file:///tmp/audio-design-global.tua";
+    let source =
+        "local hit = AudioDesign.render({ waveform = \"sine\", duration = 0.1 })\nAudioDesign.\n";
+    let output = run_messages(vec![
+        did_open(uri, source),
+        completion_request(2, uri, source, "AudioDesign."),
+        hover_request(3, uri, source, "AudioDesign.render"),
+    ]);
+    assert_completion_labels(&output, 2, ["render"]);
+    assert_hover_contains(&output, 3, "AudioDesign");
+}
+
+#[test]
 fn colon_completion_keeps_callable_members_and_omits_data_fields() {
     let uri = "file:///tmp/colon-callable-members.tua";
     let source = r#"final class Thing {

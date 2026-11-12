@@ -69,7 +69,16 @@ pub(crate) const BEHAVIOR_TREE: BuiltinModule = BuiltinModule {
     documentation: "Create a definition with `BehaviorTree.new(root)`, then call `tree:instance(context)` and `runner:update(dt)` from LOVE's update loop.",
 };
 
-pub(crate) const MODULES: &[BuiltinModule] = &[TWEEN, CAMERA, SHADER_SCAN, ROT, BEHAVIOR_TREE];
+pub(crate) const AUDIO_DESIGN: BuiltinModule = BuiltinModule {
+    name: "AudioDesign",
+    runtime: "tua.audio.design",
+    source: include_str!("../../../vendor/runtime/tua/audio/design.lua"),
+    summary: "procedural audio cue renderer",
+    documentation: "Render a short, seeded waveform once to a reusable static LOVE Source.",
+};
+
+pub(crate) const MODULES: &[BuiltinModule] =
+    &[TWEEN, CAMERA, SHADER_SCAN, ROT, BEHAVIOR_TREE, AUDIO_DESIGN];
 
 pub(crate) fn module(name: &str) -> Option<&'static BuiltinModule> {
     MODULES.iter().find(|module| module.name == name)
@@ -78,6 +87,23 @@ pub(crate) fn module(name: &str) -> Option<&'static BuiltinModule> {
 /// The module's export type, inferred once from its LuaDoc with the runtime's
 /// own classes inlined, so no internal type names leak into user code.
 pub(crate) fn module_type(module: &BuiltinModule) -> Type {
+    if module.name == AUDIO_DESIGN.name {
+        static AUDIO_TYPE: OnceLock<Type> = OnceLock::new();
+        return AUDIO_TYPE
+            .get_or_init(|| {
+                std::thread::Builder::new()
+                    .name("tua-audio-design-type".to_owned())
+                    .stack_size(16 * 1024 * 1024)
+                    .spawn(|| {
+                        INFERRING.with(|inferring| inferring.set(true));
+                        infer_module_type(&AUDIO_DESIGN)
+                    })
+                    .ok()
+                    .and_then(|thread| thread.join().ok())
+                    .unwrap_or(Type::Any)
+            })
+            .clone();
+    }
     static TYPES: OnceLock<Vec<Type>> = OnceLock::new();
     let types = TYPES.get_or_init(|| {
         // Inference recurses deeply over a whole module. Run it once on a
@@ -89,14 +115,18 @@ pub(crate) fn module_type(module: &BuiltinModule) -> Type {
                 // The runtimes' own environments must not include the modules
                 // being inferred, or inference would wait on itself.
                 INFERRING.with(|inferring| inferring.set(true));
-                MODULES.iter().map(infer_module_type).collect()
+                MODULES
+                    .iter()
+                    .filter(|module| module.name != AUDIO_DESIGN.name)
+                    .map(infer_module_type)
+                    .collect()
             })
             .and_then(|thread| {
                 thread
                     .join()
                     .map_err(|_| std::io::Error::other("built-in module inference panicked"))
             })
-            .unwrap_or_else(|_| vec![Type::Any; MODULES.len()])
+            .unwrap_or_else(|_| vec![Type::Any; MODULES.len() - 1])
     });
     let index = MODULES
         .iter()
@@ -124,6 +154,12 @@ fn infer_module_type(module: &BuiltinModule) -> Type {
 fn inline_aliases(ty: &Type, environment: &TypeEnvironment, visiting: &mut Vec<String>) -> Type {
     match ty {
         Type::Alias(name) => {
+            // LOVE's Source is a platform type, not a helper-local class.
+            // Expanding its recursive method graph makes this module's public
+            // signature enormous and can overflow while formatting it.
+            if name == "Source" {
+                return ty.clone();
+            }
             if visiting.contains(name) {
                 return Type::Any;
             }
@@ -206,6 +242,9 @@ pub(crate) fn builtin_locals(parsed: &ParsedSource) -> Vec<(String, Type)> {
     let declared = declared_names(parsed);
     MODULES
         .iter()
+        .filter(|module| {
+            module.name != AUDIO_DESIGN.name || parsed.source.contains(AUDIO_DESIGN.name)
+        })
         .filter(|module| !declared.contains(module.name))
         .map(|module| (module.name.to_owned(), module_type(module)))
         .collect()
@@ -333,6 +372,46 @@ mod tests {
         let rot = module_type(module("Rot").expect("Rot"));
         assert!(rot.to_string().contains("\"sidewinder\""), "{rot}");
         assert!(rot.to_string().contains("astar"), "{rot}");
+    }
+
+    #[test]
+    fn audio_design_global_is_typed_and_emitted_only_when_used() {
+        let good = r#"local hit: Source = AudioDesign.render({ waveform = "noise", duration = 0.18, seed = 7 })
+return hit
+"#;
+        crate::check_tua_source("src/main.tua", good).expect("typed procedural Source");
+        let bad = "AudioDesign.render(\"laser\")\n";
+        let errors = crate::check_tua_source("src/main.tua", bad)
+            .expect_err("unsupported waveform must be rejected");
+        assert!(
+            errors
+                .iter()
+                .any(|error| error.code == Some(crate::DiagnosticCode::TYPE_MISMATCH)),
+            "{errors:?}"
+        );
+        let bad_waveform = good.replace("\"noise\"", "\"laser\"");
+        let errors = crate::check_tua_source("src/main.tua", bad_waveform)
+            .expect_err("nested waveform literal must be checked");
+        assert!(
+            errors
+                .iter()
+                .any(|error| error.code == Some(crate::DiagnosticCode::TYPE_MISMATCH)),
+            "{errors:?}"
+        );
+        let emitted = crate::emit_tua_source("src/main.tua", good).expect("emit");
+        assert!(
+            emitted.contains("require(\"tua.audio.design\")"),
+            "{emitted}"
+        );
+        assert!(!crate::emit_tua_source("src/empty.tua", "return 1\n")
+            .expect("emit")
+            .contains("tua.audio.design"));
+        let shadowed = crate::emit_tua_source(
+            "src/shadowed.tua",
+            "local AudioDesign = { render = function() return 1 end }\nreturn AudioDesign.render()\n",
+        )
+        .expect("emit local override");
+        assert!(!shadowed.contains("tua.audio.design"), "{shadowed}");
     }
 
     #[test]

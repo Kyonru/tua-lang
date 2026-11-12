@@ -1,14 +1,9 @@
-local function tone(frequency: number, seconds: number): Source
-  local rate = 44100
-  local data = love.sound.newSoundData(math.floor(rate * seconds), rate, 16, 1)
-  for sample = 0, data:getSampleCount() - 1 do
-    local envelope = 1 - sample / data:getSampleCount()
-    data:setSample(sample, math.sin(sample / rate * frequency * math.pi * 2) * envelope * 0.25)
-  end
-  local source = love.audio.newQueueableSource(rate, 16, 1, 2)
-  source:queue(data)
-  return source
-end
+-- Render each short cue once at load time. audioSystem clones these Sources
+-- when simultaneous voices play; no sample buffer is built in love.update.
+local low = AudioDesign.render({ waveform = "sine", frequency = 220, duration = 0.3,
+  gain = 0.25, envelope = { attack = 0.005, decay = 0.2, sustain = 0, release = 0.05 } })
+local high = AudioDesign.render({ waveform = "sine", frequency = 660, duration = 0.2,
+  gain = 0.25, envelope = { attack = 0.005, decay = 0.13, sustain = 0, release = 0.04 } })
 
 local analysis = require("generated.audio.catalog")
 
@@ -20,8 +15,8 @@ local audio = audioSystem({
     sfx = { parent = "master", maxVoices = 6 },
   },
   cues = {
-    low = { source = tone(220, 0.3), bus = "sfx", priority = 10, maxVoices = 3 },
-    high = { source = tone(660, 0.2), bus = "sfx", priority = 50, maxVoices = 3 },
+    low = { source = low, bus = "sfx", priority = 10, maxVoices = 3 },
+    high = { source = high, bus = "sfx", priority = 50, maxVoices = 3 },
   },
   music = {
     sample = {

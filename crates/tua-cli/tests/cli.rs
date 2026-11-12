@@ -3511,6 +3511,50 @@ return {
 }
 
 #[test]
+fn build_bundles_audio_design_only_for_its_explicit_import() {
+    let temp = TempDir::new("audio-design-opt-in");
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).expect("config");
+    fs::create_dir_all(temp.path().join("src")).expect("source directory");
+    fs::write(
+        temp.path().join("src/main.tua"),
+        "local hit: Source = AudioDesign.render({waveform='noise',duration=0.1})\nreturn hit\n",
+    )
+    .expect("source");
+    let output = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .expect("build");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(temp.path().join("build/tua/audio/design.lua").is_file());
+    assert!(!temp.path().join("build/tuaaudio.lua").exists());
+    let emitted = fs::read_to_string(temp.path().join("build/main.lua")).expect("emitted Lua");
+    assert!(
+        emitted.starts_with("local AudioDesign = require(\"tua.audio.design\")"),
+        "{emitted}"
+    );
+    fs::write(temp.path().join("src/main.tua"), "return 1\n").expect("remove import");
+    let output = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .expect("rebuild");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        !temp.path().join("build/tua/audio/design.lua").exists(),
+        "owned helper removed after import disappears"
+    );
+}
+
+#[test]
 fn in_place_build_bundles_runtimes_required_only_by_lua_sources() {
     let temp = TempDir::new("lua-explicit-runtime-imports-in-place");
 

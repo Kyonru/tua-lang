@@ -2028,8 +2028,11 @@ pub(crate) fn build_type_environment_with_domain_registry(
     let builtin_locals = crate::builtin_module::builtin_locals(parsed);
     // During builtin inference this list is intentionally empty. Do not seed
     // the catalog until all builtin modules have finished their own inference.
-    let can_share_locals =
-        locals.is_empty() && builtin_locals.len() == crate::builtin_module::MODULES.len();
+    let can_share_locals = locals.is_empty()
+        && builtin_locals.len() == crate::builtin_module::MODULES.len() - 1
+        && !parsed
+            .source
+            .contains(crate::builtin_module::AUDIO_DESIGN.name);
     let locals = builtin_locals
         .into_iter()
         .chain(locals)

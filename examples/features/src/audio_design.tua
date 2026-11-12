@@ -1,0 +1,12 @@
+-- Feature: opt-in, typed procedural audio helper. Render once at load time,
+-- then reuse the returned static Source in an audioSystem cue.
+local hit: Source = AudioDesign.render({
+  waveform = "noise",
+  duration = 0.18,
+  gain = 0.35,
+  seed = 7,
+  envelope = { attack = 0.002, decay = 0.13, sustain = 0, release = 0.04 },
+  filter = { type = "lowpass", frequency = 1400 },
+})
+
+return hit

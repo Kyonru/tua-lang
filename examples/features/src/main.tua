@@ -31,6 +31,7 @@ local BehaviorTree = require("behavior_tree")
 local Camera = require("camera")
 local Tweening = require("tweening")
 local Audio = require("audio")
+local AudioDesignCue = require("audio_design")
 local Roguelike = require("roguelike")
 local ObjectPool = require("object_pool")
 local Comments = require("comments")
@@ -70,6 +71,7 @@ return {
   camera = Camera,
   tweening = Tweening,
   audio = Audio,
+  audioDesign = AudioDesignCue,
   roguelike = Roguelike,
   object_pool = ObjectPool,
   comments = Comments,

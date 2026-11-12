@@ -160,6 +160,9 @@ impl BuiltinDomainRegistry {
             runtime if runtime == crate::builtin_module::BEHAVIOR_TREE.runtime => Some(
                 crate::builtin_module::module_type(&crate::builtin_module::BEHAVIOR_TREE),
             ),
+            runtime if runtime == crate::builtin_module::AUDIO_DESIGN.runtime => Some(
+                crate::builtin_module::module_type(&crate::builtin_module::AUDIO_DESIGN),
+            ),
             _ => None,
         }
     }
