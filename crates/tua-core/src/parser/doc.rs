@@ -752,7 +752,18 @@ fn function_type_end(line: &str, cursor: usize) -> Option<usize> {
     }
 
     let return_start = skip_spaces(line, after_args + 1);
-    let (_, return_end) = take_type_text(line, return_start)?;
+    let (_, mut return_end) = take_type_text(line, return_start)?;
+    loop {
+        let comma = skip_spaces(line, return_end);
+        if !line[comma..].starts_with(',') {
+            break;
+        }
+        let next = skip_spaces(line, comma + 1);
+        let Some((_, end)) = take_type_text(line, next) else {
+            break;
+        };
+        return_end = end;
+    }
 
     Some(return_end)
 }

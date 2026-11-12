@@ -2895,6 +2895,24 @@ fn lua_doc_multiple_returns_preserve_nested_types_and_description() {
 }
 
 #[test]
+fn lua_doc_field_function_preserves_multiple_returns_and_description() {
+    let parsed = parse_lua_doc_annotations_with_options(
+        "api.lua",
+        "---@class Camera\n---@field toWorld fun(self: Camera, x: number): number, number world coordinates\n",
+        LuaDocParseOptions { diagnostics_enabled: true },
+    );
+    assert!(parsed.diagnostics.is_empty(), "{:?}", parsed.diagnostics);
+    let field = &parsed.annotations[1];
+    let LuaDocAnnotationKind::Field(field_type) = &field.kind else {
+        panic!("field annotation")
+    };
+    assert!(
+        matches!(&field_type.ty, TuaType::Function { returns, .. } if returns == &vec![TuaType::Named("number".to_owned()), TuaType::Named("number".to_owned())])
+    );
+    assert_eq!(field.documentation.as_deref(), Some("world coordinates"));
+}
+
+#[test]
 fn class_method_syntax_guidance_targets_lua_style_members() {
     for (header, message) in [
         ("function update(dt)", "remove `function`"),

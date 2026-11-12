@@ -8,6 +8,8 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- LuaDoc function fields now retain all comma-separated return types, so
+  Camera coordinate methods check and describe every returned number.
 - Slow asset-inventory refreshes now show progress in the Assets view and clear
   that state when the latest request finishes.
 - Source-mapped live signal, ECS, and pool entries now open their static

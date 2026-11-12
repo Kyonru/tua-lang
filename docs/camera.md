@@ -147,5 +147,5 @@ Camera.new({ bounds = { x = 0, y = 0 } })  -- error: bounds needs w and h
 cam:shake("hard")                          -- error: trauma expects number
 ```
 
-Multiple results, such as `toWorld`'s second number, are currently typed as
-`any`.
+Coordinate methods keep every return type. For example, both results of
+`toWorld` are numbers, and all four results of `visibleBounds` are numbers.

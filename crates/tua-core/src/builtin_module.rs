@@ -338,6 +338,38 @@ mod tests {
     }
 
     #[test]
+    fn camera_coordinate_methods_type_every_return_value() {
+        let source = "local cam = Camera.new()\nlocal x, y = cam:toWorld(10, 20)\nlocal left, top, width, height = cam:visibleBounds()\nlocal good: number = y\nlocal alsoGood: number = height\nprint(x, left, top, width, good, alsoGood)\n";
+        let diagnostics = crate::check_tua_source("src/main.tua", source)
+            .err()
+            .unwrap_or_default();
+        assert!(
+            diagnostics
+                .iter()
+                .all(|error| error.code != Some(crate::DiagnosticCode::TYPE_MISMATCH)),
+            "{diagnostics:?}"
+        );
+        let bad =
+            "local cam = Camera.new()\nlocal x, y = cam:toWorld(10, 20)\nlocal bad: string = y\n";
+        let errors = crate::check_tua_source("src/main.tua", bad)
+            .expect_err("the second coordinate must be checked");
+        assert!(
+            errors
+                .iter()
+                .any(|error| error.code == Some(crate::DiagnosticCode::TYPE_MISMATCH)),
+            "{errors:?}"
+        );
+        let hover = crate::hover_tua_source(
+            "src/main.tua",
+            "local cam = Camera.new()\nlocal x, y = cam:toWorld(10, 20)\nprint(y)\n",
+            crate::SourcePosition { line: 3, column: 7 },
+        )
+        .expect("hover")
+        .expect("second coordinate hover");
+        assert!(hover.contents.contains("number"), "{hover:?}");
+    }
+
+    #[test]
     fn module_types_are_structural_and_carry_their_contracts() {
         let parsed = crate::parse_lua_source(Path::new("tuarot.lua"), ROT.source.to_owned())
             .expect("the Rot runtime parses as Lua");
