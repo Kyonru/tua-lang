@@ -43,7 +43,7 @@ extension, documentation site, and bundled example projects.
 - Single-inheritance classes lower to Lua tables/metatables; method-only
   protocol contracts are checked and erased while normal Lua dispatch remains.
 - Readable Lua 5.1-compatible output for LuaJIT and LOVE 11.x.
-- A CLI for `init`, `check`, `fmt`, `lint`, `build`, `traceback`, `watch`,
+- A CLI for `init`, `actions init`, `check`, `fmt`, `lint`, `build`, `traceback`, `watch`,
   `dev`, `package`, `test`, and `lsp`.
 - A compiler-backed language server and VS Code extension with diagnostics,
   completion, hover, signature help, rename, references, semantic tokens,

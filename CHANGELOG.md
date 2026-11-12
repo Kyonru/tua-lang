@@ -10,6 +10,7 @@ language or editor behavior, and migration notes call out those changes.
 
 - `tua actions init` generates a GitHub Actions workflow for checked `.love`
   packages, downloadable run artifacts, and draft releases from version tags.
+  The generated workflow pins the matching Tua CLI source tag.
 - Web packages now include static-host `_headers`, a fallback Apache
   `.htaccess`, and local testing instructions for the headers required by love.js.
 - Project-defined `[[package_pipelines]]` add explicit custom packaging targets

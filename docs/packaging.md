@@ -205,13 +205,13 @@ tua actions init
 ```
 
 This creates `.github/workflows/tua-game.yml` if it is absent. Review and
-commit that file in your game repository. The generated workflow uses a pinned
-Tua `v0.7.0` source tag and Cargo to install the CLI, then runs `tua check` and
-`tua package --target love`. It does not need Tua on GitHub Packages, a
-personal access token, or a separate Tua action. The pinned version supports
-the generated portable `.love` workflow; update the pin only after verifying a
-newer Tua release. Projects using language or configuration features introduced
-after `v0.7.0` need a newer published Tua source revision for this workflow.
+commit that file in your game repository. The generated workflow pins the source
+tag matching the Tua CLI that created it and uses Cargo to install the CLI. It
+then runs `tua check` and `tua package --target love`. It does not need Tua on
+GitHub Packages, a personal access token, or a separate Tua action. Generate
+the workflow with a published Tua release. An unreleased local build may share
+a version number with an older tag. Update the pin only after verifying a newer
+Tua release.
 
 Every push and manual run uploads the `.love` file as an Actions artifact named
 `love-game` for 14 days. Download it from the workflow run's **Artifacts** area,
@@ -232,13 +232,12 @@ macOS, web, mobile, and custom targets have separate runtime or toolchain
 requirements. Add jobs for them using the [target commands above](#packaging-games)
 and the relevant toolchains, then verify those jobs on GitHub-hosted runners.
 For web builds, supply the standalone player and use a Tua CLI version with
-`--target web`; the generated `v0.7.0` pin predates that target. GitHub Release
-CLI archives can replace the source installation after a suitable version is
-published and verified.
+`--target web`. GitHub Release CLI archives can replace the source installation
+after a suitable version is published and verified.
 
 ## Custom Package Pipelines
 
-Add a named `[[package_pipelines]]` table to `tua.toml` when a
+Replace `package_pipelines = []` in `tua.toml` with a named pipeline when a
 target needs its own packaging tool.
 Tua builds the game and passes the `.love` archive to your command. The command
 writes its finished files into an empty staging directory; Tua publishes that

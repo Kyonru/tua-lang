@@ -10,7 +10,7 @@ use tua_core::{path_security::reject_symlink_path, CONFIG_FILE};
 use crate::error::CliError;
 
 const WORKFLOW_PATH: &str = ".github/workflows/tua-game.yml";
-const GAME_WORKFLOW: &str = include_str!("github_actions/tua-game.yml");
+const GAME_WORKFLOW_TEMPLATE: &str = include_str!("github_actions/tua-game.yml");
 
 pub(crate) fn init_game_workflow(cwd: &Path) -> Result<String, CliError> {
     let root = cwd.canonicalize().map_err(|error| {
@@ -44,7 +44,8 @@ pub(crate) fn init_game_workflow(cwd: &Path) -> Result<String, CliError> {
         }
         Err(error) => return Err(io_error(&destination, error)),
     };
-    if let Err(error) = file.write_all(GAME_WORKFLOW.as_bytes()) {
+    let workflow = GAME_WORKFLOW_TEMPLATE.replace("@TUA_VERSION@", env!("CARGO_PKG_VERSION"));
+    if let Err(error) = file.write_all(workflow.as_bytes()) {
         let _ = fs::remove_file(&destination);
         return Err(io_error(&destination, error));
     }

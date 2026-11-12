@@ -17,7 +17,7 @@ jobs:
           submodules: recursive
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
       - name: Install pinned Tua CLI
-        run: cargo install --git https://github.com/Kyonru/tua-lang.git --tag v0.7.0 --locked --root "$RUNNER_TEMP/tua" tua-cli
+        run: cargo install --git https://github.com/Kyonru/tua-lang.git --tag v@TUA_VERSION@ --locked --root "$RUNNER_TEMP/tua" tua-cli
       - name: Check and package game
         run: |
           "$RUNNER_TEMP/tua/bin/tua" check
