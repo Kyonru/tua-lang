@@ -4,12 +4,44 @@ const assert = require("node:assert/strict");
 const vm = require("node:vm");
 const path = require("node:path");
 const { buildSync } = require("esbuild");
+const { createGraphViewport } = require("../../src/shared/graph-viewport");
 function bundled(file) {
   const { outputFiles } = buildSync({ entryPoints: [path.resolve(__dirname, "../../src", file)], bundle: true, minify: true, platform: "node", format: "cjs", write: false });
   const context = { module: { exports: {} }, require };
   vm.runInNewContext(outputFiles[0].text, context);
   return context.module.exports;
 }
+test("graph viewport handles pinch zoom and single-pointer pan", () => {
+  const previousDocument = global.document;
+  const listeners = new Map();
+  const stage = { style: {}, append() {} };
+  const scroll = {
+    clientWidth: 400, clientHeight: 300, scrollLeft: 100, scrollTop: 50,
+    classList: { add() {}, remove() {} },
+    addEventListener(name, listener) { listeners.set(name, listener); },
+    getBoundingClientRect() { return { left: 0, top: 0 }; },
+    setPointerCapture() {},
+  };
+  const content = { style: {}, before() {} };
+  const event = (id, x, y) => ({ pointerId: id, pointerType: "touch", clientX: x, clientY: y,
+    target: { closest: () => false }, preventDefault() {} });
+  global.document = { createElement: () => stage };
+  try {
+    const viewport = createGraphViewport(scroll, content);
+    viewport.setSize(800, 600);
+    listeners.get("pointerdown")(event(1, 100, 100));
+    listeners.get("pointerdown")(event(2, 200, 100));
+    listeners.get("pointermove")(event(2, 300, 100));
+    assert.equal(viewport.scale(), 2);
+    listeners.get("pointerup")(event(2, 300, 100));
+    const left = scroll.scrollLeft;
+    listeners.get("pointermove")(event(1, 120, 100));
+    assert.equal(scroll.scrollLeft, left - 20);
+    assert.equal(stage.style.width, "1600px");
+  } finally {
+    global.document = previousDocument;
+  }
+});
 test("minified sprite webviews preserve callable playback helpers", () => {
   const { spritePreviewRuntime } = bundled("love/sprite-preview/runtime.js");
   const script = spritePreviewRuntime([], "demo.tua");
