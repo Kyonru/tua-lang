@@ -1,5 +1,10 @@
 # Tua 0.7–0.9 game-building developer-experience audit
 
+The later [implementation and qualification follow-up](RESOLUTION-2026-11-13.md)
+records fixes for the confirmed findings, remaining design questions, editor
+timings, and the local test VSIX. The baseline findings below remain the
+original trial observations.
+
 ## Executive summary
 
 Three agents built distinct small, playable LÖVE games against the current 0.9.0 checkout: [arena defense](trials/arena/REPORT.md), [alchemy](trials/alchemy/REPORT.md), and a [stealth maze](trials/maze/REPORT.md). Each combined 0.7.0 generics/protocols/classes, 0.8.0 game-domain helpers and toolchain workflows, and current 0.9.0 editor/build behavior. All three games passed their final check/build/test runs and bounded LÖVE runtime smokes after documented workarounds; their 12 Busted tests passed. This supports the practical value of the feature set, especially composing behavior trees, ECS, signals, stores, state machines, pools, audio, and procedural helpers in one game.
