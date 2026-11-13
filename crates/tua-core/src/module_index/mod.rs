@@ -1,5 +1,5 @@
 use std::cell::{Cell, RefCell};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::Arc;
@@ -8,6 +8,7 @@ use full_moon::ast::{
     self, Expression, Field, FunctionArgs, LastStmt, Prefix, Suffix, TableConstructor, Var,
 };
 use full_moon::node::Node;
+use full_moon::visitors::Visitor;
 
 use crate::ast_utils::plain_field_chain_from_var;
 use crate::deprecation::{deprecated_declarations, Deprecation};
@@ -35,8 +36,8 @@ thread_local! {
     static MODULE_EXPORT_CYCLE_REVISION: Cell<u64> = const { Cell::new(0) };
     #[cfg(test)]
     static MODULE_EXPORT_INFERENCE_COUNT: Cell<usize> = const { Cell::new(0) };
-    static RESOLVING_MODULE_EXPORTS: RefCell<std::collections::BTreeSet<PathBuf>> =
-        const { RefCell::new(std::collections::BTreeSet::new()) };
+    static RESOLVING_MODULE_EXPORTS: RefCell<BTreeSet<PathBuf>> =
+        const { RefCell::new(BTreeSet::new()) };
 }
 
 struct ModuleExportResolutionGuard(PathBuf);
@@ -541,11 +542,31 @@ fn has_parent_path_component(module: &str) -> bool {
         .any(|component| matches!(component, std::path::Component::ParentDir))
 }
 
+#[derive(Default)]
+struct ReferencedLocalNames(BTreeSet<String>);
+
+impl Visitor for ReferencedLocalNames {
+    fn visit_var(&mut self, var: &Var) {
+        if let Some(root) =
+            plain_field_chain_from_var(var).and_then(|parts| parts.into_iter().next())
+        {
+            self.0.insert(root);
+        }
+    }
+
+    fn visit_function_call(&mut self, call: &ast::FunctionCall) {
+        if let Prefix::Name(name) = call.prefix() {
+            self.0.insert(token_text(name));
+        }
+    }
+}
+
 #[derive(Clone)]
 struct ExportInferer<'a> {
     parsed: &'a ParsedSource,
     environment: Option<&'a TypeEnvironment>,
     semantic_model: Option<Rc<SemanticModel<'a>>>,
+    referenced_names: Rc<BTreeSet<String>>,
     code_field_docs: BTreeMap<String, Vec<&'a LuaDocAnnotation>>,
     locals: BTreeMap<String, Type>,
     function_docs: BTreeMap<String, String>,
@@ -561,6 +582,8 @@ struct ExportInferer<'a> {
 
 impl<'a> ExportInferer<'a> {
     fn new(parsed: &'a ParsedSource, environment: Option<&'a TypeEnvironment>) -> Self {
+        let mut referenced_names = ReferencedLocalNames::default();
+        referenced_names.visit_ast(&parsed.ast);
         let deprecations = deprecated_declarations(parsed)
             .into_iter()
             .filter(|declaration| {
@@ -578,6 +601,7 @@ impl<'a> ExportInferer<'a> {
             environment,
             semantic_model: environment
                 .map(|environment| Rc::new(SemanticModel::new(parsed, environment))),
+            referenced_names: Rc::new(referenced_names.0),
             code_field_docs: lua_doc_code_field_annotations(parsed),
             locals: BTreeMap::new(),
             function_docs: BTreeMap::new(),
@@ -737,6 +761,19 @@ impl<'a> ExportInferer<'a> {
                     let name = token_text(name);
                     self.update_local_alias(&name, expression);
                     if explicit_contract {
+                        continue;
+                    }
+                    // Module aliases that no expression reads cannot affect the
+                    // exported shape. Avoid resolving their imports a second
+                    // time while indexing this file's exports.
+                    if !self.referenced_names.contains(&name)
+                        && module_specifier_from_expression(
+                            expression,
+                            local.names().len(),
+                            local.expressions().len(),
+                        )
+                        .is_some()
+                    {
                         continue;
                     }
                     let inferred = self.infer_expression(expression);

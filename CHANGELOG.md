@@ -11,6 +11,9 @@ language or editor behavior, and migration notes call out those changes.
 - Module export inference reuses its semantic model across expressions in one
   file. In a matched 1,000-module LSP replay, cold completion improved from
   3.02 s to 2.66 s; large-workspace cold requests still need more work.
+- Module export indexing skips type resolution for imported locals that no
+  expression uses. A matched 1,000-module replay reduced cold completion from
+  2.75 s to 2.28 s with sampled peak memory effectively unchanged.
 - Newly generated game workflows install the matching Linux release CLI archive
   with checksum, provenance, and version checks instead of recompiling Tua on
   every run. Existing generated workflows remain untouched.

@@ -890,6 +890,24 @@ fn many_imported_expressions_keep_distinct_export_types_after_an_edit() {
 }
 
 #[test]
+fn callable_import_remains_referenced_when_other_imports_are_unused() {
+    let project = TempProject::new("callable_import_with_unused_imports");
+    project.write("tua.toml", "source = \"src\"\n");
+    project.write("src/unused.tua", "return { value = 'unused' }\n");
+    project.write(
+        "src/factory.tua",
+        "return function() return { value = 7 } end\n",
+    );
+    project.write(
+        "src/entry.tua",
+        "local Unused = require('unused')\nlocal Make = require('factory')\nlocal item = Make()\nreturn { value = item.value }\n",
+    );
+    let exports = required_module_exports_for_path(&project.path.join("src/entry.tua"))
+        .expect("entry exports");
+    assert_eq!(exports.field("value"), Some(&Type::number()));
+}
+
+#[test]
 fn dependency_walk_reuses_exports_without_retaining_transitive_results() {
     let project = TempProject::new("memoized_import_walk");
     project.write("tua.toml", "source = \"src\"\n");

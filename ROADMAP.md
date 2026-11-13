@@ -92,7 +92,11 @@ workflow pages under `docs/`. Completed work belongs in
   0.9.0 cold completion from 3.02 to 2.66 seconds and cold hover from 3.10 to
   2.64 seconds; warm completion stayed near 9 ms and sampled peak RSS rose
   about 3%. The remaining multi-second cold cost and memory need a real-game
-  replay and further shared-analysis profiling. See
+  replay and further shared-analysis profiling. A follow-up skip of unused
+  import aliases in export indexing reduced matched cold completion from 2.75
+  to 2.28 seconds, with sampled peak memory steady near 2.69 GiB. The result
+  remains a synthetic protocol replay, so visible editor timing and real-game
+  memory are still open. See
   `internal/audits/0.9.0-priorities-2026-11-13/README.md`.
 - Extend installed-editor qualification to prolonged real-project editing,
   Test Explorer/coverage interactions, hot reload and full-game visual parity.
