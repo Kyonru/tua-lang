@@ -50,6 +50,8 @@ test("font preview uses a local font resource and gives size and glyph samples",
   assert.match(panel.webview.html, /src: url\("vscode-resource:\/game\/assets\/ui.ttf\?\d+"\)/);
   assert.match(panel.webview.html, /18 px/);
   assert.match(panel.webview.html, /72 px/);
+  assert.match(panel.webview.html, /Try text from your game/);
+  assert.match(panel.webview.html, /sampleInput\.addEventListener\('input', updateSample\)/);
   assert.match(panel.webview.html, /0123456789/);
   assert.match(panel.webview.html, /Font could not be rendered/);
   assert.match(panel.webview.html, /Check final text in LÖVE/);

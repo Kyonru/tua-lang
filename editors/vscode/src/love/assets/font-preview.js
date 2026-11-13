@@ -43,7 +43,7 @@ function fontPreviewHtml(webview, uri) {
   const fontUrl = cssString(resource.toString());
   const nonce = webviewNonce();
   const samples = [18, 32, 48, 72]
-    .map((size) => `<section class="sample"><h2>${size} px</h2><p class="size-${size}">The quick brown fox jumps over the lazy dog.</p></section>`)
+    .map((size) => `<section class="sample"><h2>${size} px</h2><p class="size-${size} sample-copy">The quick brown fox jumps over the lazy dog.</p></section>`)
     .join("\n");
 
   return `<!DOCTYPE html>
@@ -62,6 +62,9 @@ function fontPreviewHtml(webview, uri) {
     .meta, .note { color: var(--vscode-descriptionForeground); }
     .sample { border-top: 1px solid var(--vscode-panel-border); padding: 12px 0; }
     .sample p, .glyphs { font-family: 'TuaFontPreview'; margin: 8px 0 16px; line-height: 1.3; overflow-wrap: anywhere; }
+    .sample-input { display: grid; gap: 6px; margin: 18px 0; }
+    .sample-input input { width: 100%; max-width: 70ch; padding: 8px 10px; border: 1px solid var(--vscode-input-border, var(--vscode-panel-border)); border-radius: 4px; color: var(--vscode-input-foreground); background: var(--vscode-input-background); font: inherit; }
+    .sample-input input:focus-visible { outline: 2px solid var(--vscode-focusBorder); outline-offset: 2px; }
     .size-18 { font-size: 18px; }
     .size-32 { font-size: 32px; }
     .size-48 { font-size: 48px; }
@@ -76,11 +79,22 @@ function fontPreviewHtml(webview, uri) {
     <h1>${escapeHtml(name)}</h1>
     <p class="meta">${escapeHtml(format)} · Game text at common sizes</p>
     <p id="status" role="status">Loading font…</p>
+    <label class="sample-input" for="sample-text">Try text from your game<input id="sample-text" type="text" value="The quick brown fox jumps over the lazy dog." autocomplete="off"></label>
     ${samples}
     <section class="sample"><h2>Letters, numbers, punctuation</h2><p class="glyphs">ABCDEFGHIJKLMNOPQRSTUVWXYZ<br>abcdefghijklmnopqrstuvwxyz<br>0123456789 !?.,:;+-*/()[]</p></section>
     <p class="note">This uses the editor's font renderer. Check final text in LÖVE at the game's scale.</p>
   </main>
   <script nonce="${nonce}">
+    const vscode = typeof acquireVsCodeApi === 'function' ? acquireVsCodeApi() : null;
+    const sampleInput = document.getElementById('sample-text');
+    const previousSample = vscode?.getState?.()?.sampleText;
+    if (typeof previousSample === 'string') sampleInput.value = previousSample;
+    function updateSample() {
+      for (const sample of document.querySelectorAll('.sample-copy')) sample.textContent = sampleInput.value;
+      vscode?.setState?.({ sampleText: sampleInput.value });
+    }
+    sampleInput.addEventListener('input', updateSample);
+    updateSample();
     document.fonts.load('24px TuaFontPreview').then((faces) => {
       const status = document.getElementById('status');
       status.textContent = faces.length ? 'Font loaded' : 'Font could not be rendered';

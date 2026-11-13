@@ -19,9 +19,13 @@ const { objectPoolExplorerViewModel } = require("../../src/object-pools/view-mod
 const { serverHealthHtml } = require("../../src/health/template");
 const { serverHealthViewModel } = require("../../src/health/view-model");
 const { proceduralPreviewHtml } = require("../../src/procedural/preview");
+const { fontPreviewHtml } = require("../../src/love/assets/font-preview");
 
 async function run() {
-  const panel = vscode.window.createWebviewPanel("tuaPreviewTest", "Tua Preview Test", vscode.ViewColumn.One, { enableScripts: true });
+  const panel = vscode.window.createWebviewPanel("tuaPreviewTest", "Tua Preview Test", vscode.ViewColumn.One, {
+    enableScripts: true,
+    localResourceRoots: [vscode.Uri.file(path.join(__dirname, "../../../../examples/love-full/game/assets"))],
+  });
   const messages = [];
   panel.webview.onDidReceiveMessage((message) => messages.push(message));
   const png = fs.readFileSync(path.join(__dirname, "../fixtures/player.png"));
@@ -382,6 +386,14 @@ async function run() {
     assert.equal(await evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1"), true, "audio explorer should fit a narrow editor");
     await screenshot("audio-explorer-narrow");
     await workbench.send("Emulation.clearDeviceMetricsOverride");
+    const fontUri = vscode.Uri.file(path.join(__dirname, "../../../../examples/love-full/game/assets/sniglet.otf"));
+    await load(fontPreviewHtml(panel.webview, fontUri), "sniglet.otf font preview");
+    await waitFor(() => evaluate("document.getElementById('status').textContent === 'Font loaded'"), "font asset loaded in preview host");
+    await evaluate("(() => { const input = document.getElementById('sample-text'); input.value = 'Quack & <Quack>'; input.dispatchEvent(new Event('input')); })()");
+    assert.equal(await evaluate("document.querySelector('.sample-copy').textContent"), "Quack & <Quack>", "font sample renders game text as text");
+    await screenshot("font-custom-sample");
+    await load(fontPreviewHtml(panel.webview, fontUri), "sniglet.otf font preview");
+    assert.equal(await evaluate("document.getElementById('sample-text').value"), "Quack & <Quack>", "font sample survives preview refresh");
     const mapRows = ["00000000000", ...Array(9).fill("01111111110"), "00000000000"];
     const sightRows = ["00000000000", ...Array(9).fill("01111000000"), "00000000000"];
     const mapOptions = { algorithm: "sidewinder", seed: 817, width: 11, height: 11, radius: 4 };

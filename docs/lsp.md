@@ -558,7 +558,9 @@ and navigates back to state and event declarations. Sprite sheets and state
 machines link directly to their previews from hover; recognized asset-path
 hovers open the resolved asset and reveal it in the Explorer. Images and audio
 use VS Code's native viewers; TTF and OTF fonts open a Tua sample showing
-common text sizes and glyphs, with a load-error state. The font sample uses the
+common text sizes and glyphs, with a load-error state. Type a game label or
+dialogue line into the sample field to compare its appearance at those sizes;
+the text survives preview refreshes. The font sample uses the
 editor renderer, so confirm final appearance in LÖVE. Reopen a font from the
 Assets view or hover link to refresh the existing preview after editing it.
 These actions use source navigation, so unrelated strings that merely look
