@@ -169,6 +169,36 @@ consumer does not need to import the bound protocol separately. `any` remains
 an unchecked dynamic escape hatch. A parameter currently accepts one protocol
 name as its bound; compound bounds and generic protocols are not supported.
 
+Exported type aliases do not declare their own protocol bounds. To expose an
+instance produced from a constrained value across files, keep the instance
+alias generic and put the bound on the exported factory's type parameter:
+
+```tua title="src/jars.tua"
+export protocol Named {
+  name(): string
+}
+
+final class Jar<T> {
+  item: T
+  init(item: T) { self.item = item }
+  get(): T { return self.item }
+}
+
+export type JarInstance<T> = Jar<T>
+
+local function seal<T: Named>(item: T): JarInstance<T>
+  return Jar.new(item)
+end
+
+return { Jar = Jar, seal = seal }
+```
+
+The `Named` bound is checked when calling `seal`; `JarInstance<T>` describes
+the resulting instance without imposing a separate alias bound. Import the
+alias with `import type` and the factory with `require`. Do not write
+`export type JarInstance<T: Named>`, because bounds in type-alias parameter
+lists are not part of the current syntax.
+
 ## Protocol Contracts
 
 A protocol describes methods that a class promises to provide. Declare each

@@ -36,6 +36,8 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Clarified the supported cross-file spelling for generic instance aliases
+  and protocol-bounded factory functions.
 - Documented per-acquisition `TL5007` suppression for object-pool values
   deliberately handed to an ECS cleanup owner.
 - Hover on nested fields of an imported generic class result now reaches the
