@@ -114,13 +114,9 @@ async function run() {
     await waitFor(() => workbench.evaluate("window.innerWidth <= 640"), "narrow animation viewport");
     assert.equal(await evaluate("document.querySelector('.stage').getBoundingClientRect().bottom <= document.querySelector('.inspector').getBoundingClientRect().top + 1"), true, "narrow preview must not cover playback controls");
     assert.equal(await evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1"), true, "narrow animation layout must not overflow the page");
+    assert.equal(await evaluate("document.querySelector('.timeline').getBoundingClientRect().top < 900"), true, "frame timing must be visible in a narrow preview without scrolling");
     await screenshot("animation-narrow");
     await workbench.send("Emulation.clearDeviceMetricsOverride");
-    await load(spritePreviewHtml(panel.webview, { ...model, source: "other.tua" }), "Tua Sprite Preview");
-    await waitFor(() => evaluate("document.querySelector('.animation-tabs .active')?.textContent === 'idle'"), "independent source selection");
-    assert.equal(await evaluate("document.querySelector('.timeline').getBoundingClientRect().top < 900"), true, "frame timing must be visible in a narrow preview without scrolling");
-    const bordered = { ...model, source: "bordered.tua", sprites: [{ ...model.sprites[0],
-      frame: { width: 16, height: 16, border: 1, left: 0, top: 0 },
     const timed = { ...model, source: "timed.tua", sprites: [{ ...model.sprites[0],
       animations: [{ ...model.sprites[0].animations[0], durationValues: [0.05, 0.2, 0.1, 0.15] }],
     }] };
@@ -128,6 +124,10 @@ async function run() {
     await waitFor(() => evaluate("document.querySelectorAll('.frame-chip').length === 4"), "timed sprite frames");
     assert.deepEqual(await evaluate("[...document.querySelectorAll('.frame-chip small')].map(item => item.textContent)"), ["50 ms", "200 ms", "100 ms", "150 ms"], "frame timeline shows configured durations");
     assert.equal(await evaluate("document.querySelector('.frame-chip').getAttribute('aria-label').includes('50 milliseconds')"), true, "frame duration is available to screen readers");
+    await load(spritePreviewHtml(panel.webview, { ...model, source: "other.tua" }), "Tua Sprite Preview");
+    await waitFor(() => evaluate("document.querySelector('.animation-tabs .active')?.textContent === 'idle'"), "independent source selection");
+    const bordered = { ...model, source: "bordered.tua", sprites: [{ ...model.sprites[0],
+      frame: { width: 16, height: 16, border: 1, left: 0, top: 0 },
       animations: [animation("spaced", 0, 2, true)],
     }] };
     await load(spritePreviewHtml(panel.webview, bordered), "Tua Sprite Preview");
@@ -163,15 +163,15 @@ async function run() {
     });
     const graph = { source: "file:///actor.tua", sourceLabel: "actor.tua", machines: [machine("menu"), machine("player")] };
     await load(stateMachinePreviewHtml(panel.webview, graph), "Tua State Machine Preview");
-    await evaluate("(() => { const picker = document.getElementById('machine-picker'); picker.value = '1'; picker.dispatchEvent(new Event('change')); })()");
-    await panel.webview.postMessage({ command: "tua/liveStateMachine", runtime: {
-      status: "connected", sessionTitle: "Player 1", state: "running", receivedAt: Date.now(),
-    } });
     await evaluate("drawConnections()");
     assert.equal(await evaluate("document.querySelectorAll('.transition-item').length"), 2, "machine overview lists every event route independently of graph-line overlap");
     await screenshot("state-machine-routes");
     await evaluate("document.querySelector('.transition-item').click()");
     assert.equal(await evaluate("document.querySelector('.edge-label.selected')?.textContent"), "start", "route list selects and highlights the matching diagram edge");
+    await evaluate("(() => { const picker = document.getElementById('machine-picker'); picker.value = '1'; picker.dispatchEvent(new Event('change')); })()");
+    await panel.webview.postMessage({ command: "tua/liveStateMachine", runtime: {
+      status: "connected", sessionTitle: "Player 1", state: "running", receivedAt: Date.now(),
+    } });
     await waitFor(() => evaluate("document.querySelector('[data-state=running]').classList.contains('live-current')"), "selected live state overlay");
     assert.equal(await evaluate("document.querySelector('[data-state=running]').getAttribute('aria-current')"), "true");
     assert.equal(await evaluate("document.getElementById('runtime-status').textContent.includes('Live sample')"), true);
