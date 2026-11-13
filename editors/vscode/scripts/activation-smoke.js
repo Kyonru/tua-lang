@@ -1227,10 +1227,12 @@ async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
     const healthPanel = state.webviewPanels[6];
     assert(
       healthPanel.html.includes("Language Server Health") &&
-        healthPanel.html.includes("Warm coverage") &&
-        healthPanel.html.includes("Queue depth") &&
-        healthPanel.html.includes("Cache hit rate") &&
-        healthPanel.html.includes("Recent p95"),
+        healthPanel.html.includes("Current snapshot interpretation") &&
+        healthPanel.html.includes("Warm files") &&
+        healthPanel.html.includes("Queued now") &&
+        healthPanel.html.includes("Request p95") &&
+        healthPanel.html.includes("Stale Results") &&
+        healthPanel.html.includes("<h2>Cache</h2>"),
       "server health should render revision, warm, queue, cache, stale, and latency data",
     );
     assertWebviewScriptsParse(healthPanel.html, "server health");
