@@ -191,6 +191,7 @@ impl AnalysisSnapshot {
                     &self.config.jit,
                     ecs,
                     self.asset_index.as_deref(),
+                    None,
                 )
                 .err()
                 .unwrap_or_default()

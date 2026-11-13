@@ -142,6 +142,7 @@ pub(crate) fn check_parsed_source_with_asset_roots_diagnostics_jit_and_ecs_confi
             jit_config,
             ecs_config,
             None,
+            None,
         ),
     )
     .run()
@@ -154,6 +155,7 @@ pub(crate) fn check_parsed_source_with_environment_asset_roots_diagnostics_jit_c
     diagnostics_config: &DiagnosticsConfig,
     jit_config: &JitConfig,
     asset_index: Option<&asset::AssetIndex>,
+    signal_index: Option<&signal::SignalEventIndex>,
 ) -> Result<(), Vec<Diagnostic>> {
     check_parsed_source_with_environment_and_ecs_config(
         parsed,
@@ -163,6 +165,7 @@ pub(crate) fn check_parsed_source_with_environment_asset_roots_diagnostics_jit_c
         jit_config,
         &EcsConfig::default(),
         asset_index,
+        signal_index,
     )
 }
 
@@ -174,6 +177,7 @@ pub(crate) fn check_parsed_source_with_environment_and_ecs_config(
     jit_config: &JitConfig,
     ecs_config: &EcsConfig,
     asset_index: Option<&asset::AssetIndex>,
+    signal_index: Option<&signal::SignalEventIndex>,
 ) -> Result<(), Vec<Diagnostic>> {
     CheckQuery::new(
         parsed,
@@ -183,6 +187,7 @@ pub(crate) fn check_parsed_source_with_environment_and_ecs_config(
             jit_config,
             ecs_config,
             asset_index,
+            signal_index,
         ),
     )
     .run_with_environment(environment)
@@ -209,6 +214,7 @@ struct Checker<'a> {
     unresolved_project_aliases: BTreeSet<String>,
     asset_roots: Vec<PathBuf>,
     asset_index: Option<&'a asset::AssetIndex>,
+    signal_index: Option<&'a signal::SignalEventIndex>,
     reported_asset_diagnostics: BTreeSet<(usize, usize, u16, String)>,
     reported_method_style_diagnostics: BTreeSet<(usize, usize, String)>,
     checked_function_bodies: BTreeSet<(usize, usize)>,
@@ -240,6 +246,7 @@ impl<'a> Checker<'a> {
         environment: &'a TypeEnvironment,
         asset_roots: &[PathBuf],
         asset_index: Option<&'a asset::AssetIndex>,
+        signal_index: Option<&'a signal::SignalEventIndex>,
         diagnostics_config: &DiagnosticsConfig,
     ) -> Self {
         let scope = scope_map_parsed_source_with_globals(
@@ -307,6 +314,7 @@ impl<'a> Checker<'a> {
                 normalize_asset_roots(asset_roots)
             },
             asset_index,
+            signal_index,
             reported_asset_diagnostics: BTreeSet::new(),
             reported_method_style_diagnostics: BTreeSet::new(),
             checked_function_bodies: BTreeSet::new(),
@@ -3455,13 +3463,24 @@ impl<'a> Checker<'a> {
         let Some(name) = arguments.first().and_then(signal_event_name_argument) else {
             return;
         };
-        let Some(schema) = signal::event_schema_for_receiver(
-            self.parsed,
-            self.environment,
-            receiver_parts,
-            &name,
-            node_position(function_call),
-        ) else {
+        let position = node_position(function_call);
+        let indexed_event = self.signal_index.and_then(|index| {
+            index
+                .event_for_receiver(&self.parsed.path, receiver_parts, &name, position)
+                .map(|event| (index, event))
+        });
+        let schema = if let Some((index, event)) = indexed_event {
+            index.schema_for_event(event)
+        } else {
+            signal::event_schema_for_receiver(
+                self.parsed,
+                self.environment,
+                receiver_parts,
+                &name,
+                position,
+            )
+        };
+        let Some(schema) = schema else {
             return;
         };
         let payload_arguments = arguments.iter().skip(1).collect::<Vec<_>>();

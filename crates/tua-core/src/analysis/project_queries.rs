@@ -2661,6 +2661,7 @@ impl AnalysisSnapshot {
                         &diagnostics_config,
                         &self.config.jit,
                         self.asset_index.as_deref(),
+                        Some(self.usage_index.signal_event_index()),
                     )
                     .err()
                     .unwrap_or_default();

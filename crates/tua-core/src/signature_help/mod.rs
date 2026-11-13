@@ -335,6 +335,14 @@ impl<'a> SignatureResolver<'a> {
         let (root, fields) = parts.split_first()?;
         let qualified_name = parts.join(".");
 
+        if let Some(function) = self.signal_emit_payload_function(context) {
+            return Some(self.signatures_for_typed_function(
+                &function,
+                Some(&qualified_name),
+                context,
+            ));
+        }
+
         if let Some(function) = self.semantic.project_module_signature(parts, position) {
             return Some(self.signatures_for_typed_function(
                 function,
@@ -395,14 +403,6 @@ impl<'a> SignatureResolver<'a> {
 
                     return Some(vec![signature]);
                 }
-            }
-
-            if let Some(function) = self.signal_emit_payload_function(context) {
-                return Some(self.signatures_for_typed_function(
-                    &function,
-                    Some(&qualified_name),
-                    context,
-                ));
             }
 
             if let Some(function) = self.object_pool_typed_function(parts, position) {
@@ -486,40 +486,39 @@ impl<'a> SignatureResolver<'a> {
         }
 
         let receiver_parts = &context.callee_parts[..context.callee_parts.len() - 1];
-        let receiver_type = self
-            .semantic
-            .type_of_field_chain(receiver_parts, context.position)?;
-
-        if !signal::type_is_signal_bus(self.environment, &receiver_type) {
-            return None;
-        }
-
         let event_name = context.first_string_argument.as_ref()?;
-        let schema = if let Some(index) = self.signal_index {
-            match index.event_for_receiver(
-                &self.parsed.path,
-                receiver_parts,
-                event_name,
-                context.position,
-            ) {
-                Some(event) => index.schema_for_event(event),
-                None => signal::event_schema_for_receiver(
-                    self.parsed,
-                    self.environment,
+        let indexed_event = self.signal_index.and_then(|index| {
+            index
+                .event_for_receiver(
+                    &self.parsed.path,
                     receiver_parts,
                     event_name,
                     context.position,
-                ),
-            }
+                )
+                .map(|event| (index, event))
+        });
+        let schema = if let Some((index, event)) = indexed_event {
+            // The project index includes only receivers confirmed as signal
+            // buses, including exported module fields whose local type may be
+            // less precise than their canonical project identity.
+            // A conflicting project schema must remain generic; do not fall
+            // back to one file's locally inferred payload.
+            index.schema_for_event(event)?
         } else {
+            let receiver_type = self
+                .semantic
+                .type_of_field_chain(receiver_parts, context.position)?;
+            if !signal::type_is_signal_bus(self.environment, &receiver_type) {
+                return None;
+            }
             signal::event_schema_for_receiver(
                 self.parsed,
                 self.environment,
                 receiver_parts,
                 event_name,
                 context.position,
-            )
-        }?;
+            )?
+        };
 
         Some(signal::event_emit_typed_function(
             &schema.name,

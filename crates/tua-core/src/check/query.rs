@@ -13,6 +13,7 @@ pub(super) struct CheckQueryOptions<'a> {
     jit_config: &'a JitConfig,
     domains: BuiltinDomainRegistry,
     asset_index: Option<&'a asset::AssetIndex>,
+    signal_index: Option<&'a signal::SignalEventIndex>,
 }
 
 impl<'a> CheckQueryOptions<'a> {
@@ -22,6 +23,7 @@ impl<'a> CheckQueryOptions<'a> {
         jit_config: &'a JitConfig,
         ecs_config: &'a EcsConfig,
         asset_index: Option<&'a asset::AssetIndex>,
+        signal_index: Option<&'a signal::SignalEventIndex>,
     ) -> Self {
         Self {
             asset_roots,
@@ -29,6 +31,7 @@ impl<'a> CheckQueryOptions<'a> {
             jit_config,
             domains: BuiltinDomainRegistry::with_ecs(ecs_config.enabled),
             asset_index,
+            signal_index,
         }
     }
 }
@@ -63,6 +66,7 @@ impl<'a> CheckQuery<'a> {
             environment,
             self.options.asset_roots,
             self.options.asset_index,
+            self.options.signal_index,
             self.options.diagnostics_config,
         );
 

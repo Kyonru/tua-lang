@@ -834,6 +834,7 @@ pub(super) fn fast_diagnostics_for_source(
             &fast_config,
             &crate::config::JitConfig::default(),
             None,
+            None,
         )
         .err()
         .unwrap_or_default(),

@@ -1052,6 +1052,67 @@ events:emit("player.hit", "Ada", <|signature|>12)
 }
 
 #[test]
+fn imported_signal_bus_payloads_are_checked_for_aliases_and_module_fields() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/events.tua
+local events = signal()
+events:on("hit", function(damage: number) end)
+return { events = events }
+-- file: src/alias.tua
+local EventModule = require("events")
+local bus = EventModule.events
+bus:emit("hit", "bad")
+-- file: src/direct.tua
+local EventModule = require("events")
+EventModule.events:emit("hit", "bad")
+EventModule.events:emit("hit", <|direct_signature|>1)
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+    let snapshot = host.snapshot();
+    for path in ["src/alias.tua", "src/direct.tua"] {
+        let diagnostics = snapshot.pipeline_diagnostics(path);
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.code == Some(DiagnosticCode::TYPE_MISMATCH)),
+            "{path} must reject the imported wrong payload: {diagnostics:#?}"
+        );
+    }
+    let help = snapshot
+        .signature_help("src/direct.tua", fixture.position("direct_signature"))
+        .expect("direct module field should retain its payload signature");
+    assert!(
+        help.signatures[0].label.contains("damage: number"),
+        "direct module field signature: {help:#?}"
+    );
+
+    host.set_file(
+        "src/events.tua",
+        "local events = signal()\nevents:on(\"hit\", function(damage: string) end)\nreturn { events = events }\n",
+    );
+    let refreshed = host.snapshot();
+    assert!(
+        !refreshed
+            .pipeline_diagnostics("src/alias.tua")
+            .iter()
+            .any(|diagnostic| diagnostic.code == Some(DiagnosticCode::TYPE_MISMATCH)),
+        "editing the provider should refresh the imported payload schema"
+    );
+    assert!(
+        refreshed
+            .pipeline_diagnostics("src/direct.tua")
+            .iter()
+            .any(|diagnostic| diagnostic.code == Some(DiagnosticCode::TYPE_MISMATCH)),
+        "the numeric direct-property call should become invalid after the schema edit"
+    );
+}
+
+#[test]
 fn shared_required_signal_bus_ranks_event_completion_before_nearby_other_bus() {
     let fixture = Fixture::parse(
         r#"-- file: src/signals.tua

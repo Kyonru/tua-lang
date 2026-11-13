@@ -36,6 +36,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Imported SignalBus event payloads now check against their declared schema
+  through both local aliases and module fields; direct-field signature help
+  shows the same typed payload.
 - Imported class instance aliases retain subclass assignability when a
   protocol-bound generic function is present in the same file.
 - Inferred instances from imported class constructors and typed factories now
