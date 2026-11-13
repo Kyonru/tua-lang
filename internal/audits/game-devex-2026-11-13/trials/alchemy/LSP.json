@@ -1,0 +1,80 @@
+{
+  "command": "/Users/kyonru/Documents/projects/Experiments/tlua/target/debug/tua",
+  "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/game-devex-2026-11-13/trials/alchemy/src/editor_probe.tua",
+  "source": "import type { PotionInstance } from \"./model\"\nlocal Recipes = require(\"recipes\")\nlocal items = Recipes.ingredients()\nlocal potion = Recipes.mix(items[3], items[4])\nif potion then\n  local jar = Recipes.seal(potion)\n  jar:label()\nend\n",
+  "cursor": {
+    "line": 6,
+    "character": 6
+  },
+  "mode": "completed member call",
+  "completion": {
+    "ms": 800.6,
+    "labels": [
+      "label",
+      "get"
+    ]
+  },
+  "warmCompletion": {
+    "ms": 0.44,
+    "labels": [
+      "label",
+      "get"
+    ]
+  },
+  "hover": {
+    "ms": 3.15,
+    "result": {
+      "contents": {
+        "kind": "markdown",
+        "value": "```tua\nlocal jar: Jar<Potion>\n```"
+      },
+      "range": {
+        "end": {
+          "character": 5,
+          "line": 6
+        },
+        "start": {
+          "character": 2,
+          "line": 6
+        }
+      }
+    }
+  },
+  "signature": {
+    "ms": 0.83,
+    "result": {
+      "activeParameter": 0,
+      "activeSignature": 0,
+      "signatures": [
+        {
+          "label": "function Recipes.mix(left: Element, right: Element): Potion | nil",
+          "parameters": [
+            {
+              "label": "left: Element"
+            },
+            {
+              "label": "right: Element"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "definition": {
+    "ms": 5.68,
+    "result": {
+      "range": {
+        "end": {
+          "character": 18,
+          "line": 30
+        },
+        "start": {
+          "character": 15,
+          "line": 30
+        }
+      },
+      "uri": "file:///Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/game-devex-2026-11-13/trials/alchemy/src/recipes.tua"
+    }
+  },
+  "diagnostics": []
+}

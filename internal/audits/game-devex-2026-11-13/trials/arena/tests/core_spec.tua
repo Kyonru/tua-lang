@@ -1,0 +1,57 @@
+local Game = require("game.core")
+
+describe("arena rules", function()
+  it("dispatches class overrides through the imported base type", function()
+    local first = Game.foes[1]:progress()
+    local second = Game.foes[2]:progress()
+    Game.foes[1]:update(0.5)
+    Game.foes[2]:update(0.5)
+    assert.equals(first + 0.5, Game.foes[1]:progress())
+    assert.equals(second + 1, Game.foes[2]:progress())
+  end)
+
+  it("moves with Vec2-backed game speed and finds a seeded route", function()
+    assert.is_true(Game.spawnRoute ~= nil and #Game.spawnRoute > 0)
+    local before = Game.world:get(Game.player, Game.Position)
+    if not before then error("player position missing") end
+    local x = before.x
+    Game.move(1, 0)
+    Game.update(0.1)
+    Game.move(0, 0)
+    local after = Game.world:get(Game.player, Game.Position)
+    if not after then error("player position missing after movement") end
+    assert.is_true(after.x > x)
+  end)
+
+  it("attacks an enemy, scores, and releases its pooled flash", function()
+    Game.spawnEnemy(330, 240)
+    assert.is_true(Game.attack())
+    assert.is_true(Game.state:get().score >= 5)
+    assert.equals(1, Game.sparks:activeCount())
+    Game.update(0.3)
+    assert.equals(0, Game.sparks:activeCount())
+  end)
+
+  it("uses an actor-specific behavior runner and cooldown to strike once", function()
+    local player = Game.world:get(Game.player, Game.Position)
+    if not player then error("player position missing") end
+    local enemy = Game.spawnEnemy(player.x + 4, player.y)
+    local before = Game.state:get().hp
+    Game.update(0.01)
+    assert.equals(before - 1, Game.state:get().hp)
+    Game.update(0.01)
+    assert.equals(before - 1, Game.state:get().hp)
+    local brain = Game.world:get(enemy, Game.Brain)
+    if not brain then error("enemy brain missing") end
+    assert.equals(1, brain.context.attacks)
+    brain.runner:cancel()
+    Game.world:destroy(enemy)
+  end)
+
+  it("moves to lost after five typed hit events", function()
+    for _ = 1, 5 do Game.events:emit("player.hit", 1) end
+    assert.equals(0, Game.state:get().hp)
+    assert.equals("lost", Game.phase.current)
+    assert.is_false(Game.attack())
+  end)
+end)

@@ -1,0 +1,6 @@
+final class Guard {
+  level(): number { return 1 }
+}
+local guard = Guard.new()
+local level = guard:level()
+assert(level == 1)

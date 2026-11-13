@@ -1,0 +1,42 @@
+import type { ActorInstance, Alertable, GuardInstance, LedgerInstance } from "./actors"
+local Actors = require("game.actors")
+local Legacy = require("game.legacy")
+
+type Point = { x: number, y: number }
+type Tagged < T > = { tag: string, value: T }
+
+local function tag<T>(label: string, value: T): Tagged < T >
+    return { tag = label, value = value }
+end
+
+local function alarm<T: Alertable>(subject: T, amount: number): T
+  subject:raise(amount)
+  return subject
+end
+
+local function newGuard(x: number, y: number): GuardInstance
+  return Actors.Guard.new(x, y)
+end
+
+local function ledgerForGuard(guard: GuardInstance): LedgerInstance < GuardInstance >
+    return Actors.Ledger.new(guard)
+end
+
+local function describe(guard: GuardInstance): string
+  local actors: ActorInstance[] = { Actors.Guard.new(guard.x, guard.y) }
+  return Legacy.decorate(actors[1]:label(), alarm(guard, 1):level())
+end
+
+local function pointDistance(a: Point, b: Point): number
+  local dx = a.x - b.x
+  local dy = a.y - b.y
+  return math.abs(dx) + math.abs(dy)
+end
+
+return {
+  tag = tag,
+  newGuard = newGuard,
+  ledgerForGuard = ledgerForGuard,
+  describe = describe,
+  pointDistance = pointDistance,
+}

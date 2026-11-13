@@ -1,0 +1,5 @@
+final class Guard {
+  level(): number { return 1 }
+}
+export type GuardInstance = Guard
+return { Guard = Guard }

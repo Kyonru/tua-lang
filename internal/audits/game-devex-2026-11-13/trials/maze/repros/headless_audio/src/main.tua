@@ -1,0 +1,15 @@
+local beep: Source = AudioDesign.render({
+  waveform = "sine", duration = 0.1, gain = 0.1, seed = 3,
+  envelope = { attack = 0.005, decay = 0.04, sustain = 0, release = 0.03 },
+})
+local audio = audioSystem({
+  cues = { beep = { source = beep } },
+  music = { ambience = { bpm = 100, layers = { drone = { source = beep } } } },
+})
+
+function love.load()
+  local voice, status = audio:play("beep")
+  local scene = audio:setMusicState("ambience")
+  print("TUA_AUDIO_SMOKE", status, scene, audio:snapshot().activeVoices)
+  love.event.quit(0)
+end

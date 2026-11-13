@@ -1,0 +1,52 @@
+export protocol Tickable {
+  update(dt: number): nil
+  progress(): number
+}
+
+open class Actor {
+  elapsed: number = 0
+  speed: number
+
+  init(speed: number) {
+    self.speed = speed
+  }
+
+  update(dt: number): nil {
+    self.elapsed += dt
+  }
+
+  progress(): number { return self.elapsed }
+}
+
+final class Defender extends Actor implements Tickable {
+  init() { super(120) }
+
+  override update(dt: number): nil {
+    self.elapsed += dt
+  }
+}
+
+final class Invader extends Actor implements Tickable {
+  init() { super(35) }
+
+  override update(dt: number): nil {
+    self.elapsed += dt * 2
+  }
+}
+
+final class Slot < T > {
+  value: T
+
+  init(value: T) { self.value = value }
+}
+
+local function tickOne<T: Tickable>(actor: T, dt: number): T
+  actor:update(dt)
+  return actor
+end
+
+export type ActorInstance = Actor
+export type DefenderInstance = Defender
+export type InvaderInstance = Invader
+
+return { Defender = Defender, Invader = Invader, Slot = Slot, tickOne = tickOne }

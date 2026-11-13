@@ -1,0 +1,6 @@
+import type { GuardInstance } from "./actors"
+local Actors = require("actors")
+local function make(): GuardInstance
+  return Actors.Guard.new()
+end
+return { make = make }

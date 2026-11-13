@@ -1,0 +1,5 @@
+import type { GuardInstance } from "./actors"
+local Actors = require("actors")
+local guard: GuardInstance = Actors.Guard.new()
+local level = guard:level()
+assert(level == 1)

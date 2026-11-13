@@ -1,0 +1,24 @@
+export protocol Alertable {
+  raise(amount: number): nil
+  level(): number
+}
+
+open class Actor {
+  x: number
+  y: number
+  init(x: number, y: number) { self.x = x; self.y = y }
+  move(dx: number, dy: number): nil { self.x += dx; self.y += dy }
+  label(): string { return "actor" }
+}
+
+final class Guard extends Actor implements Alertable {
+  suspicion: number = 0
+  init(x: number, y: number) { super(x, y) }
+  raise(amount: number): nil { self.suspicion += amount }
+  level(): number { return self.suspicion }
+  override label(): string { return "guard" }
+}
+
+export type ActorInstance = Actor
+export type GuardInstance = Guard
+return { Guard = Guard }

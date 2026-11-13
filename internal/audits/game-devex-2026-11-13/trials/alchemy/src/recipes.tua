@@ -1,0 +1,51 @@
+import type { Named, ElementInstance, PotionInstance, JarInstance } from "./model"
+local Model = require("model")
+
+type Formula = { first: string, second: string, result: string, score: number }
+type Pair < T > = { left: T, right: T }
+
+local formulas: Formula[] = {
+  { first = "Fire", second = "Water", result = "Steam", score = 10 },
+  { first = "Earth", second = "Water", result = "Mud", score = 8 },
+  { first = "Air", second = "Fire", result = "Spark", score = 12 },
+  { first = "Air", second = "Water", result = "Cloud", score = 9 },
+  { first = "Earth", second = "Fire", result = "Glass", score = 14 },
+  { first = "Air", second = "Earth", result = "Dust", score = 7 },
+}
+
+local function describe<T: Named>(thing: T): string
+  return thing:name()
+end
+
+local function seal<T: Named>(thing: T): JarInstance < T >
+    return Model.Jar.new(thing, thing:name())
+end
+
+local function ordered<T: Named>(left: T, right: T): Pair < T >
+    if describe(left) < describe(right) then
+    return { left = left, right = right }
+  end
+  return { left = right, right = left }
+end
+
+local function mix(left: ElementInstance, right: ElementInstance): PotionInstance | nil
+  local pair = ordered(left, right)
+  for _, formula in ipairs(formulas) do
+    if formula.first == pair.left:name() and formula.second == pair.right:name() then
+      return Model.Potion.new(formula.result, formula.score)
+    end
+  end
+  return nil
+end
+
+local function ingredients(): ElementInstance[]
+  return {
+    Model.Element.new("Air", "#a5d7ff"),
+    Model.Element.new("Earth", "#c6ad78"),
+    Model.Element.new("Fire", "#ff9b69"),
+    Model.Element.new("Water", "#7eaaff"),
+  }
+end
+
+return { formulas = formulas, ingredients = ingredients, mix = mix,
+  seal = seal, describe = describe, ordered = ordered }

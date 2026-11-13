@@ -1,0 +1,137 @@
+local Game = require("game.core")
+
+local Ring = spriteSheet({
+  image = "assets/ring.png",
+  frame = { width = 16, height = 16 },
+  origin = { x = 8, y = 8 },
+  animations = {
+    shimmer = { from = 0, to = 3, row = 0, durations = { 0.12, 0.08, 0.12, 0.2 } },
+  },
+})
+local ring = Ring:player("shimmer")
+
+local controls = input({
+  controls = {
+    left = { "key:a", "key:left" },
+    right = { "key:d", "key:right" },
+    up = { "key:w", "key:up" },
+    down = { "key:s", "key:down" },
+    fire = { "key:space", "mouse:1" },
+  },
+  pairs = { move = { "left", "right", "up", "down" } },
+})
+
+local camera = Camera.new({ style = "lockon", smoothing = 8 })
+local shaders = ShaderScan.new()
+local firstShader: Shader | nil = nil
+local flash = { alpha = 0 }
+local elapsed = 0
+local frames = 0
+local lastAudioStatus: string | nil = nil
+local musicSource = music("assets/music.ogg")
+local hitSource = AudioDesign.render({
+  waveform = "noise", duration = 0.12, gain = 0.25, seed = 17,
+  envelope = { attack = 0.002, decay = 0.06, sustain = 0, release = 0.05 },
+})
+local audio = audioSystem({
+  buses = {
+    master = { volume = 0.4 },
+    sfx = { parent = "master", maxVoices = 8 },
+    music = { parent = "master", maxVoices = 2 },
+  },
+  cues = {
+    hit = { source = hitSource, bus = "sfx", maxVoices = 4 },
+    swing = { source = sound("assets/hit.wav"), bus = "sfx" },
+  },
+  music = {
+    arena = { layers = { base = { source = musicSource, bus = "music" } } },
+  },
+})
+
+function love.load()
+  love.graphics.setBackgroundColor(0.04, 0.06, 0.1)
+  love.graphics.setFont(font("assets/sniglet.otf", 18))
+  local musicStatus = audio:setMusicState("arena")
+  if os.getenv("TUA_ARENA_SMOKE") then assert(musicStatus == "started") end
+  local ok, message = pcall(function()
+    shaders:load_shader("ring", "assets/glow.glsl")
+  end)
+  if not ok then print("shader load:", message) end
+  assert(shaders.s.ring ~= nil, "arena shader must load in the built game")
+  firstShader = shaders.s.ring
+  Game.events:on("player.hit", function(damage: number)
+    local _, status = audio:play("hit")
+    lastAudioStatus = status
+    camera:shake(0.15)
+    flash.alpha = 0.6
+    tween.to(flash, 0.35, { alpha = 0 }):ease("quadout")
+  end)
+  if os.getenv("TUA_ARENA_SMOKE") then
+    Game.events:emit("player.hit", 1)
+    assert(flash.alpha > 0)
+  end
+end
+
+function love.update(dt: number)
+  elapsed += dt
+  frames += 1
+  controls:update()
+  local x, y = controls:get("move")
+  Game.move(x, y)
+  if controls:pressed("fire") then
+    if Game.attack() then audio:play("swing") end
+  end
+  Game.update(dt)
+  ring:update(dt)
+  tween.update(dt)
+  shaders:update(dt)
+  audio:update(dt)
+  local player = Game.world:get(Game.player, Game.Position)
+  if player then camera:follow(player.x, player.y) end
+  camera:update(dt)
+  if os.getenv("TUA_ARENA_SMOKE") and frames >= 90 then
+    assert(Game.state:get().hp >= 0)
+    assert(Game.state:get().hits >= 1)
+    assert(flash.alpha <= 0.01)
+    assert(lastAudioStatus == "started" or lastAudioStatus == "stolen")
+    print("ARENA_SMOKE_OK", frames, Game.state:get().score, Game.state:get().hits)
+    love.event.quit(0)
+  end
+  if os.getenv("TUA_ARENA_HOT_RELOAD_SMOKE") and frames >= 180 then
+    assert(shaders.s.ring ~= firstShader, "shader include change must replace the shader")
+    print("ARENA_HOT_RELOAD_OK", frames)
+    love.event.quit(0)
+  end
+end
+
+function love.draw()
+  camera:draw(function()
+    local player = Game.world:get(Game.player, Game.Position)
+    if player then
+      local active = shaders.s.ring
+      if active then
+        ShaderScan.safe_send(active, "time", elapsed)
+        love.graphics.setShader(active)
+      end
+      ring:draw(player.x, player.y)
+      love.graphics.setShader()
+    end
+    love.graphics.setColor(1, 0.3, 0.3)
+    for _, enemy in ipairs(Game.enemies) do
+      local position = Game.world:get(enemy, Game.Position)
+      if position then love.graphics.circle("fill", position.x, position.y, 9) end
+    end
+    love.graphics.setColor(1, 1, 1)
+  end)
+  local game = Game.state:get()
+  love.graphics.print("HP " .. game.hp .. "  SCORE " .. game.score, 14, 12)
+  love.graphics.print("WASD move • SPACE attack", 14, 36)
+  if Game.phase.current == "lost" then
+    love.graphics.print("Defeated", 280, 230)
+  end
+  if flash.alpha > 0 then
+    love.graphics.setColor(1, 0.2, 0.2, flash.alpha)
+    love.graphics.rectangle("fill", 0, 0, 640, 480)
+    love.graphics.setColor(1, 1, 1)
+  end
+end

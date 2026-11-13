@@ -1,0 +1,33 @@
+-- Game rules stay headless so a Busted spec can exercise generated Lua.
+type Point = { x: number, y: number }
+
+local function make(seed: number)
+  local rng = Rot.Rng.new(seed)
+  local grid = Rot.Map.generate(15, 11, "sidewinder", rng)
+  local path = Rot.Path.astar(grid, 2, 2, 14, 10)
+  local bonus, rolls = Rot.Dice.roll("1d3+1", rng)
+  return { grid = grid, path = path, rng = rng, bonus = bonus, rolls = rolls }
+end
+
+local function nextStep(grid, startX: number, startY: number, goalX: number, goalY: number): Point
+  local path = Rot.Path.astar(grid, startX, startY, goalX, goalY)
+  if path and #path > 1 then
+    return { x = path[2].x, y = path[2].y }
+  end
+  return { x = startX, y = startY }
+end
+
+local function canSee(
+  grid,
+  guardX: number,
+  guardY: number,
+  playerX: number,
+  playerY: number
+): boolean
+  local seen = Rot.FOV.compute(grid.width, grid.height, guardX, guardY, 5, function(x, y)
+    return not grid:get(x, y)
+  end)
+  return seen:get(playerX, playerY)
+end
+
+return { make = make, nextStep = nextStep, canSee = canSee }

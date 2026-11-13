@@ -1,0 +1,4 @@
+local Rules = require("rules")
+local guard = Rules.make()
+local level = guard:level()
+assert(level == 1)

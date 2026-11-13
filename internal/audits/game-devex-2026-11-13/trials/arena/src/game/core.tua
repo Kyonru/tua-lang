@@ -1,0 +1,203 @@
+import type { ActorInstance, DefenderInstance } from "./actors"
+local Actors = require("game.actors")
+local Legacy = require("legacy")
+
+type Flash = { x: number, y: number, age: number }
+type EnemyContext = {
+  x: number, y: number, seesPlayer: boolean, strike: boolean,
+  cooldown: number, attacks: number,
+}
+type Result < T > = { value: T, valid: boolean }
+
+local function result<T>(value: T): Result < T >
+    return { value = value, valid = true }
+end
+
+local playerActor: DefenderInstance = Actors.Defender.new()
+local selected = Actors.Slot.new(playerActor)
+local foes: ActorInstance[] = { Actors.Defender.new(), Actors.Invader.new() }
+local selectedResult = result(selected.value)
+
+local Position = ecs.component("Position", { x = "number", y = "number" })
+local Velocity = ecs.component("Velocity", { x = "number", y = "number" })
+local Brain = ecs.component("Brain", { context = "any", runner = "any" })
+local Spark = ecs.component("Spark", { x = "number", y = "number", age = "number" })
+local world = ecs.world()
+local player = world:create()
+world:add(player, Position, { x = 320, y = 240 })
+world:add(player, Velocity, { x = 0, y = 0 })
+
+local sparks = objectPool({
+  create = function(): Flash return { x = 0, y = 0, age = 0 } end,
+  reset = function(flash: Flash)
+    flash.x = 0
+    flash.y = 0
+    flash.age = 0
+  end,
+  initial = 12,
+})
+
+local events = signal()
+local state = store({ hp = 5, score = 0, hits = 0 })
+local phase = stateMachine({
+  initial = "playing",
+  events = {
+    { name = "lose", from = "playing", to = "lost" },
+    { name = "restart", from = "lost", to = "playing" },
+  },
+})
+local lastHp = 5
+local unwatch = state:watch("hp", function(hp: number)
+  lastHp = hp
+end)
+
+events:on("player.hit", function(damage: number)
+  state:update(function(s)
+    s.hp = math.clamp(s.hp - damage, 0, 5)
+    s.hits += 1
+  end)
+  if state:get().hp <= 0 and phase.current == "playing" then phase:lose() end
+end)
+
+events:on("enemy.destroyed", function(points: number)
+  state:update(function(s) s.score += points end)
+end)
+
+local movement = ecs.system(world, { Position, Velocity }, function(_, position, velocity, dt)
+  position.x = Legacy.wrap(position.x + velocity.x * dt, 640)
+  position.y = Legacy.wrap(position.y + velocity.y * dt, 480)
+end)
+
+local tree = BehaviorTree.new(BehaviorTree.reactiveSelector({
+  BehaviorTree.sequence({
+    BehaviorTree.condition(function(actor: EnemyContext)
+      return actor.seesPlayer and actor.cooldown <= 0
+    end),
+    BehaviorTree.action(function(actor: EnemyContext)
+      actor.strike = true
+      actor.attacks += 1
+      actor.cooldown = 1.5
+      return "success"
+    end),
+  }),
+  BehaviorTree.action(function() return "running" end),
+}))
+
+local brains = ecs.system(world, { Position, Brain }, function(_, position, brain, dt)
+  local actor: EnemyContext = brain.context
+  local playerPosition = world:get(player, Position)
+  if not playerPosition then return end
+  actor.x, actor.y = position.x, position.y
+  actor.cooldown = math.max(0, actor.cooldown - dt)
+  local delta = vec2(playerPosition.x - position.x, playerPosition.y - position.y)
+  actor.seesPlayer = delta.length < 28
+  brain.runner:update(dt)
+  if actor.strike then
+    actor.strike = false
+    events:emit("player.hit", 1)
+  end
+end)
+
+local effects = ecs.system(world, { Spark }, function(entity, spark, dt)
+  spark.age += dt
+  if spark.age >= 0.25 then
+    world:destroy(entity)
+    sparks:release(spark)
+  end
+end)
+
+local enemyIds: number[] = {}
+local rng = Rot.Rng.new(71)
+local spawnCountdown = 0
+
+local function spawnEnemy(x: number, y: number): number
+  local entity = world:create()
+  local context: EnemyContext = {
+    x = x, y = y, seesPlayer = false, strike = false, cooldown = 0, attacks = 0,
+  }
+  world:add(entity, Position, { x = x, y = y })
+  world:add(entity, Velocity, { x = 0, y = 0 })
+  world:add(entity, Brain, { context = context, runner = tree:instance(context) })
+  enemyIds[#enemyIds + 1] = entity
+  return entity
+end
+
+local function burst(x: number, y: number)
+  local flash = sparks:acquire()
+  flash.x, flash.y = x, y
+  world:add(world:create(), Spark, flash)
+end
+
+local function attack(): boolean
+  if phase.current ~= "playing" then return false end
+  local position = world:get(player, Position)
+  if not position then return false end
+  for index, enemy in ipairs(enemyIds) do
+    local target = world:get(enemy, Position)
+    if target then
+      local distance = vec2(target.x - position.x, target.y - position.y)
+      if distance.length < 65 then
+        local brain = world:get(enemy, Brain)
+        if brain then brain.runner:cancel() end
+        world:destroy(enemy)
+        table.remove(enemyIds, index)
+        burst(target.x, target.y)
+        local points = Rot.Dice.roll("1d6+4", rng)
+        events:emit("enemy.destroyed", points)
+        return true
+      end
+    end
+  end
+  return false
+end
+
+local function move(x: number, y: number)
+  local velocity = world:get(player, Velocity)
+  if not velocity then return end
+  velocity.x = x * selectedResult.value.speed
+  velocity.y = y * selectedResult.value.speed
+end
+
+local function update(dt: number)
+  for _, actor in ipairs(foes) do actor:update(dt) end
+  Actors.tickOne(playerActor, dt)
+  if phase.current ~= "playing" then return end
+  movement:update(dt)
+  brains:update(dt)
+  effects:update(dt)
+  spawnCountdown -= dt
+  if spawnCountdown <= 0 and #enemyIds < 5 then
+    local edge = rng:int(1, 4)
+    local x = edge <= 2 and rng:int(25, 615) or (edge == 3 and 15 or 625)
+    local y = edge > 2 and rng:int(25, 455) or (edge == 1 and 15 or 465)
+    spawnEnemy(x, y)
+    spawnCountdown = 2
+  end
+  local playerPosition = world:get(player, Position)
+  if not playerPosition then return end
+  for _, enemy in ipairs(enemyIds) do
+    local position = world:get(enemy, Position)
+    local velocity = world:get(enemy, Velocity)
+    if position and velocity then
+      local delta = vec2(playerPosition.x - position.x, playerPosition.y - position.y)
+      if delta.length > 0 then
+        velocity.x = delta.x / delta.length * 35
+        velocity.y = delta.y / delta.length * 35
+      end
+    end
+  end
+end
+
+local arena = Rot.Map.generate(21, 15, "sidewinder", Rot.Rng.new(123))
+local spawnRoute = Rot.Path.astar(arena, 2, 2, 20, 14)
+local accent = Rot.Color.parse("#68c8ff")
+
+return {
+  world = world, Position = Position, Brain = Brain, Spark = Spark,
+  player = player, enemies = enemyIds, state = state, phase = phase,
+  events = events, sparks = sparks, tree = tree, rng = rng,
+  arena = arena, spawnRoute = spawnRoute, accent = accent,
+  selected = selected, foes = foes, lastHp = function() return lastHp end,
+  unwatch = unwatch, spawnEnemy = spawnEnemy, attack = attack,
+  move = move, update = update, burst = burst,
+}

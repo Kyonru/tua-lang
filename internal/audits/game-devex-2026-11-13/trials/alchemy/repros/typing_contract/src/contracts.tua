@@ -1,0 +1,5 @@
+export protocol Named {
+  name(): string
+}
+
+return {}
