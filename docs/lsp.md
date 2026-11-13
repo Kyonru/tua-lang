@@ -758,6 +758,10 @@ below focus on language-server setup.
 4. Run **Tua: Explain Type / Why Is This Any?** when completion disappears
    because a value became dynamic.
 5. Run **Tua: Show Language Server Health** when requests feel stale or slow.
+   Its summary identifies failed workspace analysis, a queued snapshot, or the
+   highest sampled request p95. These are server measurements; they do not
+   include the time for VS Code to paint a suggestion menu. Reload the view
+   after a completion or hover request to inspect fresh samples.
 6. Use **Tua: Restart Language Server** after changing a development binary.
 7. Use **Tua: Select Server** or set `tua.server.path` if the bundled binary is
    unavailable or a local build is required.

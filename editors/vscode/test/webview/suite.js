@@ -260,12 +260,21 @@ async function run() {
           "module filters must wrap instead of scrolling when the webview is narrow");
       }
       if (title === "Server Health") {
-        assert.equal(await evaluate("[...document.querySelectorAll('.metric')].find(item => item.textContent.includes('Recent p95'))?.querySelector('strong')?.textContent"),
-          "No samples", "unmeasured latency must not appear as zero milliseconds");
+        assert.equal(await evaluate("document.querySelector('.diagnosis h2').textContent"),
+          "No request timings captured yet", "unmeasured latency must not appear as zero milliseconds");
       }
       await screenshot(title.toLowerCase().replaceAll(" ", "-") + "-narrow");
       await workbench.send("Emulation.clearDeviceMetricsOverride");
     }
+    await load(serverHealthHtml(panel.webview, serverHealthViewModel({ revision: 2,
+      latency: { recentCount: 12, p95Ms: 40, methods: [
+        { method: "textDocument/hover", count: 6, p95Ms: 18, maxMs: 20 },
+        { method: "textDocument/completion", count: 6, p95Ms: 63, maxMs: 70 },
+      ] },
+    })), "Server Health");
+    assert.equal(await evaluate("document.querySelector('.diagnosis h2').textContent"), "Highest sampled p95: textDocument/completion");
+    assert.equal(await evaluate("document.querySelector('.diagnosis p').textContent.includes('not visible editor delay')"), true, "server timing is distinguished from editor paint");
+    assert.equal(await evaluate("document.querySelector('.tables article:last-child tbody tr:first-child td').textContent"), "textDocument/completion", "latency table prioritizes the slowest sampled method");
     for (const [title, createHtml, filterSelector, modeSelector] of [
       ["ECS Explorer", revision => ecsExplorerHtml(panel.webview, { analysisRevision: revision, components: [], systems: [], queries: [], insights: [] }), "#filter", '[data-mode="systems"]'],
       ["Object Pool Explorer", revision => objectPoolExplorerHtml(panel.webview, { analysisRevision: revision, pools: [], operations: [], insights: [] }), "#filter", '[data-mode="operations"]'],

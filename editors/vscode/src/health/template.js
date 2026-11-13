@@ -24,6 +24,7 @@ function serverHealthErrorHtml(webview, error) {
 
 function serverHealthHtml(webview, viewModel) {
   const modelJson = jsonForHtml(viewModel);
+  const diagnosis = healthDiagnosis(viewModel);
   const body = `
     <header class="toolbar">
       <div class="title-block">
@@ -36,13 +37,15 @@ function serverHealthHtml(webview, viewModel) {
       </div>
     </header>
     <main>
-      <section class="metrics" aria-label="Server health summary">
-        ${metric("Revision", viewModel.revision)}
-        ${metric("Warm coverage", viewModel.warm.discovered ? `${viewModel.warm.coveragePercent}%` : "No files")}
-        ${metric("Queue depth", viewModel.queue.total)}
-        ${metric("Cache hit rate", rateLabel(viewModel.cache))}
-        ${metric("Stale results", viewModel.stale.total)}
-        ${metric("Recent p95", latencyLabel(viewModel.latency.p95Ms, viewModel.latency.recentCount))}
+      <section class="diagnosis" aria-label="Current snapshot interpretation">
+        <h2>${escapeHtml(diagnosis.title)}</h2>
+        <p>${escapeHtml(diagnosis.detail)}</p>
+        <dl class="facts">
+          ${fact("Queued now", viewModel.queue.total)}
+          ${fact("Warm files", `${viewModel.warm.warmed}/${viewModel.warm.discovered}`)}
+          ${fact("Request p95", latencyLabel(viewModel.latency.p95Ms, viewModel.latency.recentCount))}
+          ${fact("Stale results since start", viewModel.stale.total)}
+        </dl>
       </section>
       <section class="grid">
         <article>
@@ -102,8 +105,26 @@ function serverHealthHtml(webview, viewModel) {
   return documentHtml(webview, "Server Health", body, script);
 }
 
-function metric(label, value) {
-  return `<div class="metric"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`;
+function fact(label, value) {
+  return `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`;
+}
+
+function healthDiagnosis(viewModel) {
+  if (viewModel.warm.failed > 0) {
+    return { title: `${viewModel.warm.failed} file analyses failed`, detail: "The workspace snapshot is incomplete. Check Tua language-server output for the affected files." };
+  }
+  if (viewModel.queue.total > 0) {
+    return { title: `${viewModel.queue.total} requests queued`, detail: "This is one server snapshot. Reload to see whether the queue drains after editing stops." };
+  }
+  if (viewModel.latency.recentCount === 0) {
+    return { title: "No request timings captured yet", detail: "Use completion or hover in a Tua file, then reload this view. Queue and stale-result counts are shown separately below." };
+  }
+  const method = [...viewModel.latency.methods]
+    .filter((row) => row.count > 0)
+    .sort((left, right) => right.p95Ms - left.p95Ms)[0];
+  return method
+    ? { title: `Highest sampled p95: ${method.method}`, detail: `${method.p95Ms} ms across ${method.count} sampled requests. These are server timings, not visible editor delay.` }
+    : { title: "No requests queued at this snapshot", detail: "Recent request timing is available below. Server timings do not include VS Code menu paint." };
 }
 
 function kv(label, value) {
@@ -144,7 +165,7 @@ function cacheTable(rows) {
 function latencyTable(rows) {
   return table(
     ["Method", "Samples", "p95", "Max"],
-    rows.map((row) => [
+    [...rows].sort((left, right) => right.p95Ms - left.p95Ms).map((row) => [
       row.method,
       row.count,
       latencyLabel(row.p95Ms, row.count),
@@ -230,28 +251,25 @@ function documentHtml(webview, title, body, script) {
       main {
         padding: 18px;
       }
-      .metrics {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-        gap: 10px;
-        margin-bottom: 14px;
+      .diagnosis {
+        padding: 2px 0 16px;
+        margin-bottom: 16px;
+        border-bottom: 1px solid var(--vscode-panel-border);
       }
-      .metric, article {
+      .diagnosis h2 { font-size: 16px; margin-bottom: 4px; }
+      .diagnosis p { margin: 0 0 14px; color: var(--vscode-descriptionForeground); max-width: 70ch; }
+      .facts { display: flex; flex-wrap: wrap; gap: 12px 28px; margin: 0; }
+      .facts > div { min-width: 120px; }
+      .facts dt { color: var(--vscode-descriptionForeground); font-size: 12px; }
+      .facts dd { margin: 2px 0 0; font-variant-numeric: tabular-nums; font-weight: 600; }
+      article {
         border: 1px solid var(--vscode-panel-border);
         border-radius: 6px;
         background: var(--vscode-editorWidget-background);
       }
-      .metric {
-        display: grid;
-        gap: 4px;
-        padding: 10px;
-      }
-      .metric span, .kv span {
+      .kv span {
         color: var(--vscode-descriptionForeground);
         font-size: 12px;
-      }
-      .metric strong {
-        font-size: 18px;
       }
       .grid {
         display: grid;
