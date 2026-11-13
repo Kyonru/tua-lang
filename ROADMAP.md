@@ -87,8 +87,12 @@ workflow pages under `docs/`. Completed work belongs in
   methods and limits.
   The 0.9.0 priority audit reproduced 2.92-second cold completion and 1.44 GiB
   sampled RSS on the released 0.8.0 server with one bounded 1,000-module run.
-  Its span trace points to repeated entry-file export and snapshot work, but
-  does not yet establish the precise cause or a safe fix. See
+  Its span trace pointed to repeated entry-file export and snapshot work.
+  Reusing a semantic model within each module export pass reduced matched
+  0.9.0 cold completion from 3.02 to 2.66 seconds and cold hover from 3.10 to
+  2.64 seconds; warm completion stayed near 9 ms and sampled peak RSS rose
+  about 3%. The remaining multi-second cold cost and memory need a real-game
+  replay and further shared-analysis profiling. See
   `internal/audits/0.9.0-priorities-2026-11-13/README.md`.
 - Extend installed-editor qualification to prolonged real-project editing,
   Test Explorer/coverage interactions, hot reload and full-game visual parity.
