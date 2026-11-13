@@ -1813,6 +1813,13 @@ fn line_ends_with_continuation(code: &str) -> bool {
         return false;
     }
 
+    // A complete generic alias can end in `>`; it is not a comparison
+    // waiting for its right operand on the following line.
+    if code.ends_with('>') && starts_with_word(code.strip_prefix("export ").unwrap_or(code), "type")
+    {
+        return false;
+    }
+
     // `...` is a complete vararg expression; `..` still needs its right operand.
     (code.ends_with("..") && !code.ends_with("..."))
         || code.as_bytes().last().is_some_and(|byte| {

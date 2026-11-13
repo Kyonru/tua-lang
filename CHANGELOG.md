@@ -36,6 +36,8 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Formatting a top-level generic type alias no longer indents the following
+  statement as if the alias were still incomplete.
 - Imported SignalBus event payloads now check against their declared schema
   through both local aliases and module fields; direct-field signature help
   shows the same typed payload.
