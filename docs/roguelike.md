@@ -70,6 +70,8 @@ opposite interior corner, and cells visible from the start. Select a cell or
 use arrow keys to read its coordinates and state. The sample does not execute
 your game or modify its build. Workspace trust and experimental previews must
 be enabled; the configured LÖVE executable must be available.
+While a new seed is being generated, the view labels the old map as the
+previous sample so its results cannot be mistaken for the new input.
 
 This view is a way to inspect the helper algorithms. It is not a preview of
 your game's own map, path callback, or current runtime state.

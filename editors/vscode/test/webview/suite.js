@@ -411,9 +411,10 @@ async function run() {
     await evaluate("document.querySelector('input[name=seed]').value='818';document.getElementById('controls').dispatchEvent(new Event('submit',{cancelable:true,bubbles:true}))");
     await waitFor(() => messages.filter(message => message.command === "generate").length > mapGenerateCount, "procedural regenerate action");
     assert.equal(messages.at(-1).options.seed, 818);
+    assert.equal(await evaluate("document.getElementById('pending-sample').textContent"), "Generating seed 818; the map below is the previous sample.", "an old map is identified while a new seed is pending");
     await screenshot("procedural-map-populated");
     await load(proceduralPreviewHtml(panel.webview, mapOptions, undefined, "LÖVE unavailable"), "Procedural Map Preview");
-    assert.equal(await evaluate("document.querySelector('[role=status]').textContent"), "LÖVE unavailable");
+    assert.equal(await evaluate("document.querySelector('.status:not([hidden])').textContent"), "LÖVE unavailable");
     const audioReloadCount = messages.filter(message => message.command === "reload").length;
     await load(audioExplorerErrorHtml(panel.webview, new Error("Server unavailable")), "Audio Workbench");
     assert.equal(await evaluate("document.querySelector('[role=alert]').textContent"), "Server unavailable");
