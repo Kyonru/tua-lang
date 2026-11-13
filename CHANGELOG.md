@@ -36,6 +36,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Ordinary hovers no longer request sprite, state-machine, or behavior-tree
+  inspection when the file has no preview declarations, avoiding a visible
+  hover delay after navigating between large files.
 - Object-pool lifecycle warnings now identify a typed ECS component receiving
   an acquired value and explain the required cleanup; the warning remains until
   ownership transfer is explicitly acknowledged.

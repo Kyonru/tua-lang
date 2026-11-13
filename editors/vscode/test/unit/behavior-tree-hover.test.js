@@ -39,6 +39,37 @@ test("hover links to the behavior tree selected by the inspector", async () => {
   assert.deepEqual(hover.contents.isTrusted.enabledCommands.includes("tua.previewBehaviorTree"), true);
 });
 
+test("ordinary member hover does not request preview inspection", async () => {
+  let source = "local width = love.graphics.getWidth()";
+  let version = 1;
+  let requests = 0;
+  const document = {
+    uri: { toString: () => "file:///game/src/main.tua" },
+    get version() { return version; },
+    getText: () => source,
+    getWordRangeAtPosition: () => ({ start: { line: 0, character: 19 } }),
+    lineAt: () => ({ text: source }),
+  };
+  const options = {
+    document,
+    position: { line: 0, character: 23 },
+    isTuaDocument: () => true,
+    getClient: () => ({ sendRequest: async () => {
+      requests += 1;
+      return { documentVersion: version, items: [] };
+    } }),
+  };
+
+  await hoverActionsAtPosition(options);
+  await hoverActionsAtPosition(options);
+  assert.equal(requests, 0);
+
+  source = "local tree = BehaviorTree.new()";
+  version += 1;
+  await hoverActionsAtPosition(options);
+  assert.equal(requests, 1);
+});
+
 test("asset hover opens or reveals the indexed asset at the reference", async () => {
   const uri = "file:///game/src/main.tua";
   const document = {

@@ -14,8 +14,6 @@ impl AnalysisSnapshot {
         let Ok(parsed) = &file.parsed else {
             return Vec::new();
         };
-        let definition = position.and_then(|position| self.definition(path, position));
-
         let mut items = crate::sprite::inspections(
             path,
             &parsed.sprite_declarations,
@@ -34,14 +32,28 @@ impl AnalysisSnapshot {
                 .map(InspectorItem::BehaviorTree),
         );
 
+        let Some(position) = position else {
+            return items;
+        };
+        if items.is_empty() {
+            return items;
+        }
+        if items
+            .iter()
+            .any(|item| contains_position(item.span(), position))
+        {
+            return items
+                .into_iter()
+                .filter(|item| contains_position(item.span(), position))
+                .collect();
+        }
+        let definition = self.definition(path, position);
+
         items
             .into_iter()
             .filter(|item| {
-                position.is_none_or(|position| {
-                    contains_position(item.span(), position)
-                        || definition.as_ref().is_some_and(|definition| {
-                            definition.path == path && definition.span == item.selection_span()
-                        })
+                definition.as_ref().is_some_and(|definition| {
+                    definition.path == path && definition.span == item.selection_span()
                 })
             })
             .collect()

@@ -35,6 +35,9 @@ const INSPECTION_PREVIEWS = {
     title: (item) => `Preview ${item.name} Behavior Tree`,
   },
 };
+// These are the constructors of the static previews returned by tua/inspect.
+const INSPECTION_SOURCE_PATTERN = /\b(?:spriteSheet|stateMachine|BehaviorTree)\b/;
+const inspectionSourceCache = new WeakMap();
 
 function registerHoverActions({ getClient, isTuaDocument }) {
   return vscode.Disposable.from(
@@ -126,6 +129,9 @@ async function hoverActionsAtPosition({ document, getClient, isTuaDocument, posi
 }
 
 async function inspectionPreviewAtPosition({ document, getClient, position }) {
+  if (!mayContainInspection(document)) {
+    return undefined;
+  }
   const client = getClient();
   if (!client) {
     return undefined;
@@ -163,6 +169,19 @@ async function inspectionPreviewAtPosition({ document, getClient, position }) {
   }
 
   return undefined;
+}
+
+function mayContainInspection(document) {
+  if (typeof document.getText !== "function") {
+    return true;
+  }
+  const cached = inspectionSourceCache.get(document);
+  if (cached?.version === document.version) {
+    return cached.value;
+  }
+  const value = INSPECTION_SOURCE_PATTERN.test(document.getText());
+  inspectionSourceCache.set(document, { version: document.version, value });
+  return value;
 }
 
 async function showProviderLocations({ locations: providedLocations, providerCommand, target, title }) {
