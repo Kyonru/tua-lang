@@ -180,18 +180,20 @@ async function inspectStateMachines({ client, document, position }) {
     textDocument: {
       uri: document.uri.toString(),
     },
+    kind: "stateMachine",
   };
   if (position) {
     params.position = {
       line: position.line,
       character: position.character,
     };
+    params.fallbackToAll = true;
   }
 
   let response = await freshInspection(client, document, params);
   let items = stateMachineItems(response);
 
-  if (position && items.length === 0) {
+  if (position && items.length === 0 && response?.fallbackApplied !== true) {
     delete params.position;
     response = await freshInspection(client, document, params);
     items = stateMachineItems(response);
@@ -224,5 +226,6 @@ function stateMachineItems(response) {
 }
 
 module.exports = {
+  inspectStateMachines,
   registerStateMachinePreviewFeature,
 };

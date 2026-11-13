@@ -187,3 +187,38 @@ local selected = flow
         "flow"
     );
 }
+
+#[test]
+fn inspector_can_fall_back_to_all_state_machines_in_one_request() {
+    let temp = TempProject::new("state-machine-inspector-fallback");
+    let source = r#"local sprite = spriteSheet({})
+local flow = stateMachine({ initial = "idle", events = {} })
+local selected = flow
+local unrelated = 42
+"#;
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/flow.tua", source);
+    let uri = temp.uri_for("src/flow.tua");
+    let mut unrelated =
+        inspector_request(2, &uri, Some(lsp_position_after(source, "unrelated = 4")));
+    unrelated["params"]["kind"] = json!("stateMachine");
+    unrelated["params"]["fallbackToAll"] = json!(true);
+    let mut selected =
+        inspector_request(3, &uri, Some(lsp_position_after(source, "selected = flo")));
+    selected["params"]["kind"] = json!("stateMachine");
+    selected["params"]["fallbackToAll"] = json!(true);
+
+    let output = run_messages(vec![
+        initialize_with_root(1, temp.uri()),
+        did_open(&uri, source),
+        unrelated,
+        selected,
+    ]);
+    let fallback = &response_with_id(&output, 2)["result"];
+    assert_eq!(fallback["fallbackApplied"], true);
+    assert_eq!(fallback["items"].as_array().unwrap().len(), 1);
+    assert_eq!(fallback["items"][0]["name"], "flow");
+    let focused = &response_with_id(&output, 3)["result"];
+    assert_eq!(focused["fallbackApplied"], false);
+    assert_eq!(focused["items"][0]["name"], "flow");
+}

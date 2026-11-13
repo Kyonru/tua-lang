@@ -36,6 +36,8 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- State-machine previews retain cursor-targeted selection and all-machine
+  fallback while resolving both cases through one inspection request.
 - Contextual inlay hints skip server analysis when no selection, explicit
   inspection, or active Lua debug session could show a hint.
 - Ordinary hovers no longer request sprite, state-machine, or behavior-tree

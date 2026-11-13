@@ -740,6 +740,11 @@ The bundled VS Code extension also uses version-matched Tua requests:
 | `tua/resetCompletionStats` | Clear local adaptive completion statistics |
 | `tua/localInlineCompletion` | Return a version-bound deterministic inline-completion candidate from enabled local sources |
 
+`tua/inspect` accepts an optional `kind` (`spriteSheet`, `stateMachine`, or
+`behaviorTree`). With a position and `fallbackToAll: true`, it returns all
+items of that kind when the position matches none and sets `fallbackApplied` in
+the response. This lets previews keep cursor targeting with one request.
+
 `tua/setTrace` updates runtime trace configuration. These requests are an
 extension integration surface rather than a general stable external API; keep
 custom clients matched to the server version. For versioned, read-only tooling

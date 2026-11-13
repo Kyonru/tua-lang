@@ -5,7 +5,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use serde_json::{json, Value};
 use tua_core::{
-    AnalysisCacheStats, AssistKind, InlineCompletionBudget, InlineCompletionOptions,
+    AnalysisCacheStats, AssistKind, InlineCompletionBudget, InlineCompletionOptions, InspectorItem,
     ModelCompletionRejectionReason, ModelCompletionValidationRequest, PreparedInlineCompletion,
     ProjectModel, RenameEdit, SourcePosition, SourceSpan, DEFAULT_MODEL_CONTEXT_BYTES,
     MAX_MODEL_CONTEXT_BYTES,
@@ -2031,13 +2031,35 @@ impl LspServer {
         let snapshot = self
             .analysis
             .snapshot(&self.workspace_folders, &self.settings);
+        let kind = request.params.get("kind").and_then(Value::as_str);
+        let inspect = |position| {
+            let mut items = snapshot.inspect(&request.path, position);
+            if let Some(kind) = kind {
+                items.retain(|item| {
+                    matches!(
+                        (kind, item),
+                        ("spriteSheet", InspectorItem::SpriteSheet(_))
+                            | ("stateMachine", InspectorItem::StateMachine(_))
+                            | ("behaviorTree", InspectorItem::BehaviorTree(_))
+                    )
+                });
+            }
+            items
+        };
+        let position = request.position();
+        let mut items = inspect(position);
+        let fallback_applied = position.is_some()
+            && items.is_empty()
+            && request.params.get("fallbackToAll").and_then(Value::as_bool) == Some(true);
+        if fallback_applied {
+            items = inspect(None);
+        }
 
         json!({
             "analysisRevision": snapshot.revision(),
             "documentVersion": self.document_versions.get(request.uri).copied(),
-            "items": lsp_inspector_items_from_core(
-                snapshot.inspect(&request.path, request.position()), request.source
-            )
+            "fallbackApplied": fallback_applied,
+            "items": lsp_inspector_items_from_core(items, request.source)
         })
     }
 
