@@ -123,6 +123,10 @@ pub(crate) fn is_constructor(name: &str) -> bool {
     name == CONSTRUCTOR_NAME
 }
 
+pub(crate) fn is_closed_snapshot_record(ty: &Type) -> bool {
+    matches!(ty, Type::Alias(name) if name == SNAPSHOT_TYPE)
+}
+
 pub(crate) fn constructor_typed_function() -> TypedFunction {
     typed_function(
         CONSTRUCTOR_NAME,

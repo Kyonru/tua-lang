@@ -120,7 +120,11 @@ end
 ```
 
 Snapshot bus entries also expose `volume`, `muted`, `activeVoices`, and
-`fading`; `analysis[path]` contains the analysis status string.
+`fading`; `analysis[path]` contains the analysis status string. The top-level
+`AudioSnapshot` has a fixed field set: a misspelled field such as
+`snapshot.musicState` reports `TL1016`; use `snapshot.music.state` for the
+current music state. Nested music and bus records remain ordinary open record
+types, and bus entries are nullable dictionary values.
 
 ## Music Scenes
 

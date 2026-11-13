@@ -1868,6 +1868,7 @@ impl<'a> Checker<'a> {
                             &format!("access field `{field}` on"),
                         );
                         self.report_unknown_class_member(name, &current, &field);
+                        self.report_unknown_closed_record_field(name, &current, &field);
                         if let Prefix::Name(root) = expression.prefix() {
                             self.report_unknown_module_export(name, root, &current, &field);
                         }
@@ -1879,6 +1880,9 @@ impl<'a> Checker<'a> {
                     let key = self.index_key_type(expression)?;
                     let Some(next) = resolve_index_type(self.environment, &current, &key) else {
                         self.report_unsafe_union_operation(expression, &current, "index");
+                        if let Type::StringLiteral(field) = &key {
+                            self.report_unknown_closed_record_field(expression, &current, field);
+                        }
                         return None;
                     };
                     current = next;
@@ -1905,6 +1909,7 @@ impl<'a> Checker<'a> {
         };
 
         self.report_unknown_class_member(variable, &receiver_type, field);
+        self.report_unknown_closed_record_field(variable, &receiver_type, field);
         let mut exact_module = false;
         if let Var::Expression(expression) = variable {
             if let Prefix::Name(root) = expression.prefix() {
@@ -1924,7 +1929,9 @@ impl<'a> Checker<'a> {
         if !self.unknown_record_fields {
             return;
         }
-        if matches!(ty, Type::Alias(name) if self.environment.is_class(name)) {
+        if matches!(ty, Type::Alias(name) if self.environment.is_class(name))
+            || crate::audio::is_closed_snapshot_record(ty)
+        {
             return;
         }
         let Type::Table(table) = resolve_aliases(ty, self.environment, 0) else {
@@ -1955,6 +1962,31 @@ impl<'a> Checker<'a> {
                 format!("record has no known field `{field}`; check the spelling or declare the field in its type"),
             )
             .with_code(DiagnosticCode::LINT_UNKNOWN_RECORD_FIELD),
+        );
+    }
+
+    fn report_unknown_closed_record_field(&mut self, node: &impl Node, ty: &Type, field: &str) {
+        if !crate::audio::is_closed_snapshot_record(ty) {
+            return;
+        }
+        let Type::Table(table) = resolve_aliases(ty, self.environment, 0) else {
+            return;
+        };
+        if table.has_index_signature() || table.semantic_field(field).is_some() {
+            return;
+        }
+        let Some(span) = node_span(node) else {
+            return;
+        };
+        self.diagnostics.push(
+            Diagnostic::error(
+                &self.parsed.path,
+                span.start.line,
+                span.start.column,
+                format!("unknown field `{field}` on closed record; check the spelling or use a declared field"),
+            )
+            .with_range(span.start.line, span.start.column, span.end.line, span.end.column)
+            .with_code(DiagnosticCode::TYPE_UNKNOWN_CLOSED_FIELD),
         );
     }
 

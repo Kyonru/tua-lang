@@ -73,6 +73,7 @@ valid unless it is listed below.
 | `TL1012` | A statically resolved module table has no exported member with that name. Unresolved, dynamic, and `any` modules stay permissive. | Always enabled. |
 | `TL1013` | A required plain Lua module does not parse, so its exports are untyped. The message names the first syntax error. | Always enabled; warning. |
 | `TL1015` | A generic function call has conflicting or unresolved type arguments, inference depends only on a return type or callback context that Tua cannot determine, or one source file exceeds the generic-instantiation work limit. | Always enabled. |
+| `TL1016` | A read or write names an absent top-level field on `AudioSnapshot`. Nested and ordinary Lua records remain open. | Always enabled. |
 
 `TL1003` is the general type-contract error used for annotated assignments,
 stable inferred locals, fields, arguments, returns, and compatible container

@@ -36,6 +36,8 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- The top-level `AudioSnapshot` now rejects misspelled fields such as
+  `musicState` with `TL1016`, while ordinary Lua records stay open.
 - The audio system example now guards dictionary bus lookups before reading
   snapshot fields, matching the precise snapshot types.
 - `ShaderScan:load_shader` now diagnoses a source-root-prefixed literal path

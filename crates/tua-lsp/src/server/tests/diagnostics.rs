@@ -85,6 +85,31 @@ fn diagnostic_severities_round_trip_through_lsp() {
 }
 
 #[test]
+fn closed_audio_snapshot_field_error_reaches_pull_diagnostics() {
+    let temp = TempProject::new("closed-audio-snapshot-field");
+    let source = "local audio = audioSystem({})\nlocal snapshot = audio:snapshot()\nprint(snapshot.musicState)\n";
+    temp.write("src/main.tua", source);
+    let uri = temp.uri_for("src/main.tua");
+    let output = run_messages(vec![
+        initialize_with_root(1, temp.uri()),
+        did_open(&uri, source),
+        text_document_diagnostic_request(2, &uri),
+    ]);
+    let diagnostics = response_with_id(&output, 2)["result"]["items"]
+        .as_array()
+        .expect("pull diagnostics should return items");
+    assert!(
+        diagnostics.iter().any(|diagnostic| {
+            diagnostic["code"] == "TL1016"
+                && diagnostic["message"]
+                    .as_str()
+                    .is_some_and(|message| message.contains("musicState"))
+        }),
+        "{diagnostics:#?}"
+    );
+}
+
+#[test]
 fn diagnostic_ranges_round_trip_through_lsp() {
     let diagnostic =
         Diagnostic::error("tua.toml", 2, 3, "unknown config key").with_range(2, 3, 2, 18);

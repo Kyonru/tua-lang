@@ -5488,6 +5488,35 @@ local status: string | nil = snapshot.analysis["music.ogg"]
 }
 
 #[test]
+fn audio_snapshot_rejects_unknown_closed_fields_without_closing_lua_tables() {
+    let diagnostics = check_tua_source(
+        "src/audio.tua",
+        r#"local audio = audioSystem({ buses = { master = {} } })
+local snapshot: AudioSnapshot = audio:snapshot()
+print(snapshot.musicState)
+print(audio:snapshot().musicState)
+print(snapshot["musicState"])
+snapshot.musicState = "playing"
+"#,
+    )
+    .expect_err("closed native snapshot fields should reject misspellings");
+    let unknown = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::TYPE_UNKNOWN_CLOSED_FIELD))
+        .collect::<Vec<_>>();
+    assert_eq!(unknown.len(), 4, "{diagnostics:#?}");
+    assert!(unknown
+        .iter()
+        .any(|diagnostic| diagnostic.message.contains("musicState")));
+
+    check_tua_source(
+        "src/open.tua",
+        "local dynamic = {}\nprint(dynamic.musicState)\ndynamic.musicState = 'playing'\n",
+    )
+    .expect("ordinary Lua tables should remain open");
+}
+
+#[test]
 fn audio_voice_methods_still_check_their_arguments() {
     let diagnostics = check_tua_source(
         "src/audio.tua",
