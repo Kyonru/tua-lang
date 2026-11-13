@@ -14,9 +14,9 @@ what changed afterward. Work began from `7fde1fbd` with a clean tracked tree.
 | GAME-06 cold `jar:` completion | Fixed | `a5493765`; fresh-snapshot core test plus stdio LSP replay of the alchemy probe. Cold `jar:` now returns `get` and `label`, and hover shows `Jar<Potion>` while parse diagnostics remain. |
 | GAME-07 generic alias formatting | Fixed | `e63b7fe7`; formatter indentation/idempotence regression. |
 | GAME-12 nested generic field hover | Fixed | `05618711`; hover, completion, range, and unsaved provider edit regression. |
-| GAME-09 audio snapshot typing | Improved, with one known limitation | `645fd00f`; stable nested music, bus, and analysis fields are typed and documented. Snapshot completion omits `musicState`, but default record reads remain open, so the checker does not reject that misspelling. This is a broader record strictness decision. |
-| GAME-10 pool handoff warning | Documented local mitigation | `3e428c86`, `4078d9e0`; exact `TL5007` suppression at a real ECS handoff is tested while another forgotten acquisition still warns. Tua does not infer ownership transfer through ECS. |
-| GAME-11 bounded alias syntax | Canonical working form documented | `4a2311f0`; checked two-file example uses an unbounded instance alias and a protocol-bounded factory. Type-alias parameter bounds remain unsupported syntax. |
+| GAME-09 audio snapshot typing | Fixed for top-level snapshot fields | `645fd00f` typed stable nested fields; `2141c3ed` rejects absent top-level fields with `TL1016`. Nested and ordinary Lua records stay open. |
+| GAME-10 pool handoff warning | More actionable, still conservative | `3e428c86`, `4078d9e0` documented exact `TL5007` suppression; `c8513db8` identifies a typed ECS component handoff without hiding a forgotten release. |
+| GAME-11 bounded alias syntax | Current pattern documented; direct alias bounds deferred | `4a2311f0`, `05be54c7`; the checked two-file pattern uses an unbounded instance alias and bounded factory. A direct bounded-class instance alias needs new alias-bound syntax and cross-file editor support. |
 | GAME-13 second formatter pass | Still unverified | Fresh copies of all three trial games had no changes on a second `tua fmt` pass. The reported pre-format input was not preserved, so no defect is claimed. |
 
 The CI gate found two Clippy issues in earlier follow-up changes. They were
@@ -106,10 +106,11 @@ reported `tua 0.9.0`, and its bytes matched `target/release/tua`. SHA-256:
 `54aa4eb65324cd83d2048bf35d43f302a4365146652f88fb3ed4b331f99b30dc`.
 This is a local test artifact; no publish, tag, push, or release was made.
 
-The remaining decisions are record strictness for audio snapshots, whether
-pool-to-ECS transfer should change TL5007's ownership model, and syntax for
-bounds on exported instance aliases. GAME-13 still lacks a preserved failing
-input. This follow-up did not rerun all three complete games in LÖVE after
-the fixes; the focused shader runtime replay passed. It does not establish
-long-session inspector behavior, large-preview performance, or cross-platform
-packaging.
+The [later follow-up](FOLLOWUP-2026-11-13.md) records the audio and pool
+decisions, the bounded-alias syntax decision, a fresh visible-widget latency
+comparison, and additional unsuccessful attempts to reproduce GAME-13. The
+VSIX hash above predates those later product commits. GAME-13 still lacks a
+preserved failing input. The earlier follow-up did not rerun all three complete
+games in LÖVE after the fixes; the focused shader runtime replay passed. It
+does not establish long-session inspector behavior, large-preview performance,
+or cross-platform packaging.
