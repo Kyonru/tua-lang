@@ -26,7 +26,9 @@ exports.run = async () => {
   };
   const capture = async name => {
     await command("notifications.clearAll");
-    await browser.send("Page.bringToFront"); await sleep(1600);
+    await browser.send("Page.bringToFront");
+    await browser.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: 1100, y: 820 });
+    await sleep(1600);
     const shot = await browser.send("Page.captureScreenshot", { format: "png" });
     fs.writeFileSync(path.join(output, name + ".png"), Buffer.from(shot.data, "base64"));
     console.log("Captured " + name);

@@ -1,45 +1,45 @@
 {
   "schemaVersion": 1,
   "completed": true,
-  "capturedAt": "2026-11-11T00:01:28.931Z",
-  "extensionVersion": "0.7.0",
-  "compilerVersion": "tua 0.7.0",
-  "bundleSha256": "7b1f3be8798bcddc6f9182d43c6eb86d7017db0f720b405fbf5812b7fabe8812",
+  "capturedAt": "2026-11-12T23:48:37.419Z",
+  "extensionVersion": "0.8.0",
+  "compilerVersion": "tua 0.8.0",
+  "bundleSha256": "d0d61ce8777539b1a773cbfd1e09f83c032a9e8be4468d47d219483f4ed2d4bc",
   "images": [
     {
       "file": "workspace.png",
       "width": 1440,
       "height": 960,
-      "bytes": 237690,
-      "sha256": "3e05c6167d51be6c9e8f25d03f45859d881a09dce8f129619d4281961ceb8049"
+      "bytes": 234996,
+      "sha256": "c9d0b75d2a15c3a89546dedb332150811ac9a0c1490b02182476a6c49e972015"
     },
     {
       "file": "state-machine.png",
       "width": 1440,
       "height": 960,
-      "bytes": 57991,
-      "sha256": "5b8b95f7347c5c2ac98072a71a79bcdb81ab0aaba3e368fa5f83ca18aafc769a"
+      "bytes": 55500,
+      "sha256": "af9db6785fa2af419cf0bf8ec912048da216b5e4fd8cbbaedb9c772e08bdf209"
     },
     {
       "file": "sprite-animation.png",
       "width": 1440,
       "height": 960,
-      "bytes": 114296,
-      "sha256": "aa78ed72bc5ef6ad022387cb1f06193e5b354cbac6c29042b2ef00ed7345ca52"
+      "bytes": 108643,
+      "sha256": "497043f12f96d94b5d94991c9b75c5007864e7cbb7a95ef3fb389527bae68228"
     },
     {
       "file": "module-graph.png",
       "width": 1440,
       "height": 960,
-      "bytes": 116347,
-      "sha256": "79f2fe6329651abefcfee05afdb0f1cd39d81f44b835f464bd8c902d310aa329"
+      "bytes": 114799,
+      "sha256": "e1d76ed2c9f37f207abdb967a64072775f5c0e8c3ba635846769ddec3bdb9e20"
     },
     {
       "file": "runtime-inspector.png",
       "width": 1440,
       "height": 960,
-      "bytes": 223887,
-      "sha256": "12359c5968cf0ae7aed082849c59c56b8941fb8463594459f37411a1ae09cafa"
+      "bytes": 225479,
+      "sha256": "565091e6c41d12a288a97ccb68262bebae263f26b47477e57e688db0aa08b600"
     }
   ]
 }
