@@ -55,7 +55,7 @@ async function main() {
   await new Promise(resolve => portServer.listen(0, "127.0.0.1", resolve));
   const port = portServer.address().port;
   await new Promise(resolve => portServer.close(resolve));
-  const output = path.join(__dirname, "visible-latency.json");
+  const output = process.env.TUA_VISIBLE_OUT || path.join(__dirname, "visible-latency.json");
   try {
     await runTests({
       extensionDevelopmentPath: extension,
