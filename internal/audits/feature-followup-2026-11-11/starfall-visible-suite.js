@@ -44,10 +44,11 @@ async function run() {
       await browser.evaluate(`(() => {
         const e = document.querySelector('.monaco-editor.focused .native-edit-context');
         e.focus();
-        window.__tuaStarfall = { trigger: performance.timeOrigin + performance.now(), paint: null, labels: [] };
+        window.__tuaStarfall = { trigger: performance.timeOrigin + performance.now(), firstVisible: null, paint: null, labels: [] };
         const check = () => {
           const w = document.querySelector('.suggest-widget');
           if (!w || !w.classList.contains('visible') || getComputedStyle(w).display === 'none') return;
+          window.__tuaStarfall.firstVisible ??= performance.timeOrigin + performance.now();
           const labels = [...w.querySelectorAll('.label-name')].map(x => x.textContent.trim());
           const required = ${JSON.stringify(baseline ? ["reset", "update", "draw"] : ["width", "height", "reset", "update", "draw"])};
           if (!required.every(label => labels.includes(label))) return;
@@ -61,7 +62,7 @@ async function run() {
       await browser.send("Input.insertText", { text: "." });
       let widget;
       try {
-        widget = await waitFor(() => browser.evaluate("window.__tuaStarfall?.paint ? {trigger:window.__tuaStarfall.trigger,paint:window.__tuaStarfall.paint,labels:window.__tuaStarfall.labels} : null"), "Starfall member suggestions", 10000);
+        widget = await waitFor(() => browser.evaluate("window.__tuaStarfall?.paint ? {trigger:window.__tuaStarfall.trigger,firstVisible:window.__tuaStarfall.firstVisible,paint:window.__tuaStarfall.paint,labels:window.__tuaStarfall.labels} : null"), "Starfall member suggestions", 10000);
       } catch (error) {
         const state = await browser.evaluate(`(() => { const w=document.querySelector('.suggest-widget'); return {className:w?.className,labels:[...(w?.querySelectorAll('.label-name')||[])].map(x=>x.textContent.trim()).slice(0,40),focused:document.activeElement?.className}; })()`);
         throw new Error(`${error.message}: ${JSON.stringify({ state, trace: fs.readFileSync(process.env.TUA_COMPLETION_TRACE_OUTPUT, "utf8").split("\n").slice(-4), line: document.lineAt(position.line).text })}`);
@@ -77,6 +78,7 @@ async function run() {
           responseToPaintMs: widget.paint - trace.finished,
         } : {}),
         totalMs: widget.paint - widget.trigger,
+        firstVisibleMs: widget.firstVisible - widget.trigger,
         candidateCount: widget.labels.length,
       });
     }
