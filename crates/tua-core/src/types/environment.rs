@@ -783,7 +783,12 @@ impl TypeEnvironment {
         }
         for (class, protocols) in &self.class_protocols {
             for protocol in protocols {
-                context.insert_nominal_alias_supertype(class, protocol);
+                // Imported instance aliases already carry the class's canonical
+                // nominal identity. Treating the alias spelling as a nominal
+                // class here masks its table-based subclass relationship.
+                if self.class_names.contains(class) {
+                    context.insert_nominal_alias_supertype(class, protocol);
+                }
             }
         }
         for (class, protocol_module, protocol_name) in &self.protocol_conformance_identities {

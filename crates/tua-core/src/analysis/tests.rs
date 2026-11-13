@@ -3262,6 +3262,85 @@ local b = forwarded:level()
 }
 
 #[test]
+fn imported_child_alias_upcasts_with_a_separate_protocol_bound() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/actors.tua
+export protocol Alertable { raise(amount: number): nil }
+open class Actor { label(): string { return "actor" } }
+final class Guard extends Actor implements Alertable {
+  raise(amount: number): nil {}
+  override label(): string { return "guard" }
+}
+export type ActorInstance = Actor
+export type GuardInstance = Guard
+return { Guard = Guard }
+-- file: src/main.tua
+import type { ActorInstance, Alertable, GuardInstance } from "./actors"
+local Actors = require("actors")
+local function alarm<T: Alertable>(subject: T): T
+  subject:raise(1)
+  return subject
+end
+local function throughAlias(guard: GuardInstance): string
+  alarm(guard)
+  local actors: ActorInstance[] = { guard }
+  return actors[1]:label()
+end
+assert(throughAlias(Actors.Guard.new()) == "guard")
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+    let diagnostics = host.snapshot().diagnostics("src/main.tua");
+    assert!(
+        !diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == Some(DiagnosticCode::TYPE_MISMATCH)),
+        "the unrelated protocol bound must not affect subclass upcasts: {diagnostics:#?}"
+    );
+}
+
+#[test]
+fn unrelated_imported_class_does_not_upcast_through_a_protocol_bound() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/actors.tua
+export protocol Alertable { raise(amount: number): nil }
+open class Actor {}
+final class Guard extends Actor implements Alertable {
+  raise(amount: number): nil {}
+}
+final class Stranger {}
+export type ActorInstance = Actor
+export type StrangerInstance = Stranger
+return { Stranger = Stranger }
+-- file: src/main.tua
+import type { ActorInstance, Alertable, StrangerInstance } from "./actors"
+local Actors = require("actors")
+local function alarm<T: Alertable>(subject: T): T
+  return subject
+end
+local stranger: StrangerInstance = Actors.Stranger.new()
+local actors: ActorInstance[] = { stranger }
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+    let diagnostics = host.snapshot().diagnostics("src/main.tua");
+    assert!(
+        diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == Some(DiagnosticCode::TYPE_MISMATCH)),
+        "an unrelated class must remain incompatible: {diagnostics:#?}"
+    );
+}
+
+#[test]
 fn imported_generic_class_alias_uses_runtime_constructor_and_shared_members() {
     let fixture = Fixture::parse(
         r#"-- file: src/main.tua

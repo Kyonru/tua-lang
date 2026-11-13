@@ -36,6 +36,8 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Imported class instance aliases retain subclass assignability when a
+  protocol-bound generic function is present in the same file.
 - Inferred instances from imported class constructors and typed factories now
   retain their method receiver identity during checking.
 - ShaderScan's feature example and guide use paths that exist in the built
