@@ -169,6 +169,8 @@ inspector views remain opt-in and do not add code to production packages.
 
 ### Tests and audit
 
+- Shader-validator timeout coverage now leaves enough process-start margin for
+  parallel test load while still exercising a batch longer than one timeout.
 - Shader runtime tests now create distinct temporary projects in parallel,
   avoiding intermittent missing output and cross-test source contamination.
 - Added an installed-VSIX filesystem replay for Project files and Modules,

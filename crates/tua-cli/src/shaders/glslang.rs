@@ -372,13 +372,15 @@ mod tests {
     }
     #[test]
     fn headless_timeout_applies_per_process_not_per_batch() {
-        // The batch (8 x 0.3 s) outlasts one timeout; each process stays well within it.
+        // The batch (20 x 0.3 s) outlasts one timeout. Leave enough margin for
+        // a child to start under parallel test load without making this a
+        // scheduler-speed test.
         let (_dir, command) = fake("sleep 0.3; exit 0");
         let mut validator = GlslangValidator {
             command,
-            timeout: Duration::from_secs(2),
+            timeout: Duration::from_secs(5),
         };
-        let batch = vec![request(ShaderValidationMode::Glslang); 8];
+        let batch = vec![request(ShaderValidationMode::Glslang); 20];
         let outcomes = validator.validate(&batch).unwrap();
         assert!(outcomes
             .iter()
