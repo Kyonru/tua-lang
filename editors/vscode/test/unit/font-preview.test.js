@@ -5,13 +5,18 @@ const Module = require("node:module");
 const test = require("node:test");
 
 let panel;
+let panelCount = 0;
+let revealCount = 0;
 const vscode = {
   Uri: { file: (fsPath) => ({ fsPath, scheme: "file" }) },
   ViewColumn: { Active: 1 },
   window: {
     createWebviewPanel(viewType, title, column, options) {
+      panelCount += 1;
       panel = {
         viewType, title, column, options,
+        reveal() { revealCount += 1; },
+        onDidDispose(callback) { this.didDispose = callback; },
         webview: {
           cspSource: "vscode-resource:",
           asWebviewUri: (uri) => ({ toString: () => `vscode-resource:${uri.fsPath}` }),
@@ -29,7 +34,7 @@ const { isFontFile, showFontPreview } = require("../../src/love/assets/font-prev
 Module._load = originalLoad;
 
 test("font preview uses a local font resource and gives size and glyph samples", () => {
-  const uri = { fsPath: "/game/assets/ui.ttf", scheme: "file" };
+  const uri = { fsPath: "/game/assets/ui.ttf", scheme: "file", toString: () => "file:///game/assets/ui.ttf" };
   assert(isFontFile(uri));
   assert(!isFontFile({ fsPath: "/game/assets/ui.png", scheme: "file" }));
   assert(!isFontFile({ fsPath: "/game/assets/ui.ttf", scheme: "https" }));
@@ -48,8 +53,22 @@ test("font preview uses a local font resource and gives size and glyph samples",
 });
 
 test("font preview escapes filename and resource URL in HTML and CSS", () => {
-  showFontPreview({ fsPath: '/game/assets/<img src=x onerror="x">.otf', scheme: "file" });
+  showFontPreview({ fsPath: '/game/assets/<img src=x onerror="x">.otf', scheme: "file", toString: () => "file:///game/assets/escaped.otf" });
   assert.doesNotMatch(panel.webview.html, /<img src=x/);
   assert.match(panel.webview.html, /&lt;img src=x onerror=&quot;x&quot;&gt;\.otf/);
   assert.doesNotMatch(panel.webview.html, /url\("vscode-resource:\/game\/assets\/<img/);
+});
+
+test("opening the same font reveals its existing preview and disposal allows reopening", () => {
+  const uri = { fsPath: "/game/assets/reused.otf", scheme: "file", toString: () => "file:///game/assets/reused.otf" };
+  showFontPreview(uri);
+  const originalPanel = panel;
+  const opened = panelCount;
+  const revealed = revealCount;
+  showFontPreview(uri);
+  assert.equal(panelCount, opened);
+  assert.equal(revealCount, revealed + 1);
+  originalPanel.didDispose();
+  showFontPreview(uri);
+  assert.equal(panelCount, opened + 1);
 });

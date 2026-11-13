@@ -3,12 +3,19 @@
 const path = require("node:path");
 const vscode = require("vscode");
 const { escapeHtml, webviewNonce } = require("../../shared/webview");
+const openPanels = new Map();
 
 function isFontFile(uri) {
   return uri?.scheme === "file" && /\.(?:otf|ttf)$/i.test(uri.fsPath);
 }
 
 function showFontPreview(uri) {
+  const key = uri.toString();
+  const existing = openPanels.get(key);
+  if (existing) {
+    existing.reveal();
+    return;
+  }
   const name = path.basename(uri.fsPath);
   const panel = vscode.window.createWebviewPanel(
     "tuaFontPreview",
@@ -19,6 +26,8 @@ function showFontPreview(uri) {
       localResourceRoots: [vscode.Uri.file(path.dirname(uri.fsPath))],
     },
   );
+  openPanels.set(key, panel);
+  panel.onDidDispose(() => openPanels.delete(key));
   panel.webview.html = fontPreviewHtml(panel.webview, uri);
 }
 

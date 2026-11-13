@@ -15,6 +15,11 @@ language or editor behavior, and migration notes call out those changes.
   hover action, with an explicit load failure state and a reminder to check
   final rendering in LÖVE.
 
+### Fixed
+
+- Opening the same font again reveals its existing preview tab instead of
+  creating duplicate webviews.
+
 ## [0.8.0] - 2026-11-13
 
 ### Release summary
