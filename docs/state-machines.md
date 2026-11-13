@@ -100,7 +100,8 @@ overlap in a dense graph. Select one there to highlight its diagram edge.
 Each real state receives a distinct, theme-aware
 pastel color for quick visual tracking; the wildcard source stays neutral.
 
-The preview follows edits and can switch between multiple machines in one
+The visible preview follows edits; a hidden preview catches up when reopened. It
+can switch between multiple machines in one
 file. It reads the same static model used for checking and completion, so it
 does not execute project code or simulate the machine's current runtime state.
 Computed configurations remain valid Tua, but cannot produce a graph until

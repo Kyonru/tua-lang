@@ -6,6 +6,7 @@ const { COMMANDS } = require("../constants");
 const { isPathInside, projectLayoutForUri } = require("../editor/project-layout");
 const { openLocationMessage } = require("../shared/locations");
 const { createRenderGate } = require("../shared/render-gate");
+const { createVisiblePreviewRefresh } = require("../shared/visible-preview-refresh");
 const { escapeHtml, webviewDocument } = require("../shared/webview");
 const { createAudition } = require("./audition");
 const { canAudition, canAuditionScene } = require("./audition-source");
@@ -100,7 +101,6 @@ function html(webview, graph, analyses = [], state = {}) {
 
 function registerAudioDevex({ getClient, getServerCommand }) {
   let panel, currentGraph, currentAnalyses = [];
-  let refreshTimer;
   const state = { mode: "cues", selectedId: undefined, revision: undefined };
   const renderGate = createRenderGate();
   const audition = createAudition({ getServerCommand, onStatus: message => panel?.webview.postMessage({ command: "auditionStatus", message }) });
@@ -174,11 +174,14 @@ function registerAudioDevex({ getClient, getServerCommand }) {
       if (renderGate.isCurrent(request) && panel === currentPanel) currentPanel.webview.html = errorHtml(currentPanel.webview, error);
     }
   };
+  const refresh = createVisiblePreviewRefresh(() => panel, () => render(), 250);
   const command = vscode.commands.registerCommand(COMMANDS.showAudioExplorer, async () => {
     if (!getClient()) return vscode.window.showWarningMessage("The Tua language server is not running.");
+    refresh.cancel();
     if (!panel) {
       panel = vscode.window.createWebviewPanel("tuaAudioExplorer", "Tua Audio Workbench", vscode.ViewColumn.Beside, { enableScripts: true, retainContextWhenHidden: true });
-      panel.onDidDispose(() => { renderGate.invalidate(); audition.stop(); panel = undefined; });
+      panel.onDidDispose(() => { refresh.cancel(); renderGate.invalidate(); audition.stop(); panel = undefined; });
+      panel.onDidChangeViewState?.(() => refresh.onVisible());
       panel.webview.onDidReceiveMessage(async message => {
         if (message?.command === "reload") return render();
         if (message?.command === "stop") return audition.stop();
@@ -209,18 +212,16 @@ function registerAudioDevex({ getClient, getServerCommand }) {
   const sourceChanges = vscode.workspace.onDidChangeTextDocument(event => {
     if (!panel || !currentGraph?.systems?.some(system => system.uri === event.document.uri.toString())) return;
     audition.stop();
-    clearTimeout(refreshTimer);
-    refreshTimer = setTimeout(render, 250);
+    refresh.schedule();
   });
   const assetChanges = vscode.workspace.createFileSystemWatcher("**/*.{wav,ogg,mp3,flac}");
   const scheduleAssetRefresh = () => {
     if (!panel) return;
     audition.stop();
-    clearTimeout(refreshTimer);
-    refreshTimer = setTimeout(render, 250);
+    refresh.schedule();
   };
   const assetSubscriptions = [assetChanges.onDidChange(scheduleAssetRefresh), assetChanges.onDidCreate(scheduleAssetRefresh), assetChanges.onDidDelete(scheduleAssetRefresh)];
   return vscode.Disposable.from(command, sourceChanges, assetChanges, ...assetSubscriptions,
-    { dispose() { clearTimeout(refreshTimer); renderGate.invalidate(); audition.stop(); panel?.dispose(); } });
+    { dispose() { refresh.cancel(); renderGate.invalidate(); audition.stop(); panel?.dispose(); } });
 }
 module.exports = { registerAudioDevex, audioExplorerHtml: html, audioExplorerErrorHtml: errorHtml };

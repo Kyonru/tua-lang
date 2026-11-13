@@ -16,6 +16,7 @@ const { outputFiles } = buildSync({
 });
 let previewCommand;
 let panel;
+let onDocumentChange;
 const document = { uri: { toString: () => "file:///game/ai.tua" }, version: 1 };
 const vscode = {
   Uri: { parse: value => ({ fsPath: new URL(value).pathname }) },
@@ -25,17 +26,17 @@ const vscode = {
   workspace: {
     asRelativePath: uri => uri.fsPath.replace("/game/", ""),
     getConfiguration: () => ({ get: () => true }),
-    onDidChangeTextDocument: () => ({ dispose() {} }),
+    onDidChangeTextDocument: handler => { onDocumentChange = handler; return { dispose() {} }; },
   },
   window: {
     activeTextEditor: { document },
     createWebviewPanel() {
-      panel = { webview: { cspSource: "test", onDidReceiveMessage() {} }, onDidDispose() {}, reveal() {} };
+      panel = { visible: true, webview: { cspSource: "test", onDidReceiveMessage() {} }, onDidDispose() {}, onDidChangeViewState(handler) { panel.onViewState = handler; }, reveal() {} };
       return panel;
     },
   },
 };
-const context = { module: { exports: {} }, require: (name) => name === "vscode" ? vscode : require(name) };
+const context = { module: { exports: {} }, require: (name) => name === "vscode" ? vscode : require(name), setTimeout, clearTimeout };
 vm.runInNewContext(outputFiles[0].text, context);
 const { behaviorTreePreviewHtml, registerBehaviorTreePreview } = context.module.exports;
 
@@ -80,4 +81,27 @@ test("hover command opens only the targeted tree", async () => {
   assert.equal(requests[0].position.character, 6);
   assert.match(panel.webview.html, /patrol/);
   assert.doesNotMatch(panel.webview.html, /Root not set/);
+});
+
+test("hidden behavior-tree preview defers inspection until reveal", async () => {
+  const requests = [];
+  const client = { sendRequest: async (_, params) => {
+    requests.push(params);
+    return { documentVersion: document.version, items: [
+      { kind: "behaviorTree", name: `patrol${document.version}`, root: { kind: "wait", children: [] } },
+    ] };
+  } };
+  registerBehaviorTreePreview({ configurationTarget: () => undefined, isTuaDocument: () => true, getClient: () => client });
+  await previewCommand();
+  assert.equal(requests.length, 1);
+  panel.visible = false;
+  document.version++;
+  onDocumentChange({ document });
+  await new Promise(resolve => setTimeout(resolve, 220));
+  assert.equal(requests.length, 1, "editing a hidden preview must not inspect");
+  panel.visible = true;
+  await panel.onViewState();
+  assert.equal(requests.length, 2);
+  assert.match(panel.webview.html, /patrol2/);
+  document.version = 1;
 });

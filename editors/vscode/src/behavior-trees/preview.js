@@ -6,6 +6,7 @@ const { isStaleDocumentResponse } = require("../shared/documents");
 const { displayUriPath, openLocationMessage } = require("../shared/locations");
 const { ensureExperimentalPreviewEnabled } = require("../shared/preview-gate");
 const { createGraphViewport } = require("../shared/graph-viewport");
+const { createVisiblePreviewRefresh } = require("../shared/visible-preview-refresh");
 const { escapeHtml, jsonForHtml, webviewDocument } = require("../shared/webview");
 
 const REFRESH_DELAY_MS = 180;
@@ -34,7 +35,6 @@ function registerBehaviorTreePreview({ configurationTarget, getClient, isTuaDocu
   let document;
   let selectedName;
   let sequence = 0;
-  let timer;
 
   const render = async ({ loading = false, position } = {}) => {
     const client = getClient();
@@ -67,6 +67,8 @@ function registerBehaviorTreePreview({ configurationTarget, getClient, isTuaDocu
     }
   };
 
+  const refresh = createVisiblePreviewRefresh(() => panel, () => render(), REFRESH_DELAY_MS);
+
   const show = async (target) => {
     if (!(await ensureExperimentalPreviewEnabled(configurationTarget, "Tua behavior-tree previews"))) {
       return;
@@ -82,6 +84,7 @@ function registerBehaviorTreePreview({ configurationTarget, getClient, isTuaDocu
     }
     document = active;
     selectedName = undefined;
+    refresh.cancel();
     if (!panel) {
       panel = vscode.window.createWebviewPanel(
         "tuaBehaviorTreePreview", "Tua Behavior Tree Preview", vscode.ViewColumn.Beside,
@@ -96,8 +99,9 @@ function registerBehaviorTreePreview({ configurationTarget, getClient, isTuaDocu
         document = undefined;
         selectedName = undefined;
         sequence += 1;
-        clearTimeout(timer);
+        refresh.cancel();
       });
+      panel.onDidChangeViewState?.(() => refresh.onVisible());
     } else {
       panel.reveal(vscode.ViewColumn.Beside, false);
     }
@@ -108,11 +112,10 @@ function registerBehaviorTreePreview({ configurationTarget, getClient, isTuaDocu
   const command = vscode.commands.registerCommand(COMMANDS.previewBehaviorTree, show);
   const changes = vscode.workspace.onDidChangeTextDocument((event) => {
     if (!panel || event.document.uri.toString() !== document?.uri.toString()) return;
-    clearTimeout(timer);
-    timer = setTimeout(() => { void render(); }, REFRESH_DELAY_MS);
+    refresh.schedule();
   });
   return vscode.Disposable.from(command, changes, {
-    dispose() { clearTimeout(timer); sequence += 1; panel?.dispose(); },
+    dispose() { refresh.cancel(); sequence += 1; panel?.dispose(); },
   });
 }
 

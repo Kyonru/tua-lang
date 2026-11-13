@@ -6,6 +6,7 @@ const Module = require("node:module");
 
 const commands = new Map();
 let panel;
+let onDocumentChange;
 const vscode = {
   ViewColumn: { Beside: 2 },
   Disposable: { from: (...items) => ({ dispose: () => items.forEach(item => item?.dispose?.()) }) },
@@ -17,8 +18,10 @@ const vscode = {
     activeTextEditor: undefined,
     createWebviewPanel: () => {
       panel = {
+        visible: true,
         webview: { cspSource: "vscode-resource:", postMessage() {}, onDidReceiveMessage(handler) { panel.onMessage = handler; } },
         onDidDispose(handler) { panel.onDispose = handler; },
+        onDidChangeViewState(handler) { panel.onViewState = handler; },
         reveal() {},
         dispose() { panel.onDispose?.(); },
       };
@@ -28,7 +31,7 @@ const vscode = {
   workspace: {
     findFiles: async () => [],
     asRelativePath: uri => uri.fsPath,
-    onDidChangeTextDocument: () => ({ dispose() {} }),
+    onDidChangeTextDocument: handler => { onDocumentChange = handler; return { dispose() {} }; },
     createFileSystemWatcher: () => ({ onDidChange: () => ({ dispose() {} }), onDidCreate: () => ({ dispose() {} }), onDidDelete: () => ({ dispose() {} }), dispose() {} }),
   },
   Uri: { parse: (uri) => ({ scheme: "file", fsPath: new URL(uri).pathname }) },
@@ -90,6 +93,30 @@ test("ECS explorer command carries an inspected component name into its view", a
   try {
     await commands.get("tua.showEcsExplorer")({ componentName: "Position" });
     assert.match(panel.webview.html, /"focusComponentName":"Position"/);
+  } finally {
+    feature.dispose();
+  }
+});
+
+test("hidden audio workbench defers graph and asset analysis until reveal", async () => {
+  let requests = 0;
+  const client = { sendRequest: async () => {
+    requests++;
+    return { analysisRevision: requests, graph: { systems: [
+      { uri: "file:///game/audio.tua", buses: [], cues: [], musicStates: [], layers: [], effects: [] },
+    ] } };
+  } };
+  const feature = registerAudioDevex({ getClient: () => client });
+  try {
+    await commands.get("tua.showAudioExplorer")();
+    assert.equal(requests, 1);
+    panel.visible = false;
+    onDocumentChange({ document: { uri: { toString: () => "file:///game/audio.tua" } } });
+    await new Promise(resolve => setTimeout(resolve, 280));
+    assert.equal(requests, 1);
+    panel.visible = true;
+    await panel.onViewState();
+    assert.equal(requests, 2);
   } finally {
     feature.dispose();
   }

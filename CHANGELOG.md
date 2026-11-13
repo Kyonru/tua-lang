@@ -36,6 +36,8 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Hidden behavior-tree, state-machine, and audio preview panels defer edit-triggered
+  analysis and rendering until reopened; visible previews remain live.
 - Hidden Assets views refresh unused-asset diagnostics without building or
   transferring the full asset listing; opening the view still loads the full
   inventory.

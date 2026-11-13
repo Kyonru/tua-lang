@@ -110,7 +110,7 @@ to focus on part of a tree; that choice survives preview refreshes. Scroll
 sideways or drag empty canvas space to explore wide trees. Pinch or use
 Control/Command + wheel to zoom; the header also has Zoom in, Zoom out, and Fit
 buttons. Click a node to jump to its constructor.
-The preview refreshes after edits and
+The visible preview refreshes after edits; a hidden preview catches up when reopened. It
 uses the same opt-in `tua.preview.enabled` setting as the state-machine preview.
 Open the [feature example](https://github.com/Kyonru/tua-lang/blob/main/examples/features/src/behavior_tree.tua)
 to try the preview on a complete tree.

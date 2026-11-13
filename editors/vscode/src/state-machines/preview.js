@@ -5,6 +5,7 @@ const { COMMANDS } = require("../constants");
 const { isStaleDocumentResponse } = require("../shared/documents");
 const { displayUriPath, openLocationMessage } = require("../shared/locations");
 const { ensureExperimentalPreviewEnabled } = require("../shared/preview-gate");
+const { createVisiblePreviewRefresh } = require("../shared/visible-preview-refresh");
 const {
   stateMachinePreviewErrorHtml,
   stateMachinePreviewHtml,
@@ -24,7 +25,6 @@ function registerStateMachinePreviewFeature({
   let panel;
   let document;
   let renderSequence = 0;
-  let refreshTimer;
   let liveTarget;
 
   const render = async ({ reveal = false, position, loading = false } = {}) => {
@@ -75,6 +75,13 @@ function registerStateMachinePreviewFeature({
     }
   };
 
+  const refresh = createVisiblePreviewRefresh(() => panel, () => render(), REFRESH_DELAY_MS);
+  const sendLiveUpdate = () => {
+    if (panel && panel.visible !== false && liveTarget) {
+      void panel.webview.postMessage({ command: "tua/liveStateMachine", runtime: liveStateMachineSnapshot(inspector, liveTarget) });
+    }
+  };
+
   const show = async (target) => {
     if (
       !(await ensureExperimentalPreviewEnabled(
@@ -104,6 +111,7 @@ function registerStateMachinePreviewFeature({
 
     document = activeDocument;
     liveTarget = target?.runtime;
+    refresh.cancel();
     if (!panel) {
       panel = createPanel(async (message) => {
         if (message?.command === "reload") {
@@ -116,7 +124,10 @@ function registerStateMachinePreviewFeature({
         document = undefined;
         liveTarget = undefined;
         renderSequence += 1;
-        clearTimeout(refreshTimer);
+        refresh.cancel();
+      });
+      panel.onDidChangeViewState?.(() => {
+        if (!refresh.onVisible()) sendLiveUpdate();
       });
     } else {
       panel.reveal?.(vscode.ViewColumn.Beside, false);
@@ -138,19 +149,14 @@ function registerStateMachinePreviewFeature({
       return;
     }
 
-    clearTimeout(refreshTimer);
-    refreshTimer = setTimeout(() => {
-      void render();
-    }, REFRESH_DELAY_MS);
+    refresh.schedule();
   });
 
-  const liveUpdates = inspector?.subscribe(() => {
-    if (panel && liveTarget) void panel.webview.postMessage({ command: "tua/liveStateMachine", runtime: liveStateMachineSnapshot(inspector, liveTarget) });
-  });
+  const liveUpdates = inspector?.subscribe(sendLiveUpdate);
 
   return vscode.Disposable.from(command, reload, changes, liveUpdates || { dispose() {} }, {
     dispose() {
-      clearTimeout(refreshTimer);
+      refresh.cancel();
       renderSequence += 1;
       panel?.dispose?.();
       panel = undefined;

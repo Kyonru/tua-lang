@@ -501,7 +501,8 @@ in the status line. Audition is an editing aid, not a measurement of the live
 game's mix.
 
 **Stop audition** terminates the child process. Editing an audio declaration
-or changing an audio asset stops playback and refreshes the view. Selection is
+or changing an audio asset stops playback and refreshes the visible view. A
+hidden view refreshes when reopened. Selection is
 retained when the item still exists. A failed request offers **Retry**. A
 trusted workspace and a configured LÖVE executable are required. Use
 `snapshot()` in your game for runtime voice counts and bus state.
