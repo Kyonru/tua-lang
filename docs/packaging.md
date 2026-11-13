@@ -207,10 +207,10 @@ tua actions init
 This creates `.github/workflows/tua-game.yml` if it is absent. Review and
 commit that file in your game repository. The generated workflow pins the release
 tag matching the Tua CLI that created it and installs the Linux CLI archive. It
-checks the archive checksum, verifies its GitHub build attestation and tag, and
-checks the installed CLI version before running `tua check` and
-`tua package --target love`. It does not need Tua on
-GitHub Packages, a personal access token, or a separate Tua action. Generate
+checks the archive checksum and GitHub build attestation, then checks the
+installed CLI version before running `tua check` and
+`tua package --target love`. It does not need Tua on GitHub Packages, a
+personal access token, or a separate Tua action. Generate
 the workflow with a published Tua release. An unreleased local build may share
 a version number with an older tag. Update the pin only after verifying a newer
 Tua release.

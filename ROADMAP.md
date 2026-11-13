@@ -10,30 +10,6 @@ workflow pages under `docs/`. Completed work belongs in
 
 ## Now
 
-### 0.7.0: Protocol Contracts And Generics
-
-The planned protocol, generic-alias, generic-function, and scoped generic-class
-features are implemented for the documented 0.7.0 contract. The November 10
-final audit passed the workspace, LSP, CLI, and VS Code checks; an exact local
-macOS arm64 VSIX also passed the installed real-server suite. No unimplemented
-language capability inside that scoped contract is currently known.
-
-The remaining work is qualification, not an unfinished implementation of the
-scoped language features: LOVE/LuaJIT runtime and visual checks, non-macOS
-platforms and other LSP clients, long-session memory, and repeated release-host
-performance baselines. Cross-module class inheritance, generic methods and
-protocols, compound bounds, callback-only/return-only generic inference, and
-explicit call-site type arguments remain deliberate limits of this contract;
-do not imply they are supported. See the final audit addendum in
-`internal/audits/generics-polymorphism-0.7.0-final/REPORT.md` for exact evidence
-and environment limits.
-
-Owner: core parser/semantic/checker/emitter and IDE queries; LSP and VS Code
-consume shared results. Each behavior lands with its own tests and documentation.
-First acceptance case: an actor and a UI panel implement the same update
-contract, share an update loop, and retain their own implementation at runtime;
-missing methods and unsafe signatures fail at the implementation declaration.
-
 ### Qualify The Next Coordinated Release
 
 - Prepare the next CLI, server and extension release together, with current
@@ -80,12 +56,6 @@ missing methods and unsafe signatures fail at the implementation declaration.
   client send, server response, and widget paint before assigning the visible
   delay to a component. Repeat on a real game and previous version; also test
   pull-diagnostic client behavior, larger imports, and LOVE hot reload.
-- Fix [FUP-01](internal/audits/feature-followup-2026-11-11/FINDINGS.md):
-  an unannotated forwarding function two module hops after an imported class
-  preserves `AgentInstance` on hover but loses member completion. Preserve
-  canonical class/alias provenance through inferred module exports, then add a
-  cross-file project/LSP regression with edit recovery. Explicitly importing
-  and annotating the forwarding function's return is the current workaround.
 - Investigate the November 10 release-build LSP stress result: a synthetic
   1,000-module workspace did not finish profiling after 270 seconds; its active
   server was sampled at about 3.75 GiB RSS and 299% CPU. The same profile had
@@ -115,6 +85,11 @@ missing methods and unsafe signatures fail at the implementation declaration.
   LOVE project had 441–457 ms cold cross-file completion and 83–90 ms on later
   edits. See `internal/audits/0.7.0-release-performance-2026-11-11.md` for
   methods and limits.
+  The 0.9.0 priority audit reproduced 2.92-second cold completion and 1.44 GiB
+  sampled RSS on the released 0.8.0 server with one bounded 1,000-module run.
+  Its span trace points to repeated entry-file export and snapshot work, but
+  does not yet establish the precise cause or a safe fix. See
+  `internal/audits/0.9.0-priorities-2026-11-13/README.md`.
 - Extend installed-editor qualification to prolonged real-project editing,
   Test Explorer/coverage interactions, hot reload and full-game visual parity.
   Candidate installation, real-server language features and five graphical
