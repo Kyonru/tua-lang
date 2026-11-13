@@ -322,6 +322,15 @@ pub struct ObjectPoolGraphInsight {
 pub(crate) struct ObjectPoolFileIndex {
     pub pools: Vec<ObjectPoolGraphPool>,
     pub operations: Vec<ObjectPoolGraphOperation>,
+    ecs_handoffs: Vec<EcsHandoff>,
+}
+
+#[derive(Clone, Debug)]
+struct EcsHandoff {
+    path: PathBuf,
+    item_name: String,
+    component_name: String,
+    span: SourceSpan,
 }
 
 #[derive(Clone, Debug)]
@@ -353,10 +362,12 @@ pub(crate) fn object_pool_graph<'a>(
     indexes: impl IntoIterator<Item = &'a ObjectPoolFileIndex>,
 ) -> ObjectPoolGraph {
     let mut graph = ObjectPoolGraph::default();
+    let mut ecs_handoffs = Vec::new();
 
     for index in indexes {
         graph.pools.extend(index.pools.iter().cloned());
         graph.operations.extend(index.operations.iter().cloned());
+        ecs_handoffs.extend(index.ecs_handoffs.iter().cloned());
     }
 
     let pool_ids = graph
@@ -371,7 +382,7 @@ pub(crate) fn object_pool_graph<'a>(
             .cloned();
     }
 
-    graph.insights = unreleased_acquire_insights(&graph.operations);
+    graph.insights = unreleased_acquire_insights(&graph.operations, &ecs_handoffs);
 
     graph.pools.sort_by(|left, right| {
         left.name.cmp(&right.name).then_with(|| {
@@ -435,6 +446,7 @@ pub(crate) fn diagnostics_for_graph(graph: &ObjectPoolGraph, path: &Path) -> Vec
 
 fn unreleased_acquire_insights(
     operations: &[ObjectPoolGraphOperation],
+    ecs_handoffs: &[EcsHandoff],
 ) -> Vec<ObjectPoolGraphInsight> {
     operations
         .iter()
@@ -455,14 +467,27 @@ fn unreleased_acquire_insights(
                 return None;
             }
 
+            let handoff = ecs_handoffs.iter().find(|handoff| {
+                handoff.path == acquire.path
+                    && handoff.item_name == *item_name
+                    && position_key(handoff.span.start) > position_key(acquire.span.start)
+            });
+            let message = if let Some(handoff) = handoff {
+                format!(
+                    "Object `{item_name}` from `{}` is passed to ECS component `{}`. Its release is not visible for this acquisition; ensure component removal or cleanup calls `{}:release(...)`, then suppress this TL5007 at the acquisition if ownership was deliberately transferred.",
+                    acquire.pool_name, handoff.component_name, acquire.pool_name
+                )
+            } else {
+                format!(
+                    "Object `{item_name}` is acquired from `{}` but no later same-file `{}:release({item_name})` or `{}:clear()` is visible.",
+                    acquire.pool_name, acquire.pool_name, acquire.pool_name
+                )
+            };
             Some(ObjectPoolGraphInsight {
                 id: format!("{}:unreleased", acquire.id),
                 kind: ObjectPoolInsightKind::UnreleasedAcquire,
                 title: "Acquired object has no visible release".to_owned(),
-                message: format!(
-                    "Object `{item_name}` is acquired from `{}` but no later same-file `{}:release({item_name})` or `{}:clear()` is visible.",
-                    acquire.pool_name, acquire.pool_name, acquire.pool_name
-                ),
+                message,
                 path: acquire.path.clone(),
                 span: acquire.item_span.unwrap_or(acquire.span),
                 pool_id: pool_id.clone(),
@@ -528,6 +553,13 @@ impl Visitor for ObjectPoolVisitor<'_> {
             return;
         }
 
+        if parts.last().is_some_and(|method| method == "add")
+            && self.receiver_is_ecs_world(&parts[..parts.len() - 1], span.start)
+        {
+            self.record_ecs_handoff(call, span);
+            return;
+        }
+
         let Some(method) = parts.last() else {
             return;
         };
@@ -543,6 +575,35 @@ impl Visitor for ObjectPoolVisitor<'_> {
 }
 
 impl ObjectPoolVisitor<'_> {
+    fn receiver_is_ecs_world(&self, parts: &[String], position: SourcePosition) -> bool {
+        self.semantic
+            .type_of_field_chain(parts, position)
+            .as_ref()
+            .is_some_and(crate::ecs::is_world_type_direct)
+    }
+
+    fn record_ecs_handoff(&mut self, call: &FunctionCall, span: SourceSpan) {
+        let Some(item_name) = argument_expression(call, 2)
+            .and_then(plain_field_chain_from_expression)
+            .filter(|parts| parts.len() == 1)
+            .map(|parts| parts[0].clone())
+        else {
+            return;
+        };
+        let Some(component_name) = argument_expression(call, 1)
+            .and_then(plain_field_chain_from_expression)
+            .map(|parts| parts.join("."))
+        else {
+            return;
+        };
+        self.index.ecs_handoffs.push(EcsHandoff {
+            path: self.path.to_path_buf(),
+            item_name,
+            component_name,
+            span,
+        });
+    }
+
     fn receiver_has_object_pool_member(&self, parts: &[String], position: SourcePosition) -> bool {
         let Some((method, receiver)) = parts.split_last() else {
             return false;

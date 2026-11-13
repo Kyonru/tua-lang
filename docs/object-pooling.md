@@ -187,10 +187,15 @@ The language server keeps object-pool facts in the shared semantic snapshot:
   lifecycle warnings.
 
 The lifecycle warning is conservative. It does not try to prove ownership
-through aliases, closures, module boundaries, or dynamic control flow. When an
-ECS component or another owner takes responsibility for release, mark that
-specific acquisition with an exact-code suppression and keep the release in
-the new owner's cleanup path:
+through aliases, closures, module boundaries, or dynamic control flow. When
+Tua sees a directly acquired local passed to a typed ECS `world:add`, the
+warning names the receiving component and asks for the release in component
+removal or cleanup. It remains a warning until you add the exact-code
+suppression: passing a value to ECS does not prove that the game releases it.
+
+When an ECS component or another owner takes responsibility for release, mark
+that specific acquisition with an exact-code suppression and keep the release
+in the new owner's cleanup path:
 
 ```tua
 -- Effect matches the x/y fields produced by the effects pool.

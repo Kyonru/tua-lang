@@ -303,7 +303,7 @@ fn is_module_type_direct(candidate: &Type) -> bool {
     candidate == &ecs_module_type()
 }
 
-fn is_world_type_direct(candidate: &Type) -> bool {
+pub(crate) fn is_world_type_direct(candidate: &Type) -> bool {
     match candidate {
         Type::Alias(name) => name == WORLD_TYPE,
         Type::Table(_) => candidate == &world_type(),

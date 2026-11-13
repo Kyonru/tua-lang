@@ -3006,6 +3006,46 @@ local forgotten = effects:acquire()
 }
 
 #[test]
+fn object_pool_ecs_handoff_warning_keeps_release_requirement_visible() {
+    let mut host = AnalysisHost::new();
+    host.set_file(
+        "src/pool.tua",
+        r#"local world = ecs.world()
+local Effect = ecs.component("Effect", { x = "number" })
+local entity = world:create()
+local effects = objectPool({ create = function(): { x: number } return { x = 0 } end })
+local transferred = effects:acquire()
+world:add(entity, Effect, transferred)
+local forgotten = effects:acquire()
+local impostor = { add = function() end }
+local not_ecs = effects:acquire()
+impostor:add(entity, Effect, not_ecs)
+"#,
+    );
+
+    let snapshot = host.snapshot();
+    let warnings = snapshot
+        .pipeline_diagnostics("src/pool.tua")
+        .into_iter()
+        .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::DOMAIN_OBJECT_POOL_LIFECYCLE))
+        .collect::<Vec<_>>();
+    assert_eq!(warnings.len(), 3, "{warnings:#?}");
+    assert!(warnings.iter().any(|warning| {
+        warning.message.contains("transferred")
+            && warning.message.contains("ECS component `Effect`")
+            && warning
+                .message
+                .contains("ensure component removal or cleanup")
+    }));
+    assert!(warnings.iter().any(|warning| {
+        warning.message.contains("forgotten") && !warning.message.contains("ECS component")
+    }));
+    assert!(warnings.iter().any(|warning| {
+        warning.message.contains("not_ecs") && !warning.message.contains("ECS component")
+    }));
+}
+
+#[test]
 fn object_pool_graph_ignores_non_pool_object_pool_overrides() {
     let mut host = AnalysisHost::new();
 

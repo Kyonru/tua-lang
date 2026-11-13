@@ -1993,6 +1993,36 @@ local leaked = bullets:acquire()
 }
 
 #[test]
+fn did_open_keeps_ecs_handoff_pool_warning_actionable() {
+    let uri = "file:///tmp/object-pool-ecs-handoff.tua";
+    let source = r#"local world = ecs.world()
+local Effect = ecs.component("Effect", { x = "number" })
+local entity = world:create()
+local effects = objectPool({ create = function(): { x: number } return { x = 0 } end })
+local transferred = effects:acquire()
+world:add(entity, Effect, transferred)
+local forgotten = effects:acquire()
+"#;
+    let mut server = TestServer::new();
+    server.send(did_open(uri, source));
+    let warnings = last_published_diagnostics(server.output(), uri)
+        .into_iter()
+        .filter(|diagnostic| diagnostic["code"] == "TL5007")
+        .collect::<Vec<_>>();
+    assert_eq!(warnings.len(), 2, "{warnings:#?}");
+    assert!(warnings.iter().any(|warning| warning["message"]
+        .as_str()
+        .is_some_and(|message| message.contains("ECS component `Effect`"))));
+    assert!(warnings
+        .iter()
+        .any(
+            |warning| warning["message"].as_str().is_some_and(|message| message
+                .contains("forgotten")
+                && !message.contains("ECS component"))
+        ));
+}
+
+#[test]
 fn did_open_publishes_love_callback_diagnostics() {
     let uri = "file:///tmp/love-callback-diagnostics.tua";
     let source = r#"function love.udpate(dt: number)
