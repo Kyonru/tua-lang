@@ -15,6 +15,10 @@ const vscode = {
   TreeItem: class { constructor(label) { this.label = label; } },
   ThemeIcon: class {},
   TreeItemCollapsibleState: { None: 0, Collapsed: 1 },
+  Position: class { constructor(line, character) { this.line = line; this.character = character; } },
+  Range: class { constructor(start, end) { this.start = start; this.end = end; } },
+  Diagnostic: class { constructor(range, message, severity) { this.range = range; this.message = message; this.severity = severity; } },
+  DiagnosticSeverity: { Error: 0, Warning: 1, Information: 2, Hint: 3 },
   Uri: { parse: (value) => ({ toString: () => value }) },
   languages: { createDiagnosticCollection: () => ({ clear() {}, dispose() {} }) },
   window: { createTreeView: () => ({ onDidChangeVisibility: () => disposable, dispose() {} }) },
@@ -82,4 +86,42 @@ test("a slow asset refresh shows progress in its view and clears it on completio
   await refresh;
   assert.match(controller.view.message, /No supported assets/);
   controller.dispose();
+});
+
+test("hidden asset view refreshes diagnostics without rebuilding its tree", async () => {
+  const requests = [];
+  const asset = { uri: "file:///game/assets/player.png", path: "assets/player.png", category: "image", categoryLabel: "Images", references: [] };
+  const diagnostic = { uri: "file:///game/assets/unused.wav", diagnostic: {
+    range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
+    message: "Unused asset", severity: 4, code: "TL2009",
+  } };
+  const client = { sendRequest: async (method, params) => {
+    requests.push({ method, params });
+    return { inventory: { assets: params?.diagnosticsOnly ? [] : [asset], diagnostics: [diagnostic] } };
+  } };
+  const controller = new AssetExplorerController({ getClient: () => client });
+  let diagnosticUpdates = 0;
+  const published = [];
+  controller.diagnostics.clear = () => { diagnosticUpdates += 1; };
+  controller.diagnostics.set = (uri, diagnostics) => { published.push({ uri, diagnostics }); };
+  try {
+    controller.view.visible = false;
+    controller.scheduleRefresh();
+    for (let attempt = 0; attempt < 30 && requests.length === 0; attempt += 1) {
+      await new Promise(resolve => setTimeout(resolve, 10));
+    }
+    assert.deepEqual(requests, [{ method: "tua/assetInventory", params: { diagnosticsOnly: true } }]);
+    assert.equal(diagnosticUpdates, 1);
+    assert.equal(published[0].diagnostics[0].code, "TL2009");
+    assert.equal(published[0].diagnostics[0].severity, vscode.DiagnosticSeverity.Hint);
+    assert.deepEqual(controller.provider.assets, []);
+
+    controller.view.visible = true;
+    await controller.refresh();
+    assert.equal(requests[1].params, null);
+    assert.equal(controller.provider.assets.length, 1);
+    assert.equal(diagnosticUpdates, 2);
+  } finally {
+    controller.dispose();
+  }
 });

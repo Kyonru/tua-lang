@@ -2,6 +2,14 @@ use super::*;
 
 impl AnalysisSnapshot {
     pub fn asset_inventory(&self) -> AssetInventory {
+        self.asset_inventory_with_details(true)
+    }
+
+    pub fn asset_inventory_diagnostics(&self) -> Vec<Diagnostic> {
+        self.asset_inventory_with_details(false).diagnostics
+    }
+
+    fn asset_inventory_with_details(&self, include_assets: bool) -> AssetInventory {
         let _profile = profile::span("analysis.query.asset_inventory");
         let Some(index) = self.asset_index.as_ref() else {
             return AssetInventory::default();
@@ -28,6 +36,37 @@ impl AnalysisSnapshot {
                         loader_kind: metadata.kind,
                     });
             }
+        }
+
+        if !include_assets {
+            let mut unused = index
+                .files()
+                .filter(|(path, ..)| !self.is_generated_path(path))
+                .filter_map(|(path, relative_path, extension, ..)| {
+                    if references_by_asset.contains_key(path) {
+                        return None;
+                    }
+                    Some((
+                        asset::asset_category_for_extension(extension)?,
+                        relative_path.to_owned(),
+                        path.to_path_buf(),
+                    ))
+                })
+                .collect::<Vec<_>>();
+            unused.sort_by(|left, right| {
+                left.0
+                    .cmp(&right.0)
+                    .then_with(|| left.1.cmp(&right.1))
+                    .then_with(|| left.2.cmp(&right.2))
+            });
+            let diagnostics = unused
+                .into_iter()
+                .map(|(_, relative_path, path)| unused_asset_diagnostic(&path, &relative_path))
+                .collect();
+            return AssetInventory {
+                assets: Vec::new(),
+                diagnostics,
+            };
         }
 
         for references in references_by_asset.values_mut() {
@@ -60,19 +99,7 @@ impl AnalysisSnapshot {
         let diagnostics = assets
             .iter()
             .filter(|asset| asset.references.is_empty())
-            .map(|asset| {
-                Diagnostic::new(
-                    asset.path.clone(),
-                    1,
-                    1,
-                    crate::DiagnosticSeverity::Hint,
-                    format!(
-                        "asset `{}` has no static Tua or Lua references; dynamically loaded assets may still be used",
-                        asset.relative_path
-                    ),
-                )
-                .with_code(crate::DiagnosticCode::ASSET_UNUSED)
-            })
+            .map(|asset| unused_asset_diagnostic(&asset.path, &asset.relative_path))
             .collect();
 
         AssetInventory {
@@ -125,6 +152,19 @@ impl AnalysisSnapshot {
         edits.dedup_by_key(|edit| asset_text_edit_key(edit));
         edits
     }
+}
+
+fn unused_asset_diagnostic(path: &Path, relative_path: &str) -> Diagnostic {
+    Diagnostic::new(
+        path.to_path_buf(),
+        1,
+        1,
+        crate::DiagnosticSeverity::Hint,
+        format!(
+            "asset `{relative_path}` has no static Tua or Lua references; dynamically loaded assets may still be used"
+        ),
+    )
+    .with_code(crate::DiagnosticCode::ASSET_UNUSED)
 }
 
 fn quoted_asset_path(source: &str, span: SourceSpan, path: &str) -> Option<String> {

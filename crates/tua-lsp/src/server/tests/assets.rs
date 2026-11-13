@@ -14,9 +14,12 @@ fn asset_inventory_returns_grouped_usage_references_and_unused_diagnostics() {
     temp.write("assets/player.png", "");
     temp.write("assets/unused.wav", "");
 
+    let mut diagnostics_only = asset_inventory_request(3);
+    diagnostics_only["params"] = json!({ "diagnosticsOnly": true });
     let output = run_messages(vec![
         initialize_with_root(1, temp.uri()),
         asset_inventory_request(2),
+        diagnostics_only,
     ]);
     let result = &response_with_id(&output, 2)["result"];
     let inventory = &result["inventory"];
@@ -51,6 +54,9 @@ fn asset_inventory_returns_grouped_usage_references_and_unused_diagnostics() {
     assert_eq!(diagnostics[0]["uri"], temp.uri_for("assets/unused.wav"));
     assert_eq!(diagnostics[0]["diagnostic"]["code"], "TL2009");
     assert_eq!(diagnostics[0]["diagnostic"]["severity"], 4);
+    let compact = &response_with_id(&output, 3)["result"]["inventory"];
+    assert_eq!(compact["assets"], json!([]));
+    assert_eq!(compact["diagnostics"], inventory["diagnostics"]);
 }
 
 #[test]

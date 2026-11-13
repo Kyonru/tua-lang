@@ -36,6 +36,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Hidden Assets views refresh unused-asset diagnostics without building or
+  transferring the full asset listing; opening the view still loads the full
+  inventory.
 - State-machine previews retain cursor-targeted selection and all-machine
   fallback while resolving both cases through one inspection request.
 - Contextual inlay hints skip server analysis when no selection, explicit

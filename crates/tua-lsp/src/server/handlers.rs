@@ -5,10 +5,10 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use serde_json::{json, Value};
 use tua_core::{
-    AnalysisCacheStats, AssistKind, InlineCompletionBudget, InlineCompletionOptions, InspectorItem,
-    ModelCompletionRejectionReason, ModelCompletionValidationRequest, PreparedInlineCompletion,
-    ProjectModel, RenameEdit, SourcePosition, SourceSpan, DEFAULT_MODEL_CONTEXT_BYTES,
-    MAX_MODEL_CONTEXT_BYTES,
+    AnalysisCacheStats, AssetInventory, AssistKind, InlineCompletionBudget,
+    InlineCompletionOptions, InspectorItem, ModelCompletionRejectionReason,
+    ModelCompletionValidationRequest, PreparedInlineCompletion, ProjectModel, RenameEdit,
+    SourcePosition, SourceSpan, DEFAULT_MODEL_CONTEXT_BYTES, MAX_MODEL_CONTEXT_BYTES,
 };
 
 use super::configuration::WorkspaceSettings;
@@ -405,7 +405,7 @@ impl LspServer {
             }
             RequestKind::Inspect => response(id, self.inspector_response(&message)),
             RequestKind::ExplainType => response(id, self.type_explanation_response(&message)),
-            RequestKind::AssetInventory => response(id, self.asset_inventory_response()),
+            RequestKind::AssetInventory => response(id, self.asset_inventory_response(&message)),
             RequestKind::ModuleGraph => response(id, self.module_dependency_graph_response()),
             RequestKind::EcsGraph => response(id, self.ecs_graph_response()),
             RequestKind::ObjectPoolGraph => response(id, self.object_pool_graph_response()),
@@ -1966,14 +1966,27 @@ impl LspServer {
         lsp_signal_graph_from_core(snapshot.signal_graph(), &snapshot)
     }
 
-    fn asset_inventory_response(&self) -> Value {
+    fn asset_inventory_response(&self, message: &Value) -> Value {
         let snapshot = self
             .analysis
             .snapshot(&self.workspace_folders, &self.settings);
+        let diagnostics_only = message
+            .get("params")
+            .and_then(|params| params.get("diagnosticsOnly"))
+            .and_then(Value::as_bool)
+            == Some(true);
+        let inventory = if diagnostics_only {
+            AssetInventory {
+                assets: Vec::new(),
+                diagnostics: snapshot.asset_inventory_diagnostics(),
+            }
+        } else {
+            snapshot.asset_inventory()
+        };
 
         json!({
             "analysisRevision": snapshot.revision(),
-            "inventory": lsp_asset_inventory_from_core(snapshot.asset_inventory(), &snapshot)
+            "inventory": lsp_asset_inventory_from_core(inventory, &snapshot)
         })
     }
 

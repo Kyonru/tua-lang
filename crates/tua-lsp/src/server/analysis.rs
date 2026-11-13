@@ -1264,6 +1264,10 @@ impl AnalysisSnapshot {
         self.core.asset_inventory()
     }
 
+    pub(super) fn asset_inventory_diagnostics(&self) -> Vec<Diagnostic> {
+        self.core.asset_inventory_diagnostics()
+    }
+
     pub(super) fn module_dependency_graph(&self) -> ModuleDependencyGraph {
         self.core.module_dependency_graph()
     }

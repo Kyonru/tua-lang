@@ -63,6 +63,8 @@ class AssetExplorerController {
     this.refreshTimer = undefined;
     this.visibilityDisposable = this.view.onDidChangeVisibility((event) => {
       if (event.visible) {
+        clearTimeout(this.refreshTimer);
+        this.refreshTimer = undefined;
         this.refresh();
       }
     });
@@ -89,11 +91,11 @@ class AssetExplorerController {
 
     this.refreshTimer = setTimeout(() => {
       this.refreshTimer = undefined;
-      this.refresh();
+      this.refresh({ diagnosticsOnly: this.view.visible === false });
     }, REFRESH_DELAY_MS);
   }
 
-  async refresh() {
+  async refresh({ diagnosticsOnly = false } = {}) {
     if (this.disposed) return undefined;
     const client = this.getClient();
     if (!client) {
@@ -102,25 +104,31 @@ class AssetExplorerController {
 
     const serial = ++this.requestSerial;
     const loading = setTimeout(() => {
-      if (!this.disposed && serial === this.requestSerial && client === this.getClient()) {
+      if (!diagnosticsOnly && !this.disposed && serial === this.requestSerial && client === this.getClient()) {
         this.view.message = "Refreshing asset inventory…";
       }
     }, 250);
 
     try {
-      const response = await client.sendRequest("tua/assetInventory", null);
+      const response = await client.sendRequest(
+        "tua/assetInventory",
+        diagnosticsOnly ? { diagnosticsOnly: true } : null,
+      );
 
       if (this.disposed || serial !== this.requestSerial || client !== this.getClient()) {
         return undefined;
       }
 
       const inventory = response?.inventory || {};
-      this.provider.update(inventory.assets);
       updateDiagnostics(this.diagnostics, inventory.diagnostics);
+      if (diagnosticsOnly) {
+        return inventory;
+      }
+      this.provider.update(inventory.assets);
       this.view.message = this.provider.assets.length ? undefined : "No supported assets found in this project.";
       return inventory;
     } catch (error) {
-      if (!this.disposed && serial === this.requestSerial && client === this.getClient()) {
+      if (!diagnosticsOnly && !this.disposed && serial === this.requestSerial && client === this.getClient()) {
         this.view.message = `Asset inventory unavailable: ${formatError(error)}`;
       }
 

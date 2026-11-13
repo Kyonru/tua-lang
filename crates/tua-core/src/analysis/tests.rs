@@ -2373,7 +2373,10 @@ local portrait = love.graphics.newImage('assets/player.png')
     }
     host.refresh_asset_index_from_disk();
 
-    let inventory = host.snapshot().asset_inventory();
+    let snapshot = host.snapshot();
+    let diagnostics_only = snapshot.asset_inventory_diagnostics();
+    let inventory = snapshot.asset_inventory();
+    assert_eq!(diagnostics_only, inventory.diagnostics);
     assert_eq!(inventory.assets.len(), 2);
     let player = inventory
         .assets

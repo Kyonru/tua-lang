@@ -745,6 +745,10 @@ The bundled VS Code extension also uses version-matched Tua requests:
 items of that kind when the position matches none and sets `fallbackApplied` in
 the response. This lets previews keep cursor targeting with one request.
 
+`tua/assetInventory` accepts `diagnosticsOnly: true` for hidden Assets views.
+The response keeps unused-asset diagnostics current and returns an empty
+`assets` list; opening the view requests the full inventory.
+
 `tua/setTrace` updates runtime trace configuration. These requests are an
 extension integration surface rather than a general stable external API; keep
 custom clients matched to the server version. For versioned, read-only tooling
