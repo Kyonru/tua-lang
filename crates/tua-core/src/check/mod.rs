@@ -49,7 +49,8 @@ mod query;
 mod shader_values;
 mod type_mismatch;
 
-use query::{CheckQuery, CheckQueryOptions};
+use query::CheckQuery;
+pub(crate) use query::CheckQueryOptions;
 use type_mismatch::{
     mismatch_diagnostic, mismatch_diagnostic_at_position, mismatch_diagnostic_for_expression,
 };
@@ -160,37 +161,23 @@ pub(crate) fn check_parsed_source_with_environment_asset_roots_diagnostics_jit_c
     check_parsed_source_with_environment_and_ecs_config(
         parsed,
         environment,
-        asset_roots,
-        diagnostics_config,
-        jit_config,
-        &EcsConfig::default(),
-        asset_index,
-        signal_index,
+        CheckQueryOptions::new(
+            asset_roots,
+            diagnostics_config,
+            jit_config,
+            &EcsConfig::default(),
+            asset_index,
+            signal_index,
+        ),
     )
 }
 
 pub(crate) fn check_parsed_source_with_environment_and_ecs_config(
     parsed: &ParsedSource,
     environment: &TypeEnvironment,
-    asset_roots: &[PathBuf],
-    diagnostics_config: &DiagnosticsConfig,
-    jit_config: &JitConfig,
-    ecs_config: &EcsConfig,
-    asset_index: Option<&asset::AssetIndex>,
-    signal_index: Option<&signal::SignalEventIndex>,
+    options: CheckQueryOptions<'_>,
 ) -> Result<(), Vec<Diagnostic>> {
-    CheckQuery::new(
-        parsed,
-        CheckQueryOptions::new(
-            asset_roots,
-            diagnostics_config,
-            jit_config,
-            ecs_config,
-            asset_index,
-            signal_index,
-        ),
-    )
-    .run_with_environment(environment)
+    CheckQuery::new(parsed, options).run_with_environment(environment)
 }
 
 type GenericInstantiationCacheKey = (FunctionType, Vec<Option<Type>>);

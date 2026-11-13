@@ -187,12 +187,14 @@ impl AnalysisSnapshot {
                 check_parsed_source_with_environment_and_ecs_config(
                     parsed,
                     environment,
-                    analysis_asset_roots(self.vfs.source_roots(), &self.asset_roots),
-                    &diagnostics_config,
-                    &self.config.jit,
-                    ecs,
-                    self.asset_index.as_deref(),
-                    None,
+                    crate::check::CheckQueryOptions::new(
+                        analysis_asset_roots(self.vfs.source_roots(), &self.asset_roots),
+                        &diagnostics_config,
+                        &self.config.jit,
+                        ecs,
+                        self.asset_index.as_deref(),
+                        None,
+                    ),
                 )
                 .err()
                 .unwrap_or_default()

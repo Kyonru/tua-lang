@@ -7,7 +7,7 @@ pub(super) struct CheckQuery<'a> {
 }
 
 #[derive(Clone, Copy)]
-pub(super) struct CheckQueryOptions<'a> {
+pub(crate) struct CheckQueryOptions<'a> {
     asset_roots: &'a [PathBuf],
     diagnostics_config: &'a DiagnosticsConfig,
     jit_config: &'a JitConfig,
@@ -17,7 +17,7 @@ pub(super) struct CheckQueryOptions<'a> {
 }
 
 impl<'a> CheckQueryOptions<'a> {
-    pub(super) fn new(
+    pub(crate) fn new(
         asset_roots: &'a [PathBuf],
         diagnostics_config: &'a DiagnosticsConfig,
         jit_config: &'a JitConfig,
