@@ -323,6 +323,13 @@ async function run() {
     await evaluate('document.querySelector("#detail .detail-header button").click()');
     await waitFor(() => messages.some(message => message.command === "openLocation" && message.uri === "file:///game/components.tua"), "populated ECS source action");
     await screenshot("ecs-explorer-populated");
+    await evaluate('document.querySelector("[data-related=systems]").click()');
+    assert.equal(await evaluate('document.querySelector("[data-mode=systems]").classList.contains("active") && document.querySelector("#detail h2")?.textContent === "Movement"'), true, "component relationship opens its system in the explorer");
+    await screenshot("ecs-relationship-system");
+    await evaluate('document.querySelector("[data-related=components]").click()');
+    assert.equal(await evaluate('document.querySelector("[data-mode=components]").classList.contains("active") && document.querySelector("#detail h2")?.textContent === "Position"'), true, "system relationship returns to its component");
+    await evaluate('document.querySelector(".related-row .command-button").click()');
+    await waitFor(() => messages.some(message => message.command === "openLocation" && message.uri === "file:///game/movement.tua"), "ECS relation retains direct source navigation");
     const focusedEcs = { ...ecsView, focusComponentName: "Position", components: [
       ecsView.components[0],
       { ...ecsView.components[0], id: "position-ui", uri: "file:///game/ui.tua" },

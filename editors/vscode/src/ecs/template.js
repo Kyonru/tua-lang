@@ -185,12 +185,6 @@ function ecsExplorerHtml(webview, viewModel) {
 
     function renderComponent(component) {
       const body = element("div", "detail-body");
-      body.append(metricStrip([
-        [component.fields.length, "Fields"],
-        [systemsFor(component.id).length, "Systems"],
-        [queriesFor(component.id).length, "Queries"],
-      ]));
-
       body.append(sectionHeading("Schema"));
       if (!component.fields.length) {
         body.append(note("No statically indexed schema fields."));
@@ -218,6 +212,8 @@ function ecsExplorerHtml(webview, viewModel) {
           access: use.access,
           uri: item.uri,
           range: use.range,
+          targetMode: "systems",
+          targetId: item.id,
         }))));
       }
 
@@ -232,6 +228,8 @@ function ecsExplorerHtml(webview, viewModel) {
           access: use.access,
           uri: item.uri,
           range: use.range,
+          targetMode: "queries",
+          targetId: item.id,
         }))));
       }
       detailRoot.append(body);
@@ -252,10 +250,6 @@ function ecsExplorerHtml(webview, viewModel) {
 
     function renderQuery(query) {
       const body = element("div", "detail-body");
-      body.append(metricStrip([
-        [queryKind(query), "Kind"],
-        [query.components.length, "Components"],
-      ]));
       body.append(sectionHeading("Matched components"));
       body.append(componentRows(query.components));
 
@@ -298,8 +292,14 @@ function ecsExplorerHtml(webview, viewModel) {
         row.append(label(component?.runtimeName || use.reference, "data-name"));
         row.append(accessBadge(use.access));
         row.append(label(component ? component.file : "unresolved static reference", "row-meta"));
-        row.addEventListener("click", () => openLocation(use.uri, use.range));
-        rows.append(row);
+        row.addEventListener("click", () => component
+          ? inspectRelated("components", component.id)
+          : openLocation(use.uri, use.range));
+        if (component) {
+          row.dataset.related = "components";
+          row.setAttribute("aria-label", "Inspect component " + component.runtimeName);
+          rows.append(relatedRow(row, "Open component use source", use.uri, use.range));
+        } else rows.append(row);
       }
       return rows;
     }
@@ -312,10 +312,33 @@ function ecsExplorerHtml(webview, viewModel) {
         row.append(label(relation.title, "data-name"));
         if (relation.access) row.append(accessBadge(relation.access));
         row.append(label(relation.meta, "row-meta"));
-        row.addEventListener("click", () => openLocation(relation.uri, relation.range));
-        rows.append(row);
+        row.addEventListener("click", () => relation.targetId
+          ? inspectRelated(relation.targetMode, relation.targetId)
+          : openLocation(relation.uri, relation.range));
+        if (relation.targetId) {
+          row.dataset.related = relation.targetMode;
+          row.setAttribute("aria-label", "Inspect " + relation.title);
+          rows.append(relatedRow(row, "Open relationship source", relation.uri, relation.range));
+        } else rows.append(row);
       }
       return rows;
+    }
+
+    function relatedRow(inspectButton, sourceLabel, uri, range) {
+      const wrapper = element("div", "related-row");
+      const sourceButton = locationButton("Source", uri, range);
+      sourceButton.setAttribute("aria-label", sourceLabel);
+      wrapper.append(inspectButton, sourceButton);
+      return wrapper;
+    }
+
+    function inspectRelated(targetMode, targetId) {
+      mode = targetMode;
+      selectedId = targetId;
+      filter = "";
+      filterInput.value = "";
+      render();
+      detailRoot.scrollTop = 0;
     }
 
     function insightRows(insights) {
@@ -368,17 +391,6 @@ function ecsExplorerHtml(webview, viewModel) {
       if (mode === "queries") return queryKind(item) + " · " + item.file + ":" + item.line;
       if (mode === "insights") return item.file + ":" + item.line;
       return item.file + ":" + item.line;
-    }
-
-    function metricStrip(metrics) {
-      const strip = element("div", "metrics");
-      for (const [value, name] of metrics) {
-        const metric = element("div", "metric");
-        metric.append(label(String(value), "metric-value"));
-        metric.append(label(name, "metric-name"));
-        strip.append(metric);
-      }
-      return strip;
     }
 
     function sectionHeading(text) {
@@ -438,7 +450,7 @@ function documentHtml(webview, title, body, script) {
     .toolbar { min-height: 58px; padding: 9px 14px; border-bottom: 1px solid var(--vscode-panel-border); display: flex; align-items: center; justify-content: space-between; gap: 16px; background: var(--vscode-sideBar-background); }
     .title-block { min-width: 180px; }
     h1 { margin: 0; font-size: 15px; line-height: 20px; font-weight: 600; }
-    .muted, .row-meta, .metric-name { color: var(--vscode-descriptionForeground); font-size: 11px; }
+    .muted, .row-meta { color: var(--vscode-descriptionForeground); font-size: 11px; }
     .tools { min-width: 0; display: flex; align-items: center; gap: 8px; }
     .search { display: flex; align-items: center; gap: 7px; color: var(--vscode-descriptionForeground); }
     .search input { width: min(300px, 38vw); height: 28px; padding: 3px 8px; border: 1px solid var(--vscode-input-border, transparent); border-radius: 3px; outline: none; color: var(--vscode-input-foreground); background: var(--vscode-input-background); }
@@ -465,13 +477,11 @@ function documentHtml(webview, title, body, script) {
     .detail-heading { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
     .detail-title { margin: 0; font-size: 16px; font-weight: 600; overflow-wrap: anywhere; }
     .detail-body { padding: 16px 18px 36px; }
-    .metrics { display: grid; grid-template-columns: repeat(3, minmax(90px, 1fr)); border-top: 1px solid var(--vscode-panel-border); border-bottom: 1px solid var(--vscode-panel-border); }
-    .metric { min-width: 0; padding: 9px 10px; border-right: 1px solid var(--vscode-panel-border); }
-    .metric:last-child { border-right: 0; }
-    .metric-value { display: block; font-size: 16px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .metric-name { display: block; margin-top: 2px; }
     .section-heading { margin: 20px 0 8px; font-size: 11px; font-weight: 600; text-transform: uppercase; }
     .rows { border-top: 1px solid var(--vscode-panel-border); }
+    .related-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; border-bottom: 1px solid var(--vscode-panel-border); }
+    .related-row .data-row { border-bottom: 0; }
+    .related-row .command-button { margin: 0 8px; }
     .data-row { width: 100%; min-height: 48px; padding: 7px 8px; border: 0; border-bottom: 1px solid var(--vscode-panel-border); display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 5px 12px; text-align: left; background: transparent; cursor: pointer; }
     .data-row:hover { background: var(--vscode-list-hoverBackground); }
     .data-name { min-width: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

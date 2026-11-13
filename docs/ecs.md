@@ -87,7 +87,9 @@ Run **Tua: Show ECS Explorer** from VS Code to inspect the current project's
 static ECS structure. The compiler-backed view lists components, systems, and
 standalone or system-owned queries without reparsing source in the extension.
 Selecting a component shows its schema, every resolved system access, and every
-relevant query; each relationship opens the exact component reference.
+relevant query. Select a related system or query to inspect it in place, then
+follow its component row back; the adjacent **Source** action opens the exact
+component reference without changing the explorer selection.
 
 With the opt-in development Runtime Inspector enabled, expand a sampled entity
 and choose **Find static systems and queries** under a component. The explorer
