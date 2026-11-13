@@ -47,6 +47,12 @@ installs Zensical when it is not already available.
 Specialized benchmark, extension, generated-catalog, and evaluation workflows
 are exposed through the corresponding Makefile targets.
 
+AI contributors should start with [AGENTS.md](AGENTS.md). Repository skills
+live in `skills/tua-*` and are discovered through `.codex/skills` aliases.
+The model language contract is authored in `docs/llms.txt`; root `llms.txt` is
+generated. Run `make ai-tooling-check` after changing agent guidance or skills,
+and `make llms-drift-check` after changing the model contract.
+
 ## Make A Change
 
 1. Add or update a focused regression test at the layer that owns the behavior.
@@ -95,6 +101,7 @@ make generate-config-schema
 make config-schema-drift-check
 make generate-llms
 make llms-drift-check
+make ai-tooling-check
 make sync-version
 make version-drift-check
 ```

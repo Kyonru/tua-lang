@@ -35,6 +35,11 @@ Examples are test fixtures and user documentation at the same time.
 - LOVE method calls use `:` when the receiver is a known LOVE object.
 - Asset helper examples have existing paths and supported extensions.
 - Feature examples cover new user-facing capabilities when reasonable.
+- For a built-in game helper, show its actual no-`require` `.tua` use and a
+  meaningful combination with another feature when that teaches ownership or
+  update order. Keep the example small enough to check and build routinely.
+- Verify that a used helper is emitted and an unused helper is absent; do not
+  infer runtime behavior from static preview output alone.
 
 ## Verification
 

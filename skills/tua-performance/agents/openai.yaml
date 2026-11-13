@@ -1,0 +1,4 @@
+interface:
+  display_name: "Tua Performance"
+  short_description: "Profile toolchain and editor latency without losing DevEx."
+  default_prompt: "Use this to measure and improve Tua compiler, LSP, extension, preview, or runtime performance while preserving fresh and accurate editor behavior."

@@ -24,6 +24,11 @@ Produce a trustworthy map of risk, not a large undifferentiated issue list.
   the lead owns those cross-cutting lenses when no specialist is assigned.
 - Use the corresponding Tua specialist skill for each lane. Use `tua-review`
   instead when reviewing a particular change or diff.
+- For game-helper interaction or runtime ownership, use
+  `tua-framework-devex`; for latency and memory attribution, use
+  `tua-performance`; for model contracts and local AI transports, use
+  `tua-ai-bridge`; for domain webviews, use `tua-editor-previews`; for
+  distributable game artifacts, use `tua-game-packaging`.
 - Deduplicate symptoms that share one root cause. Prefer a shared semantic or
   architectural fix over many surface-specific tickets.
 

@@ -1,6 +1,6 @@
 ---
 name: tua-domain-design
-description: Design first-class Tua game domains. Use when proposing or changing ECS, sprite, animation, vector, Feather/tooling metadata, domain diagnostics, domain completion, or compiler-owned lowering beyond baseline Lua-compatible Tua syntax.
+description: Design or change first-class Tua game APIs and compiler support, including sprites, ECS, behavior trees, audio, camera, tweening, and procedural helpers. Use for new domain behavior or lowering, not ordinary game code that composes existing features.
 ---
 
 # Tua Domain Design
@@ -10,14 +10,17 @@ generic executable extension system.
 
 ## Boundaries
 
-- Keep domain behavior in `tua-core` modules with typed inputs and outputs.
+- Keep compiler-owned domain facts in `tua-core`; bundled Lua runtime modules
+  own execution. Do not implement feature semantics in the extension.
 - Run diagnostics through the cached `AnalysisFile` build.
 - Reuse parser metadata, semantic queries, asset indexes, and the structured
   lowering operation IR.
 - Prefer ordinary Lua-compatible APIs such as `spriteSheet({...})` and
   `ecs.world()` over new syntax.
-- Keep opt-in domains disabled through project configuration, not dynamic
-  registration.
+- Keep helper runtimes opt-in by source references. In `.tua`, supported
+  built-ins inject their import only when used; a compatible project module
+  can replace the bundled runtime. Keep configuration gates for features that
+  actually require configuration, such as external asset pipelines or previews.
 - Give each expensive domain stage its own profiler span.
 
 Do not let a domain:
@@ -26,7 +29,7 @@ Do not let a domain:
 - change core Lua/Tua semantics;
 - execute project runtime code during analysis;
 - emit raw Lua strings outside compiler-owned lowering;
-- make emitted code require a hidden Tua runtime.
+- add a required global runtime to ordinary typed Lua that uses no helper.
 
 ## Design Workflow
 
@@ -38,11 +41,13 @@ Do not let a domain:
    lowering operations.
 5. Add completion, hover, signature help, and navigation from the same semantic
    facts.
-6. Measure the domain stage and test disabled/enabled behavior.
+6. Test helper-present and helper-absent output, runtime replacement, and
+   composability with neighboring game features. Measure stages that can
+   affect typing or build latency.
 
 ## Challenge Broad DSLs
 
-For sprite, animation, vector, ECS, or Feather ideas, ask:
+For sprite, animation, ECS, audio, procedural, or other game APIs, ask:
 
 - Can an ordinary Lua-compatible call or table represent this clearly?
 - Does the feature improve compiler and editor tooling, not just syntax style?

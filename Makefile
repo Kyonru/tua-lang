@@ -99,6 +99,10 @@ config-schema-drift-check: ## Verify VS Code and docs config metadata matches co
 llms-drift-check: ## Verify root llms.txt matches the documented contract.
 	node scripts/generate-llms.js --check
 
+.PHONY: ai-tooling-check
+ai-tooling-check: ## Verify agent guidance and repository skill aliases/metadata.
+	node scripts/check-ai-tooling.js
+
 .PHONY: love-api-drift-check
 love-api-drift-check: ## Verify generated LOVE catalogs match the pinned source checkout.
 	@test -n "$(LOVE_API_ROOT)" || { echo "error: set LOVE_API_ROOT=/path/to/love-api"; exit 1; }
@@ -122,10 +126,10 @@ rust-audit: ## Audit locked Rust dependencies against the RustSec advisory datab
 	$(CARGO) audit
 
 .PHONY: verify
-verify: fmt-check test clippy version-drift-check release-tool-test config-schema-drift-check llms-drift-check llm-language-eval-test feature-examples-check extension-check json-check diff-check ## Run the main local verification suite without modifying files.
+verify: fmt-check test clippy version-drift-check release-tool-test config-schema-drift-check llms-drift-check ai-tooling-check llm-language-eval-test feature-examples-check extension-check json-check diff-check ## Run the main local verification suite without modifying files.
 
 .PHONY: ci-check
-ci-check: fmt-check clippy rust-audit test build-examples editor-regression-smoke version-drift-check release-tool-test config-schema-drift-check llms-drift-check llm-language-eval-test feature-examples-check extension-check json-check docs-build benchmark-smoke diff-check ## Run required CI checks that do not need an external catalog checkout or VS Code host.
+ci-check: fmt-check clippy rust-audit test build-examples editor-regression-smoke version-drift-check release-tool-test config-schema-drift-check llms-drift-check ai-tooling-check llm-language-eval-test feature-examples-check extension-check json-check docs-build benchmark-smoke diff-check ## Run required CI checks that do not need an external catalog checkout or VS Code host.
 
 .PHONY: diff-check
 diff-check: ## Check the git diff for whitespace errors.

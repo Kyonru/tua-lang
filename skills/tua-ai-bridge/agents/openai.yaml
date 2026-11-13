@@ -1,0 +1,4 @@
+interface:
+  display_name: "Tua AI Bridge"
+  short_description: "Maintain Tua model and local AI integration facts."
+  default_prompt: "Use this to update Tua's model language contract, completion prompts, local API or MCP adapter, and verify privacy and freshness."

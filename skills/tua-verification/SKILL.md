@@ -42,8 +42,12 @@ cleanup, docs, packaging, or conflict resolution.
 - Examples: run `make check-example EXAMPLE=...` and `make build-example
   EXAMPLE=...`.
 - Docs/nav: run `make docs-build`, `make json-check`, and `make diff-check`.
-- LOVE runtime: run `make love-test` only when LOVE is available and the change
-  needs runtime validation.
+- LOVE examples: `make love-test` build-checks them without starting LÖVE.
+  When runtime behavior matters and LÖVE is installed, use
+  `TUA_LOVE_BIN=/path/to/love make love-runtime-test`.
+- Model language contract or AI API: run `make generate-llms` after changing
+  `docs/llms.txt`, then `make llms-drift-check`, focused core contract tests,
+  and affected API/MCP tests.
 - VS Code packaging: run `make extension-package`, verify the resulting archive
   with `unzip -t`, and report its SHA-256. `extension-check` also validates
   `.vscode/launch.json` through `launch-config-check.js`.

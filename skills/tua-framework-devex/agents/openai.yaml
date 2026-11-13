@@ -1,0 +1,4 @@
+interface:
+  display_name: "Tua Framework DevEx"
+  short_description: "Compose Tua game helpers in real LOVE workflows."
+  default_prompt: "Use this to build or improve a game workflow with existing Tua helpers and check their behavior, ownership, editor support, and runtime output."

@@ -19,6 +19,8 @@ Update a skill when:
 - validation fails;
 - docs, roadmap, examples, or tooling standards change in a way future agents
   should remember.
+- root `AGENTS.md` or the generated `llms.txt` contract changes skill routing
+  or makes a skill's claims inaccurate.
 
 ## Update Rules
 
@@ -58,10 +60,13 @@ Regenerate metadata:
 Validate all repo-local skills:
 
 ```sh
-for skill in skills/tua-*; do
-  .venv/docs/bin/python /Users/kyonru/.codex/skills/.system/skill-creator/scripts/quick_validate.py "$skill" || exit 1
+for file in skills/tua-*/SKILL.md; do
+  .venv/docs/bin/python /Users/kyonru/.codex/skills/.system/skill-creator/scripts/quick_validate.py "${file%/SKILL.md}" || exit 1
 done
 ```
+
+Run `make ai-tooling-check` for the repository's name, metadata, and alias
+consistency gate; it also runs in `make verify` and `make ci-check`.
 
 Check catalog aliases:
 

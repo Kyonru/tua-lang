@@ -1,0 +1,4 @@
+interface:
+  display_name: "Tua Editor Previews"
+  short_description: "Make game feature previews useful and truthful."
+  default_prompt: "Use this to audit or change Tua's VS Code feature previews, graphs, explorers, workbenches, or runtime inspector with source fidelity and accessible UI."
