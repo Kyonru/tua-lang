@@ -446,15 +446,44 @@ fn voice_type() -> Type {
 }
 
 fn snapshot_type() -> Type {
+    let bus = Type::table([
+        ("gain", TableField::required(Type::number())),
+        ("volume", TableField::required(Type::number())),
+        ("muted", TableField::required(Type::boolean())),
+        ("activeVoices", TableField::required(Type::number())),
+        ("fading", TableField::required(Type::boolean())),
+    ]);
+    let music = Type::table([
+        (
+            "state",
+            TableField::required(Type::union([Type::string(), Type::nil()])),
+        ),
+        (
+            "pending",
+            TableField::required(Type::union([Type::string(), Type::nil()])),
+        ),
+        (
+            "position",
+            TableField::required(Type::union([Type::number(), Type::nil()])),
+        ),
+        ("layerDrift", TableField::required(Type::number())),
+        ("energy", TableField::required(Type::number())),
+    ]);
     Type::table([
         ("activeVoices", TableField::required(Type::number())),
         ("pooledVoices", TableField::required(Type::number())),
         ("started", TableField::required(Type::number())),
         ("stolen", TableField::required(Type::number())),
         ("rejected", TableField::required(Type::number())),
-        ("buses", TableField::required(Type::Any)),
-        ("music", TableField::required(Type::Any)),
-        ("analysis", TableField::required(Type::Any)),
+        (
+            "buses",
+            TableField::required(Type::dictionary(Type::string(), bus)),
+        ),
+        ("music", TableField::required(music)),
+        (
+            "analysis",
+            TableField::required(Type::dictionary(Type::string(), Type::string())),
+        ),
     ])
 }
 

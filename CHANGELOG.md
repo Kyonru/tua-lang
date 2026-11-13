@@ -36,6 +36,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Audio snapshots expose typed `music`, bus, and analysis fields in completion,
+  hover, and checking; the subscription-only `musicState` is absent from
+  snapshot member suggestions.
 - Formatting a top-level generic type alias no longer indents the following
   statement as if the alias were still incomplete.
 - Imported SignalBus event payloads now check against their declared schema

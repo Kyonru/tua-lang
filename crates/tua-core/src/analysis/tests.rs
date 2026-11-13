@@ -1113,6 +1113,37 @@ EventModule.events:emit("hit", <|direct_signature|>1)
 }
 
 #[test]
+fn audio_snapshot_music_fields_complete_and_hover_with_their_types() {
+    let fixture = Fixture::parse(
+        r#"local audio = audioSystem({})
+local snapshot = audio:snapshot()
+local state = snapshot.music.<|hover|>state
+local pending = snapshot.music.<|members|>pending
+local unknown = snapshot.<|top_members|>musicState
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_file("src/main.tua", fixture.source("src/main.tua"));
+    let snapshot = host.snapshot();
+    let hover = snapshot
+        .hover("src/main.tua", fixture.position("hover"))
+        .expect("music state should hover");
+    assert!(hover.contents.contains("string"), "{hover:#?}");
+    assert!(hover.contents.contains("nil"), "{hover:#?}");
+    let completions = snapshot.completion("src/main.tua", fixture.position("members"));
+    assert!(
+        completions.iter().any(|item| item.label == "pending"),
+        "music fields should complete: {completions:#?}"
+    );
+    let top_level = snapshot.completion("src/main.tua", fixture.position("top_members"));
+    assert!(
+        top_level.iter().any(|item| item.label == "music")
+            && !top_level.iter().any(|item| item.label == "musicState"),
+        "snapshot and subscription state fields must remain distinct: {top_level:#?}"
+    );
+}
+
+#[test]
 fn shared_required_signal_bus_ranks_event_completion_before_nearby_other_bus() {
     let fixture = Fixture::parse(
         r#"-- file: src/signals.tua

@@ -5468,6 +5468,26 @@ unsubscribe()
 }
 
 #[test]
+fn audio_snapshot_exposes_nested_music_bus_and_analysis_types() {
+    check_tua_source(
+        "src/audio.tua",
+        r#"local audio = audioSystem({ buses = { master = {} } })
+local snapshot: AudioSnapshot = audio:snapshot()
+local state: string | nil = snapshot.music.state
+local pending: string | nil = snapshot.music.pending
+local position: number | nil = snapshot.music.position
+local drift: number = snapshot.music.layerDrift
+local master = snapshot.buses["master"]
+if master then
+  local gain: number = master.gain
+end
+local status: string | nil = snapshot.analysis["music.ogg"]
+"#,
+    )
+    .expect("nested snapshot fields should use their runtime types");
+}
+
+#[test]
 fn audio_voice_methods_still_check_their_arguments() {
     let diagnostics = check_tua_source(
         "src/audio.tua",

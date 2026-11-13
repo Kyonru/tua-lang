@@ -105,6 +105,23 @@ observes active-voice and music-state changes; an update with unchanged control
 state does not notify it. Typed `on` and `once` cover voice lifecycle, bus
 changes, fades, music transitions, beats, bars, effects, and analysis.
 
+The snapshot keeps music information under `music`, while the smaller
+`subscribe` state has a top-level `musicState` field:
+
+```tua
+local snapshot = audio:snapshot()
+local current: string | nil = snapshot.music.state
+local pending: string | nil = snapshot.music.pending
+local drift: number = snapshot.music.layerDrift
+local sfx = snapshot.buses["sfx"]
+if sfx then
+  local sfxGain: number = sfx.gain
+end
+```
+
+Snapshot bus entries also expose `volume`, `muted`, `activeVoices`, and
+`fading`; `analysis[path]` contains the analysis status string.
+
 ## Music Scenes
 
 Scenes contain synchronized layers. `setMusicState` accepts an immediate,
