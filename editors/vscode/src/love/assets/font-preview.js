@@ -4,6 +4,7 @@ const path = require("node:path");
 const vscode = require("vscode");
 const { escapeHtml, webviewNonce } = require("../../shared/webview");
 const openPanels = new Map();
+let fontRevision = 0;
 
 function isFontFile(uri) {
   return uri?.scheme === "file" && /\.(?:otf|ttf)$/i.test(uri.fsPath);
@@ -13,6 +14,7 @@ function showFontPreview(uri) {
   const key = uri.toString();
   const existing = openPanels.get(key);
   if (existing) {
+    existing.webview.html = fontPreviewHtml(existing.webview, uri);
     existing.reveal();
     return;
   }
@@ -27,14 +29,18 @@ function showFontPreview(uri) {
     },
   );
   openPanels.set(key, panel);
-  panel.onDidDispose(() => openPanels.delete(key));
+  panel.onDidDispose(() => {
+    if (openPanels.get(key) === panel) openPanels.delete(key);
+  });
   panel.webview.html = fontPreviewHtml(panel.webview, uri);
 }
 
 function fontPreviewHtml(webview, uri) {
   const name = path.basename(uri.fsPath);
   const format = path.extname(name).slice(1).toUpperCase();
-  const fontUrl = cssString(webview.asWebviewUri(uri).toString());
+  // A new resource URL makes an explicit reopen reflect edits to the font file.
+  const resource = webview.asWebviewUri(uri).with({ query: String(++fontRevision) });
+  const fontUrl = cssString(resource.toString());
   const nonce = webviewNonce();
   const samples = [18, 32, 48, 72]
     .map((size) => `<section class="sample"><h2>${size} px</h2><p class="size-${size}">The quick brown fox jumps over the lazy dog.</p></section>`)

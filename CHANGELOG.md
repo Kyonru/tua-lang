@@ -22,6 +22,8 @@ language or editor behavior, and migration notes call out those changes.
 
 - Opening the same font again reveals its existing preview tab instead of
   creating duplicate webviews.
+- Reopening a font preview reloads the font resource, so edits and replacements
+  show their current rendered or error state.
 
 ## [0.8.0] - 2026-11-13
 

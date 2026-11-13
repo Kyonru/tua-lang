@@ -19,7 +19,10 @@ const vscode = {
         onDidDispose(callback) { this.didDispose = callback; },
         webview: {
           cspSource: "vscode-resource:",
-          asWebviewUri: (uri) => ({ toString: () => `vscode-resource:${uri.fsPath}` }),
+          asWebviewUri: (uri) => ({
+            with: ({ query }) => ({ toString: () => `vscode-resource:${uri.fsPath}?${query}` }),
+            toString: () => `vscode-resource:${uri.fsPath}`,
+          }),
         },
       };
       return panel;
@@ -44,7 +47,7 @@ test("font preview uses a local font resource and gives size and glyph samples",
   assert.equal(panel.title, "Font: ui.ttf");
   assert.equal(panel.options.localResourceRoots[0].fsPath, "/game/assets");
   assert.match(panel.webview.html, /font-src vscode-resource:/);
-  assert.match(panel.webview.html, /src: url\("vscode-resource:\/game\/assets\/ui.ttf"\)/);
+  assert.match(panel.webview.html, /src: url\("vscode-resource:\/game\/assets\/ui.ttf\?\d+"\)/);
   assert.match(panel.webview.html, /18 px/);
   assert.match(panel.webview.html, /72 px/);
   assert.match(panel.webview.html, /0123456789/);
@@ -63,11 +66,17 @@ test("opening the same font reveals its existing preview and disposal allows reo
   const uri = { fsPath: "/game/assets/reused.otf", scheme: "file", toString: () => "file:///game/assets/reused.otf" };
   showFontPreview(uri);
   const originalPanel = panel;
+  const originalHtml = panel.webview.html;
   const opened = panelCount;
   const revealed = revealCount;
   showFontPreview(uri);
   assert.equal(panelCount, opened);
   assert.equal(revealCount, revealed + 1);
+  assert.notEqual(panel.webview.html, originalHtml, "reopening a font should reload its content");
+  const resourceUrl = (html) => html.match(/vscode-resource:\/game\/assets\/reused\.otf\?\d+/)?.[0];
+  assert(resourceUrl(originalHtml));
+  assert(resourceUrl(panel.webview.html));
+  assert.notEqual(resourceUrl(panel.webview.html), resourceUrl(originalHtml));
   originalPanel.didDispose();
   showFontPreview(uri);
   assert.equal(panelCount, opened + 1);

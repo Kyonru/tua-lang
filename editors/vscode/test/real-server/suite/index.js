@@ -1,6 +1,7 @@
 "use strict";
 
 const assert = require("assert/strict");
+const fs = require("node:fs");
 const path = require("path");
 const vscode = require("vscode");
 const { previewContext, verifyGraphPreviews } = require("./graph-previews");
@@ -809,6 +810,48 @@ async function run() {
   } finally {
     fontBrowser.dispose();
   }
+  const originalFont = fs.readFileSync(fixtures.fontPath);
+  try {
+    fs.writeFileSync(fixtures.fontPath, "invalid font bytes");
+    await vscode.commands.executeCommand("tua.assets.preview", { uri: fontUri.toString() });
+    const invalidPreview = await previewContext(
+      process.env.TUA_REAL_SERVER_CDP_PORT,
+      "sniglet.otf font preview",
+    );
+    try {
+      await retry(
+        () => invalidPreview.browser.evaluate(
+          "document.getElementById('status')?.textContent",
+          invalidPreview.context,
+        ),
+        (status) => status === "Font could not be rendered",
+        "edited invalid font to refresh the existing preview",
+      );
+    } finally {
+      invalidPreview.browser.dispose();
+    }
+
+    fs.writeFileSync(fixtures.fontPath, originalFont);
+    await vscode.commands.executeCommand("tua.assets.preview", { uri: fontUri.toString() });
+    const restoredPreview = await previewContext(
+      process.env.TUA_REAL_SERVER_CDP_PORT,
+      "sniglet.otf font preview",
+    );
+    try {
+      await retry(
+        () => restoredPreview.browser.evaluate(
+          "document.getElementById('status')?.textContent",
+          restoredPreview.context,
+        ),
+        (status) => status === "Font loaded",
+        "restored font to reload in the existing preview",
+      );
+    } finally {
+      restoredPreview.browser.dispose();
+    }
+  } finally {
+    fs.writeFileSync(fixtures.fontPath, originalFont);
+  }
   await vscode.commands.executeCommand("workbench.action.closeActiveEditor");
 
   console.log(
@@ -831,6 +874,7 @@ async function run() {
       protocolStubActionApplied: true,
       formattingEdits: formatting.length,
       fontPreview: "sniglet.otf rendered at 18px",
+      fontReload: true,
       hover: "Player",
       genericAliasHover: "Box<number>.value: number",
       importedGenericFunctionHover: hoverText(importedGenericHover),

@@ -559,8 +559,10 @@ machines link directly to their previews from hover; recognized asset-path
 hovers open the resolved asset and reveal it in the Explorer. Images and audio
 use VS Code's native viewers; TTF and OTF fonts open a Tua sample showing
 common text sizes and glyphs, with a load-error state. The font sample uses the
-editor renderer, so confirm final appearance in LÖVE. These actions use source navigation, so unrelated strings that merely
-look like asset paths do not acquire asset links. Preview links trust only
+editor renderer, so confirm final appearance in LÖVE. Reopen a font from the
+Assets view or hover link to refresh the existing preview after editing it.
+These actions use source navigation, so unrelated strings that merely look
+like asset paths do not acquire asset links. Preview links trust only
 their registered Tua commands. The graph never runs the project or claims to
 show the machine's live runtime state.
 The Assets view shows a refresh message when inventory analysis takes more than
