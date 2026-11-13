@@ -632,6 +632,43 @@ final class Fallback {
 }
 
 #[test]
+fn class_constructors_preserve_assignments_after_inline_super() {
+    let emitted = emit_tua_source(
+        "src/classes.tua",
+        r#"
+open class Base {
+  speed: number = 0
+}
+
+final class Inline extends Base {
+  init() { super(); self.speed = 120 }
+}
+
+final class Multiline extends Base {
+  init() {
+    super()
+    self.speed = 120
+  }
+}
+"#,
+    )
+    .expect("subclass constructors should emit");
+
+    for class in ["Inline", "Multiline"] {
+        assert!(
+            emitted.contains(&format!(
+                "local function {class}_new()\n  local self = setmetatable({{}}, {class})\n  {class}_init(self)\n  return self\nend"
+            )),
+            "{class} must execute its init body:\n{emitted}"
+        );
+        assert!(
+            emitted.contains(&format!("local function {class}_init(self)")),
+            "missing {class} initializer:\n{emitted}"
+        );
+    }
+}
+
+#[test]
 fn class_constructors_preserve_varargs_and_only_rewrite_standalone_super_calls() {
     let emitted = emit_tua_source(
         "src/classes.tua",

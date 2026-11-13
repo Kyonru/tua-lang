@@ -2598,6 +2598,11 @@ fn self_assignments(body: &str, allow_leading_super: bool) -> Option<Vec<(String
         }
 
         if allow_leading_super && !saw_super && line.starts_with("super(") {
+            // A second statement on this line must still run. Flattening is
+            // only safe when the complete line is the standalone super call.
+            if leading_super_args(line).is_none() {
+                return None;
+            }
             saw_super = true;
             continue;
         }

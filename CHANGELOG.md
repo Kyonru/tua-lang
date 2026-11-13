@@ -36,6 +36,8 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Subclass constructors execute assignments after an inline `super()` call;
+  constructor flattening no longer drops later statements on the same line.
 - Opening the same font again reveals its existing preview tab instead of
   creating duplicate webviews.
 - Reopening a font preview reloads the font resource, so edits and replacements
