@@ -772,12 +772,8 @@ function stateMachinePreviewHtml(webview, viewModel) {
     }
 
     function renderMachineInspector(root, machine) {
-      root.append(sectionLabel("Topology"));
-      root.append(metricRow([
-        [machine.states.length, "states"],
-        [machine.transitions.length, "events"],
-        [expandedEdges(machine).length, "routes"],
-      ]));
+      root.append(sectionLabel("Event routes"));
+      root.append(transitionList(expandedEdges(machine), "No transition routes are declared."));
       root.append(sectionLabel("States"));
       const list = element("div", "item-list");
       for (const state of machine.states) {

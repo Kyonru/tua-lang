@@ -163,6 +163,11 @@ async function run() {
     await panel.webview.postMessage({ command: "tua/liveStateMachine", runtime: {
       status: "connected", sessionTitle: "Player 1", state: "running", receivedAt: Date.now(),
     } });
+    await evaluate("drawConnections()");
+    assert.equal(await evaluate("document.querySelectorAll('.transition-item').length"), 2, "machine overview lists every event route independently of graph-line overlap");
+    await screenshot("state-machine-routes");
+    await evaluate("document.querySelector('.transition-item').click()");
+    assert.equal(await evaluate("document.querySelector('.edge-label.selected')?.textContent"), "start", "route list selects and highlights the matching diagram edge");
     await waitFor(() => evaluate("document.querySelector('[data-state=running]').classList.contains('live-current')"), "selected live state overlay");
     assert.equal(await evaluate("document.querySelector('[data-state=running]').getAttribute('aria-current')"), "true");
     assert.equal(await evaluate("document.getElementById('runtime-status').textContent.includes('Live sample')"), true);

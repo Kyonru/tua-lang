@@ -95,6 +95,8 @@ remain traceable in a dense graph. Hover or click an arrow to inspect its
 transition, or double-click it to open the source. Drag empty canvas space to pan; pinch or use
 Control/Command + wheel to zoom. The graph also has Zoom in, Zoom out, and Fit
 buttons, plus `+`, `-`, and `0` shortcuts when the canvas has keyboard focus.
+The machine inspector lists every event route, including routes that cross or
+overlap in a dense graph. Select one there to highlight its diagram edge.
 Each real state receives a distinct, theme-aware
 pastel color for quick visual tracking; the wildcard source stays neutral.
 
