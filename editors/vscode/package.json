@@ -2,7 +2,7 @@
   "name": "tua",
   "displayName": "Tua",
   "description": "Build LOVE2D games in typed Lua with completion, visual previews, hot reload, tests, and debugging.",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "publisher": "SolenodonteLabs",
   "license": "MIT",
   "repository": {
