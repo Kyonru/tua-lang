@@ -947,8 +947,15 @@ fn custom_package_targets_list_and_publish_atomically() {
         .path()
         .join("dist/custom/portable/Custom Game/result.txt");
     let original = fs::read(&destination).unwrap();
-    assert!(String::from_utf8_lossy(&success.stdout)
-        .contains("packaged dist/custom/portable/Custom Game"));
+    let relative_destination = PathBuf::from("dist")
+        .join("custom")
+        .join("portable")
+        .join("Custom Game");
+    assert!(
+        String::from_utf8_lossy(&success.stdout)
+            .contains(&format!("packaged {}", relative_destination.display())),
+        "{success:?}"
+    );
 
     for mode in ["fail", "empty"] {
         let failed = package()

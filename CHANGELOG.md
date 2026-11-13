@@ -77,6 +77,8 @@ inspector views remain opt-in and do not add code to production packages.
 
 ### Fixed
 
+- Web package hosting templates now keep LF line endings on Windows checkouts,
+  so generated hosting headers match other platforms.
 - Formatting a table argument that closes mid-line no longer indents the
   following statements, including the bundled audio example on format-on-save.
 - Opening generated Lua beside Tua now selects the line mapped from the
@@ -169,6 +171,7 @@ inspector views remain opt-in and do not add code to production packages.
 
 ### Tests and audit
 
+- Custom package output tests now accept the host platform's path separators.
 - Shader-validator timeout coverage now leaves enough process-start margin for
   parallel test load while still exercising a batch longer than one timeout.
 - Shader runtime tests now create distinct temporary projects in parallel,
