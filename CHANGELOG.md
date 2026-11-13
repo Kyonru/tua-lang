@@ -36,6 +36,8 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Inferred instances from imported class constructors and typed factories now
+  retain their method receiver identity during checking.
 - ShaderScan's feature example and guide use paths that exist in the built
   LÖVE game; a missing source-root-prefixed path now suggests the matching
   build-relative file when it exists.

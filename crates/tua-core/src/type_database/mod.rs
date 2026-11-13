@@ -787,12 +787,14 @@ impl ProjectTypeDatabase {
                             .any(|active| active == identity)
                     })
                     .and_then(|identity| self.nominal_classes.get(identity))
-                    .and_then(|(path, name)| self.module(path)?.alias(name))
-                    .and_then(|binding| match &binding.ty {
-                        Type::Table(current) => Some(current),
-                        _ => None,
+                    .and_then(|(path, name)| {
+                        let binding = self.module(path)?.alias(name)?;
+                        match &binding.ty {
+                            Type::Table(current) => Some((current, path.as_path())),
+                            _ => None,
+                        }
                     });
-                let table = current.unwrap_or(table);
+                let (table, field_source_path) = current.unwrap_or((table, source_path));
                 if let Some(identity) = identity {
                     if context
                         .nominal_classes
@@ -813,7 +815,7 @@ impl ProjectTypeDatabase {
                             crate::TableField {
                                 ty: self.resolve_type_inner(
                                     module_graph,
-                                    source_path,
+                                    field_source_path,
                                     &field.ty,
                                     context,
                                 ),

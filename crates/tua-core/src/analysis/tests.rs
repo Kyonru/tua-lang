@@ -3223,6 +3223,45 @@ return { Dialogue = Dialogue }
 }
 
 #[test]
+fn inferred_imported_class_instances_keep_their_method_receiver_identity() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/actors.tua
+final class Guard {
+  level(): number { return 1 }
+}
+export type GuardInstance = Guard
+return { Guard = Guard }
+-- file: src/rules.tua
+import type { GuardInstance } from "./actors"
+local Actors = require("actors")
+local function make(): GuardInstance
+  return Actors.Guard.new()
+end
+return { make = make }
+-- file: src/main.tua
+local Actors = require("actors")
+local Rules = require("rules")
+local direct = Actors.Guard.new()
+local forwarded = Rules.make()
+local a = direct:level()
+local b = forwarded:level()
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+    let diagnostics = host.snapshot().diagnostics("src/main.tua");
+    assert!(
+        !diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == Some(DiagnosticCode::TYPE_MISMATCH)),
+        "inferred imported instances should keep their receiver: {diagnostics:#?}"
+    );
+}
+
+#[test]
 fn imported_generic_class_alias_uses_runtime_constructor_and_shared_members() {
     let fixture = Fixture::parse(
         r#"-- file: src/main.tua
