@@ -1,7 +1,7 @@
 # Tua 0.8.0 local release-readiness audit
 
 Date: 2026-11-13 (JST). Starting revision: `03ad8603`. Product candidate revision:
-`01c7220c`. Host: macOS arm64, Rust stable, Node 24, VSCodium, LÖVE 11.5.
+`e5906bcb`. Host: macOS arm64, Rust stable, Node 24, VSCodium, LÖVE 11.5.
 This is a **local release candidate**, not a published-release certification.
 No tag, push, registry upload, or GitHub release was created.
 
@@ -23,6 +23,7 @@ project. Do not describe those release-only or pilot checks as passed.
 | A newly generated game-packaging workflow selected the old `v0.7.0` compiler and default project config omitted `package_pipelines`. | Two core config tests failed in the initial full gate; a fresh 0.8.0 `tua actions init` workflow contained the stale tag. | `772d8fd0` restores the schema default and renders the CLI package version into the workflow. Fresh output now uses `v0.8.0`. |
 | Parallel shader runtime tests intermittently shared a temporary project. | Repeated `shader_scan` runs showed output contamination or a missing build directory despite successful builds. | `02ccb7cf` gives each fixture a process-local unique ID and creates its directory exclusively. Ten consecutive focused runs passed. |
 | Formatting an inline-closing table argument leaked indentation into subsequent statements. | `examples/audio-system/src/main.tua` failed `tua fmt --check` in full CI; a two-call reproduction gained two then four spaces on following locals. | `8082c678` tracks open table block depths and closes them on suffix `})`; added a regression and idempotence assertion. All 68 formatter tests and the audio example format check pass. |
+| A shader-validator timeout test could fail under parallel test scheduling. | The first exact-revision CI rerun failed `headless_timeout_applies_per_process_not_per_batch` even though its 0.3-second child usually finishes within the two-second deadline; the prior full run passed. | `e5906bcb` keeps the total batch longer than one timeout while allowing more per-process startup margin. Three focused repetitions and the final full CI run passed. This changes the test oracle, not the production timeout. |
 
 `2077a005` synchronizes the 0.8.0 Cargo and extension versions and prepares
 release notes. `01c7220c` refreshes five README screenshots from a graphical
@@ -35,7 +36,7 @@ legibility, clipping, and errors; the artifact hash check passed.
 
 | Check | Result and scope |
 | --- | --- |
-| `make ci-check` after final product edit | Passed. Includes `cargo fmt`, Clippy, RustSec policy, workspace tests (1,948 core, 455 LSP, 148 CLI tests among the suite), all bundled example builds, LSP feature smoke, extension tests, 466 tracked JSON files, docs build, representative completion/performance smoke, and inline-completion evaluation. Core reports one pre-existing ignored test; CLI API reports two ignored tests. Log: `/tmp/tua-release-audit-ci-080-final3.log`. |
+| `make ci-check` after final product edit | Passed. Includes `cargo fmt`, Clippy, RustSec policy, workspace tests (1,948 core, 455 LSP, 148 CLI tests among the suite), all bundled example builds, LSP feature smoke, extension tests, 466 tracked JSON files, docs build, representative completion/performance smoke, and inline-completion evaluation. Core reports one pre-existing ignored test; CLI API reports two ignored tests. Final log: `/tmp/tua-release-audit-ci-080-exact2.log`. |
 | `make love-runtime-test` | Passed three LOVE example tests in the installed runtime. |
 | `make runtime-test` | Passed plain Lua runtime suite before the final formatter-only edit; emitted Lua paths were unchanged by that edit, and the later full CI runtime tests passed. |
 | Graphical extension host | `test:vscode`, `test:webviews`, and `test:vscode-real` passed with the staged 0.8.0 server. The final `tua-0.8.0.vsix` was then installed in a disposable VSCodium profile and `node editors/vscode/test/real-server/run.js` passed with `TUA_TEST_VSIX`, exercising the **bundled** server, completion, hover, navigation, formatting, and ECS/pool/Signal preview navigation. Host coverage is selected workflows, not every command or long session. Log: `/tmp/tua-release-audit-installed-vsix-080.log`. |
