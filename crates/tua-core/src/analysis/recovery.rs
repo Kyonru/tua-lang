@@ -233,7 +233,19 @@ fn source_without_recoverable_incomplete_lines_preserving_headers(
         if !protected_header
             && (line_is_recoverable_incomplete_edit(trimmed) || unfinished_argument)
         {
-            if class_body_ranges
+            if trimmed.ends_with(':')
+                && !content.contains("--")
+                && !class_body_ranges
+                    .iter()
+                    .any(|range| range.contains(&line_start))
+            {
+                // A trailing method separator is a common cold-completion
+                // state. Keep its receiver and surrounding scope in the
+                // temporary parse; the original source still supplies the
+                // completion context and parser diagnostics.
+                recovered.push_str(content);
+                recovered.push_str("__tua_completion_placeholder()");
+            } else if class_body_ranges
                 .iter()
                 .any(|range| range.contains(&line_start))
             {

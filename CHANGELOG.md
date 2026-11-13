@@ -36,6 +36,8 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Cold completion after an unfinished `:` now retains the receiver's scope,
+  including imported generic factory results inside a narrowed branch.
 - Clarified the supported cross-file spelling for generic instance aliases
   and protocol-bounded factory functions.
 - Documented per-acquisition `TL5007` suppression for object-pool values

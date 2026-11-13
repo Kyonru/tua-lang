@@ -10296,6 +10296,53 @@ final class Draft<T: Renderable> implements Renderable {
 }
 
 #[test]
+fn cold_incomplete_imported_generic_receiver_keeps_member_completion() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/model.tua
+final class Jar<T> {
+  item: T
+  init(item: T) { self.item = item }
+  get(): T { return self.item }
+  label(): string { return "jar" }
+}
+export type JarInstance<T> = Jar<T>
+return { Jar = Jar }
+-- file: src/recipes.tua
+import type { JarInstance } from "./model"
+local Model = require("model")
+local function seal(value: number): JarInstance<number>
+  return Model.Jar.new(value)
+end
+return { seal = seal }
+-- file: src/main.tua
+local Recipes = require("recipes")
+local potion: number | nil = 1
+if potion then
+  local jar = Recipes.seal(potion)
+  jar:<|complete|>
+end
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+    let snapshot = host.snapshot();
+    assert!(snapshot
+        .last_good_semantic_facts(Path::new("src/main.tua"))
+        .is_none());
+    let labels =
+        completion_labels(&snapshot.completion("src/main.tua", fixture.position("complete")));
+    assert!(labels.contains(&"get".to_owned()), "{labels:?}");
+    assert!(labels.contains(&"label".to_owned()), "{labels:?}");
+    assert!(snapshot
+        .diagnostics("src/main.tua")
+        .iter()
+        .any(|diagnostic| { diagnostic.code == Some(DiagnosticCode::SYNTAX_PARSE) }));
+}
+
+#[test]
 fn workspace_declaration_overlays_keep_project_ownership() {
     let mut host = AnalysisHost::new();
     host.set_source_roots([PathBuf::from("first/src"), PathBuf::from("second/src")]);
