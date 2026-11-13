@@ -15,13 +15,33 @@ jobs:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           submodules: recursive
-      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
       - name: Install pinned Tua CLI
-        run: cargo install --git https://github.com/Kyonru/tua-lang.git --tag v@TUA_VERSION@ --locked --root "$RUNNER_TEMP/tua" tua-cli
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version="@TUA_VERSION@"
+          archive="tua-${version}-x86_64-unknown-linux-gnu.tar.gz"
+          release="https://github.com/Kyonru/tua-lang/releases/download/v${version}"
+          install_dir="$RUNNER_TEMP/tua"
+          mkdir -p "$install_dir"
+          curl --fail --location --retry 3 --silent --show-error \
+            "$release/$archive" -o "$install_dir/$archive"
+          curl --fail --location --retry 3 --silent --show-error \
+            "$release/$archive.sha256" -o "$install_dir/$archive.sha256"
+          (cd "$install_dir" && sha256sum --check "$archive.sha256")
+          gh attestation verify "$install_dir/$archive" \
+            --repo Kyonru/tua-lang \
+            --signer-workflow Kyonru/tua-lang/.github/workflows/release.yml \
+            --source-ref "refs/tags/v${version}"
+          tar -xzf "$install_dir/$archive" -C "$install_dir"
+          cli="$install_dir/tua-${version}-x86_64-unknown-linux-gnu/tua"
+          test "$("$cli" --version)" = "tua ${version}"
+          echo "$(dirname "$cli")" >> "$GITHUB_PATH"
       - name: Check and package game
         run: |
-          "$RUNNER_TEMP/tua/bin/tua" check
-          "$RUNNER_TEMP/tua/bin/tua" package --target love
+          tua check
+          tua package --target love
       - name: Keep downloadable game artifact
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:

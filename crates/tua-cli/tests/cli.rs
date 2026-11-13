@@ -262,11 +262,16 @@ fn actions_init_adds_a_reviewable_workflow_without_overwriting_it() {
     let workflow_path = temp.path().join(".github/workflows/tua-game.yml");
     let workflow = fs::read_to_string(&workflow_path).unwrap();
     assert!(!workflow.contains("@TUA_VERSION@"));
-    assert!(workflow.contains(&format!(
-        "--tag v{} --locked --root \"$RUNNER_TEMP/tua\" tua-cli",
-        env!("CARGO_PKG_VERSION")
-    )));
-    assert!(workflow.contains("\"$RUNNER_TEMP/tua/bin/tua\" package --target love"));
+    assert!(workflow.contains(&format!("version=\"{}\"", env!("CARGO_PKG_VERSION"))));
+    assert!(workflow.contains("tua-${version}-x86_64-unknown-linux-gnu.tar.gz"));
+    assert!(workflow.contains("releases/download/v${version}"));
+    assert!(workflow.contains("sha256sum --check \"$archive.sha256\""));
+    assert!(workflow.contains("gh attestation verify"));
+    assert!(workflow.contains("--signer-workflow Kyonru/tua-lang/.github/workflows/release.yml"));
+    assert!(workflow.contains("--source-ref \"refs/tags/v${version}\""));
+    assert!(workflow.contains("test \"$(\"$cli\" --version)\" = \"tua ${version}\""));
+    assert!(workflow.contains("tua package --target love"));
+    assert!(!workflow.contains("cargo install"));
     assert!(workflow.contains("actions/upload-artifact@"));
     assert!(workflow.contains("actions/download-artifact@"));
     assert!(workflow.contains("gh release create"));

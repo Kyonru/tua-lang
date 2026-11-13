@@ -205,9 +205,11 @@ tua actions init
 ```
 
 This creates `.github/workflows/tua-game.yml` if it is absent. Review and
-commit that file in your game repository. The generated workflow pins the source
-tag matching the Tua CLI that created it and uses Cargo to install the CLI. It
-then runs `tua check` and `tua package --target love`. It does not need Tua on
+commit that file in your game repository. The generated workflow pins the release
+tag matching the Tua CLI that created it and installs the Linux CLI archive. It
+checks the archive checksum, verifies its GitHub build attestation and tag, and
+checks the installed CLI version before running `tua check` and
+`tua package --target love`. It does not need Tua on
 GitHub Packages, a personal access token, or a separate Tua action. Generate
 the workflow with a published Tua release. An unreleased local build may share
 a version number with an older tag. Update the pin only after verifying a newer
@@ -232,8 +234,8 @@ macOS, web, mobile, and custom targets have separate runtime or toolchain
 requirements. Add jobs for them using the [target commands above](#packaging-games)
 and the relevant toolchains, then verify those jobs on GitHub-hosted runners.
 For web builds, supply the standalone player and use a Tua CLI version with
-`--target web`. GitHub Release CLI archives can replace the source installation
-after a suitable version is published and verified.
+`--target web`. The generated Linux CLI installation requires a published Tua
+release for the version that created the workflow.
 
 ## Custom Package Pipelines
 

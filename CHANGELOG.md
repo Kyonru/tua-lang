@@ -6,6 +6,12 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+### Changed
+
+- Newly generated game workflows install the matching Linux release CLI archive
+  with checksum, provenance, and version checks instead of recompiling Tua on
+  every run. Existing generated workflows remain untouched.
+
 ## [0.8.0] - 2026-11-13
 
 ### Release summary
