@@ -47,7 +47,9 @@ function registerWorkspaceSidebar({ getClient }) {
         if (node?.uri) await vscode.window.showTextDocument(vscode.Uri.parse(node.uri), { preview: true });
         return vscode.commands.executeCommand(command);
       })),
-    vscode.workspace.onDidSaveTextDocument(refresh),
+    vscode.workspace.onDidSaveTextDocument(document => {
+      if (/\.(tua|lua|toml)$/i.test(document.uri.path)) refresh();
+    }),
     vscode.workspace.onDidChangeWorkspaceFolders(refresh),
   );
 }

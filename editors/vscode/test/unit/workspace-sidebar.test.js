@@ -83,6 +83,12 @@ test("workspace sidebar invalidates edited and externally changed sources and di
     await provider.getChildren(node);
   }
   assert.equal(calls, 7);
+  events.save({ uri: { path: "/game/README.md" } });
+  await provider.getChildren(node);
+  assert.equal(calls, 7, "saving unrelated files should not refetch graph sections");
+  events.save({ uri: { path: "/game/main.tua" } });
+  await provider.getChildren(node);
+  assert.equal(calls, 8, "saving Tua still refreshes the sidebar");
   events.edit({ document: { uri: { path: "/game/main.tua" } } });
   registration.dispose();
   assert.deepEqual(Object.keys(events), []);

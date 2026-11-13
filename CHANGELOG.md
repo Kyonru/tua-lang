@@ -36,6 +36,8 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Saving an unrelated file no longer invalidates the Project files, Modules,
+  Signals, and ECS sidebar data; Tua, Lua, and project config saves still refresh it.
 - Hidden behavior-tree, state-machine, and audio preview panels defer edit-triggered
   analysis and rendering until reopened; visible previews remain live.
 - Hidden Assets views refresh unused-asset diagnostics without building or
