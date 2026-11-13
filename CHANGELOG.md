@@ -20,6 +20,19 @@ language or editor behavior, and migration notes call out those changes.
 - Font assets now open a glyph and size preview from the Assets view and asset
   hover action, with an explicit load failure state and a reminder to check
   final rendering in LÖVE.
+- Sprite previews show effective per-frame timing beside each frame and keep
+  the frame strip closer to playback controls in narrow editor panes.
+- State-machine previews list all event routes in the inspector, so dense or
+  overlapping graph lines remain selectable by name.
+- Server Health leads with an interpretation of the current snapshot and sorts
+  sampled request methods by p95 latency, while distinguishing server timing
+  from visible editor delay.
+- Font previews let developers try their own game text at several sizes and
+  keep that sample through a refresh.
+- Procedural-map previews identify an old map while a newly requested seed is
+  still generating.
+- ECS Explorer relationships can be followed between components, systems, and
+  queries in place, with a separate action to open the source reference.
 
 ### Fixed
 
