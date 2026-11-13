@@ -5,6 +5,7 @@ const { COMMANDS } = require("../../constants");
 const { formatError } = require("../../shared/errors");
 const { lspRangeToVscode } = require("../../shared/locations");
 const { AssetTreeDataProvider } = require("./tree");
+const { isFontFile, showFontPreview } = require("./font-preview");
 
 const ASSET_GLOB = "**/*.{bmp,exr,hdr,jpeg,jpg,pic,png,tga,flac,mp3,ogg,wav,otf,ttf,frag,fs,glsl,vert,vs,ogm,ogv}";
 const REFRESH_DELAY_MS = 150;
@@ -133,18 +134,26 @@ class AssetExplorerController {
 async function openAsset(node) {
   const uri = assetUri(node);
   if (uri) {
-    await vscode.commands.executeCommand("vscode.open", uri, { preview: true });
+    await openAssetUri(uri);
   }
 }
 
 async function previewAsset(target) {
   const uri = assetPreviewUri(target);
   if (uri) {
-    await vscode.commands.executeCommand("vscode.open", uri, { preview: true });
+    await openAssetUri(uri);
     return uri.toString();
   }
 
   return undefined;
+}
+
+async function openAssetUri(uri) {
+  if (isFontFile(uri)) {
+    showFontPreview(uri);
+  } else {
+    await vscode.commands.executeCommand("vscode.open", uri, { preview: true });
+  }
 }
 
 async function revealAsset(node) {

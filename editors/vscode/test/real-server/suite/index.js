@@ -3,7 +3,7 @@
 const assert = require("assert/strict");
 const path = require("path");
 const vscode = require("vscode");
-const { verifyGraphPreviews } = require("./graph-previews");
+const { previewContext, verifyGraphPreviews } = require("./graph-previews");
 
 const fixtures = JSON.parse(process.env.TUA_REAL_SERVER_FIXTURES);
 
@@ -785,6 +785,32 @@ async function run() {
 
   await verifyGraphPreviews(fixtures.graphPath);
 
+  const fontUri = vscode.Uri.file(fixtures.fontPath);
+  assert.equal(
+    await vscode.commands.executeCommand("tua.assets.preview", { uri: fontUri.toString() }),
+    fontUri.toString(),
+  );
+  const { browser: fontBrowser, context: fontContext } = await previewContext(
+    process.env.TUA_REAL_SERVER_CDP_PORT,
+    "sniglet.otf font preview",
+  );
+  try {
+    const rendered = await retry(
+      () => fontBrowser.evaluate(`({
+        status: document.getElementById('status')?.textContent,
+        size: getComputedStyle(document.querySelector('.size-18')).fontSize,
+        glyphs: document.querySelector('.glyphs')?.textContent
+      })`, fontContext),
+      (result) => result.status === "Font loaded",
+      "valid font to render in the editor preview",
+    );
+    assert.equal(rendered.size, "18px");
+    assert.match(rendered.glyphs, /0123456789/);
+  } finally {
+    fontBrowser.dispose();
+  }
+  await vscode.commands.executeCommand("workbench.action.closeActiveEditor");
+
   console.log(
     `REAL_SERVER_EVIDENCE ${JSON.stringify({
       cacheStats: true,
@@ -804,6 +830,7 @@ async function run() {
       cyclicProtocolReturnCompletion: completionLabels(cyclicProtocolReturnCompletion).includes("previous"),
       protocolStubActionApplied: true,
       formattingEdits: formatting.length,
+      fontPreview: "sniglet.otf rendered at 18px",
       hover: "Player",
       genericAliasHover: "Box<number>.value: number",
       importedGenericFunctionHover: hoverText(importedGenericHover),

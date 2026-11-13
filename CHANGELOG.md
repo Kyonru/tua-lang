@@ -11,6 +11,9 @@ language or editor behavior, and migration notes call out those changes.
 - Newly generated game workflows install the matching Linux release CLI archive
   with checksum, provenance, and version checks instead of recompiling Tua on
   every run. Existing generated workflows remain untouched.
+- Font assets now open a glyph and size preview from the Assets view and asset
+  hover action, with an explicit load failure state and a reminder to check
+  final rendering in LÖVE.
 
 ## [0.8.0] - 2026-11-13
 

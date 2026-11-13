@@ -67,4 +67,4 @@ async function previewContext(port, title) {
   }, `rendered ${title} webview`, 15000);
 }
 
-module.exports = { verifyGraphPreviews };
+module.exports = { previewContext, verifyGraphPreviews };

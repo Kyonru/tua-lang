@@ -556,8 +556,10 @@ Static state-machine configurations use the same preview gate for
 state, expands multi-source and wildcard event routes, follows source edits,
 and navigates back to state and event declarations. Sprite sheets and state
 machines link directly to their previews from hover; recognized asset-path
-hovers link to the native asset preview and reveal the resolved asset in the
-Explorer. These actions use source navigation, so unrelated strings that merely
+hovers open the resolved asset and reveal it in the Explorer. Images and audio
+use VS Code's native viewers; TTF and OTF fonts open a Tua sample showing
+common text sizes and glyphs, with a load-error state. The font sample uses the
+editor renderer, so confirm final appearance in LÖVE. These actions use source navigation, so unrelated strings that merely
 look like asset paths do not acquire asset links. Preview links trust only
 their registered Tua commands. The graph never runs the project or claims to
 show the machine's live runtime state.

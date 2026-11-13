@@ -98,6 +98,7 @@ function createProject(workspacePath) {
   const headerCompletionPath = path.join(sourcePath, "header_completion.tua");
   const protocolStubsPath = path.join(sourcePath, "protocol_stubs.tua");
   const graphPath = path.join(sourcePath, "graph_workflow.tua");
+  const fontPath = path.join(workspacePath, "assets", "sniglet.otf");
   const cyclicProtocolAPath = path.join(sourcePath, "cyclic_a.d.tua");
   const cyclicProtocolBPath = path.join(sourcePath, "cyclic_b.d.tua");
   const cyclicProtocolValuePath = path.join(sourcePath, "cyclic_value.tua");
@@ -105,6 +106,8 @@ function createProject(workspacePath) {
   const configPath = path.join(workspacePath, "tua.toml");
 
   fs.mkdirSync(sourcePath, { recursive: true });
+  fs.mkdirSync(path.dirname(fontPath), { recursive: true });
+  fs.copyFileSync(path.resolve(__dirname, "../../../../examples/love-full/game/assets/sniglet.otf"), fontPath);
   fs.writeFileSync(
     configPath,
     ['source = "src"', 'out = "build"', 'main = "main.tua"', ""].join("\n"),
@@ -338,6 +341,7 @@ function createProject(workspacePath) {
     cyclicProtocolValuePath,
     cyclicProtocolUsePath,
     contractsPath,
+    fontPath,
     genericPath,
     genericClassPath,
     graphPath,
