@@ -32,7 +32,14 @@ function love.draw()
 end
 ```
 
-Use project-root-relative include paths:
+Use paths relative to the running LÖVE game root. With `source = "src"` and
+`out = "build"`, `src/shaders/water.glsl` is copied to
+`build/shaders/water.glsl`; both `load_shader` and `#include` use
+`"shaders/..."`. A source path such as `"src/shaders/water.glsl"` exists while
+editing but does not exist inside the built game. ShaderScan suggests the
+build-relative path when it finds that file at runtime.
+
+For example:
 
 ```glsl
 // shaders/water.glsl
@@ -45,7 +52,7 @@ vec4 effect(vec4 color, Image texture, vec2 uv, vec2 pixel) {
 
 Included files are expanded once per shader. This makes shared includes and
 cycles finite and prevents a shared declaration from being duplicated. If an
-include is missing or escapes the project root, the load error shows the
+include is missing or escapes the game root, the load error shows the
 including file and line. LÖVE compiler errors are mapped from the expanded
 source back to the original included file and line.
 
@@ -73,7 +80,7 @@ end)
 if not ok then print(message) end
 ```
 
-Tua expands project-root-relative includes for the shared shader index. Uniforms
+Tua expands includes for the shared shader index. Uniforms
 declared in included files participate in `Shader:send` diagnostics, completion,
 hover, go to definition, and LOVE-backed shader validation. Diagnostics and
 definitions retain the included file's original path and line. This analysis

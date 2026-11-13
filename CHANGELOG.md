@@ -36,6 +36,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- ShaderScan's feature example and guide use paths that exist in the built
+  LÖVE game; a missing source-root-prefixed path now suggests the matching
+  build-relative file when it exists.
 - Subclass constructors execute assignments after an inline `super()` call;
   constructor flattening no longer drops later statements on the same line.
 - Opening the same font again reveals its existing preview tab instead of

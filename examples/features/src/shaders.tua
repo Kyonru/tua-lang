@@ -1,10 +1,11 @@
 -- Feature: ShaderScan reloads a shader when the file changes, preserving the
 -- last working shader if a development edit fails to compile.
--- The path is relative to the project root, unlike shader "assets/wave.glsl".
+-- Paths are relative to the running game root. Build copies src/assets to
+-- build/assets, so this same path works in source and generated games.
 local shaders = ShaderScan.new()
 
 local function load()
-  shaders:load_shader("wave", "src/assets/wave.glsl")
+  shaders:load_shader("wave", "assets/wave.glsl")
 end
 
 local function update(dt: number)

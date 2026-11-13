@@ -30,7 +30,12 @@ end
 local function read(path)
   local source, message = love.filesystem.read(path)
   if not source then
-    return nil, ("cannot read shader include %q: %s"):format(path, tostring(message))
+    local shorter = path:match("^[^/]+/(.+)$")
+    local hint = ""
+    if shorter and love.filesystem.getInfo and love.filesystem.getInfo(shorter) then
+      hint = ("; %q exists in the built game, so use that path instead"):format(shorter)
+    end
+    return nil, ("cannot read shader include %q: %s%s"):format(path, tostring(message), hint)
   end
   return source
 end
@@ -50,7 +55,7 @@ local function expand(path, root_source)
   local function visit(current_path, supplied_source)
     current_path = normalize(current_path)
     if not current_path then
-      return nil, "shader include path escapes the project root"
+      return nil, "shader include path escapes the game root"
     end
     -- Include-once semantics make cycles finite and avoid duplicate helper
     -- declarations when a shared include is reached by multiple branches.
@@ -77,7 +82,7 @@ local function expand(path, root_source)
         local normalized = normalize(requested)
         if not normalized then
           stack[#stack] = nil
-          return nil, ("%s:%d: include path escapes the project root"):format(current_path, line_number)
+          return nil, ("%s:%d: include path escapes the game root"):format(current_path, line_number)
         end
         local ok, message = visit(normalized)
         if not ok then
@@ -107,7 +112,7 @@ end
 
 local function load(name, path)
   path = normalize(path)
-  if not path then return nil, "shader path escapes the project root" end
+  if not path then return nil, "shader path escapes the game root" end
   local source, message = read(path)
   if not source then
     return nil, message, {

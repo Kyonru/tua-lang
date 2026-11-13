@@ -129,6 +129,44 @@ assert(sent[1][1] == "active" and sent[1][2] == 2 and sent[1][3] == 3)
 }
 
 #[test]
+fn shader_scan_suggests_the_built_game_path_for_a_source_root_prefix() {
+    let Some(lua) = lua_runtime() else {
+        eprintln!("skipping emitted ShaderScan runtime test: Lua is unavailable");
+        return;
+    };
+
+    let temp = TempProject::new();
+    fs::write(
+        temp.path().join("src/main.tua"),
+        r#"
+local files = {
+  ["assets/effect.glsl"] = "vec4 effect(vec4 color, Image image, vec2 uv, vec2 pixel) { return color; }",
+}
+_G.love = {
+  filesystem = {
+    read = function(path) return files[path], "not found" end,
+    getInfo = function(path) if files[path] then return { type = "file" } end end,
+  },
+  graphics = { newShader = function(code) return { code = code } end },
+}
+
+local scanner = ShaderScan.new()
+local ok, message = pcall(function()
+  scanner:load_shader("wrong", "src/assets/effect.glsl")
+end)
+assert(not ok)
+assert(tostring(message):find('"assets/effect.glsl" exists in the built game', 1, true))
+assert(scanner:load_shader("right", "assets/effect.glsl"))
+print("SHADER_PATHS_OK")
+"#,
+    )
+    .expect("write ShaderScan path source");
+
+    let (_, output) = build_and_run(&temp, lua);
+    assert!(output.contains("SHADER_PATHS_OK"), "{output}");
+}
+
+#[test]
 fn includes_expand_once_and_compiler_errors_map_to_the_included_file() {
     let Some(lua) = lua_runtime() else {
         eprintln!("skipping emitted ShaderScan runtime test: Lua is unavailable");
