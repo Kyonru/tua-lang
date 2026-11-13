@@ -6,6 +6,41 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-13
+
+### Release summary
+
+Tua 0.8.0 expands the game packaging and editor workflows around the existing
+typed Lua compiler. Projects can build a portable `.love` archive, a web site
+with a supplied LÖVE web player, or a custom package through an explicitly
+configured pipeline. The editor now guides platform selection and provides more
+direct paths from live development state to the source and static views that
+explain it. Generated Lua remains the release output; the Runtime Inspector
+continues to run only during opted-in development sessions.
+
+#### Highlights
+
+- Package for the web with hosting headers, or define a bounded custom target
+  that receives the built game archive and publishes output only on success.
+- Generate a GitHub Actions workflow with `tua actions init` for checked `.love`
+  artifacts, downloads, and draft releases from version tags.
+- Inspect audio cues, music scenes, behavior execution, ECS components, signals,
+  stores, input, state machines, and pool pressure while developing a game.
+- Navigate previews more easily with pan and zoom, separated state-machine
+  routes, source-linked transitions, and clearer sprite-frame bounds.
+- Keep useful types through imported factory results, SignalBus fields, ECS
+  component imports, and Tween chains; correct audio-cue runtime defaults.
+
+#### Upgrade notes
+
+Install matching 0.8.0 CLI/server and extension builds. Run `tua check` and
+`tua build` in each project after upgrading. Web packaging needs a separately
+supplied standalone player; custom package pipelines run only when selected.
+Existing `tua.toml` files need no migration. A workflow previously generated
+from an unreleased CLI is left unchanged by `tua actions init`; review its Tua
+source tag and update it to `v0.8.0` after that tag is published. The new
+inspector views remain opt-in and do not add code to production packages.
+
 ### Added
 
 - `tua actions init` generates a GitHub Actions workflow for checked `.love`
@@ -42,6 +77,8 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Formatting a table argument that closes mid-line no longer indents the
+  following statements, including the bundled audio example on format-on-save.
 - Opening generated Lua beside Tua now selects the line mapped from the
   source cursor after rebuilding, making vector lowering inspectable on demand.
 - Sprite previews now mark every out-of-bounds frame in the timeline and show
@@ -132,6 +169,8 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Tests and audit
 
+- Shader runtime tests now create distinct temporary projects in parallel,
+  avoiding intermittent missing output and cross-test source contamination.
 - Added an installed-VSIX filesystem replay for Project files and Modules,
   covering create/change/delete events and unsaved dependency edits.
 - The ordinary inspector soak command now measures post-collection Node heap,
@@ -2328,7 +2367,8 @@ from 0.3.0:
 - Project source and `tua.toml` files require no migration for this coordinated
   release.
 
-[Unreleased]: https://github.com/Kyonru/tua-lang/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/Kyonru/tua-lang/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/Kyonru/tua-lang/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/Kyonru/tua-lang/compare/v0.6.1...v0.7.0
 [0.6.1]: https://github.com/Kyonru/tua-lang/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/Kyonru/tua-lang/compare/v0.5.1...v0.6.0
