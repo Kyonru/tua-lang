@@ -1,9 +1,12 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 struct TempProject(PathBuf);
+
+static NEXT_PROJECT_ID: AtomicU64 = AtomicU64::new(0);
 
 impl TempProject {
     fn new() -> Self {
@@ -11,8 +14,12 @@ impl TempProject {
             .duration_since(UNIX_EPOCH)
             .expect("system clock")
             .as_nanos();
-        let path =
-            std::env::temp_dir().join(format!("tua-shader-scan-{}-{nonce}", std::process::id()));
+        let id = NEXT_PROJECT_ID.fetch_add(1, Ordering::Relaxed);
+        let path = std::env::temp_dir().join(format!(
+            "tua-shader-scan-{}-{nonce}-{id}",
+            std::process::id()
+        ));
+        fs::create_dir(&path).expect("create temporary project directory");
         fs::create_dir_all(path.join("src")).expect("create source directory");
         fs::write(path.join("tua.toml"), "source = \"src\"\n").expect("write config");
         Self(path)
@@ -52,11 +59,25 @@ fn build_and_run(temp: &TempProject, lua: &str) -> (String, String) {
         String::from_utf8_lossy(&build.stdout),
         String::from_utf8_lossy(&build.stderr)
     );
+    let build_dir = temp.path().join("build");
+    assert!(
+        build_dir.is_dir(),
+        "build output missing at {}; stdout: {} stderr: {}",
+        build_dir.display(),
+        String::from_utf8_lossy(&build.stdout),
+        String::from_utf8_lossy(&build.stderr)
+    );
     let run = Command::new(lua)
         .arg("main.lua")
-        .current_dir(temp.path().join("build"))
+        .current_dir(&build_dir)
         .output()
-        .expect("run ShaderScan project");
+        .unwrap_or_else(|error| {
+            panic!(
+                "run ShaderScan project with {lua} in {} (directory exists: {}): {error}",
+                build_dir.display(),
+                build_dir.is_dir()
+            )
+        });
     assert!(
         run.status.success(),
         "stdout:\n{}\nstderr:\n{}",
