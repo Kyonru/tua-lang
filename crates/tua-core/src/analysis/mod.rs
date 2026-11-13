@@ -108,6 +108,7 @@ mod navigation_queries;
 mod object_pool_queries;
 mod project_queries;
 mod recovery;
+mod shader_paths;
 mod shader_queries;
 mod shader_unsent;
 mod snapshot;

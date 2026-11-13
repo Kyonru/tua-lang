@@ -1560,7 +1560,7 @@ fn uniform_name_variable(expression: &Expression) -> Option<String> {
     }
 }
 
-fn string_literal_value(token: &TokenReference) -> Option<String> {
+pub(crate) fn string_literal_value(token: &TokenReference) -> Option<String> {
     String::from_utf8(crate::ast_utils::string_literal_runtime_bytes(token)?).ok()
 }
 

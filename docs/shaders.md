@@ -37,7 +37,10 @@ Use paths relative to the running LÖVE game root. With `source = "src"` and
 `build/shaders/water.glsl`; both `load_shader` and `#include` use
 `"shaders/..."`. A source path such as `"src/shaders/water.glsl"` exists while
 editing but does not exist inside the built game. ShaderScan suggests the
-build-relative path when it finds that file at runtime.
+build-relative path when it finds that file at runtime. Tua also reports
+`TL2019` on a literal `load_shader` path when the file exists under the
+configured source root but the literal path will disappear after build. The
+diagnostic names the path to use. Dynamic paths cannot be checked this way.
 
 For example:
 

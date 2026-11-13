@@ -14,6 +14,37 @@ fn shader_host(temp: &TempProject, fixture: &Fixture) -> AnalysisHost {
 }
 
 #[test]
+fn shader_scan_reports_source_root_paths_that_disappear_after_build() {
+    let temp = TempProject::new("shader-runtime-path");
+    temp.write("src/assets/pulse.glsl", SHADER);
+    let source_path = temp.path().join("src/main.tua");
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([temp.path().join("src")]);
+    host.set_file(
+        &source_path,
+        r#"local scan = ShaderScan.new()
+scan:load_shader("bad", "src/assets/pulse.glsl")
+scan:load_shader("good", "assets/pulse.glsl")
+local fake = { load_shader = function(name: string, path: string) end }
+fake:load_shader("other", "src/assets/pulse.glsl")
+scan = fake
+scan:load_shader("reassigned", "src/assets/pulse.glsl")
+"#,
+    );
+
+    let diagnostics = host.snapshot().pipeline_diagnostics(&source_path);
+    let runtime_paths = diagnostics
+        .iter()
+        .filter(|diagnostic| {
+            diagnostic.code == Some(crate::DiagnosticCode::ASSET_SHADER_RUNTIME_PATH)
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(runtime_paths.len(), 1, "{diagnostics:#?}");
+    assert_eq!(runtime_paths[0].line, 2);
+    assert!(runtime_paths[0].message.contains("assets/pulse.glsl"));
+}
+
+#[test]
 fn shader_uniform_completion_ranks_and_filters_names() {
     let temp = TempProject::new("shader-completion");
     let fixture = Fixture::parse(

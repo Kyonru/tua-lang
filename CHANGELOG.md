@@ -36,6 +36,8 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- `ShaderScan:load_shader` now diagnoses a source-root-prefixed literal path
+  that will fail after build relocation and suggests the runtime path.
 - Cold completion after an unfinished `:` now retains the receiver's scope,
   including imported generic factory results inside a narrowed branch.
 - Clarified the supported cross-file spelling for generic instance aliases
