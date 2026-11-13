@@ -8,6 +8,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Changed
 
+- Model-facing language guidance and offline evaluation now recognize generic
+  classes, protocols, and opt-in game helpers instead of discouraging supported
+  generic syntax.
 - Module export inference reuses its semantic model across expressions in one
   file. In a matched 1,000-module LSP replay, cold completion improved from
   3.02 s to 2.66 s; large-workspace cold requests still need more work.

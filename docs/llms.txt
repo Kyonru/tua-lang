@@ -31,7 +31,8 @@ Never answer with TypeScript, JavaScript, Luau, Python, or Markdown.
   mixed Lua/Tua modules, static imports, type-only modules, generated modules,
   and LuaDoc; the LOVE 11.x catalog, callbacks, objects, and assets; `Vec2`,
   asset helpers, sprite sheets, Signals, stores, state machines, Baton input,
-  object pools, ECS, and `audioSystem`.
+  object pools, ECS, behavior trees, tweening, camera, procedural helpers,
+  and audio systems.
 
 ## Lua and modules
 
@@ -116,12 +117,15 @@ Never answer with TypeScript, JavaScript, Luau, Python, or Markdown.
   multiple returns. Declarations support typed `...: Type`, optional trailing
   `mode?: string`, and defaults such as `amount: number = 5`.
 - `value is Type` performs supported runtime identity checks and branch
-  narrowing. Generic aliases and free functions support binders; generic
-  functions infer arguments from direct calls. Unbounded LuaDoc
-  `---@generic T` binds documented function parameters and returns. Generic
-  classes/methods and explicit call-site arguments are not supported. Tua has
-  no built-in `Table<T>` container; use `T[]` or `{ [Key]: Value }` for
-  collections.
+  narrowing. Generic aliases, free functions, and classes support binders;
+  free functions and class constructors infer arguments from direct calls.
+  Generic classes can extend an applied generic parent and can be shared
+  through exported generic instance aliases. A generic parameter may have
+  one protocol bound such as `T: Updatable`; generic methods, generic
+  protocols, and explicit call-site type arguments remain unsupported.
+  Unbounded LuaDoc `---@generic T` binds documented function parameters and
+  returns. Tua has no built-in `Table<T>` container; use `T[]` or
+  `{ [Key]: Value }` for collections.
 - Ordinary functions remain Lua:
   `function name(args): Return ... end` and
   `local function name(args): Return ... end`.
@@ -177,7 +181,13 @@ Never answer with TypeScript, JavaScript, Luau, Python, or Markdown.
 - `objectPool({...})` types factory results and supports `acquire`, `release`,
   `prewarm`, ownership/count inspection, cleanup, and `clear`.
 - Built-in `ecs` supplies typed components, worlds, systems, and queries
-  without an explicit package import.
+  without an explicit package import. `BehaviorTree.new(...)` supplies
+  composable actions, conditions, selectors, sequences, and per-actor runners;
+  it can be used from ECS systems without creating a tree per entity or frame.
+- Built-in `tween` animates numeric fields; `Camera.new(...)` follows and
+  transforms a game view; `Rot` provides seeded randomness, maps, paths,
+  visibility, noise, colors, grammars, and lighting. These names need no
+  explicit `require` in `.tua` source.
 - `audioSystem({...})` derives exact bus, cue, music-scene, layer, effect, and
   event names. It supports bounded polyphonic voices, priorities, fades,
   snapshots, positional sources, effects, and beat/bar-quantized music; use
@@ -186,6 +196,13 @@ Never answer with TypeScript, JavaScript, Luau, Python, or Markdown.
   generated catalog passed as `analysis`. Authored `bpm`, `offset`, and
   `signature` remain authoritative; analysis is advisory, and dynamic
   `requestAnalysis` is explicit rather than automatic.
+- `AudioDesign.render({...})` makes a short setup-time `Source` from a typed
+  waveform and envelope; it is not a per-frame synthesizer.
+- Built-in helper runtimes are emitted and copied only when referenced. A
+  project-provided compatible module can replace a bundled runtime; ordinary
+  Lua/LOVE code has no Tua runtime dependency. Static editor previews show
+  source-derived declarations, while the opt-in runtime inspector shows sampled
+  live state. Do not describe a static graph as a live game trace.
 - Use native LOVE freely. Use a Tua helper when nearby code uses it or its
   typed configuration fits the task; do not force helpers into ordinary LOVE.
 - Plain `.lua` files access bundled Tua runtimes through explicit imports such

@@ -1197,9 +1197,7 @@ mod tests {
         assert!(context.prompt.contains("Tua is Lua first"));
         assert!(context.prompt.contains("LOVE 11.x foundation"));
         assert!(context.prompt.contains("Baton input,"));
-        assert!(context
-            .prompt
-            .contains("object pools, ECS, and `audioSystem`"));
+        assert!(context.prompt.contains("object pools, ECS, behavior trees"));
         assert!(context.prompt.ends_with("local image = "));
         assert!(!context.suffix.is_empty());
     }
@@ -1218,6 +1216,10 @@ mod tests {
             "stateMachine({...})",
             "objectPool({...})",
             "Built-in `ecs`",
+            "Generic aliases, free functions, and classes support binders",
+            "BehaviorTree.new(...)` supplies",
+            "Camera.new(...)` follows",
+            "AudioDesign.render({...})",
             "Never emit",
         ] {
             assert!(

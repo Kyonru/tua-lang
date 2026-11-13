@@ -5,8 +5,8 @@ const test = require("node:test");
 const { CURSOR, tasks } = require("../benchmarks/llm-language/tasks.js");
 const { isLoopbackHostname, parseArgs, requestFor, structuralFailure } = require("./llm-language-eval.js");
 
-test("LLM language corpus has forty unique, well-formed tasks", () => {
-  assert.strictEqual(tasks.length, 40);
+test("LLM language corpus has forty-three unique, well-formed tasks", () => {
+  assert.strictEqual(tasks.length, 43);
   assert.strictEqual(new Set(tasks.map((item) => item.id)).size, tasks.length);
   for (const item of tasks) {
     assert.match(item.id, /^[a-z0-9-]+$/);
@@ -31,6 +31,15 @@ test("compact core contract stays within its intended learning budget", () => {
   const words = core.match(/\b[\w`|?:.+-]+\b/g) || [];
   assert(words.length >= 300, `core contract is too small: ${words.length} words`);
   assert(words.length <= 500, `core contract is too large: ${words.length} words`);
+});
+
+test("model evaluation describes supported generics and exercises current game features", () => {
+  const core = requestFor(tasks[0]).prompt.split("\n\nTask:")[0];
+  assert.match(core, /supports generic aliases, free functions, and classes/);
+  assert.doesNotMatch(core, /do not emit[^\n]*generics/i);
+  for (const id of ["class-generic", "class-protocol", "love-behavior-helper", "trap-no-callsite-generics"]) {
+    assert(tasks.some((item) => item.id === id), `${id} is missing from the corpus`);
+  }
 });
 
 test("default negative controls reach the compiler oracle", () => {
