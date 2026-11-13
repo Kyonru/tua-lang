@@ -814,41 +814,19 @@ async function run() {
   try {
     fs.writeFileSync(fixtures.fontPath, "invalid font bytes");
     await vscode.commands.executeCommand("tua.assets.preview", { uri: fontUri.toString() });
-    const invalidPreview = await previewContext(
-      process.env.TUA_REAL_SERVER_CDP_PORT,
-      "sniglet.otf font preview",
+    await retry(
+      () => fontPreviewStatus(process.env.TUA_REAL_SERVER_CDP_PORT),
+      (status) => status === "Font could not be rendered",
+      "edited invalid font to refresh the existing preview",
     );
-    try {
-      await retry(
-        () => invalidPreview.browser.evaluate(
-          "document.getElementById('status')?.textContent",
-          invalidPreview.context,
-        ),
-        (status) => status === "Font could not be rendered",
-        "edited invalid font to refresh the existing preview",
-      );
-    } finally {
-      invalidPreview.browser.dispose();
-    }
 
     fs.writeFileSync(fixtures.fontPath, originalFont);
     await vscode.commands.executeCommand("tua.assets.preview", { uri: fontUri.toString() });
-    const restoredPreview = await previewContext(
-      process.env.TUA_REAL_SERVER_CDP_PORT,
-      "sniglet.otf font preview",
+    await retry(
+      () => fontPreviewStatus(process.env.TUA_REAL_SERVER_CDP_PORT),
+      (status) => status === "Font loaded",
+      "restored font to reload in the existing preview",
     );
-    try {
-      await retry(
-        () => restoredPreview.browser.evaluate(
-          "document.getElementById('status')?.textContent",
-          restoredPreview.context,
-        ),
-        (status) => status === "Font loaded",
-        "restored font to reload in the existing preview",
-      );
-    } finally {
-      restoredPreview.browser.dispose();
-    }
   } finally {
     fs.writeFileSync(fixtures.fontPath, originalFont);
   }
@@ -986,6 +964,18 @@ function locationPath(location) {
 
 function symbolNames(symbols) {
   return symbols.flatMap((symbol) => [symbol.name, ...symbolNames(symbol.children || [])]);
+}
+
+async function fontPreviewStatus(port) {
+  // Reopening the preview replaces its webview execution context. Discover it
+  // again on each poll so a context destroyed during loading cannot pin the
+  // entire retry to the previous document.
+  const { browser, context } = await previewContext(port, "sniglet.otf font preview");
+  try {
+    return await browser.evaluate("document.getElementById('status')?.textContent", context);
+  } finally {
+    browser.dispose();
+  }
 }
 
 async function retry(operation, predicate, description, timeoutMs = 10000) {
