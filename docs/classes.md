@@ -199,6 +199,14 @@ alias with `import type` and the factory with `require`. Do not write
 `export type JarInstance<T: Named>`, because bounds in type-alias parameter
 lists are not part of the current syntax.
 
+The distinction matters when the class itself is bounded. Writing
+`final class Jar<T: Named>` and then `export type JarInstance<T> = Jar<T>`
+currently reports a bound error at the alias declaration: the alias's `T`
+cannot promise `Named`. Keep the class unbounded and constrain its public
+factory as above when that API fits. A direct generic instance alias for a
+bounded class requires a future alias-bound feature; Tua does not silently
+erase the class constraint.
+
 ## Protocol Contracts
 
 A protocol describes methods that a class promises to provide. Declare each

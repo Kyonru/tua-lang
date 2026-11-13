@@ -181,6 +181,14 @@ parallel parser or semantic model in the extension.
 
 ### Improve Semantic Precision Without Losing Lua Flexibility
 
+- Add a bounded type-alias parameter contract before promising direct exported
+  aliases of protocol-bounded generic classes. The current `Jar<T: Named>` /
+  `JarInstance<T> = Jar<T>` form fails at the alias declaration, while the
+  proposed `JarInstance<T: Named>` spelling does not parse. Keep the checked
+  unbounded-class/bounded-factory pattern documented meanwhile. Acceptance for
+  new syntax: same-file and imported positive/negative checks, alias
+  application and class-bound diagnostics, completion/hover/navigation, and
+  unchanged emitted Lua. See the November 13 game-trial follow-up.
 - Broaden control-flow and metatable inference only where identities are
   compiler-proven.
 - Expand LuaDoc/LuaCATS interoperability for common existing Lua libraries.
