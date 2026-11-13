@@ -114,8 +114,16 @@ async function run() {
     await workbench.send("Emulation.clearDeviceMetricsOverride");
     await load(spritePreviewHtml(panel.webview, { ...model, source: "other.tua" }), "Tua Sprite Preview");
     await waitFor(() => evaluate("document.querySelector('.animation-tabs .active')?.textContent === 'idle'"), "independent source selection");
+    assert.equal(await evaluate("document.querySelector('.timeline').getBoundingClientRect().top < 900"), true, "frame timing must be visible in a narrow preview without scrolling");
     const bordered = { ...model, source: "bordered.tua", sprites: [{ ...model.sprites[0],
       frame: { width: 16, height: 16, border: 1, left: 0, top: 0 },
+    const timed = { ...model, source: "timed.tua", sprites: [{ ...model.sprites[0],
+      animations: [{ ...model.sprites[0].animations[0], durationValues: [0.05, 0.2, 0.1, 0.15] }],
+    }] };
+    await load(spritePreviewHtml(panel.webview, timed), "Tua Sprite Preview");
+    await waitFor(() => evaluate("document.querySelectorAll('.frame-chip').length === 4"), "timed sprite frames");
+    assert.deepEqual(await evaluate("[...document.querySelectorAll('.frame-chip small')].map(item => item.textContent)"), ["50 ms", "200 ms", "100 ms", "150 ms"], "frame timeline shows configured durations");
+    assert.equal(await evaluate("document.querySelector('.frame-chip').getAttribute('aria-label').includes('50 milliseconds')"), true, "frame duration is available to screen readers");
       animations: [animation("spaced", 0, 2, true)],
     }] };
     await load(spritePreviewHtml(panel.webview, bordered), "Tua Sprite Preview");

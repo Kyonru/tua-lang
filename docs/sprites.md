@@ -308,7 +308,9 @@ leaf players that share an image.
 - The VS Code preview renders the sheet's frames and animations. Frames whose
   source rectangles extend outside the image are marked in the frame strip
   before playback reaches them; selecting one shows the exact rectangle and
-  image dimensions.
+  image dimensions. The frame strip shows each frame's effective duration in
+  milliseconds (an explicit per-frame duration or the animation's FPS), so
+  timing and out-of-bounds frames can be checked while scrubbing.
 
 ## Runtime And Overrides
 

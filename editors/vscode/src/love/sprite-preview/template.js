@@ -392,14 +392,19 @@ function spritePreviewHtml(webview, viewModel) {
 
     .timeline {
       display: flex;
-      flex-wrap: wrap;
+      overflow-x: auto;
       gap: 4px;
+      padding: 2px 2px 6px;
     }
 
     .frame-chip {
-      min-width: 32px;
-      min-height: 28px;
-      padding: 3px 7px;
+      flex: 0 0 auto;
+      min-width: 48px;
+      min-height: 42px;
+      display: grid;
+      gap: 1px;
+      align-content: center;
+      padding: 3px 8px;
       border: 1px solid var(--panel-border);
       border-radius: 4px;
       text-align: center;
@@ -407,6 +412,14 @@ function spritePreviewHtml(webview, viewModel) {
       background: var(--panel-raised);
       font-variant-numeric: tabular-nums;
     }
+
+    .frame-chip small {
+      font-size: 11px;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    .frame-chip.active small { color: var(--accent-text); }
 
     .frame-chip.active {
       color: var(--accent-text);
@@ -477,6 +490,12 @@ function spritePreviewHtml(webview, viewModel) {
       .metrics {
         grid-template-columns: repeat(2, minmax(0, 1fr));
       }
+
+      .stage { grid-template-rows: minmax(130px, 26vh) auto; }
+      .stage-frame { min-height: 130px; max-height: 26vh; }
+      .stage-readout { grid-template-columns: 1fr; }
+      .readout { display: flex; justify-content: space-between; gap: 8px; }
+      .readout span:last-child { white-space: normal; text-align: right; }
     }
 
     @media (prefers-reduced-motion: reduce) {

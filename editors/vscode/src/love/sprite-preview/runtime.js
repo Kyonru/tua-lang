@@ -136,18 +136,18 @@ function spritePreviewRuntime(sprites, source) {
               <label class="slider">Zoom <input class="zoom" type="range" min="1" max="4" step="0.25" value="1"><span class="zoom-value">Fit</span></label>
             </div>
           </div>
+          <div class="strip">
+            <div class="strip-head">
+              <span>Frames and timing</span>
+              <span class="frame-count">-</span>
+            </div>
+            <div class="timeline"></div>
+          </div>
           <div class="metrics">
             <div class="metric"><span>Range</span><span class="range-value">-</span></div>
             <div class="metric"><span>FPS</span><span class="fps-value">-</span></div>
             <div class="metric"><span>Mode</span><span class="mode-value">-</span></div>
             <div class="metric"><span>Sheet</span><span class="sheet-value">-</span></div>
-          </div>
-          <div class="strip">
-            <div class="strip-head">
-              <span>Frames</span>
-              <span class="frame-count">-</span>
-            </div>
-            <div class="timeline"></div>
           </div>
           <div class="sheet">
             <div class="sheet-head">
@@ -457,13 +457,21 @@ function spritePreviewRuntime(sprites, source) {
           entry.type = "button";
           entry.className = "frame-chip";
           entry.setAttribute("aria-pressed", "false");
-          entry.textContent = frame.column + "," + frame.row;
+          const durationMs = Math.round(frameDuration(index) * 1000);
+          const coordinates = document.createElement("span");
+          coordinates.textContent = frame.column + "," + frame.row;
+          const timing = document.createElement("small");
+          timing.textContent = durationMs + " ms";
+          entry.append(coordinates, timing);
+          entry.setAttribute("aria-label", "Frame " + (index + 1) + ", " +
+            frame.column + "," + frame.row + ", " + durationMs + " milliseconds");
           const rect = sourceRect(frame);
           if (frameOutOfBounds(rect, geometry)) {
             invalid += 1;
             entry.classList.add("invalid");
             entry.title = "Frame " + (index + 1) + " is outside the " + image.naturalWidth + "x" + image.naturalHeight + " image";
-            entry.setAttribute("aria-label", "Frame " + (index + 1) + ", " + frame.column + "," + frame.row + ", outside image");
+            entry.setAttribute("aria-label", "Frame " + (index + 1) + ", " + frame.column + "," + frame.row +
+              ", " + durationMs + " milliseconds, outside image");
           }
           entry.addEventListener("click", () => {
             frameOffset = index;
