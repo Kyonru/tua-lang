@@ -36,6 +36,8 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Documented per-acquisition `TL5007` suppression for object-pool values
+  deliberately handed to an ECS cleanup owner.
 - Hover on nested fields of an imported generic class result now reaches the
   same specialized type as completion, including after provider edits.
 - Audio snapshots expose typed `music`, bus, and analysis fields in completion,

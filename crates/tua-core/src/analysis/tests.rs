@@ -2975,6 +2975,37 @@ bullets:release(released)
 }
 
 #[test]
+fn object_pool_handoff_suppression_is_local_to_one_acquisition() {
+    let mut host = AnalysisHost::new();
+    host.set_file(
+        "src/pool.tua",
+        r#"type Particle = { active: boolean }
+local effects = objectPool({
+  create = function(): Particle
+    return { active = false }
+  end,
+})
+
+-- An ECS cleanup system owns the eventual release of this particle.
+-- tua-ignore-next-line TL5007
+local transferred = effects:acquire()
+local forgotten = effects:acquire()
+"#,
+    );
+
+    let diagnostics = host.snapshot().pipeline_diagnostics("src/pool.tua");
+    let pool_warnings = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::DOMAIN_OBJECT_POOL_LIFECYCLE))
+        .collect::<Vec<_>>();
+    assert_eq!(pool_warnings.len(), 1, "{diagnostics:#?}");
+    assert!(pool_warnings[0].message.contains("forgotten"));
+    assert!(!diagnostics
+        .iter()
+        .any(|diagnostic| { diagnostic.code == Some(DiagnosticCode::LINT_INLINE_IGNORE_UNUSED) }));
+}
+
+#[test]
 fn object_pool_graph_ignores_non_pool_object_pool_overrides() {
     let mut host = AnalysisHost::new();
 

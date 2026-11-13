@@ -187,6 +187,18 @@ The language server keeps object-pool facts in the shared semantic snapshot:
   lifecycle warnings.
 
 The lifecycle warning is conservative. It does not try to prove ownership
-through aliases, closures, module boundaries, or dynamic control flow. When a
-pool is intentionally handed to another owner, release explicitly in the same
-file or treat the warning as a prompt to make the ownership boundary clearer.
+through aliases, closures, module boundaries, or dynamic control flow. When an
+ECS component or another owner takes responsibility for release, mark that
+specific acquisition with an exact-code suppression and keep the release in
+the new owner's cleanup path:
+
+```tua
+-- The effect cleanup system calls effects:release(particle).
+-- tua-ignore-next-line TL5007
+local particle = effects:acquire()
+world:add(entity, "effect", particle)
+```
+
+Use this only when the transfer and cleanup are real; other acquisitions
+without a visible release still warn. The suppression affects the editor and
+`tua check`, but does not release the object at runtime.
