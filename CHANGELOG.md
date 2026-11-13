@@ -36,6 +36,8 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Contextual inlay hints skip server analysis when no selection, explicit
+  inspection, or active Lua debug session could show a hint.
 - Ordinary hovers no longer request sprite, state-machine, or behavior-tree
   inspection when the file has no preview declarations, avoiding a visible
   hover delay after navigating between large files.

@@ -138,21 +138,29 @@ async function provideInlayHints(options, document, range, token, next) {
     return [];
   }
 
+  let context;
+  if (mode === "contextual") {
+    const editor = vscode.window.activeTextEditor;
+    const inspection = options.getInspected?.();
+    const session = vscode.debug.activeDebugSession;
+    const sameWorkspace = !session?.workspaceFolder || session.workspaceFolder.uri.toString() === vscode.workspace.getWorkspaceFolder(document.uri)?.uri.toString();
+    context = {
+      debugging: session?.type === "lua-local" && sameWorkspace,
+      selections: editor?.document.uri.toString() === document.uri.toString() ? editor.selections || [editor.selection] : [],
+      inspectedLine: inspection?.uri === document.uri.toString() ? inspection.line : undefined,
+    };
+    if (!context.debugging && context.inspectedLine === undefined && context.selections.every(selection => !selection || selection.isEmpty)) {
+      return [];
+    }
+  }
+
   const hints = await next(document, range, token);
   if (!Array.isArray(hints)) {
     return hints;
   }
 
   if (mode === "contextual") {
-    const editor = vscode.window.activeTextEditor;
-    const inspection = options.getInspected?.();
-    const session = vscode.debug.activeDebugSession;
-    const sameWorkspace = !session?.workspaceFolder || session.workspaceFolder.uri.toString() === vscode.workspace.getWorkspaceFolder(document.uri)?.uri.toString();
-    return contextualHints(hints, {
-      debugging: session?.type === "lua-local" && sameWorkspace,
-      selections: editor?.document.uri.toString() === document.uri.toString() ? editor.selections || [editor.selection] : [],
-      inspectedLine: inspection?.uri === document.uri.toString() ? inspection.line : undefined,
-    });
+    return contextualHints(hints, context);
   }
   if (mode === "types") {
     return hints.filter((hint) => hint.kind === vscode.InlayHintKind.Type);
