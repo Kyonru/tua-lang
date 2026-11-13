@@ -193,10 +193,12 @@ specific acquisition with an exact-code suppression and keep the release in
 the new owner's cleanup path:
 
 ```tua
--- The effect cleanup system calls effects:release(particle).
+-- Effect matches the x/y fields produced by the effects pool.
+local Effect = ecs.component("Effect", { x = "number", y = "number" })
+-- A system over { Effect } later calls effects:release(effect).
 -- tua-ignore-next-line TL5007
 local particle = effects:acquire()
-world:add(entity, "effect", particle)
+world:add(entity, Effect, particle)
 ```
 
 Use this only when the transfer and cleanup are real; other acquisitions
