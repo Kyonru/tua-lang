@@ -1767,6 +1767,15 @@ fn closes_call_and_table_indentation_after_multiline_literal_suffixes() {
 }
 
 #[test]
+fn closes_table_argument_indentation_when_call_ends_mid_line() {
+    let source = "local low = AudioDesign.render({ waveform = \"sine\", frequency = 220, duration = 0.3,\n  gain = 0.25, envelope = { attack = 0.005, decay = 0.2, sustain = 0, release = 0.05 } })\nlocal high = AudioDesign.render({ waveform = \"sine\", frequency = 660, duration = 0.2,\n  gain = 0.25, envelope = { attack = 0.005, decay = 0.13, sustain = 0, release = 0.04 } })\nlocal nextValue = 3\n";
+
+    let output = format(source);
+    assert_eq!(output, source);
+    assert_eq!(format(&output), output);
+}
+
+#[test]
 fn inline_middle_branches_close_their_own_conditional_indentation() {
     for branch in [
         "elseif side == 2 then x = 2 end",

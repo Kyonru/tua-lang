@@ -498,6 +498,7 @@ struct Formatter<'a> {
     indent_level: usize,
     paren_depth: usize,
     brace_depth: usize,
+    brace_block_depths: Vec<usize>,
     open_parens: Vec<OpenParen>,
     line_number: usize,
     source_line: usize,
@@ -551,6 +552,7 @@ impl<'a> Formatter<'a> {
             indent_level: 0,
             paren_depth: 0,
             brace_depth: 0,
+            brace_block_depths: Vec::new(),
             open_parens: Vec::new(),
             line_number: 0,
             source_line: 0,
@@ -743,6 +745,10 @@ impl<'a> Formatter<'a> {
         let split_header = self.split_control_header;
         let closes_split_header = split_header.is_some_and(|header| header.closes_with(code));
         let opens_split_header = split_control_header(code);
+        let opens_brace_block = line_can_open_block(code)
+            && line_opens_brace_block(code.trim())
+            && !line_opens_keyword_block(code)
+            && !closes_split_header;
         let dedent = line_starts_with_dedent(code);
         let middle_block = line_is_middle_block(code);
         let closes_middle_block = middle_block
@@ -833,6 +839,18 @@ impl<'a> Formatter<'a> {
             }
         }
         self.brace_depth = update_group_depth(self.brace_depth, code, b'{', b'}');
+        let closed_brace_blocks = self
+            .brace_block_depths
+            .iter()
+            .rev()
+            .take_while(|depth| **depth > self.brace_depth)
+            .count();
+        self.brace_block_depths
+            .truncate(self.brace_block_depths.len() - closed_brace_blocks);
+        let leading_brace_dedent = usize::from(code.trim_start().starts_with('}'));
+        self.indent_level = self
+            .indent_level
+            .saturating_sub(closed_brace_blocks.saturating_sub(leading_brace_dedent));
         // A comma outside every group continues an expression list, such as
         // the values of `return a,` or the names of `local a,`.
         self.pending_continuation = self.paren_depth == 0
@@ -844,6 +862,14 @@ impl<'a> Formatter<'a> {
                 .suppressed_paren_blocks
                 .pop()
                 .expect("suppressed block should retain its promoted indent");
+            self.indent_level = self.indent_level.saturating_sub(suppressed.promoted_indent);
+        }
+        while self
+            .suppressed_paren_blocks
+            .last()
+            .is_some_and(|block| block.depth > self.paren_depth)
+        {
+            let suppressed = self.suppressed_paren_blocks.pop().unwrap();
             self.indent_level = self.indent_level.saturating_sub(suppressed.promoted_indent);
         }
 
@@ -859,6 +885,9 @@ impl<'a> Formatter<'a> {
                 }
             }
             self.indent_level += 1;
+            if opens_brace_block {
+                self.brace_block_depths.push(self.brace_depth);
+            }
         }
 
         if middle_block && opens_split_header.is_none() && !closes_middle_block {
