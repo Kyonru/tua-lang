@@ -24,6 +24,15 @@ workflow pages under `docs/`. Completed work belongs in
 
 - Harden asset path navigation and diagnostics across realistic project roots.
 - Refine sprite-sheet preview and SignalBus graph workflows from user feedback.
+- Qualify large populated module, signal, state-machine, and ECS previews against
+  compiler output and source targets. Then add cross-view relationship links
+  only where stable semantic IDs and ranges identify both ends; keep source
+  navigation separate. See the [preview peer design review](internal/audits/preview-peer-design-2026-11-13/README.md).
+- Define a compiler-owned input binding map before adding a binding preview.
+  Evaluate a static store schema/watcher view separately from the existing
+  live Runtime Inspector history; avoid presenting static links as runtime
+  events. Qualify native asset previews and long inspector sessions in a real
+  game project.
 - Benchmark the object-pool runtime on representative LOVE populations.
 - Maintain one generated LOVE source for signatures, enums, callbacks,
   inheritance, and documentation.
