@@ -8,6 +8,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Changed
 
+- Module export inference reuses its semantic model across expressions in one
+  file. In a matched 1,000-module LSP replay, cold completion improved from
+  3.02 s to 2.66 s; large-workspace cold requests still need more work.
 - Newly generated game workflows install the matching Linux release CLI archive
   with checksum, provenance, and version checks instead of recompiling Tua on
   every run. Existing generated workflows remain untouched.

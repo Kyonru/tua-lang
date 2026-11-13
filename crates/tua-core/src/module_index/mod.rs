@@ -1,6 +1,7 @@
 use std::cell::{Cell, RefCell};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
+use std::rc::Rc;
 use std::sync::Arc;
 
 use full_moon::ast::{
@@ -544,6 +545,7 @@ fn has_parent_path_component(module: &str) -> bool {
 struct ExportInferer<'a> {
     parsed: &'a ParsedSource,
     environment: Option<&'a TypeEnvironment>,
+    semantic_model: Option<Rc<SemanticModel<'a>>>,
     code_field_docs: BTreeMap<String, Vec<&'a LuaDocAnnotation>>,
     locals: BTreeMap<String, Type>,
     function_docs: BTreeMap<String, String>,
@@ -574,6 +576,8 @@ impl<'a> ExportInferer<'a> {
         Self {
             parsed,
             environment,
+            semantic_model: environment
+                .map(|environment| Rc::new(SemanticModel::new(parsed, environment))),
             code_field_docs: lua_doc_code_field_annotations(parsed),
             locals: BTreeMap::new(),
             function_docs: BTreeMap::new(),
@@ -980,11 +984,11 @@ impl<'a> ExportInferer<'a> {
                 })
                 .unwrap_or_else(|| function_type_from_body(function.body())),
             Expression::FunctionCall(_) | Expression::Var(Var::Expression(_)) => self
-                .environment
-                .and_then(|environment| {
+                .semantic_model
+                .as_ref()
+                .and_then(|semantic| {
                     let position = node_span(expression)?.start;
-                    SemanticModel::new(self.parsed, environment)
-                        .type_of_expression_return(expression, position, 0)
+                    semantic.type_of_expression_return(expression, position, 0)
                 })
                 .map(|ty| self.resolve_export_type(&ty))
                 .unwrap_or(Type::Any),

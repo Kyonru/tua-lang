@@ -864,6 +864,32 @@ fn final_review_transitive_module_cache_tracks_dependency_edits() {
 }
 
 #[test]
+fn many_imported_expressions_keep_distinct_export_types_after_an_edit() {
+    let project = TempProject::new("many_imported_expressions");
+    project.write("tua.toml", "source = \"src\"\n");
+    let mut source = String::new();
+    for index in 0..64 {
+        project.write(
+            &format!("src/m{index}.tua"),
+            &format!("return {{ value = {index} }}\n"),
+        );
+        source.push_str(&format!("local M{index} = require('m{index}')\n"));
+    }
+    source.push_str("return { first = M0.value, last = M63.value }\n");
+    project.write("src/entry.tua", &source);
+    let entry = project.path.join("src/entry.tua");
+
+    let exports = required_module_exports_for_path(&entry).expect("entry exports");
+    assert_eq!(exports.field("first"), Some(&Type::number()));
+    assert_eq!(exports.field("last"), Some(&Type::number()));
+
+    project.write("src/m63.tua", "return { value = 'updated' }\n");
+    let updated = required_module_exports_for_path(&entry).expect("updated exports");
+    assert_eq!(updated.field("first"), Some(&Type::number()));
+    assert_eq!(updated.field("last"), Some(&Type::string()));
+}
+
+#[test]
 fn dependency_walk_reuses_exports_without_retaining_transitive_results() {
     let project = TempProject::new("memoized_import_walk");
     project.write("tua.toml", "source = \"src\"\n");
