@@ -1,6 +1,0 @@
-source="src"
-out="build"
-[[type_libraries]]
-path="src/vendor-types"
-declaration_prefix="feel"
-runtime_prefix="lib.feel"

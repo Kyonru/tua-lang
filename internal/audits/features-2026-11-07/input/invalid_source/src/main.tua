@@ -1,1 +1,0 @@
-local c = input({controls={go={"key:not-a-key"}}})

@@ -1,5 +1,0 @@
-source="src"
-out="build"
-[diagnostics]
-inline_ignore_scopes=["tua-ignore-file"]
-inline_ignore_max_per_file=1

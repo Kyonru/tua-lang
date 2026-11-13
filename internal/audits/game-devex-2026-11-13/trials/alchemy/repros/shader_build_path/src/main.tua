@@ -1,9 +1,0 @@
-local shaders = ShaderScan.new()
-
-function love.load()
-  local ok, message = pcall(function()
-    shaders:load_shader("pulse", "assets/pulse.glsl")
-  end)
-  print("build-path load", ok, message)
-  love.event.quit()
-end

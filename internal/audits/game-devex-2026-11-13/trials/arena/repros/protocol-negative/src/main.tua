@@ -1,7 +1,0 @@
-import type { Tickable } from "./contract"
-
-final class Missing implements Tickable {
-  init() { }
-}
-
-return Missing

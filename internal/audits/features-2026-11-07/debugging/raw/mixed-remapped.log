@@ -1,4 +1,0 @@
-src/main.tua:5 (generated build/main.lua:7): default
-src/main.tua:5 (generated build\main.lua:7): windows separators
-src/main.tua:5 (generated ./build/main.lua:7): relative
-build/nested dir/crash.lua:17: class

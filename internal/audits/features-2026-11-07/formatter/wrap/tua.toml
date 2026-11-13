@@ -1,6 +1,0 @@
-source="src"
-out="build"
-[diagnostics]
-rules=false
-[format]
-line_width=20

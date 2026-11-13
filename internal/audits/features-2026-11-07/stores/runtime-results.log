@@ -1,7 +1,0 @@
-PASS watch callback arity 0
-PASS watch callback arity 1
-PASS watch callback arity 2
-PASS watch callback arity 3
-PASS optional field deletion notifies watcher
-REENTRANT_SET returned_next=false returned_current=true
-PASS documented shallow state snapshots and subscription persistence adapter

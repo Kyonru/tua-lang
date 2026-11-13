@@ -1,2 +1,0 @@
-local main = require("main")
-return { value = 42 }

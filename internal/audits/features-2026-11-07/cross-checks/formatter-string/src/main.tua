@@ -1,3 +1,0 @@
-local s = [[a
-b]]
-print(#s)

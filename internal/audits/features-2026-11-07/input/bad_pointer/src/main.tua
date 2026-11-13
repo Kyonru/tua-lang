@@ -1,1 +1,0 @@
-local c = input({controls={},pointer=1})

@@ -1,4 +1,0 @@
-cargo build --package tua-cli
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.03s
-node editors/vscode/scripts/lsp-features-smoke.js target/debug/tua examples/features
-features LSP smoke passed

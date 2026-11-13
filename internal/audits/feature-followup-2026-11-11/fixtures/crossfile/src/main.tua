@@ -1,4 +1,0 @@
-local service = require "service"
-local agent = service.current()
-print(agent.health)
-print(agent)

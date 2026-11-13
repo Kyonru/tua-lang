@@ -1,3 +1,0 @@
-/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/debugging/fixture/src/nested dir/crash.tua:1:1 warning TL4001: table key `value` is a duplicate; previously defined at line 27
-/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/debugging/fixture/src/nested dir/crash.tua:2:3 warning TL4077: field `Bomb.value` has a default that runs after its assignment in `init`; remove the default to preserve the initialized value
-built 2 file(s)

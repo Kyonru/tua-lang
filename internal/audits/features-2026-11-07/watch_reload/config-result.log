@@ -1,4 +1,0 @@
-old signal: 2
-new main: print(1)
-new signal exists: False
-new runtime exists: False

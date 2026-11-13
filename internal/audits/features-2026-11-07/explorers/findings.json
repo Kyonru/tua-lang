@@ -1,4 +1,0 @@
-[
-  {"id":"EXPLORERS-01","title":"Sidebar graph cache does not follow unsaved or filesystem changes","category":"feature gap","severity":"low","status":"reproduced","summary":"Actual server responses update while sidebar cache remains unchanged until save/manual refresh; no explicit live sidebar refresh contract, so not counted as a defect.","evidence":["sidebar-probe.js","sidebar-results.json","responses.json","REPORT.md"],"known":false},
-  {"id":"EXPLORERS-02","title":"Project files omits Lua sources that Modules includes","category":"feature gap","severity":"low","status":"reproduced","summary":"Actual module graph includes interop.lua but production sidebar directory filtering excludes .lua; complete sidebar inventory is not explicitly promised.","evidence":["sidebar-probe.js","sidebar-results.json","responses.json","REPORT.md"],"known":false}
-]

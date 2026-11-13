@@ -27,7 +27,7 @@ workflow pages under `docs/`. Completed work belongs in
 - Qualify large populated module, signal, state-machine, and ECS previews against
   compiler output and source targets. Then add cross-view relationship links
   only where stable semantic IDs and ranges identify both ends; keep source
-  navigation separate. See the [preview peer design review](internal/audits/preview-peer-design-2026-11-13/README.md).
+  navigation separate.
 - Define a compiler-owned input binding map before adding a binding preview.
   Evaluate a static store schema/watcher view separately from the existing
   live Runtime Inspector history; avoid presenting static links as runtime
@@ -57,8 +57,8 @@ workflow pages under `docs/`. Completed work belongs in
   63 → 24 ms and 44 → 25 ms respectively in the follow-up replay. Repeat the real
   project replay and representative contention gate before accepting another
   optimization.
-- The November 11 [installed-editor follow-up](internal/audits/feature-followup-2026-11-11/EDITOR_PERFORMANCE.md)
-  measured visible suggestions in a synthetic 113-file project: imported-table
+- A November 11 installed-editor follow-up measured visible suggestions in a
+  synthetic 113-file project: imported-table
   completion was about 161 ms warm median; a one-hop imported class factory was
   about 108 ms. Pointer hover on that class took 320–325 ms including VS Code's
   hover delay, and format-on-save of 1,001 lines took 16–33 ms. Trace trigger,
@@ -92,8 +92,7 @@ workflow pages under `docs/`. Completed work belongs in
   two valid-document completions arrived without stale results. Investigate
   retained memory before qualifying very large workspaces. The local 17-file
   LOVE project had 441–457 ms cold cross-file completion and 83–90 ms on later
-  edits. See `internal/audits/0.7.0-release-performance-2026-11-11.md` for
-  methods and limits.
+  edits.
   The 0.9.0 priority audit reproduced 2.92-second cold completion and 1.44 GiB
   sampled RSS on the released 0.8.0 server with one bounded 1,000-module run.
   Its span trace pointed to repeated entry-file export and snapshot work.
@@ -105,8 +104,7 @@ workflow pages under `docs/`. Completed work belongs in
   import aliases in export indexing reduced matched cold completion from 2.75
   to 2.28 seconds, with sampled peak memory steady near 2.69 GiB. The result
   remains a synthetic protocol replay, so visible editor timing and real-game
-  memory are still open. See
-  `internal/audits/0.9.0-priorities-2026-11-13/README.md`.
+  memory are still open.
 - Extend installed-editor qualification to prolonged real-project editing,
   Test Explorer/coverage interactions, hot reload and full-game visual parity.
   Candidate installation, real-server language features and five graphical
@@ -121,9 +119,7 @@ workflow pages under `docs/`. Completed work belongs in
   editor jump was not reproduced: the final 10-minute replay stayed around
   1.82–2.01 GiB RSS. It still grew by roughly 185 MiB over ten minutes,
   however, so sustained memory growth remains unexplained and long sessions are
-  not qualified. See the local-only
-  `internal/audits/devex-2026-11-06/memory-investigation-2026-11-06.md` and
-  `workflow/soak-evidence.json` for host, binary hashes, and detailed results.
+  not qualified.
   Keep profiling the retained growth separately from the now-reduced cold peak;
   do not infer a memory leak solely from RSS or treat a single ten-minute replay
   as long-session qualification.
@@ -160,8 +156,7 @@ The Kotlin LSP comparison found no missing standard request from its published
 feature list: Tua already supports completion, diagnostics/actions, semantic
 tokens, import organization, rename, formatting, documentation/hover, call
 hierarchy, and folding. Focus on behavior depth instead of duplicate endpoints.
-The comparison and source-license review are in
-`internal/lsp-peer-capability-review-2026-11-09.md`.
+The comparison also reviewed source-license boundaries.
 
 - Audit navigation for configured Lua dependencies and generated declarations;
   link to indexed source or stable docs where available, and stay conservative

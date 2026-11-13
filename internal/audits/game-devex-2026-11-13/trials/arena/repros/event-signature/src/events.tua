@@ -1,5 +1,0 @@
-local events = signal()
-events:on("hit", function(damage: number)
-  assert(damage > 0)
-end)
-return { events = events }

@@ -1,2 +1,0 @@
-local events = signal()
-events:emit("ok")

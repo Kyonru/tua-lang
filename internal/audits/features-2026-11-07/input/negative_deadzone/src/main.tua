@@ -1,2 +1,0 @@
-local c = input({controls={go={"key:a"}},deadzone=-0.25})
-return c

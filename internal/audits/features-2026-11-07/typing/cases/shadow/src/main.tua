@@ -1,4 +1,0 @@
-local value: number = 1
-do local value: string = "yes" value="ok" print(value) end
-value=2
-print(value)

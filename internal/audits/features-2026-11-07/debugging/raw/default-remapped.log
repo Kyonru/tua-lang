@@ -1,7 +1,0 @@
-/opt/homebrew/bin/lua: src/main.tua:2 (generated build/main.lua:2): default failure
-stack traceback:
-	[C]: in function 'error'
-	src/main.tua:2 (generated build/main.lua:2): in upvalue 'defaultValue'
-	src/main.tua:5 (generated build/main.lua:7): in local 'crash'
-	src/main.tua:8 (generated build/main.lua:11): in main chunk
-	[C]: in ?

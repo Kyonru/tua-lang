@@ -1,3 +1,0 @@
-local events = signal()
-events:declare("score", function(value: number) end)
-return events

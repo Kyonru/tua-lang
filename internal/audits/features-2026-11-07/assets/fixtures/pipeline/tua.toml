@@ -1,7 +1,0 @@
-source="src"
-out="build"
-[[asset_pipelines]]
-name="world"
-inputs=["input.txt", "import.py"]
-command=["python3", "import.py"]
-output="src/generated/b"

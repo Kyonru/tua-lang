@@ -1,2 +1,0 @@
-local game = store({ score = 0 })
-game:update(function(state) state.score = "wrong" end)

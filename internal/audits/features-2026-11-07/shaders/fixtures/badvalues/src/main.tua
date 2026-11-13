@@ -1,5 +1,0 @@
-local fx = shader "effect.glsl"
-fx:send("alpha", {})
-fx:send("tint", {1,2})
-fx:send("unused", 1)
-fx:send("alpa", 1)

@@ -1,2 +1,0 @@
-local values: number[] = {}
-local n: number = table.remove(values)

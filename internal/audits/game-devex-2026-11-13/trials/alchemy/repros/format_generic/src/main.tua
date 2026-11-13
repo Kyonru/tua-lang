@@ -1,9 +1,0 @@
-final class Box < T > {
-  value: T
-  init(value: T) {
-    self.value = value
-  }
-}
-
-export type BoxInstance < T > = Box < T >
-  return { Box = Box }

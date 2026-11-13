@@ -1,4 +1,0 @@
-source="src"
-out="build"
-[diagnostics.severity]
-TL9999="warning"

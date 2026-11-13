@@ -1,3 +1,0 @@
-local function use(cb: (x: number) -> string): string return cb(1) end
-local result = use(function(x) return x+1 end)
-print(result)

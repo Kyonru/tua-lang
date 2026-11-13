@@ -1,3 +1,0 @@
-local function takes(n: number): number return n end
-local function f(): number return 1, takes("bad") end
-print(f())

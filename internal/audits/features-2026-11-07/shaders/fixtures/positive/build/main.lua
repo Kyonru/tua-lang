@@ -1,3 +1,0 @@
-local fx = love.graphics.newShader("effect.glsl")
-fx:send("alpha", 1)
-fx:sendColor("tint", {1, 1, 1, 1})

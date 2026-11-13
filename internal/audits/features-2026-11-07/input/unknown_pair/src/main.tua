@@ -1,1 +1,0 @@
-local c = input({controls={go={"key:a"}},pairs={move={"go","go","go","missing"}}})

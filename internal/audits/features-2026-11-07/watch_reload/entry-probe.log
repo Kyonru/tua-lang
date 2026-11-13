@@ -1,5 +1,0 @@
-[tua dev] hot reload is watching for rebuilds
-restart after conf creation: 0
-restart after subsequent conf edit: 0
-[tua dev] main.lua changed; restarting
-restart after main edit (positive control): 1

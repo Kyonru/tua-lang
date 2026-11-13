@@ -1,3 +1,0 @@
-local love = {graphics = {newShader = function(s: string): any return {} end}}
-local fx = love.graphics.newShader("absent.glsl")
-fx:send("noUniform", 1)

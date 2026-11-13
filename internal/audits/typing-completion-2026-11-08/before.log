@@ -1,9 +1,0 @@
-pid 85502
-initialize 49
-opened main first
-opened
-stderr
-Error: textDocument/completion timed out after 30000ms
-    at Timeout._onTimeout (/Users/kyonru/Documents/projects/Experiments/tlua/editors/vscode/scripts/lsp-profile-common.js:89:16)
-    at listOnTimeout (node:internal/timers:605:17)
-    at process.processTimers (node:internal/timers:541:7)

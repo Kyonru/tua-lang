@@ -1,2 +1,0 @@
-local c = input({controls={go={"key:a"}}})
-print(c:get("missing"))

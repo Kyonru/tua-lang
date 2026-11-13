@@ -1,3 +1,0 @@
-local missing = image "assets/missing.png"
-local wrong = image "assets/sound.wav"
-local format = image "assets/file.xyz"

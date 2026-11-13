@@ -1,3 +1,0 @@
-cancel	false	idle	leave callback count	1
-chain	true	run	none	nil
-resume finish	nil	run	none

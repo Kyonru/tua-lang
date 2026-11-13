@@ -1,6 +1,0 @@
-import type { ActorInstance } from "./actor"
-local Actors = require("actor")
-local actor: ActorInstance = Actors.Fast.new()
-local value = actor:update(3)
-assert(value == 6)
-print(actor.value)

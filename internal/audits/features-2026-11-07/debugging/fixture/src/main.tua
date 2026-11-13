@@ -1,8 +1,0 @@
-local function defaultValue(): number
-  error("default failure")
-  return 0
-end
-local function crash(value: number = defaultValue()): number
-  return value
-end
-crash()

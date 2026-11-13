@@ -1,9 +1,0 @@
-{
-  "status": 0,
-  "stdout": "watching src/**/*\nusing polling file watcher\ninitial build: built 1 file(s)\ndev: started /Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/post-fix-review/dev-restart-project/fake-love /Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/post-fix-review/dev-restart-project/build\nchanged 1 file(s)\nwatching src/**/*\nconfiguration rebuild: rebuilt 1 file(s)\ndev: started /Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/post-fix-review/dev-restart-project/fake-love /Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/post-fix-review/dev-restart-project/moved\ndev: sent reload 2 to the game\n",
-  "stderr": "",
-  "oldPid": "2729",
-  "newPid": "2759",
-  "hook": true,
-  "signal": "2\n"
-}

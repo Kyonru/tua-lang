@@ -1,4 +1,0 @@
----@param value string
-local function f(value: number): number return value end
----@param
-local function g() end

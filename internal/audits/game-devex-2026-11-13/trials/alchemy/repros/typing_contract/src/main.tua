@@ -1,8 +1,0 @@
-import type { Named } from "./contracts"
-
-final class Missing implements Named {
-  init() {}
-}
-
-local count: number = "wrong"
-return { count = count, Missing = Missing }

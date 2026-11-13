@@ -1,3 +1,0 @@
-type Row = {value?: number}
-local row: Row = {}
-row.value = nil

@@ -1,9 +1,0 @@
-local Legacy = require("legacy")
-local enemy = Legacy.makeEnemy("slime")
-enemy.hp -= 5
-local Player = require("player")
-local player = Player.new("Ada")
-player:update(0.02)
-local n, s = Legacy.pair()
-local result = Legacy.sum("total",1,2,3)
-print(enemy.hp, player.x, n, s, result, Legacy.identity(4))

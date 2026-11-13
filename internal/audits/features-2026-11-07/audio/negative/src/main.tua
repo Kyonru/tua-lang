@@ -1,2 +1,0 @@
-local a=audioSystem({maxVoices=-1,cues={ping={}}})
-a:play("wrong")

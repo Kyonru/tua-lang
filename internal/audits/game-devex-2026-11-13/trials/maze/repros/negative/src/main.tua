@@ -1,9 +1,0 @@
-protocol Tickable {
-  tick(dt: number): nil
-}
-
-final class Broken implements Tickable {
-  wait(dt: number): nil { return nil }
-}
-
-local steps: number = "several"

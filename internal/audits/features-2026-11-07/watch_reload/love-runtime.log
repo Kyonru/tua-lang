@@ -1,2 +1,0 @@
-Invocation: /Applications/LOVE.app/Contents/MacOS/love internal/audits/features-2026-11-07/watch_reload/love-runtime
-subprocess.run timeout=15; returncode=-6; stdout/stderr empty

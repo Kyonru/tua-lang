@@ -1,3 +1,0 @@
-local cam = Camera.new({style="orbit"})
-Camera.new({bounds={x=0,y=0}})
-cam:shake("hard")

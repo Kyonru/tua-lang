@@ -25,8 +25,8 @@ Thus all differences disappear when the menu-selection input is held absent.
 No Lua/Tua fixture or inline algorithm modification was necessary. This control
 also supersedes the initial investigation's parser-change hypothesis.
 
-Evidence, including executable hashes and every added/removed record:
-[inline-menu-causal.json](../../../internal/audits/features-2026-11-07/post-fix-review/inline-menu-causal.json).
+The executable hashes and added/removed records are retained in local audit
+notes. They are not part of the tracked benchmark fixture.
 
 Commands (use the retained historical executable when reproducing the comparison):
 

@@ -1,4 +1,0 @@
-type State = { score?: number }
-local initial: State = {}
-local game = store(initial)
-game:watch("score", function(value: number) print(value + 1) end)

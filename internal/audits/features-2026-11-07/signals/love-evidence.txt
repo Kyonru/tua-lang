@@ -1,4 +1,0 @@
-exit 1
-runtime	Lua 5.1	LuaJIT 2.1.1700008891
-once_nested	2
-pattern_nil_payload	1

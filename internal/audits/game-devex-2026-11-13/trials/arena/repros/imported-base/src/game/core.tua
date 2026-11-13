@@ -1,9 +1,0 @@
-import type { ActorInstance, DefenderInstance, Tickable } from "./actors"
-local Actors = require("game.actors")
-
-local named: DefenderInstance = Actors.Defender.new()
-local direct: ActorInstance = Actors.Defender.new()
-local base: ActorInstance = named
-local tasks: Tickable[] = { Actors.Defender.new() }
-
-return { base = base, direct = direct, tasks = tasks }

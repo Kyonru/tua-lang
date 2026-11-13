@@ -251,8 +251,8 @@ inspector views remain opt-in and do not add code to production packages.
   making its retained-memory assertion comparable to an explicit forced-GC run.
 - Added emitted-Lua interaction tests for combined game features and installed
   editor checks for real Signal, ECS, and object-pool graph data and source links.
-- Recorded the feature and preview audit, reproductions, coverage limits, and
-  independent review under `internal/audits/feature-and-preview-2026-11-11/`.
+- Completed the feature and preview audit with reproductions, coverage limits,
+  and independent review; the working notes are kept locally.
 
 ## [0.7.0] - 2026-11-11
 

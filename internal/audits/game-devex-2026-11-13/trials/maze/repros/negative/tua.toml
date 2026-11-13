@@ -1,4 +1,0 @@
-source = "src"
-out = "build"
-target = "lua51"
-extension = "tua"

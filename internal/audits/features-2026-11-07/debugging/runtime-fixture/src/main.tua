@@ -1,5 +1,0 @@
-local player = store({ score = 10 })
-function love.update(dt: number)
-  local state = player:get()
-  state.score += 1
-end

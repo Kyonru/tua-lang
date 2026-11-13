@@ -1,2 +1,0 @@
-local game = store({ score = 0 })
-game:watch("score", function(value, previous, state) print(value) end)

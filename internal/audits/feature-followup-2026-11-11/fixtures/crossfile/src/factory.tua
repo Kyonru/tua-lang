@@ -1,8 +1,0 @@
-import type { AgentInstance } from "./classes/agent"
-local Agent = require("classes.agent").Agent
-
-local function spawn(name: string): AgentInstance
-  return Agent.new(name)
-end
-
-return { spawn = spawn }

@@ -1,9 +1,0 @@
-watching src/**/*
-initial build: built 1 file(s)
-changed 2 file(s)
-rebuild: rebuilt 2 file(s)
-changed 3 file(s)
-/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/watch_reload/native/tua.toml:1:12 error TL3001: unclosed array, expected `]`
-configuration reload failed; keeping previous configuration
-removed 3 output file(s)
-rebuild: rebuilt 1 file(s)

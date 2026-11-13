@@ -1,3 +1,0 @@
-local game = store({ score = 0, paused = false })
-local key: "score" | "paused" = "score"
-game:watch(key, function(value) print(value) end)

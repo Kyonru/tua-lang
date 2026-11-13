@@ -1,4 +1,0 @@
-build/main.lua:7: default
-build\main.lua:7: windows separators
-./build/main.lua:7: relative
-build/nested dir/crash.lua:17: class

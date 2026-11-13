@@ -1,3 +1,0 @@
-local fx = shader "effect.glsl"
-fx = unknown()
-fx:send("noUniform", 1)

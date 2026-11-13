@@ -1,7 +1,0 @@
-local Legacy = require("legacy")
-Legacy.makeEnemy(42)
-Legacy.sum("x", "bad")
-Legacy.identity(true)
-local enemy = Legacy.makeEnemy("slime")
-enemy.hp = "bad"
-print(enemy.missing)

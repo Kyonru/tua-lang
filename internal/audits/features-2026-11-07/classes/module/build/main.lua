@@ -1,5 +1,0 @@
-local Actors = require("actor")
-local actor = Actors.Fast.new()
-local value = actor:update(3)
-assert(value == 6)
-print(actor.value)

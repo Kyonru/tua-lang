@@ -1,6 +1,0 @@
-class Item {
- value: number
- init(flag: boolean) {
-  if flag then self.value = 1 end
- }
-}

@@ -1,4 +1,0 @@
-source="src"
-out="build"
-[format]
-line_ending="preserve"

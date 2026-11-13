@@ -1,1 +1,0 @@
-Native runtime inspector passed: two players, ECS/state/signal/pool/store snapshots, pause/refresh/resume, live files, independent exit, cleanup, and inspector-free package.

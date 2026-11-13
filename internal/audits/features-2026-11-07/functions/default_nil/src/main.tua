@@ -1,2 +1,0 @@
-local function f(x: number = 7): number return x end
-print(f(), f(nil), f(0))

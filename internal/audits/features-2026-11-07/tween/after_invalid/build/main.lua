@@ -1,5 +1,0 @@
-local tween = require("tuatween")
-local box = { x = 0 }
-local t = tween.to(box, 1, { x = 1 })
-t:after("bad", { x = 2 })
-tween.update(1)

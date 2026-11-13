@@ -1,3 +1,0 @@
-export protocol Tickable {
-  update(dt: number): nil
-}

@@ -1,4 +1,0 @@
-local a=audioSystem({cues={ping={source=sound("sample.wav")}},buses={master={},sfx={parent="master"}}})
-a:play("")
-a:stopBus("")
-a:on("", function(e) end)

@@ -1,3 +1,0 @@
-local x = 9
-local function f(x: number = x): number return x end
-print(f())

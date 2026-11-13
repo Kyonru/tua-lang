@@ -1,2 +1,0 @@
-local x: number = "bad"
-print(x)

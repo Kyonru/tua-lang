@@ -1,5 +1,0 @@
-local function takes(n: number): number return n end
-local function wrapper(): number
- return takes("bad")
-end
-print(wrapper())

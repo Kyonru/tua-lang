@@ -1,3 +1,0 @@
-local config={controls={go={"key:a"}}}
-local c=input(config)
-print(c:get("go"))

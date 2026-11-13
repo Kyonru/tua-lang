@@ -1,3 +1,0 @@
-type Receiver = {kind: "unrelated" | "leaked", call: (self: Receiver, mode: "yes" | "no") -> nil}
-local r: Receiver = {kind="unrelated", call=function(self: Receiver, mode: "yes" | "no") end}
-r:call("")

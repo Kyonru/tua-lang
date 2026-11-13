@@ -1,4 +1,0 @@
-local events = signal()
-events:on("bad", 123)
-events:once("bad", false)
-events:declare("bad", "not a schema")

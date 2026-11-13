@@ -1,4 +1,0 @@
-local function inc(x: number): number
- return x+1
-end
-return {inc=inc}

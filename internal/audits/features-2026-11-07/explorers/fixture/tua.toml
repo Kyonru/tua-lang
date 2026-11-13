@@ -1,3 +1,0 @@
-source = "src"
-out = "build"
-main = "main.tua"

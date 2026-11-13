@@ -1,6 +1,0 @@
-local machine = stateMachine({
- initial = "idle",
- events = { {name="current", from="idle", to="running"} },
-})
-local fired: boolean = machine:current()
-print(fired)

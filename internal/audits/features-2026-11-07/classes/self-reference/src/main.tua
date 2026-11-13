@@ -1,9 +1,0 @@
-final class Node {
- next: Self
- init() {
-  self.next = self
- }
-}
-local node = Node.new()
-assert(node.next == node, "self reference lost")
-print("ok")

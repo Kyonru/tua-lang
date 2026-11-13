@@ -1,2 +1,0 @@
-local c = input({controls={left={"key:a"},right={"key:d"},up={"key:w"},down={"key:s"}},pairs={move={"left","right","up","down"}}})
-local x,y=c:get("move")

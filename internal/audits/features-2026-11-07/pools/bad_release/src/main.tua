@@ -1,2 +1,0 @@
-local pool = objectPool({create=function(): {x:number} return {x=0} end})
-pool:release({name="wrong"})

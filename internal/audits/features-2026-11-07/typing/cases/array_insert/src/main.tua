@@ -1,2 +1,0 @@
-local values: number[] = {}
-table.insert(values,"wrong")

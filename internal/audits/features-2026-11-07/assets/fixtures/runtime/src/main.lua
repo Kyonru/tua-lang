@@ -1,1 +1,0 @@
-function love.load() love.graphics={newImage=function(p) local d=love.image.newImageData(p); assert(d:getWidth()==1); print("decoded "..p); return d end}; dofile("compiled.lua"); love.event.quit(0) end

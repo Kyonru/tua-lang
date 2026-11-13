@@ -1,3 +1,0 @@
-type State = { score?: number }
-local state: State = {}
-state.score = nil

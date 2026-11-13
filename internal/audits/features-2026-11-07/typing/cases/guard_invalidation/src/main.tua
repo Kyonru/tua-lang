@@ -1,5 +1,0 @@
-local row: {value?: {n: number}} = {}
-if row.value then
- row.value = nil
- print(row.value.n)
-end

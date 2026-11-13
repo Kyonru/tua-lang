@@ -1,4 +1,0 @@
-type State = { score?: number }
-local initial: State = {}
-local game = store(initial)
-game:update(function(state) state.score = nil end)

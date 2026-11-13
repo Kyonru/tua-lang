@@ -1,6 +1,0 @@
-local P = require("player")
-local L = require("legacy")
-local p = P.new("Mina")
-assert(p.name=="Mina")
-assert(L.double(3)==6)
-print("modules happy passed")

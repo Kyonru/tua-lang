@@ -1,3 +1,0 @@
-type Choice = "yes" | "no"
-local function choose(c: Choice): boolean return c=="yes" end
-choose("")

@@ -1,1 +1,0 @@
-/Users/kyonru/Documents/projects/Experiments/tlua/internal/audits/features-2026-11-07/functions/callback_short/src/main.tua:4:6 error TL1003: type mismatch at cb: callback requires 1 parameters, but it may be called with only 2

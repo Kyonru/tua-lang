@@ -1,3 +1,0 @@
-source = "."
-out = "."
-target = "love11-luajit"

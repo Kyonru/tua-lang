@@ -1,3 +1,0 @@
-(node:9664) [DEP0190] DeprecationWarning: Passing args to a child process with shell option true can lead to security vulnerabilities, as the arguments are not escaped, only concatenated.
-(Use `node --trace-deprecation ...` to show where the warning was created)
-source-mapped LOVE breakpoint passed in 771ms: /var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-love-debugger-e2e-0BTaXL/src/main.tua:4

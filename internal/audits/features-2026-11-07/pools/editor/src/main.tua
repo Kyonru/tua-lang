@@ -1,8 +1,0 @@
-type Bullet = { x:number }
-local pool=objectPool({create=function(): Bullet return {x=0} end,reset=function(b) print(b.x) end})
-local b=pool:acquire()
-print(b.x)
-pool:release(b)
-local imported=require("library")
-local other=imported.pool:acquire()
-print(other.x)

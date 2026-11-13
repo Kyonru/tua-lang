@@ -1,5 +1,0 @@
-source="src"
-out="build"
-[diagnostics.severity]
-TL4005="allow"
-TL4004="info"

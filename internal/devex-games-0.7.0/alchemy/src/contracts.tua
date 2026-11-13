@@ -1,3 +1,0 @@
-export protocol Combinable {
-  combine(first: string, second: string): string | nil
-}

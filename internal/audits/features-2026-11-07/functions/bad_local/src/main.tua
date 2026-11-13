@@ -1,3 +1,0 @@
-local function takes(n: number): number return n end
-local n = takes("bad")
-return n

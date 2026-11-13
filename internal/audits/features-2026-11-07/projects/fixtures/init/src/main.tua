@@ -1,2 +1,0 @@
-local message: string = "hello from tua"
-print(message)

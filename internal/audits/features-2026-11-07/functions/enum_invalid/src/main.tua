@@ -1,5 +1,0 @@
-enum Mode
- "fast"
- "slow"
-end
-local mode: Mode = "no"

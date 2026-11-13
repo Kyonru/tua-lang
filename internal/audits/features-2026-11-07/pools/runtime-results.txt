@@ -1,7 +1,0 @@
-inner_release	true
-outer_release	true
-reentrant_counts	-1	2	1
-duplicate_checkouts	true
-clear_during_reset	-1	1	0	true
-infinite_prewarm	false	5	internal/audits/features-2026-11-07/pools/runtime.lua:17: probe safety stop
-reset_exception_control	PASS

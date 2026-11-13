@@ -1,5 +1,0 @@
-describe("failure", function()
-  it("mapped", function()
-    assert.equals(123, 456)
-  end)
-end)

@@ -1,9 +1,0 @@
-   Compiling tua-cli v0.6.0 (<repository>/crates/tua-cli)
-    Finished `test` profile [unoptimized + debuginfo] target(s) in 7.14s
-     Running unittests src/lib.rs (target/debug/deps/tua_cli-37025561aceebd45)
-
-running 2 tests
-test shaders::glslang::tests::real_glslang_validates_the_shader_corpus ... ok
-test shaders::tests::real_love_validates_valid_and_invalid_shaders ... ok
-
-test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 92 filtered out; finished in 1.03s

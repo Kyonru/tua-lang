@@ -1,5 +1,0 @@
-local tween = require("tuatween")
-local box = { x = 0 }
-tween.to(box, 1, { x = 10 })
-tween.update(1)
-print(box.x)

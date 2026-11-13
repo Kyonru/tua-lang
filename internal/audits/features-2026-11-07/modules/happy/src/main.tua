@@ -1,7 +1,0 @@
-import type { Person } from "./facade"
-local P = import("./player")
-local L = require("legacy")
-local p: Person = P.new("Mina")
-assert(p.name=="Mina")
-assert(L.double(3)==6)
-print("modules happy passed")

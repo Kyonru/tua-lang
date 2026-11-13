@@ -1,2 +1,0 @@
-local fx = shader "effect.glsl"
-fx:send("alpha", 1)

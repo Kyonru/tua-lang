@@ -1,1 +1,0 @@
-PASS: existing signal_runtime.lua fixture exited 0 under Lua 5.4.8

@@ -1,6 +1,0 @@
-/opt/homebrew/bin/lua: build/nested dir/crash.lua:17: class failure
-stack traceback:
-	[C]: in function 'error'
-	build/nested dir/crash.lua:17: in local 'Bomb_explode'
-	build/nested dir/crash.lua:33: in main chunk
-	[C]: in ?

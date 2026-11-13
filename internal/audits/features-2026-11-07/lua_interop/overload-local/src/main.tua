@@ -1,4 +1,0 @@
----@overload fun(value: string): string
----@overload fun(value: number): number
-local function identity(value) return value end
-identity(true)

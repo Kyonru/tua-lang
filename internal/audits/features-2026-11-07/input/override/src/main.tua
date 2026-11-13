@@ -1,2 +1,0 @@
-local c=input({controls={}})
-print(c)

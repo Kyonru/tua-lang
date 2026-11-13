@@ -1,3 +1,0 @@
-local EventModule = require("events")
-local bus = EventModule.events
-bus:emit("hit", 1)

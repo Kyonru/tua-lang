@@ -1,8 +1,0 @@
-source="src"
-out="build"
-[diagnostics]
-rules=false
-[format]
-line_ending="preserve"
-indent_style="tabs"
-final_newline=false
