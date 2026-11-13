@@ -2063,7 +2063,10 @@ impl AnalysisSnapshot {
             return false;
         };
 
-        self.require_binding(parsed, &root.text, position).is_some()
+        // The module-export index handles the module and its direct fields.
+        // Deeper member chains can require generic instantiation or another
+        // semantic lookup after the export, so let those fall through.
+        chain.cursor_index <= 1 && self.require_binding(parsed, &root.text, position).is_some()
     }
 
     pub(super) fn require_binding(

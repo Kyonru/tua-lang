@@ -3531,6 +3531,69 @@ return { Box = Box }
 }
 
 #[test]
+fn nested_imported_generic_class_field_hover_matches_completion() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/game.tua
+final class Defender {
+  speed: number
+  init() { self.speed = 3 }
+}
+final class Slot<T> {
+  value: T
+  init(value: T) { self.value = value }
+}
+local selected = Slot.new(Defender.new())
+return { selected = selected }
+-- file: src/main.tua
+local Game = require("game")
+local chosen = Game.selected.<|hover|>value
+local speed = Game.selected.value.<|members|>speed
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+    let snapshot = host.snapshot();
+    let hover = snapshot
+        .hover("src/main.tua", fixture.position("hover"))
+        .expect("the nested imported field should hover");
+    assert!(hover.contents.contains("Defender"), "{hover:#?}");
+    assert_eq!(
+        hover
+            .span
+            .map(|span| text_at_span(fixture.source("src/main.tua"), span)),
+        Some("value".to_owned())
+    );
+    let completions = snapshot.completion("src/main.tua", fixture.position("members"));
+    assert!(
+        completions.iter().any(|item| item.label == "speed"),
+        "the same field should keep its member completions: {completions:#?}"
+    );
+
+    host.set_file(
+        "src/game.tua",
+        fixture
+            .source("src/game.tua")
+            .replace("speed: number", "speed: string")
+            .replace("self.speed = 3", "self.speed = \"fast\""),
+    );
+    let refreshed = host.snapshot();
+    let completions = refreshed.completion("src/main.tua", fixture.position("members"));
+    assert!(
+        completions.iter().any(|item| {
+            item.label == "speed"
+                && item
+                    .detail
+                    .as_deref()
+                    .is_some_and(|detail| detail.contains("string"))
+        }),
+        "an imported field edit should refresh its nested member type: {completions:#?}"
+    );
+}
+
+#[test]
 fn reexported_generic_class_metadata_refreshes_after_unsaved_provider_edits() {
     let fixture = Fixture::parse(
         r#"-- file: src/main.tua

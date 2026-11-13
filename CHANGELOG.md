@@ -36,6 +36,8 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Hover on nested fields of an imported generic class result now reaches the
+  same specialized type as completion, including after provider edits.
 - Audio snapshots expose typed `music`, bus, and analysis fields in completion,
   hover, and checking; the subscription-only `musicState` is absent from
   snapshot member suggestions.
