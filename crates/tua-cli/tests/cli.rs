@@ -268,7 +268,7 @@ fn actions_init_adds_a_reviewable_workflow_without_overwriting_it() {
     assert!(workflow.contains("sha256sum --check \"$archive.sha256\""));
     assert!(workflow.contains("gh attestation verify"));
     assert!(workflow.contains("--signer-workflow Kyonru/tua-lang/.github/workflows/release.yml"));
-    assert!(workflow.contains("--source-ref \"refs/tags/v${version}\""));
+    assert!(!workflow.contains("--source-ref"));
     assert!(workflow.contains("test \"$(\"$cli\" --version)\" = \"tua ${version}\""));
     assert!(workflow.contains("tua package --target love"));
     assert!(!workflow.contains("cargo install"));
@@ -278,6 +278,7 @@ fn actions_init_adds_a_reviewable_workflow_without_overwriting_it() {
     assert!(workflow.contains("--draft --generate-notes --verify-tag"));
     assert!(workflow.contains("if: startsWith(github.ref, 'refs/tags/v')"));
     assert!(workflow.contains("contents: read"));
+    assert!(workflow.contains("attestations: read"));
     assert!(workflow.contains("contents: write"));
 
     fs::write(&workflow_path, "# my own workflow\n").unwrap();

@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  attestations: read
 
 jobs:
   package:
@@ -32,8 +33,7 @@ jobs:
           (cd "$install_dir" && sha256sum --check "$archive.sha256")
           gh attestation verify "$install_dir/$archive" \
             --repo Kyonru/tua-lang \
-            --signer-workflow Kyonru/tua-lang/.github/workflows/release.yml \
-            --source-ref "refs/tags/v${version}"
+            --signer-workflow Kyonru/tua-lang/.github/workflows/release.yml
           tar -xzf "$install_dir/$archive" -C "$install_dir"
           cli="$install_dir/tua-${version}-x86_64-unknown-linux-gnu/tua"
           test "$("$cli" --version)" = "tua ${version}"
