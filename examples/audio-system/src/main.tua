@@ -69,8 +69,10 @@ function love.keypressed(key: string)
   if key == "1" then audio:play("low", { fadeIn = 0.03 }) end
   if key == "2" then audio:play("high", { fadeIn = { duration = 0.08, curve = "smoothstep" } }) end
   if key == "m" then
-    local muted = audio:snapshot().buses.sfx.muted
-    audio:setBusMuted("sfx", not muted)
+    local sfx = audio:snapshot().buses.sfx
+    if sfx then
+      audio:setBusMuted("sfx", not sfx.muted)
+    end
   end
   if key == "left" then audio:setBusVolume("sfx", 0.15, 0.5) end
   if key == "right" then audio:setBusVolume("sfx", 1, 0.5) end
@@ -93,6 +95,11 @@ function love.draw()
     return
   end
   local snapshot = audio:snapshot()
+  local sfx = snapshot.buses.sfx
+  local gainLabel = "unavailable"
+  if sfx then
+    gainLabel = string.format("%.2f", sfx.gain)
+  end
   love.graphics.print("Tua first-class audio", 32, 32)
   love.graphics.print(message, 32, 72)
   love.graphics.print("Active voices: " .. snapshot.activeVoices, 32, 118)
@@ -102,7 +109,7 @@ function love.draw()
     146
   )
   love.graphics.print(
-    "Effective SFX gain: " .. string.format("%.2f", snapshot.buses.sfx.gain),
+    "Effective SFX gain: " .. gainLabel,
     32,
     174
   )

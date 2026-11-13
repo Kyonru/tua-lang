@@ -36,6 +36,8 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- The audio system example now guards dictionary bus lookups before reading
+  snapshot fields, matching the precise snapshot types.
 - `ShaderScan:load_shader` now diagnoses a source-root-prefixed literal path
   that will fail after build relocation and suggests the runtime path.
 - Cold completion after an unfinished `:` now retains the receiver's scope,
