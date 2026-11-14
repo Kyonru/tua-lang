@@ -63,6 +63,7 @@
     "test:multiplayer": "node scripts/multiplayer-runtime-e2e.js",
     "test:inspector": "node scripts/runtime-inspector-e2e.js",
     "test:profiler": "node scripts/love-profiler-e2e.js",
+    "bench:profiler": "node scripts/love-profiler-benchmark.js",
     "test:procedural": "node scripts/procedural-preview-e2e.js",
     "screenshots:readme": "npm run build && node scripts/readme-screenshots.js && npm run screenshots:readme:check",
     "screenshots:readme:check": "node scripts/readme-screenshot-artifacts.js"

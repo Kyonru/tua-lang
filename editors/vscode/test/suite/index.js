@@ -6,6 +6,7 @@ const { runCompletionTests } = require("./completion");
 const { runEditorIntelligenceTests } = require("./editor-intelligence");
 const { runEcsExplorerTests } = require("./ecs-explorer");
 const { runModuleGraphTests } = require("./module-graph");
+const { runProfilerTests } = require("./profiler");
 const { runSpritePreviewTests } = require("./sprite-preview");
 const { fixtures, waitForEvent } = require("./support");
 const { runSetupTests } = require("./setup");
@@ -24,6 +25,7 @@ async function run() {
     "workspace",
     "workspace-ui",
     "sprite-preview",
+    "profiler",
   ]);
 
   assert(
@@ -82,6 +84,9 @@ async function run() {
   }
   if (selectedSuite === "all" || selectedSuite === "sprite-preview") {
     await runSpritePreviewTests();
+  }
+  if (selectedSuite === "all" || selectedSuite === "profiler") {
+    await runProfilerTests();
   }
 }
 

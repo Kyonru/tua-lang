@@ -227,6 +227,12 @@ builds, and packaged games contain no profiler code or per-frame profiler
 branch. Captures have measurement overhead; compare runs with and without
 capture before using a small timing difference as evidence.
 
+For a reproducible fixture-based overhead comparison on a machine with LÖVE,
+run `npm --prefix editors/vscode run bench:profiler` from the Tua repository.
+It runs three ordinary/capture pairs and reports median and 95th-percentile
+CPU-loop and frame intervals. Those host-specific figures are a probe of the
+profiler, not a correction factor for your game.
+
 ### Record and replay input
 
 Select **Record keyboard and mouse input for replay** when starting a capture.
