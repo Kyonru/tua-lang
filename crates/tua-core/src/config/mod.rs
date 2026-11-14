@@ -42,6 +42,12 @@ exclude_specs = true
 [emit]
 annotation_mode = \"off\"
 
+[i18n]
+enabled = false
+default_locale = \"en\"
+fallback_locale = \"en\"
+catalogs = []
+
 [format]
 indent_style = \"spaces\"
 indent_width = 2
@@ -59,12 +65,6 @@ hot_loop_hints = true
 [ecs]
 enabled = true
 backend = \"tua\"
-
-[i18n]
-enabled = false
-default_locale = \"en\"
-fallback_locale = \"en\"
-catalogs = []
 
 [shaders]
 validate = \"auto\"

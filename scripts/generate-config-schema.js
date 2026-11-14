@@ -132,7 +132,7 @@ function defaultTemplate(settings) {
   const root = [];
   const sections = new Map();
 
-  for (const setting of settings) {
+  for (const setting of settings.filter((setting) => setting.template !== false)) {
     const parts = setting.path.split(".");
     const line = `${parts.at(-1)} = ${tomlValue(setting.default)}`;
 

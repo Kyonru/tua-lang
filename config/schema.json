@@ -104,12 +104,14 @@
     {
       "path": "i18n.catalogs.locale",
       "type": "string",
+      "template": false,
       "default": "en",
       "description": "Canonical locale tag represented by this catalog, such as en or pt-BR."
     },
     {
       "path": "i18n.catalogs.path",
       "type": "string",
+      "template": false,
       "default": "locales/en.lua",
       "description": "Source-relative Lua catalog file for this locale."
     },

@@ -24,6 +24,7 @@ pub struct ConfigSettingMetadata {
     pub key: String,
     pub type_name: String,
     pub default: serde_json::Value,
+    pub template: bool,
     pub description: String,
     pub enum_values: Vec<String>,
     pub minimum: Option<usize>,
@@ -35,6 +36,8 @@ struct ConfigSetting {
     #[serde(rename = "type")]
     type_name: String,
     default: serde_json::Value,
+    #[serde(default)]
+    template: Option<bool>,
     description: String,
     #[serde(default, rename = "enum")]
     enum_values: Vec<String>,
@@ -370,6 +373,7 @@ impl ConfigSetting {
             key: self.key().to_owned(),
             type_name: self.type_name.clone(),
             default: self.default.clone(),
+            template: self.template != Some(false),
             description: self.description.clone(),
             enum_values: self.enum_values.clone(),
             minimum: self.minimum,
@@ -668,6 +672,7 @@ mod tests {
         let schema_paths = config_schema()
             .settings
             .iter()
+            .filter(|setting| setting.template != Some(false))
             .map(|setting| setting.path.as_str())
             .collect::<BTreeSet<_>>();
 
@@ -677,6 +682,9 @@ mod tests {
         );
 
         for setting in &config_schema().settings {
+            if setting.template == Some(false) {
+                continue;
+            }
             let value = value_at_path(&defaults, &setting.path)
                 .unwrap_or_else(|| panic!("missing default for {}", setting.path));
             let value = serde_json::to_value(value).expect("TOML default should serialize");
@@ -710,6 +718,7 @@ mod tests {
         const DEFAULT_TEMPLATE: &str = include_str!("../../../../config/templates/default.toml");
 
         assert_eq!(DEFAULT_TEMPLATE, DEFAULT_CONFIG_TEXT);
+        parse_config(DEFAULT_TEMPLATE).expect("generated default template must be usable");
     }
 
     #[test]
