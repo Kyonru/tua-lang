@@ -154,6 +154,7 @@ impl DiagnosticCode {
     pub const DOMAIN_OBJECT_POOL_LIFECYCLE: Self = Self(5007);
     pub const DOMAIN_INPUT_CONFIG: Self = Self(5008);
     pub const DOMAIN_AUDIO_CONFIG: Self = Self(5009);
+    pub const DOMAIN_I18N: Self = Self(5010);
 
     pub fn new(number: u16) -> Option<Self> {
         if (1..=5999).contains(&number) {
@@ -301,6 +302,7 @@ impl DiagnosticCode {
                 | Self::DOMAIN_OBJECT_POOL_LIFECYCLE
                 | Self::DOMAIN_INPUT_CONFIG
                 | Self::DOMAIN_AUDIO_CONFIG
+                | Self::DOMAIN_I18N
         )
     }
 }

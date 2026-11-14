@@ -7,6 +7,9 @@ impl AnalysisSnapshot {
         if let Some(hover) = self.shader_uniform_hover(path, position) {
             return Some(hover);
         }
+        if let Some(hover) = self.i18n_hover(path, position) {
+            return Some(hover);
+        }
         let file = self.file(path)?;
 
         match &file.parsed {
@@ -56,6 +59,73 @@ impl AnalysisSnapshot {
             &normalize_path(path),
             position,
         )
+    }
+
+    fn i18n_hover(&self, path: &Path, position: SourcePosition) -> Option<Hover> {
+        if !self.config.i18n.enabled {
+            return None;
+        }
+        let file = self.file(path)?;
+        let usage = self.i18n_key_use_at(file, position);
+        if usage.is_none()
+            && !self.config.i18n.catalogs.iter().any(|catalog| {
+                self.vfs.source_roots().first().is_some_and(|root| {
+                    normalize_path(root.join(&catalog.path)) == normalize_path(path)
+                })
+            })
+        {
+            return None;
+        }
+        let index = self.catalog_index();
+        let (key, span, locale) = if let Some(usage) = usage {
+            (
+                usage.key.clone(),
+                usage.span,
+                usage
+                    .locale
+                    .clone()
+                    .unwrap_or_else(|| self.config.i18n.default_locale.clone()),
+            )
+        } else {
+            let entry = index.entry_at(&normalize_path(path), position)?;
+            (entry.key.clone(), entry.span, entry.locale.clone())
+        };
+        let entry = index.resolved_entry(&key, &locale, &self.config.i18n.fallback_locale)?;
+        let preview = match &entry.value {
+            crate::i18n::CatalogValue::Text(value) => format!("`{}`", value.replace('`', "\\`")),
+            crate::i18n::CatalogValue::Dialogue(lines) => format!("{} dialogue lines", lines.len()),
+            crate::i18n::CatalogValue::Plural(forms) => format!(
+                "plural forms: {}",
+                forms.keys().cloned().collect::<Vec<_>>().join(", ")
+            ),
+            crate::i18n::CatalogValue::Dynamic => "calculated at game runtime".to_owned(),
+        };
+        Some(Hover {
+            is_markdown: true,
+            contents: format!(
+                "**{key}** · {preview}\n\nCatalog: `{}` · locale `{}`{}",
+                entry.path.display(),
+                entry.locale,
+                if entry.locale == locale {
+                    ""
+                } else {
+                    " (fallback)"
+                }
+            ),
+            span: Some(span),
+            documentation: (!entry.placeholders.is_empty()).then(|| {
+                format!(
+                    "Named arguments: {}",
+                    entry
+                        .placeholders
+                        .iter()
+                        .cloned()
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            }),
+            context: Vec::new(),
+        })
     }
 
     pub(super) fn hover_parsed_snapshot(
@@ -205,6 +275,13 @@ impl AnalysisSnapshot {
     ) -> Vec<Completion> {
         let source = source_override.unwrap_or(&file.source);
 
+        if let Some(completions) = self.i18n_argument_completions(file, source, position) {
+            return completions;
+        }
+        if let Some(completions) = self.i18n_string_completions(file, source, position) {
+            return completions;
+        }
+
         if let Some(completions) =
             complete_indexed_module_paths(path, source, position, &self.module_path_index)
         {
@@ -292,6 +369,132 @@ impl AnalysisSnapshot {
         };
 
         completions
+    }
+
+    fn i18n_argument_completions(
+        &self,
+        file: &AnalysisFile,
+        source: &str,
+        position: SourcePosition,
+    ) -> Option<Vec<Completion>> {
+        if !self.config.i18n.enabled {
+            return None;
+        }
+        if file.scope().is_some_and(|scope| {
+            scope.has_non_builtin_binding_at(crate::i18n::MODULE_NAME, position)
+        }) {
+            return None;
+        }
+        let (key, prefix, used) = crate::i18n::argument_field_context(source, position)?;
+        let entry = self.catalog_index().resolved_entry(
+            &key,
+            &self.config.i18n.default_locale,
+            &self.config.i18n.fallback_locale,
+        )?;
+        Some(
+            entry
+                .placeholders
+                .iter()
+                .filter(|field| !used.contains(*field) && field.starts_with(&prefix))
+                .map(|field| Completion {
+                    label: field.clone(),
+                    kind: CompletionKind::Field,
+                    detail: Some(format!("argument for `{key}`")),
+                    documentation: None,
+                    deprecation: None,
+                    insert_text: Some(format!("{field} = ")),
+                    filter_text: None,
+                    is_snippet: false,
+                    module_path: None,
+                    source_module: None,
+                    additional_text_edits: Vec::new(),
+                })
+                .collect(),
+        )
+    }
+
+    fn i18n_string_completions(
+        &self,
+        file: &AnalysisFile,
+        source: &str,
+        position: SourcePosition,
+    ) -> Option<Vec<Completion>> {
+        if !self.config.i18n.enabled {
+            return None;
+        }
+        let crate::completion::context::CompletionContext::StringArgument {
+            callee_parts,
+            active_parameter,
+            prefix,
+            ..
+        } = crate::completion::context::completion_context(source, position)?
+        else {
+            return None;
+        };
+        let direct = callee_parts == [crate::i18n::MODULE_NAME, "t"];
+        if direct
+            && file.scope().is_some_and(|scope| {
+                scope.has_non_builtin_binding_at(crate::i18n::MODULE_NAME, position)
+            })
+        {
+            return None;
+        }
+        let wrapper_key = active_parameter == 0
+            && file
+                .parsed
+                .as_ref()
+                .ok()
+                .is_some_and(|parsed| self.i18n_wrapper_accepts_key(parsed, &callee_parts));
+        let keys = (direct || wrapper_key) && active_parameter == 0;
+        let locales = (callee_parts == [crate::i18n::MODULE_NAME, "t"] && active_parameter == 2)
+            || (callee_parts == [crate::i18n::MODULE_NAME, "setLocale"] && active_parameter == 0);
+        if !keys && !locales {
+            return None;
+        }
+        let values = if keys {
+            self.catalog_index()
+                .entries
+                .keys()
+                .map(|key| (key.clone(), "translation key".to_owned()))
+                .collect::<Vec<_>>()
+        } else {
+            self.config
+                .i18n
+                .catalogs
+                .iter()
+                .map(|catalog| (catalog.locale.clone(), "configured locale".to_owned()))
+                .collect::<Vec<_>>()
+        };
+        Some(
+            values
+                .into_iter()
+                .filter(|(value, _)| value.starts_with(&prefix))
+                .take(256)
+                .map(|(value, detail)| Completion {
+                    label: value.clone(),
+                    kind: CompletionKind::Value,
+                    detail: Some(detail),
+                    documentation: if keys {
+                        self.catalog_index()
+                            .entries
+                            .get(&value)
+                            .and_then(|entries| entries.get(&self.config.i18n.default_locale))
+                            .map(|entry| format!("Default: {:?}", entry.value))
+                    } else {
+                        None
+                    },
+                    deprecation: None,
+                    insert_text: Some(crate::completion::escape_completion_string(
+                        source, position, &value,
+                    )),
+                    filter_text: None,
+                    is_snippet: false,
+                    module_path: None,
+                    source_module: None,
+                    additional_text_edits: Vec::new(),
+                })
+                .collect(),
+        )
     }
 
     pub(super) fn completion_ranking_inputs(
@@ -641,6 +844,7 @@ impl AnalysisSnapshot {
             &self.config.diagnostics,
         );
         actions.extend(self.missing_protocol_method_actions(parsed, diagnostics, range));
+        actions.extend(self.missing_i18n_key_actions(diagnostics, range));
         actions
     }
 
@@ -668,8 +872,71 @@ impl AnalysisSnapshot {
         );
         if requested_kinds.is_empty() || requested_kinds.contains(&crate::AssistKind::QuickFix) {
             actions.extend(self.missing_protocol_method_actions(parsed, diagnostics, range));
+            actions.extend(self.missing_i18n_key_actions(diagnostics, range));
         }
         actions
+    }
+
+    fn missing_i18n_key_actions(
+        &self,
+        diagnostics: &[Diagnostic],
+        range: AssistRange,
+    ) -> Vec<Assist> {
+        if !self.config.i18n.enabled {
+            return Vec::new();
+        }
+        let Some(catalog) = self
+            .config
+            .i18n
+            .catalogs
+            .iter()
+            .find(|catalog| catalog.locale == self.config.i18n.fallback_locale)
+        else {
+            return Vec::new();
+        };
+        let Some(root) = self.vfs.source_roots().first() else {
+            return Vec::new();
+        };
+        let path = normalize_path(root.join(&catalog.path));
+        let Some(parsed) = self.file(&path).and_then(|file| file.parsed.as_ref().ok()) else {
+            return Vec::new();
+        };
+        diagnostics
+            .iter()
+            .filter_map(|diagnostic| {
+                let diagnostic_span = SourceSpan {
+                    start: SourcePosition {
+                        line: diagnostic.line,
+                        column: diagnostic.column,
+                    },
+                    end: SourcePosition {
+                        line: diagnostic.end_line,
+                        column: diagnostic.end_column,
+                    },
+                };
+                if diagnostic.code != Some(crate::DiagnosticCode::DOMAIN_I18N)
+                    || (!range.contains(diagnostic_span.start)
+                        && !super::span_contains_position(diagnostic_span, range.start))
+                {
+                    return None;
+                }
+                let key = diagnostic
+                    .message
+                    .strip_prefix("unknown i18n key `")?
+                    .strip_suffix('`')?;
+                let edit = crate::i18n::missing_key_stub(parsed, &catalog.locale, key)?;
+                let mut changes = BTreeMap::new();
+                changes.insert(path.clone(), vec![edit]);
+                Some(Assist {
+                    title: format!("Add `{key}` to fallback catalog"),
+                    kind: crate::AssistKind::QuickFix,
+                    edit: crate::AssistEdit {
+                        changes,
+                        create_files: Vec::new(),
+                    },
+                })
+            })
+            .collect()
     }
 
     fn missing_protocol_method_actions(

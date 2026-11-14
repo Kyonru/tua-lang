@@ -183,6 +183,27 @@ fn build_project_files(
 
     push_tua_output_collision_diagnostics(&mut diagnostics, &tua_output_collisions);
 
+    if workspace.config().i18n.enabled {
+        for catalog in &workspace.config().i18n.catalogs {
+            let path = source_dir.join(&catalog.path);
+            if !path.is_file() {
+                diagnostics.push(
+                    Diagnostic::error(
+                        &path,
+                        1,
+                        1,
+                        format!("i18n catalog for `{}` does not exist", catalog.locale),
+                    )
+                    .with_code(DiagnosticCode::CONFIG_IO),
+                );
+            } else if let Err(message) = reject_symlink_path(workspace.root(), &path) {
+                diagnostics.push(
+                    Diagnostic::error(&path, 1, 1, message).with_code(DiagnosticCode::CONFIG_IO),
+                );
+            }
+        }
+    }
+
     for source_file in source_files {
         let source_path = source_file.path;
         let output_path = output_path_for_asset(&workspace, &source_path);
@@ -403,6 +424,13 @@ fn build_project_files(
         }
     }
 
+    if !workspace.config().i18n.enabled {
+        required_bundled_runtimes.remove("tuai18n");
+    }
+    if !required_bundled_runtimes.contains("tuai18n") {
+        required_bundled_runtimes.retain(|module| !module.starts_with("smiti18n"));
+    }
+
     let existing_runtimes = write_required_bundled_runtimes(
         &output_guard,
         &workspace,
@@ -411,6 +439,21 @@ fn build_project_files(
         &mut emitted,
         &mut diagnostics,
     );
+
+    if required_bundled_runtimes.contains("tuai18n") && workspace.config().i18n.enabled {
+        let path = out_dir.join("tuai18n_config.lua");
+        if source_dir.join("tuai18n_config.lua").exists() || tua_output_owners.contains_key(&path) {
+            diagnostics.push(Diagnostic::error(&path, 1, 1, "configured localization reserves `tuai18n_config.lua`; rename the project file").with_code(DiagnosticCode::EMIT_OUTPUT_COLLISION));
+        } else {
+            match write_output(&output_guard, &path, i18n_config_lua(workspace.config())) {
+                Ok(()) => {
+                    emitted += 1;
+                    owned_outputs.insert(path);
+                }
+                Err(diagnostic) => diagnostics.push(diagnostic),
+            }
+        }
+    }
 
     for runtime in BUNDLED_RUNTIMES {
         if required_bundled_runtimes.contains(runtime.module) {
@@ -433,6 +476,44 @@ fn build_project_files(
         diagnostics,
         ..BuildOutcome::default()
     }
+}
+
+fn i18n_config_lua(config: &tua_core::ProjectConfig) -> String {
+    let mut output = format!(
+        "return {{\n  default_locale = {},\n  fallback_locale = {},\n  catalogs = {{\n",
+        lua_quoted(&config.i18n.default_locale),
+        lua_quoted(&config.i18n.fallback_locale)
+    );
+    for catalog in &config.i18n.catalogs {
+        let module = catalog
+            .path
+            .with_extension("")
+            .components()
+            .filter_map(|part| part.as_os_str().to_str())
+            .collect::<Vec<_>>()
+            .join(".");
+        output.push_str(&format!(
+            "    {{ locale = {}, module = {} }},\n",
+            lua_quoted(&catalog.locale),
+            lua_quoted(&module)
+        ));
+    }
+    output.push_str("  },\n}\n");
+    output
+}
+
+fn lua_quoted(value: &str) -> String {
+    let mut output = String::from("\"");
+    for byte in value.bytes() {
+        match byte {
+            b'"' => output.push_str("\\\""),
+            b'\\' => output.push_str("\\\\"),
+            32..=126 => output.push(char::from(byte)),
+            _ => output.push_str(&format!("\\{byte:03}")),
+        }
+    }
+    output.push('"');
+    output
 }
 
 fn is_pipeline_development_output(

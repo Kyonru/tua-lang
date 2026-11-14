@@ -157,7 +157,109 @@ fn parse_config_inner(input: &str) -> Result<ProjectConfig, ConfigParseError> {
             ));
         }
     }
+    if config.i18n.enabled {
+        if config.i18n.catalogs.is_empty() {
+            return Err(parse_error(
+                input,
+                None,
+                "enabled i18n needs at least one [[i18n.catalogs]] entry",
+            ));
+        }
+        for locale in [&config.i18n.default_locale, &config.i18n.fallback_locale] {
+            if !valid_locale(locale) {
+                return Err(parse_error(
+                    input,
+                    None,
+                    "i18n locales must use canonical BCP 47-style tags such as `en` or `pt-BR`",
+                ));
+            }
+        }
+        if config.i18n.catalogs.len() > 64 {
+            return Err(parse_error(
+                input,
+                None,
+                "at most 64 i18n catalogs are supported",
+            ));
+        }
+        let mut locales = BTreeSet::new();
+        let mut paths = BTreeSet::new();
+        for catalog in &config.i18n.catalogs {
+            if !valid_locale(&catalog.locale) {
+                return Err(parse_error(
+                    input,
+                    None,
+                    "i18n catalog locale must use a canonical tag such as `en` or `pt-BR`",
+                ));
+            }
+            if !locales.insert(catalog.locale.to_ascii_lowercase()) {
+                return Err(parse_error(
+                    input,
+                    None,
+                    "i18n catalog locales must be unique",
+                ));
+            }
+            if catalog.path.extension().and_then(|ext| ext.to_str()) != Some("lua")
+                || catalog
+                    .path
+                    .components()
+                    .any(|part| !matches!(part, std::path::Component::Normal(_)))
+                || catalog.path.to_string_lossy().contains('\\')
+            {
+                return Err(parse_error(
+                    input,
+                    None,
+                    "i18n catalog paths must be source-relative `.lua` files without `..`",
+                ));
+            }
+            if !paths.insert(catalog.path.clone()) {
+                return Err(parse_error(
+                    input,
+                    None,
+                    "i18n catalog paths must be unique",
+                ));
+            }
+        }
+        if !config.i18n.catalogs.is_empty()
+            && !locales.contains(&config.i18n.default_locale.to_ascii_lowercase())
+        {
+            return Err(parse_error(
+                input,
+                None,
+                "i18n.default_locale needs a configured catalog",
+            ));
+        }
+        if !config.i18n.catalogs.is_empty()
+            && !locales.contains(&config.i18n.fallback_locale.to_ascii_lowercase())
+        {
+            return Err(parse_error(
+                input,
+                None,
+                "i18n.fallback_locale needs a configured catalog",
+            ));
+        }
+    }
     Ok(config)
+}
+
+fn valid_locale(locale: &str) -> bool {
+    let mut parts = locale.split('-');
+    let Some(language) = parts.next() else {
+        return false;
+    };
+    if !(2..=8).contains(&language.len()) || !language.bytes().all(|byte| byte.is_ascii_lowercase())
+    {
+        return false;
+    }
+    parts.all(|part| {
+        (part.len() == 2 && part.bytes().all(|byte| byte.is_ascii_uppercase()))
+            || (part.len() == 4
+                && part
+                    .bytes()
+                    .next()
+                    .is_some_and(|byte| byte.is_ascii_uppercase())
+                && part.bytes().skip(1).all(|byte| byte.is_ascii_lowercase()))
+            || (part.len() == 3 && part.bytes().all(|byte| byte.is_ascii_digit()))
+    })
 }
 
 pub fn config_settings_metadata() -> Vec<ConfigSettingMetadata> {

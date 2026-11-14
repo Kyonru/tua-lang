@@ -655,7 +655,7 @@ fn byte_offset_for_position(source: &str, position: SourcePosition) -> Option<us
     None
 }
 
-fn active_call_open(source: &str, cursor: usize) -> Option<usize> {
+pub(crate) fn active_call_open(source: &str, cursor: usize) -> Option<usize> {
     let mut stack = Vec::new();
     let mut scanner = Scanner::new(source, cursor);
 
@@ -684,7 +684,7 @@ fn method_separator_before(source: &str, open: usize) -> bool {
     })
 }
 
-fn callee_parts_before(source: &str, open: usize) -> Option<Vec<String>> {
+pub(crate) fn callee_parts_before(source: &str, open: usize) -> Option<Vec<String>> {
     let bytes = source.as_bytes();
     let mut end = trim_ascii_whitespace_before(bytes, open);
     let mut parts = Vec::new();
@@ -706,7 +706,7 @@ fn callee_parts_before(source: &str, open: usize) -> Option<Vec<String>> {
     (!parts.is_empty()).then_some(parts)
 }
 
-fn active_parameter_index(source: &str, start: usize, cursor: usize) -> usize {
+pub(crate) fn active_parameter_index(source: &str, start: usize, cursor: usize) -> usize {
     let mut active = 0;
     let mut depth = 0usize;
     let mut scanner = Scanner::new(

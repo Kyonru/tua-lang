@@ -1,0 +1,56 @@
+-- Tua's configured localization adapter. Kept separate from the pinned Smiti18n runtime.
+local config = require("tuai18n_config")
+local smiti = require("smiti18n")
+local previous_locale = smiti.getLocale()
+
+for _, catalog in ipairs(config.catalogs) do
+  local data = require(catalog.module)
+  if type(data) ~= "table" or type(data[catalog.locale]) ~= "table" then
+    error("i18n catalog " .. catalog.module .. " must return a table rooted at " .. catalog.locale)
+  end
+  smiti.load(data)
+end
+
+smiti.setFallbackLocale(config.fallback_locale)
+smiti.setLocale(previous_locale or config.default_locale)
+
+local I18n = {}
+
+function I18n.t(key, args, locale)
+  if locale == nil then
+    return smiti.translate(key, args)
+  end
+  -- Smiti includes the current locale after data.locale. A per-call override
+  -- must instead fall back directly to the configured fallback locale.
+  local previous = smiti.getLocale()
+  local data = {}
+  if args then
+    for name, value in pairs(args) do data[name] = value end
+  end
+  data.locale = locale
+  smiti.setLocale(locale)
+  local ok, result = pcall(smiti.translate, key, data)
+  smiti.setLocale(previous)
+  if not ok then error(result, 0) end
+  return result
+end
+
+function I18n.setLocale(locale)
+  smiti.setLocale(locale)
+end
+
+function I18n.getLocale()
+  return smiti.getLocale()
+end
+
+function I18n.getLocales()
+  local result = {}
+  for index, catalog in ipairs(config.catalogs) do result[index] = catalog.locale end
+  return result
+end
+
+I18n.formatNumber = smiti.formatNumber
+I18n.formatPrice = smiti.formatPrice
+I18n.formatDate = smiti.formatDate
+
+return I18n

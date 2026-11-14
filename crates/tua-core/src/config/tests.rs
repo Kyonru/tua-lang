@@ -53,6 +53,7 @@ fn default_config_matches_spec() {
             format: FormatConfig::default(),
             jit: JitConfig::default(),
             ecs: EcsConfig::default(),
+            i18n: I18nConfig::default(),
             shaders: ShadersConfig::default(),
             diagnostics: DiagnosticsConfig::default(),
         }
@@ -62,6 +63,21 @@ fn default_config_matches_spec() {
         parse_config(DEFAULT_CONFIG_TEXT).expect("default config text should parse"),
         ProjectConfig::default()
     );
+}
+
+#[test]
+fn localization_is_opt_in_and_validates_catalog_identity_and_paths() {
+    assert!(!parse_config("").unwrap().i18n.enabled);
+    let configured = parse_config("[i18n]\nenabled = true\ndefault_locale = 'en'\nfallback_locale = 'en'\n[[i18n.catalogs]]\nlocale = 'en'\npath = 'locales/en.lua'\n[[i18n.catalogs]]\nlocale = 'fr'\npath = 'locales/fr.lua'\n").unwrap();
+    assert_eq!(configured.i18n.catalogs.len(), 2);
+    for input in [
+        "[i18n]\nenabled = true\n",
+        "[i18n]\nenabled = true\n[[i18n.catalogs]]\nlocale = 'en'\npath = '../outside.lua'\n",
+        "[i18n]\nenabled = true\n[[i18n.catalogs]]\nlocale = 'en'\npath = 'en.lua'\n[[i18n.catalogs]]\nlocale = 'en'\npath = 'other.lua'\n",
+        "[i18n]\nenabled = true\ndefault_locale = 'fr'\n[[i18n.catalogs]]\nlocale = 'en'\npath = 'en.lua'\n",
+    ] {
+        assert!(parse_config(input).is_err(), "accepted invalid i18n config: {input}");
+    }
 }
 
 #[test]
@@ -296,6 +312,7 @@ severity = { TL1003 = "warning", TL4035 = "allow" }
                 enabled: true,
                 backend: "tiny-ecs".to_owned(),
             },
+            i18n: I18nConfig::default(),
             shaders: ShadersConfig::default(),
             diagnostics: DiagnosticsConfig {
                 rules: true,

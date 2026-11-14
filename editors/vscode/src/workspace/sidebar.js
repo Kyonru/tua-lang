@@ -117,6 +117,7 @@ class WorkspaceTree {
       ...SECTIONS.map(([kind, label, icon, request, graphCommand]) => ({ id: kind, kind, label, icon, request, graphCommand })),
       { id: "pools", label: "Object pools", icon: "database", command: COMMANDS.showObjectPoolExplorer },
       { id: "audio", label: "Audio", icon: "unmute", command: COMMANDS.showAudioExplorer },
+      { id: "localization", label: "Localization", icon: "globe", command: COMMANDS.showLocalizationExplorer },
       { id: "setup", label: "Editor setup", icon: "settings-gear", command: COMMANDS.openSetup },
     ];
     if (node.children) return node.children;

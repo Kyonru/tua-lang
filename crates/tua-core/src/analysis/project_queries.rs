@@ -597,13 +597,40 @@ impl AnalysisSnapshot {
             }))
             .with_local_contract_types(self.project_local_annotation_types(parsed));
 
-        if self.config.ecs.enabled {
+        let environment = if self.config.ecs.enabled {
             environment
                 .with_alias_types(crate::ecs::builtin_aliases())
                 .with_local_types(crate::ecs::builtin_locals())
         } else {
             environment
+        };
+        if !self.config.i18n.enabled || parsed.raw.language != crate::ParsedLanguage::Tua {
+            return environment;
         }
+        // Key completion and literal diagnostics use the catalog index. The
+        // type remains open because games may compute keys at runtime.
+        let keys = Type::string();
+        // Regional tags may use a configured parent catalog (for example
+        // fr-CA with fr), so this alias remains open while completion suggests
+        // the known catalog tags.
+        let locales = Type::string();
+        let aliases = [
+            (!parsed
+                .type_aliases
+                .iter()
+                .any(|alias| alias.name == crate::i18n::KEY_TYPE))
+            .then(|| (crate::i18n::KEY_TYPE.to_owned(), keys)),
+            (!parsed
+                .type_aliases
+                .iter()
+                .any(|alias| alias.name == crate::i18n::LOCALE_TYPE))
+            .then(|| (crate::i18n::LOCALE_TYPE.to_owned(), locales)),
+        ]
+        .into_iter()
+        .flatten();
+        environment
+            .with_alias_types(aliases)
+            .with_i18n_result_types(self.i18n_result_types())
     }
 
     fn project_imported_generic_alias_bindings(
@@ -1071,6 +1098,22 @@ impl AnalysisSnapshot {
         local_types: &BTreeMap<String, Type>,
     ) -> Option<Type> {
         let parts = field_chain_before_first_call(function_call)?;
+        if return_index == 0 && self.config.i18n.enabled {
+            if let Some(key) = crate::i18n::literal_key_from_call(function_call) {
+                let position = node_span(function_call)?.start;
+                let is_shadowed = self
+                    .file(&parsed.path)
+                    .and_then(|file| file.scope())
+                    .is_some_and(|scope| {
+                        scope.has_non_builtin_binding_at(crate::i18n::MODULE_NAME, position)
+                    });
+                if !is_shadowed {
+                    if let Some(ty) = self.i18n_result_types().get(&key) {
+                        return Some(ty.clone());
+                    }
+                }
+            }
+        }
         if self.config.ecs.enabled
             && parts.len() > 1
             && matches!(
@@ -1501,7 +1544,7 @@ impl AnalysisSnapshot {
         self.indexed_module_path_for_specifier(parsed, module)
     }
 
-    fn indexed_module_path_for_specifier(
+    pub(super) fn indexed_module_path_for_specifier(
         &self,
         parsed: &ParsedSource,
         module: &str,
@@ -2642,6 +2685,9 @@ impl AnalysisSnapshot {
             .map(|parsed| {
                 let facts = self.semantic_facts_for_parsed(parsed);
                 let mut diagnostics_config = self.config.diagnostics.clone();
+                if self.config.i18n.enabled && parsed.raw.language == crate::ParsedLanguage::Tua {
+                    diagnostics_config.globals.push(crate::i18n::MODULE_NAME.to_owned());
+                }
 
                 if facts.environment.has_busted_globals() {
                     for name in crate::busted::GLOBAL_NAMES {

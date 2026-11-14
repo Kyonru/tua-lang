@@ -406,6 +406,9 @@ impl LspServer {
             RequestKind::Inspect => response(id, self.inspector_response(&message)),
             RequestKind::ExplainType => response(id, self.type_explanation_response(&message)),
             RequestKind::AssetInventory => response(id, self.asset_inventory_response(&message)),
+            RequestKind::LocalizationCatalog => {
+                response(id, self.localization_catalog_response(&message))
+            }
             RequestKind::ModuleGraph => response(id, self.module_dependency_graph_response()),
             RequestKind::EcsGraph => response(id, self.ecs_graph_response()),
             RequestKind::ObjectPoolGraph => response(id, self.object_pool_graph_response()),
@@ -1445,7 +1448,7 @@ impl LspServer {
             return json!([]);
         };
         if is_config_uri(request.uri) {
-            return super::config::completion_response(source, position);
+            return super::config::completion_response(source, position, &request.path);
         }
 
         if let Some(completions) = self
@@ -1999,6 +2002,33 @@ impl LspServer {
             "analysisRevision": snapshot.revision(),
             "graph": lsp_module_dependency_graph_from_core(snapshot.module_dependency_graph(), &snapshot)
         })
+    }
+
+    fn localization_catalog_response(&self, message: &Value) -> Value {
+        let snapshot = self
+            .analysis
+            .snapshot(&self.workspace_folders, &self.settings);
+        let params = message.get("params");
+        let search = params
+            .and_then(|params| params.get("search"))
+            .and_then(Value::as_str)
+            .unwrap_or("");
+        let offset = params
+            .and_then(|params| params.get("offset"))
+            .and_then(Value::as_u64)
+            .unwrap_or(0) as usize;
+        let page = snapshot.localization_page(search, offset, 100);
+        let rows = page.rows.into_iter().map(|row| json!({
+            "key": row.key,
+            "cells": row.cells.into_iter().map(|cell| {
+                let range = cell.path.as_ref().zip(cell.span).and_then(|(path, span)| snapshot.source(path).map(|source| lsp_range_for_source(source, span)));
+                json!({ "locale": cell.locale, "status": cell.status, "preview": cell.preview,
+                    "forms": cell.forms, "placeholders": cell.placeholders,
+                    "uri": cell.path.as_deref().map(uri_from_path), "range": range })
+            }).collect::<Vec<_>>()
+        })).collect::<Vec<_>>();
+        json!({ "analysisRevision": snapshot.revision(), "enabled": page.enabled,
+            "locales": page.locales, "total": page.total, "offset": offset, "rows": rows })
     }
 
     fn ecs_graph_response(&self) -> Value {

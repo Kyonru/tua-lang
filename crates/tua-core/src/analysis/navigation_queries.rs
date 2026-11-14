@@ -27,6 +27,25 @@ impl AnalysisSnapshot {
         }
 
         let file = self.file(path)?;
+        if self.config.i18n.enabled && file.kind == AnalysisSourceKind::Tua {
+            if let Some(usage) = self.i18n_key_use_at(file, position) {
+                let locale = usage
+                    .locale
+                    .as_deref()
+                    .unwrap_or(&self.config.i18n.default_locale);
+                if let Some(entry) = self.catalog_index().resolved_entry(
+                    &usage.key,
+                    locale,
+                    &self.config.i18n.fallback_locale,
+                ) {
+                    return Some(Definition {
+                        path: entry.path.clone(),
+                        span: entry.span,
+                        kind: DefinitionKind::TableField,
+                    });
+                }
+            }
+        }
         let key = definition_request_key(self.revision, path, &file.source, position);
 
         if let Some(definition) = self
@@ -1088,6 +1107,10 @@ impl AnalysisSnapshot {
         let _profile = profile::span("analysis.query.references");
         let path = path.as_ref();
 
+        if let Some(references) = self.i18n_references(path, position, include_declaration) {
+            return references;
+        }
+
         if let Some(references) =
             self.signal_event_references_at_position(path, position, include_declaration)
         {
@@ -1650,6 +1673,130 @@ impl AnalysisSnapshot {
         definitions
     }
 
+    fn i18n_key_at(&self, path: &Path, position: SourcePosition) -> Option<(String, SourceSpan)> {
+        if !self.config.i18n.enabled {
+            return None;
+        }
+        let file = self.file(path)?;
+        if file.kind == AnalysisSourceKind::Lua {
+            if !self.config.i18n.catalogs.iter().any(|catalog| {
+                self.vfs.source_roots().first().is_some_and(|root| {
+                    normalize_path(root.join(&catalog.path)) == normalize_path(path)
+                })
+            }) {
+                return None;
+            }
+            let entry = self
+                .catalog_index()
+                .entry_at(&normalize_path(path), position)?;
+            return Some((entry.key.clone(), entry.span));
+        }
+        self.i18n_key_use_at(file, position)
+            .map(|usage| (usage.key, usage.span))
+    }
+
+    fn i18n_references(
+        &self,
+        path: &Path,
+        position: SourcePosition,
+        include_declaration: bool,
+    ) -> Option<Vec<Reference>> {
+        let (key, _) = self.i18n_key_at(path, position)?;
+        let mut references = Vec::new();
+        if include_declaration {
+            if let Some(entries) = self.catalog_index().entries.get(&key) {
+                references.extend(entries.values().map(|entry| Reference {
+                    path: entry.path.clone(),
+                    span: entry.span,
+                    kind: ReferenceKind::TableField,
+                }));
+            }
+        }
+        for file in self.files.values() {
+            let Ok(parsed) = &file.parsed else {
+                continue;
+            };
+            if parsed.raw.language != crate::ParsedLanguage::Tua {
+                continue;
+            }
+            references.extend(
+                self.i18n_key_uses_for_file(file)
+                    .into_iter()
+                    .filter(|usage| usage.key == key)
+                    .map(|usage| Reference {
+                        path: parsed.path.clone(),
+                        span: usage.span,
+                        kind: ReferenceKind::TableField,
+                    }),
+            );
+        }
+        sort_and_dedup_references(&mut references);
+        Some(references)
+    }
+
+    fn rename_i18n_key(&self, key: &str, new_leaf: &str) -> Option<RenameEdit> {
+        if !is_valid_rename_identifier(new_leaf)
+            || self.catalog_index().duplicate_keys.contains(key)
+        {
+            return None;
+        }
+        let parent = key.rsplit_once('.').map(|(parent, _)| parent);
+        let new_key = parent.map_or_else(
+            || new_leaf.to_owned(),
+            |parent| format!("{parent}.{new_leaf}"),
+        );
+        if new_key != key && self.catalog_index().entries.contains_key(&new_key) {
+            return None;
+        }
+        let references = self.catalog_index().entries.get(key)?;
+        let mut edits = Vec::new();
+        for entry in references.values() {
+            let source = self.source(&entry.path)?;
+            let start = crate::source_text::byte_for_position(source, entry.span.start)?;
+            let end = crate::source_text::byte_for_position(source, entry.span.end)?;
+            let old = source.get(start..end)?;
+            let new_text = match old.as_bytes().first().copied() {
+                Some(b'\'') => format!("'{new_leaf}'"),
+                Some(b'"') => format!("\"{new_leaf}\""),
+                Some(b'[') => format!("\"{new_leaf}\""),
+                _ => new_leaf.to_owned(),
+            };
+            edits.push(TextEdit {
+                path: entry.path.clone(),
+                span: entry.span,
+                new_text,
+            });
+        }
+        for file in self.files.values() {
+            let Ok(parsed) = &file.parsed else {
+                continue;
+            };
+            if parsed.raw.language != crate::ParsedLanguage::Tua {
+                continue;
+            }
+            for usage in self
+                .i18n_key_uses_for_file(file)
+                .into_iter()
+                .filter(|usage| usage.key == key)
+            {
+                let start =
+                    crate::source_text::byte_for_position(&parsed.source, usage.span.start)?;
+                let quote = match parsed.source.as_bytes().get(start).copied() {
+                    Some(b'\'') => '\'',
+                    _ => '"',
+                };
+                edits.push(TextEdit {
+                    path: parsed.path.clone(),
+                    span: usage.span,
+                    new_text: format!("{quote}{new_key}{quote}"),
+                });
+            }
+        }
+        edits.sort_by_key(text_edit_key);
+        edits.dedup_by_key(|edit| text_edit_key(edit));
+        (!edits.is_empty()).then_some(RenameEdit { edits })
+    }
+
     pub fn prepare_rename(
         &self,
         path: impl AsRef<Path>,
@@ -1657,6 +1804,18 @@ impl AnalysisSnapshot {
     ) -> Option<RenameTarget> {
         let _profile = profile::span("analysis.query.prepare_rename");
         let path = path.as_ref();
+
+        if let Some((key, span)) = self.i18n_key_at(path, position) {
+            if self.catalog_index().duplicate_keys.contains(&key) {
+                return None;
+            }
+            return Some(RenameTarget {
+                path: path.to_path_buf(),
+                span,
+                placeholder: key.rsplit('.').next().unwrap_or(&key).to_owned(),
+                kind: crate::RenameKind::TableField,
+            });
+        }
 
         if let Some(event) = self.usage_index.signal_event_at(path, position) {
             return Some(RenameTarget {
@@ -1694,6 +1853,10 @@ impl AnalysisSnapshot {
     ) -> Option<RenameEdit> {
         let _profile = profile::span("analysis.query.rename");
         let path = path.as_ref();
+
+        if let Some((key, _)) = self.i18n_key_at(path, position) {
+            return self.rename_i18n_key(&key, new_name);
+        }
 
         if let Some(event) = self.usage_index.signal_event_at(path, position) {
             if !crate::signal::is_valid_event_name(new_name) {

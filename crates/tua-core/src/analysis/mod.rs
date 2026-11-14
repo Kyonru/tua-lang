@@ -217,6 +217,8 @@ pub struct AnalysisSnapshot {
     emission_diagnostics_cache: Arc<Mutex<BTreeMap<PathBuf, Vec<Diagnostic>>>>,
     reverse_reference_index: Arc<OnceLock<ReverseReferenceIndex>>,
     project_module_globals: Arc<OnceLock<BTreeSet<String>>>,
+    catalog_index: Arc<OnceLock<crate::i18n::CatalogIndex>>,
+    i18n_result_types: Arc<OnceLock<Arc<BTreeMap<String, Type>>>>,
     call_hierarchy_symbols: Arc<BTreeMap<PathBuf, Vec<CallHierarchySymbol>>>,
     call_hierarchy_calls: Arc<BTreeMap<PathBuf, Vec<CallHierarchyCallSite>>>,
 }
@@ -254,6 +256,9 @@ struct AnalysisFileData {
     usage_index: Arc<FileUsageIndex>,
     ecs_index: Arc<crate::ecs::EcsFileIndex>,
     object_pool_index: Arc<crate::object_pool::ObjectPoolFileIndex>,
+    i18n_key_uses: OnceLock<Vec<crate::i18n::KeyUse>>,
+    i18n_wrapper_key_uses: OnceLock<Vec<crate::i18n::WrapperKeyUse>>,
+    i18n_locale_uses: OnceLock<Vec<crate::i18n::LocaleUse>>,
     #[allow(dead_code)]
     symbols: Vec<SymbolIndexEntry>,
 }
@@ -267,6 +272,45 @@ struct AnalysisFileSemantics {
 }
 
 impl AnalysisFile {
+    fn i18n_wrapper_key_uses(&self) -> &[crate::i18n::WrapperKeyUse] {
+        self.i18n_wrapper_key_uses.get_or_init(|| {
+            if self.kind != AnalysisSourceKind::Tua {
+                return Vec::new();
+            }
+            if !self.source.contains("I18nKey")
+                && !self.source.contains("require")
+                && !self.source.contains("import")
+            {
+                return Vec::new();
+            }
+            self.parsed
+                .as_ref()
+                .ok()
+                .map_or_else(Vec::new, |parsed| crate::i18n::wrapper_key_uses(parsed))
+        })
+    }
+    fn i18n_locale_uses(&self) -> &[crate::i18n::LocaleUse] {
+        self.i18n_locale_uses.get_or_init(|| {
+            if self.kind != AnalysisSourceKind::Tua || !self.source.contains("I18n") {
+                return Vec::new();
+            }
+            self.parsed
+                .as_ref()
+                .ok()
+                .map_or_else(Vec::new, |parsed| crate::i18n::locale_uses(parsed))
+        })
+    }
+    fn i18n_key_uses(&self) -> &[crate::i18n::KeyUse] {
+        self.i18n_key_uses.get_or_init(|| {
+            if self.kind != AnalysisSourceKind::Tua || !self.source.contains("I18n") {
+                return Vec::new();
+            }
+            self.parsed
+                .as_ref()
+                .ok()
+                .map_or_else(Vec::new, |parsed| crate::i18n::key_uses(parsed))
+        })
+    }
     fn inline_shaders(&self) -> &[asset::InlineShader] {
         &self.inline_shaders
     }

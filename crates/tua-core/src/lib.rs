@@ -29,6 +29,8 @@ pub mod formatter;
 mod game_math;
 pub mod hir;
 pub mod hover;
+mod i18n;
+pub use i18n::{LocalizationCell, LocalizationPage, LocalizationRow};
 pub mod ide_db;
 pub mod inlay_hint;
 pub mod inline_completion;
@@ -124,9 +126,9 @@ pub use completion::{
 pub use config::{
     init_project, load_config_from_dir, parse_config, AnnotationMode, AssetPipelineConfig,
     ConfigError, ConfigParseError, DiagnosticLevel, DiagnosticsConfig, EcsConfig, EmitConfig,
-    FormatConfig, InitResult, JitConfig, LoadedConfig, PackagePipelineConfig, ProjectConfig,
-    ShaderValidationMode, ShadersConfig, TypeLibraryConfig, CONFIG_FILE, DEFAULT_CONFIG_TEXT,
-    DEFAULT_MAIN_TEXT,
+    FormatConfig, I18nCatalogConfig, I18nConfig, InitResult, JitConfig, LoadedConfig,
+    PackagePipelineConfig, ProjectConfig, ShaderValidationMode, ShadersConfig, TypeLibraryConfig,
+    CONFIG_FILE, DEFAULT_CONFIG_TEXT, DEFAULT_MAIN_TEXT,
 };
 pub use definition::{
     definition_parsed_source, definition_parsed_source_with_hir, definition_tua_source, Definition,
@@ -323,6 +325,10 @@ pub fn tuastore_runtime_source() -> &'static str {
 
 pub fn tuaaudio_runtime_source() -> &'static str {
     audio::runtime_source()
+}
+
+pub fn tuai18n_runtime_source() -> &'static str {
+    i18n::runtime_source()
 }
 
 pub fn tua_audio_design_runtime_source() -> &'static str {

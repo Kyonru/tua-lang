@@ -1268,6 +1268,15 @@ impl AnalysisSnapshot {
         self.core.asset_inventory_diagnostics()
     }
 
+    pub(super) fn localization_page(
+        &self,
+        search: &str,
+        offset: usize,
+        limit: usize,
+    ) -> tua_core::LocalizationPage {
+        self.core.localization_page(search, offset, limit)
+    }
+
     pub(super) fn module_dependency_graph(&self) -> ModuleDependencyGraph {
         self.core.module_dependency_graph()
     }

@@ -588,6 +588,9 @@ fn build_analysis_file(
         usage_index,
         ecs_index,
         object_pool_index,
+        i18n_key_uses: OnceLock::new(),
+        i18n_wrapper_key_uses: OnceLock::new(),
+        i18n_locale_uses: OnceLock::new(),
         symbols,
     }))
 }
@@ -823,7 +826,12 @@ pub(super) fn fast_diagnostics_for_source(
     };
     let (environment, mut diagnostics) =
         build_analysis_type_environment_with_diagnostics(&parsed, config);
-    let fast_config = fast_diagnostics_config(&config.diagnostics);
+    let mut fast_config = fast_diagnostics_config(&config.diagnostics);
+    if config.i18n.enabled && parsed.raw.language == crate::ParsedLanguage::Tua {
+        fast_config
+            .globals
+            .push(crate::i18n::MODULE_NAME.to_owned());
+    }
     let project_types_required = !parsed.type_imports.is_empty()
         || !crate::module_index::require_bindings_for_parsed_source(&parsed).is_empty();
     diagnostics.extend(
@@ -884,10 +892,14 @@ pub(super) fn build_analysis_type_environment_with_busted_globals(
     config: &ProjectConfig,
     busted_test_source: bool,
 ) -> (TypeEnvironment, Vec<Diagnostic>) {
-    let (environment, diagnostics) = if config.ecs.enabled {
+    let i18n_enabled = config.i18n.enabled && parsed.raw.language == crate::ParsedLanguage::Tua;
+    let (environment, diagnostics) = if config.ecs.enabled || i18n_enabled {
         let (environment, diagnostics) = build_type_environment_with_domain_registry(
             parsed,
-            crate::semantic_domains::BuiltinDomainRegistry::with_ecs(true),
+            crate::semantic_domains::BuiltinDomainRegistry::with_features(
+                config.ecs.enabled,
+                i18n_enabled,
+            ),
         );
 
         (environment, diagnostics)

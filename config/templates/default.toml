@@ -15,6 +15,16 @@ exclude_specs = true
 [emit]
 annotation_mode = "off"
 
+[i18n]
+enabled = false
+default_locale = "en"
+fallback_locale = "en"
+catalogs = []
+
+[i18n.catalogs]
+locale = "en"
+path = "locales/en.lua"
+
 [format]
 indent_style = "spaces"
 indent_width = 2

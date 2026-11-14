@@ -70,6 +70,7 @@ pub struct TypeEnvironment {
     table_sort_overridden: bool,
     project_module_globals: BTreeSet<String>,
     busted_globals: Option<Arc<BTreeMap<String, Type>>>,
+    i18n_result_types: Option<Arc<BTreeMap<String, Type>>>,
 }
 
 /// Annotation contracts belong to declarations, not names shared across scopes.
@@ -844,6 +845,15 @@ impl TypeEnvironment {
         }
 
         self
+    }
+
+    pub(crate) fn with_i18n_result_types(mut self, types: Arc<BTreeMap<String, Type>>) -> Self {
+        self.i18n_result_types = Some(types);
+        self
+    }
+
+    pub(crate) fn i18n_result_type(&self, key: &str) -> Option<&Type> {
+        self.i18n_result_types.as_ref()?.get(key)
     }
 
     pub(crate) fn with_local_contract_types(
@@ -2030,18 +2040,24 @@ pub(crate) fn build_type_environment_with_domain_registry(
     let shared_aliases = if has_module_aliases {
         static STANDARD: OnceLock<Arc<BTreeMap<String, Type>>> = OnceLock::new();
         static WITH_ECS: OnceLock<Arc<BTreeMap<String, Type>>> = OnceLock::new();
-        let cache = if domains == BuiltinDomainRegistry::standard() {
-            &STANDARD
+        if domains.i18n_enabled() {
+            let mut aliases = (*domains.shared_builtin_aliases()).clone();
+            aliases.extend(crate::builtin_module::builtin_type_aliases());
+            Arc::new(aliases)
         } else {
-            &WITH_ECS
-        };
-        cache
-            .get_or_init(|| {
-                let mut aliases = (*domains.shared_builtin_aliases()).clone();
-                aliases.extend(crate::builtin_module::builtin_type_aliases());
-                Arc::new(aliases)
-            })
-            .clone()
+            let cache = if domains == BuiltinDomainRegistry::standard() {
+                &STANDARD
+            } else {
+                &WITH_ECS
+            };
+            cache
+                .get_or_init(|| {
+                    let mut aliases = (*domains.shared_builtin_aliases()).clone();
+                    aliases.extend(crate::builtin_module::builtin_type_aliases());
+                    Arc::new(aliases)
+                })
+                .clone()
+        }
     } else {
         domains.shared_builtin_aliases()
     };
@@ -2058,10 +2074,15 @@ pub(crate) fn build_type_environment_with_domain_registry(
         && !parsed
             .source
             .contains(crate::builtin_module::AUDIO_DESIGN.name);
+    let domain_locals = domains
+        .builtin_locals()
+        .into_iter()
+        .filter(|(name, _)| !locals.contains_key(name))
+        .collect::<Vec<_>>();
     let locals = builtin_locals
         .into_iter()
+        .chain(domain_locals)
         .chain(locals)
-        .chain(domains.builtin_locals())
         .collect::<BTreeMap<_, _>>();
     let locals = if can_share_locals {
         domains.shared_builtin_locals(locals)
@@ -2191,6 +2212,7 @@ pub(crate) fn build_type_environment_with_domain_registry(
         table_sort_overridden: lua::table_member_is_overridden(parsed, "sort"),
         project_module_globals: BTreeSet::new(),
         busted_globals: None,
+        i18n_result_types: None,
     };
     diagnostics.extend(environment.generic_alias_diagnostics(parsed));
     (environment, diagnostics)

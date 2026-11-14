@@ -83,6 +83,7 @@ pub fn emit_tua_source_with_workspace_artifact(
         annotation_mode,
         Some(&resolver),
         workspace.config().ecs.enabled,
+        workspace.config().i18n.enabled,
     )
 }
 
@@ -106,6 +107,7 @@ pub fn emit_tua_source_with_workspace_environment_artifact(
         annotation_mode,
         Some(&resolver),
         workspace.config().ecs.enabled,
+        workspace.config().i18n.enabled,
         Some(environment),
     )
 }
@@ -134,6 +136,7 @@ pub fn emit_lua_artifact_with_mode(
         annotation_mode,
         None,
         crate::config::EcsConfig::default().enabled,
+        false,
     )
 }
 
@@ -148,6 +151,7 @@ pub(crate) fn emit_lua_with_mode_and_import_resolver(
         annotation_mode,
         import_resolver,
         crate::config::EcsConfig::default().enabled,
+        false,
     )
     .map(|emission| emission.code)
 }
@@ -157,12 +161,14 @@ fn emit_lua_artifact_with_mode_and_import_resolver(
     annotation_mode: AnnotationMode,
     import_resolver: ImportResolver<'_>,
     ecs_enabled: bool,
+    i18n_enabled: bool,
 ) -> Result<LuaEmission, Vec<Diagnostic>> {
     emit_lua_artifact_with_mode_import_resolver_and_environment(
         parsed,
         annotation_mode,
         import_resolver,
         ecs_enabled,
+        i18n_enabled,
         None,
     )
 }
@@ -172,6 +178,7 @@ pub(crate) fn emit_lua_artifact_with_mode_import_resolver_and_environment(
     annotation_mode: AnnotationMode,
     import_resolver: ImportResolver<'_>,
     ecs_enabled: bool,
+    i18n_enabled: bool,
     environment: Option<&TypeEnvironment>,
 ) -> Result<LuaEmission, Vec<Diagnostic>> {
     let mut diagnostics = Vec::new();
@@ -199,6 +206,7 @@ pub(crate) fn emit_lua_artifact_with_mode_import_resolver_and_environment(
             &document,
             parsed,
             ecs_enabled,
+            i18n_enabled,
             builtin_constructor_spans,
             environment,
         );
@@ -1892,6 +1900,7 @@ fn lower_builtin_call_operations(
     document: &lowering::LoweringDocument,
     parsed: &ParsedSource,
     ecs_enabled: bool,
+    i18n_enabled: bool,
     builtin_constructor_spans: BTreeMap<String, SourceSpan>,
     environment: &TypeEnvironment,
 ) -> Vec<lowering::LoweringOperation> {
@@ -1920,6 +1929,7 @@ fn lower_builtin_call_operations(
         .get(input::CONSTRUCTOR_NAME)
         .copied();
     let mut tuaecs_span = None;
+    let mut tuai18n_span = None;
     let game_math_helpers = game_math::used_helpers(parsed);
     let explicit_ecs_binding = explicit_binding_position(parsed, ecs::MODULE_NAME);
     let scope = crate::scope::scope_map_parsed_source(parsed);
@@ -1970,6 +1980,18 @@ fn lower_builtin_call_operations(
                 }
             }
 
+            if i18n_enabled && name == crate::i18n::MODULE_NAME {
+                let field_start = skip_whitespace(&output, index + identifier_end);
+                if output[field_start..].starts_with('.') {
+                    let source_span = document.source_span_at(index);
+                    if !scope
+                        .has_non_builtin_binding_at(crate::i18n::MODULE_NAME, source_span.start)
+                    {
+                        tuai18n_span.get_or_insert(source_span);
+                    }
+                }
+            }
+
             index += identifier_end;
             continue;
         }
@@ -1990,6 +2012,7 @@ fn lower_builtin_call_operations(
         || baton_span.is_some()
         || tuaaudio_span.is_some()
         || tuaecs_span.is_some()
+        || tuai18n_span.is_some()
         || builtin_module_spans.iter().any(Option::is_some)
         || !game_math_helpers.is_empty()
     {
@@ -2095,6 +2118,18 @@ fn lower_builtin_call_operations(
                 "local {} = require(\"{}\")\n",
                 ecs::MODULE_NAME,
                 ecs::RUNTIME_MODULE
+            ),
+            source_span,
+            LoweringKind::BuiltinCall,
+        ));
+    }
+    if let Some(source_span) = tuai18n_span {
+        operations.push(lowering::LoweringOperation::insert(
+            0,
+            format!(
+                "local {} = require(\"{}\")\n",
+                crate::i18n::MODULE_NAME,
+                crate::i18n::RUNTIME_MODULE
             ),
             source_span,
             LoweringKind::BuiltinCall,

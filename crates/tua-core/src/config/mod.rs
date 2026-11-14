@@ -60,6 +60,12 @@ hot_loop_hints = true
 enabled = true
 backend = \"tua\"
 
+[i18n]
+enabled = false
+default_locale = \"en\"
+fallback_locale = \"en\"
+catalogs = []
+
 [shaders]
 validate = \"auto\"
 targets = [\"desktop\"]
@@ -124,6 +130,7 @@ pub struct ProjectConfig {
     pub format: FormatConfig,
     pub jit: JitConfig,
     pub ecs: EcsConfig,
+    pub i18n: I18nConfig,
     pub shaders: ShadersConfig,
     pub diagnostics: DiagnosticsConfig,
 }
@@ -145,6 +152,7 @@ impl Default for ProjectConfig {
             format: FormatConfig::default(),
             jit: JitConfig::default(),
             ecs: EcsConfig::default(),
+            i18n: I18nConfig::default(),
             shaders: ShadersConfig::default(),
             diagnostics: DiagnosticsConfig::default(),
         }
@@ -350,6 +358,35 @@ impl Default for EcsConfig {
             backend: "tua".to_owned(),
         }
     }
+}
+
+/// Localization is opt-in because catalog paths and locale policy belong to
+/// the project, not to an editor setting.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+#[serde(default, deny_unknown_fields)]
+pub struct I18nConfig {
+    pub enabled: bool,
+    pub default_locale: String,
+    pub fallback_locale: String,
+    pub catalogs: Vec<I18nCatalogConfig>,
+}
+
+impl Default for I18nConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            default_locale: "en".to_owned(),
+            fallback_locale: "en".to_owned(),
+            catalogs: Vec::new(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct I18nCatalogConfig {
+    pub locale: String,
+    pub path: PathBuf,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]

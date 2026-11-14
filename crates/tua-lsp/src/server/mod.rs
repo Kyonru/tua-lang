@@ -1281,6 +1281,7 @@ fn method_is_background_refresh(method: &str) -> bool {
             | "textDocument/semanticTokens/full/delta"
             | "textDocument/semanticTokens/range"
             | "tua/assetInventory"
+            | "tua/localizationCatalog"
             | "tua/ecsGraph"
             | "tua/moduleGraph"
             | "tua/objectPoolGraph"

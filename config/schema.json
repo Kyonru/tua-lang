@@ -78,6 +78,42 @@
       "description": "Controls annotation-preserving Lua emission."
     },
     {
+      "path": "i18n.enabled",
+      "type": "boolean",
+      "default": false,
+      "description": "Enable Tua's opt-in localization integration and configured catalog analysis."
+    },
+    {
+      "path": "i18n.default_locale",
+      "type": "string",
+      "default": "en",
+      "description": "Initial game locale; a configured catalog must provide it."
+    },
+    {
+      "path": "i18n.fallback_locale",
+      "type": "string",
+      "default": "en",
+      "description": "Fallback locale after the selected locale and its language parent."
+    },
+    {
+      "path": "i18n.catalogs",
+      "type": "array",
+      "default": [],
+      "description": "Locale and source-relative Lua catalog path pairs, for example { locale = 'en', path = 'locales/en.lua' }."
+    },
+    {
+      "path": "i18n.catalogs.locale",
+      "type": "string",
+      "default": "en",
+      "description": "Canonical locale tag represented by this catalog, such as en or pt-BR."
+    },
+    {
+      "path": "i18n.catalogs.path",
+      "type": "string",
+      "default": "locales/en.lua",
+      "description": "Source-relative Lua catalog file for this locale."
+    },
+    {
       "path": "format.indent_style",
       "type": "string",
       "default": "spaces",

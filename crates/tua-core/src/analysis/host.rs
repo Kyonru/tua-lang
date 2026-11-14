@@ -753,6 +753,8 @@ impl AnalysisHost {
             emission_diagnostics_cache: Arc::new(Mutex::new(BTreeMap::new())),
             reverse_reference_index: Arc::new(OnceLock::new()),
             project_module_globals: Arc::new(OnceLock::new()),
+            catalog_index: Arc::new(OnceLock::new()),
+            i18n_result_types: Arc::new(OnceLock::new()),
             call_hierarchy_symbols: Arc::new(call_hierarchy_symbols),
             call_hierarchy_calls: Arc::new(call_hierarchy_calls),
         };
@@ -1010,6 +1012,26 @@ impl AnalysisHost {
         let semantics = file
             .semantics()
             .expect("parsed file must have semantic facts");
+
+        // Catalog hovers need the project index, including unsaved catalog
+        // overlays. A source-only `string` hover would mask that result.
+        if self.config.i18n.enabled
+            && (file
+                .i18n_key_uses()
+                .iter()
+                .any(|usage| super::span_contains_position(usage.span, position))
+                || file
+                    .i18n_wrapper_key_uses()
+                    .iter()
+                    .any(|candidate| super::span_contains_position(candidate.usage.span, position))
+                || self.config.i18n.catalogs.iter().any(|catalog| {
+                    self.source_roots().first().is_some_and(|root| {
+                        normalize_path(root.join(&catalog.path)) == normalize_path(path.as_ref())
+                    })
+                }))
+        {
+            return None;
+        }
 
         // Shader argument hovers need the snapshot's shared asset metadata.
         if matches!(

@@ -14,6 +14,7 @@ need. Omitted settings use their defaults.
 | Types for a third-party Lua library | [Declaration-only type libraries](#declaration-only-type-libraries) |
 | Generated assets or modules | [Asset pipelines](#asset-pipelines) |
 | Formatting | [Format](#format) |
+| Translation catalogs and locale defaults | [Localization](localization.md) |
 | Diagnostic rules or severity | [Diagnostics](#diagnostics) |
 | Editor-specific overrides | [Editor settings](#editor-settings) |
 
@@ -62,6 +63,12 @@ hot_loop_hints = true
 [ecs]
 enabled = true
 backend = "tua"
+
+[i18n]
+enabled = false
+default_locale = "en"
+fallback_locale = "en"
+catalogs = []
 
 [diagnostics]
 rules = true
@@ -113,6 +120,12 @@ the behavior and tradeoffs of each option.
 | `asset_pipelines` | array | `[]` | - |
 | `package_pipelines` | array | `[]` | - |
 | `emit.annotation_mode` | string | `"off"` | - |
+| `i18n.enabled` | boolean | `false` | - |
+| `i18n.default_locale` | string | `"en"` | - |
+| `i18n.fallback_locale` | string | `"en"` | - |
+| `i18n.catalogs` | array | `[]` | - |
+| `i18n.catalogs.locale` | string | `"en"` | - |
+| `i18n.catalogs.path` | string | `"locales/en.lua"` | - |
 | `format.indent_style` | string | `"spaces"` | `tua.format.indentStyle` |
 | `format.indent_width` | integer | `2` | `tua.format.indentWidth` |
 | `format.line_width` | integer | `100` | `tua.format.lineWidth` |

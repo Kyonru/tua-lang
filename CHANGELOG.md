@@ -6,6 +6,17 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+### Added
+
+- Add opt-in `[i18n]` localization for LOVE projects, with source-relative Lua
+  catalogs, a pinned Smiti18n runtime, and automatic `I18n` import only in
+  files that use the built-in.
+- Complete translation keys, named arguments, and locales; show catalog-backed
+  hover, navigation, references, rename, diagnostics, safe missing-key stubs,
+  and a searchable Localization Explorer in VS Code.
+- Infer stable literal translation result types from catalog entries, and
+  package only the runtime and catalogs needed by a using build.
+
 ## [0.9.0] - 2026-11-14
 
 ### Release summary

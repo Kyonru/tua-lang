@@ -10,7 +10,11 @@ use tua_core::{
 
 use super::protocol::lsp_code_action_from_core;
 
-pub(super) fn completion_response(source: &str, position: SourcePosition) -> Value {
+pub(super) fn completion_response(
+    source: &str,
+    position: SourcePosition,
+    config_path: &Path,
+) -> Value {
     let line = source_line(source, position.line);
     let cursor = byte_for_utf16_column(line, position.column);
     let before = &line[..cursor];
@@ -26,7 +30,7 @@ pub(super) fn completion_response(source: &str, position: SourcePosition) -> Val
 
     if let Some(equals) = line.find('=') {
         if cursor > equals {
-            let items = value_completion_items(source, position);
+            let items = value_completion_items(source, position, config_path);
 
             if !items.is_empty() {
                 return Value::Array(items);
@@ -143,13 +147,51 @@ pub(super) fn code_action_response(
     Value::Array(actions)
 }
 
-fn value_completion_items(source: &str, position: SourcePosition) -> Vec<Value> {
+fn value_completion_items(
+    source: &str,
+    position: SourcePosition,
+    config_path: &Path,
+) -> Vec<Value> {
     let Some(token) = key_token_at_position(source, position) else {
         return Vec::new();
     };
     let Some(setting) = tua_core::config::config_setting_metadata(&token.path) else {
         return Vec::new();
     };
+
+    if setting.path == "i18n.catalogs.path" {
+        return catalog_path_candidates(source, config_path)
+            .into_iter()
+            .map(|value| quoted_config_value_item(source, position, &value, "Lua catalog path"))
+            .collect();
+    }
+    if matches!(
+        setting.path.as_str(),
+        "i18n.catalogs.locale" | "i18n.default_locale" | "i18n.fallback_locale"
+    ) {
+        let mut locales = std::collections::BTreeSet::from(["en".to_owned()]);
+        for line in source.lines() {
+            if !line.trim_start().starts_with("locale =")
+                && !line.trim_start().starts_with("default_locale =")
+                && !line.trim_start().starts_with("fallback_locale =")
+            {
+                continue;
+            }
+            if let Some((_, value)) = line.split_once('=') {
+                let value = value.trim().trim_matches(['\'', '"']);
+                if !value.is_empty()
+                    && value.len() <= 32
+                    && value.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
+                {
+                    locales.insert(value.to_owned());
+                }
+            }
+        }
+        return locales
+            .into_iter()
+            .map(|value| quoted_config_value_item(source, position, &value, "configured locale"))
+            .collect();
+    }
 
     if !setting.enum_values.is_empty() {
         return setting
@@ -198,6 +240,105 @@ fn value_completion_items(source: &str, position: SourcePosition) -> Vec<Value> 
         }
         _ => Vec::new(),
     }
+}
+
+fn quoted_config_value_item(
+    source: &str,
+    position: SourcePosition,
+    value: &str,
+    detail: &str,
+) -> Value {
+    let line = source_line(source, position.line);
+    let equals = line.find('=').unwrap_or(0);
+    let start = equals + 1 + line[equals + 1..].len() - line[equals + 1..].trim_start().len();
+    let end = quoted_value_end(line, start);
+    let quoted = format!("{value:?}");
+    let mut item = completion_item(value, None, detail, detail, 12, format!("a{value}"));
+    item["textEdit"] = json!({"range": {"start": {"line": position.line - 1, "character": utf16_column_for_byte(line, start) - 1},
+        "end": {"line": position.line - 1, "character": utf16_column_for_byte(line, end) - 1}}, "newText": quoted});
+    item
+}
+
+fn quoted_value_end(line: &str, start: usize) -> usize {
+    let Some(quote @ (b'\'' | b'"')) = line.as_bytes().get(start).copied() else {
+        return line[start..]
+            .find('#')
+            .map_or(line.len(), |offset| start + offset);
+    };
+    let mut escaped = false;
+    for (offset, byte) in line.as_bytes().iter().enumerate().skip(start + 1) {
+        if quote == b'"' && !escaped && *byte == b'\\' {
+            escaped = true;
+            continue;
+        }
+        if !escaped && *byte == quote {
+            return offset + 1;
+        }
+        escaped = false;
+    }
+    line.len()
+}
+
+fn catalog_path_candidates(source: &str, config_path: &Path) -> Vec<String> {
+    let Some(root) = config_path.parent() else {
+        return Vec::new();
+    };
+    let source_dir = source
+        .lines()
+        .find_map(|line| {
+            let line = line.trim();
+            let value = line
+                .strip_prefix("source")?
+                .trim_start()
+                .strip_prefix('=')?
+                .trim();
+            (!value.is_empty()).then(|| value.trim_matches(['\'', '"']).to_owned())
+        })
+        .unwrap_or_else(|| "src".to_owned());
+    if source_dir.contains("..") || source_dir.starts_with('/') {
+        return Vec::new();
+    }
+    let source_root = root.join(source_dir);
+    if std::fs::symlink_metadata(&source_root).is_ok_and(|meta| meta.file_type().is_symlink()) {
+        return Vec::new();
+    }
+    let mut dirs = vec![(source_root.clone(), 0usize)];
+    let mut paths = Vec::new();
+    let mut seen = 0usize;
+    while let Some((dir, depth)) = dirs.pop() {
+        if depth > 6 || seen >= 512 {
+            break;
+        }
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            seen += 1;
+            if seen >= 512 {
+                break;
+            }
+            let Ok(kind) = entry.file_type() else {
+                continue;
+            };
+            if kind.is_symlink() {
+                continue;
+            }
+            let path = entry.path();
+            if kind.is_dir() {
+                if !entry.file_name().to_string_lossy().starts_with('.') {
+                    dirs.push((path, depth + 1));
+                }
+            } else if kind.is_file() && path.extension().and_then(|ext| ext.to_str()) == Some("lua")
+            {
+                if let Ok(relative) = path.strip_prefix(&source_root) {
+                    paths.push(relative.to_string_lossy().replace('\\', "/"));
+                }
+            }
+        }
+    }
+    paths.sort();
+    paths.truncate(200);
+    paths
 }
 
 fn setting_completion_item(setting: ConfigSettingMetadata, index: usize) -> Value {
@@ -405,8 +546,13 @@ fn section_name_from_line(line: &str) -> Option<(&str, usize, usize)> {
         return None;
     }
 
-    let close = trimmed.find(']')?;
-    let raw_start = line_start + 1;
+    let array = trimmed.starts_with("[[");
+    let close = if array {
+        trimmed.find("]]")?
+    } else {
+        trimmed.find(']')?
+    };
+    let raw_start = line_start + if array { 2 } else { 1 };
     let raw_end = line_start + close;
     let raw = &line[raw_start..raw_end];
     let name_start = raw_start + raw.len() - raw.trim_start().len();
@@ -449,4 +595,23 @@ fn lsp_range(span: SourceSpan) -> Value {
             "character": span.end.column.saturating_sub(1)
         }
     })
+}
+
+#[cfg(test)]
+mod localization_section_tests {
+    use super::*;
+
+    #[test]
+    fn catalog_array_section_has_its_own_keys() {
+        let source = "[i18n]\nenabled = true\n[[i18n.catalogs]]\nlo";
+        assert_eq!(section_at_line(source, 3).as_deref(), Some("i18n.catalogs"));
+        let items = completion_response(
+            source,
+            SourcePosition { line: 4, column: 3 },
+            Path::new("/tmp/tua.toml"),
+        );
+        assert!(items
+            .as_array()
+            .is_some_and(|items| items.iter().any(|item| item["label"] == "locale")));
+    }
 }

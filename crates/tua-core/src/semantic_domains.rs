@@ -46,15 +46,33 @@ const MEMBER_DOMAINS: &[BuiltinDomain] = &[
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct BuiltinDomainRegistry {
     ecs_enabled: bool,
+    i18n_enabled: bool,
 }
 
 impl BuiltinDomainRegistry {
     pub(crate) const fn standard() -> Self {
-        Self { ecs_enabled: false }
+        Self {
+            ecs_enabled: false,
+            i18n_enabled: false,
+        }
     }
 
     pub(crate) const fn with_ecs(ecs_enabled: bool) -> Self {
-        Self { ecs_enabled }
+        Self {
+            ecs_enabled,
+            i18n_enabled: false,
+        }
+    }
+
+    pub(crate) const fn with_features(ecs_enabled: bool, i18n_enabled: bool) -> Self {
+        Self {
+            ecs_enabled,
+            i18n_enabled,
+        }
+    }
+
+    pub(crate) const fn i18n_enabled(self) -> bool {
+        self.i18n_enabled
     }
 
     pub(crate) fn domains(self) -> impl Iterator<Item = BuiltinDomain> {
@@ -72,6 +90,8 @@ impl BuiltinDomainRegistry {
                 crate::lua::OS_DATE_TABLE_TYPE,
                 crate::lua::OS_DATE_INPUT_TYPE,
             ])
+            .chain(self.i18n_enabled.then_some(crate::i18n::KEY_TYPE))
+            .chain(self.i18n_enabled.then_some(crate::i18n::LOCALE_TYPE))
             .collect()
     }
 
@@ -89,17 +109,18 @@ impl BuiltinDomainRegistry {
                     crate::lua::os_date_input_type(),
                 ),
             ])
+            .chain(
+                self.i18n_enabled
+                    .then(crate::i18n::builtin_aliases)
+                    .into_iter()
+                    .flatten(),
+            )
             .collect()
     }
 
     pub(crate) fn shared_builtin_aliases(self) -> Arc<BTreeMap<String, Type>> {
-        static STANDARD: OnceLock<Arc<BTreeMap<String, Type>>> = OnceLock::new();
-        static WITHOUT_ECS: OnceLock<Arc<BTreeMap<String, Type>>> = OnceLock::new();
-        let cache = if self.ecs_enabled {
-            &STANDARD
-        } else {
-            &WITHOUT_ECS
-        };
+        static CACHE: [OnceLock<Arc<BTreeMap<String, Type>>>; 4] = [const { OnceLock::new() }; 4];
+        let cache = &CACHE[(self.ecs_enabled as usize) * 2 + self.i18n_enabled as usize];
         cache
             .get_or_init(|| Arc::new(self.builtin_aliases().into_iter().collect()))
             .clone()
@@ -109,13 +130,8 @@ impl BuiltinDomainRegistry {
         self,
         locals: BTreeMap<String, Type>,
     ) -> Arc<BTreeMap<String, Type>> {
-        static STANDARD: OnceLock<Arc<BTreeMap<String, Type>>> = OnceLock::new();
-        static WITHOUT_ECS: OnceLock<Arc<BTreeMap<String, Type>>> = OnceLock::new();
-        let cache = if self.ecs_enabled {
-            &STANDARD
-        } else {
-            &WITHOUT_ECS
-        };
+        static CACHE: [OnceLock<Arc<BTreeMap<String, Type>>>; 4] = [const { OnceLock::new() }; 4];
+        let cache = &CACHE[(self.ecs_enabled as usize) * 2 + self.i18n_enabled as usize];
         cache.get_or_init(|| Arc::new(locals)).clone()
     }
 
@@ -124,11 +140,15 @@ impl BuiltinDomainRegistry {
     }
 
     pub(crate) fn builtin_locals(self) -> Vec<(String, Type)> {
-        if self.ecs_enabled {
+        let mut locals = if self.ecs_enabled {
             ecs::builtin_locals()
         } else {
             Vec::new()
+        };
+        if self.i18n_enabled {
+            locals.extend(crate::i18n::builtin_locals());
         }
+        locals
     }
 
     pub(crate) fn constructor_domain(self, name: &str) -> Option<BuiltinDomain> {
@@ -162,6 +182,9 @@ impl BuiltinDomainRegistry {
             ecs::RUNTIME_MODULE if self.ecs_enabled => ecs::builtin_locals()
                 .into_iter()
                 .find_map(|(name, ty)| (name == ecs::MODULE_NAME).then_some(ty)),
+            crate::i18n::RUNTIME_MODULE if self.i18n_enabled => crate::i18n::builtin_locals()
+                .into_iter()
+                .find_map(|(name, ty)| (name == crate::i18n::MODULE_NAME).then_some(ty)),
             runtime if runtime == crate::builtin_module::TWEEN.runtime => Some(
                 crate::builtin_module::module_type(&crate::builtin_module::TWEEN),
             ),

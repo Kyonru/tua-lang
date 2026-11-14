@@ -9,6 +9,7 @@ const os = require("os");
 const path = require("path");
 const vscode = require("vscode");
 const { registerAudioDevex } = require("./audio");
+const { registerLocalizationExplorer } = require("./localization");
 const { COMMANDS, DOCUMENT_SELECTOR, STATUS_SELECTOR } = require("./constants");
 const { registerEditorDevex } = require("./editor");
 const { withCompletionTrace } = require("./editor/completion-trace");
@@ -109,6 +110,7 @@ async function activate(context) {
   context.subscriptions.push(registerEcsDevex({ getClient: () => client }));
   context.subscriptions.push(registerObjectPoolDevex({ getClient: () => client }));
   context.subscriptions.push(registerAudioDevex({ getClient: () => client, getServerCommand: () => currentServerInfo?.command || configuredServerPath(context) }));
+  context.subscriptions.push(registerLocalizationExplorer({ getClient: () => client }));
   context.subscriptions.push(registerServerHealthFeature({ getClient: () => client }));
   context.subscriptions.push(await registerProjectContext());
   context.subscriptions.push(vscode.workspace.onDidChangeConfiguration(handleConfigurationChange));

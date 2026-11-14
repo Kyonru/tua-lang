@@ -37,6 +37,43 @@ fn config_completion_suggests_section_keys_and_enum_values() {
 }
 
 #[test]
+fn config_completion_understands_localization_catalog_array_sections() {
+    let uri = "file:///tmp/localization-config/tua.toml";
+    let source = "[i18n]\nenabled = true\n[[i18n.catalogs]]\nlo";
+    let output = run_messages(vec![
+        did_open(uri, source),
+        completion_request(2, uri, source, "\nlo"),
+    ]);
+    let labels = completion_labels(&output, 2);
+    assert!(labels.contains(&"locale"));
+    assert!(labels.contains(&"path"));
+}
+
+#[test]
+fn localization_config_suggests_existing_catalog_paths() {
+    let project = TempProject::new("localization-config-path");
+    project.write("src/locales/en.lua", "return { en = {} }");
+    let source = "source = 'src'\n[i18n]\nenabled = true\n[[i18n.catalogs]]\nlocale = 'en'\npath = \"locales/e";
+    project.write("tua.toml", source);
+    let uri = project.uri_for("tua.toml");
+    let output = run_messages(vec![
+        did_open(&uri, source),
+        completion_request(2, &uri, source, "path = \"locales/e"),
+    ]);
+    assert_completion_labels(&output, 2, ["locales/en.lua"]);
+    let item = &response_with_id(&output, 2)["result"][0];
+    assert_eq!(item["textEdit"]["newText"], "\"locales/en.lua\"");
+
+    let with_comment = "source = 'src'\n[i18n]\nenabled = true\n[[i18n.catalogs]]\nlocale = 'en'\npath = \"locales/e\" # keep this note";
+    let output = run_messages(vec![
+        did_open(&uri, with_comment),
+        completion_request(3, &uri, with_comment, "path = \"locales/e\""),
+    ]);
+    let item = &response_with_id(&output, 3)["result"][0];
+    assert_eq!(item["textEdit"]["range"]["end"]["character"], 18);
+}
+
+#[test]
 fn config_hover_documents_schema_settings() {
     let uri = "file:///tmp/tua.toml";
     let source = "[format]\nline_width = 100\n";

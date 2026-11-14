@@ -66,6 +66,7 @@ const COMMANDS = {
   showEcsExplorer: "tua.showEcsExplorer",
   showObjectPoolExplorer: "tua.showObjectPoolExplorer",
   showAudioExplorer: "tua.showAudioExplorer",
+  showLocalizationExplorer: "tua.showLocalizationExplorer",
   whyModuleIncluded: "tua.whyModuleIncluded",
   organizeImports: "tua.source.organizeImports",
   sortImports: "tua.source.sortImports",

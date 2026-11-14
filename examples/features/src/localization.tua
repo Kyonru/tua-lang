@@ -1,0 +1,16 @@
+-- Feature: opt-in localization catalogs, keys, and named translation arguments.
+-- The [i18n] gate in ../tua.toml makes I18n available without require.
+-- Lua catalogs stay plain Lua and are copied into the build only when used.
+local function greeting(name: string)
+  return I18n.t("menu.greeting", { name = name })
+end
+
+local function coins(count: number)
+  return I18n.t("hud.coins", { count = count })
+end
+
+local function chooseFrench()
+  I18n.setLocale("fr")
+end
+
+return { greeting = greeting, coins = coins, chooseFrench = chooseFrench }

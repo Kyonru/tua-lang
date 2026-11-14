@@ -36,6 +36,7 @@ local Roguelike = require("roguelike")
 local ObjectPool = require("object_pool")
 local Comments = require("comments")
 local Shaders = require("shaders")
+local Localization = require("localization")
 
 return {
   types = Types,
@@ -76,4 +77,5 @@ return {
   object_pool = ObjectPool,
   comments = Comments,
   shaders = Shaders,
+  localization = Localization,
 }

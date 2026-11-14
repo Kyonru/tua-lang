@@ -46,6 +46,7 @@ nav = [
     { "Entity Component Systems" = "ecs.md" },
     { "Object Pooling" = "object-pooling.md" },
     { "Audio" = "audio.md" },
+    { "Localization" = "localization.md" },
   ] },
   { "Tooling" = [
     { "CLI" = "cli.md" },

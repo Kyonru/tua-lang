@@ -1,6 +1,211 @@
 use super::*;
 
 impl AnalysisSnapshot {
+    pub(super) fn i18n_wrapper_accepts_key(
+        &self,
+        parsed: &ParsedSource,
+        callee_parts: &[String],
+    ) -> bool {
+        if callee_parts.len() == 1 && crate::i18n::function_accepts_key(parsed, &callee_parts[0], 0)
+        {
+            return true;
+        }
+        let Some((module, field)) = crate::i18n::imported_wrapper(parsed, callee_parts) else {
+            return false;
+        };
+        let Some(path) = self.indexed_module_path_for_specifier(parsed, &module) else {
+            return false;
+        };
+        self.file(path)
+            .and_then(|file| file.parsed.as_ref().ok())
+            .is_some_and(|target| crate::i18n::function_accepts_key(target, &field, 0))
+    }
+
+    pub(super) fn i18n_key_uses_for_file(&self, file: &AnalysisFile) -> Vec<crate::i18n::KeyUse> {
+        let mut uses = file.i18n_key_uses().to_vec();
+        let Some(parsed) = file.parsed.as_ref().ok() else {
+            return uses;
+        };
+        uses.extend(
+            file.i18n_wrapper_key_uses()
+                .iter()
+                .filter(|candidate| self.i18n_wrapper_accepts_key(parsed, &candidate.callee_parts))
+                .map(|candidate| candidate.usage.clone()),
+        );
+        uses
+    }
+
+    pub(super) fn i18n_key_use_at(
+        &self,
+        file: &AnalysisFile,
+        position: SourcePosition,
+    ) -> Option<crate::i18n::KeyUse> {
+        if let Some(usage) = file
+            .i18n_key_uses()
+            .iter()
+            .find(|usage| super::span_contains_position(usage.span, position))
+        {
+            return Some(usage.clone());
+        }
+        let parsed = file.parsed.as_ref().ok()?;
+        file.i18n_wrapper_key_uses()
+            .iter()
+            .find(|candidate| {
+                super::span_contains_position(candidate.usage.span, position)
+                    && self.i18n_wrapper_accepts_key(parsed, &candidate.callee_parts)
+            })
+            .map(|candidate| candidate.usage.clone())
+    }
+    pub(super) fn i18n_result_types(&self) -> Arc<BTreeMap<String, Type>> {
+        self.i18n_result_types
+            .get_or_init(|| {
+                Arc::new(
+                    self.catalog_index()
+                        .guaranteed_result_types(&self.config.i18n),
+                )
+            })
+            .clone()
+    }
+    pub(super) fn catalog_index(&self) -> &crate::i18n::CatalogIndex {
+        self.catalog_index.get_or_init(|| {
+            let _profile = profile::span("analysis.index.i18n");
+            let mut index = crate::i18n::CatalogIndex::default();
+            if !self.config.i18n.enabled {
+                return index;
+            }
+            let Some(root) = self.vfs.source_roots().first() else {
+                return index;
+            };
+            for catalog in &self.config.i18n.catalogs {
+                let path = normalize_path(root.join(&catalog.path));
+                let parsed = self
+                    .files
+                    .get(&path)
+                    .and_then(|file| file.parsed.as_ref().ok());
+                index.add_catalog(&catalog.locale, path, parsed.map(Arc::as_ref));
+            }
+            index.finish(&self.config.i18n);
+            index
+        })
+    }
+
+    /// Catalog diagnostics are project facts, including catalogs that do not
+    /// currently have a source file in the VFS.
+    pub fn i18n_catalog_diagnostics(&self) -> Vec<Diagnostic> {
+        if !self.config.i18n.enabled {
+            return Vec::new();
+        }
+        self.catalog_index()
+            .diagnostics
+            .values()
+            .flatten()
+            .cloned()
+            .collect()
+    }
+
+    pub fn localization_page(
+        &self,
+        search: &str,
+        offset: usize,
+        limit: usize,
+    ) -> crate::LocalizationPage {
+        if !self.config.i18n.enabled {
+            return crate::LocalizationPage {
+                enabled: false,
+                locales: Vec::new(),
+                total: 0,
+                rows: Vec::new(),
+            };
+        }
+        let index = self.catalog_index();
+        let locales = self
+            .config
+            .i18n
+            .catalogs
+            .iter()
+            .map(|catalog| catalog.locale.clone())
+            .collect::<Vec<_>>();
+        let search = search
+            .trim()
+            .chars()
+            .take(100)
+            .collect::<String>()
+            .to_lowercase();
+        let matching = index
+            .entries
+            .iter()
+            .filter(|(key, _)| key.to_lowercase().contains(&search))
+            .collect::<Vec<_>>();
+        let total = matching.len();
+        let rows = matching
+            .into_iter()
+            .skip(offset)
+            .take(limit.min(200))
+            .map(|(key, entries)| {
+                let cells = locales
+                    .iter()
+                    .map(|locale| {
+                        let exact = entries.get(locale);
+                        let resolved =
+                            index.resolved_entry(key, locale, &self.config.i18n.fallback_locale);
+                        let status = match (exact, resolved) {
+                            (Some(entry), _)
+                                if matches!(entry.value, crate::i18n::CatalogValue::Dynamic) =>
+                            {
+                                "dynamic"
+                            }
+                            (Some(_), _) => "translated",
+                            (None, Some(entry))
+                                if matches!(entry.value, crate::i18n::CatalogValue::Dynamic) =>
+                            {
+                                "dynamic"
+                            }
+                            (None, Some(_)) => "fallback",
+                            (None, None) => "missing",
+                        };
+                        let (preview, forms) = match resolved.map(|entry| &entry.value) {
+                            Some(crate::i18n::CatalogValue::Text(value)) => {
+                                (Some(value.clone()), Vec::new())
+                            }
+                            Some(crate::i18n::CatalogValue::Dialogue(lines)) => {
+                                (Some(format!("{} dialogue lines", lines.len())), Vec::new())
+                            }
+                            Some(crate::i18n::CatalogValue::Plural(forms)) => (
+                                None,
+                                forms
+                                    .iter()
+                                    .map(|(name, text)| (name.clone(), text.clone()))
+                                    .collect(),
+                            ),
+                            _ => (None, Vec::new()),
+                        };
+                        crate::LocalizationCell {
+                            locale: locale.clone(),
+                            status,
+                            preview,
+                            forms,
+                            placeholders: resolved.map_or_else(Vec::new, |entry| {
+                                entry.placeholders.iter().cloned().collect()
+                            }),
+                            path: resolved.map(|entry| entry.path.clone()),
+                            span: resolved.map(|entry| entry.span),
+                        }
+                    })
+                    .collect();
+                crate::LocalizationRow {
+                    key: key.clone(),
+                    cells,
+                }
+            })
+            .collect();
+        crate::LocalizationPage {
+            enabled: true,
+            locales,
+            total,
+            rows,
+        }
+    }
+
     pub fn revision(&self) -> u64 {
         self.revision
     }
@@ -96,6 +301,27 @@ impl AnalysisSnapshot {
         diagnostics.extend(self.unsent_shader_diagnostics(path.as_ref()));
         diagnostics.extend(self.shader_scan_runtime_path_diagnostics(path.as_ref(), file));
         diagnostics.extend(self.usage_index.signal_event_diagnostics(path.as_ref()));
+        if self.config.i18n.enabled {
+            if let Some(catalog_diagnostics) = self
+                .catalog_index()
+                .diagnostics
+                .get(&normalize_path(path.as_ref()))
+            {
+                diagnostics.extend(catalog_diagnostics.iter().cloned());
+            }
+            if let Ok(parsed) = &file.parsed {
+                if parsed.raw.language == crate::ParsedLanguage::Tua {
+                    let uses = self.i18n_key_uses_for_file(file);
+                    diagnostics.extend(crate::i18n::use_diagnostics(
+                        parsed,
+                        &uses,
+                        file.i18n_locale_uses(),
+                        self.catalog_index(),
+                        &self.config.i18n,
+                    ));
+                }
+            }
+        }
 
         // Source-only checking can validate on-disk modules, but it cannot see
         // VFS overlays or the complete workspace module map. The graph below
@@ -170,8 +396,20 @@ impl AnalysisSnapshot {
                 if !environment_diagnostics.is_empty() {
                     return Vec::new();
                 }
+                let i18n_environment =
+                    (self.config.i18n.enabled && !file.i18n_key_uses().is_empty()).then(|| {
+                        environment
+                            .clone()
+                            .with_i18n_result_types(self.i18n_result_types())
+                    });
+                let environment = i18n_environment.as_ref().unwrap_or(environment);
                 let _profile = profile::span_for_path("analysis.check", path);
                 let mut diagnostics_config = self.config.diagnostics.clone();
+                if self.config.i18n.enabled && parsed.raw.language == crate::ParsedLanguage::Tua {
+                    diagnostics_config
+                        .globals
+                        .push(crate::i18n::MODULE_NAME.to_owned());
+                }
                 if environment.has_busted_globals() {
                     for name in crate::busted::GLOBAL_NAMES {
                         if !diagnostics_config
@@ -239,6 +477,7 @@ impl AnalysisSnapshot {
             self.config.emit.annotation_mode,
             Some(&resolver),
             self.config.ecs.enabled,
+            self.config.i18n.enabled,
             environment.as_ref(),
         )
         .err()

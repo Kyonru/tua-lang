@@ -96,6 +96,7 @@ pub(crate) fn run_project_diagnostics(
 
         diagnostics.extend(snapshot.pipeline_diagnostics(&source_file.path));
     }
+    diagnostics.extend(snapshot.i18n_catalog_diagnostics());
 
     let mut note = String::new();
     if mode == ProjectDiagnosticMode::Check {

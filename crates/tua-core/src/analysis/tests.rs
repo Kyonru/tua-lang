@@ -9139,6 +9139,7 @@ fn project_global_modules_keep_runtime_ownership_across_unsaved_edits() {
             crate::AnnotationMode::Off,
             None,
             false,
+            false,
             Some(&environment),
         )
         .unwrap();
@@ -9219,6 +9220,7 @@ fn project_global_tween_suppresses_injection_but_unrelated_globals_do_not() {
             parsed,
             crate::AnnotationMode::Off,
             None,
+            false,
             false,
             Some(&environment),
         )

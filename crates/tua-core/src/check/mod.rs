@@ -693,6 +693,15 @@ impl<'a> Checker<'a> {
                 })
                 .filter(type_contains_string_literal);
             let environment_type = indexed_contract_type.or_else(|| {
+                // The configured I18n global is only a fallback for references.
+                // A lexical declaration with the same name must receive its
+                // initializer's type, including inside a nested function.
+                if name == crate::i18n::MODULE_NAME
+                    && !has_annotation
+                    && self.environment.alias(crate::i18n::KEY_TYPE).is_some()
+                {
+                    return None;
+                }
                 self.environment
                     .local_at_declaration(&name, declaration_position)
                     .cloned()
@@ -2302,6 +2311,23 @@ impl<'a> Checker<'a> {
             }
             Callable::Function(function) => {
                 self.check_call_arguments(function_call, &function);
+
+                if !self
+                    .scoped_locals
+                    .iter()
+                    .any(|locals| locals.contains_key(crate::i18n::MODULE_NAME))
+                    && !self
+                        .scope
+                        .globals()
+                        .get(crate::i18n::MODULE_NAME)
+                        .is_some_and(|global| global.kind == ScopeGlobalKind::Assigned)
+                {
+                    if let Some(ty) = crate::i18n::literal_key_from_call(function_call)
+                        .and_then(|key| self.environment.i18n_result_type(&key))
+                    {
+                        return vec![ty.clone()];
+                    }
+                }
 
                 if let Some(ty) = self.builtin_constructor_call_return_type(function_call) {
                     return vec![ty];

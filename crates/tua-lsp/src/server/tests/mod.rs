@@ -23,6 +23,7 @@ mod hover;
 mod inlay_hints;
 mod inline_completion;
 mod inspector;
+mod localization;
 mod model_completion;
 mod module_graph;
 mod navigation;

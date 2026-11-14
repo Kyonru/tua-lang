@@ -880,6 +880,7 @@ return { game = game, next_kind = next_kind }
         AnnotationMode::Luacats,
         None,
         true,
+        false,
         Some(&environment),
     )
     .expect("project LuaCATS annotations should emit")

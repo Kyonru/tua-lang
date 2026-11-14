@@ -22,6 +22,10 @@ guides cannot silently omit an example.
 
 ## Files
 
+- `src/localization.tua` and `src/locales/{en,fr}.lua` demonstrate the opt-in
+  `I18n` helper, literal key assistance, named arguments, plurals, and a player
+  locale selected explicitly at runtime.
+
 - `src/types.tua` covers primitive types, `any`, aliases, table shapes,
   optional fields, unions, literal string unions, erased enum sugar, and
   annotated locals.
