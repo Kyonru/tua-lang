@@ -3,6 +3,7 @@
   "vectors.md": ["src/vectors.tua", "src/game_math.tua"],
   "signals.md": ["src/signals.tua"],
   "stores.md": ["src/store.tua"],
+  "save-contracts.md": ["src/save_contracts.tua"],
   "state-machines.md": ["src/state_machine.tua"],
   "input.md": ["src/input.tua"],
   "tweening.md": ["src/tweening.tua"],

@@ -17,6 +17,7 @@ folder in VS Code and use **Tua: Run LOVE Project** without building the compile
 | --- | --- |
 | `love-minimal` | The smallest LOVE build/run example. |
 | `features` | Focused syntax and typing samples; this is a tour, not one game. |
+| `love-save` | A playable typed save contract with a store binding, migration, checkpoint, and recovery controls. |
 | `starfall` | A playable game with scenes, input, camera, and persistence. |
 | `love-tua` | A game combining typed systems with existing Lua libraries. |
 | `audio-system` | Audio buses, cues, music scenes, and analysis metadata. |
@@ -46,7 +47,8 @@ Both run in repository CI.
 
 It also includes focused modules for native generics and protocols, behavior
 trees, camera, tweening, audio, procedural helpers, the Baton-backed
-`input({...})` helper, state machines, stores, Signals, ECS, object pools,
+`input({...})` helper, state machines, stores, typed save contracts, Signals,
+ECS, object pools,
 sprite sheets, vectors, and Lua interoperability. See the
 [`features` file index](https://github.com/Kyonru/tua-lang/blob/main/examples/features/README.md)
 for the source file for each feature.

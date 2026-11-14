@@ -142,7 +142,9 @@ so consumers retain state fields and method signatures.
 
 Runtime state and save data are separate concerns. The store does not choose a
 serialization format, filename, save slot, schema version, or migration policy.
-Use a subscription as the adapter to `love.filesystem`:
+For schema-checked saves with deferred writes and recovery, use a
+[typed save contract](save-contracts.md). If you use a custom persistence
+library, a subscription can still adapt changes to `love.filesystem`:
 
 ```tua
 local game = require("game_state")

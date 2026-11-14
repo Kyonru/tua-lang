@@ -1,0 +1,68 @@
+local Profile = require("profile")
+local game = store({ profile = Profile:defaults(), notice = "Loading save..." })
+local persistence = Profile:bind(game, {
+  select = function(state) return state.profile end,
+  debounce = 1.0,
+  max_interval = 10.0,
+})
+local loadIssue: SaveIssue | nil = nil
+
+function love.load()
+  local saved, issue = Profile:load()
+  loadIssue = issue
+  game:update(function(state)
+    state.profile = saved or Profile:defaults()
+    if issue then
+      state.notice = issue.message
+    else
+      state.notice = saved and "Save loaded" or "New profile"
+    end
+  end)
+end
+
+function love.update(dt: number)
+  persistence:update(dt)
+end
+
+function love.keypressed(key: string)
+  if key == "space" then
+    game:update(function(state) state.profile.score += 1 end)
+  elseif key == "s" then
+    local ok, issue = persistence:flush()
+    game:update(function(state)
+      state.notice = ok and "Checkpoint saved" or issue.message
+    end)
+  elseif key == "r" and loadIssue and loadIssue.code == "recovered_previous_slot" then
+    if Profile:acceptRecovery() then
+      loadIssue = nil
+      persistence:markDirty()
+      game:update(function(state) state.notice = "Recovered save accepted" end)
+    end
+  elseif key == "d" and loadIssue then
+    local defaults, issue = Profile:reset()
+    if defaults then
+      loadIssue = nil
+      game:update(function(state)
+        state.profile = defaults
+        state.notice = "Damaged save discarded"
+      end)
+    else
+      game:update(function(state)
+        state.notice = issue and issue.message or "Reset failed"
+      end)
+    end
+  end
+end
+
+function love.draw()
+  love.graphics.print("Score: " .. game:get().profile.score, 20, 20)
+  love.graphics.print("Space: score    S: checkpoint", 20, 60)
+  love.graphics.print("R: accept recovered slot    D: discard damaged save", 20, 90)
+  love.graphics.print(game:get().notice, 20, 130)
+end
+
+function love.quit()
+  local ok, issue = persistence:flush()
+  if not ok then print("save on quit failed:", issue and issue.message or "unknown error") end
+  persistence:dispose()
+end

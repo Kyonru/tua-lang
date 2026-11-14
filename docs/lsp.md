@@ -227,6 +227,13 @@ Static `store({...})` calls likewise share one inferred state model across
 completion, hover, signature help, checking, and module exports. Keyed `watch`
 signatures are derived from that model. See [State Stores](stores.md).
 
+Literal `Save.contract` schemas infer the snapshot shape for completion,
+hover, signature help, and checking, including imported contracts. `select`
+callbacks in a store binding complete the store's state fields. Invalid
+literal slots, versions, root schemas, duplicate record fields, and missing
+defaults receive static diagnostics; disk failures remain runtime issues. See
+[Typed Save Contracts](save-contracts.md).
+
 Static `input({...})` calls derive Baton control and pair names once for
 completion, hover, signature help, checking, inlay hints, and module exports.
 Source strings complete LOVE keys, scancodes, gamepad axes, buttons, and hat

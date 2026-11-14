@@ -52,6 +52,7 @@ out:
 - source maps (`.lua.map` and `.lua.map.json`), which only the debugger uses;
 - Tua sources and `tua.toml`, for projects that build in place;
 - `dist/` itself, hidden files, and symbolic links.
+- `__tua_saves/` player data, even if it appears in the build output.
 
 The output must contain `main.lua` at its root, which LOVE runs. Entries are
 stored uncompressed, since images and audio are already compressed, and carry

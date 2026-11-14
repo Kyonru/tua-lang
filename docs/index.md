@@ -140,6 +140,7 @@ configuration and editor support, and builds include their Lua runtimes when use
 | Follow a player or convert screen coordinates | [Camera](camera.md) |
 | Send typed events between systems | [Signals](signals.md) |
 | Share observable state | [State Stores](stores.md) |
+| Persist a typed game snapshot | [Typed Save Contracts](save-contracts.md) |
 | Model states and transitions | [State Machines](state-machines.md) |
 | Map keyboard, mouse, and gamepad controls | [Input](input.md) |
 | Process entities by component | [ECS](ecs.md) |

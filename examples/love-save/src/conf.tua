@@ -1,0 +1,7 @@
+function love.conf(t)
+  t.identity = "tua-save-example"
+  t.window.title = "Tua save contracts"
+  t.window.width = 640
+  t.window.height = 240
+  t.modules.audio = false
+end

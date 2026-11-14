@@ -168,6 +168,8 @@ guides cannot silently omit an example.
   fields, typed reads and updates, whole-store subscriptions, keyed watcher
   signatures, idempotent unsubscribe functions, and on-demand `tuastore.lua`
   build output.
+- `src/save_contracts.tua` defines a typed save schema and a direct migration;
+  the optional `tuasave.lua` runtime is included only when this module is used.
 - `src/assets/` contains placeholder files used by static asset validation,
   asset-path completion, and asset metadata hovers.
 - `src/main.tua` ties the feature modules together while keeping ordinary

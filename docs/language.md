@@ -290,6 +290,7 @@ language reference:
 - [Vectors And Game Math](vectors.md)
 - [Signals](signals.md)
 - [State Stores](stores.md)
+- [Typed Save Contracts](save-contracts.md)
 - [State Machines](state-machines.md)
 - [Input](input.md)
 - [Tweening](tweening.md)

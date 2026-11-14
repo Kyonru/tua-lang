@@ -173,7 +173,12 @@ Never answer with TypeScript, JavaScript, Luau, Python, or Markdown.
   `offPattern`, and `clearPattern` match only event names that already have
   handlers.
 - `store({...})` infers state for `get`, `set`, `update`, `subscribe`, and
-  typed field `watch`.
+  typed field `watch`. Its `revision()` advances on every `set` and `update`.
+- `Save.contract({slot, version, schema})` declares a bounded JSON snapshot
+  with `Save.record`, `array`, `number`, `string`, `boolean`, `optional`, and
+  `enum`. `load` reports recovery issues; `save` checkpoints explicitly;
+  `bind(store, {select, debounce, max_interval})` polls store revisions and
+  schedules writes. In `.tua`, `Save` imports its runtime only when referenced.
 - `stateMachine({...})` derives state/event names, event methods, transition
   checks, and lifecycle callbacks.
 - `input({...})` provides Baton-backed controls/pairs, LOVE key/gamepad source

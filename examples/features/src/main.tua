@@ -37,6 +37,7 @@ local ObjectPool = require("object_pool")
 local Comments = require("comments")
 local Shaders = require("shaders")
 local Localization = require("localization")
+local SaveContracts = require("save_contracts")
 
 return {
   types = Types,
@@ -78,4 +79,5 @@ return {
   comments = Comments,
   shaders = Shaders,
   localization = Localization,
+  saveContracts = SaveContracts,
 }

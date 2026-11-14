@@ -1,0 +1,20 @@
+-- Feature: a save contract describes the persistent slice of game state.
+-- This function can be called after LÖVE has initialized its save identity.
+local function makeProfile()
+  return Save.contract({
+    slot = "feature_profile",
+    version = 2,
+    schema = Save.record({
+      score = Save.number(0),
+      musicOn = Save.boolean(true),
+      unlocked = Save.array(Save.string(), {}),
+    }),
+    migrations = {
+      [1] = function(old: any)
+        return { score = old.points or 0, musicOn = true, unlocked = {} }
+      end,
+    },
+  })
+end
+
+return makeProfile

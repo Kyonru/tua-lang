@@ -139,7 +139,8 @@ before the first manifest are preserved on disk but excluded from packages.
 - plain `.lua` files and other assets are copied unchanged;
 - bundled helper runtimes such as `brinevector.lua`, `anim8.lua`,
   `tuasignal.lua`, `tuaecs.lua`, `tuaobjectpool.lua`, `tuastatemachine.lua`,
-  `tuastore.lua`, `tuaaudio.lua`, `baton.lua`, `tuatween.lua`,
+  `tuastore.lua`, `tuasave.lua` and its bounded JSON codec, `tuaaudio.lua`,
+  `baton.lua`, `tuatween.lua`,
   `tuacamera.lua`, `tuarot.lua`, and `tuabehavior.lua` are written only when generated Lua or a
   copied `.lua` source requires them with a static string literal. The audio
   runtime also brings in its `tuasignal.lua` and `tuastore.lua` dependencies;

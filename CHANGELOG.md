@@ -19,6 +19,9 @@ language or editor behavior, and migration notes call out those changes.
 - Expose a typed `store:revision()` counter for polling mutations without a
   whole-store subscription; increments remain allocation-free, including for
   no-op and partially failed updates.
+- Add opt-in typed `Save` contracts with bounded JSON, direct migrations,
+  verified two-slot writes, explicit recovery, and revision-polled store
+  persistence. A using `.tua` file imports its runtime automatically.
 
 ## [0.9.0] - 2026-11-14
 
