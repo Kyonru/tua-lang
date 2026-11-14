@@ -238,3 +238,25 @@ do
   end
   assert(disk.writes() == 1, "max_interval forces a save during sustained mutations")
 end
+
+-- A failing projection backs off scheduled retries instead of running once
+-- per frame; an explicit flush can still retry immediately.
+do
+  local disk = backend()
+  local profile = contract(disk)
+  local state = Store({ profile = profile:defaults() })
+  local attempts = 0
+  local binding = profile:bind(state, { select = function(value)
+    attempts = attempts + 1
+    if attempts == 1 then error("projection unavailable") end
+    return value.profile
+  end, debounce = 0, max_interval = 2 })
+  state:update(function(value) value.profile.score = 9 end)
+  local ok, problem = binding:update(0.1)
+  assert(not ok); expectCode(problem, "select_failed")
+  for _ = 1, 10 do binding:update(0.1) end
+  assert(attempts == 1 and disk.writes() == 0)
+  assert(binding:update(2) == false) -- retry clock reaches zero first.
+  assert(binding:update(0.1))
+  assert(attempts == 2 and disk.writes() == 1 and not binding:isDirty())
+end

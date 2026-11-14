@@ -487,6 +487,8 @@ local function flush(binding)
   if not selected then
     binding.issue = issue("select_failed", tostring(snapshot), binding.contract.slot,
       "validate", true)
+    binding.failures = math.min(binding.failures + 1, 5)
+    binding.retry = math.min(2 ^ binding.failures, 30)
     return false, binding.issue
   end
   local ok, problem = binding.contract:save(snapshot)
