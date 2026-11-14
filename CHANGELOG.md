@@ -14,6 +14,9 @@ language or editor behavior, and migration notes call out those changes.
 - Add selectable ECS, behavior, signal, audio, and asset boundary timing for
   short captures, with bounded recent-call context and source-mapped failure
   reports. Selected wrappers are restored after capture.
+- Add optional bounded keyboard/mouse capture and same-project input replay in
+  temporary development launchers, with a controlled seed and explicit
+  nondeterministic-runtime limits.
 
 - Add opt-in `[i18n]` localization for LOVE projects, with source-relative Lua
   catalogs, a pinned Smiti18n runtime, and automatic `I18n` import only in

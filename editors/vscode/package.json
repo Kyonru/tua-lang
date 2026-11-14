@@ -918,6 +918,12 @@
         "icon": "$(debug-stop)"
       },
       {
+        "command": "tua.replayLoveInput",
+        "title": "Replay Last LOVE Input Capture",
+        "category": "Tua",
+        "icon": "$(debug-restart)"
+      },
+      {
         "command": "tua.runLoveProjectWithHotReload",
         "title": "Run LOVE Project With Hot Reload",
         "category": "Tua",

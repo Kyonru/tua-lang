@@ -11,6 +11,7 @@ local gcSamples, vmStates = 0, {}
 local errorMessage, errorTraceback
 local originalUpdate, originalDraw
 local trace, traceError
+local input, inputError
 
 local function clock()
   return love and love.timer and love.timer.getTime and love.timer.getTime() or os.clock()
@@ -35,6 +36,7 @@ local function writeReport(reason)
   ended = true
   if profile then pcall(profile.stop) end
   if trace then trace.stop() end
+  if input then input.stop() end
   if originalUpdate then love.update = originalUpdate end
   if originalDraw then love.draw = originalDraw end
   local now = clock()
@@ -90,7 +92,23 @@ local function writeReport(reason)
       ',"location":' .. (item.location and quote(item.location) or "null") ..
       ',"elapsedMs":' .. number(item.elapsedMs) .. '}'
   end
-  parts[#parts + 1] = "]}"
+  parts[#parts + 1] = '],"inputError":' .. (inputError and quote(inputError) or "null")
+  if input then
+    local recorded = input.snapshot()
+    parts[#parts + 1] = ',"input":{"seed":' .. tostring(recorded.seed) ..
+      ',"dropped":' .. tostring(recorded.dropped) .. ',"events":['
+    for index, event in ipairs(recorded.events) do
+      if index > 1 then parts[#parts + 1] = "," end
+      parts[#parts + 1] = '{"frame":' .. tostring(event.frame) .. ',"name":' .. quote(event.name) .. ',"args":['
+      for argument, value in ipairs(event.args) do
+        if argument > 1 then parts[#parts + 1] = "," end
+        parts[#parts + 1] = type(value) == "string" and quote(value) or tostring(value)
+      end
+      parts[#parts + 1] = "]}"
+    end
+    parts[#parts + 1] = "]}"
+  else parts[#parts + 1] = ',"input":null' end
+  parts[#parts + 1] = "}"
   local temporary = reportPath .. ".tmp"
   local file = io.open(temporary, "wb")
   if not file then return end
@@ -100,11 +118,18 @@ local function writeReport(reason)
 end
 
 function M.beforeGame()
-  if type(options.trace) ~= "table" or next(options.trace) == nil then return end
-  local ok, result = pcall(function()
-    return assert(loadfile(options.tracePath))()(options.trace)
-  end)
-  if ok then trace = result else traceError = tostring(result) end
+  if type(options.trace) == "table" and next(options.trace) ~= nil then
+    local ok, result = pcall(function()
+      return assert(loadfile(options.tracePath))()(options.trace)
+    end)
+    if ok then trace = result else traceError = tostring(result) end
+  end
+  if options.inputSeed then
+    local ok, result = pcall(function()
+      return assert(loadfile(options.inputPath))().record(options.inputSeed, function() return frameCount end)
+    end)
+    if ok then input = result else inputError = tostring(result) end
+  end
 end
 
 local function start()

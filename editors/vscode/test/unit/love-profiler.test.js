@@ -8,7 +8,7 @@ const Module = require("node:module");
 
 const originalLoad = Module._load;
 Module._load = function (id, ...args) { return id === "vscode" ? {} : originalLoad.call(this, id, ...args); };
-const { createProfileLauncher } = require("../../src/profiler/launcher");
+const { createProfileLauncher, createReplayLauncher } = require("../../src/profiler/launcher");
 const { parseReport, framePercentile, stackLocation, buildProfileModel } = require("../../src/profiler/model");
 const { ProfileCapture } = require("../../src/profiler/capture");
 Module._load = originalLoad;
@@ -84,4 +84,21 @@ test("capture reads a completed report once and does not warn after a failed bui
   assert.equal(reports.length, 1);
   assert.equal(reports[0].reason, "manual");
   assert.equal(errors.length, 0);
+});
+
+test("input replay launcher rejects incomplete records and keeps injected data private", t => {
+  const { build } = fixture(t);
+  const inputPath = path.resolve(__dirname, "../../assets/profiler/input.lua");
+  const recorded = { seed: 42, dropped: 0, events: [{ frame: 1, name: "keypressed", args: ["space", "space", false] }] };
+  assert.throws(() => createReplayLauncher(build, inputPath, { ...recorded, dropped: 1 }), /incomplete/u);
+  assert.throws(() => createReplayLauncher(build, inputPath, { ...recorded,
+    events: [{ frame: 1, name: "filedropped", args: ["secret"] }] }), /invalid/u);
+  const launcher = createReplayLauncher(build, inputPath, recorded);
+  assert.match(fs.readFileSync(path.join(launcher.directory, "main.lua"), "utf8"), /replay\.install/u);
+  assert.equal(fs.readFileSync(path.join(build, "main.lua"), "utf8"), "function love.update() end\n");
+  const data = fs.readFileSync(path.join(path.dirname(launcher.directory), "input.lua"), "utf8");
+  assert.match(data, /frame = 1, name = "\\107\\101/u);
+  assert.equal(fs.statSync(path.dirname(launcher.directory)).mode & 0o777, 0o700);
+  launcher.dispose();
+  assert.equal(fs.existsSync(launcher.directory), false);
 });

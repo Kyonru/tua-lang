@@ -38,6 +38,7 @@ const COMMANDS = {
   runLoveProject: "tua.runLoveProject",
   profileLoveProject: "tua.profileLoveProject",
   stopLoveProfile: "tua.stopLoveProfile",
+  replayLoveInput: "tua.replayLoveInput",
   stopLoveProject: "tua.stopLoveProject",
   debugLoveProject: "tua.debugLoveProject",
   restartLoveProject: "tua.restartLoveProject",

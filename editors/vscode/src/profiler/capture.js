@@ -6,15 +6,15 @@ const { parseReport, buildProfileModel, MAX_REPORT_BYTES } = require("./model");
 const { loadSourceMapsFromDirectory } = require("../editor/source-maps");
 
 class ProfileCapture {
-  constructor({ durationSeconds, budgetMs, traceCategories = [], assetsDirectory, onReport, onError }) {
-    Object.assign(this, { durationSeconds, budgetMs, traceCategories, assetsDirectory, onReport, onError });
+  constructor({ durationSeconds, budgetMs, traceCategories = [], inputSeed, assetsDirectory, onReport, onError }) {
+    Object.assign(this, { durationSeconds, budgetMs, traceCategories, inputSeed, assetsDirectory, onReport, onError });
     this.completed = false;
   }
 
   launch(outputDirectory) {
     this.outputDirectory = outputDirectory;
     this.launcher = createProfileLauncher(outputDirectory,
-      path.join(this.assetsDirectory, "shim.lua"), this.durationSeconds, this.traceCategories);
+      path.join(this.assetsDirectory, "shim.lua"), this.durationSeconds, this.traceCategories, this.inputSeed);
     this.poller = setInterval(() => this.readReport(), 200);
     this.poller.unref?.();
     return this.launcher.directory;

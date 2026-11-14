@@ -1,6 +1,7 @@
 "use strict";
 
 const childProcess = require("child_process");
+const { randomInt } = require("node:crypto");
 const fs = require("fs");
 const path = require("path");
 const vscode = require("vscode");
@@ -15,6 +16,7 @@ const { sourceLocation } = require("../workspace/console-buffer");
 const { formatError } = require("../shared/errors");
 const { ProfileCapture } = require("../profiler/capture");
 const { showProfile } = require("../profiler/view");
+const { createReplayLauncher } = require("../profiler/launcher");
 
 const TASK_TYPE = "tua";
 const TASK_NAME = "Run LOVE Project";
@@ -25,6 +27,7 @@ function registerLoveProjectRunner({ appendOutputLine, getClient, getServerComma
   let nextRun = 0;
   let lastRun = {};
   let currentCapture;
+  let lastReplay;
   const disposables = [
     vscode.commands.registerCommand(COMMANDS.runLoveProject, presentation =>
       runLoveProject({ getClient, getServerCommand, showConsole: presentation?.console === true, instances: presentation?.instances, title: presentation?.title, configurationName: presentation?.configurationName }),
@@ -50,19 +53,26 @@ function registerLoveProjectRunner({ appendOutputLine, getClient, getServerComma
         { label: "Signals", category: "signals" },
         { label: "Audio systems", category: "audio" },
         { label: "Asset and shader creation", category: "assets" },
+        { label: "Record keyboard and mouse input for replay", recordInput: true },
       ], { title: "Optional named traces", placeHolder: "Select boundaries to time, or continue with none", canPickMany: true });
       if (!categories) return;
       const budgetText = await vscode.window.showInputBox({ title: "Frame budget", prompt: "Milliseconds per frame to mark as a spike", value: "16.67",
         validateInput: value => Number.isFinite(Number(value)) && Number(value) > 0 && Number(value) <= 1000 ? undefined : "Enter a number between 0 and 1000 ms." });
       if (budgetText === undefined) return;
       await runLoveProject({ getClient, getServerCommand, profileDuration: choice.duration, budgetMs: Number(budgetText),
-        traceCategories: categories.map(item => item.category),
+        traceCategories: categories.filter(item => item.category).map(item => item.category),
+        inputSeed: categories.some(item => item.recordInput) ? randomInt(1, 2147483647) : undefined,
         title: "Profile LOVE Project", showConsole: true });
     }),
     vscode.commands.registerCommand(COMMANDS.stopLoveProfile, () => {
       if (!currentCapture || currentCapture.completed) return vscode.window.showInformationMessage("No LÖVE performance capture is running.");
       currentCapture.stop();
       return vscode.window.showInformationMessage("Stopping the capture after the current frame. The game will keep running.");
+    }),
+    vscode.commands.registerCommand(COMMANDS.replayLoveInput, async () => {
+      if (!lastReplay) return vscode.window.showInformationMessage("Record keyboard or mouse input in a LÖVE performance capture first.");
+      return runLoveProject({ getClient, getServerCommand, replayInput: lastReplay,
+        title: "Replay LOVE Input", showConsole: true });
     }),
   ];
 
@@ -104,6 +114,10 @@ function registerLoveProjectRunner({ appendOutputLine, getClient, getServerComma
       vscode.window.showWarningMessage(projectSelectionMessage("running"));
       return undefined;
     }
+    if (options.replayInput && options.replayInput.projectRoot !== layout.configDirectory) {
+      vscode.window.showWarningMessage("Open a file from the recorded Tua project before replaying its input.");
+      return undefined;
+    }
 
     let instances;
     try { instances = options.instances === undefined ? undefined : normalizeInstances(options.instances); }
@@ -118,8 +132,15 @@ function registerLoveProjectRunner({ appendOutputLine, getClient, getServerComma
       durationSeconds: options.profileDuration,
       budgetMs: options.budgetMs,
       traceCategories: options.traceCategories,
+      inputSeed: options.inputSeed,
       assetsDirectory: path.join(extensionPath, "assets", "profiler"),
-      onReport: model => { appendOutputLine?.(`[tua] Performance capture ready: ${model.frameCount} frames, ${model.sampleCount} CPU samples.`); showProfile(model); },
+      onReport: model => {
+        appendOutputLine?.(`[tua] Performance capture ready: ${model.frameCount} frames, ${model.sampleCount} CPU samples.`);
+        if (model.recordedInput && model.recordedInput.dropped === 0) {
+          lastReplay = { projectRoot: layout.configDirectory, recording: model.recordedInput };
+        }
+        showProfile(model, lastReplay ? () => vscode.commands.executeCommand(COMMANDS.replayLoveInput) : undefined);
+      },
       onError: error => { appendOutputLine?.(`[tua] Performance capture unavailable: ${error.message}`); void vscode.window.showWarningMessage(`Tua performance capture unavailable: ${error.message}`); },
     });
     if (capture) currentCapture = capture;
@@ -133,6 +154,8 @@ function registerLoveProjectRunner({ appendOutputLine, getClient, getServerComma
       activity,
       inspector,
       capture,
+      replay: options.replayInput,
+      replayInputPath: path.join(extensionPath, "assets", "profiler", "input.lua"),
       appendOutputLine,
       layout,
       loveCommand: configuredLoveCommand(),
@@ -169,11 +192,13 @@ function registerLoveProjectRunner({ appendOutputLine, getClient, getServerComma
   } });
 }
 
-function createLoveProjectTask({ appendOutputLine, layout, loveCommand, tuaCommand, activity, showConsole = false, instances, title = TASK_NAME, runId, configurationName, inspector, capture }) {
+function createLoveProjectTask({ appendOutputLine, layout, loveCommand, tuaCommand, activity, showConsole = false, instances, title = TASK_NAME, runId, configurationName, inspector, capture, replay, replayInputPath }) {
   const terminalOptions = {
     activity,
     inspector,
     capture,
+    replay,
+    replayInputPath,
     title,
     configurationName,
     instances,
@@ -268,7 +293,7 @@ function resolveLoveCommand(command, options = {}) {
 }
 
 class LoveProjectTerminal {
-  constructor({ appendOutputLine, cwd, loveCommand, outputDirectory, tuaCommand, activity, kind = "run", title, instances, args = [], groupId, configurationName, inspector, capture }) {
+  constructor({ appendOutputLine, cwd, loveCommand, outputDirectory, tuaCommand, activity, kind = "run", title, instances, args = [], groupId, configurationName, inspector, capture, replay, replayInputPath }) {
     this.closeEmitter = new vscode.EventEmitter();
     this.writeEmitter = new vscode.EventEmitter();
     this.onDidClose = this.closeEmitter.event;
@@ -290,6 +315,8 @@ class LoveProjectTerminal {
     this.activity = activity;
     this.inspector = inspector;
     this.capture = capture;
+    this.replay = replay;
+    this.replayInputPath = replayInputPath;
     this.session = activity?.begin({ cwd, kind, title, configurationName, ...(groupId ? { groupId } : {}) });
     if (this.session) this.session.stop = () => this.close();
   }
@@ -347,7 +374,8 @@ class LoveProjectTerminal {
     this.writeLine(`[tua] Starting LOVE from ${this.outputDirectory}`);
     let launchDirectory;
     try {
-      launchDirectory = this.capture?.launch(this.outputDirectory) || await this.inspector?.launch(this.session, this.outputDirectory) || this.outputDirectory;
+      this.replayLauncher = this.replay ? createReplayLauncher(this.outputDirectory, this.replayInputPath, this.replay.recording) : undefined;
+      launchDirectory = this.capture?.launch(this.outputDirectory) || this.replayLauncher?.directory || await this.inspector?.launch(this.session, this.outputDirectory) || this.outputDirectory;
     } catch (error) {
       this.writeLine(`[tua] Performance capture could not start: ${formatError(error)}`);
       this.finish(1);
@@ -503,6 +531,7 @@ class LoveProjectTerminal {
 
     this.finished = true;
     this.capture?.finish();
+    this.replayLauncher?.dispose();
     this.activity?.finish(this.session, code, this.stopped);
     this.closeEmitter.fire(code);
     this.closeEmitter.dispose();

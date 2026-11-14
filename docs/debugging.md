@@ -227,6 +227,25 @@ builds, and packaged games contain no profiler code or per-frame profiler
 branch. Captures have measurement overhead; compare runs with and without
 capture before using a small timing difference as evidence.
 
+### Record and replay input
+
+Select **Record keyboard and mouse input for replay** when starting a capture.
+The report keeps at most 4,096 key, text, mouse, and wheel events with their
+frame numbers; it excludes file drops, joystick objects, and arbitrary event
+payloads. A generated seed initializes Lua and LÖVE random generators before
+the game loads. The report shows the event count and whether the limit was
+reached.
+
+Use **Replay with current build** in the result or **Tua: Replay Last LOVE Input
+Capture**. Tua rebuilds the same project and launches it from another temporary
+directory. Live keyboard and mouse events are ignored during replay, except a
+window quit. Replay uses the recorded frame order and seed, but it does not
+reproduce frame durations, wall-clock time, external I/O, network events,
+arbitrary Lua state, or seeds set later by game code. If any supported input
+event was dropped, replay is unavailable. Treat it as a debugging aid, not a
+determinism guarantee. The recording is held only in the current editor
+session and is not added to the game build.
+
 ### Navigate between source and runtime
 
 Use the inline **Go to Runtime Object Creation Site** action or

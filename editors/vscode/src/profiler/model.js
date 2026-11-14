@@ -21,10 +21,24 @@ function parseReport(text) {
       !Array.isArray(value.recentTraces || []) || (value.recentTraces || []).length > 32 ||
       !(value.traces || []).every(trace => validTrace(trace) && Number.isSafeInteger(trace.calls) && trace.calls >= 0 &&
         Number.isFinite(trace.totalMs) && trace.totalMs >= 0 && Number.isFinite(trace.worstMs) && trace.worstMs >= 0) ||
-      !(value.recentTraces || []).every(trace => validTrace(trace) && Number.isFinite(trace.elapsedMs) && trace.elapsedMs >= 0)) {
+      !(value.recentTraces || []).every(trace => validTrace(trace) && Number.isFinite(trace.elapsedMs) && trace.elapsedMs >= 0) ||
+      !validInput(value.input)) {
     throw new Error("invalid Tua profile data");
   }
   return value;
+}
+
+const INPUT_EVENTS = new Set(["keypressed", "keyreleased", "textinput", "mousemoved", "mousepressed", "mousereleased", "wheelmoved"]);
+function validInput(input) {
+  if (input == null) return true;
+  return Number.isSafeInteger(input.seed) && input.seed >= 1 && input.seed <= 2147483647 &&
+    Number.isSafeInteger(input.dropped) && input.dropped >= 0 &&
+    Array.isArray(input.events) && input.events.length <= 4096 &&
+    input.events.every((event, index) => INPUT_EVENTS.has(event?.name) && Number.isSafeInteger(event.frame) && event.frame >= 1 && event.frame <= 1000000 &&
+      (index === 0 || event.frame >= input.events[index - 1].frame) &&
+      Array.isArray(event.args) && event.args.length <= 8 && event.args.every(argument =>
+        typeof argument === "boolean" || typeof argument === "number" && Number.isFinite(argument) ||
+        typeof argument === "string" && Buffer.byteLength(argument) <= 128));
 }
 
 function validTrace(trace) {
@@ -72,6 +86,7 @@ function buildProfileModel(report, maps, outputDirectory, budgetMs = 16.67) {
     profileError: report.profileError, errorMessage: report.errorMessage,
     traceError: report.traceError, droppedTraces: report.droppedTraces || 0,
     traces, recentTraces,
+    inputError: report.inputError, recordedInput: report.input || undefined,
     failureLocation: failureLocations[0],
     p50: framePercentile(frames, 0.5), p95: framePercentile(frames, 0.95),
     worst: slowFrames[0]?.wallMs || 0, slowFrames, stacks,

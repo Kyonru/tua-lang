@@ -8,7 +8,7 @@ const { spawn } = require("node:child_process");
 const Module = require("node:module");
 const originalLoad = Module._load;
 Module._load = function (id, ...args) { return id === "vscode" ? {} : originalLoad.call(this, id, ...args); };
-const { createProfileLauncher } = require("../src/profiler/launcher");
+const { createProfileLauncher, createReplayLauncher } = require("../src/profiler/launcher");
 const { parseReport, buildProfileModel } = require("../src/profiler/model");
 const { loadSourceMapsFromDirectory } = require("../src/editor/source-maps");
 Module._load = originalLoad;
@@ -66,7 +66,7 @@ jit.off(love.update, true)
   const original = fs.readFileSync(path.join(build, "main.lua"));
   const launcher = createProfileLauncher(build, path.resolve(__dirname, "../assets/profiler/shim.lua"), 0.5,
     ["ecs", "signals", "behaviors", "audio", "assets"]);
-  let child, errorChild, errorLauncher, output = "";
+  let child, errorChild, errorLauncher, inputChild, replayChild, inputLauncher, replayLauncher, output = "";
   try {
     child = spawn(process.env.TUA_LOVE || "/Applications/LOVE.app/Contents/MacOS/love", [launcher.directory], { cwd: root, stdio: ["ignore", "pipe", "pipe"] });
     child.stdout.on("data", data => { output += data; });
@@ -86,6 +86,8 @@ jit.off(love.update, true)
       assert(model.traces.some(trace => trace.kind === kind && trace.calls > 0),
         `Missing ${kind} trace: ${JSON.stringify(report.traces)}`);
     }
+    assert(model.traces.some(trace => trace.kind === "ecs" && trace.source?.sourcePath === source),
+      `ECS timing did not link to Tua source: ${JSON.stringify(report.traces)}`);
     for (let attempt = 0; attempt < 40 && !output.includes("TRACE_RESTORED"); attempt++) await sleep(100);
     assert.match(output, /TRACE_RESTORED/u, `Trace wrappers were not restored after capture: ${output}`);
     assert.deepEqual(fs.readFileSync(path.join(build, "main.lua")), original);
@@ -108,11 +110,41 @@ jit.off(love.update, true)
     assert.match(failed.errorMessage, /profile boom/u);
     assert.equal(failureModel.failureLocation?.sourcePath, source);
     assert(failureModel.recentTraces.some(trace => trace.name === "before_error"));
+    const inputBuild = path.join(root, "input-build");
+    fs.mkdirSync(inputBuild);
+    fs.copyFileSync(path.join(build, "conf.lua"), path.join(inputBuild, "conf.lua"));
+    fs.writeFileSync(path.join(inputBuild, "main.lua"), `local started = love.timer.getTime()
+local pressed = 0
+function love.load() love.event.push("keypressed", "space", "space", false) end
+function love.keypressed(key) if key == "space" then pressed = pressed + 1 end end
+function love.update()
+  if love.timer.getTime() - started > 1.0 then print("PRESSED:" .. pressed); love.event.quit() end
+end
+`);
+    inputLauncher = createProfileLauncher(inputBuild, path.resolve(__dirname, "../assets/profiler/shim.lua"), 0.5, [], 12345);
+    inputChild = spawn(process.env.TUA_LOVE || "/Applications/LOVE.app/Contents/MacOS/love", [inputLauncher.directory], { cwd: root, stdio: ["ignore", "pipe", "pipe"] });
+    for (let attempt = 0; attempt < 60 && !fs.existsSync(inputLauncher.reportPath); attempt++) await sleep(100);
+    assert(fs.existsSync(inputLauncher.reportPath), "Input capture did not write a report");
+    const recorded = parseReport(fs.readFileSync(inputLauncher.reportPath, "utf8")).input;
+    assert.equal(recorded.seed, 12345);
+    assert.equal(recorded.dropped, 0);
+    assert(recorded.events.some(event => event.name === "keypressed"));
+    replayLauncher = createReplayLauncher(inputBuild, path.resolve(__dirname, "../assets/profiler/input.lua"), recorded);
+    let replayOutput = "";
+    replayChild = spawn(process.env.TUA_LOVE || "/Applications/LOVE.app/Contents/MacOS/love", [replayLauncher.directory], { cwd: root, stdio: ["ignore", "pipe", "pipe"] });
+    replayChild.stdout.on("data", data => { replayOutput += data; });
+    replayChild.stderr.on("data", data => { replayOutput += data; });
+    for (let attempt = 0; attempt < 60 && !replayOutput.includes("PRESSED:"); attempt++) await sleep(100);
+    assert.match(replayOutput, /PRESSED:1/u, `Replay did not reproduce one key press: ${replayOutput}`);
     process.stdout.write(`Native profiler: ${report.frameCount} frames, ${report.sampleCount} samples; Tua source linked.\n`);
   } finally {
     child?.kill();
     errorChild?.kill();
+    inputChild?.kill();
+    replayChild?.kill();
     errorLauncher?.dispose();
+    inputLauncher?.dispose();
+    replayLauncher?.dispose();
     launcher.dispose();
     fs.rmSync(root, { recursive: true, force: true });
   }
