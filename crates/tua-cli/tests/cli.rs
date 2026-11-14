@@ -4525,6 +4525,91 @@ fn build_does_not_overwrite_project_tuastore_runtime() {
 }
 
 #[test]
+fn build_includes_save_runtime_only_when_used() {
+    let temp = TempDir::new("build-save-runtime");
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).unwrap();
+    fs::create_dir_all(temp.path().join("src")).unwrap();
+    fs::write(temp.path().join("src/main.tua"), "return {score = 0}\n").unwrap();
+    let output = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(!temp.path().join("build/tuasave.lua").exists());
+
+    fs::write(temp.path().join("src/main.tua"), "local Profile = Save.contract({slot = 'profile', version = 1, schema = Save.record({score = Save.number(0)})})\nreturn Profile\n").unwrap();
+    let output = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let emitted = fs::read_to_string(temp.path().join("build/main.lua")).unwrap();
+    assert!(
+        emitted.starts_with("local Save = require(\"tuasave\")\n"),
+        "{emitted}"
+    );
+    assert!(temp.path().join("build/tuasave.lua").is_file());
+    assert!(temp.path().join("build/tuasave_json.lua").is_file());
+
+    fs::write(
+        temp.path().join("src/tuasave.lua"),
+        "return {contract = function(options) return options end}\n",
+    )
+    .unwrap();
+    let output = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        fs::read_to_string(temp.path().join("build/tuasave.lua")).unwrap(),
+        "return {contract = function(options) return options end}\n"
+    );
+
+    fs::create_dir_all(temp.path().join("build/__tua_saves")).unwrap();
+    fs::write(
+        temp.path().join("build/__tua_saves/profile.a"),
+        b"private player data",
+    )
+    .unwrap();
+    let output = tua()
+        .args(["package", "--name", "save-contract"])
+        .current_dir(temp.path())
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let archive = fs::read(temp.path().join("dist/save-contract.love")).unwrap();
+    assert!(archive
+        .windows(b"tuasave.lua".len())
+        .any(|bytes| bytes == b"tuasave.lua"));
+    assert!(!archive
+        .windows(b"__tua_saves".len())
+        .any(|bytes| bytes == b"__tua_saves"));
+    assert!(!archive
+        .windows(b"private player data".len())
+        .any(|bytes| bytes == b"private player data"));
+}
+
+#[test]
 fn build_writes_baton_runtime_when_input_helper_is_used() {
     let temp = TempDir::new("build-baton-runtime");
 

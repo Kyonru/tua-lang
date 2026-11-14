@@ -449,7 +449,11 @@ fn collect_entries(
         let path = entry.path();
         let file_name = entry.file_name().to_string_lossy().into_owned();
         let file_type = entry.file_type()?;
-        if file_name.starts_with('.') || file_type.is_symlink() || path == dist {
+        if file_name.starts_with('.')
+            || file_name == "__tua_saves"
+            || file_type.is_symlink()
+            || path == dist
+        {
             continue;
         }
         let relative = path
@@ -892,5 +896,20 @@ mod tests {
         for kept in ["main.lua", "conf.lua", "player.png", "map.json"] {
             assert!(!is_excluded_file(kept, "tua"), "{kept}");
         }
+    }
+
+    #[test]
+    fn player_save_slots_never_enter_game_archives() {
+        let root = temp_dir("save-archive");
+        fs::create_dir_all(root.join("__tua_saves")).unwrap();
+        fs::write(root.join("__tua_saves/profile.a"), b"private player data").unwrap();
+        fs::write(root.join("main.lua"), b"return true").unwrap();
+        let mut entries = Vec::new();
+        collect_entries(&root, &root, "tua", &root.join("dist"), &mut entries).unwrap();
+        assert!(entries.iter().any(|(name, _)| name == "main.lua"));
+        assert!(!entries
+            .iter()
+            .any(|(name, _)| name.starts_with("__tua_saves")));
+        fs::remove_dir_all(root).unwrap();
     }
 }
