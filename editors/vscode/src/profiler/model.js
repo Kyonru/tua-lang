@@ -16,10 +16,22 @@ function parseReport(text) {
   if (!value.frames.every(frame => Number.isSafeInteger(frame?.index) && frame.index > 0 &&
       Number.isFinite(frame.wallMs) && frame.wallMs >= 0) ||
       !value.stacks.every(stack => typeof stack?.stack === "string" && stack.stack.length <= 1024 &&
-      Number.isSafeInteger(stack.count) && stack.count >= 0)) {
+      Number.isSafeInteger(stack.count) && stack.count >= 0) ||
+      !Array.isArray(value.traces || []) || (value.traces || []).length > 128 ||
+      !Array.isArray(value.recentTraces || []) || (value.recentTraces || []).length > 32 ||
+      !(value.traces || []).every(trace => validTrace(trace) && Number.isSafeInteger(trace.calls) && trace.calls >= 0 &&
+        Number.isFinite(trace.totalMs) && trace.totalMs >= 0 && Number.isFinite(trace.worstMs) && trace.worstMs >= 0) ||
+      !(value.recentTraces || []).every(trace => validTrace(trace) && Number.isFinite(trace.elapsedMs) && trace.elapsedMs >= 0)) {
     throw new Error("invalid Tua profile data");
   }
   return value;
+}
+
+function validTrace(trace) {
+  return typeof trace?.kind === "string" && trace.kind.length <= 32 &&
+    typeof trace.name === "string" && trace.name.length <= 120 &&
+    (trace.location === null || trace.location === undefined ||
+      typeof trace.location === "string" && trace.location.length <= 1024);
 }
 
 function framePercentile(frames, fraction) {
@@ -48,11 +60,18 @@ function buildProfileModel(report, maps, outputDirectory, budgetMs = 16.67) {
     .map(item => ({ ...item, location: stackLocation(item.stack, maps, outputDirectory),
       share: report.sampleCount ? item.count / report.sampleCount : 0 }));
   const failureLocations = report.errorTraceback ? tracebackLocations(report.errorTraceback, maps) : [];
+  const traces = (report.traces || []).map(item => ({ ...item,
+    source: item.location ? stackLocation(item.location, maps, outputDirectory) : undefined }))
+    .sort((a, b) => b.totalMs - a.totalMs);
+  const recentTraces = (report.recentTraces || []).map(item => ({ ...item,
+    source: item.location ? stackLocation(item.location, maps, outputDirectory) : undefined }));
   return {
     reason: report.reason, durationMs: report.durationMs,
     frameCount: report.frameCount, retainedFrames: frames.length,
     sampleCount: report.sampleCount, droppedSamples: report.droppedSamples,
     profileError: report.profileError, errorMessage: report.errorMessage,
+    traceError: report.traceError, droppedTraces: report.droppedTraces || 0,
+    traces, recentTraces,
     failureLocation: failureLocations[0],
     p50: framePercentile(frames, 0.5), p95: framePercentile(frames, 0.95),
     worst: slowFrames[0]?.wallMs || 0, slowFrames, stacks,

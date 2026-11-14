@@ -21,19 +21,52 @@ async function main() {
   fs.mkdirSync(build);
   fs.mkdirSync(path.dirname(source));
   fs.writeFileSync(source, "function love.update(dt)\n  local x = 0\n  for i = 1, 1000000 do x = x + i end\nend\n");
-  fs.writeFileSync(path.join(build, "conf.lua"), "function love.conf(t) t.window.visible = false; t.window.width = 64; t.window.height = 64; t.modules.audio = false; t.modules.joystick = false end\n");
+  fs.writeFileSync(path.join(build, "conf.lua"), "io.stdout:setvbuf('no')\nfunction love.conf(t) t.window.visible = false; t.window.width = 64; t.window.height = 64; t.modules.audio = false; t.modules.joystick = false end\n");
+  for (const name of ["tuaecs", "tuasignal", "tuabehavior", "tuastore", "tuaaudio"]) {
+    fs.copyFileSync(path.resolve(__dirname, "../../../vendor/runtime", `${name}.lua`), path.join(build, `${name}.lua`));
+  }
   fs.writeFileSync(path.join(build, "main.lua"), `local started = love.timer.getTime()
+local ecs = require("tuaecs")
+local world = ecs.world()
+local marker = ecs.component("Marker", {})
+local entity = world:create()
+world:add(entity, marker, {})
+local system = ecs.system(world, { marker }, function() end)
+local bus = require("tuasignal").new()
+bus:on("tick", function() end)
+local treeApi = require("tuabehavior")
+local runner = treeApi.new(treeApi.action(function() return "success" end)):instance({})
+local audio = require("tuaaudio")({ buses = { master = { volume = 1 } } })
+local tracedRequire, tracedSystem, tracedSignal, tracedRunner, tracedAudio = require, system.update, bus.emit, runner.update, audio.update
+local checked = false
+function love.load()
+  local pixels = love.image.newImageData(1, 1)
+  love.graphics.newImage(pixels)
+end
 function love.update(dt)
   local x = 0
   for i = 1, 1000000 do x = x + i end
+  system:update(dt)
+  bus:emit("tick")
+  runner:update(dt)
+  audio:update(dt)
+  if not checked and love.timer.getTime() - started > 1.0 then
+    assert(require ~= tracedRequire and system.update ~= tracedSystem and bus.emit ~= tracedSignal and runner.update ~= tracedRunner and audio.update ~= tracedAudio)
+    print("TRACE_RESTORED")
+    checked = true
+  end
   if love.timer.getTime() - started > 1.5 then love.event.quit() end
 end
 jit.off(love.update, true)
 `);
-  fs.writeFileSync(path.join(build, "main.lua.map.json"), JSON.stringify({ version: 1, source: "../src/main.tua", generated: "main.lua", lineMappings: [{ generatedLine: 4, sourceLine: 3 }] }));
+  fs.writeFileSync(path.join(build, "main.lua.map.json"), JSON.stringify({ version: 1, source: "../src/main.tua", generated: "main.lua", lineMappings: [
+    { generatedLine: 7, sourceLine: 1 }, { generatedLine: 8, sourceLine: 2 },
+    { generatedLine: 11, sourceLine: 3 }, { generatedLine: 21, sourceLine: 4 },
+  ] }));
   const original = fs.readFileSync(path.join(build, "main.lua"));
-  const launcher = createProfileLauncher(build, path.resolve(__dirname, "../assets/profiler/shim.lua"), 0.5);
-  let child, output = "";
+  const launcher = createProfileLauncher(build, path.resolve(__dirname, "../assets/profiler/shim.lua"), 0.5,
+    ["ecs", "signals", "behaviors", "audio", "assets"]);
+  let child, errorChild, errorLauncher, output = "";
   try {
     child = spawn(process.env.TUA_LOVE || "/Applications/LOVE.app/Contents/MacOS/love", [launcher.directory], { cwd: root, stdio: ["ignore", "pipe", "pipe"] });
     child.stdout.on("data", data => { output += data; });
@@ -48,11 +81,38 @@ jit.off(love.update, true)
     const model = buildProfileModel(report, loadSourceMapsFromDirectory(build), build);
     assert(model.stacks.some(stack => stack.location?.sourcePath === source),
       `CPU samples did not map to Tua source: ${JSON.stringify(report.stacks.slice(0, 3))}`);
+    assert.equal(report.traceError, null);
+    for (const kind of ["ecs", "signals", "behaviors", "audio", "assets"]) {
+      assert(model.traces.some(trace => trace.kind === kind && trace.calls > 0),
+        `Missing ${kind} trace: ${JSON.stringify(report.traces)}`);
+    }
+    for (let attempt = 0; attempt < 40 && !output.includes("TRACE_RESTORED"); attempt++) await sleep(100);
+    assert.match(output, /TRACE_RESTORED/u, `Trace wrappers were not restored after capture: ${output}`);
     assert.deepEqual(fs.readFileSync(path.join(build, "main.lua")), original);
     assert.equal(fs.existsSync(path.join(build, "profiler.lua")), false);
+    const failedBuild = path.join(root, "failure");
+    fs.mkdirSync(failedBuild);
+    fs.copyFileSync(path.join(build, "conf.lua"), path.join(failedBuild, "conf.lua"));
+    fs.copyFileSync(path.join(build, "tuasignal.lua"), path.join(failedBuild, "tuasignal.lua"));
+    fs.writeFileSync(path.join(failedBuild, "main.lua"), 'local bus = require("tuasignal").new()\nfunction love.update()\n  bus:emit("before_error")\n  error("profile boom")\nend\n');
+    fs.writeFileSync(path.join(failedBuild, "main.lua.map.json"), JSON.stringify({ version: 1,
+      source: "../src/main.tua", generated: "main.lua", lineMappings: [{ generatedLine: 4, sourceLine: 4 }] }));
+    errorLauncher = createProfileLauncher(failedBuild, path.resolve(__dirname, "../assets/profiler/shim.lua"), 0, ["signals"]);
+    errorChild = spawn(process.env.TUA_LOVE || "/Applications/LOVE.app/Contents/MacOS/love", [errorLauncher.directory], { cwd: root, stdio: ["ignore", "pipe", "pipe"] });
+    errorChild.on("error", error => { output += error.message; });
+    for (let attempt = 0; attempt < 50 && !fs.existsSync(errorLauncher.reportPath); attempt++) await sleep(100);
+    assert(fs.existsSync(errorLauncher.reportPath), `LÖVE failure did not save a profile: ${output}`);
+    const failed = parseReport(fs.readFileSync(errorLauncher.reportPath, "utf8"));
+    const failureModel = buildProfileModel(failed, loadSourceMapsFromDirectory(failedBuild), failedBuild);
+    assert.equal(failed.reason, "error");
+    assert.match(failed.errorMessage, /profile boom/u);
+    assert.equal(failureModel.failureLocation?.sourcePath, source);
+    assert(failureModel.recentTraces.some(trace => trace.name === "before_error"));
     process.stdout.write(`Native profiler: ${report.frameCount} frames, ${report.sampleCount} samples; Tua source linked.\n`);
   } finally {
     child?.kill();
+    errorChild?.kill();
+    errorLauncher?.dispose();
     launcher.dispose();
     fs.rmSync(root, { recursive: true, force: true });
   }

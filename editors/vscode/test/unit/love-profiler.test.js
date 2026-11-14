@@ -56,6 +56,11 @@ test("profile model preserves bounded samples and maps LuaJIT stack paths", () =
   assert.equal(model.slowFrames[0].index, 2);
   assert.equal(model.stacks[0].location.sourcePath, "/project/src/main.tua");
   assert.equal(model.stacks[0].share, 1);
+  const traced = parseReport(JSON.stringify({ ...report, traces: [{ kind: "ecs", name: "system",
+    location: `@${build}/main.lua:9`, calls: 3, totalMs: 7, worstMs: 4 }], recentTraces: [] }));
+  assert.equal(buildProfileModel(traced, [map], build).traces[0].source.sourceLine, 4);
+  assert.throws(() => parseReport(JSON.stringify({ ...report, traces: [{ kind: "ecs", name: "x",
+    calls: 1, totalMs: -1, worstMs: 0 }] })), /invalid/u);
   assert.throws(() => parseReport(JSON.stringify({ ...report, frames: Array(2049).fill(report.frames[0]) })), /invalid/u);
   assert.throws(() => parseReport("x".repeat(2 * 1024 * 1024 + 1)), /exceeds 2 MiB/u);
 });

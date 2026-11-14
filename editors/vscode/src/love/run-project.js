@@ -44,10 +44,19 @@ function registerLoveProjectRunner({ appendOutputLine, getClient, getServerComma
         { label: "Until stopped", duration: 0 },
       ], { title: "Profile LÖVE Game", placeHolder: "Choose a short capture duration" });
       if (!choice) return;
+      const categories = await vscode.window.showQuickPick([
+        { label: "ECS systems", category: "ecs" },
+        { label: "Behavior trees", category: "behaviors" },
+        { label: "Signals", category: "signals" },
+        { label: "Audio systems", category: "audio" },
+        { label: "Asset and shader creation", category: "assets" },
+      ], { title: "Optional named traces", placeHolder: "Select boundaries to time, or continue with none", canPickMany: true });
+      if (!categories) return;
       const budgetText = await vscode.window.showInputBox({ title: "Frame budget", prompt: "Milliseconds per frame to mark as a spike", value: "16.67",
         validateInput: value => Number.isFinite(Number(value)) && Number(value) > 0 && Number(value) <= 1000 ? undefined : "Enter a number between 0 and 1000 ms." });
       if (budgetText === undefined) return;
       await runLoveProject({ getClient, getServerCommand, profileDuration: choice.duration, budgetMs: Number(budgetText),
+        traceCategories: categories.map(item => item.category),
         title: "Profile LOVE Project", showConsole: true });
     }),
     vscode.commands.registerCommand(COMMANDS.stopLoveProfile, () => {
@@ -108,6 +117,7 @@ function registerLoveProjectRunner({ appendOutputLine, getClient, getServerComma
     const capture = options.profileDuration === undefined ? undefined : new ProfileCapture({
       durationSeconds: options.profileDuration,
       budgetMs: options.budgetMs,
+      traceCategories: options.traceCategories,
       assetsDirectory: path.join(extensionPath, "assets", "profiler"),
       onReport: model => { appendOutputLine?.(`[tua] Performance capture ready: ${model.frameCount} frames, ${model.sampleCount} CPU samples.`); showProfile(model); },
       onError: error => { appendOutputLine?.(`[tua] Performance capture unavailable: ${error.message}`); void vscode.window.showWarningMessage(`Tua performance capture unavailable: ${error.message}`); },

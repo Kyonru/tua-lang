@@ -4,7 +4,12 @@ const os = require("node:os");
 const path = require("node:path");
 const { luaString } = require("../inspector/launcher");
 
-function createProfileLauncher(outputDirectory, shimPath, durationSeconds) {
+const TRACE_CATEGORIES = new Set(["ecs", "behaviors", "signals", "audio", "assets"]);
+
+function createProfileLauncher(outputDirectory, shimPath, durationSeconds, traceCategories = []) {
+  if (!Array.isArray(traceCategories) || traceCategories.some(category => !TRACE_CATEGORIES.has(category))) {
+    throw new Error("invalid performance trace category");
+  }
   const originalMain = path.join(outputDirectory, "main.lua");
   if (!fs.statSync(originalMain).isFile()) throw new Error("built game has no main.lua");
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "tua-profile-"));
@@ -27,7 +32,8 @@ function createProfileLauncher(outputDirectory, shimPath, durationSeconds) {
     }
     const bootstrap = [
       "-- Tua development-only profiler launcher. The build is untouched.",
-      `local profiler = assert(loadfile(${luaString(shimPath)}))(${luaString(reportPath)}, ${luaString(stopPath)}, ${durationSeconds})`,
+      `local profiler = assert(loadfile(${luaString(shimPath)}))(${luaString(reportPath)}, ${luaString(stopPath)}, ${durationSeconds}, { tracePath = ${luaString(path.join(path.dirname(shimPath), "trace.lua"))}, trace = { ${traceCategories.map(category => `[${luaString(category)}] = true`).join(", ")} } })`,
+      "profiler.beforeGame()",
       `local results = { assert(loadfile(${luaString(originalMain)}))() }`,
       "profiler.install()",
       "return unpack(results)",

@@ -1,5 +1,6 @@
 -- Loaded only by Tua's temporary profiling launcher, never by a game build.
-local reportPath, stopPath, durationSeconds = ...
+local reportPath, stopPath, durationSeconds, options = ...
+options = options or {}
 local M = {}
 local MAX_FRAMES, MAX_STACKS = 2048, 512
 local frames, stacks, frameCount, stackCount, sampleCount = {}, {}, 0, 0, 0
@@ -9,6 +10,7 @@ local updateMs, drawMs, drawCalls, luaKb = nil, nil, nil, nil
 local gcSamples, vmStates = 0, {}
 local errorMessage, errorTraceback
 local originalUpdate, originalDraw
+local trace, traceError
 
 local function clock()
   return love and love.timer and love.timer.getTime and love.timer.getTime() or os.clock()
@@ -32,6 +34,7 @@ local function writeReport(reason)
   if ended then return end
   ended = true
   if profile then pcall(profile.stop) end
+  if trace then trace.stop() end
   if originalUpdate then love.update = originalUpdate end
   if originalDraw then love.draw = originalDraw end
   local now = clock()
@@ -69,13 +72,39 @@ local function writeReport(reason)
     first = false
     parts[#parts + 1] = quote(state) .. ":" .. tostring(count)
   end
-  parts[#parts + 1] = "}}"
+  parts[#parts + 1] = '},"traceError":' .. (traceError and quote(traceError) or "null")
+  local traced, recent, dropped = {}, {}, 0
+  if trace then traced, recent, dropped = trace.snapshot() end
+  parts[#parts + 1] = ',"droppedTraces":' .. tostring(dropped) .. ',"traces":['
+  for index, item in ipairs(traced) do
+    if index > 1 then parts[#parts + 1] = "," end
+    parts[#parts + 1] = '{"kind":' .. quote(item.kind) .. ',"name":' .. quote(item.name) ..
+      ',"location":' .. (item.location and quote(item.location) or "null") ..
+      ',"calls":' .. tostring(item.calls) .. ',"totalMs":' .. number(item.totalMs) ..
+      ',"worstMs":' .. number(item.worstMs) .. '}'
+  end
+  parts[#parts + 1] = '],"recentTraces":['
+  for index, item in ipairs(recent) do
+    if index > 1 then parts[#parts + 1] = "," end
+    parts[#parts + 1] = '{"kind":' .. quote(item.kind) .. ',"name":' .. quote(item.name) ..
+      ',"location":' .. (item.location and quote(item.location) or "null") ..
+      ',"elapsedMs":' .. number(item.elapsedMs) .. '}'
+  end
+  parts[#parts + 1] = "]}"
   local temporary = reportPath .. ".tmp"
   local file = io.open(temporary, "wb")
   if not file then return end
   file:write(table.concat(parts))
   file:close()
   os.rename(temporary, reportPath)
+end
+
+function M.beforeGame()
+  if type(options.trace) ~= "table" or next(options.trace) == nil then return end
+  local ok, result = pcall(function()
+    return assert(loadfile(options.tracePath))()(options.trace)
+  end)
+  if ok then trace = result else traceError = tostring(result) end
 end
 
 local function start()

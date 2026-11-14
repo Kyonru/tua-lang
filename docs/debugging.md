@@ -191,8 +191,10 @@ Ended or disconnected players retain their last data with a status and age.
 ## Capture LÖVE Performance
 
 Run **Tua: Profile LOVE Game** in a trusted project workspace. Choose a 10- or
-30-second capture, or **Until stopped**, then enter a frame budget in
-milliseconds. Tua builds the project and launches LÖVE from a private,
+30-second capture, or **Until stopped**. Optionally select ECS systems,
+behavior trees, signals, audio systems, or asset/shader creation for named
+tracing, then enter a frame budget in milliseconds. Tua builds the project
+and launches LÖVE from a private,
 temporary development directory. **Tua: Stop LOVE Profile** ends a manual
 capture after the current frame; the game keeps running.
 
@@ -210,6 +212,15 @@ open its `.tua` line, or **Lua** to inspect the generated line. Enable
 inlining can make line attribution approximate. A capture with no project
 samples still shows frame data. If this LÖVE build lacks `jit.profile`, the
 view states that CPU sampling was unavailable.
+
+Named traces time selected runtime boundaries and show call count, total time,
+and slowest call. Their totals overlap when one boundary invokes another; do
+not add them together as whole-frame time. Trace wrappers are installed only
+for selected categories and restored when capture ends. The latest 32
+completed traced calls are retained for failure context, without event
+payloads. A failure capture also links the LÖVE traceback to Tua source when
+the generated line has a source-map entry. Recent calls are context, not proof
+that any one call caused the failure.
 
 The profiler shim is loaded only by the temporary launcher. Ordinary runs,
 builds, and packaged games contain no profiler code or per-frame profiler
