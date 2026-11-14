@@ -27,6 +27,8 @@ language or editor behavior, and migration notes call out those changes.
 
 - Infer plural translations as strings when catalog shapes agree, and use the
   required `other` form if a locale's plural rule selects a missing form.
+- Widen inferred store state before constructing method signatures, so stores
+  initialized with string literals retain usable `set` types across factories.
 
 ## [0.9.0] - 2026-11-14
 

@@ -1,6 +1,7 @@
 use crate::semantic::resolve_aliases;
 use crate::types::{
-    FunctionParameter, FunctionType, TableField, Type, TypeEnvironment, TypedFunctionOverload,
+    widen_inferred_type, FunctionParameter, FunctionType, TableField, Type, TypeEnvironment,
+    TypedFunctionOverload,
 };
 use crate::{TypedFunction, TypedParameter};
 
@@ -54,7 +55,7 @@ pub(crate) fn store_type(state_type: Type) -> Type {
 }
 
 pub(crate) fn store_type_from_initial(initial: &Type) -> Type {
-    store_type(initial.clone())
+    store_type(widen_inferred_type(initial))
 }
 
 pub(crate) fn store_state_type(environment: &TypeEnvironment, candidate: &Type) -> Option<Type> {

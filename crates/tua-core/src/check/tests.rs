@@ -391,6 +391,21 @@ stopScore()
 }
 
 #[test]
+fn inferred_store_string_state_survives_a_factory_return() {
+    check_tua_source(
+        "src/store_factory.tua",
+        r#"local function new()
+  local state = store({ notice = "ready", score = 0 })
+  return { state = state }
+end
+local game = new()
+game.state:set({ notice = "playing", score = 1 })
+"#,
+    )
+    .expect("a store factory should widen inferred literals before creating method parameters");
+}
+
+#[test]
 fn accepts_optional_store_watch_values_as_nilable() {
     check_tua_source(
         "src/store.tua",
