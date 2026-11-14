@@ -23,6 +23,11 @@ language or editor behavior, and migration notes call out those changes.
   verified two-slot writes, explicit recovery, and revision-polled store
   persistence. A using `.tua` file imports its runtime automatically.
 
+### Fixed
+
+- Infer plural translations as strings when catalog shapes agree, and use the
+  required `other` form if a locale's plural rule selects a missing form.
+
 ## [0.9.0] - 2026-11-14
 
 ### Release summary

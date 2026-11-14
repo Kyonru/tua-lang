@@ -103,7 +103,7 @@ local function pluralize(t, loc, data)
   else
     plural_form = defaultPluralizeFunction(loc, count)
   end
-  return t[plural_form]
+  return t[plural_form] or t.other
 end
 
 local function treatNode(node, loc, data)

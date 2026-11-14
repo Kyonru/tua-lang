@@ -86,8 +86,10 @@ warning summarizes keys missing in each nonfallback locale. For an unknown key
 whose parent is a literal table in the fallback catalog, the quick fix inserts
 a clearly unfinished `TODO` translation there.
 
-A literal key with a static text fallback and consistent string-shaped locale
-entries has type `string`; a consistent dialogue key has type `string[]`.
+A literal key with a static text or plural fallback and consistent string-shaped
+locale entries has type `string`; a consistent dialogue key has type `string[]`.
+When a locale's plural rule selects a form absent from its catalog, the runtime
+uses that entry's required `other` text.
 Calculated or mixed-shape keys retain the broader `string | string[] | nil`
 result. This precision applies to project checking and ordinary local
 inference. A dynamic key can still fail at runtime, so handle `nil` where a

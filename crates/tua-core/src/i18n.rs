@@ -162,9 +162,9 @@ impl CatalogIndex {
             .filter_map(|(key, entries)| {
                 let fallback = entries.get(&config.fallback_locale)?;
                 let (expected, is_dialogue) = match fallback.value {
-                    CatalogValue::Text(_) => (Type::string(), false),
+                    CatalogValue::Text(_) | CatalogValue::Plural(_) => (Type::string(), false),
                     CatalogValue::Dialogue(_) => (Type::array(Type::string()), true),
-                    CatalogValue::Plural(_) | CatalogValue::Dynamic => return None,
+                    CatalogValue::Dynamic => return None,
                 };
                 let consistent = entries.values().all(|entry| {
                     if is_dialogue {
@@ -1413,6 +1413,40 @@ mod tests {
         );
         assert!(
             diagnostics.iter().any(|diagnostic| diagnostic.line == 6
+                && diagnostic.code == Some(DiagnosticCode::TYPE_MISMATCH)),
+            "{diagnostics:?}"
+        );
+    }
+
+    #[test]
+    fn plural_results_are_strings_but_dialogue_results_remain_arrays() {
+        use crate::{AnalysisHost, AnalysisSourceKind};
+        let mut config = crate::ProjectConfig::default();
+        config.i18n.enabled = true;
+        config.i18n.catalogs.push(crate::I18nCatalogConfig {
+            locale: "en".to_owned(),
+            path: PathBuf::from("locales/en.lua"),
+        });
+        let mut host = AnalysisHost::with_config(config);
+        host.set_source_roots([PathBuf::from("src")]);
+        host.set_file_with_kind(
+            "src/locales/en.lua",
+            "return { en = { coins = { one = '%{count} coin', other = '%{count} coins' }, dialogue = { 'Hello', 'Bye' } } }",
+            AnalysisSourceKind::Lua,
+        );
+        host.set_file_with_kind(
+            "src/main.tua",
+            "local coins: string = I18n.t('coins', {count = 2})\nlocal bad: string = I18n.t('dialogue')\n",
+            AnalysisSourceKind::Tua,
+        );
+        let diagnostics = host.snapshot().diagnostics("src/main.tua");
+        assert!(
+            !diagnostics.iter().any(|diagnostic| diagnostic.line == 1
+                && diagnostic.code == Some(DiagnosticCode::TYPE_MISMATCH)),
+            "{diagnostics:?}"
+        );
+        assert!(
+            diagnostics.iter().any(|diagnostic| diagnostic.line == 2
                 && diagnostic.code == Some(DiagnosticCode::TYPE_MISMATCH)),
             "{diagnostics:?}"
         );
