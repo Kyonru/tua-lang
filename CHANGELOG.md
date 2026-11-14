@@ -6,6 +6,39 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+### Release summary
+
+Tua 0.9.0 focuses on the responsiveness and clarity of everyday game editing.
+Ordinary hover and hidden previews avoid unnecessary analysis, while module
+export inference does less work on large projects. The extension adds more
+useful views for fonts, sprite timing, state-machine routes, ECS relationships,
+and server health. Type checking and editor assistance also stay aligned more
+often across imported classes, generic results, signals, and audio snapshots.
+
+#### Highlights
+
+- Keep hover and workspace views responsive by skipping preview work that the
+  current editor action cannot display. Large-workspace module indexing also
+  avoids resolving unused imports.
+- Preview a font with your own text, inspect effective sprite-frame durations,
+  select crowded state-machine routes by name, and follow ECS relationships
+  without losing the source reference.
+- Retain useful types for imported generic fields, class receivers, and
+  SignalBus payloads; reject misspelled top-level audio snapshot fields.
+- Diagnose shader paths that would fail after build relocation, preserve code
+  after inline `super()` calls, and keep formatting after generic aliases stable.
+- Generate game workflows that install the matching checked Linux release CLI
+  archive instead of compiling Tua for each run.
+
+#### Upgrade notes
+
+Update the CLI/server and extension together, then run `tua check` and
+`tua build` in your project. Existing configuration needs no migration.
+Previously accepted extra top-level `AudioSnapshot` fields now produce a type
+error, and source-root-prefixed shader paths that fail in the build are
+diagnosed. Existing generated GitHub Actions workflows are unchanged; rerun
+`tua actions init` only if you want the new installer template.
+
 ### Changed
 
 - Model-facing language guidance and offline evaluation now recognize generic
