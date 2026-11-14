@@ -101,6 +101,16 @@ do
   assert(disk.writes() == written)
 end
 
+-- The conservative default cap keeps oversized autosaves opt-in.
+do
+  local disk = backend()
+  local profile = Save.contract({slot = "bounded", version = 1, backend = disk,
+    schema = Save.record({text = Save.string("")})})
+  local ok, problem = profile:save({text = string.rep("x", 128 * 1024)})
+  assert(not ok); expectCode(problem, "oversized")
+  assert(disk.writes() == 0)
+end
+
 -- Corrupting a newer slot recovers the older generation, but both automatic
 -- and manual writes remain blocked until the game accepts that recovery.
 do
