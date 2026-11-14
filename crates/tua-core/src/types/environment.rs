@@ -6115,6 +6115,9 @@ fn infer_binary_operator_type(
     left: &Type,
     right: &Type,
 ) -> Option<Type> {
+    if matches!(binop, ast::BinOp::Or(_)) {
+        return Some(super::infer_or_type(left, right));
+    }
     if is_numeric_operator(binop) && is_number_type(aliases, left) && is_number_type(aliases, right)
     {
         return Some(Type::number());

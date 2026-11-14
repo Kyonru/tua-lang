@@ -42,3 +42,31 @@ fn imported_save_contract_keeps_snapshot_completion_and_hover() {
     server.send(completion_request(7, &uri, source, "initial.s"));
     assert_completion_labels(server.output(), 7, ["stamina"]);
 }
+
+#[test]
+fn loaded_save_snapshot_coalesced_into_store_keeps_members_after_edit() {
+    let project = TempProject::new("save-store-coalesce");
+    project.write("tua.toml", "source = 'src'\n");
+    let profile = "return Save.contract({slot = 'profile', version = 1, schema = Save.record({stars = Save.number(0)})})\n";
+    project.write("src/profile.tua", profile);
+    let source = "local Profile = require('profile')\nlocal saved = Profile:load()\nlocal game = store({profile = saved or Profile:defaults()})\nlocal state = game:get()\nprint(state.profile.s)\n";
+    project.write("src/main.tua", source);
+    let uri = project.uri_for("src/main.tua");
+    let profile_uri = project.uri_for("src/profile.tua");
+    let mut server = TestServer::new();
+    server.send(initialize_with_root(1, project.uri()));
+    server.send(did_open(&uri, source));
+    server.send(did_open(&profile_uri, profile));
+    server.send(completion_request(2, &uri, source, "state.profile.s"));
+    server.send(hover_request(3, &uri, source, "state.profile"));
+    assert_completion_labels(server.output(), 2, ["stars"]);
+    assert_hover_contains(server.output(), 3, "stars");
+
+    server.send(did_change(
+        &profile_uri,
+        &profile.replace("stars", "stamina"),
+        2,
+    ));
+    server.send(completion_request(4, &uri, source, "state.profile.s"));
+    assert_completion_labels(server.output(), 4, ["stamina"]);
+}

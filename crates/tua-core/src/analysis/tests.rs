@@ -105,6 +105,45 @@ print(initial.<|complete|>s)
 }
 
 #[test]
+fn imported_save_snapshot_survives_store_state_completion_and_unsaved_edits() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/profile.tua
+return Save.contract({slot = "profile", version = 1,
+  schema = Save.record({ stars = Save.number(0), locale = Save.string("en") })})
+-- file: src/main.tua
+local Profile = require("profile")
+local saved = Profile:load()
+local game = store({ profile = saved or Profile:defaults() })
+local state = game:get()
+print(state.profile.<|complete|>s)
+state.profile.stars = "wrong"
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+    let position = fixture.position("complete");
+    let labels = completion_labels(&host.snapshot().completion("src/main.tua", position));
+    assert!(labels.contains(&"stars".to_owned()), "{labels:?}");
+    let diagnostics = host.snapshot().pipeline_diagnostics("src/main.tua");
+    assert!(
+        diagnostics.iter().any(|diagnostic| {
+            diagnostic.code == Some(DiagnosticCode::TYPE_MISMATCH)
+                && diagnostic.message.contains("expected number, found string")
+        }),
+        "{diagnostics:?}"
+    );
+
+    let updated = fixture.source("src/profile.tua").replace("stars", "score");
+    host.set_file("src/profile.tua", updated);
+    let labels = completion_labels(&host.snapshot().completion("src/main.tua", position));
+    assert!(!labels.contains(&"stars".to_owned()), "{labels:?}");
+    assert!(labels.contains(&"score".to_owned()), "{labels:?}");
+}
+
+#[test]
 fn save_contract_diagnostics_reject_invalid_static_declarations() {
     let mut host = AnalysisHost::new();
     host.set_file(

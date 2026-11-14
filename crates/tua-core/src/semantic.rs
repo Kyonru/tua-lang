@@ -3791,6 +3791,9 @@ fn infer_binary_operator_type(
     left: &Type,
     right: &Type,
 ) -> Option<Type> {
+    if matches!(binop, ast::BinOp::Or(_)) {
+        return Some(crate::types::infer_or_type(left, right));
+    }
     if is_numeric_operator(binop)
         && is_number_type(environment, left)
         && is_number_type(environment, right)

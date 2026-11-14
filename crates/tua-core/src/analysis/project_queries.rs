@@ -1076,6 +1076,15 @@ impl AnalysisSnapshot {
                     local_types,
                 )
             }
+            Expression::BinaryOperator {
+                lhs,
+                binop: ast::BinOp::Or(_),
+                rhs,
+            } if return_index == 0 => {
+                let left = self.project_structured_argument_type(parsed, lhs, local_types)?;
+                let right = self.project_structured_argument_type(parsed, rhs, local_types)?;
+                Some(crate::types::infer_or_type(&left, &right))
+            }
             Expression::Var(var) if return_index == 0 => {
                 let parts = plain_field_chain_from_var(var)?;
 
@@ -1098,6 +1107,24 @@ impl AnalysisSnapshot {
         local_types: &BTreeMap<String, Type>,
     ) -> Option<Type> {
         let parts = field_chain_before_first_call(function_call)?;
+        if return_index == 0
+            && parts.as_slice() == [crate::store::CONSTRUCTOR_NAME]
+            && parsed.raw.language == crate::ParsedLanguage::Tua
+            && !self
+                .file(&parsed.path)?
+                .scope()?
+                .has_non_builtin_binding_at(
+                    crate::store::CONSTRUCTOR_NAME,
+                    node_span(function_call)?.start,
+                )
+        {
+            let initial = project_call_argument_expressions(function_call)?
+                .first()
+                .and_then(|argument| {
+                    self.project_structured_argument_type(parsed, argument, local_types)
+                })?;
+            return Some(crate::store::store_type_from_initial(&initial));
+        }
         if parts
             .first()
             .is_some_and(|part| part == crate::save::MODULE_NAME)
@@ -1114,7 +1141,7 @@ impl AnalysisSnapshot {
             let argument = project_call_argument_expressions(function_call)?
                 .first()
                 .and_then(|argument| {
-                    self.project_save_argument_type(parsed, argument, local_types)
+                    self.project_structured_argument_type(parsed, argument, local_types)
                 });
             return crate::save::inferred_return(&parts, argument.as_ref())
                 .filter(|_| return_index == 0);
@@ -1210,7 +1237,7 @@ impl AnalysisSnapshot {
         }
     }
 
-    fn project_save_argument_type(
+    fn project_structured_argument_type(
         &self,
         parsed: &ParsedSource,
         expression: &Expression,
@@ -1222,7 +1249,7 @@ impl AnalysisSnapshot {
                     return None;
                 };
                 let value = self
-                    .project_save_argument_type(parsed, value, local_types)
+                    .project_structured_argument_type(parsed, value, local_types)
                     .unwrap_or(Type::Any);
                 Some((token_text(key), TableField::required(value)))
             });

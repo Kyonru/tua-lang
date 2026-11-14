@@ -440,6 +440,11 @@ local pending: number | nil = nil
 pending = 10
 ```
 
+When a loaded value may be `nil`, `saved or defaults` keeps the non-`nil`
+value type when both branches have the same shape. For example, a
+`Profile:load()` snapshot combined with `Profile:defaults()` remains a typed
+snapshot when passed into a store.
+
 Lua also fills missing assignment slots with `nil`. Parentheses force a call
 to produce one value; an unparenthesized final call can supply multiple values
 in an assignment or argument list:

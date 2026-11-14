@@ -1,4 +1,18 @@
 use super::*;
+
+#[test]
+fn or_inference_uses_a_non_nil_left_value_or_the_fallback() {
+    let snapshot = Type::table([("score", TableField::required(Type::number()))]);
+    assert_eq!(
+        infer_or_type(&Type::union([snapshot.clone(), Type::nil()]), &snapshot),
+        snapshot
+    );
+    assert_eq!(infer_or_type(&Type::nil(), &Type::string()), Type::string());
+    assert_eq!(
+        infer_or_type(&Type::boolean(), &Type::nil()),
+        Type::union([Type::boolean(), Type::nil()])
+    );
+}
 use crate::{parse_lua_source, parse_tua_source, DiagnosticCode};
 
 #[test]

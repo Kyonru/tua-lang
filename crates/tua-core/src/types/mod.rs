@@ -31,6 +31,52 @@ pub use model::{
     MetatableFacts, NewIndexRule, PrimitiveType, TableField, TableShape, Type, TypeAlias,
 };
 
+/// Lua's `or` returns the left value when it is truthy, otherwise the right
+/// value. Keep a possible `false` (modeled as boolean), but discard `nil` from
+/// the left arm before joining it with the fallback.
+pub(crate) fn infer_or_type(left: &Type, right: &Type) -> Type {
+    if matches!(left, Type::Any) || matches!(right, Type::Any) {
+        return Type::Any;
+    }
+
+    fn can_be_falsy(ty: &Type) -> bool {
+        match ty {
+            Type::Primitive(PrimitiveType::Nil | PrimitiveType::Boolean)
+            | Type::Any
+            | Type::Alias(_)
+            | Type::GenericParameter { .. } => true,
+            Type::Union(types) => types.iter().any(can_be_falsy),
+            _ => false,
+        }
+    }
+
+    if !can_be_falsy(left) {
+        return left.clone();
+    }
+
+    fn push_type(ty: &Type, result: &mut Vec<Type>, omit_nil: bool) {
+        match ty {
+            Type::Primitive(PrimitiveType::Nil) if omit_nil => {}
+            Type::Union(types) => {
+                for ty in types {
+                    push_type(ty, result, omit_nil);
+                }
+            }
+            _ if !result.contains(ty) => result.push(ty.clone()),
+            _ => {}
+        }
+    }
+
+    let mut result = Vec::new();
+    push_type(left, &mut result, true);
+    push_type(right, &mut result, false);
+    match result.len() {
+        0 => Type::nil(),
+        1 => result.remove(0),
+        _ => Type::union(result),
+    }
+}
+
 /// A callback may be optional, but competing callable contracts are ambiguous.
 pub(crate) fn contextual_function_type(ty: Type) -> Option<FunctionType> {
     fn collect(ty: Type, callback: &mut Option<FunctionType>) -> bool {

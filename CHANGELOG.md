@@ -29,6 +29,8 @@ language or editor behavior, and migration notes call out those changes.
   required `other` form if a locale's plural rule selects a missing form.
 - Widen inferred store state before constructing method signatures, so stores
   initialized with string literals retain usable `set` types across factories.
+- Preserve the inferred snapshot type through `saved or defaults`, including
+  Store member completion and checker errors after importing a save contract.
 
 ## [0.9.0] - 2026-11-14
 

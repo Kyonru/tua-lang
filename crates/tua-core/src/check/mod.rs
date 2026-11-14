@@ -4414,6 +4414,9 @@ impl<'a> Checker<'a> {
         left: &Type,
         right: &Type,
     ) -> Option<Type> {
+        if matches!(binop, ast::BinOp::Or(_)) {
+            return Some(crate::types::infer_or_type(left, right));
+        }
         if is_numeric_operator(binop) && self.is_number_type(left) && self.is_number_type(right) {
             return Some(Type::number());
         }
