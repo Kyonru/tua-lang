@@ -276,6 +276,7 @@ module.exports = {
   lookupSourceLocation,
   nearestMapping,
   remapTracebackLine,
+  tracebackLocations,
   resolveSourceMapPath,
   sourceMapPathForGeneratedPath,
 };

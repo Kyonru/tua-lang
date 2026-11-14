@@ -8,6 +8,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Added
 
+- Add an opt-in **Profile LOVE Game** development capture with bounded frame
+  timings, LuaJIT CPU stacks, source-map links to Tua and generated Lua, a
+  chosen frame budget, and manual or timed stop. Ordinary builds are untouched.
+
 - Add opt-in `[i18n]` localization for LOVE projects, with source-relative Lua
   catalogs, a pinned Smiti18n runtime, and automatic `I18n` import only in
   files that use the built-in.

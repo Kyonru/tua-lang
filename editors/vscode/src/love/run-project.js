@@ -13,15 +13,18 @@ const {
 const { loadSourceMapsFromDirectory, remapTracebackLine } = require("../editor/source-maps");
 const { sourceLocation } = require("../workspace/console-buffer");
 const { formatError } = require("../shared/errors");
+const { ProfileCapture } = require("../profiler/capture");
+const { showProfile } = require("../profiler/view");
 
 const TASK_TYPE = "tua";
 const TASK_NAME = "Run LOVE Project";
 const RUNNING_CONTEXT = "tua.loveProjectRunning";
 
-function registerLoveProjectRunner({ appendOutputLine, getClient, getServerCommand, activity, inspector }) {
+function registerLoveProjectRunner({ appendOutputLine, getClient, getServerCommand, activity, inspector, extensionPath }) {
   const activeExecutions = new Set();
   let nextRun = 0;
   let lastRun = {};
+  let currentCapture;
   const disposables = [
     vscode.commands.registerCommand(COMMANDS.runLoveProject, presentation =>
       runLoveProject({ getClient, getServerCommand, showConsole: presentation?.console === true, instances: presentation?.instances, title: presentation?.title, configurationName: presentation?.configurationName }),
@@ -30,6 +33,28 @@ function registerLoveProjectRunner({ appendOutputLine, getClient, getServerComma
       runLoveProject({ getClient, getServerCommand, ...lastRun, restart: true }),
     ),
     vscode.commands.registerCommand(COMMANDS.stopLoveProject, () => stopLoveProject()),
+    vscode.commands.registerCommand(COMMANDS.profileLoveProject, async () => {
+      if (currentCapture && !currentCapture.completed) {
+        vscode.window.showInformationMessage("A LÖVE performance capture is already running. Stop it before starting another.");
+        return;
+      }
+      const choice = await vscode.window.showQuickPick([
+        { label: "10 seconds", duration: 10 },
+        { label: "30 seconds", duration: 30 },
+        { label: "Until stopped", duration: 0 },
+      ], { title: "Profile LÖVE Game", placeHolder: "Choose a short capture duration" });
+      if (!choice) return;
+      const budgetText = await vscode.window.showInputBox({ title: "Frame budget", prompt: "Milliseconds per frame to mark as a spike", value: "16.67",
+        validateInput: value => Number.isFinite(Number(value)) && Number(value) > 0 && Number(value) <= 1000 ? undefined : "Enter a number between 0 and 1000 ms." });
+      if (budgetText === undefined) return;
+      await runLoveProject({ getClient, getServerCommand, profileDuration: choice.duration, budgetMs: Number(budgetText),
+        title: "Profile LOVE Project", showConsole: true });
+    }),
+    vscode.commands.registerCommand(COMMANDS.stopLoveProfile, () => {
+      if (!currentCapture || currentCapture.completed) return vscode.window.showInformationMessage("No LÖVE performance capture is running.");
+      currentCapture.stop();
+      return vscode.window.showInformationMessage("Stopping the capture after the current frame. The game will keep running.");
+    }),
   ];
 
   void setRunningContext(false);
@@ -80,6 +105,15 @@ function registerLoveProjectRunner({ appendOutputLine, getClient, getServerComma
     }
     lastRun = { configurationName: options.configurationName, instances, title: options.title, showConsole: options.showConsole };
 
+    const capture = options.profileDuration === undefined ? undefined : new ProfileCapture({
+      durationSeconds: options.profileDuration,
+      budgetMs: options.budgetMs,
+      assetsDirectory: path.join(extensionPath, "assets", "profiler"),
+      onReport: model => { appendOutputLine?.(`[tua] Performance capture ready: ${model.frameCount} frames, ${model.sampleCount} CPU samples.`); showProfile(model); },
+      onError: error => { appendOutputLine?.(`[tua] Performance capture unavailable: ${error.message}`); void vscode.window.showWarningMessage(`Tua performance capture unavailable: ${error.message}`); },
+    });
+    if (capture) currentCapture = capture;
+
     const task = createLoveProjectTask({
       configurationName: options.configurationName,
       runId: ++nextRun,
@@ -88,6 +122,7 @@ function registerLoveProjectRunner({ appendOutputLine, getClient, getServerComma
       showConsole: options.showConsole,
       activity,
       inspector,
+      capture,
       appendOutputLine,
       layout,
       loveCommand: configuredLoveCommand(),
@@ -124,10 +159,11 @@ function registerLoveProjectRunner({ appendOutputLine, getClient, getServerComma
   } });
 }
 
-function createLoveProjectTask({ appendOutputLine, layout, loveCommand, tuaCommand, activity, showConsole = false, instances, title = TASK_NAME, runId, configurationName, inspector }) {
+function createLoveProjectTask({ appendOutputLine, layout, loveCommand, tuaCommand, activity, showConsole = false, instances, title = TASK_NAME, runId, configurationName, inspector, capture }) {
   const terminalOptions = {
     activity,
     inspector,
+    capture,
     title,
     configurationName,
     instances,
@@ -222,7 +258,7 @@ function resolveLoveCommand(command, options = {}) {
 }
 
 class LoveProjectTerminal {
-  constructor({ appendOutputLine, cwd, loveCommand, outputDirectory, tuaCommand, activity, kind = "run", title, instances, args = [], groupId, configurationName, inspector }) {
+  constructor({ appendOutputLine, cwd, loveCommand, outputDirectory, tuaCommand, activity, kind = "run", title, instances, args = [], groupId, configurationName, inspector, capture }) {
     this.closeEmitter = new vscode.EventEmitter();
     this.writeEmitter = new vscode.EventEmitter();
     this.onDidClose = this.closeEmitter.event;
@@ -243,6 +279,7 @@ class LoveProjectTerminal {
     this.sourceMaps = [];
     this.activity = activity;
     this.inspector = inspector;
+    this.capture = capture;
     this.session = activity?.begin({ cwd, kind, title, configurationName, ...(groupId ? { groupId } : {}) });
     if (this.session) this.session.stop = () => this.close();
   }
@@ -298,7 +335,14 @@ class LoveProjectTerminal {
   async runGame() {
     this.sourceMaps = this.loadSourceMaps();
     this.writeLine(`[tua] Starting LOVE from ${this.outputDirectory}`);
-    const launchDirectory = await this.inspector?.launch(this.session, this.outputDirectory) || this.outputDirectory;
+    let launchDirectory;
+    try {
+      launchDirectory = this.capture?.launch(this.outputDirectory) || await this.inspector?.launch(this.session, this.outputDirectory) || this.outputDirectory;
+    } catch (error) {
+      this.writeLine(`[tua] Performance capture could not start: ${formatError(error)}`);
+      this.finish(1);
+      return 1;
+    }
     if (this.finished) return 1;
     const loveCode = await this.runProcess(this.loveCommand, [launchDirectory, ...this.args], { onStart: () => this.activity?.update(this.session, "running") });
 
@@ -448,6 +492,7 @@ class LoveProjectTerminal {
     }
 
     this.finished = true;
+    this.capture?.finish();
     this.activity?.finish(this.session, code, this.stopped);
     this.closeEmitter.fire(code);
     this.closeEmitter.dispose();

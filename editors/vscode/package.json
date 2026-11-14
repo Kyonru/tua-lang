@@ -62,6 +62,7 @@
     "test:webviews": "npm run build && node test/webview/run.js",
     "test:multiplayer": "node scripts/multiplayer-runtime-e2e.js",
     "test:inspector": "node scripts/runtime-inspector-e2e.js",
+    "test:profiler": "node scripts/love-profiler-e2e.js",
     "test:procedural": "node scripts/procedural-preview-e2e.js",
     "screenshots:readme": "npm run build && node scripts/readme-screenshots.js && npm run screenshots:readme:check",
     "screenshots:readme:check": "node scripts/readme-screenshot-artifacts.js"
@@ -903,6 +904,18 @@
         "title": "Debug LOVE Project",
         "category": "Tua",
         "icon": "$(debug-alt)"
+      },
+      {
+        "command": "tua.profileLoveProject",
+        "title": "Profile LOVE Game",
+        "category": "Tua",
+        "icon": "$(pulse)"
+      },
+      {
+        "command": "tua.stopLoveProfile",
+        "title": "Stop LOVE Profile Capture",
+        "category": "Tua",
+        "icon": "$(debug-stop)"
       },
       {
         "command": "tua.runLoveProjectWithHotReload",

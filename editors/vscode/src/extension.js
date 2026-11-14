@@ -80,6 +80,7 @@ async function activate(context) {
   context.subscriptions.push(runtimeInspector);
   loveDevex = registerLoveDevex({
     activity: runActivity.store,
+    extensionPath: context.extensionPath,
     inspector: runtimeInspector.sessions,
     appendOutputLine: (line) => outputChannel?.appendLine(line),
     configurationTarget,

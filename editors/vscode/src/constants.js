@@ -36,6 +36,8 @@ const COMMANDS = {
   openGeneratedLua: "tua.openGeneratedLua",
   jumpBetweenSourceAndGenerated: "tua.jumpBetweenSourceAndGenerated",
   runLoveProject: "tua.runLoveProject",
+  profileLoveProject: "tua.profileLoveProject",
+  stopLoveProfile: "tua.stopLoveProfile",
   stopLoveProject: "tua.stopLoveProject",
   debugLoveProject: "tua.debugLoveProject",
   restartLoveProject: "tua.restartLoveProject",

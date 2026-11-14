@@ -188,6 +188,34 @@ connection. Disabling an existing game leaves wrappers until that game exits.
 Debugger pauses also pause snapshots.
 Ended or disconnected players retain their last data with a status and age.
 
+## Capture LÖVE Performance
+
+Run **Tua: Profile LOVE Game** in a trusted project workspace. Choose a 10- or
+30-second capture, or **Until stopped**, then enter a frame budget in
+milliseconds. Tua builds the project and launches LÖVE from a private,
+temporary development directory. **Tua: Stop LOVE Profile** ends a manual
+capture after the current frame; the game keeps running.
+
+The resulting view shows the median, 95th percentile, and worst **retained**
+frame, plus frames over the chosen budget. It keeps the last 2,048 frames and
+at most 512 distinct CPU stacks. Frame wall time includes the game loop and
+sleep; update and draw columns time those callbacks separately. Draw-call
+counts come from `love.graphics.getStats`, and the GC column counts LuaJIT
+samples in GC state. These measurements help correlate a spike; they do not
+prove that a particular callback caused it.
+
+CPU stacks come from LuaJIT's statistical profiler. Click a mapped stack to
+open its `.tua` line, or **Lua** to inspect the generated line. Enable
+`emit_maps = true` for source links. Sampling may miss short work, and JIT
+inlining can make line attribution approximate. A capture with no project
+samples still shows frame data. If this LÖVE build lacks `jit.profile`, the
+view states that CPU sampling was unavailable.
+
+The profiler shim is loaded only by the temporary launcher. Ordinary runs,
+builds, and packaged games contain no profiler code or per-frame profiler
+branch. Captures have measurement overhead; compare runs with and without
+capture before using a small timing difference as evidence.
+
 ### Navigate between source and runtime
 
 Use the inline **Go to Runtime Object Creation Site** action or
