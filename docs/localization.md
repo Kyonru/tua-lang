@@ -116,6 +116,49 @@ Translation text still needs a game font containing the selected language's
 glyphs. Tua does not perform text shaping, UI mirroring, or layout overflow
 measurement.
 
+## Spoken audio and subtitles
+
+`I18n` catalogs contain text, not sound files. Keep subtitles under stable
+translation keys and define recordings as named [audio cues](audio.md). For a
+small English/French game with short `src/assets/voice/<locale>/intro.wav`
+recordings, add `dialogue.intro` as text in both catalogs and select a cue when
+the line plays:
+
+```tua
+local audio = audioSystem({
+  cues = {
+    intro_en = { source = sound("assets/voice/en/intro.wav") },
+    intro_fr = { source = sound("assets/voice/fr/intro.wav") },
+  },
+})
+
+local function playIntro()
+  local subtitle = I18n.t("dialogue.intro")
+  if I18n.getLocale() == "fr" then
+    audio:play("intro_fr")
+  else
+    audio:play("intro_en")
+  end
+  return subtitle
+end
+```
+
+This example intentionally falls back to the English recording. Tua checks
+the literal cue names and referenced asset paths, but it does not infer that
+`intro_en` and `intro_fr` are variants of one line or require a recording for
+every configured locale. Its text fallback chain does not select audio: map
+regional tags such as `fr-CA` to a voice language explicitly if your game uses
+them. For a game that offers independent text and voice languages, use the
+player's voice-language setting here instead of `I18n.getLocale()`. Keep the
+localized subtitle available when a recording is absent.
+
+Create reusable sources during setup, not on each frame. `sound(...)` is for
+short static clips; use `music(...)` for longer recordings that should stream,
+following [LÖVE's source guidance](https://love2d.org/wiki/SourceType). Plan
+for the size of all language recordings included in a build. Tua currently has
+no locale-aware voice coverage diagnostic, voice-variant completion, or
+automatic subtitle-to-recording timing.
+
 ## Build and interop
 
 When a `.tua` file references the built-in `I18n`, generated Lua imports

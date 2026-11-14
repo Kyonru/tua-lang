@@ -35,6 +35,11 @@ end
 For a project with included sound fixtures, open
 [the audio-system example](examples.md#examplesaudio-system).
 
+For spoken lines, keep subtitles in localization catalogs and recordings in
+audio cues. The [localized voice recipe](localization.md#spoken-audio-and-subtitles)
+shows explicit language selection and fallback; `audioSystem` does not change
+its cue source automatically when `I18n.setLocale` changes.
+
 ## Add Buses And Music
 
 The larger configuration below also needs the named music assets and the
