@@ -10,7 +10,8 @@ pub(crate) const CONSTRUCTOR_NAME: &str = "store";
 pub(crate) const RUNTIME_MODULE: &str = "tuastore";
 pub(crate) const EMITTED_CONSTRUCTOR_LOCAL: &str = "__tua_store";
 
-const METHOD_NAMES: &[&str] = &["get", "set", "update", "subscribe", "watch"];
+const METHOD_NAMES: &[&str] = &["get", "set", "update", "subscribe", "watch", "revision"];
+const STATE_METHOD_NAMES: &[&str] = &["get", "set", "update", "subscribe", "watch"];
 const BUILTIN_TYPE_NAMES: &[&str] = &[TYPE_NAME, STATE_TYPE];
 
 pub(crate) fn builtin_type_names() -> &'static [&'static str] {
@@ -76,7 +77,7 @@ pub(crate) fn store_state_type(environment: &TypeEnvironment, candidate: &Type) 
             }
         }
         Type::Table(table)
-            if METHOD_NAMES
+            if STATE_METHOD_NAMES
                 .iter()
                 .all(|method| table.field(method).is_some()) =>
         {
@@ -118,6 +119,12 @@ fn typed_method_for_state(method: &str, state_type: Type) -> Option<TypedFunctio
             [self_parameter],
             state_type,
             "Return the current state table.",
+        ),
+        "revision" => typed_function(
+            method,
+            [self_parameter],
+            Type::number(),
+            "Return the mutation revision. It advances for every set or update, including no-ops and failed mutators.",
         ),
         "set" => typed_function(
             method,
@@ -280,5 +287,24 @@ fn parameter(name: &str, ty: Type) -> TypedParameter {
         name: name.to_owned(),
         ty,
         documentation: None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn revision_is_a_number_on_specialized_stores() {
+        let Type::Table(table) = store_type(Type::table([(
+            "score",
+            TableField::required(Type::number()),
+        )])) else {
+            unreachable!("stores expose a method table")
+        };
+        let Type::Function(function) = &table.field("revision").unwrap().ty else {
+            unreachable!("revision is callable")
+        };
+        assert_eq!(function.return_types_or_any(), &[Type::number()]);
     }
 }

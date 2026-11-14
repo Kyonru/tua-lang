@@ -10,6 +10,28 @@ local function check(condition, message)
   end
 end
 
+-- Revisions detect changes without subscribing or copying a state table.
+do
+  local store = runtime({ score = 0 })
+  check(store:revision() == 0, "new stores start at revision zero")
+  store:set({ score = 1 })
+  store:update(function(state) state.score = state.score + 1 end)
+  store:update(function() end)
+  check(store:revision() == 3, "set, mutation, and no-op update each advance revision")
+  check(not pcall(function()
+    store:update(function(state)
+      state.score = 5
+      error("expected mutator failure")
+    end)
+  end), "mutator errors propagate")
+  check(store:revision() == 4 and store:get().score == 5,
+    "a partially mutated state never appears clean after an error")
+  store:update(function()
+    store:update(function(state) state.score = 6 end)
+  end)
+  check(store:revision() == 6, "nested updates have distinct revisions")
+end
+
 -- Stores without observers take the allocation-free update path.
 do
   local state = {}

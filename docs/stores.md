@@ -54,6 +54,7 @@ a generic annotation or package install.
 | Method | Behavior |
 | --- | --- |
 | `get()` | Return the current state table. |
+| `revision()` | Return a mutation counter, initially zero. Every `set` and `update` advances it. |
 | `set(next)` | Replace the state, notify listeners, and return `next`. |
 | `update(mutator)` | Run `mutator(state)`, notify listeners, and return the state. |
 | `subscribe(listener)` | Run `listener(state, previous)` after every change and return an unsubscribe function. |
@@ -79,6 +80,12 @@ key returns to `score` in the initial table. The returned unsubscribe function
 is idempotent. The inferred state contract is preserved when the Store is
 returned directly or nested in a required module table, so `update(function(state)`
 does not need a repeated annotation at the use site.
+
+`revision()` advances before an `update` mutator runs, so even a mutator that
+partially changes state and then errors leaves a changed revision. A no-op
+`update` also advances it. Directly changing the table returned by `get()`
+does not advance the revision; use `set` or `update` when a persistence binding
+must observe a change.
 
 !!! warning "Updates are shallow"
     When whole-store subscribers exist, `update` takes a shallow snapshot

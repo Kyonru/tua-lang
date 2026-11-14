@@ -26,9 +26,11 @@ game:update(function(state)
 end)
 
 local state = game:get()
+local revision = game:revision()
 stopScore()
 
 return {
   game = game,
   score = state.score,
+  revision = revision,
 }

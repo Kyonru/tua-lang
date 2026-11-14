@@ -94,24 +94,31 @@ function Store:get()
   return self._state
 end
 
+function Store:revision()
+  return self._revision
+end
+
 function Store:set(nextState)
   assert(type(nextState) == "table", "store:set expects a state table")
 
   local previous = self._state
   local listeners = self._listeners
   local watchers = self._watchers
+  self._state = nextState
+  self._revision = self._revision + 1
   if #listeners == 0 and next(watchers) == nil then
-    self._state = nextState
     return self._state
   end
 
-  self._state = nextState
   notifyStore(self, previous, listeners, watchers)
   return nextState
 end
 
 function Store:update(mutator)
   assert(type(mutator) == "function", "store:update expects a function")
+
+  -- Advance before user code: a mutator may change state and then throw.
+  self._revision = self._revision + 1
 
   local listeners = self._listeners
   local watchers = self._watchers
@@ -180,6 +187,7 @@ return function(initialState)
 
   return setmetatable({
     _state = initialState,
+    _revision = 0,
     _listeners = {},
     _watchers = {},
   }, Store)

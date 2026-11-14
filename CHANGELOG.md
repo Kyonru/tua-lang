@@ -16,6 +16,9 @@ language or editor behavior, and migration notes call out those changes.
   and a searchable Localization Explorer in VS Code.
 - Infer stable literal translation result types from catalog entries, and
   package only the runtime and catalogs needed by a using build.
+- Expose a typed `store:revision()` counter for polling mutations without a
+  whole-store subscription; increments remain allocation-free, including for
+  no-op and partially failed updates.
 
 ## [0.9.0] - 2026-11-14
 
