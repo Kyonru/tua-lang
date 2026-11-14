@@ -534,7 +534,7 @@ fn narrowed_type_after_guard(
     lookup: impl Fn(&str) -> Option<Type> + Copy,
 ) -> Option<Type> {
     if let Some(condition) = assertion_condition(statement, || lookup("assert").is_none()) {
-        return narrowed_locals_for_condition(condition, aliases, lookup).remove(name);
+        return narrowed_condition_name(condition_narrowings(condition), aliases, name, lookup);
     }
     let ast::Stmt::If(statement) = statement else {
         return None;
@@ -547,7 +547,31 @@ fn narrowed_type_after_guard(
         return None;
     }
 
-    narrowed_locals_after_false_condition(statement.condition(), aliases, lookup).remove(name)
+    narrowed_condition_name(
+        false_condition_narrowings(statement.condition()),
+        aliases,
+        name,
+        lookup,
+    )
+}
+
+fn narrowed_condition_name(
+    narrowings: Vec<TypeNarrowing>,
+    aliases: &BTreeMap<String, Type>,
+    name: &str,
+    lookup: impl Fn(&str) -> Option<Type> + Copy,
+) -> Option<Type> {
+    let mut result = None;
+    for narrowing in narrowings
+        .into_iter()
+        .filter(|narrowing| narrowing.name == name)
+    {
+        let Some(base) = lookup(name) else { continue };
+        if let Some(narrowed) = apply_narrowing(aliases, &base, &narrowing.kind, lookup) {
+            result = Some(narrowed);
+        }
+    }
+    result
 }
 
 fn collect_if_branch_narrowing(
@@ -1160,4 +1184,46 @@ fn position_key(position: SourcePosition) -> (usize, usize) {
 
 fn token_text(token: &full_moon::tokenizer::TokenReference) -> String {
     token.token().to_string().trim().to_owned()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::cell::RefCell;
+
+    #[test]
+    fn unrelated_assertion_guards_do_not_resolve_their_variables() {
+        let mut source = String::new();
+        for index in 0..12 {
+            source.push_str(&format!(
+                "assert(ok{index}, issue{index} and issue{index}.message)\n"
+            ));
+        }
+        source.push_str("print(persistence)\n");
+        let parsed = crate::parse_tua_source("src/main.tua", &source).unwrap();
+        let calls = RefCell::new(Vec::<String>::new());
+        let lookup = |name: &str| {
+            calls.borrow_mut().push(name.to_owned());
+            (name != "assert").then(Type::boolean)
+        };
+        let narrowed = narrowed_type_at_position(
+            &parsed,
+            &BTreeMap::new(),
+            "persistence",
+            SourcePosition {
+                line: 13,
+                column: 8,
+            },
+            lookup,
+        );
+        assert!(narrowed.is_none());
+        assert!(
+            calls
+                .borrow()
+                .iter()
+                .all(|name| matches!(name.as_str(), "assert" | "persistence")),
+            "unrelated guards resolved names: {:?}",
+            calls.borrow()
+        );
+    }
 }

@@ -31,6 +31,8 @@ language or editor behavior, and migration notes call out those changes.
   initialized with string literals retain usable `set` types across factories.
 - Preserve the inferred snapshot type through `saved or defaults`, including
   Store member completion and checker errors after importing a save contract.
+- Resolve assertion guards only for the name being queried, avoiding repeated
+  analysis of unrelated save-result variables during `tua check` and editor requests.
 
 ## [0.9.0] - 2026-11-14
 
