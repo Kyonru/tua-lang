@@ -1930,6 +1930,7 @@ fn lower_builtin_call_operations(
         .copied();
     let mut tuaecs_span = None;
     let mut tuai18n_span = None;
+    let mut tuasave_span = None;
     let game_math_helpers = game_math::used_helpers(parsed);
     let explicit_ecs_binding = explicit_binding_position(parsed, ecs::MODULE_NAME);
     let scope = crate::scope::scope_map_parsed_source(parsed);
@@ -1992,6 +1993,18 @@ fn lower_builtin_call_operations(
                 }
             }
 
+            if name == crate::save::MODULE_NAME {
+                let field_start = skip_whitespace(&output, index + identifier_end);
+                if output[field_start..].starts_with('.') {
+                    let source_span = document.source_span_at(index);
+                    if !scope
+                        .has_non_builtin_binding_at(crate::save::MODULE_NAME, source_span.start)
+                    {
+                        tuasave_span.get_or_insert(source_span);
+                    }
+                }
+            }
+
             index += identifier_end;
             continue;
         }
@@ -2013,6 +2026,7 @@ fn lower_builtin_call_operations(
         || tuaaudio_span.is_some()
         || tuaecs_span.is_some()
         || tuai18n_span.is_some()
+        || tuasave_span.is_some()
         || builtin_module_spans.iter().any(Option::is_some)
         || !game_math_helpers.is_empty()
     {
@@ -2130,6 +2144,18 @@ fn lower_builtin_call_operations(
                 "local {} = require(\"{}\")\n",
                 crate::i18n::MODULE_NAME,
                 crate::i18n::RUNTIME_MODULE
+            ),
+            source_span,
+            LoweringKind::BuiltinCall,
+        ));
+    }
+    if let Some(source_span) = tuasave_span {
+        operations.push(lowering::LoweringOperation::insert(
+            0,
+            format!(
+                "local {} = require(\"{}\")\n",
+                crate::save::MODULE_NAME,
+                crate::save::RUNTIME_MODULE
             ),
             source_span,
             LoweringKind::BuiltinCall,

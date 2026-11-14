@@ -30,6 +30,7 @@ mod navigation;
 mod object_pool_graph;
 mod project_layout;
 mod recovery;
+mod save_contracts;
 mod scheduling;
 mod semantic_tokens;
 mod server_protocol;

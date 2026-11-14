@@ -1267,7 +1267,13 @@ impl AnalysisSnapshot {
         let documentation = module_export_documentation(
             &export,
             self.module_export_source_documentation(path, &fields),
-        );
+        )
+        .or_else(|| {
+            self.indexed_module_value_type(path)
+                .filter(crate::save::is_contract)
+                .and_then(|_| crate::save::contract_method_documentation(&current_part.text))
+                .map(str::to_owned)
+        });
         let kind = if matches!(export.ty, Type::Function(_)) {
             "function"
         } else {

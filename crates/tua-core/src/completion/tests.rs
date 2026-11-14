@@ -641,6 +641,7 @@ position.
         vec![
             "Vec2".to_owned(),
             "LoveColor".to_owned(),
+            "SaveIssue".to_owned(),
             "AudioEventPayload".to_owned(),
             "BezierCurve".to_owned(),
             "StateMachineEvent".to_owned(),

@@ -4,6 +4,212 @@ use std::env;
 use std::fs;
 
 #[test]
+fn save_contract_literal_schema_completes_nested_snapshot_fields() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+local Profile = Save.contract({
+  slot = "profile",
+  version = 2,
+  schema = Save.record({
+    score = Save.number(0),
+    tags = Save.array(Save.string(), {}),
+    settings = Save.record({ enabled = Save.boolean(true) }),
+  }),
+})
+local initial = Profile:defaults()
+local score = <|hover|>initial.<|complete|>s
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+    let snapshot = host.snapshot();
+    let hover = snapshot.hover("src/main.tua", fixture.position("hover"));
+    assert!(
+        hover.is_some(),
+        "snapshot type should be available on hover"
+    );
+    let labels =
+        completion_labels(&snapshot.completion("src/main.tua", fixture.position("complete")));
+    assert!(
+        labels.contains(&"score".to_owned()),
+        "{labels:?} hover={hover:?}"
+    );
+    assert!(labels.contains(&"settings".to_owned()), "{labels:?}");
+}
+
+#[test]
+fn save_contract_editor_completion_hides_internal_type_markers() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+local Profile = Save.contract({slot = "profile", version = 1,
+  schema = Save.record({score = Save.number(0)})})
+Profile.<|complete|>
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_file("src/main.tua", fixture.files()[0].source.clone());
+    let snapshot = host.snapshot();
+    let labels =
+        completion_labels(&snapshot.completion("src/main.tua", fixture.position("complete")));
+    assert!(labels.contains(&"defaults".to_owned()), "{labels:?}");
+    assert!(
+        !labels.iter().any(|label| label.starts_with("__tua_save")),
+        "{labels:?}"
+    );
+}
+
+#[test]
+fn plain_lua_does_not_get_an_implicit_save_global() {
+    let mut host = AnalysisHost::new();
+    host.set_file("src/main.lua", "return 1\n");
+    let snapshot = host.snapshot();
+    let parsed = snapshot
+        .file(Path::new("src/main.lua"))
+        .unwrap()
+        .parsed
+        .as_ref()
+        .unwrap();
+    assert!(snapshot
+        .semantic_environment(parsed)
+        .local("Save")
+        .is_none());
+}
+
+#[test]
+fn imported_save_contract_preserves_snapshot_completion() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/profile.tua
+return Save.contract({
+  slot = "profile",
+  version = 1,
+  schema = Save.record({ score = Save.number(0), label = Save.string("Ada") }),
+})
+-- file: src/main.tua
+local Profile = require("profile")
+local initial = Profile:defaults()
+print(initial.<|complete|>s)
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+    let snapshot = host.snapshot();
+    let labels =
+        completion_labels(&snapshot.completion("src/main.tua", fixture.position("complete")));
+    assert!(labels.contains(&"score".to_owned()), "{labels:?}");
+}
+
+#[test]
+fn save_contract_diagnostics_reject_invalid_static_declarations() {
+    let mut host = AnalysisHost::new();
+    host.set_file(
+        "src/bad.tua",
+        "local A = Save.contract({slot = '../bad', version = 0, schema = Save.array(Save.number())})\nlocal B = Save.record({score = Save.number(), score = Save.number()})\nlocal C = Save.contract({slot = 'valid', version = 1, schema = Save.record({score = Save.number()})})\nlocal D = Save.record({score = 3})\nreturn A\n",
+    );
+    let diagnostics = host.snapshot().pipeline_diagnostics("src/bad.tua");
+    let messages = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::DOMAIN_SAVE))
+        .map(|diagnostic| diagnostic.message.as_str())
+        .collect::<Vec<_>>();
+    assert!(
+        messages.iter().any(|message| message.contains("slot")),
+        "{messages:?}"
+    );
+    assert!(
+        messages.iter().any(|message| message.contains("version")),
+        "{messages:?}"
+    );
+    assert!(
+        messages
+            .iter()
+            .any(|message| message.contains("root schema")),
+        "{messages:?}"
+    );
+    assert!(
+        messages.iter().any(|message| message.contains("duplicate")),
+        "{messages:?}"
+    );
+    assert!(
+        messages
+            .iter()
+            .any(|message| message.contains("needs a default")),
+        "{messages:?}"
+    );
+    assert!(
+        messages
+            .iter()
+            .any(|message| message.contains("needs a Save schema descriptor")),
+        "{messages:?}"
+    );
+}
+
+#[test]
+fn save_bind_select_completes_store_state() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+local Profile = Save.contract({slot = "profile", version = 1,
+  schema = Save.record({score = Save.number(0)})})
+local game = store({profile = Profile:defaults(), session = "active"})
+local binding = Profile:bind(game, {
+  select = function(state) return state.<|complete|>p end,
+})
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+    let snapshot = host.snapshot();
+    let labels =
+        completion_labels(&snapshot.completion("src/main.tua", fixture.position("complete")));
+    assert!(labels.contains(&"profile".to_owned()), "{labels:?}");
+}
+
+#[test]
+fn save_bind_rejects_a_projection_with_the_wrong_snapshot_shape() {
+    let mut host = AnalysisHost::new();
+    host.set_file(
+        "src/main.tua",
+        "local Profile = Save.contract({slot = 'profile', version = 1, schema = Save.record({score = Save.number(0)})})\nlocal game = store({profile = Profile:defaults(), session = 'active'})\nlocal binding = Profile:bind(game, {select = function(state) return state.session end})\nreturn binding\n",
+    );
+    let diagnostics = host.snapshot().pipeline_diagnostics("src/main.tua");
+    assert!(
+        diagnostics.iter().any(|diagnostic| {
+            diagnostic.code == Some(DiagnosticCode::TYPE_MISMATCH)
+                && diagnostic
+                    .message
+                    .contains("expected { score: number }, found string")
+        }),
+        "{diagnostics:?}"
+    );
+}
+
+#[test]
+fn save_migration_return_must_match_current_snapshot() {
+    let mut host = AnalysisHost::new();
+    host.set_file(
+        "src/profile.tua",
+        "local Profile = Save.contract({slot = 'profile', version = 2, schema = Save.record({score = Save.number(0)}), migrations = {[1] = function(old: any) return {score = 'bad'} end}})\nreturn Profile\n",
+    );
+    let diagnostics = host.snapshot().pipeline_diagnostics("src/profile.tua");
+    assert!(
+        diagnostics.iter().any(|diagnostic| {
+            diagnostic.code == Some(DiagnosticCode::TYPE_MISMATCH)
+                && diagnostic.message.contains("number")
+                && diagnostic.message.contains("string")
+        }),
+        "{diagnostics:?}"
+    );
+}
+
+#[test]
 fn snapshots_share_parsed_and_last_good_analysis_storage() {
     let mut host = AnalysisHost::new();
     let path = PathBuf::from("main.tua");

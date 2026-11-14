@@ -115,6 +115,7 @@ impl BuiltinDomainRegistry {
                     .into_iter()
                     .flatten(),
             )
+            .chain(crate::save::builtin_aliases())
             .collect()
     }
 
@@ -129,9 +130,11 @@ impl BuiltinDomainRegistry {
     pub(crate) fn shared_builtin_locals(
         self,
         locals: BTreeMap<String, Type>,
+        save_enabled: bool,
     ) -> Arc<BTreeMap<String, Type>> {
-        static CACHE: [OnceLock<Arc<BTreeMap<String, Type>>>; 4] = [const { OnceLock::new() }; 4];
-        let cache = &CACHE[(self.ecs_enabled as usize) * 2 + self.i18n_enabled as usize];
+        static CACHE: [OnceLock<Arc<BTreeMap<String, Type>>>; 8] = [const { OnceLock::new() }; 8];
+        let cache = &CACHE[((self.ecs_enabled as usize) * 2 + self.i18n_enabled as usize) * 2
+            + save_enabled as usize];
         cache.get_or_init(|| Arc::new(locals)).clone()
     }
 
@@ -148,6 +151,7 @@ impl BuiltinDomainRegistry {
         if self.i18n_enabled {
             locals.extend(crate::i18n::builtin_locals());
         }
+        locals.extend(crate::save::builtin_locals());
         locals
     }
 
@@ -185,6 +189,9 @@ impl BuiltinDomainRegistry {
             crate::i18n::RUNTIME_MODULE if self.i18n_enabled => crate::i18n::builtin_locals()
                 .into_iter()
                 .find_map(|(name, ty)| (name == crate::i18n::MODULE_NAME).then_some(ty)),
+            crate::save::RUNTIME_MODULE => crate::save::builtin_locals()
+                .into_iter()
+                .find_map(|(name, ty)| (name == crate::save::MODULE_NAME).then_some(ty)),
             runtime if runtime == crate::builtin_module::TWEEN.runtime => Some(
                 crate::builtin_module::module_type(&crate::builtin_module::TWEEN),
             ),
@@ -294,6 +301,10 @@ impl BuiltinDomainRegistry {
             && environment.function(audio::CONSTRUCTOR_NAME).is_none()
         {
             diagnostics.extend(audio::config_diagnostics(parsed));
+        }
+
+        if parsed.raw.language == crate::ParsedLanguage::Tua {
+            diagnostics.extend(crate::save::config_diagnostics(parsed));
         }
 
         diagnostics

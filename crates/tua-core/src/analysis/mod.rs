@@ -1714,6 +1714,9 @@ fn collect_type_fields(ty: &Type, fields: &mut BTreeMap<String, Type>) {
     match ty {
         Type::Table(table) => {
             for (name, field) in table.semantic_fields() {
+                if crate::save::is_internal_field(table, &name) {
+                    continue;
+                }
                 let ty = field.ty.clone();
 
                 fields

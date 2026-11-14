@@ -2310,6 +2310,62 @@ impl<'a> Checker<'a> {
                 vec![Type::Any]
             }
             Callable::Function(function) => {
+                if self.parsed.raw.language == crate::ParsedLanguage::Tua {
+                    if let Some(parts) = field_chain_before_first_call(function_call) {
+                        if parts
+                            .first()
+                            .is_some_and(|part| part == crate::save::MODULE_NAME)
+                            && self
+                                .environment
+                                .local(crate::save::MODULE_NAME)
+                                .is_some_and(crate::save::is_builtin)
+                            && !self
+                                .scoped_locals
+                                .iter()
+                                .any(|locals| locals.contains_key(crate::save::MODULE_NAME))
+                            && !self
+                                .scope
+                                .globals()
+                                .get(crate::save::MODULE_NAME)
+                                .is_some_and(|global| global.kind == ScopeGlobalKind::Assigned)
+                        {
+                            let inferred = if parts
+                                .get(1)
+                                .is_some_and(|member| member == "contract")
+                            {
+                                let snapshot = crate::save::contract_schema_argument(function_call)
+                                    .and_then(|schema| self.infer_expression_return(schema, 0))
+                                    .and_then(|schema| crate::save::schema_value(&schema))
+                                    .map(|(value, _)| value)
+                                    .unwrap_or(Type::Any);
+                                Some(crate::save::contract_type(snapshot))
+                            } else {
+                                let argument = crate::save::first_argument(function_call)
+                                    .and_then(|argument| self.infer_expression_return(argument, 0));
+                                crate::save::inferred_return(&parts, argument.as_ref())
+                            };
+                            if let Some(ty) = inferred {
+                                if parts.get(1).is_some_and(|member| member == "contract") {
+                                    if let Some(snapshot) = crate::save::snapshot_type(&ty) {
+                                        let target = crate::save::migration_function_type(snapshot);
+                                        for migration in
+                                            crate::save::migration_functions(function_call)
+                                        {
+                                            self.check_expression_assignable_at(
+                                                migration,
+                                                &target,
+                                                Some("migration"),
+                                            );
+                                        }
+                                    }
+                                }
+                                self.check_call_arguments(function_call, &function);
+                                return vec![ty];
+                            }
+                        }
+                    }
+                }
+
                 self.check_call_arguments(function_call, &function);
 
                 if !self
@@ -3041,6 +3097,24 @@ impl<'a> Checker<'a> {
         }
 
         if !fields.is_empty() {
+            if parts.last().is_some_and(|method| method == "bind") {
+                if let Some(receiver) = self.resolve_field_chain_type(&parts[..parts.len() - 1]) {
+                    if crate::save::is_contract(&receiver) {
+                        let store_type =
+                            crate::save::first_argument(function_call).and_then(|argument| {
+                                SemanticModel::new(self.parsed, self.environment)
+                                    .type_of_expression_return(argument, node_position(argument), 0)
+                            });
+                        if let Some(state) = store_type.as_ref().and_then(|store| {
+                            crate::store::store_state_type(self.environment, store)
+                        }) {
+                            if let Some(ty) = crate::save::specialized_bind_type(&receiver, state) {
+                                return callable_from_type(&ty, self.environment);
+                            }
+                        }
+                    }
+                }
+            }
             if let Some(mut function) = self.builtin_domain_method_call_target(&parts) {
                 if let Some(receiver) = self.resolve_field_chain_type(&parts[..parts.len() - 1]) {
                     let model = SemanticModel::new(self.parsed, self.environment);

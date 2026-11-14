@@ -405,6 +405,11 @@ impl AnalysisSnapshot {
                 let environment = i18n_environment.as_ref().unwrap_or(environment);
                 let _profile = profile::span_for_path("analysis.check", path);
                 let mut diagnostics_config = self.config.diagnostics.clone();
+                if parsed.raw.language == crate::ParsedLanguage::Tua {
+                    diagnostics_config
+                        .globals
+                        .push(crate::save::MODULE_NAME.to_owned());
+                }
                 if self.config.i18n.enabled && parsed.raw.language == crate::ParsedLanguage::Tua {
                     diagnostics_config
                         .globals

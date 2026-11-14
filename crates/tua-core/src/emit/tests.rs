@@ -2802,3 +2802,27 @@ fn emits_math_helpers_used_through_comments_and_static_indices() {
     );
     assert!(emitted.contains("-- keep"), "{emitted}");
 }
+#[test]
+fn save_runtime_is_injected_only_for_unshadowed_tua_references() {
+    let emitted = emit_tua_source(
+        "src/profile.tua",
+        "local profile = Save.contract({slot = \"profile\", version = 1, schema = Save.record({score = Save.number(0)})})\nreturn profile\n",
+    )
+    .expect("save contracts should emit");
+    assert!(
+        emitted.starts_with("local Save = require(\"tuasave\")\n"),
+        "{emitted}"
+    );
+    assert_eq!(emitted.matches("require(\"tuasave\")").count(), 1);
+
+    let shadowed = emit_tua_source(
+        "src/profile.tua",
+        "local Save = require(\"custom_save\")\nreturn Save.contract({})\n",
+    )
+    .expect("custom Save binding should emit");
+    assert!(!shadowed.contains("tuasave"), "{shadowed}");
+
+    let unused = emit_tua_source("src/profile.tua", "return {score = 0}\n")
+        .expect("ordinary Tua should emit");
+    assert!(!unused.contains("tuasave"), "{unused}");
+}

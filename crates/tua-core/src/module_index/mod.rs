@@ -10,7 +10,7 @@ use full_moon::ast::{
 use full_moon::node::Node;
 use full_moon::visitors::Visitor;
 
-use crate::ast_utils::plain_field_chain_from_var;
+use crate::ast_utils::{field_chain_before_first_call, plain_field_chain_from_var};
 use crate::deprecation::{deprecated_declarations, Deprecation};
 use crate::module_link::ModuleSpecifierKind;
 use crate::must_use::must_use_paths;
@@ -1020,6 +1020,41 @@ impl<'a> ExportInferer<'a> {
                     inferred_function_type_from_body(self.parsed, environment, function.body())
                 })
                 .unwrap_or_else(|| function_type_from_body(function.body())),
+            Expression::FunctionCall(call)
+                if self.parsed.raw.language == crate::ParsedLanguage::Tua =>
+            {
+                if let Some(parts) = field_chain_before_first_call(call) {
+                    if parts
+                        .first()
+                        .is_some_and(|part| part == crate::save::MODULE_NAME)
+                        && node_span(call).is_some_and(|span| {
+                            !crate::scope::scope_map_parsed_source(self.parsed)
+                                .has_non_builtin_binding_at(crate::save::MODULE_NAME, span.start)
+                        })
+                    {
+                        let argument = call
+                            .suffixes()
+                            .find_map(|suffix| match suffix {
+                                Suffix::Call(ast::Call::AnonymousCall(
+                                    FunctionArgs::Parentheses { arguments, .. },
+                                )) => arguments.iter().next(),
+                                _ => None,
+                            })
+                            .map(|argument| self.infer_expression(argument));
+                        if let Some(ty) = crate::save::inferred_return(&parts, argument.as_ref()) {
+                            return ty;
+                        }
+                    }
+                }
+                self.semantic_model
+                    .as_ref()
+                    .and_then(|semantic| {
+                        let position = node_span(expression)?.start;
+                        semantic.type_of_expression_return(expression, position, 0)
+                    })
+                    .map(|ty| self.resolve_export_type(&ty))
+                    .unwrap_or(Type::Any)
+            }
             Expression::FunctionCall(_) | Expression::Var(Var::Expression(_)) => self
                 .semantic_model
                 .as_ref()

@@ -94,6 +94,20 @@ pub const RUNTIMES: &[BundledRuntime] = &[
         explicit_import: false,
     },
     BundledRuntime {
+        module: "tuasave",
+        file_name: "tuasave.lua",
+        source: crate::tuasave_runtime_source,
+        dependencies: &["tuasave_json"],
+        explicit_import: false,
+    },
+    BundledRuntime {
+        module: "tuasave_json",
+        file_name: "tuasave_json.lua",
+        source: crate::tuasave_json_runtime_source,
+        dependencies: &[],
+        explicit_import: false,
+    },
+    BundledRuntime {
         module: "smiti18n",
         file_name: "smiti18n/init.lua",
         source: || include_str!("../../../vendor/runtime/smiti18n/init.lua"),

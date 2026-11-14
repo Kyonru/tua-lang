@@ -188,6 +188,26 @@ impl<'a> HoverResolver<'a> {
                 .map(|part| part.text.clone())
                 .collect::<Vec<_>>();
 
+            if field_parts.len() == 2
+                && field_parts[0] == crate::save::MODULE_NAME
+                && self
+                    .environment
+                    .local(crate::save::MODULE_NAME)
+                    .is_some_and(crate::save::is_builtin)
+            {
+                if let (Some(ty), Some(documentation)) = (
+                    self.semantic.type_of_field_chain(&field_parts, position),
+                    crate::save::builder_documentation(&field_parts[1]),
+                ) {
+                    let mut result = hover(
+                        format_type_with_prefix(format!("{}: ", current_part.text), &ty),
+                        Some(current_part.span),
+                    );
+                    result.documentation = Some(documentation.to_owned());
+                    return Some(result);
+                }
+            }
+
             if let Some(hover) =
                 self.required_module_field_hover(&field_parts, position, current_part.span)
             {
@@ -210,6 +230,28 @@ impl<'a> HoverResolver<'a> {
                 .semantic
                 .type_of_field_chain(&field_parts[..field_parts.len() - 1], position)
             {
+                if crate::save::is_contract(&receiver_type) {
+                    if let (Some(ty), Some(documentation)) = (
+                        crate::semantic::resolve_table_field_type(
+                            self.environment,
+                            &receiver_type,
+                            &current_part.text,
+                        ),
+                        crate::save::contract_method_documentation(&current_part.text),
+                    ) {
+                        let method =
+                            member_access_separator(&self.parsed.source, current_part.span.start)
+                                == Some(b':');
+                        let (prefix, display_type) =
+                            method_hover_presentation(&current_part.text, &ty, method);
+                        let mut result = hover(
+                            format_type_with_prefix(prefix, &display_type),
+                            Some(current_part.span),
+                        );
+                        result.documentation = Some(documentation.to_owned());
+                        return Some(result);
+                    }
+                }
                 if let Some(function) =
                     ecs::typed_member(self.environment, &receiver_type, &current_part.text)
                         .or_else(|| {
@@ -311,6 +353,17 @@ impl<'a> HoverResolver<'a> {
             hover.documentation = Some(ecs::module_documentation().to_owned());
 
             return Some(hover);
+        }
+
+        if current_part.text == crate::save::MODULE_NAME
+            && self
+                .environment
+                .local(crate::save::MODULE_NAME)
+                .is_some_and(crate::save::is_builtin)
+        {
+            let mut result = hover("(built-in module) Save", Some(current_part.span));
+            result.documentation = Some(crate::save::module_documentation().to_owned());
+            return Some(result);
         }
 
         if let Some(definition) = self

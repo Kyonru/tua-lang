@@ -827,6 +827,11 @@ pub(super) fn fast_diagnostics_for_source(
     let (environment, mut diagnostics) =
         build_analysis_type_environment_with_diagnostics(&parsed, config);
     let mut fast_config = fast_diagnostics_config(&config.diagnostics);
+    if parsed.raw.language == crate::ParsedLanguage::Tua {
+        fast_config
+            .globals
+            .push(crate::save::MODULE_NAME.to_owned());
+    }
     if config.i18n.enabled && parsed.raw.language == crate::ParsedLanguage::Tua {
         fast_config
             .globals

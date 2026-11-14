@@ -30,6 +30,7 @@ mod game_math;
 pub mod hir;
 pub mod hover;
 mod i18n;
+mod save;
 pub use i18n::{LocalizationCell, LocalizationPage, LocalizationRow};
 pub mod ide_db;
 pub mod inlay_hint;
@@ -329,6 +330,14 @@ pub fn tuaaudio_runtime_source() -> &'static str {
 
 pub fn tuai18n_runtime_source() -> &'static str {
     i18n::runtime_source()
+}
+
+pub fn tuasave_runtime_source() -> &'static str {
+    save::runtime_source()
+}
+
+pub fn tuasave_json_runtime_source() -> &'static str {
+    save::json_runtime_source()
 }
 
 pub fn tua_audio_design_runtime_source() -> &'static str {

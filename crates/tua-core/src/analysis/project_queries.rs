@@ -1098,6 +1098,27 @@ impl AnalysisSnapshot {
         local_types: &BTreeMap<String, Type>,
     ) -> Option<Type> {
         let parts = field_chain_before_first_call(function_call)?;
+        if parts
+            .first()
+            .is_some_and(|part| part == crate::save::MODULE_NAME)
+            && parsed.raw.language == crate::ParsedLanguage::Tua
+            && !local_types.contains_key(crate::save::MODULE_NAME)
+            && !self
+                .file(&parsed.path)?
+                .scope()?
+                .has_non_builtin_binding_at(
+                    crate::save::MODULE_NAME,
+                    node_span(function_call)?.start,
+                )
+        {
+            let argument = project_call_argument_expressions(function_call)?
+                .first()
+                .and_then(|argument| {
+                    self.project_save_argument_type(parsed, argument, local_types)
+                });
+            return crate::save::inferred_return(&parts, argument.as_ref())
+                .filter(|_| return_index == 0);
+        }
         if return_index == 0 && self.config.i18n.enabled {
             if let Some(key) = crate::i18n::literal_key_from_call(function_call) {
                 let position = node_span(function_call)?.start;
@@ -1151,6 +1172,7 @@ impl AnalysisSnapshot {
             local_types.get(root).cloned()
         } else {
             self.project_type_for_field_chain(parsed, &parts)
+                .or_else(|| project_local_field_chain_type(local_types, &parts))
         }?;
 
         match ty {
@@ -1186,6 +1208,28 @@ impl AnalysisSnapshot {
             }
             _ => None,
         }
+    }
+
+    fn project_save_argument_type(
+        &self,
+        parsed: &ParsedSource,
+        expression: &Expression,
+        local_types: &BTreeMap<String, Type>,
+    ) -> Option<Type> {
+        if let Expression::TableConstructor(table) = expression {
+            let fields = table.fields().iter().filter_map(|field| {
+                let ast::Field::NameKey { key, value, .. } = field else {
+                    return None;
+                };
+                let value = self
+                    .project_save_argument_type(parsed, value, local_types)
+                    .unwrap_or(Type::Any);
+                Some((token_text(key), TableField::required(value)))
+            });
+            return Some(Type::table(fields));
+        }
+        self.project_type_for_expression(parsed, expression, 0, local_types)
+            .or_else(|| project_literal_type(expression))
     }
 
     pub(super) fn project_type_for_field_chain(
@@ -1963,6 +2007,9 @@ impl AnalysisSnapshot {
         name: &str,
         position: SourcePosition,
     ) -> Option<(Type, PathBuf)> {
+        if let Some(state) = self.save_select_parameter_type(parsed, name, position) {
+            return Some((state, parsed.path.clone()));
+        }
         if let Some((receiver_parts, event_name, parameter_index)) =
             crate::signal::handler_parameter_context(parsed, name, position)
         {
@@ -2011,6 +2058,35 @@ impl AnalysisSnapshot {
             self.resolve_expected_type(parsed, &expected.origin_path, &ty),
             expected.origin_path,
         ))
+    }
+
+    fn save_select_parameter_type(
+        &self,
+        parsed: &ParsedSource,
+        name: &str,
+        position: SourcePosition,
+    ) -> Option<Type> {
+        let mut syntax = ExpectedTableSyntaxCollector::default();
+        syntax.visit_ast(&parsed.ast);
+        let environment = self.semantic_environment(parsed);
+        let semantic = SemanticModel::new(parsed, &environment);
+        syntax.calls.into_iter().find_map(|call| {
+            node_span(&call).is_some_and(|span| span_contains_position(span, position)).then_some(())?;
+            let parts = field_chain_before_first_call(&call)?;
+            if parts.last().map(String::as_str) != Some("bind") { return None }
+            let receiver = semantic.type_of_field_chain(&parts[..parts.len() - 1], position)?;
+            if !crate::save::is_contract(&receiver) { return None }
+            let args = project_call_argument_expressions(&call)?;
+            let [store, Expression::TableConstructor(options)] = args.as_slice() else { return None };
+            let (field, function) = table_callback_field_at_position(options, position)?;
+            if field != "select" { return None }
+            let parameter = function.body().parameters().iter().next()?;
+            if !matches!(parameter, ast::Parameter::Name(parameter) if token_text(parameter) == name) {
+                return None;
+            }
+            let store_type = semantic.type_of_expression_return(store, position, 0)?;
+            crate::store::store_state_type(&environment, &store_type)
+        })
     }
 
     fn state_machine_callback_type_at_position(
@@ -2685,6 +2761,9 @@ impl AnalysisSnapshot {
             .map(|parsed| {
                 let facts = self.semantic_facts_for_parsed(parsed);
                 let mut diagnostics_config = self.config.diagnostics.clone();
+                if parsed.raw.language == crate::ParsedLanguage::Tua {
+                    diagnostics_config.globals.push(crate::save::MODULE_NAME.to_owned());
+                }
                 if self.config.i18n.enabled && parsed.raw.language == crate::ParsedLanguage::Tua {
                     diagnostics_config.globals.push(crate::i18n::MODULE_NAME.to_owned());
                 }

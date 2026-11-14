@@ -2077,6 +2077,9 @@ pub(crate) fn build_type_environment_with_domain_registry(
     let domain_locals = domains
         .builtin_locals()
         .into_iter()
+        .filter(|(name, _)| {
+            name != crate::save::MODULE_NAME || parsed.raw.language == ParsedLanguage::Tua
+        })
         .filter(|(name, _)| !locals.contains_key(name))
         .collect::<Vec<_>>();
     let locals = builtin_locals
@@ -2085,7 +2088,7 @@ pub(crate) fn build_type_environment_with_domain_registry(
         .chain(locals)
         .collect::<BTreeMap<_, _>>();
     let locals = if can_share_locals {
-        domains.shared_builtin_locals(locals)
+        domains.shared_builtin_locals(locals, parsed.raw.language == ParsedLanguage::Tua)
     } else {
         Arc::new(locals)
     };
@@ -5618,6 +5621,23 @@ fn infer_first_function_call_return_types(
         return Vec::new();
     };
 
+    if parts
+        .first()
+        .is_some_and(|name| name == crate::save::MODULE_NAME)
+        && (query
+            .locals
+            .get(crate::save::MODULE_NAME)
+            .is_some_and(crate::save::is_builtin)
+            || (query.context.parsed.raw.language == ParsedLanguage::Tua
+                && !query.locals.contains_key(crate::save::MODULE_NAME)))
+    {
+        let argument = first_parenthesized_call_argument_after_field(function_call)
+            .and_then(|argument| query.type_of(argument));
+        if let Some(ty) = crate::save::inferred_return(&parts, argument.as_ref()) {
+            return vec![ty];
+        }
+    }
+
     if parts.len() == 1
         && parts
             .first()
@@ -5881,6 +5901,19 @@ fn first_parenthesized_call_argument(function_call: &FunctionCall) -> Option<&Ex
     };
 
     arguments.iter().next()
+}
+
+fn first_parenthesized_call_argument_after_field(
+    function_call: &FunctionCall,
+) -> Option<&Expression> {
+    function_call.suffixes().find_map(|suffix| {
+        let Suffix::Call(Call::AnonymousCall(ast::FunctionArgs::Parentheses { arguments, .. })) =
+            suffix
+        else {
+            return None;
+        };
+        arguments.iter().next()
+    })
 }
 
 fn rawget_collection_argument(function_call: &FunctionCall) -> Option<&Expression> {

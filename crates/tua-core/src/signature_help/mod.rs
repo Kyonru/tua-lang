@@ -150,6 +150,35 @@ fn signature_help_parsed_source_with_context(
             );
         }
     }
+    let save_documentation = match context.callee_parts.as_slice() {
+        [root, member]
+            if root == crate::save::MODULE_NAME
+                && environment
+                    .local(crate::save::MODULE_NAME)
+                    .is_some_and(crate::save::is_builtin) =>
+        {
+            crate::save::builder_documentation(member)
+        }
+        parts
+            if context.is_method_call
+                && parts.len() >= 2
+                && resolver
+                    .method_receiver_type(&context)
+                    .is_some_and(|ty| crate::save::is_contract(&ty)) =>
+        {
+            parts
+                .last()
+                .and_then(|member| crate::save::contract_method_documentation(member))
+        }
+        _ => None,
+    };
+    if let Some(documentation) = save_documentation {
+        for signature in &mut signatures {
+            signature
+                .documentation
+                .get_or_insert_with(|| documentation.to_owned());
+        }
+    }
     let active_signature = active_signature_for_literal_argument(
         &signatures,
         context.argument_count,
