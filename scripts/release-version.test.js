@@ -8,6 +8,7 @@ const path = require("path");
 const test = require("node:test");
 
 const {
+  assertPreparedRelease,
   compareVersions,
   releasedChangelog,
   synchronizedReleaseDocs,
@@ -65,6 +66,30 @@ test("release notes and artifact examples are required", () => {
     () => synchronizedReleaseDocs("no artifact", "0.2.8", "0.2.9"),
     /contains no 0.2.8 artifact/,
   );
+});
+
+test("prepared releases require complete notes, links, and an empty Unreleased section", () => {
+  const changelog = `## [Unreleased]
+
+## [0.3.0] - 2026-08-02
+
+### Release summary
+
+Prepared release.
+
+### Fixed
+
+- Release workflow.
+
+[Unreleased]: https://github.com/Kyonru/tua-lang/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/Kyonru/tua-lang/compare/v0.2.9...v0.3.0
+`;
+  const docs = "shasum -a 256 tua-0.3.0-darwin-arm64.vsix\n";
+  assert.doesNotThrow(() => assertPreparedRelease(changelog, docs, "0.3.0"));
+  assert.throws(() => assertPreparedRelease(changelog.replace("## [Unreleased]\n\n", "## [Unreleased]\n\n- Unreleased fix.\n\n"), docs, "0.3.0"), /empty \[Unreleased]/);
+  assert.throws(() => assertPreparedRelease(changelog.replace("### Release summary", "### Added"), docs, "0.3.0"), /release summary/);
+  assert.throws(() => assertPreparedRelease(changelog.replace("v0.2.9...v0.3.0", "v0.2.9...v0.2.9"), docs, "0.3.0"), /comparison links/);
+  assert.throws(() => assertPreparedRelease(changelog, "no matching artifact", "0.3.0"), /artifact example/);
 });
 
 test("release command commits synchronized metadata and creates an annotated tag", () => {
@@ -153,6 +178,48 @@ version = "0.2.8"
     assert.strictEqual(run(root, "git", ["status", "--porcelain"]), "");
     assert.match(fs.readFileSync(path.join(root, "Cargo.toml"), "utf8"), /0\.2\.9/);
     assert.match(fs.readFileSync(path.join(root, "CHANGELOG.md"), "utf8"), /## \[0\.2\.9]/);
+
+    run(root, process.execPath, ["scripts/sync-version.js", "--set", "0.3.0"]);
+    fs.writeFileSync(path.join(root, "CHANGELOG.md"), `# Changelog
+
+## [Unreleased]
+
+## [0.3.0] - 2026-08-02
+
+### Release summary
+
+Prepared release.
+
+### Fixed
+
+- Release workflow.
+
+## [0.2.9] - 2026-08-01
+
+- Previous release.
+
+[Unreleased]: https://github.com/Kyonru/tua-lang/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/Kyonru/tua-lang/compare/v0.2.9...v0.3.0
+`);
+    fs.writeFileSync(path.join(root, "docs", "releases.md"),
+      "shasum -a 256 tua-0.3.0-darwin-arm64.vsix\n");
+    run(root, "git", ["add", "."]);
+    run(root, "git", ["commit", "-qm", "prepare 0.3.0"]);
+    const preparedHead = run(root, "git", ["rev-parse", "HEAD"]);
+    run(root, "git", ["config", "tag.gpgSign", "true"]);
+
+    const rejected = childProcess.spawnSync(process.execPath,
+      ["scripts/release-version.js", "0.3.0+different-build"], { cwd: root, encoding: "utf8" });
+    assert.notStrictEqual(rejected.status, 0);
+    assert.match(rejected.stderr, /must be newer than or exactly match/,
+      "equal precedence with different metadata must not bypass prepared-release validation");
+
+    const preparedOutput = run(root, process.execPath, ["scripts/release-version.js", "0.3.0"]);
+    assert.match(preparedOutput, /validated and tagged prepared release v0\.3\.0/);
+    assert.strictEqual(run(root, "git", ["rev-parse", "HEAD"]), preparedHead,
+      "prepared releases should tag the reviewed commit without making a second commit");
+    assert.strictEqual(run(root, "git", ["describe", "--tags", "--exact-match"]), "v0.3.0");
+    assert.strictEqual(run(root, "git", ["status", "--porcelain"]), "");
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

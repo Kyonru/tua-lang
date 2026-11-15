@@ -78,7 +78,7 @@ set-version: ## Set every package version; usage: make set-version VERSION=0.2.9
 	node scripts/sync-version.js --set "$(VERSION)"
 
 .PHONY: release-version
-release-version: ## Validate, commit, and create the local vVERSION tag.
+release-version: ## Validate and tag VERSION; commit metadata when it is not already prepared.
 	@test -n "$(VERSION)" || { echo "error: set VERSION, for example make release-version VERSION=0.2.9"; exit 1; }
 	node scripts/release-version.js "$(VERSION)"
 

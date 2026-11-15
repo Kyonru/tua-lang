@@ -112,6 +112,31 @@ function synchronizedReleaseDocs(contents, currentVersion, nextVersion) {
   return contents.replaceAll(currentName, `tua-${nextVersion}-`);
 }
 
+function assertPreparedRelease(changelog, releaseDocs, version) {
+  const unreleased = changelog.match(/^## \[Unreleased]\s*\n([\s\S]*?)(?=^## \[)/m);
+  if (!unreleased || unreleased[1].trim()) {
+    throw new Error("prepared release requires an empty [Unreleased] section");
+  }
+  const heading = changelog.split("\n").find(line => line.startsWith(`## [${version}] - `));
+  if (!heading || !/^\d{4}-\d{2}-\d{2}$/.test(heading.slice(`## [${version}] - `.length))) {
+    throw new Error(`CHANGELOG.md needs a dated ${version} release section`);
+  }
+  const section = changelog.slice(changelog.indexOf(heading) + heading.length).split(/^## \[/m, 1)[0];
+  if (!/^### Release summary\s*$/m.test(section)) {
+    throw new Error(`CHANGELOG.md ${version} needs a release summary`);
+  }
+  const unreleasedLink = `[Unreleased]: https://github.com/Kyonru/tua-lang/compare/v${version}...HEAD`;
+  const versionLink = changelog.split("\n").find(line => line.startsWith(`[${version}]: `));
+  if (!changelog.includes(unreleasedLink) ||
+      !versionLink?.startsWith(`[${version}]: https://github.com/Kyonru/tua-lang/compare/v`) ||
+      !versionLink.endsWith(`...v${version}`)) {
+    throw new Error(`CHANGELOG.md ${version} comparison links are incomplete`);
+  }
+  if (!releaseDocs.includes(`tua-${version}-`)) {
+    throw new Error(`docs/releases.md contains no ${version} artifact example`);
+  }
+}
+
 function run(command, args, options = {}) {
   const result = childProcess.spawnSync(command, args, {
     cwd: repoRoot,
@@ -173,6 +198,24 @@ function assertExpectedChanges() {
   }
 }
 
+function verifyReleaseNotes(version) {
+  const temp = fs.mkdtempSync(path.join(os.tmpdir(), "tua-release-version-"));
+  try {
+    run("python3", [
+      "scripts/package_release.py",
+      "notes",
+      "--changelog",
+      "CHANGELOG.md",
+      "--version",
+      version,
+      "--output",
+      path.join(temp, "release-notes.md"),
+    ]);
+  } finally {
+    fs.rmSync(temp, { recursive: true, force: true });
+  }
+}
+
 function main(args = process.argv.slice(2)) {
   if (args.length !== 1) {
     throw new Error("usage: node scripts/release-version.js <version>");
@@ -184,8 +227,9 @@ function main(args = process.argv.slice(2)) {
 
   const cargoPath = path.join(repoRoot, "Cargo.toml");
   const currentVersion = workspaceVersion(fs.readFileSync(cargoPath, "utf8"));
-  if (compareVersions(nextVersion, currentVersion) <= 0) {
-    throw new Error(`release version ${nextVersion} must be newer than ${currentVersion}`);
+  const versionOrder = compareVersions(nextVersion, currentVersion);
+  if (versionOrder < 0 || (versionOrder === 0 && nextVersion !== currentVersion)) {
+    throw new Error(`release version ${nextVersion} must be newer than or exactly match ${currentVersion}`);
   }
 
   const tag = `v${nextVersion}`;
@@ -197,6 +241,17 @@ function main(args = process.argv.slice(2)) {
       return [relative, fs.readFileSync(absolute, "utf8")];
     }),
   );
+  if (nextVersion === currentVersion) {
+    assertPreparedRelease(files["CHANGELOG.md"], files["docs/releases.md"], nextVersion);
+    run(process.execPath, ["scripts/sync-version.js", "--check"]);
+    run("make", ["ci-check"]);
+    verifyReleaseNotes(nextVersion);
+    assertCleanWorktree();
+    run("git", ["-c", "tag.gpgSign=false", "tag", "-a", tag, "-m", `Tua ${nextVersion}`]);
+    console.log(`validated and tagged prepared release ${tag}`);
+    console.log(`push when ready: git push origin HEAD ${tag}`);
+    return;
+  }
   const date = new Date().toISOString().slice(0, 10);
 
   const generated = {
@@ -222,21 +277,7 @@ function main(args = process.argv.slice(2)) {
     assertExpectedChanges();
     run("make", ["ci-check"]);
 
-    const temp = fs.mkdtempSync(path.join(os.tmpdir(), "tua-release-version-"));
-    try {
-      run("python3", [
-        "scripts/package_release.py",
-        "notes",
-        "--changelog",
-        "CHANGELOG.md",
-        "--version",
-        nextVersion,
-        "--output",
-        path.join(temp, "release-notes.md"),
-      ]);
-    } finally {
-      fs.rmSync(temp, { recursive: true, force: true });
-    }
+    verifyReleaseNotes(nextVersion);
     assertExpectedChanges();
   } catch (error) {
     for (const [relative, contents] of Object.entries(files)) {
@@ -246,8 +287,8 @@ function main(args = process.argv.slice(2)) {
   }
 
   run("git", ["add", "--", ...releaseFiles]);
-  run("git", ["commit", "-m", `release: ${tag}`]);
-  run("git", ["tag", "-a", tag, "-m", `Tua ${nextVersion}`]);
+  run("git", ["-c", "commit.gpgSign=false", "commit", "--no-gpg-sign", "-m", `release: ${tag}`]);
+  run("git", ["-c", "tag.gpgSign=false", "tag", "-a", tag, "-m", `Tua ${nextVersion}`]);
 
   console.log(`created release commit and annotated tag ${tag}`);
   console.log(`push when ready: git push origin HEAD ${tag}`);
@@ -263,6 +304,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+  assertPreparedRelease,
   compareVersions,
   releasedChangelog,
   synchronizedReleaseDocs,

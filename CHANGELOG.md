@@ -85,6 +85,9 @@ before calling `acceptRecovery()` or `reset()`.
 
 ### Fixed
 
+- Allow the release helper to validate and tag a versioned candidate commit
+  without making a second release commit.
+
 - Skip unrelated source-map line scans when converting large LÖVE CPU captures,
   keeping the extension host responsive at report completion.
 
