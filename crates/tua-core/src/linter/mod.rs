@@ -255,6 +255,13 @@ fn unused_type_diagnostics(parsed: &ParsedSource) -> Vec<Diagnostic> {
                 .map(|parameter| &parameter.ty)
                 .chain(function.return_type.iter())
         }))
+        .chain(
+            parsed
+                .class_declarations
+                .iter()
+                .flat_map(|class| &class.fields)
+                .map(|field| &field.parsed_ty),
+        )
     {
         collect(ty, &mut live);
     }

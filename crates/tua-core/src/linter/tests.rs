@@ -983,6 +983,30 @@ print(room)
 }
 
 #[test]
+fn imported_types_used_in_class_fields_and_methods_are_not_reported_unused() {
+    let diagnostics = check_standard_rules_source(
+        r#"
+import type { Writer, Position } from "./contracts"
+open class Dialogue {
+  writer: Writer
+  init(writer: any) {
+    self.writer = writer
+  }
+  append(position: Position): nil {
+    self.writer:append(position)
+  }
+}
+"#,
+    );
+
+    assert_eq!(
+        count_code(&diagnostics, DiagnosticCode::LINT_UNUSED_IMPORT),
+        0,
+        "{diagnostics:#?}"
+    );
+}
+
+#[test]
 fn imported_protocol_used_by_implements_is_not_reported_unused() {
     let diagnostics = check_standard_rules_source(
         r#"
