@@ -1186,6 +1186,83 @@ EnemyEvents:emit("<|emitter|>duck.hit", vec2(1, 2))
 }
 
 #[test]
+fn untyped_class_field_does_not_navigate_to_unrelated_local_method() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/enhanced.tua
+open class EnhancedWriter {
+  append(value: string) {}
+}
+return EnhancedWriter
+-- file: src/dialogue.tua
+local EnhancedWriter = require("enhanced")
+open class LegacyWriter {
+  append(value: string) {}
+}
+open class Dialogue {
+  writer: any
+  init() {
+    self.writer = EnhancedWriter.new()
+  }
+  use() {
+    self.writer:<|call|>append("hello")
+  }
+}
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+    let definition = host
+        .snapshot()
+        .definition("src/dialogue.tua", fixture.position("call"));
+    assert!(
+        definition.is_none(),
+        "an `any` receiver has no known method: {definition:?}"
+    );
+}
+
+#[test]
+fn typed_imported_class_field_navigates_to_its_method() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/enhanced.tua
+open class EnhancedWriter {
+  append(value: string) {}
+}
+export type EnhancedWriterInstance = EnhancedWriter
+return EnhancedWriter
+-- file: src/dialogue.tua
+local EnhancedWriter = require("enhanced")
+import type { EnhancedWriterInstance } from "enhanced"
+open class LegacyWriter {
+  append(value: string) {}
+}
+open class Dialogue {
+  writer: EnhancedWriterInstance
+  init() {
+    self.writer = EnhancedWriter.new()
+  }
+  use() {
+    self.writer:<|call|>append("hello")
+  }
+}
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+    let definition = host
+        .snapshot()
+        .definition("src/dialogue.tua", fixture.position("call"))
+        .expect("typed imported class member should resolve");
+    assert_eq!(definition.path, PathBuf::from("src/enhanced.tua"));
+    assert_eq!(definition.span.start.line, 2);
+}
+
+#[test]
 fn escaped_signal_event_names_match_their_lua_runtime_values() {
     let source = r#"local events = signal()
 events:declare("player.hit", function(player: string) end)

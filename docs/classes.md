@@ -402,6 +402,10 @@ the constructor value. Imported instances retain class member completion and
 method signatures. Use colon calls for instances reached through module
 boundaries so the generated Lua passes the receiver explicitly.
 
+For a class field initialized from another module, annotate the field with the
+exported instance type too. A field declared `any` has no reliable member type,
+so completion and method navigation cannot identify its target.
+
 ## Documentation And Navigation
 
 Class names, fields, and methods participate in source definition, references,

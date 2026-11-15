@@ -164,6 +164,10 @@ impl<'a> DefinitionResolver<'a> {
             if let Some(definition) = self.builtin_definition(&parts, position) {
                 return Some(definition);
             }
+
+            // A member whose receiver did not resolve must not fall through
+            // to a same-named local or class method elsewhere in the file.
+            return None;
         }
 
         if self.is_type_reference(position) {
@@ -380,6 +384,11 @@ impl<'a> DefinitionResolver<'a> {
         }
 
         match ty {
+            Type::GenericClassApplication { identity, .. }
+                if identity.module == crate::vfs::normalize_path(&self.parsed.path) =>
+            {
+                class_member_target(self.parsed, &identity.name, field, depth + 1)
+            }
             Type::Alias(name) => {
                 if let Some(target) = class_member_target(self.parsed, name, field, depth + 1) {
                     return Some(target);
