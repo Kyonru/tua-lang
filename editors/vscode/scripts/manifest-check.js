@@ -50,7 +50,6 @@ const expected = [
   "tua.completion.toggleExperimental",
   "tua.completion.toggleLocalInline",
   "tua.saveCpuProfile",
-  "tua.saveHeapSummary",
   "tua.openGeneratedLua",
   "tua.jumpBetweenSourceAndGenerated",
   "tua.runLoveProject",

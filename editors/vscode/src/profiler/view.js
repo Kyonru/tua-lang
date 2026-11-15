@@ -36,30 +36,42 @@ async function saveCpuProfile(model, target) {
   await fs.writeFile(target, `${JSON.stringify(model.cpuProfile)}\n`, "utf8");
 }
 
+async function exportCpuProfile(model) {
+  if (!model?.cpuProfile) {
+    await vscode.window.showInformationMessage("Profile a LÖVE game to capture timed CPU samples before exporting.");
+    return;
+  }
+  try {
+    const target = await vscode.window.showSaveDialog({ title: "Export LÖVE CPU profile", saveLabel: "Export .cpuprofile",
+      filters: { "CPU profiles": ["cpuprofile"] } });
+    if (target) {
+      await saveCpuProfile(model, target.fsPath);
+      await vscode.window.showInformationMessage(`CPU profile exported to ${target.fsPath}`);
+    }
+  } catch (error) {
+    await vscode.window.showErrorMessage(`Could not export the CPU profile: ${error.message}`);
+  }
+}
+
 function showProfile(model, onReplay) {
   const panel = vscode.window.createWebviewPanel("tuaProfile", "Tua Performance Capture", vscode.ViewColumn.Beside, { enableScripts: true });
   const nonce = randomBytes(16).toString("base64");
   panel.webview.html = renderProfileHtml(model, nonce);
   panel.webview.onDidReceiveMessage(async message => {
     if (message?.type === "replay" && onReplay) return onReplay();
-    if (message?.type === "exportCpu" || message?.type === "openFlame") {
+    if (message?.type === "exportCpu") return exportCpuProfile(model);
+    if (message?.type === "openFlame") {
       if (!model.cpuProfile) return;
       try {
-        if (message.type === "exportCpu") {
-          const target = await vscode.window.showSaveDialog({ title: "Export LÖVE CPU profile", saveLabel: "Export .cpuprofile",
-            filters: { "CPU profiles": ["cpuprofile"] } });
-          if (target) { await saveCpuProfile(model, target.fsPath); await vscode.window.showInformationMessage(`CPU profile exported to ${target.fsPath}`); }
-        } else {
-          if (!vscode.extensions.getExtension("ms-vscode.vscode-js-profile-flame")) {
-            const action = await vscode.window.showInformationMessage("Install Flame Chart Visualizer to open this CPU profile.", "Install extension");
-            if (action === "Install extension") await vscode.commands.executeCommand("workbench.extensions.installExtension", "ms-vscode.vscode-js-profile-flame");
-            return;
-          }
-          const directory = await fs.mkdtemp(path.join(os.tmpdir(), "tua-cpu-profile-"));
-          const target = path.join(directory, "love.cpuprofile");
-          await saveCpuProfile(model, target);
-          await vscode.commands.executeCommand("vscode.openWith", vscode.Uri.file(target), "jsProfileVisualizer.cpuprofile.flame");
+        if (!vscode.extensions.getExtension("ms-vscode.vscode-js-profile-flame")) {
+          const action = await vscode.window.showInformationMessage("Install Flame Chart Visualizer to open this CPU profile.", "Install extension");
+          if (action === "Install extension") await vscode.commands.executeCommand("workbench.extensions.installExtension", "ms-vscode.vscode-js-profile-flame");
+          return;
         }
+        const directory = await fs.mkdtemp(path.join(os.tmpdir(), "tua-cpu-profile-"));
+        const target = path.join(directory, "love.cpuprofile");
+        await saveCpuProfile(model, target);
+        await vscode.commands.executeCommand("vscode.openWith", vscode.Uri.file(target), "jsProfileVisualizer.cpuprofile.flame");
       } catch (error) { await vscode.window.showErrorMessage(`Could not open or export the CPU profile: ${error.message}`); }
       return;
     }
@@ -84,4 +96,4 @@ function showProfile(model, onReplay) {
   return panel;
 }
 
-module.exports = { renderProfileHtml, saveCpuProfile, showProfile };
+module.exports = { exportCpuProfile, renderProfileHtml, saveCpuProfile, showProfile };

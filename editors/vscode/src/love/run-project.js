@@ -15,7 +15,7 @@ const { loadSourceMapsFromDirectory, remapTracebackLine } = require("../editor/s
 const { sourceLocation } = require("../workspace/console-buffer");
 const { formatError } = require("../shared/errors");
 const { ProfileCapture } = require("../profiler/capture");
-const { showProfile } = require("../profiler/view");
+const { exportCpuProfile, showProfile } = require("../profiler/view");
 const { createReplayLauncher } = require("../profiler/launcher");
 
 const TASK_TYPE = "tua";
@@ -29,6 +29,7 @@ function registerLoveProjectRunner({ appendOutputLine, getClient, getServerComma
   let lastRun = {};
   let currentCapture;
   let lastReplay;
+  let lastCpuProfile;
   const disposables = [
     vscode.commands.registerCommand(COMMANDS.runLoveProject, presentation =>
       runLoveProject({ getClient, getServerCommand, showConsole: presentation?.console === true, instances: presentation?.instances, title: presentation?.title, configurationName: presentation?.configurationName }),
@@ -75,6 +76,7 @@ function registerLoveProjectRunner({ appendOutputLine, getClient, getServerComma
       return runLoveProject({ getClient, getServerCommand, replayInput: lastReplay,
         title: "Replay LOVE Input", showConsole: true });
     }),
+    vscode.commands.registerCommand(COMMANDS.saveCpuProfile, () => exportCpuProfile(lastCpuProfile)),
   ];
 
   void setRunningContext(false);
@@ -138,6 +140,7 @@ function registerLoveProjectRunner({ appendOutputLine, getClient, getServerComma
       assetsDirectory: path.join(extensionPath, "assets", "profiler"),
       onReport: model => {
         appendOutputLine?.(`[tua] Performance capture ready: ${model.frameCount} frames, ${model.sampleCount} CPU samples.`);
+        lastCpuProfile = model;
         if (model.recordedInput && model.recordedInput.dropped === 0) {
           lastReplay = { projectRoot: layout.configDirectory, recording: model.recordedInput };
         }

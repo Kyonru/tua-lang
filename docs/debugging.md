@@ -233,11 +233,14 @@ view states that CPU sampling was unavailable.
 
 When timed CPU samples are available, **Open flame chart** opens a converted
 `.cpuprofile` in the optional [Flame Chart Visualizer for JavaScript Profiles](https://marketplace.visualstudio.com/items?itemName=ms-vscode.vscode-js-profile-flame).
-If it is missing, Tua offers to install it. **Export .cpuprofile** saves a copy
-at a location you choose; open that file later in VS Code or VSCodium to inspect
-it. The export has one timeline point per LuaJIT profiler callback, retaining
-the latest 4,096 callbacks. A callback may represent several samples without
-separate timestamps, so the flame timeline and source lines are approximate.
+If it is missing, Tua offers to install it. **Export .cpuprofile** in the capture
+view, or **Tua: Export Last LOVE CPU Profile** in the Command Palette, saves a
+copy at a location you choose. The command uses the most recently completed
+capture and explains when it has no timed CPU samples. Open the saved file later
+in VS Code or VSCodium to inspect it. The export has one timeline point per
+LuaJIT profiler callback, retaining the latest 4,096 callbacks. A callback may
+represent several samples without separate timestamps, so the flame timeline
+and source lines are approximate.
 For longer captures, the chart starts at the earliest retained callback and
 the results view names the number of callbacks evicted from its timeline.
 Older captures and captures without timed samples have no export action. This

@@ -49,6 +49,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Make the Command Palette CPU export save the latest LÖVE capture instead of
+  requesting an unsupported server artifact; remove the unavailable heap
+  summary command.
+
 - Report errors raised while loading a profiled game's main module, preserving
   the original failure and its source-mapped traceback before sampling starts.
 

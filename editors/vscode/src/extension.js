@@ -196,12 +196,6 @@ function registerLifecycleCommands() {
       COMMANDS.toggleExperimentalCompletions,
       toggleExperimentalCompletions,
     ),
-    vscode.commands.registerCommand(COMMANDS.saveCpuProfile, () =>
-      saveServerProfileArtifact("cpuProfile", "CPU profile"),
-    ),
-    vscode.commands.registerCommand(COMMANDS.saveHeapSummary, () =>
-      saveServerProfileArtifact("heapSummary", "heap/allocation summary"),
-    ),
     vscode.commands.registerCommand(COMMANDS.organizeImports, () =>
       runSourceAction("source.organizeImports"),
     ),
@@ -761,52 +755,6 @@ async function toggleExperimentalCompletions() {
   const message = `Tua experimental completion features ${enabled ? "enabled" : "disabled"} ${scope}.`;
   outputChannel?.appendLine(message);
   vscode.window.showInformationMessage(message);
-}
-
-async function saveServerProfileArtifact(kind, label) {
-  if (!client) {
-    vscode.window.showWarningMessage("Tua language server is not running.");
-    return;
-  }
-
-  const directory = profileOutputDirectory();
-
-  try {
-    fs.mkdirSync(directory, { recursive: true });
-
-    const result = await client.sendRequest("tua/profileArtifact", {
-      kind,
-      outputDirectory: directory,
-    });
-    const outputPaths = profileArtifactPaths(result);
-    const outputLabel = outputPaths.length > 0 ? outputPaths.join(", ") : directory;
-
-    outputChannel?.appendLine(`Tua ${label} saved to: ${outputLabel}`);
-    vscode.window.showInformationMessage(`Tua ${label} saved to ${outputLabel}`);
-  } catch (error) {
-    outputChannel?.appendLine(`Tua ${label} unavailable: ${formatError(error)}`);
-    vscode.window.showWarningMessage(`Tua ${label} is not available from this server: ${formatError(error)}`);
-  }
-}
-
-function profileArtifactPaths(result) {
-  if (typeof result === "string" && result.trim()) {
-    return [result.trim()];
-  }
-
-  if (!result || typeof result !== "object") {
-    return [];
-  }
-
-  if (typeof result.path === "string" && result.path.trim()) {
-    return [result.path.trim()];
-  }
-
-  if (Array.isArray(result.paths)) {
-    return result.paths.filter((entry) => typeof entry === "string" && entry.trim());
-  }
-
-  return [];
 }
 
 function profileOutputDirectory() {

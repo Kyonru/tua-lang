@@ -34,7 +34,6 @@ const COMMANDS = {
   localInlineCompletionAccepted: "tua.completion.localInlineAccepted",
   ollamaCompletionAccepted: "tua.completion.ollamaAccepted",
   saveCpuProfile: "tua.saveCpuProfile",
-  saveHeapSummary: "tua.saveHeapSummary",
   openGeneratedLua: "tua.openGeneratedLua",
   jumpBetweenSourceAndGenerated: "tua.jumpBetweenSourceAndGenerated",
   runLoveProject: "tua.runLoveProject",

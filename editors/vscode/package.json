@@ -863,12 +863,7 @@
       },
       {
         "command": "tua.saveCpuProfile",
-        "title": "Save CPU Profile",
-        "category": "Tua"
-      },
-      {
-        "command": "tua.saveHeapSummary",
-        "title": "Save Heap Summary",
+        "title": "Export Last LOVE CPU Profile",
         "category": "Tua"
       },
       {

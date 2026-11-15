@@ -10,6 +10,7 @@ const Module = require("node:module");
 let receive;
 const executed = [];
 const saved = [];
+const information = [];
 const vscode = {
   ViewColumn: { Beside: 2 },
   Uri: { file: fsPath => ({ fsPath }) },
@@ -18,13 +19,13 @@ const vscode = {
   window: {
     createWebviewPanel: () => ({ webview: { onDidReceiveMessage: callback => { receive = callback; } } }),
     showSaveDialog: async () => ({ fsPath: saved.at(-1) }),
-    showInformationMessage: async () => {},
+    showInformationMessage: async message => { information.push(message); },
     showErrorMessage: async message => assert.fail(message),
   },
 };
 const original = Module._load;
 Module._load = function(id, ...args) { return id === "vscode" ? vscode : original.call(this, id, ...args); };
-const { showProfile } = require("../../src/profiler/view");
+const { exportCpuProfile, showProfile } = require("../../src/profiler/view");
 Module._load = original;
 
 test("profile view exports and opens the same CPU capture in the flame custom editor", async t => {
@@ -43,4 +44,18 @@ test("profile view exports and opens the same CPU capture in the flame custom ed
   assert.equal(viewType, "jsProfileVisualizer.cpuprofile.flame");
   assert.deepEqual(JSON.parse(fs.readFileSync(uri.fsPath, "utf8")), cpuProfile);
   fs.rmSync(path.dirname(uri.fsPath), { recursive: true, force: true });
+});
+
+test("Command Palette CPU export uses the completed capture and explains missing samples", async t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "tua-profile-command-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  saved.push(path.join(root, "command.cpuprofile"));
+  await exportCpuProfile(undefined);
+  assert.match(information.at(-1), /Profile a LÖVE game/u);
+  await exportCpuProfile({ reason: "error" });
+  assert.match(information.at(-1), /timed CPU samples/u);
+  assert.equal(fs.existsSync(saved.at(-1)), false);
+  const cpuProfile = { nodes: [], samples: [1], timeDeltas: [0], startTime: 0, endTime: 1 };
+  await exportCpuProfile({ cpuProfile });
+  assert.deepEqual(JSON.parse(fs.readFileSync(saved.at(-1), "utf8")), cpuProfile);
 });

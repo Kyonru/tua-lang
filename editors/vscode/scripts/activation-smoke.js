@@ -1423,25 +1423,9 @@ async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
     );
 
     await state.commands.get("tua.saveCpuProfile")();
-
-    const cpuProfileRequest = state.clients[1].requests.find(
-      (request) => request.method === "tua/profileArtifact",
-    );
-
-    assert.deepStrictEqual(
-      cpuProfileRequest,
-      {
-        method: "tua/profileArtifact",
-        params: {
-          kind: "cpuProfile",
-          outputDirectory: profileDir,
-        },
-      },
-      "CPU profile command should request an artifact outside the workspace",
-    );
     assert(
-      state.warningMessages.some((message) => message.includes("CPU profile is not available")),
-      "unsupported profile artifacts should fail with a warning",
+      state.informationMessages.some((message) => message.includes("Profile a LÖVE game")),
+      "CPU export should guide users when there is no completed LÖVE capture",
     );
 
     await extension.deactivate();
@@ -2614,10 +2598,6 @@ function createMockState(workspace, options = {}) {
         return Promise.resolve({ removedFiles: 1 });
       }
 
-      if (method === "tua/profileArtifact") {
-        return Promise.reject(new Error("unsupported profile artifact"));
-      }
-
       if (method === "tua/signalGraph") {
         const eventsUri = `file://${path.join(workspace, "src", "events.tua")}`;
         const combatUri = `file://${path.join(workspace, "src", "combat.tua")}`;
@@ -3468,7 +3448,6 @@ function assertRegisteredCommands(state) {
     "tua.completion.toggleExperimental",
     "tua.completion.toggleLocalInline",
     "tua.saveCpuProfile",
-    "tua.saveHeapSummary",
     "tua.runLoveProject",
     "tua.stopLoveProject",
     "tua.debugLoveProject",
