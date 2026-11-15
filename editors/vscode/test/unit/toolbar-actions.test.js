@@ -49,6 +49,24 @@ test("toolbar configuration picker ignores implicit URI and focused-tree argumen
   feature.dispose();
 });
 
+test("Package runs once and an old Package selection defaults to Development", async () => {
+  const state = new Map([["tua.run.selectedConfiguration", "Package"]]);
+  const feature = registerRunConfigurations({ workspaceState: { get: key => state.get(key), update: async (key, value) => state.set(key, value) } });
+  const provider = views.get("tua.run");
+  const packageNode = provider.getChildren().find(item => item.name === "Package");
+  assert.equal(provider.getTreeItem(packageNode).command.command, "tua.run.configuration");
+  await commands.get("tua.run.selected")();
+  assert.equal(executed.at(-1)[0], "tua.runLoveProject");
+  assert.equal(executed.at(-1)[1].configurationName, "Development");
+  const command = provider.getTreeItem(packageNode).command;
+  await commands.get(command.command)(...command.arguments);
+  assert.equal(executed.at(-1)[0], "tua.packageGame");
+  assert.equal(state.get("tua.run.selectedConfiguration"), "Package", "package must not become a new default");
+  await commands.get("tua.run.selected")();
+  assert.equal(executed.at(-1)[1].configurationName, "Development");
+  feature.dispose();
+});
+
 test("Stop uses live sessions, ignores editor URIs, and does not stop unrelated sessions", () => {
   const feature = registerRunActivity();
   let firstStops = 0;

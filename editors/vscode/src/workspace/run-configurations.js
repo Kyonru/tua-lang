@@ -9,7 +9,9 @@ function registerRunConfigurations(context, activity) {
   const changed = new vscode.EventEmitter();
   let configurations = [];
   let error;
-  const selected = () => configurations.find(item => item.name === context.workspaceState.get(SELECTED)) || configurations[0];
+  const selected = () => configurations.find(item => item.name === context.workspaceState.get(SELECTED) && item.mode !== "package") ||
+    configurations.find(item => item.name === "Development" && item.mode === "run") ||
+    configurations.find(item => item.mode === "run") || configurations.find(item => item.mode !== "package") || configurations[0];
   const activeRun = configuration => activity?.sessions.find(session => session.active && !session.groupId && session.configurationName === configuration?.name);
   const updateRunning = () => { void vscode.commands.executeCommand("setContext", "tua.selectedRunActive", Boolean(activeRun(selected()))); };
   const provider = {
@@ -21,7 +23,8 @@ function registerRunConfigurations(context, activity) {
       item.description = configuration.mode === "hotReload" ? "hot reload" : configuration.mode;
       item.iconPath = new vscode.ThemeIcon(configuration === selected() ? "check" : "circle-outline");
       item.contextValue = "tuaRunConfiguration";
-      item.command = { command: "tua.run.selectConfiguration", title: "Select configuration", arguments: [configuration] };
+      item.command = { command: configuration.mode === "package" ? "tua.run.configuration" : "tua.run.selectConfiguration",
+        title: configuration.mode === "package" ? "Package game" : "Select configuration", arguments: [configuration] };
       return item;
     },
   };
@@ -39,14 +42,14 @@ function registerRunConfigurations(context, activity) {
   };
   const choose = async requested => {
     const picked = requested ? configurations.find(item => item.name === requested.name) : await vscode.window.showQuickPick(
-      configurations.map(item => ({ ...item, label: item.name, description: item.mode, picked: item === selected() })),
+      configurations.filter(item => item.mode !== "package").map(item => ({ ...item, label: item.name, description: item.mode, picked: item === selected() })),
       { title: "Tua run configuration", placeHolder: "Choose the action for the Run button" },
     );
-    if (picked) { await context.workspaceState.update(SELECTED, picked.name); refresh(); }
+    if (picked && picked.mode !== "package") { await context.workspaceState.update(SELECTED, picked.name); refresh(); }
     return picked;
   };
   const run = async requested => {
-    const configuration = requested ? await choose(requested) : selected();
+    const configuration = requested?.mode === "package" ? configurations.find(item => item.name === requested.name) : requested ? await choose(requested) : selected();
     if (!configuration) return vscode.window.showWarningMessage(error || "Choose a Tua run configuration first.");
     const running = activeRun(configuration);
     if (running) return vscode.commands.executeCommand("tua.activity.stop", { id: running.id });

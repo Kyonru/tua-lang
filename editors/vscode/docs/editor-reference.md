@@ -70,7 +70,8 @@ requests load when you expand their section; use Refresh for an immediate update
 
 ## Named run configurations
 
-Choose Development, Debug, Hot reload, or Package in **Run Configuration**.
+Choose Development, Debug, or Hot reload in **Run Configuration**. Package is a
+one-time action; selecting it does not replace the default Play action.
 The same list appears as **Tua LOVE Game** in VS Code's **Run and Debug**
 sidebar. If that section is collapsed, expand it or run **Tua: Show Run Options
 in Run and Debug**; the same action is in the Run Configuration header. Selection
@@ -80,8 +81,9 @@ button while the capture is active. Debug configurations still use VS Code's
 debugger controls and require Second Local Lua Debugger. **Select and Start
 Debugging** offers **Debug Tua LOVE Game** in a workspace with `tua.toml`; a
 custom `launch.json` is optional.
-The choice is remembered per workspace and drives the compact toolbar Run button,
-which opens the game console. Run uses a green play icon and Stop a red square,
+The run choice is remembered per workspace and drives the compact toolbar Run button.
+New workspaces default to Development; a previously saved Package selection also
+falls back to Development. The Run button opens the game console. Run uses a green play icon and Stop a red square,
 with light/dark variants. Direct run commands retain their task terminal.
 Customize names and modes in `tua.run.configurations`; packaging configurations
 can specify `packageTarget` (`love`, `windows`, `macos`, `web`, or

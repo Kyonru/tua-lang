@@ -45,6 +45,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Keep Package as a one-time action so the Play button defaults to Development
+  even when an older workspace remembered Package as its selection.
+
 - Infer plural translations as strings when catalog shapes agree, and use the
   required `other` form if a locale's plural rule selects a missing form.
 - Widen inferred store state before constructing method signatures, so stores
