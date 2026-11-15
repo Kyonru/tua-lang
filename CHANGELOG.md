@@ -6,6 +6,42 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-11-15
+
+### Release summary
+
+Tua 0.10.0 adds two optional game systems: catalog-backed localization and
+typed save contracts. A project can enable localization in `tua.toml` to check
+translation keys, placeholders, locales, and catalog coverage while editing.
+Save contracts describe JSON-shaped snapshots, support explicit migrations,
+and can persist stores through revision polling. Both helpers are added to a
+game build only when Tua code uses them; existing Lua and LÖVE projects can
+keep their own solutions.
+
+#### Highlights
+
+- Complete translation keys and named arguments, inspect localized text in
+  hover, navigate to catalog entries, and compare locale coverage in the
+  Localization Explorer.
+- Define typed save schemas with bounded writes, two-slot verification,
+  recovery choices, and store bindings that avoid serializing on every edit.
+- Profile a LÖVE game for a short development capture: inspect slow frames,
+  sampled CPU stacks, selected game-system boundaries, and source-mapped
+  failures. Export a `.cpuprofile` or open an approximate flame chart with the
+  optional viewer.
+- Start Tua runs and profiles from VS Code's Run and Debug view, with the same
+  run configurations available from Tua's project tools.
+- Keep inferred store and save types useful across files and nil fallbacks,
+  and type stable translation results more precisely.
+
+#### Upgrade notes
+
+No project configuration migration is required. Localization stays disabled
+until `[i18n]` is enabled; save contracts and profiling are used only when
+requested. Update the CLI/server and extension together. For save contracts,
+keep a stable LÖVE save identity and provide a player-facing recovery choice
+before calling `acceptRecovery()` or `reset()`.
+
 ### Added
 
 - Export timed LÖVE CPU samples as `.cpuprofile` and open them directly in the
@@ -2561,7 +2597,8 @@ from 0.3.0:
 - Project source and `tua.toml` files require no migration for this coordinated
   release.
 
-[Unreleased]: https://github.com/Kyonru/tua-lang/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/Kyonru/tua-lang/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/Kyonru/tua-lang/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/Kyonru/tua-lang/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/Kyonru/tua-lang/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/Kyonru/tua-lang/compare/v0.6.1...v0.7.0

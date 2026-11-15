@@ -1,17 +1,17 @@
 {
   "schemaVersion": 1,
   "completed": true,
-  "capturedAt": "2026-11-14T00:39:59.831Z",
-  "extensionVersion": "0.9.0",
-  "compilerVersion": "tua 0.9.0",
-  "bundleSha256": "f799f71fc3cfa5addce98acfd1313c21db5e4f97c816a6e1d4c2282cf102f48c",
+  "capturedAt": "2026-11-15T02:39:39.705Z",
+  "extensionVersion": "0.10.0",
+  "compilerVersion": "tua 0.10.0",
+  "bundleSha256": "f1ae0fd81639b76313c3f894547bb37ed10039359dc701e887d020556831dbb1",
   "images": [
     {
       "file": "workspace.png",
       "width": 1440,
       "height": 960,
-      "bytes": 237890,
-      "sha256": "8c332100b918d7d4482f6b9777809d110c6d8c7ec0e3c130d6910a6dacca9793"
+      "bytes": 237519,
+      "sha256": "6732223a95036197b22d5d8277374db1f81ef4b7086160a2cc88096037c15ff0"
     },
     {
       "file": "state-machine.png",
@@ -24,8 +24,8 @@
       "file": "sprite-animation.png",
       "width": 1440,
       "height": 960,
-      "bytes": 123092,
-      "sha256": "97b40a2b6732838b7e7e49d002fc3d4491d327a6dfaee00eaea38f719a5043ef"
+      "bytes": 122897,
+      "sha256": "2372d59a6f2aa6af356d64114bf663e4473a39457eb13c69463b44e925f50228"
     },
     {
       "file": "module-graph.png",

@@ -16,6 +16,11 @@ Tua checks your code as you write, helps you navigate a growing project, and emi
 
 Tua's native generics and protocols help keep APIs precise across files. You can still call ordinary Lua modules and LÖVE APIs; the generated Lua remains available beside your source whenever you want to see what will run.
 
+Opt-in [localization](https://kyonru.github.io/tua-lang/localization/) completes
+catalog keys and shows locale coverage. [Typed save contracts](https://kyonru.github.io/tua-lang/save-contracts/)
+help check persisted game state and recover damaged saves. Both game helpers
+are included in generated output only when referenced.
+
 ## Start in four steps
 
 1. Install the extension and open your game folder in VS Code.
@@ -45,7 +50,12 @@ The extension bundles its server for your platform. A separate CLI is useful for
 
 ## See your project before you run it
 
-The following views were captured from the extension running in VSCodium with its optional Indigo Carbon theme. The [Starfall example](https://github.com/Kyonru/tua-lang/tree/main/examples/starfall) supplies the game source. Static previews read source without executing the game; enable experimental previews with `tua.preview.enabled`. The seeded procedural-map preview runs only its own temporary sample project and never executes your game.
+The following views were captured from the extension running in VS Code with
+its optional Indigo Carbon theme. The [Starfall example](https://github.com/Kyonru/tua-lang/tree/main/examples/starfall)
+supplies the game source. Static previews read source without executing the
+game; enable experimental previews with `tua.preview.enabled`. The seeded
+procedural-map preview runs only its own temporary sample project and never
+executes your game.
 
 <details>
 <summary><strong>State machine</strong> · Follow states and event routes</summary>
@@ -83,7 +93,9 @@ Opt into inspection for a development run to view stores, state machines, signal
 
 </details>
 
-Behavior trees also have a source-linked static tree preview. Asset, SignalBus, ECS, object-pool, and audio explorers help reveal relationships that are otherwise spread across game files.
+Behavior trees also have a source-linked static tree preview. Asset, SignalBus,
+ECS, object-pool, audio, and localization explorers help reveal relationships
+that are otherwise spread across game files.
 
 ## Editing Tua
 

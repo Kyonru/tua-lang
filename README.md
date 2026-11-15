@@ -54,6 +54,8 @@ extension, documentation site, and bundled example projects.
   typed input, signal buses, state stores, state machines, ECS, and object
   pools, plus `audioSystem({...})` for typed buses, cues, music scenes, and
   cached audio analysis.
+- Opt-in catalog-backed localization with translation-key editor assistance,
+  and typed save contracts for bounded, recoverable LOVE persistence.
 - Mixed-source builds where `.tua` files compile to `.lua`, while plain `.lua`
   files and assets are copied into the build output for runnable LOVE folders.
 
@@ -88,6 +90,8 @@ The opt-in [live Runtime Inspector](docs/debugging.md#live-runtime-inspector)
 shows per-player ECS components, active states, signal activity, pool counts,
 and store state with update and subscription counts.
 Its editor-owned development shim leaves build and release output untouched.
+Short [LÖVE performance captures](docs/debugging.md) show sampled CPU stacks,
+slow frames, and selected game-system timings with links back to Tua source.
 
 When deterministic ghost text is enabled, the extension tries it before
 experimental local Ollama completion. Ollama remains a separate opt-in and is
@@ -105,6 +109,8 @@ service opens a network socket or starts automatically.
 - [Typed state stores](https://kyonru.github.io/tua-lang/stores/)
 - [Typed input](https://kyonru.github.io/tua-lang/input/)
 - [Audio systems](https://kyonru.github.io/tua-lang/audio/)
+- [Localization](https://kyonru.github.io/tua-lang/localization/)
+- [Typed save contracts](https://kyonru.github.io/tua-lang/save-contracts/)
 - [CLI reference](https://kyonru.github.io/tua-lang/cli/)
 - [Language server](https://kyonru.github.io/tua-lang/lsp/)
 - [External API and MCP](https://kyonru.github.io/tua-lang/external-api-bridge/)
