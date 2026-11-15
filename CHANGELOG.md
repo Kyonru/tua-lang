@@ -19,6 +19,8 @@ language or editor behavior, and migration notes call out those changes.
   nondeterministic-runtime limits.
 - Show the shared Tua LOVE run configurations in VS Code's Run and Debug
   sidebar, with Profile/Stop Capture controls in both run views.
+- Offer a Tua LOVE launch in VS Code's Select and Start Debugging picker when
+  the workspace has `tua.toml`; custom `launch.json` files remain optional.
 
 - Add opt-in `[i18n]` localization for LOVE projects, with source-relative Lua
   catalogs, a pinned Smiti18n runtime, and automatic `I18n` import only in

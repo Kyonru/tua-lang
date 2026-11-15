@@ -691,11 +691,34 @@ async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
 
     assert.strictEqual(
       state.debugConfigurationProviders.length,
-      1,
-      "debug LOVE should register one Lua launch configuration resolver",
+      2,
+      "debug LOVE should register launch resolution and dynamic configuration providers",
     );
-    const launchProvider = state.debugConfigurationProviders[0];
+    const launchProvider = state.debugConfigurationProviders.find((entry) =>
+      typeof entry.provider.resolveDebugConfigurationWithSubstitutedVariables === "function");
     assert.strictEqual(launchProvider.type, "lua-local");
+    const dynamicProvider = state.debugConfigurationProviders.find((entry) =>
+      typeof entry.provider.provideDebugConfigurations === "function");
+    assert.strictEqual(dynamicProvider.triggerKind, state.vscode.DebugConfigurationProviderTriggerKind.Dynamic);
+    const [suggestedLaunch] = dynamicProvider.provider.provideDebugConfigurations(
+      state.vscode.workspace.workspaceFolders[0],
+    );
+    assert.strictEqual(suggestedLaunch.name, "Debug Tua LOVE Game");
+    assert.strictEqual(suggestedLaunch.tuaProject, true);
+    assert.strictEqual(suggestedLaunch.program.communication, "pipe");
+    assert.deepStrictEqual(dynamicProvider.provider.provideDebugConfigurations(undefined), []);
+    assert.deepStrictEqual(
+      dynamicProvider.provider.provideDebugConfigurations({ uri: state.vscode.Uri.file(path.join(workspace, "other")) }),
+      [],
+      "the picker should not offer Tua for folders without tua.toml",
+    );
+    state.setConfiguration("configurations", [{ type: "lua-local", tuaProject: true }]);
+    assert.deepStrictEqual(
+      dynamicProvider.provider.provideDebugConfigurations(state.vscode.workspace.workspaceFolders[0]),
+      [],
+      "a saved Tua launch configuration should not be duplicated in the picker",
+    );
+    state.setConfiguration("configurations", []);
     const ordinaryLuaLaunch = {
       type: "lua-local",
       request: "launch",
@@ -1970,6 +1993,7 @@ function createMockState(workspace, options = {}) {
       Global: 1,
       Workspace: 2,
     },
+    DebugConfigurationProviderTriggerKind: { Dynamic: 2 },
     Disposable: {
       from(...disposables) {
         return {

@@ -15,8 +15,9 @@ the original `.tua` source.
    [Second Local Lua Debugger](https://marketplace.visualstudio.com/items?itemName=ismoh-games.second-local-lua-debugger-vscode).
 3. Open the folder containing `tua.toml` and place a breakpoint in a `.tua`
    file.
-4. Run **Tua: Debug LOVE Project** from the command palette, or add the launch
-   configuration below and start it from the Run and Debug view.
+4. Open **Run and Debug → Select and Start Debugging**, then choose **Debug Tua
+   LOVE Game**. You can also run **Tua: Debug LOVE Project** from the Command
+   Palette.
 
 Both workflows build the project before launching LOVE. If LOVE is not on
 `PATH`, set `tua.love.command` to the executable path in VS Code settings.
@@ -31,12 +32,19 @@ This is the default for new projects.
 
 !!! important "Opt the launch configuration into Tua"
     A normal `lua-local` configuration bypasses Tua's build and source-map
-    preparation. Set `tuaProject: true` as shown below, or use **Tua: Debug LOVE
-    Project**, so Tua can prepare and restore the generated output correctly.
+    preparation. The suggested **Debug Tua LOVE Game** configuration includes
+    `tuaProject: true`. Add it to any custom configuration as shown below so
+    Tua can prepare and restore the generated output correctly.
 
 ## Run From The VS Code UI
 
-In your game's workspace, create or update `.vscode/launch.json`:
+The **Select and Start Debugging** picker offers **Debug Tua LOVE Game** when
+the workspace folder contains `tua.toml`. Tua builds the project and launches
+LOVE through Second Local Lua Debugger. No `launch.json` is needed for this
+default configuration.
+
+To customize debugger options or keep a named configuration in the Run and
+Debug dropdown, create or update `.vscode/launch.json`:
 
 ```json
 {

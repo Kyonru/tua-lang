@@ -109,7 +109,7 @@ suggestions and the local Ollama fallback are separate opt-in features.
 | Task | In VS Code |
 | --- | --- |
 | Play or rebuild | Choose a named Run configuration, then use Run, Stop, Restart, or Hot reload. |
-| Debug | Use **Tua: Debug LOVE Project** with the optional [Second Local Lua Debugger](https://marketplace.visualstudio.com/items?itemName=ismoh-games.second-local-lua-debugger-vscode). Breakpoints and stopped locations map back to Tua source. |
+| Debug | Choose **Debug Tua LOVE Game** from **Run and Debug → Select and Start Debugging**, or use **Tua: Debug LOVE Project**. Install [Second Local Lua Debugger](https://marketplace.visualstudio.com/items?itemName=ismoh-games.second-local-lua-debugger-vscode) for source-mapped breakpoints and stepping. |
 | Test | Discover and run Tua/Busted specs in the Testing view, including file and case runs. Install Busted for the interpreter you use. |
 | Inspect | Enable the development-only Runtime Inspector, then start a new run. Pause or refresh snapshots without pausing the game. |
 | Profile | Select the pulse button in **Run and Debug → Tua LOVE Game**, or run **Tua: Profile LOVE Game**. Open a sampled Tua line or its generated Lua from the result. |

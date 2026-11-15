@@ -45,6 +45,7 @@
     "onCommand:tua.debugLoveProject",
     "onCommand:tua.tests.createForFunction",
     "onDebugResolve:lua-local",
+    "onDebugDynamicConfigurations",
     "onLanguage:tua",
     "workspaceContains:**/tua.toml",
     "workspaceContains:**/*.tua"

@@ -111,6 +111,28 @@ function registerLoveProjectDebugger({ appendOutputLine, getClient, getServerCom
       },
     },
   );
+  const dynamicConfigurationDisposable = vscode.debug.registerDebugConfigurationProvider(
+    DEBUGGER_TYPE,
+    {
+      provideDebugConfigurations(folder) {
+        if (folder?.uri?.scheme !== "file" || !fs.existsSync(path.join(folder.uri.fsPath, "tua.toml"))) {
+          return [];
+        }
+        const saved = vscode.workspace.getConfiguration("launch", folder.uri).get("configurations", []);
+        if (Array.isArray(saved) && saved.some((entry) => entry?.type === DEBUGGER_TYPE && entry?.[TUA_LAUNCH_PROPERTY] === true)) {
+          return [];
+        }
+        return [{
+          name: "Debug Tua LOVE Game",
+          type: DEBUGGER_TYPE,
+          request: "launch",
+          [TUA_LAUNCH_PROPERTY]: true,
+          program: { command: configuredLoveCommand(), communication: "pipe" },
+        }];
+      },
+    },
+    vscode.DebugConfigurationProviderTriggerKind.Dynamic,
+  );
   const commandDisposable = vscode.commands.registerCommand(COMMANDS.debugLoveProject, async (options) => {
     if (!vscode.workspace.isTrusted) {
       vscode.window.showWarningMessage("Trust this workspace before debugging a LOVE project.");
@@ -191,6 +213,7 @@ function registerLoveProjectDebugger({ appendOutputLine, getClient, getServerCom
     commandDisposable,
     instanceGroups,
     configurationProviderDisposable,
+    dynamicConfigurationDisposable,
     terminationDisposable,
     startDisposable,
     trackerDisposable,

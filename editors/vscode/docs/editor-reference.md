@@ -71,7 +71,9 @@ The same list appears as **Tua LOVE Game** in VS Code's **Run and Debug**
 sidebar. Selection and Run/Stop stay synchronized across both views. The pulse
 button starts a short LÖVE performance capture; it becomes a Stop Capture
 button while the capture is active. Debug configurations still use VS Code's
-debugger controls and require Second Local Lua Debugger.
+debugger controls and require Second Local Lua Debugger. **Select and Start
+Debugging** offers **Debug Tua LOVE Game** in a workspace with `tua.toml`; a
+custom `launch.json` is optional.
 The choice is remembered per workspace and drives the compact toolbar Run button,
 which opens the game console. Run uses a green play icon and Stop a red square,
 with light/dark variants. Direct run commands retain their task terminal.
