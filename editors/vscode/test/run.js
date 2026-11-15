@@ -19,12 +19,14 @@ async function main() {
 
   const fixtures = createWorkspaceFixtures(workspaceOne, workspaceTwo);
   let debugPort;
-  if (process.env.TUA_TEST_SUITE === "workspace-ui") {
+  if (["workspace-ui", "run-options", "all"].includes(process.env.TUA_TEST_SUITE || "all")) {
     const server = net.createServer();
     await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
     debugPort = server.address().port;
     await new Promise(resolve => server.close(resolve));
-    fixtures.mockLove = createServerLauncher(tempRoot, path.join(__dirname, "fixtures", "mock-love.js"), "love-vscode-test");
+    if (process.env.TUA_TEST_SUITE === "workspace-ui") {
+      fixtures.mockLove = createServerLauncher(tempRoot, path.join(__dirname, "fixtures", "mock-love.js"), "love-vscode-test");
+    }
   }
   fs.writeFileSync(
     workspacePath,

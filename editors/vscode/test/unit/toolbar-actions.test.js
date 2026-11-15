@@ -39,6 +39,8 @@ test("toolbar configuration picker ignores implicit URI and focused-tree argumen
   assert.equal(picks, before + 2, "a view-title picker must not silently select its focused row");
   const provider = views.get("tua.run");
   assert.equal(views.get("tua.debugRun"), provider, "Run and Debug must show the same configurations and selection");
+  await commands.get("tua.showRunOptions")();
+  assert.deepEqual(executed.at(-1), ["tua.debugRun.focus"], "showing run options should focus the native Run and Debug view");
   const node = provider.getChildren().find(item => item.name === "Hot reload");
   const command = provider.getTreeItem(node).command;
   await commands.get(command.command)(...command.arguments);
@@ -116,6 +118,9 @@ test("Play changes to Stop for the selected run, including groups, and back afte
 test("primary editor and sidebar Play/Stop buttons have complementary visibility", () => {
   const manifest = require("../../package.json");
   assert(manifest.contributes.views.debug.some(view => view.id === "tua.debugRun"));
+  const debugView = manifest.contributes.views.debug.find(view => view.id === "tua.debugRun");
+  assert.equal(debugView.visibility, "visible", "fresh projects should show the run options view by default");
+  assert(manifest.contributes.menus["view/title"].some(item => item.command === "tua.showRunOptions" && item.when === "view == tua.run"));
   for (const location of ["editor/title", "view/title"]) {
     const menu = manifest.contributes.menus[location];
     const play = menu.find(item => item.command === "tua.run.selected");

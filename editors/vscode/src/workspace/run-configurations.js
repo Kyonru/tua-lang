@@ -65,6 +65,7 @@ function registerRunConfigurations(context, activity) {
     vscode.commands.registerCommand("tua.run.selected", () => run()),
     vscode.commands.registerCommand("tua.run.configuration", run),
     vscode.commands.registerCommand("tua.run.configure", () => vscode.commands.executeCommand("workbench.action.openSettings", "tua.run.configurations")),
+    vscode.commands.registerCommand(COMMANDS.showRunOptions, () => vscode.commands.executeCommand("tua.debugRun.focus")),
     vscode.workspace.onDidChangeConfiguration(event => { if (event.affectsConfiguration("tua.run.configurations")) refresh(); }),
   );
 }

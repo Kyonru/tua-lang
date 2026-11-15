@@ -8,6 +8,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Added
 
+- Add **Show Run Options in Run and Debug** and a shortcut from Tua's Run
+  Configuration view so a collapsed Run and Debug section can be reopened;
+  remove a size hint that VSCodium ignores for built-in view containers.
 - List Tua's optional debugger, shader-highlighting, and file-icon companion
   extensions in setup, with install-on-click actions and a reminder that the
   flame hot-reload button is built in.

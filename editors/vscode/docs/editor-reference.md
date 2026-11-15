@@ -72,7 +72,9 @@ requests load when you expand their section; use Refresh for an immediate update
 
 Choose Development, Debug, Hot reload, or Package in **Run Configuration**.
 The same list appears as **Tua LOVE Game** in VS Code's **Run and Debug**
-sidebar. Selection and Run/Stop stay synchronized across both views. The pulse
+sidebar. If that section is collapsed, expand it or run **Tua: Show Run Options
+in Run and Debug**; the same action is in the Run Configuration header. Selection
+and Run/Stop stay synchronized across both views. The pulse
 button starts a short LÖVE performance capture; it becomes a Stop Capture
 button while the capture is active. Debug configurations still use VS Code's
 debugger controls and require Second Local Lua Debugger. **Select and Start

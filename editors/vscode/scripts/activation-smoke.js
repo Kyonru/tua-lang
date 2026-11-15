@@ -3447,6 +3447,7 @@ function assertRegisteredCommands(state) {
     "tua.setup.restoreLayout",
     "tua.setup.useMaterialIcons",
     "tua.setup.installDebugger",
+    "tua.showRunOptions",
     "tua.setup.restoreIcons",
     "tua.setup.applyShaders",
     "tua.setup.checkShaderTools",
