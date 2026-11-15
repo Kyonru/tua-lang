@@ -479,6 +479,40 @@ impl SignalEventIndex {
             })
     }
 
+    /// Prefer an explicit event declaration. Without one, navigation crosses
+    /// the emit/listen boundary so clicking either call reaches the other side.
+    pub fn navigation_targets(&self, event: &IndexedSignalEvent) -> Vec<&IndexedSignalEvent> {
+        let related = self.related_events(event);
+        let declarations = related
+            .iter()
+            .copied()
+            .filter(|candidate| candidate.mention.method == "declare")
+            .collect::<Vec<_>>();
+        if !declarations.is_empty() {
+            return declarations;
+        }
+
+        let opposite = related
+            .iter()
+            .copied()
+            .filter(|candidate| {
+                if event.mention.method == "emit" {
+                    matches!(
+                        candidate.mention.method.as_str(),
+                        "on" | "once" | "register"
+                    )
+                } else {
+                    candidate.mention.method == "emit"
+                }
+            })
+            .collect::<Vec<_>>();
+        if !opposite.is_empty() {
+            return opposite;
+        }
+
+        self.definition(event).into_iter().collect()
+    }
+
     pub fn schema_for_event(&self, event: &IndexedSignalEvent) -> Option<SignalEventSchema> {
         self.schema_for_key(&SignalEventKey {
             identity: event.identity.clone(),

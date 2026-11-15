@@ -222,7 +222,10 @@ the scene can't leak handlers onto a shared bus.
   suggests known event names. It ranks them by the same bus, then the same
   file, typed declarations, nearby calls, and the rest of the project.
 - **Navigation:** hover, go to definition, find references, and rename work on
-  event-name strings and understand which bus each call uses.
+  event-name strings and understand which bus each call uses. Go to definition
+  prefers an explicit `declare`. Without one, clicking an `emit` opens its
+  listeners, and clicking a listener opens its emitters. When there are several
+  targets, the editor lets you choose. Find References lists both sides.
 - **Signal Graph:** run **Tua: Show Signal Graph** to see every indexed event
   across the project. It filters by bus, file, listener, or emitter, shows
   conflicting payload schemas, and can create a typed listener or an empty

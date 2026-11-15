@@ -1,11 +1,17 @@
 use super::*;
 
 impl AnalysisSnapshot {
-    /// All declaration sites, including uniforms declared in both shader stages.
+    /// All navigation targets, including uniforms declared in both shader stages
+    /// and all listeners or emitters for an undeclared signal event.
     pub fn definitions(&self, path: impl AsRef<Path>, position: SourcePosition) -> Vec<Definition> {
         let definitions = self.shader_uniform_definitions(path.as_ref(), position);
         if definitions.is_empty() {
-            self.definition(path, position).into_iter().collect()
+            let signal_targets = self.signal_event_navigation_targets(path.as_ref(), position);
+            if signal_targets.is_empty() {
+                self.definition(path, position).into_iter().collect()
+            } else {
+                signal_targets
+            }
         } else {
             definitions
         }
@@ -107,14 +113,29 @@ impl AnalysisSnapshot {
         path: &Path,
         position: SourcePosition,
     ) -> Option<Definition> {
-        let event = self.usage_index.signal_event_at(path, position)?;
-        let definition = self.usage_index.signal_event_definition(event)?;
+        self.signal_event_navigation_targets(path, position)
+            .into_iter()
+            .next()
+    }
 
-        Some(Definition {
-            path: definition.path.clone(),
-            span: definition.mention.name_span,
-            kind: DefinitionKind::SignalEvent,
-        })
+    fn signal_event_navigation_targets(
+        &self,
+        path: &Path,
+        position: SourcePosition,
+    ) -> Vec<Definition> {
+        let Some(event) = self.usage_index.signal_event_at(path, position) else {
+            return Vec::new();
+        };
+        self.usage_index
+            .signal_event_index()
+            .navigation_targets(event)
+            .into_iter()
+            .map(|target| Definition {
+                path: target.path.clone(),
+                span: target.mention.name_span,
+                kind: DefinitionKind::SignalEvent,
+            })
+            .collect()
     }
 
     fn asset_definition_at_position(

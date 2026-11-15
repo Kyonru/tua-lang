@@ -1100,6 +1100,48 @@ ui:declare("player.hit", function(message: string) end)
 }
 
 #[test]
+fn signal_event_definition_navigates_from_listener_to_cross_file_emitter() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/events.tua
+return { enemies = signal() }
+-- file: src/main.tua
+local Events = require("events")
+local EnemyEvents = Events.enemies
+EnemyEvents:on("<|listener|>duck.hit", function(position: Vec2) end)
+EnemyEvents:once("duck.hit", function(position: Vec2) end)
+-- file: src/combat.tua
+local Events = require("events")
+local EnemyEvents = Events.enemies
+EnemyEvents:emit("<|emitter|>duck.hit", vec2(1, 2))
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+    let snapshot = host.snapshot();
+
+    let listener = snapshot
+        .definition("src/main.tua", fixture.position("listener"))
+        .expect("listener should navigate to its emitter");
+    assert_eq!(listener.path, PathBuf::from("src/combat.tua"));
+    assert_eq!(listener.span.start, fixture.position("emitter"));
+    let emitter = snapshot
+        .definition("src/combat.tua", fixture.position("emitter"))
+        .expect("emitter should navigate to its listener");
+    assert_eq!(emitter.path, PathBuf::from("src/main.tua"));
+    assert_eq!(emitter.span.start, fixture.position("listener"));
+    assert_eq!(
+        snapshot
+            .definitions("src/combat.tua", fixture.position("emitter"))
+            .len(),
+        2,
+        "all handlers should appear as navigation targets"
+    );
+}
+
+#[test]
 fn escaped_signal_event_names_match_their_lua_runtime_values() {
     let source = r#"local events = signal()
 events:declare("player.hit", function(player: string) end)
