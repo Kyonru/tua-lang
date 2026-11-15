@@ -1,6 +1,6 @@
 "use strict";
 const path = require("node:path");
-const { lookupSourceLocation, tracebackLocations } = require("../editor/source-maps");
+const { createSourceMapLookup, lookupSourceLocation, tracebackLocations } = require("../editor/source-maps");
 const { toCpuProfile } = require("./cpuprofile");
 
 const MAX_REPORT_BYTES = 2 * 1024 * 1024;
@@ -59,14 +59,14 @@ function framePercentile(frames, fraction) {
   return values.length ? values[Math.min(values.length - 1, Math.ceil(fraction * values.length) - 1)] : 0;
 }
 
-function stackLocation(stack, maps, outputDirectory) {
+function stackLocation(stack, maps, outputDirectory, lookup = (generatedPath, generatedLine) => lookupSourceLocation(maps, generatedPath, generatedLine)) {
   for (const frame of stack.split("\n")) {
     const match = /^(.*\.lua):(\d+)$/u.exec(frame.trim());
     if (!match) continue;
     const generatedLine = Number(match[2]);
     const luaPath = match[1].replace(/^@/u, "");
     const generatedPath = path.isAbsolute(luaPath) ? luaPath : path.join(outputDirectory, luaPath);
-    const source = lookupSourceLocation(maps, generatedPath, generatedLine);
+    const source = lookup(generatedPath, generatedLine);
     if (source) return { sourcePath: source.sourcePath, sourceLine: source.sourceLine,
       generatedPath: source.generatedPath, generatedLine };
   }
@@ -74,17 +74,18 @@ function stackLocation(stack, maps, outputDirectory) {
 }
 
 function buildProfileModel(report, maps, outputDirectory, budgetMs = 16.67) {
+  const lookup = createSourceMapLookup(maps);
   const frames = report.frames;
   const slowFrames = [...frames].sort((a, b) => b.wallMs - a.wallMs).slice(0, 20);
   const stacks = [...report.stacks].sort((a, b) => b.count - a.count).slice(0, 50)
-    .map(item => ({ ...item, location: stackLocation(item.stack, maps, outputDirectory),
+    .map(item => ({ ...item, location: stackLocation(item.stack, maps, outputDirectory, lookup),
       share: report.sampleCount ? item.count / report.sampleCount : 0 }));
   const failureLocations = report.errorTraceback ? tracebackLocations(report.errorTraceback, maps) : [];
   const traces = (report.traces || []).map(item => ({ ...item,
-    source: item.location ? stackLocation(item.location, maps, outputDirectory) : undefined }))
+    source: item.location ? stackLocation(item.location, maps, outputDirectory, lookup) : undefined }))
     .sort((a, b) => b.totalMs - a.totalMs);
   const recentTraces = (report.recentTraces || []).map(item => ({ ...item,
-    source: item.location ? stackLocation(item.location, maps, outputDirectory) : undefined }));
+    source: item.location ? stackLocation(item.location, maps, outputDirectory, lookup) : undefined }));
   return {
     reason: report.reason, durationMs: report.durationMs,
     frameCount: report.frameCount, retainedFrames: frames.length,
@@ -97,7 +98,7 @@ function buildProfileModel(report, maps, outputDirectory, budgetMs = 16.67) {
     failureLocation: failureLocations[0],
     p50: framePercentile(frames, 0.5), p95: framePercentile(frames, 0.95),
     worst: slowFrames[0]?.wallMs || 0, slowFrames, stacks,
-    cpuProfile: toCpuProfile(report, maps, outputDirectory),
+    cpuProfile: toCpuProfile(report, maps, outputDirectory, lookup),
     budgetMs, missedBudget: frames.filter(frame => frame.wallMs > budgetMs).length,
   };
 }

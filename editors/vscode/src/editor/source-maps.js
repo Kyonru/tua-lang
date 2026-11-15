@@ -104,13 +104,17 @@ function lookupSourceLocation(maps, generatedPath, generatedLine) {
   const matches = [];
 
   for (const map of maps) {
-    const mapping = map.lineMappings.find((entry) => entry.generatedLine === generatedLine);
-    if (!mapping || !map.sourcePath) {
+    if (!map.sourcePath) {
       continue;
     }
 
     const score = pathMatchScore(generatedPath, map.generated || map.generatedPath);
     if (score === undefined) {
+      continue;
+    }
+
+    const mapping = map.lineMappings.find((entry) => entry.generatedLine === generatedLine);
+    if (!mapping) {
       continue;
     }
 
@@ -130,6 +134,20 @@ function lookupSourceLocation(maps, generatedPath, generatedLine) {
   }
 
   return matches[0];
+}
+
+function createSourceMapLookup(maps) {
+  const mapsByFilename = new Map();
+  for (const map of maps) {
+    if (!map.sourcePath) continue;
+    const filename = normalizeTracebackPath(map.generated || map.generatedPath).split("/").at(-1);
+    if (!mapsByFilename.has(filename)) mapsByFilename.set(filename, []);
+    mapsByFilename.get(filename).push(map);
+  }
+  return (generatedPath, generatedLine) => {
+    const filename = normalizeTracebackPath(generatedPath).split("/").at(-1);
+    return lookupSourceLocation(mapsByFilename.get(filename) || [], generatedPath, generatedLine);
+  };
 }
 
 function remapTracebackLine(line, maps) {
@@ -271,6 +289,7 @@ function integerLine(value) {
 }
 
 module.exports = {
+  createSourceMapLookup,
   loadSourceMapForGeneratedPath,
   loadSourceMapsFromDirectory,
   lookupSourceLocation,

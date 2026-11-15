@@ -49,6 +49,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Skip unrelated source-map line scans when converting large LÖVE CPU captures,
+  keeping the extension host responsive at report completion.
+
 - Make the Command Palette CPU export save the latest LÖVE capture instead of
   requesting an unsupported server artifact; remove the unavailable heap
   summary command.
