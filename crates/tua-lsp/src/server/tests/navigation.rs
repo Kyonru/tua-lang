@@ -208,6 +208,48 @@ ui:declare("player.hit", function(message: string) end)
 }
 
 #[test]
+fn imported_signal_bus_navigates_between_listener_and_emitter_with_project_hover() {
+    let fixture = Fixture::parse(
+        r#"-- file: tua.toml
+source = "src"
+-- file: src/events.tua
+return { enemies = signal() }
+-- file: src/main.tua
+local Events = require("events")
+local EnemyEvents = Events.enemies
+EnemyEvents:on("<|listener|>duck.hit", function(position: Vec2) end)
+-- file: src/combat.tua
+local Events = require("events")
+local EnemyEvents = Events.enemies
+EnemyEvents:emit("<|emitter|>duck.hit", vec2(1, 2))
+"#,
+    );
+    let temp = fixture
+        .write_to_temp("cross-file-signal-navigation")
+        .expect("fixture should write");
+    let main_uri = path_uri(&temp.join("src/main.tua"));
+    let combat_uri = path_uri(&temp.join("src/combat.tua"));
+    let output = run_messages(vec![
+        initialize_with_root(1, path_uri(temp.path())),
+        did_open(&main_uri, fixture.source("src/main.tua")),
+        did_open(&combat_uri, fixture.source("src/combat.tua")),
+        definition_request_at(2, &main_uri, fixture.position("listener")),
+        definition_request_at(3, &combat_uri, fixture.position("emitter")),
+        hover_request(4, &combat_uri, fixture.source("src/combat.tua"), "duck.hit"),
+    ]);
+
+    assert_eq!(response_with_id(&output, 2)["result"]["uri"], combat_uri);
+    assert_eq!(response_with_id(&output, 3)["result"]["uri"], main_uri);
+    assert!(
+        response_with_id(&output, 4)["result"]["contents"]["value"]
+            .as_str()
+            .is_some_and(|hover| hover.contains("1 listeners, 1 emits")),
+        "{:?}",
+        response_with_id(&output, 4)
+    );
+}
+
+#[test]
 fn definition_returns_known_alias_function_local_and_table_field_locations() {
     let uri = "file:///tmp/definition.tua";
     let source = r#"type Vec2 = { x: number, y: number }

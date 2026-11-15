@@ -1100,6 +1100,50 @@ ui:declare("player.hit", function(message: string) end)
 }
 
 #[test]
+fn imported_signal_event_hover_uses_project_listener_counts() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/events.tua
+return { enemies = signal() }
+-- file: src/main.tua
+local Events = require("events")
+local EnemyEvents = Events.enemies
+EnemyEvents:on("duck.hit", function(position: Vec2) end)
+-- file: src/combat.tua
+local Events = require("events")
+local EnemyEvents = Events.enemies
+EnemyEvents:emit("<|emit|>duck.hit", vec2(1, 2))
+EnemyEvents:has("<|query|>duck.hit")
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+
+    let path = PathBuf::from("src/combat.tua");
+    let position = fixture.position("emit");
+    let local_hover = host.current_file_hover(&path, position);
+    assert!(
+        local_hover.is_none(),
+        "a local-only signal index cannot know about imported listeners: {local_hover:?}"
+    );
+    let hover = host.snapshot().hover(&path, position).expect("event hover");
+    assert!(
+        hover
+            .documentation
+            .as_deref()
+            .is_some_and(|doc| doc.contains("1 listeners, 1 emits")),
+        "{hover:?}"
+    );
+    assert!(
+        host.current_file_hover(&path, fixture.position("query"))
+            .is_none(),
+        "event query hovers also need the project index"
+    );
+}
+
+#[test]
 fn signal_event_definition_navigates_from_listener_to_cross_file_emitter() {
     let fixture = Fixture::parse(
         r#"-- file: src/events.tua

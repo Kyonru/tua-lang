@@ -226,6 +226,7 @@ the scene can't leak handlers onto a shared bus.
   prefers an explicit `declare`. Without one, clicking an `emit` opens its
   listeners, and clicking a listener opens its emitters. When there are several
   targets, the editor lets you choose. Find References lists both sides.
+  Hover counts listeners and emitters across files for a shared bus.
 - **Signal Graph:** run **Tua: Show Signal Graph** to see every indexed event
   across the project. It filters by bus, file, listener, or emitter, shows
   conflicting payload schemas, and can create a typed listener or an empty

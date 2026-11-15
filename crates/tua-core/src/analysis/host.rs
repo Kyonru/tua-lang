@@ -1034,8 +1034,10 @@ impl AnalysisHost {
         }
 
         // Shader argument hovers need the snapshot's shared asset metadata.
+        let completion_context =
+            crate::completion::context::completion_context(&file.source, position);
         if matches!(
-            crate::completion::context::completion_context(&file.source, position),
+            &completion_context,
             Some(crate::completion::context::CompletionContext::StringArgument { callee_parts, .. })
                 if callee_parts.last().is_some_and(|method| matches!(method.as_str(), "send" | "sendColor"))
         ) {
@@ -1160,6 +1162,21 @@ impl AnalysisHost {
                 documentation: None,
                 context: Vec::new(),
             });
+        }
+
+        // Event hover reports listener/emit counts. Those counts may span
+        // files, so the source-only fast path must leave event names to the
+        // project snapshot even when it cannot confirm the bus locally.
+        if matches!(
+            &completion_context,
+            Some(crate::completion::context::CompletionContext::StringArgument {
+                is_method_call: true,
+                callee_parts,
+                active_parameter: 0,
+                ..
+            }) if callee_parts.last().is_some_and(|method| crate::signal::is_event_name_method(method))
+        ) {
+            return None;
         }
 
         let signal_index =
