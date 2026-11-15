@@ -1,4 +1,4 @@
-local reportPath, shimPath = ...
+local reportPath, shimPath, callbacks = ...
 local elapsed = 0
 local onSample
 love = {
@@ -6,7 +6,7 @@ love = {
   update = function() end,
   run = function()
     return function()
-      onSample({}, 1, "I")
+      for _ = 1, tonumber(callbacks) or 1 do onSample({}, 1, "I") end
       love.update()
       return true
     end

@@ -89,6 +89,7 @@ function buildProfileModel(report, maps, outputDirectory, budgetMs = 16.67) {
     reason: report.reason, durationMs: report.durationMs,
     frameCount: report.frameCount, retainedFrames: frames.length,
     sampleCount: report.sampleCount, droppedSamples: report.droppedSamples,
+    droppedCpuCallbacks: report.sampleEventsDropped || 0,
     profileError: report.profileError, errorMessage: report.errorMessage,
     traceError: report.traceError, droppedTraces: report.droppedTraces || 0,
     traces, recentTraces,

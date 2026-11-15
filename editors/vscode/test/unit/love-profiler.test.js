@@ -111,6 +111,24 @@ test("temporary Lua shim writes bounded, parseable timed samples", t => {
   assert.equal(report.sampleEventsDropped, 0);
 });
 
+test("long captures export only the retained CPU window and disclose evicted callbacks", t => {
+  const { root, build } = fixture(t);
+  const reportPath = path.join(root, "long-capture.json");
+  const fixturePath = path.resolve(__dirname, "../fixtures/profiler-shim-mock.lua");
+  const shimPath = path.resolve(__dirname, "../../assets/profiler/shim.lua");
+  const result = spawnSync("lua", [fixturePath, reportPath, shimPath, "10000"], { encoding: "utf8" });
+  if (result.error?.code === "ENOENT") return t.skip("Lua interpreter unavailable");
+  assert.equal(result.status, 0, result.stderr);
+  const report = parseReport(fs.readFileSync(reportPath, "utf8"));
+  assert.equal(report.sampleEvents.length, 4096);
+  assert.equal(report.sampleEventsDropped, 5904);
+  const model = buildProfileModel(report, [], build);
+  assert.equal(model.cpuProfile.startTime, Math.round(report.sampleEvents[0].atMs * 1000));
+  assert.equal(model.cpuProfile.timeDeltas[0], 0);
+  assert(model.cpuProfile.endTime - model.cpuProfile.startTime < 42000000);
+  assert.match(renderProfileHtml(model, "nonce"), /5904 earlier CPU callbacks were evicted/u);
+});
+
 test("capture reads a completed report once and does not warn after a failed build", t => {
   const { build } = fixture(t);
   const reports = [], errors = [], done = [];

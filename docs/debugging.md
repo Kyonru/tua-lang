@@ -238,6 +238,8 @@ at a location you choose; open that file later in VS Code or VSCodium to inspect
 it. The export has one timeline point per LuaJIT profiler callback, retaining
 the latest 4,096 callbacks. A callback may represent several samples without
 separate timestamps, so the flame timeline and source lines are approximate.
+For longer captures, the chart starts at the earliest retained callback and
+the results view names the number of callbacks evicted from its timeline.
 Older captures and captures without timed samples have no export action. This
 conversion is a CPU sample profile, not a V8 or Lua heap profile.
 

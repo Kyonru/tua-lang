@@ -49,6 +49,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Start exported LÖVE flame charts at the first retained callback after a long
+  capture, and show how many earlier callbacks were evicted.
+
 - Keep Package as a one-time action so the Play button defaults to Development
   even when an older workspace remembered Package as its selection.
 

@@ -41,7 +41,10 @@ function toCpuProfile(report, maps, outputDirectory) {
     return parent.id;
   });
   const samples = [], timeDeltas = [];
-  let lastUs = 0;
+  // The ring retains only the latest callbacks. Do not render evicted time as
+  // an empty lead-in to the exported flame chart.
+  const startTime = report.sampleEventsDropped ? Math.round(report.sampleEvents[0].atMs * 1000) : 0;
+  let lastUs = startTime;
   for (const event of report.sampleEvents) {
     const nowUs = Math.max(lastUs, Math.round(event.atMs * 1000));
     samples.push(leafIds[event.stackId - 1]);
@@ -49,7 +52,7 @@ function toCpuProfile(report, maps, outputDirectory) {
     lastUs = nowUs;
   }
   return {
-    nodes, startTime: 0, endTime: Math.max(lastUs, Math.round((report.durationMs || 0) * 1000)),
+    nodes, startTime, endTime: Math.max(lastUs, Math.round((report.durationMs || 0) * 1000)),
     samples, timeDeltas,
     tua: { source: "LuaJIT statistical profiler", capturedSamples: report.sampleCount,
       exportedCallbacks: samples.length, droppedCallbacks: report.sampleEventsDropped || 0,
