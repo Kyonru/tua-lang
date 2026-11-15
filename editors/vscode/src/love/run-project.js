@@ -21,6 +21,7 @@ const { createReplayLauncher } = require("../profiler/launcher");
 const TASK_TYPE = "tua";
 const TASK_NAME = "Run LOVE Project";
 const RUNNING_CONTEXT = "tua.loveProjectRunning";
+const PROFILE_CONTEXT = "tua.loveProfileCapturing";
 
 function registerLoveProjectRunner({ appendOutputLine, getClient, getServerCommand, activity, inspector, extensionPath }) {
   const activeExecutions = new Set();
@@ -67,7 +68,7 @@ function registerLoveProjectRunner({ appendOutputLine, getClient, getServerComma
     vscode.commands.registerCommand(COMMANDS.stopLoveProfile, () => {
       if (!currentCapture || currentCapture.completed) return vscode.window.showInformationMessage("No LÖVE performance capture is running.");
       currentCapture.stop();
-      return vscode.window.showInformationMessage("Stopping the capture after the current frame. The game will keep running.");
+      return vscode.window.showInformationMessage("Capture stop requested. The game will keep running.");
     }),
     vscode.commands.registerCommand(COMMANDS.replayLoveInput, async () => {
       if (!lastReplay) return vscode.window.showInformationMessage("Record keyboard or mouse input in a LÖVE performance capture first.");
@@ -77,6 +78,7 @@ function registerLoveProjectRunner({ appendOutputLine, getClient, getServerComma
   ];
 
   void setRunningContext(false);
+  void vscode.commands.executeCommand("setContext", PROFILE_CONTEXT, false);
 
   if (vscode.tasks?.onDidEndTask) {
     disposables.push(
@@ -142,8 +144,17 @@ function registerLoveProjectRunner({ appendOutputLine, getClient, getServerComma
         showProfile(model, lastReplay ? () => vscode.commands.executeCommand(COMMANDS.replayLoveInput) : undefined);
       },
       onError: error => { appendOutputLine?.(`[tua] Performance capture unavailable: ${error.message}`); void vscode.window.showWarningMessage(`Tua performance capture unavailable: ${error.message}`); },
+      onDone: () => {
+        if (currentCapture === capture) {
+          currentCapture = undefined;
+          void vscode.commands.executeCommand("setContext", PROFILE_CONTEXT, false);
+        }
+      },
     });
-    if (capture) currentCapture = capture;
+    if (capture) {
+      currentCapture = capture;
+      void vscode.commands.executeCommand("setContext", PROFILE_CONTEXT, true);
+    }
 
     const task = createLoveProjectTask({
       configurationName: options.configurationName,
@@ -162,7 +173,9 @@ function registerLoveProjectRunner({ appendOutputLine, getClient, getServerComma
       tuaCommand: options.getServerCommand?.() || "tua",
     });
 
-    const execution = await vscode.tasks.executeTask(task);
+    let execution;
+    try { execution = await vscode.tasks.executeTask(task); }
+    catch (error) { capture?.finish(); throw error; }
     activeExecutions.add(execution);
     await setRunningContext(true);
 
@@ -189,6 +202,7 @@ function registerLoveProjectRunner({ appendOutputLine, getClient, getServerComma
   return vscode.Disposable.from(...disposables, { dispose() {
     for (const execution of activeExecutions) execution.terminate();
     activeExecutions.clear();
+    void vscode.commands.executeCommand("setContext", PROFILE_CONTEXT, false);
   } });
 }
 

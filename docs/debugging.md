@@ -190,7 +190,16 @@ Ended or disconnected players retain their last data with a status and age.
 
 ## Capture LÖVE Performance
 
-Run **Tua: Profile LOVE Game** in a trusted project workspace. Choose a 10- or
+Open the **Run and Debug** sidebar and expand **Tua LOVE Game**, then select
+the **Profile LOVE Game** pulse button. The same action is available in
+**Tua → Run Configuration** and as **Tua: Profile LOVE Game** in the Command
+Palette. The button changes to **Stop LOVE Profile Capture** while a capture
+is being prepared or recorded. Stopping a capture leaves the game running.
+The Tua view shares its configurations and selection with the Tua sidebar;
+the ordinary VS Code debugger toolbar continues to control breakpoint
+sessions.
+
+Run the command in a trusted project workspace. Choose a 10- or
 30-second capture, or **Until stopped**. Optionally select ECS systems,
 behavior trees, signals, audio systems, or asset/shader creation for named
 tracing, then enter a frame budget in milliseconds. Tua builds the project

@@ -1423,6 +1423,14 @@
       }
     ],
     "views": {
+      "debug": [
+        {
+          "id": "tua.debugRun",
+          "name": "Tua LOVE Game",
+          "when": "tua.hasProject",
+          "initialSize": 18
+        }
+      ],
       "tua": [
         {
           "id": "tua.run",
@@ -1759,23 +1767,33 @@
         },
         {
           "command": "tua.run.selected",
-          "when": "view == tua.run && !tua.selectedRunActive",
+          "when": "(view == tua.run || view == tua.debugRun) && !tua.selectedRunActive",
           "group": "navigation@0"
         },
         {
-          "command": "tua.run.select",
-          "when": "view == tua.run",
+          "command": "tua.profileLoveProject",
+          "when": "(view == tua.run || view == tua.debugRun) && !tua.loveProfileCapturing",
           "group": "navigation@1"
         },
         {
-          "command": "tua.run.configure",
-          "when": "view == tua.run",
+          "command": "tua.stopLoveProfile",
+          "when": "(view == tua.run || view == tua.debugRun) && tua.loveProfileCapturing",
+          "group": "navigation@1"
+        },
+        {
+          "command": "tua.run.select",
+          "when": "view == tua.run || view == tua.debugRun",
           "group": "navigation@2"
+        },
+        {
+          "command": "tua.run.configure",
+          "when": "view == tua.run || view == tua.debugRun",
+          "group": "navigation@3"
         },
         {
           "command": "tua.packageGame",
           "when": "view == tua.run && workspaceFolderCount > 0",
-          "group": "navigation@3"
+          "group": "navigation@4"
         },
         {
           "command": "tua.console.level",
@@ -1804,7 +1822,7 @@
         },
         {
           "command": "tua.run.stopSelected",
-          "when": "view == tua.run && tua.selectedRunActive",
+          "when": "(view == tua.run || view == tua.debugRun) && tua.selectedRunActive",
           "group": "navigation@0"
         },
         {

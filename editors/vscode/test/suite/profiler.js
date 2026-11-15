@@ -8,6 +8,7 @@ async function runProfilerTests() {
   for (const command of ["tua.profileLoveProject", "tua.stopLoveProfile", "tua.replayLoveInput"]) {
     assert(commands.includes(command), `${command} should be available in the editor`);
   }
+  await vscode.commands.executeCommand("tua.debugRun.focus");
   const sourcePath = "/tmp/profile-source.tua";
   const model = {
     reason: "duration", durationMs: 1000, frameCount: 2, retainedFrames: 2,

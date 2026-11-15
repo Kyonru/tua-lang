@@ -12,7 +12,7 @@ function registerRunConfigurations(context, activity) {
   const selected = () => configurations.find(item => item.name === context.workspaceState.get(SELECTED)) || configurations[0];
   const activeRun = configuration => activity?.sessions.find(session => session.active && !session.groupId && session.configurationName === configuration?.name);
   const updateRunning = () => { void vscode.commands.executeCommand("setContext", "tua.selectedRunActive", Boolean(activeRun(selected()))); };
-  const view = vscode.window.createTreeView("tua.run", { treeDataProvider: {
+  const provider = {
     onDidChangeTreeData: changed.event,
     getChildren: () => configurations,
     getTreeItem(configuration) {
@@ -24,12 +24,16 @@ function registerRunConfigurations(context, activity) {
       item.command = { command: "tua.run.selectConfiguration", title: "Select configuration", arguments: [configuration] };
       return item;
     },
-  } });
+  };
+  const views = ["tua.run", "tua.debugRun"].map(id =>
+    vscode.window.createTreeView(id, { treeDataProvider: provider }));
   const refresh = () => {
     try { configurations = normalizeConfigurations(vscode.workspace.getConfiguration("tua").get("run.configurations", DEFAULT_CONFIGURATIONS)); error = undefined; }
     catch (failure) { configurations = []; error = failure.message; }
-    view.description = selected()?.name;
-    view.message = error;
+    for (const view of views) {
+      view.description = selected()?.name;
+      view.message = error;
+    }
     changed.fire();
     updateRunning();
   };
@@ -50,7 +54,7 @@ function registerRunConfigurations(context, activity) {
     return vscode.commands.executeCommand(MODES[configuration.mode], { console: true, title: configuration.name, configurationName: configuration.name, ...(configuration.instances ? { instances: configuration.instances } : {}), ...(configuration.mode === "package" ? { target: configuration.packageTarget } : {}) });
   };
   refresh();
-  return vscode.Disposable.from(changed, view,
+  return vscode.Disposable.from(changed, ...views,
     activity?.subscribe(updateRunning) || { dispose() {} },
     vscode.commands.registerCommand("tua.run.stopSelected", () => {
       const running = activeRun(selected());

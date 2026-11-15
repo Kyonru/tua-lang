@@ -6,8 +6,8 @@ const { parseReport, buildProfileModel, MAX_REPORT_BYTES } = require("./model");
 const { loadSourceMapsFromDirectory } = require("../editor/source-maps");
 
 class ProfileCapture {
-  constructor({ durationSeconds, budgetMs, traceCategories = [], inputSeed, assetsDirectory, onReport, onError }) {
-    Object.assign(this, { durationSeconds, budgetMs, traceCategories, inputSeed, assetsDirectory, onReport, onError });
+  constructor({ durationSeconds, budgetMs, traceCategories = [], inputSeed, assetsDirectory, onReport, onError, onDone }) {
+    Object.assign(this, { durationSeconds, budgetMs, traceCategories, inputSeed, assetsDirectory, onReport, onError, onDone });
     this.completed = false;
   }
 
@@ -15,6 +15,7 @@ class ProfileCapture {
     this.outputDirectory = outputDirectory;
     this.launcher = createProfileLauncher(outputDirectory,
       path.join(this.assetsDirectory, "shim.lua"), this.durationSeconds, this.traceCategories, this.inputSeed);
+    if (this.stopRequested) this.launcher.stop();
     this.poller = setInterval(() => this.readReport(), 200);
     this.poller.unref?.();
     return this.launcher.directory;
@@ -30,7 +31,9 @@ class ProfileCapture {
     } catch (error) {
       if (error.code === "ENOENT") return;
       this.completed = true;
+      clearInterval(this.poller);
       this.onError?.(error);
+      this.notifyDone();
       return;
     }
     try {
@@ -44,10 +47,19 @@ class ProfileCapture {
       clearInterval(this.poller);
       this.onError?.(error);
     }
+    this.notifyDone();
   }
 
   stop() {
-    if (!this.completed && this.launcher) this.launcher.stop();
+    if (this.completed) return;
+    this.stopRequested = true;
+    this.launcher?.stop();
+  }
+
+  notifyDone() {
+    if (this.doneNotified) return;
+    this.doneNotified = true;
+    this.onDone?.();
   }
 
   finish() {
@@ -58,6 +70,7 @@ class ProfileCapture {
     this.launcher = undefined;
     if (wasLaunched && !this.completed) this.onError?.(new Error("LÖVE ended before the capture could be saved"));
     this.completed = true;
+    this.notifyDone();
   }
 }
 

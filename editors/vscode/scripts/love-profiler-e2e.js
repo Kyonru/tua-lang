@@ -66,7 +66,7 @@ jit.off(love.update, true)
   const original = fs.readFileSync(path.join(build, "main.lua"));
   const launcher = createProfileLauncher(build, path.resolve(__dirname, "../assets/profiler/shim.lua"), 0.5,
     ["ecs", "signals", "behaviors", "audio", "assets"]);
-  let child, errorChild, errorLauncher, inputChild, replayChild, inputLauncher, replayLauncher, output = "";
+  let child, errorChild, errorLauncher, inputChild, replayChild, manualChild, inputLauncher, replayLauncher, manualLauncher, output = "";
   try {
     child = spawn(process.env.TUA_LOVE || "/Applications/LOVE.app/Contents/MacOS/love", [launcher.directory], { cwd: root, stdio: ["ignore", "pipe", "pipe"] });
     child.stdout.on("data", data => { output += data; });
@@ -136,15 +136,23 @@ end
     replayChild.stderr.on("data", data => { replayOutput += data; });
     for (let attempt = 0; attempt < 60 && !replayOutput.includes("PRESSED:"); attempt++) await sleep(100);
     assert.match(replayOutput, /PRESSED:1/u, `Replay did not reproduce one key press: ${replayOutput}`);
+    manualLauncher = createProfileLauncher(inputBuild, path.resolve(__dirname, "../assets/profiler/shim.lua"), 0);
+    manualLauncher.stop();
+    manualChild = spawn(process.env.TUA_LOVE || "/Applications/LOVE.app/Contents/MacOS/love", [manualLauncher.directory], { cwd: root, stdio: ["ignore", "pipe", "pipe"] });
+    for (let attempt = 0; attempt < 50 && !fs.existsSync(manualLauncher.reportPath); attempt++) await sleep(100);
+    assert(fs.existsSync(manualLauncher.reportPath), "A stop requested before launch did not save a capture");
+    assert.equal(parseReport(fs.readFileSync(manualLauncher.reportPath, "utf8")).reason, "manual");
     process.stdout.write(`Native profiler: ${report.frameCount} frames, ${report.sampleCount} samples; Tua source linked.\n`);
   } finally {
     child?.kill();
     errorChild?.kill();
     inputChild?.kill();
     replayChild?.kill();
+    manualChild?.kill();
     errorLauncher?.dispose();
     inputLauncher?.dispose();
     replayLauncher?.dispose();
+    manualLauncher?.dispose();
     launcher.dispose();
     fs.rmSync(root, { recursive: true, force: true });
   }

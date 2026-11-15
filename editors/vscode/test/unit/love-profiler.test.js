@@ -67,16 +67,19 @@ test("profile model preserves bounded samples and maps LuaJIT stack paths", () =
 
 test("capture reads a completed report once and does not warn after a failed build", t => {
   const { build } = fixture(t);
-  const reports = [], errors = [];
+  const reports = [], errors = [], done = [];
   const capture = new ProfileCapture({ durationSeconds: 1,
     assetsDirectory: path.resolve(__dirname, "../../assets/profiler"),
-    onReport: report => reports.push(report), onError: error => errors.push(error) });
+    onReport: report => reports.push(report), onError: error => errors.push(error), onDone: () => done.push("failed-build") });
   capture.finish();
   assert.equal(errors.length, 0);
+  assert.deepEqual(done, ["failed-build"]);
   const second = new ProfileCapture({ durationSeconds: 1,
     assetsDirectory: path.resolve(__dirname, "../../assets/profiler"),
-    onReport: report => reports.push(report), onError: error => errors.push(error) });
+    onReport: report => reports.push(report), onError: error => errors.push(error), onDone: () => done.push("report") });
+  second.stop();
   second.launch(build);
+  assert.equal(fs.existsSync(second.launcher.stopPath), true, "Stop during build must take effect when LÖVE starts");
   fs.writeFileSync(second.launcher.reportPath, JSON.stringify({ version: 1, reason: "manual",
     durationMs: 1, frameCount: 0, sampleCount: 0, droppedSamples: 0, frames: [], stacks: [] }));
   second.readReport();
@@ -84,6 +87,7 @@ test("capture reads a completed report once and does not warn after a failed bui
   assert.equal(reports.length, 1);
   assert.equal(reports[0].reason, "manual");
   assert.equal(errors.length, 0);
+  assert.deepEqual(done, ["failed-build", "report"]);
 });
 
 test("input replay launcher rejects incomplete records and keeps injected data private", t => {

@@ -38,6 +38,7 @@ test("toolbar configuration picker ignores implicit URI and focused-tree argumen
   await commands.get("tua.run.select")({ name: "Development", mode: "run" });
   assert.equal(picks, before + 2, "a view-title picker must not silently select its focused row");
   const provider = views.get("tua.run");
+  assert.equal(views.get("tua.debugRun"), provider, "Run and Debug must show the same configurations and selection");
   const node = provider.getChildren().find(item => item.name === "Hot reload");
   const command = provider.getTreeItem(node).command;
   await commands.get(command.command)(...command.arguments);
@@ -114,6 +115,7 @@ test("Play changes to Stop for the selected run, including groups, and back afte
 
 test("primary editor and sidebar Play/Stop buttons have complementary visibility", () => {
   const manifest = require("../../package.json");
+  assert(manifest.contributes.views.debug.some(view => view.id === "tua.debugRun"));
   for (const location of ["editor/title", "view/title"]) {
     const menu = manifest.contributes.menus[location];
     const play = menu.find(item => item.command === "tua.run.selected");
@@ -122,4 +124,10 @@ test("primary editor and sidebar Play/Stop buttons have complementary visibility
     assert(stop.when.includes("tua.selectedRunActive"));
     assert.equal(play.group, stop.group);
   }
+  const menu = manifest.contributes.menus["view/title"];
+  for (const command of ["tua.run.selected", "tua.run.stopSelected", "tua.profileLoveProject", "tua.stopLoveProfile"]) {
+    assert(menu.find(item => item.command === command)?.when.includes("tua.debugRun"), `${command} must be available from Run and Debug`);
+  }
+  assert(menu.find(item => item.command === "tua.profileLoveProject").when.includes("!tua.loveProfileCapturing"));
+  assert(menu.find(item => item.command === "tua.stopLoveProfile").when.includes("tua.loveProfileCapturing"));
 });
