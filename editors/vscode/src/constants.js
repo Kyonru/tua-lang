@@ -8,6 +8,7 @@ const COMMANDS = {
   setupRestoreLayout: "tua.setup.restoreLayout",
   setupUseMaterialIcons: "tua.setup.useMaterialIcons",
   setupInstallDebugger: "tua.setup.installDebugger",
+  setupInstallFlameChart: "tua.setup.installFlameChart",
   setupCheckShaderTools: "tua.setup.checkShaderTools",
   setupSelectGlslang: "tua.setup.selectGlslang",
   setupApplyShaders: "tua.setup.applyShaders",

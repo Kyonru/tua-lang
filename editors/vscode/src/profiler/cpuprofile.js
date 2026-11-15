@@ -1,0 +1,60 @@
+"use strict";
+
+const path = require("node:path");
+const { pathToFileURL } = require("node:url");
+const { lookupSourceLocation } = require("../editor/source-maps");
+
+function stackFrames(stack, maps, outputDirectory) {
+  const frames = stack.split("\n").map(line => {
+    const label = line.trim();
+    const match = /^(.*\.lua):(\d+)$/u.exec(label);
+    if (!match) return { functionName: label || "(unknown)", scriptId: "0", url: "", lineNumber: 0, columnNumber: 0 };
+    const generatedPath = path.isAbsolute(match[1].replace(/^@/u, "")) ? match[1].replace(/^@/u, "") :
+      path.join(outputDirectory, match[1].replace(/^@/u, ""));
+    const generatedLine = Number(match[2]);
+    const mapped = lookupSourceLocation(maps, generatedPath, generatedLine);
+    const sourcePath = mapped?.sourcePath || generatedPath;
+    const sourceLine = mapped?.sourceLine || generatedLine;
+    return { functionName: `${path.basename(sourcePath)}:${sourceLine}`, scriptId: "0",
+      url: pathToFileURL(sourcePath).href, lineNumber: Math.max(0, sourceLine - 1), columnNumber: 0 };
+  });
+  return frames.reverse(); // LuaJIT dumpstack lists the active frame first.
+}
+
+function toCpuProfile(report, maps, outputDirectory) {
+  if (!report.sampleEvents?.length) return undefined;
+  const nodes = [{ id: 1, callFrame: { functionName: "(root)", scriptId: "0", url: "", lineNumber: 0, columnNumber: 0 }, children: [] }];
+  const children = new Map();
+  const leafIds = report.stacks.map(item => {
+    let parent = nodes[0];
+    for (const frame of stackFrames(item.stack, maps, outputDirectory)) {
+      const key = `${parent.id}\0${frame.url}\0${frame.lineNumber}\0${frame.functionName}`;
+      let child = children.get(key);
+      if (!child) {
+        child = { id: nodes.length + 1, callFrame: frame, children: [] };
+        nodes.push(child);
+        parent.children.push(child.id);
+        children.set(key, child);
+      }
+      parent = child;
+    }
+    return parent.id;
+  });
+  const samples = [], timeDeltas = [];
+  let lastUs = 0;
+  for (const event of report.sampleEvents) {
+    const nowUs = Math.max(lastUs, Math.round(event.atMs * 1000));
+    samples.push(leafIds[event.stackId - 1]);
+    timeDeltas.push(nowUs - lastUs);
+    lastUs = nowUs;
+  }
+  return {
+    nodes, startTime: 0, endTime: Math.max(lastUs, Math.round((report.durationMs || 0) * 1000)),
+    samples, timeDeltas,
+    tua: { source: "LuaJIT statistical profiler", capturedSamples: report.sampleCount,
+      exportedCallbacks: samples.length, droppedCallbacks: report.sampleEventsDropped || 0,
+      note: "One timeline point per profiler callback; batched samples are not individually timed. Source lines can be approximate due to JIT inlining." },
+  };
+}
+
+module.exports = { toCpuProfile };

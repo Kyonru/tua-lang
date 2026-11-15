@@ -1,6 +1,7 @@
 "use strict";
 const path = require("node:path");
 const { lookupSourceLocation, tracebackLocations } = require("../editor/source-maps");
+const { toCpuProfile } = require("./cpuprofile");
 
 const MAX_REPORT_BYTES = 2 * 1024 * 1024;
 
@@ -17,6 +18,11 @@ function parseReport(text) {
       Number.isFinite(frame.wallMs) && frame.wallMs >= 0) ||
       !value.stacks.every(stack => typeof stack?.stack === "string" && stack.stack.length <= 1024 &&
       Number.isSafeInteger(stack.count) && stack.count >= 0) ||
+      (value.sampleEvents !== undefined && (!Array.isArray(value.sampleEvents) || value.sampleEvents.length > 4096 ||
+        !value.sampleEvents.every((event, index) => Number.isSafeInteger(event?.stackId) && event.stackId >= 1 && event.stackId <= value.stacks.length &&
+          Number.isFinite(event.atMs) && event.atMs >= 0 && (index === 0 || event.atMs >= value.sampleEvents[index - 1].atMs) &&
+          Number.isSafeInteger(event.count) && event.count >= 1))) ||
+      (value.sampleEventsDropped !== undefined && (!Number.isSafeInteger(value.sampleEventsDropped) || value.sampleEventsDropped < 0)) ||
       !Array.isArray(value.traces || []) || (value.traces || []).length > 128 ||
       !Array.isArray(value.recentTraces || []) || (value.recentTraces || []).length > 32 ||
       !(value.traces || []).every(trace => validTrace(trace) && Number.isSafeInteger(trace.calls) && trace.calls >= 0 &&
@@ -90,6 +96,7 @@ function buildProfileModel(report, maps, outputDirectory, budgetMs = 16.67) {
     failureLocation: failureLocations[0],
     p50: framePercentile(frames, 0.5), p95: framePercentile(frames, 0.95),
     worst: slowFrames[0]?.wallMs || 0, slowFrames, stacks,
+    cpuProfile: toCpuProfile(report, maps, outputDirectory),
     budgetMs, missedBudget: frames.filter(frame => frame.wallMs > budgetMs).length,
   };
 }

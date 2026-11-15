@@ -1147,6 +1147,11 @@
         "category": "Tua"
       },
       {
+        "command": "tua.setup.installFlameChart",
+        "title": "Install Flame Chart Visualizer",
+        "category": "Tua"
+      },
+      {
         "command": "tua.showRunOptions",
         "title": "Show Run Options in Run and Debug",
         "category": "Tua",
@@ -2176,7 +2181,7 @@
           {
             "id": "companions",
             "title": "Add game-development tools",
-            "description": "Tua's flame button runs built-in hot reload; it needs LÖVE, not another VS Code extension. For source-mapped breakpoints, install Second Local Lua Debugger. Shader highlighting and file icons are optional companion extensions; their setup controls remain in the steps above. Nothing installs when you open setup.\n[Install Second Local Lua Debugger](command:tua.setup.installDebugger)\n[Install Shader Highlighting](command:tua.setup.installShaderHighlighting)\n[Install / Use Material Icons](command:tua.setup.useMaterialIcons)",
+            "description": "Tua's hot-reload flame button is built in. For source-mapped breakpoints, install Second Local Lua Debugger. To view exported LÖVE CPU samples as a flame chart, install Flame Chart Visualizer. Shader highlighting and file icons are also optional. Nothing installs when you open setup.\n[Install Second Local Lua Debugger](command:tua.setup.installDebugger)\n[Install Flame Chart Visualizer](command:tua.setup.installFlameChart)\n[Install Shader Highlighting](command:tua.setup.installShaderHighlighting)\n[Install / Use Material Icons](command:tua.setup.useMaterialIcons)",
             "media": {
               "markdown": "assets/setup/companions.md"
             },

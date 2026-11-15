@@ -8,6 +8,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Added
 
+- Export timed LÖVE CPU samples as `.cpuprofile` and open them directly in the
+  optional Flame Chart Visualizer; keep the sample timeline bounded and label
+  callback batching and source attribution as approximate.
+
 - Add **Show Run Options in Run and Debug** and a shortcut from Tua's Run
   Configuration view so a collapsed Run and Debug section can be reopened;
   remove a size hint that VSCodium ignores for built-in view containers.

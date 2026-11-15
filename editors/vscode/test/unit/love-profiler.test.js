@@ -5,12 +5,14 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const Module = require("node:module");
+const { spawnSync } = require("node:child_process");
 
 const originalLoad = Module._load;
 Module._load = function (id, ...args) { return id === "vscode" ? {} : originalLoad.call(this, id, ...args); };
 const { createProfileLauncher, createReplayLauncher } = require("../../src/profiler/launcher");
 const { parseReport, framePercentile, stackLocation, buildProfileModel } = require("../../src/profiler/model");
 const { ProfileCapture } = require("../../src/profiler/capture");
+const { renderProfileHtml, saveCpuProfile } = require("../../src/profiler/view");
 Module._load = originalLoad;
 
 function fixture(t) {
@@ -63,6 +65,50 @@ test("profile model preserves bounded samples and maps LuaJIT stack paths", () =
     calls: 1, totalMs: -1, worstMs: 0 }] })), /invalid/u);
   assert.throws(() => parseReport(JSON.stringify({ ...report, frames: Array(2049).fill(report.frames[0]) })), /invalid/u);
   assert.throws(() => parseReport("x".repeat(2 * 1024 * 1024 + 1)), /exceeds 2 MiB/u);
+});
+
+test("timed LuaJIT callbacks export a source-mapped V8 CPU profile", async t => {
+  const { root, build } = fixture(t);
+  const map = { generated: path.join(build, "main.lua"), sourcePath: path.join(root, "src", "main.tua"),
+    lineMappings: [{ generatedLine: 9, sourceLine: 4 }] };
+  const report = parseReport(JSON.stringify({ version: 1, reason: "duration", durationMs: 50,
+    frameCount: 0, sampleCount: 3, frames: [], stacks: [
+      { stack: `@${build}/main.lua:9\n[C]:0`, count: 2 },
+      { stack: `@${build}/main.lua:10\n[C]:0`, count: 1 },
+    ], sampleEvents: [{ stackId: 1, atMs: 10, count: 2 }, { stackId: 2, atMs: 20, count: 1 }],
+    sampleEventsDropped: 0 }));
+  const model = buildProfileModel(report, [map], build);
+  const profile = model.cpuProfile;
+  assert.deepEqual(profile.timeDeltas, [10000, 10000]);
+  assert.equal(profile.samples.length, 2, "one timeline point per callback, even if a callback batches samples");
+  assert.equal(profile.endTime, 50000);
+  assert(profile.nodes.some(node => node.callFrame.url.endsWith("/src/main.tua") && node.callFrame.lineNumber === 3));
+  assert.match(renderProfileHtml(model, "nonce"), /Open flame chart.*Export \.cpuprofile/u);
+  const target = path.join(root, "capture.cpuprofile");
+  await saveCpuProfile(model, target);
+  assert.deepEqual(JSON.parse(fs.readFileSync(target, "utf8")), profile);
+  assert.throws(() => parseReport(JSON.stringify({ ...report, sampleEvents: [{ stackId: 3, atMs: 1, count: 1 }] })), /invalid/u);
+  assert.throws(() => parseReport(JSON.stringify({ ...report, sampleEvents: [
+    { stackId: 1, atMs: 20, count: 1 }, { stackId: 1, atMs: 10, count: 1 }] })), /invalid/u);
+  const legacy = buildProfileModel({ ...report, sampleEvents: undefined }, [map], build);
+  assert.equal(legacy.cpuProfile, undefined);
+  assert.doesNotMatch(renderProfileHtml(legacy, "nonce"), /id="export-cpu"/u);
+});
+
+test("temporary Lua shim writes bounded, parseable timed samples", t => {
+  const { root } = fixture(t);
+  const reportPath = path.join(root, "capture.json");
+  const fixturePath = path.resolve(__dirname, "../fixtures/profiler-shim-mock.lua");
+  const shimPath = path.resolve(__dirname, "../../assets/profiler/shim.lua");
+  const result = spawnSync("lua", [fixturePath, reportPath, shimPath], { encoding: "utf8" });
+  if (result.error?.code === "ENOENT") return t.skip("Lua interpreter unavailable");
+  assert.equal(result.status, 0, result.stderr);
+  const report = parseReport(fs.readFileSync(reportPath, "utf8"));
+  assert.equal(report.sampleCount, 1);
+  assert.equal(report.sampleEvents.length, 1);
+  assert.equal(report.sampleEvents[0].stackId, 1);
+  assert(report.sampleEvents[0].atMs >= 0);
+  assert.equal(report.sampleEventsDropped, 0);
 });
 
 test("capture reads a completed report once and does not warn after a failed build", t => {

@@ -114,6 +114,7 @@ function registerSetup(context, { getServerCommand } = {}) {
     register(COMMANDS.setupSkipShaders, () => undefined),
     register(COMMANDS.setupInstallShaderHighlighting, () => installOptionalExtension("slevesque.shader", "Shader highlighting")),
     register(COMMANDS.setupInstallDebugger, () => installOptionalExtension(DEBUGGER_EXTENSION_ID, "Lua debugger", DEBUGGER_EXTENSION_IDS)),
+    register(COMMANDS.setupInstallFlameChart, () => installOptionalExtension("ms-vscode.vscode-js-profile-flame", "Flame Chart Visualizer")),
     register(COMMANDS.setupApplyTheme, () => apply("theme", "Indigo Carbon")),
     register(COMMANDS.setupRestoreTheme, () => restore("theme", "Theme")),
     register(COMMANDS.setupApplyLayout, () => apply("layout", "Tua layout")),

@@ -78,7 +78,12 @@ jit.off(love.update, true)
     assert.equal(report.reason, "duration");
     assert(report.frameCount > 0);
     assert(report.sampleCount > 0, "LuaJIT profiler did not provide CPU samples");
+    assert(report.sampleEvents.length > 0, "LuaJIT profiler did not retain timed sample callbacks");
     const model = buildProfileModel(report, loadSourceMapsFromDirectory(build), build);
+    assert.equal(model.cpuProfile.samples.length, report.sampleEvents.length);
+    assert.equal(model.cpuProfile.timeDeltas.length, report.sampleEvents.length);
+    assert(model.cpuProfile.nodes.some(node => node.callFrame.url.endsWith("/src/main.tua")),
+      "exported flame chart must retain Tua source locations");
     assert(model.stacks.some(stack => stack.location?.sourcePath === source),
       `CPU samples did not map to Tua source: ${JSON.stringify(report.stacks.slice(0, 3))}`);
     assert.equal(report.traceError, null);

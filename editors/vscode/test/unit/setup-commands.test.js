@@ -116,6 +116,15 @@ test("shader highlighting setup is optional and does not reinstall an existing e
   assert.deepEqual(f.settings, {});
 });
 
+test("flame chart setup installs only on request and leaves settings alone", async () => {
+  const f = fixture();
+  assert.deepEqual(f.executed, []);
+  await f.commands.get("tua.setup.installFlameChart")();
+  await f.commands.get("tua.setup.installFlameChart")();
+  assert.deepEqual(f.executed, [["workbench.extensions.installExtension", "ms-vscode.vscode-js-profile-flame"]]);
+  assert.deepEqual(f.settings, {});
+});
+
 test("failed debugger installation reports the registry error without changing settings", async () => {
   const f = fixture({ installFails: true });
   assert.equal(await f.commands.get("tua.setup.installDebugger")(), false);

@@ -2,8 +2,9 @@
 local reportPath, stopPath, durationSeconds, options = ...
 options = options or {}
 local M = {}
-local MAX_FRAMES, MAX_STACKS = 2048, 512
+local MAX_FRAMES, MAX_STACKS, MAX_SAMPLE_EVENTS = 2048, 512, 4096
 local frames, stacks, frameCount, stackCount, sampleCount = {}, {}, 0, 0, 0
+local stackOrder, stackIds, sampleEvents, sampleEventCount = {}, {}, {}, 0
 local droppedSamples, profile, profileError = 0, nil, nil
 local startTime, ended = nil, false
 local updateMs, drawMs, drawCalls, luaKb = nil, nil, nil, nil
@@ -61,14 +62,22 @@ local function writeReport(reason)
       ',"gcSamples":' .. tostring(item.gcSamples) .. '}'
   end
   parts[#parts + 1] = '],"stacks":['
-  local first = true
-  for stack, count in pairs(stacks) do
-    if not first then parts[#parts + 1] = "," end
-    first = false
+  for index, stack in ipairs(stackOrder) do
+    if index > 1 then parts[#parts + 1] = "," end
+    local count = stacks[stack]
     parts[#parts + 1] = '{"stack":' .. quote(stack) .. ',"count":' .. tostring(count) .. '}'
   end
-  parts[#parts + 1] = '],"vmStates":{'
-  first = true
+  parts[#parts + 1] = '],"sampleEvents":['
+  local retainedSamples = math.min(sampleEventCount, MAX_SAMPLE_EVENTS)
+  for index = sampleEventCount - retainedSamples + 1, sampleEventCount do
+    if index > sampleEventCount - retainedSamples + 1 then parts[#parts + 1] = "," end
+    local item = sampleEvents[(index - 1) % MAX_SAMPLE_EVENTS + 1]
+    parts[#parts + 1] = '{"stackId":' .. item.stackId .. ',"atMs":' .. number(item.atMs) ..
+      ',"count":' .. item.count .. '}'
+  end
+  parts[#parts + 1] = '],"sampleEventsDropped":' .. tostring(sampleEventCount - retainedSamples)
+  parts[#parts + 1] = ',"vmStates":{'
+  local first = true
   for state, count in pairs(vmStates) do
     if not first then parts[#parts + 1] = "," end
     first = false
@@ -147,8 +156,19 @@ local function start()
     local stack = profile.dumpstack(thread, "pl\n", 8)
     if #stack > 1024 then stack = stack:sub(1, 1024) end
     if stacks[stack] then stacks[stack] = stacks[stack] + count
-    elseif stackCount < MAX_STACKS then stacks[stack] = count; stackCount = stackCount + 1
+    elseif stackCount < MAX_STACKS then
+      stacks[stack] = count
+      stackCount = stackCount + 1
+      stackOrder[stackCount] = stack
+      stackIds[stack] = stackCount
     else droppedSamples = droppedSamples + count end
+    local stackId = stackIds[stack]
+    if stackId then
+      sampleEventCount = sampleEventCount + 1
+      sampleEvents[(sampleEventCount - 1) % MAX_SAMPLE_EVENTS + 1] = {
+        stackId = stackId, atMs = (clock() - startTime) * 1000, count = count,
+      }
+    end
   end)
   if not started then profileError = tostring(reason); profile = nil end
 end

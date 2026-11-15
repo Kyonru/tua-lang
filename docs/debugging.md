@@ -231,6 +231,16 @@ inlining can make line attribution approximate. A capture with no project
 samples still shows frame data. If this LÖVE build lacks `jit.profile`, the
 view states that CPU sampling was unavailable.
 
+When timed CPU samples are available, **Open flame chart** opens a converted
+`.cpuprofile` in the optional [Flame Chart Visualizer for JavaScript Profiles](https://marketplace.visualstudio.com/items?itemName=ms-vscode.vscode-js-profile-flame).
+If it is missing, Tua offers to install it. **Export .cpuprofile** saves a copy
+at a location you choose; open that file later in VS Code or VSCodium to inspect
+it. The export has one timeline point per LuaJIT profiler callback, retaining
+the latest 4,096 callbacks. A callback may represent several samples without
+separate timestamps, so the flame timeline and source lines are approximate.
+Older captures and captures without timed samples have no export action. This
+conversion is a CPU sample profile, not a V8 or Lua heap profile.
+
 Named traces time selected runtime boundaries and show call count, total time,
 and slowest call. Their totals overlap when one boundary invokes another; do
 not add them together as whole-frame time. Trace wrappers are installed only
