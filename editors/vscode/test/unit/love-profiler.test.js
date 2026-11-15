@@ -13,6 +13,7 @@ const { createProfileLauncher, createReplayLauncher } = require("../../src/profi
 const { parseReport, framePercentile, stackLocation, buildProfileModel } = require("../../src/profiler/model");
 const { ProfileCapture } = require("../../src/profiler/capture");
 const { renderProfileHtml, saveCpuProfile } = require("../../src/profiler/view");
+const { loadSourceMapsFromDirectory } = require("../../src/editor/source-maps");
 Module._load = originalLoad;
 
 function fixture(t) {
@@ -42,6 +43,29 @@ test("temporary profile launcher preserves the build, assets, and cleanup", t =>
   assert.equal(fs.existsSync(launch.directory), false);
   assert.equal(fs.existsSync(path.join(build, "main.lua")), true);
   assert.equal(fs.existsSync(path.join(build, "profiler.lua")), false);
+});
+
+test("module-load failure writes a profile while preserving the original error", t => {
+  const { root, build } = fixture(t);
+  fs.writeFileSync(path.join(build, "main.lua"), 'error("startup boom")\n');
+  fs.mkdirSync(path.join(root, "src"));
+  fs.writeFileSync(path.join(root, "src", "main.tua"), 'error("startup boom")\n');
+  fs.writeFileSync(path.join(build, "main.lua.map.json"), JSON.stringify({ version: 1,
+    source: "../src/main.tua", generated: "main.lua", lineMappings: [{ generatedLine: 1, sourceLine: 1 }] }));
+  const shim = path.resolve(__dirname, "../../assets/profiler/shim.lua");
+  const launcher = createProfileLauncher(build, shim, 1);
+  t.after(() => launcher.dispose());
+  const result = spawnSync("lua", [path.join(launcher.directory, "main.lua")], { encoding: "utf8" });
+  if (result.error?.code === "ENOENT") return t.skip("Lua interpreter unavailable");
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /startup boom/u);
+  const report = parseReport(fs.readFileSync(launcher.reportPath, "utf8"));
+  assert.equal(report.reason, "error");
+  assert.match(report.errorMessage, /startup boom/u);
+  assert.match(report.errorTraceback, /main\.lua:1/u);
+  assert.equal(report.sampleCount, 0);
+  assert.equal(buildProfileModel(report, loadSourceMapsFromDirectory(build), build).failureLocation?.sourcePath,
+    path.join(root, "src", "main.tua"));
 });
 
 test("profile model preserves bounded samples and maps LuaJIT stack paths", () => {

@@ -141,6 +141,12 @@ function M.beforeGame()
   end
 end
 
+function M.gameLoadFailed(message)
+  errorMessage = tostring(message)
+  errorTraceback = debug and debug.traceback and debug.traceback(errorMessage, 2) or errorMessage
+  writeReport("error")
+end
+
 local function start()
   startTime = clock()
   local ok, value = pcall(require, "jit.profile")

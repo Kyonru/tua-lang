@@ -251,6 +251,8 @@ completed traced calls are retained for failure context, without event
 payloads. A failure capture also links the LÖVE traceback to Tua source when
 the generated line has a source-map entry. Recent calls are context, not proof
 that any one call caused the failure.
+Errors while loading the game's main module also produce a failure report;
+CPU sampling has not begun at that point, so those reports have no CPU samples.
 
 The profiler shim is loaded only by the temporary launcher. Ordinary runs,
 builds, and packaged games contain no profiler code or per-frame profiler
