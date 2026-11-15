@@ -6,13 +6,13 @@ const path = require("path");
 const test = require("node:test");
 const vm = require("vm");
 
-function fixture({ installFails = false, disabled = false } = {}) {
+function fixture({ installFails = false, disabled = false, installedExtensions = [] } = {}) {
   const commands = new Map();
   const settings = {};
   const saved = new Map();
   const executed = [];
   const errors = [];
-  let installed = false;
+  const installed = new Set(installedExtensions);
   const vscode = {
     ConfigurationTarget: { Global: 1 },
     Disposable: { from: (...items) => ({ dispose: () => items.forEach((item) => item.dispose()) }) },
@@ -25,7 +25,7 @@ function fixture({ installFails = false, disabled = false } = {}) {
         executed.push([id, ...args]);
         if (id === "workbench.extensions.installExtension") {
           if (installFails) throw new Error("registry unavailable");
-          installed = true;
+          installed.add(args[0]);
         }
       },
     },
@@ -40,8 +40,8 @@ function fixture({ installFails = false, disabled = false } = {}) {
       }),
     },
     extensions: {
-      getExtension: () => installed && !disabled
-        ? { packageJSON: { contributes: { iconThemes: [{ id: "material-icon-theme" }] } } }
+      getExtension: (id) => installed.has(id) && !disabled
+        ? { packageJSON: { contributes: { iconThemes: id === "PKief.material-icon-theme" ? [{ id: "material-icon-theme" }] : [] } } }
         : undefined,
     },
     window: {
@@ -89,6 +89,38 @@ test("icon installation happens only on request, and a double-click installs onc
   assert.equal(f.settings["workbench.iconTheme"], undefined);
   await action();
   assert.equal(f.executed.length, 1, "installed icons are reused");
+});
+
+test("debugger setup installs only on request and accepts the supported legacy debugger", async () => {
+  const f = fixture();
+  assert.deepEqual(f.executed, []);
+  const install = f.commands.get("tua.setup.installDebugger");
+  await Promise.all([install(), install()]);
+  assert.deepEqual(f.executed, [["workbench.extensions.installExtension", "ismoh-games.second-local-lua-debugger-vscode"]]);
+  await install();
+  assert.equal(f.executed.length, 1, "an installed debugger must not be installed again");
+  assert.deepEqual(f.settings, {}, "installing the debugger must not change editor settings");
+
+  const legacy = fixture({ installedExtensions: ["tomblind.local-lua-debugger-vscode"] });
+  await legacy.commands.get("tua.setup.installDebugger")();
+  assert.deepEqual(legacy.executed, [], "the existing supported debugger is sufficient");
+});
+
+test("shader highlighting setup is optional and does not reinstall an existing extension", async () => {
+  const f = fixture();
+  assert.deepEqual(f.executed, []);
+  const install = f.commands.get("tua.setup.installShaderHighlighting");
+  await install();
+  await install();
+  assert.deepEqual(f.executed, [["workbench.extensions.installExtension", "slevesque.shader"]]);
+  assert.deepEqual(f.settings, {});
+});
+
+test("failed debugger installation reports the registry error without changing settings", async () => {
+  const f = fixture({ installFails: true });
+  assert.equal(await f.commands.get("tua.setup.installDebugger")(), false);
+  assert.deepEqual(f.settings, {});
+  assert.match(f.errors[0], /registry unavailable/);
 });
 
 test("failed or disabled icon installs preserve the current icon selection", async () => {

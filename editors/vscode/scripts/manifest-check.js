@@ -269,8 +269,8 @@ function assertExistingJson(relativePath, label) {
 
 // Setup must be discoverable and self-contained in the packaged extension.
 const walkthrough = manifest.contributes.walkthroughs?.find((item) => item.id === "tua.setup");
-if (!walkthrough || walkthrough.steps.length !== 5) {
-  throw new Error("Tua setup should expose five optional steps.");
+if (!walkthrough || walkthrough.steps.length !== 6) {
+  throw new Error("Tua setup should expose six optional steps.");
 }
 for (const step of walkthrough.steps) {
   const media = step.media?.image || step.media?.markdown;
@@ -281,6 +281,12 @@ for (const step of walkthrough.steps) {
     if (command.startsWith("tua.") && !commands.has(command)) {
       throw new Error(`Unregistered setup button: ${command}`);
     }
+  }
+}
+const companionStep = walkthrough.steps.find((step) => step.id === "companions");
+for (const command of ["tua.setup.installDebugger", "tua.setup.installShaderHighlighting", "tua.setup.useMaterialIcons"]) {
+  if (!companionStep?.description.includes(`(command:${command})`)) {
+    throw new Error(`Missing companion extension setup action: ${command}`);
   }
 }
 if (!commands.has("tua.openSetup")) throw new Error("Missing Set Up Tua command.");

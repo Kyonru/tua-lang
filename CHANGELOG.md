@@ -8,6 +8,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Added
 
+- List Tua's optional debugger, shader-highlighting, and file-icon companion
+  extensions in setup, with install-on-click actions and a reminder that the
+  flame hot-reload button is built in.
 - Add an opt-in **Profile LOVE Game** development capture with bounded frame
   timings, LuaJIT CPU stacks, source-map links to Tua and generated Lua, a
   chosen frame budget, and manual or timed stop. Ordinary builds are untouched.

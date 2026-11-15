@@ -11,15 +11,13 @@ const { projectLayoutForWorkspaceRoot } = require("../editor/project-layout");
 const { sourceMapPathForGeneratedPath } = require("../editor/source-maps");
 const { sourceLocation } = require("../workspace/console-buffer");
 const { formatError } = require("../shared/errors");
+const { DEBUGGER_EXTENSION_ID, DEBUGGER_EXTENSION_IDS } = require("./debugger-extensions");
 const {
   activeProjectLayout,
   configuredLoveCommand,
   projectSelectionMessage,
 } = require("./run-project");
 
-const DEBUGGER_EXTENSION_ID = "ismoh-games.second-local-lua-debugger-vscode";
-const LEGACY_DEBUGGER_EXTENSION_ID = "tomblind.local-lua-debugger-vscode";
-const DEBUGGER_EXTENSION_IDS = [DEBUGGER_EXTENSION_ID, LEGACY_DEBUGGER_EXTENSION_ID];
 const DEBUGGER_TYPE = "lua-local";
 const TUA_LAUNCH_PROPERTY = "tuaProject";
 const DEBUG_BOOTSTRAP =

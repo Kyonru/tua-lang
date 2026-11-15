@@ -1142,6 +1142,11 @@
         "category": "Tua"
       },
       {
+        "command": "tua.setup.installDebugger",
+        "title": "Install Second Local Lua Debugger",
+        "category": "Tua"
+      },
+      {
         "command": "tua.setup.restoreIcons",
         "title": "Restore Previous File Icons",
         "category": "Tua"
@@ -2108,7 +2113,7 @@
       {
         "id": "tua.setup",
         "title": "Set Up Tua",
-        "description": "Make room for your code. Choose an optional theme, toolbar layout, file icons, and hint density. Every step is optional; language tools work with your existing setup.",
+        "description": "Choose optional editor appearance, companion extensions, shader tools, and hint density. Every step is optional; language tools work with your existing setup.",
         "steps": [
           {
             "id": "theme",
@@ -2155,6 +2160,17 @@
             "completionEvents": [
               "onContext:tua.setup.shadersApplied",
               "onCommand:tua.setup.skipShaders"
+            ]
+          },
+          {
+            "id": "companions",
+            "title": "Add game-development tools",
+            "description": "Tua's flame button runs built-in hot reload; it needs LÖVE, not another VS Code extension. For source-mapped breakpoints, install Second Local Lua Debugger. Shader highlighting and file icons are optional companion extensions; their setup controls remain in the steps above. Nothing installs when you open setup.\n[Install Second Local Lua Debugger](command:tua.setup.installDebugger)\n[Install Shader Highlighting](command:tua.setup.installShaderHighlighting)\n[Install / Use Material Icons](command:tua.setup.useMaterialIcons)",
+            "media": {
+              "markdown": "assets/setup/companions.md"
+            },
+            "completionEvents": [
+              "onCommand:tua.setup.installDebugger"
             ]
           },
           {

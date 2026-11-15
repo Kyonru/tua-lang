@@ -34,6 +34,10 @@ For an existing project, open the folder containing `tua.toml`. The extension
 starts the bundled server and discovers the project configuration
 automatically.
 
+Run **Tua: Set Up Tua** to see optional companion extensions for debugging,
+shader highlighting, and file icons. Opening setup installs nothing. The flame
+hot-reload action is included with Tua and needs LÖVE, not another extension.
+
 For source-mapped LOVE breakpoints, stepping, variables, and watches, continue
 with [Debugging](debugging.md) after installing the Tua extension.
 

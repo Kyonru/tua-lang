@@ -4,6 +4,7 @@ const vscode = require("vscode");
 const { COMMANDS } = require("../constants");
 const { formatError } = require("../shared/errors");
 const { createPresetManager, MATERIAL_ICONS_EXTENSION } = require("./presets");
+const { DEBUGGER_EXTENSION_ID, DEBUGGER_EXTENSION_IDS } = require("../love/debugger-extensions");
 
 const { shaderEnvironment, probeShaderTools } = require("./shader-tools");
 const { createShaderSetup } = require("./shaders");
@@ -71,6 +72,16 @@ function registerSetup(context, { getServerCommand } = {}) {
     return apply("icons", "Material file icons");
   }
 
+  async function installOptionalExtension(id, label, supportedIds = [id]) {
+    if (supportedIds.some((supportedId) => vscode.extensions.getExtension(supportedId))) {
+      vscode.window.setStatusBarMessage(`${label} is already installed.`, 5000);
+      return false;
+    }
+    await vscode.commands.executeCommand("workbench.extensions.installExtension", id);
+    vscode.window.setStatusBarMessage(`${label} installation requested. Reload VS Code if prompted.`, 5000);
+    return true;
+  }
+
   const register = (id, action) => vscode.commands.registerCommand(id, () => run(id, action));
   return vscode.Disposable.from(
     vscode.commands.registerCommand(COMMANDS.openSetup, () =>
@@ -101,7 +112,8 @@ function registerSetup(context, { getServerCommand } = {}) {
       await vscode.commands.executeCommand("setContext", "tua.setup.shadersApplied", false);
     }),
     register(COMMANDS.setupSkipShaders, () => undefined),
-    register(COMMANDS.setupInstallShaderHighlighting, () => vscode.commands.executeCommand("workbench.extensions.installExtension", "slevesque.shader")),
+    register(COMMANDS.setupInstallShaderHighlighting, () => installOptionalExtension("slevesque.shader", "Shader highlighting")),
+    register(COMMANDS.setupInstallDebugger, () => installOptionalExtension(DEBUGGER_EXTENSION_ID, "Lua debugger", DEBUGGER_EXTENSION_IDS)),
     register(COMMANDS.setupApplyTheme, () => apply("theme", "Indigo Carbon")),
     register(COMMANDS.setupRestoreTheme, () => restore("theme", "Theme")),
     register(COMMANDS.setupApplyLayout, () => apply("layout", "Tua layout")),

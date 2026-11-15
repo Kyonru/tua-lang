@@ -6,7 +6,8 @@ Detailed setup, controls, and settings for the Tua extension. Start with the [ex
 
 Run **Tua: Set Up Tua** from the Command Palette or the **Tua Tools** menu.
 The native Getting Started walkthrough also appears on a fresh installation.
-All five steps are optional; opening setup does not change settings.
+All six steps are optional; opening setup does not change settings or install
+extensions.
 
 - **Theme:** choose the bundled Indigo Carbon theme, browse other themes, or
   restore the previous theme. Its existing picker name, `Indigo Carbon HC`, is
@@ -22,6 +23,9 @@ All five steps are optional; opening setup does not change settings.
 - **Shaders:** check available validators, select a glslang executable, apply or
   restore workspace LOVE shader associations, and optionally install shader
   highlighting from the editor's extension registry.
+- **Companion extensions:** install Second Local Lua Debugger for source-mapped
+  breakpoints and stepping, or reach the optional shader and file-icon tools.
+  Tua's flame hot reload, profiler, and language features are built in.
 - **Hints:** choose Contextual, Full, Compact, Types Only, Parameters Only, or Off for the
   current workspace (or user profile when no folder is open), even with no Tua
   file open.
@@ -39,7 +43,7 @@ The layout preset changes only `window.commandCenter`,
 Installing Tua or selecting its theme never applies the layout preset.
 
 The theme and setup add no telemetry, account requirements, or trial period.
-Setup uses no remote content. The optional icon and shader tooling installs contact your editor's
+Setup uses no remote content. The optional debugger, icon, and shader tooling installs contact your editor's
 extension registry only when you click their install buttons. The existing separately
 opted-in Ollama integration is unaffected.
 

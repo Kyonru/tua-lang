@@ -13,6 +13,7 @@ the original `.tua` source.
 1. Install the [Tua VS Code extension](installation.md).
 2. Install
    [Second Local Lua Debugger](https://marketplace.visualstudio.com/items?itemName=ismoh-games.second-local-lua-debugger-vscode).
+   You can do this from **Tua: Set Up Tua → Add game-development tools**.
 3. Open the folder containing `tua.toml` and place a breakpoint in a `.tua`
    file.
 4. Open **Run and Debug → Select and Start Debugging**, then choose **Debug Tua

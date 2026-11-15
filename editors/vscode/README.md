@@ -120,8 +120,10 @@ The **Tua** Activity Bar view groups project files, assets, signals, modules, EC
 ## Optional setup
 
 **Tua: Set Up Tua** offers a theme, a layout preset, file-icon choices,
-shader-tool checks, and inlay-hint settings. Opening it does not change your
-settings. The language features work with your existing VS Code theme and layout.
+shader-tool checks, inlay-hint settings, and optional companion extensions for
+debugging and shader highlighting. The flame hot-reload action is built in.
+Opening setup does not install extensions or change settings. The language
+features work with your existing VS Code theme and layout.
 
 Visual previews, runtime inspection, local inline suggestions, and Ollama each
 have separate opt-in controls. The extension sends no telemetry or project
