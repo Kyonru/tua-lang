@@ -32,11 +32,11 @@ function love.keypressed(key: string)
     game:update(function(state)
       state.notice = ok and "Checkpoint saved" or issue.message
     end)
-  elseif key == "r" and loadIssue and loadIssue.code == "recovered_previous_slot" then
+  elseif key == "r" and loadIssue and loadIssue.code == "damaged_slot_unverified" then
     if Profile:acceptRecovery() then
       loadIssue = nil
       persistence:markDirty()
-      game:update(function(state) state.notice = "Recovered save accepted" end)
+      game:update(function(state) state.notice = "Valid save accepted" end)
     end
   elseif key == "d" and loadIssue then
     local defaults, issue = Profile:reset()
@@ -57,7 +57,7 @@ end
 function love.draw()
   love.graphics.print("Score: " .. game:get().profile.score, 20, 20)
   love.graphics.print("Space: score    S: checkpoint", 20, 60)
-  love.graphics.print("R: accept recovered slot    D: discard damaged save", 20, 90)
+  love.graphics.print("R: accept valid snapshot    D: discard damaged save", 20, 90)
   love.graphics.print(game:get().notice, 20, 130)
 end
 

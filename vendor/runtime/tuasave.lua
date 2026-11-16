@@ -346,9 +346,11 @@ local function inspect(contract)
     contract.active, contract.generation = slot.suffix, slot.generation
     contract.snapshot = slot.snapshot
     contract.pendingUpgrade = slot.version < contract.version
-    if (a.error or b.error) then
-      contract.blocked = issue("recovered_previous_slot",
-        "one save slot is damaged; recovered the other slot", slot.path, "read", true)
+    local damaged = a.error or b.error
+    if damaged then
+      contract.blocked = issue("damaged_slot_unverified",
+        "one save slot is damaged; selected a valid snapshot, but the damaged slot's generation is unknown",
+        damaged.slot, damaged.phase, true)
     end
     return
   end
@@ -401,7 +403,7 @@ function Contract:copySnapshot()
 end
 
 function Contract:acceptRecovery()
-  if not self.blocked or self.blocked.code ~= "recovered_previous_slot" then return false end
+  if not self.blocked or self.blocked.code ~= "damaged_slot_unverified" then return false end
   self.blocked = nil
   return true
 end

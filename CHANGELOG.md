@@ -24,6 +24,8 @@ language or editor behavior, and migration notes call out those changes.
   are forwarded, while leaving unrelated table properties out of the build.
 - Reject dotted localization catalog path components at configuration time,
   before Lua `require` would fail at game startup.
+- Report a damaged save peer as `damaged_slot_unverified` and keep writes
+  blocked until recovery is accepted, without implying that progress rolled back.
 - Avoid rescanning unrelated modules and repeated function declarations when
   resolving a side-effect imported global on hover or navigation.
 - Preserve exported type-alias origins through Tua and Lua forwarding files,

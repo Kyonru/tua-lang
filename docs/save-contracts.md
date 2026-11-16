@@ -80,10 +80,13 @@ Neither `set` nor `update` performs serialization or filesystem I/O.
 
 Each slot has two files under `__tua_saves/` in LÖVE's save directory. Writes
 target the inactive file, read it back, and verify its length and SHA-256
-checksum before advancing the generation. A damaged newest file may yield the
-older snapshot with `issue.code == "recovered_previous_slot"`. The contract
-blocks further writes until the game tells the player and calls
-`Profile:acceptRecovery()`. Any other load error, including a future save
+checksum before advancing the generation. If one slot is damaged and the other
+contains a valid snapshot, `load()` returns that snapshot with
+`issue.code == "damaged_slot_unverified"`. The damaged slot's generation cannot
+be trusted, even if part of its header is readable: the selected snapshot
+could be newer or older. The contract blocks writes until the game tells the
+player and calls `Profile:acceptRecovery()`, explicitly accepting the risk of
+overwriting the damaged slot. Any other load error, including a future save
 version, stays blocked. `Profile:reset()` is an explicit destructive choice:
 it removes both slot files and returns fresh defaults. Do not call it without
 an appropriate player-facing recovery choice.

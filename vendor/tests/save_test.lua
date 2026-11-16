@@ -111,8 +111,8 @@ do
   assert(disk.writes() == 0)
 end
 
--- Corrupting a newer slot recovers the older generation, but both automatic
--- and manual writes remain blocked until the game accepts that recovery.
+-- Corrupting a newer slot leaves only an older valid snapshot. The damaged
+-- slot's generation cannot be trusted, so writes require explicit acceptance.
 do
   local disk = backend()
   local profile = contract(disk)
@@ -124,13 +124,44 @@ do
   local reopened = contract(disk)
   local recovered, problem = reopened:load()
   assert(recovered.score == 1)
-  expectCode(problem, "recovered_previous_slot")
+  expectCode(problem, "damaged_slot_unverified")
+  assert(problem.message:find("generation is unknown", 1, true))
   local writes = disk.writes()
   local ok, denied = reopened:save(newer)
-  assert(not ok and denied.code == "recovered_previous_slot" and disk.writes() == writes)
+  assert(not ok and denied.code == "damaged_slot_unverified" and disk.writes() == writes)
   assert(reopened:acceptRecovery())
   assert(reopened:save(newer))
   assert(contract(disk):load().score == 2)
+end
+
+-- The selected snapshot may also be the newest one. A damaged spare is still
+-- blocked because unreadable metadata cannot prove that it was older.
+for _, damage in ipairs({ "garbled", "checksum" }) do
+  local disk = backend()
+  local profile = contract(disk)
+  local old = profile:defaults(); old.score = 1
+  assert(profile:save(old))
+  local newer = profile:defaults(); newer.score = 2
+  assert(profile:save(newer))
+  local path = "__tua_saves/profile.a"
+  if damage == "garbled" then
+    disk.files[path] = "unreadable metadata"
+  else
+    -- Keep a readable generation header while invalidating its checksum.
+    local bytes = disk.files[path]
+    disk.files[path] = bytes:sub(1, -2) .. "x"
+  end
+  local reopened = contract(disk)
+  local selected, problem = reopened:load()
+  assert(selected.score == 2)
+  expectCode(problem, "damaged_slot_unverified")
+  assert(problem.message:find("generation is unknown", 1, true))
+  local writes = disk.writes()
+  assert(not reopened:save(newer) and disk.writes() == writes)
+  assert(reopened:acceptRecovery())
+  local next = profile:defaults(); next.score = 3
+  assert(reopened:save(next))
+  assert(contract(disk):load().score == 3)
 end
 
 -- Future versions, bad JSON, and migration failure preserve both slot bytes.

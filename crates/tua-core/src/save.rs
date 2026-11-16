@@ -320,7 +320,7 @@ pub(crate) fn contract_method_documentation(name: &str) -> Option<&'static str> 
         "load" => "Read and validate both save slots. Returns snapshot or nil, then a SaveIssue or nil; recovery and future-version errors block writes.",
         "save" => "Write an explicit checkpoint synchronously to the inactive slot, then read it back and verify before reporting success.",
         "bind" => "Bind a store without loading or mutating it. `select(state)` projects only persistent data; update(dt) polls the store revision and schedules synchronous writes.",
-        "acceptRecovery" => "After informing the player, accept a recovered older slot so writes may resume. Returns false for other blocked states.",
+        "acceptRecovery" => "After informing the player that another save slot is damaged, accept the selected valid snapshot so writes may resume. The damaged slot's generation may be unknown. Returns false for other blocked states.",
         "reset" => "Explicitly remove both slot files and return fresh defaults. This discards saved progress and is intended for a player-approved recovery choice.",
         _ => return None,
     })
