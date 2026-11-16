@@ -76,6 +76,7 @@ fn declaration_meta_name(parsed: &ParsedSource) -> Option<&str> {
 }
 
 mod inspection;
+mod provenance;
 
 pub use inspection::{
     ModuleDependencyEdge, ModuleDependencyExport, ModuleDependencyGraph, ModuleDependencyModule,
@@ -322,7 +323,11 @@ impl ModuleGraph {
             })
             .flatten()
             .collect::<Vec<_>>();
+        let class_returns_changed = graph.enrich_imported_class_returns(&inputs);
         graph.propagate_runtime_export_forwards(&forwards);
+        if class_returns_changed {
+            graph.enrich_forwarded_function_returns(&inputs);
+        }
 
         graph.collect_require_diagnostics();
         graph.collect_runtime_module_key_diagnostics();

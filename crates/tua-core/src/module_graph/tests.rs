@@ -65,6 +65,117 @@ fn graph_with_options<'a>(
 }
 
 #[test]
+fn imported_class_return_provenance_uses_indexed_provider_through_wrappers() {
+    fn build_provider(field: &str) -> (ParsedSource, HirModule, ModuleExports) {
+        tua_input(
+            "src/agent.tua",
+            &format!(
+                "final class Agent {{\n  {field}: number = 1\n}}\nexport type AgentInstance = Agent\nreturn {{ Agent = Agent }}\n"
+            ),
+        )
+    }
+
+    let (factory, factory_hir, factory_exports) = tua_input(
+        "src/factory.tua",
+        "import type { AgentInstance } from \"./agent\"\nlocal Agent = require(\"agent\").Agent\nlocal function spawn(): AgentInstance\n  return Agent.new()\nend\nreturn { spawn = spawn }\n",
+    );
+    let (service, service_hir, service_exports) = tua_input(
+        "src/service.tua",
+        "local factory = require \"factory\"\nlocal function current()\n  return factory.spawn()\nend\nreturn { current = current }\n",
+    );
+
+    for (field, missing) in [("health", "shield"), ("shield", "health")] {
+        let (provider, provider_hir, provider_exports) = build_provider(field);
+        let graph = graph([
+            (
+                &provider,
+                &provider_hir,
+                &provider_exports,
+                AnalysisSourceKind::Tua,
+            ),
+            (
+                &factory,
+                &factory_hir,
+                &factory_exports,
+                AnalysisSourceKind::Tua,
+            ),
+            (
+                &service,
+                &service_hir,
+                &service_exports,
+                AnalysisSourceKind::Tua,
+            ),
+        ]);
+        for (path, export_name) in [("src/factory.tua", "spawn"), ("src/service.tua", "current")] {
+            let export = graph.export(path, export_name).expect("function export");
+            let Type::Function(function) = &export.field.ty else {
+                panic!("expected function export");
+            };
+            let Type::Table(instance) = function.return_types_or_any().first().unwrap() else {
+                panic!("expected indexed class return, found {}", export.field.ty);
+            };
+            assert!(instance.nominal_identity().is_some());
+            assert!(
+                instance.field(field).is_some(),
+                "{path} should use current provider"
+            );
+            assert!(
+                instance.field(missing).is_none(),
+                "{path} used stale provider"
+            );
+        }
+    }
+}
+
+#[test]
+fn imported_class_wrapper_does_not_use_shadowed_or_reassigned_module() {
+    let (provider, provider_hir, provider_exports) = tua_input(
+        "src/agent.tua",
+        "final class Agent { health: number = 1 }\nexport type AgentInstance = Agent\nreturn { Agent = Agent }\n",
+    );
+    let (factory, factory_hir, factory_exports) = tua_input(
+        "src/factory.tua",
+        "import type { AgentInstance } from \"./agent\"\nlocal Agent = require(\"agent\").Agent\nlocal function spawn(): AgentInstance\n  return Agent.new()\nend\nreturn { spawn = spawn }\n",
+    );
+    for service_source in [
+        "local factory = require \"factory\"\nlocal function current(factory)\n  return factory.spawn()\nend\nreturn { current = current }\n",
+        "local factory = require \"factory\"\nfactory = { spawn = function() return { dummy = 1 } end }\nlocal function current()\n  return factory.spawn()\nend\nreturn { current = current }\n",
+        "local factory = require \"factory\"\nif true then factory = { spawn = function() return { dummy = 1 } end } end\nlocal function current()\n  return factory.spawn()\nend\nreturn { current = current }\n",
+        "local factory = require \"factory\"\nlocal function current()\n  factory = { spawn = function() return { dummy = 1 } end }\n  return factory.spawn()\nend\nreturn { current = current }\n",
+    ] {
+        let (service, service_hir, service_exports) = tua_input("src/service.tua", service_source);
+        let graph = graph([
+            (
+                &provider,
+                &provider_hir,
+                &provider_exports,
+                AnalysisSourceKind::Tua,
+            ),
+            (
+                &factory,
+                &factory_hir,
+                &factory_exports,
+                AnalysisSourceKind::Tua,
+            ),
+            (
+                &service,
+                &service_hir,
+                &service_exports,
+                AnalysisSourceKind::Tua,
+            ),
+        ]);
+        let export = graph.export("src/service.tua", "current").unwrap();
+        let Type::Function(function) = &export.field.ty else {
+            panic!("expected function export");
+        };
+        assert!(!matches!(
+            function.return_types_or_any().first(),
+            Some(Type::Table(table)) if table.nominal_identity().is_some()
+        ));
+    }
+}
+
+#[test]
 fn indexes_require_edges_and_module_exports() {
     let main = parse_tua_source(
         "src/main.tua",

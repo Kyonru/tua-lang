@@ -20,6 +20,8 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Preserve imported class instance members and navigation through forwarding
+  functions when an upstream provider has a recoverable syntax error.
 - Keep completion, hover, and signature help on healthy later lines when a
   local statement is malformed on cold open, without promoting text inside an
   incomplete function body or comment into top-level symbols.

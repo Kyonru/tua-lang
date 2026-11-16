@@ -475,14 +475,23 @@ impl AnalysisSnapshot {
         {
             Type::GenericClassApplication { identity, .. } => {
                 let file = self.file(&identity.module)?;
-                let parsed = file.parsed.as_ref().ok()?;
+                let parsed = file
+                    .parsed
+                    .as_ref()
+                    .ok()
+                    .map(Arc::as_ref)
+                    .or_else(|| file.degraded_semantics.as_ref().map(|facts| &facts.parsed))?;
                 class_member_definition_in_parsed(parsed, &identity.name, member, depth + 1)
             }
             Type::Table(table) => {
                 let identity = table.nominal_identity()?;
 
                 for file in self.files.values() {
-                    let Ok(parsed) = &file.parsed else {
+                    let Some(parsed) =
+                        file.parsed.as_ref().ok().map(Arc::as_ref).or_else(|| {
+                            file.degraded_semantics.as_ref().map(|facts| &facts.parsed)
+                        })
+                    else {
                         continue;
                     };
                     let Some(class) = parsed.class_declarations.iter().find(|class| {

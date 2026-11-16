@@ -1,6 +1,56 @@
 use super::*;
 use full_moon::visitors::Visit;
 
+#[derive(Default)]
+struct SelectedProjectFacts<'a> {
+    parsed: Option<&'a ParsedSource>,
+    hir: Option<&'a HirModule>,
+    exports: Option<&'a ModuleExports>,
+    environment: Option<&'a TypeEnvironment>,
+    scope: Option<&'a ScopeMap>,
+}
+
+fn selected_project_facts<'a>(
+    file: &'a AnalysisFile,
+    last_good: Option<&'a AnalysisFile>,
+) -> SelectedProjectFacts<'a> {
+    if let Ok(parsed) = &file.parsed {
+        return SelectedProjectFacts {
+            parsed: Some(parsed),
+            hir: file.hir(),
+            exports: file.exports.as_ref(),
+            environment: file.environment(),
+            scope: file.scope(),
+        };
+    }
+
+    if let Some(degraded) = &file.degraded_semantics {
+        // A recovered file may retain an intact export despite a syntax error
+        // elsewhere. Keep that export and its parse, scope, and types together.
+        // If recovery lost the export, use the previous complete snapshot as a
+        // unit instead of mixing its export with the current partial parse.
+        if file.exports.is_some() || last_good.is_none() {
+            return SelectedProjectFacts {
+                parsed: Some(&degraded.parsed),
+                hir: Some(&degraded.hir),
+                exports: file.exports.as_ref(),
+                environment: Some(&degraded.environment),
+                scope: Some(&degraded.scope),
+            };
+        }
+    }
+
+    last_good.map_or_else(SelectedProjectFacts::default, |last_good| {
+        SelectedProjectFacts {
+            parsed: last_good.parsed.as_ref().ok().map(Arc::as_ref),
+            hir: last_good.hir(),
+            exports: last_good.exports.as_ref(),
+            environment: last_good.environment(),
+            scope: last_good.scope(),
+        }
+    })
+}
+
 impl AnalysisHost {
     /// Record a rejected disk input without retaining stale semantic results.
     pub fn set_input_error(&mut self, path: impl AsRef<Path>, message: impl Into<String>) {
@@ -549,30 +599,15 @@ impl AnalysisHost {
             let _trace = profile::diagnostics_span(profile::DiagnosticsTraceCategory::ModuleGraph);
 
             ModuleGraph::build_with_workspaces(
-                files.iter().map(|(path, file)| ModuleGraphInput {
-                    path,
-                    parsed: file
-                        .parsed
-                        .as_ref()
-                        .ok()
-                        .map(Arc::as_ref)
-                        .or_else(|| {
-                            last_good_files
-                                .get(path)
-                                .and_then(|last_good| last_good.parsed.as_ref().ok())
-                                .map(Arc::as_ref)
-                        })
-                        .or_else(|| file.degraded_semantics.as_ref().map(|facts| &facts.parsed)),
-                    hir: file
-                        .hir()
-                        .or_else(|| last_good_files.get(path).and_then(AnalysisFile::hir))
-                        .or_else(|| file.degraded_semantics.as_ref().map(|facts| &facts.hir)),
-                    exports: file.exports.as_ref().or_else(|| {
-                        last_good_files
-                            .get(path)
-                            .and_then(|last_good| last_good.exports.as_ref())
-                    }),
-                    source_kind: file.kind,
+                files.iter().map(|(path, file)| {
+                    let facts = selected_project_facts(file, last_good_files.get(path));
+                    ModuleGraphInput {
+                        path,
+                        parsed: facts.parsed,
+                        hir: facts.hir,
+                        exports: facts.exports,
+                        source_kind: file.kind,
+                    }
                 }),
                 ModuleGraphOptions {
                     source_roots: vfs.source_roots().to_vec(),
@@ -581,21 +616,8 @@ impl AnalysisHost {
                     require_path_separator: self.require_path_separator,
                     declaration_modules: crate::module_graph::declaration_modules(
                         files.iter().filter_map(|(path, file)| {
-                            let parsed = file
-                                .parsed
-                                .as_ref()
-                                .ok()
-                                .map(Arc::as_ref)
-                                .or_else(|| {
-                                    last_good_files
-                                        .get(path)
-                                        .and_then(|last_good| last_good.parsed.as_ref().ok())
-                                        .map(Arc::as_ref)
-                                })
-                                .or_else(|| {
-                                    file.degraded_semantics.as_ref().map(|facts| &facts.parsed)
-                                })?;
-                            Some((path.as_path(), parsed))
+                            let facts = selected_project_facts(file, last_good_files.get(path));
+                            Some((path.as_path(), facts.parsed?))
                         }),
                         &self.type_libraries,
                     ),
@@ -609,37 +631,15 @@ impl AnalysisHost {
                 profile::diagnostics_span(profile::DiagnosticsTraceCategory::TypeEnvironment);
 
             ProjectTypeDatabase::build(
-                files.iter().map(|(path, file)| ProjectTypeDatabaseInput {
-                    path,
-                    source_kind: file.kind,
-                    environment: file
-                        .environment()
-                        .or_else(|| {
-                            last_good_files
-                                .get(path)
-                                .and_then(AnalysisFile::environment)
-                        })
-                        .or_else(|| {
-                            file.degraded_semantics
-                                .as_ref()
-                                .map(|facts| &facts.environment)
-                        }),
-                    scope: file
-                        .scope()
-                        .or_else(|| last_good_files.get(path).and_then(AnalysisFile::scope))
-                        .or_else(|| file.degraded_semantics.as_ref().map(|facts| &facts.scope)),
-                    parsed: file
-                        .parsed
-                        .as_ref()
-                        .ok()
-                        .map(Arc::as_ref)
-                        .or_else(|| {
-                            last_good_files
-                                .get(path)
-                                .and_then(|last_good| last_good.parsed.as_ref().ok())
-                                .map(Arc::as_ref)
-                        })
-                        .or_else(|| file.degraded_semantics.as_ref().map(|facts| &facts.parsed)),
+                files.iter().map(|(path, file)| {
+                    let facts = selected_project_facts(file, last_good_files.get(path));
+                    ProjectTypeDatabaseInput {
+                        path,
+                        source_kind: file.kind,
+                        environment: facts.environment,
+                        scope: facts.scope,
+                        parsed: facts.parsed,
+                    }
                 }),
                 &module_graph,
             )
@@ -648,7 +648,10 @@ impl AnalysisHost {
             let _profile = profile::span("analysis.index.symbol_index");
 
             SymbolIndex::build(
-                files.iter().map(|(path, file)| (path, file.hir())),
+                files.iter().map(|(path, file)| {
+                    let facts = selected_project_facts(file, last_good_files.get(path));
+                    (path, facts.hir)
+                }),
                 &module_graph,
                 vfs.source_roots(),
             )

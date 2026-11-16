@@ -1690,3 +1690,53 @@ fn multi_workspace_type_library_overlays_are_project_local() {
     assert!(first_hover.contains("number"), "{first_hover}");
     assert!(second_hover.contains("string"), "{second_hover}");
 }
+
+#[test]
+fn warm_malformed_provider_uses_current_class_members_across_factory_and_service() {
+    let temp = TempProject::new("warm-malformed-provider-class");
+    temp.write("tua.toml", "source = \"src\"\n");
+    let provider = "final class Agent {\n  health: number = 100\n  takeDamage(amount: number): nil { self.health -= amount }\n}\nexport type AgentInstance = Agent\nreturn { Agent = Agent }\n";
+    let edited_provider = "final class Agent {\n  shield: number = 50\n  takeDamage(amount: number): nil { self.shield -= amount }\n  guard(): nil { self.shield += 1 }\n}\nexport type AgentInstance = Agent\nreturn { Agent = Agent }\nlocal broken = (\n";
+    let factory = "import type { AgentInstance } from \"./agent\"\nlocal Agent = require(\"agent\").Agent\nlocal function spawn(): AgentInstance\n  return Agent.new()\nend\nreturn { spawn = spawn }\n";
+    let service = "local factory = require \"factory\"\nlocal function current()\n  return factory.spawn()\nend\nreturn { current = current }\n";
+    let main = "local service = require \"service\"\nlocal agent = service.current()\nlocal hp = agent.health\nagent:takeDamage(1)\n";
+    let edited_main = "local service = require \"service\"\nlocal agent = service.current()\nlocal shield = agent.shield\nagent:guard()\n";
+    temp.write("src/agent.tua", provider);
+    temp.write("src/factory.tua", factory);
+    temp.write("src/service.tua", service);
+    temp.write("src/main.tua", main);
+    let provider_uri = temp.uri_for("src/agent.tua");
+    let main_uri = temp.uri_for("src/main.tua");
+    let mut server = TestServer::new();
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&provider_uri, provider));
+    server.send(did_open(&main_uri, main));
+    server.send(completion_request(2, &main_uri, main, "agent."));
+    assert_completion_labels(server.output(), 2, ["takeDamage", "health"]);
+
+    server.send(did_change(&provider_uri, edited_provider, 2));
+    server.send(did_change(&main_uri, edited_main, 2));
+    server.send(completion_request(3, &main_uri, edited_main, "agent."));
+    assert_completion_labels(server.output(), 3, ["guard", "shield", "takeDamage"]);
+    server.send(definition_request(
+        4,
+        &main_uri,
+        edited_main,
+        "agent.shield",
+        "agent.".len(),
+    ));
+    assert_definition_text(server.output(), 4, &provider_uri, edited_provider, "shield");
+    server.send(definition_request(
+        5,
+        &main_uri,
+        edited_main,
+        "agent:guard()",
+        "agent:".len(),
+    ));
+    assert_definition_text(server.output(), 5, &provider_uri, edited_provider, "guard");
+
+    server.send(did_change(&provider_uri, provider, 3));
+    server.send(did_change(&main_uri, main, 3));
+    server.send(completion_request(6, &main_uri, main, "agent."));
+    assert_completion_labels(server.output(), 6, ["takeDamage", "health"]);
+}

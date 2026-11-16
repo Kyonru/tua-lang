@@ -489,12 +489,19 @@ fn build_analysis_file(
         let _profile = profile::span_for_path("analysis.index.exports", path);
         let _trace = profile::diagnostics_span(profile::DiagnosticsTraceCategory::ModuleGraph);
 
-        parsed.as_ref().ok().and_then(|parsed| {
+        if let Ok(parsed) = &parsed {
             infer_module_exports_with_optional_environment(
                 parsed,
                 semantics.as_ref().map(|semantics| &semantics.environment),
             )
-        })
+        } else {
+            degraded_semantics.as_ref().and_then(|degraded| {
+                infer_module_exports_with_optional_environment(
+                    &degraded.parsed,
+                    Some(&degraded.environment),
+                )
+            })
+        }
     };
     let require_edges = {
         let _profile = profile::span_for_path("analysis.index.requires", path);

@@ -115,6 +115,41 @@ fn malformed_consumer_does_not_report_false_imported_self_mismatch() {
 }
 
 #[test]
+fn cold_invalid_provider_keeps_intact_exported_class_members() {
+    let temp = TempProject::new("cold-invalid-provider-class");
+    temp.write("tua.toml", "source = \"src\"\n");
+    let provider = "final class Agent {\n  health: number = 100\n  takeDamage(amount: number): nil { self.health -= amount }\n}\nexport type AgentInstance = Agent\nreturn { Agent = Agent }\nlocal broken = (\n";
+    let factory = "import type { AgentInstance } from \"./agent\"\nlocal Agent = require(\"agent\").Agent\nlocal function spawn(): AgentInstance\n  return Agent.new()\nend\nreturn { spawn = spawn }\n";
+    let service = "local factory = require \"factory\"\nlocal function current()\n  return factory.spawn()\nend\nreturn { current = current }\n";
+    let main = "local service = require \"service\"\nlocal agent = service.current()\nlocal hp = agent.health\nagent:takeDamage(1)\n";
+    temp.write("src/agent.tua", provider);
+    temp.write("src/factory.tua", factory);
+    temp.write("src/service.tua", service);
+    temp.write("src/main.tua", main);
+    let provider_uri = temp.uri_for("src/agent.tua");
+    let main_uri = temp.uri_for("src/main.tua");
+    let output = run_messages(vec![
+        initialize_with_root(1, temp.uri()),
+        did_open(&provider_uri, provider),
+        did_open(&main_uri, main),
+        completion_request(2, &main_uri, main, "agent."),
+        hover_request(3, &main_uri, main, "agent ="),
+        definition_request(4, &main_uri, main, "takeDamage(1)", 0),
+        text_document_diagnostic_request(5, &provider_uri),
+    ]);
+
+    assert_completion_labels(&output, 2, ["takeDamage", "health"]);
+    assert_hover_contains(&output, 3, "local agent: Agent");
+    assert_definition_text(&output, 4, &provider_uri, provider, "takeDamage");
+    let diagnostics = response_with_id(&output, 5)["result"]["items"]
+        .as_array()
+        .expect("provider diagnostics should be returned");
+    assert!(diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic["code"] == "TL0001"));
+}
+
+#[test]
 fn semantic_features_survive_incomplete_field_chain_statement() {
     let uri = "file:///tmp/recovered-love-conf.tua";
     let source = r#"function love.conf(t)
