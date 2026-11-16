@@ -273,6 +273,52 @@ impl<'a> SemanticModel<'a> {
         field_chain_before_first_call(call)
     }
 
+    /// Whether a local's simple field or call-result initializer ultimately
+    /// reads one of the named roots. Each step uses the initializer's own
+    /// evaluation position, so a later shadow or reassignment cannot create a
+    /// false dependency. This is used to defer source-only editor answers
+    /// when a transitive require needs project facts.
+    pub(crate) fn local_initializer_depends_on_roots(
+        &self,
+        name: &str,
+        position: SourcePosition,
+        roots: &BTreeSet<String>,
+    ) -> bool {
+        let mut current = name.to_owned();
+        let mut evaluation_position = position;
+        for _ in 0..MAX_SEMANTIC_INFERENCE_DEPTH {
+            if roots.contains(&current) {
+                return true;
+            }
+            let Some(local) = self.local_assignment_value(&current, evaluation_position) else {
+                return false;
+            };
+            let Some(mut expression) = local.expression else {
+                return false;
+            };
+            while let Expression::Parentheses {
+                expression: inner, ..
+            }
+            | Expression::TypeAssertion {
+                expression: inner, ..
+            } = expression
+            {
+                expression = inner;
+            }
+            let parts = match expression {
+                Expression::Var(var) => plain_field_chain_from_var(var),
+                Expression::FunctionCall(call) => field_chain_before_first_call(call),
+                _ => None,
+            };
+            let Some(root) = parts.and_then(|parts| parts.into_iter().next()) else {
+                return false;
+            };
+            current = root;
+            evaluation_position = local.evaluation_position;
+        }
+        false
+    }
+
     pub(crate) fn local_initializer_field_chain_with_position(
         &self,
         name: &str,

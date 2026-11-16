@@ -20,6 +20,8 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Show project-inferred types in hover for locals derived from module values
+  through forwarding files, including Store and LOVE call results.
 - Keep project-aware type checking active for recoverable syntax errors, so
   an imported class call does not report a false receiver mismatch while a
   nearby line is incomplete.

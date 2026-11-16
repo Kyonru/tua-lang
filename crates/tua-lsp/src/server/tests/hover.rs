@@ -540,6 +540,37 @@ return {
     assert!(contents.contains("audio.lua"));
 }
 #[test]
+fn hover_on_local_derived_from_two_hop_module_field_uses_project_type() {
+    let temp = TempProject::new("two-hop-derived-local-hover");
+    let provider = "local item = { value = 1, name = \"ready\" }\nreturn { item = item }\n";
+    let facade = "local provider = require \"provider\"\nreturn provider\n";
+    let main =
+        "local facade = require \"facade\"\nlocal item = facade.item\nlocal derived = item.value\n";
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/provider.tua", provider);
+    temp.write("src/facade.tua", facade);
+    temp.write("src/main.tua", main);
+    let uri = temp.uri_for("src/main.tua");
+    let provider_uri = temp.uri_for("src/provider.tua");
+    let mut server = TestServer::new();
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&uri, main));
+    server.send(hover_request(2, &uri, main, "derived ="));
+    server.send(hover_request(3, &uri, main, "value\n"));
+    assert_hover_contains(server.output(), 2, "local derived: number");
+    assert_hover_contains(server.output(), 3, "value: number");
+
+    server.send(did_open(&provider_uri, provider));
+    let edited_provider = provider.replace("value = 1", "value = \"changed\"");
+    server.send(did_change(&provider_uri, &edited_provider, 2));
+    server.send(hover_request(4, &uri, main, "derived ="));
+    assert_hover_contains(server.output(), 4, "local derived: string");
+    server.send(did_change(&provider_uri, provider, 3));
+    server.send(hover_request(5, &uri, main, "derived ="));
+    assert_hover_contains(server.output(), 5, "local derived: number");
+}
+
+#[test]
 fn hover_and_diagnostics_use_project_type_database_after_edit() {
     let temp = TempProject::new("project-type-hover-after-edit");
     let source = r#"local Types = require("types")

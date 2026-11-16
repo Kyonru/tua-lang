@@ -1116,28 +1116,41 @@ impl AnalysisHost {
                 let imprecise_local = chain.parts.first().is_some_and(|part| {
                     semantic
                         .type_of_name(&part.text, position)
+                        .or_else(|| semantic.type_of_local_assignment(&part.text, position))
                         .is_some_and(|ty| match ty {
                             Type::Any => true,
                             Type::Union(types) => types.contains(&Type::Any),
                             _ => false,
                         })
                 });
-                if let Some(expression) = chain
-                    .parts
-                    .first()
-                    .filter(|_| imprecise_local)
-                    .and_then(|part| semantic.local_initializer_expression(&part.text, position))
-                {
+                if imprecise_local {
                     let required_names = required
                         .iter()
                         .map(|binding| binding.alias.clone())
                         .collect::<BTreeSet<_>>();
-                    let mut visitor = RequiredRootInInitializer {
-                        names: &required_names,
-                        found: false,
-                    };
-                    expression.visit(&mut visitor);
-                    if visitor.found {
+                    let direct_required = chain
+                        .parts
+                        .first()
+                        .and_then(|part| {
+                            semantic.local_initializer_expression(&part.text, position)
+                        })
+                        .is_some_and(|expression| {
+                            let mut visitor = RequiredRootInInitializer {
+                                names: &required_names,
+                                found: false,
+                            };
+                            expression.visit(&mut visitor);
+                            visitor.found
+                        });
+                    if direct_required
+                        || chain.parts.first().is_some_and(|part| {
+                            semantic.local_initializer_depends_on_roots(
+                                &part.text,
+                                position,
+                                &required_names,
+                            )
+                        })
+                    {
                         return None;
                     }
                 }

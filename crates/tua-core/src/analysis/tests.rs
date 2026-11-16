@@ -6327,6 +6327,77 @@ return {
 }
 
 #[test]
+fn two_hop_module_field_local_hover_matches_member_hover() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/provider.tua
+local item = { value = 1, name = "ready" }
+return { item = item }
+-- file: src/facade.tua
+local provider = require "provider"
+return provider
+-- file: src/main.tua
+local facade = require "facade"
+local item = facade.item
+local <|declaration|>value = item.<|field|>value
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+    let fast = host.current_file_hover("src/main.tua", fixture.position("declaration"));
+    assert!(
+        fast.is_none(),
+        "transitive module local needs the project snapshot, not a source-only `any`: {fast:?}"
+    );
+    let snapshot = host.snapshot();
+    let field = snapshot
+        .hover("src/main.tua", fixture.position("field"))
+        .expect("transitive module field should hover");
+    assert!(field.contents.contains("number"), "{field:?}");
+    let declaration = snapshot
+        .hover("src/main.tua", fixture.position("declaration"))
+        .expect("derived local should hover");
+    assert_eq!(declaration.contents, "local value: number");
+}
+
+#[test]
+fn two_hop_store_and_love_call_results_hover_as_numbers() {
+    for (name, provider, main) in [
+        (
+            "store",
+            "local game = store({ score = 0, paused = false })\nreturn { game = game }",
+            "local facade = require \"facade\"\nlocal game = facade.game\nlocal state = game:get()\nlocal <|declaration|>derived = state.score",
+        ),
+        (
+            "love",
+            "local font = love.graphics.newFont(12)\nlocal text = love.graphics.newText(font)\nreturn { text = text }",
+            "local facade = require \"facade\"\nlocal text = facade.text\nlocal <|declaration|>derived = text:getWidth()",
+        ),
+    ] {
+        let fixture = Fixture::parse(&format!(
+            "-- file: src/provider.tua\n{provider}\n-- file: src/facade.tua\nlocal provider = require \"provider\"\nreturn provider\n-- file: src/main.tua\n{main}\n"
+        ));
+        let mut host = AnalysisHost::new();
+        host.set_source_roots([PathBuf::from("src")]);
+        for file in fixture.files() {
+            host.set_file(&file.path, file.source.clone());
+        }
+        assert!(
+            host.current_file_hover("src/main.tua", fixture.position("declaration"))
+                .is_none(),
+            "{name} requires project-aware local hover"
+        );
+        let hover = host
+            .snapshot()
+            .hover("src/main.tua", fixture.position("declaration"))
+            .expect("project-aware derived local should hover");
+        assert_eq!(hover.contents, "local derived: number", "{name}: {hover:?}");
+    }
+}
+
+#[test]
 fn snapshot_preserves_store_callback_state_through_nested_module_exports() {
     let fixture = Fixture::parse(
         r#"-- file: src/main.tua
