@@ -115,7 +115,28 @@ When a generated line has no exact map, Tua leaves it unlinked rather than
 guessing a source line; inspect the full traceback in the run terminal or
 Debug Console.
 
-### Source-Map Files
+For structured game messages, Tua provides an optional `Log` global:
+
+```lua
+local combat = Log.scope("combat")
+combat.info("enemy spawned", enemyId)
+combat.warn("low health", health)
+Log.error("asset failed", assetPath) -- logs; does not throw
+```
+
+Levels are `trace`, `debug`, `info`, `warn`, and `error`. The default minimum is
+`info`; call `Log.setLevel("debug")` during development to see debug messages.
+Arguments are converted to text and separated by tabs. Newlines are escaped
+so each call stays one console entry. When Lua's debug library is available,
+each message includes its generated Lua call site; the Game Console maps that
+location to Tua when source maps exist.
+
+The logger runs only when called, and its runtime is copied into a build only
+when Tua source uses `Log`. In a plain `.lua` file, write
+`local Log = require("tualog")` explicitly. For a real exception and traceback,
+use Lua's `error(...)` instead of `Log.error(...)`.
+
+## Source-Map Files
 
 With `emit_maps = true`, each generated Lua file can have two adjacent maps:
 

@@ -2070,10 +2070,11 @@ pub(crate) fn build_type_environment_with_domain_registry(
     // During builtin inference this list is intentionally empty. Do not seed
     // the catalog until all builtin modules have finished their own inference.
     let can_share_locals = locals.is_empty()
-        && builtin_locals.len() == crate::builtin_module::MODULES.len() - 1
+        && builtin_locals.len() == crate::builtin_module::EAGER_MODULES.len()
         && !parsed
             .source
-            .contains(crate::builtin_module::AUDIO_DESIGN.name);
+            .contains(crate::builtin_module::AUDIO_DESIGN.name)
+        && !parsed.source.contains(crate::builtin_module::LOG.name);
     let domain_locals = domains
         .builtin_locals()
         .into_iter()

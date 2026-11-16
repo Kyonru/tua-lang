@@ -37,6 +37,7 @@ flowchart LR
 | Install Tua and choose an editor or CLI setup | [Installation](installation.md) |
 | Create and run a first project in VS Code | [Quickstart](quickstart.md) |
 | Debug generated LOVE code from `.tua` source | [Debugging](debugging.md) |
+| Find game logs and jump from errors to source | [Game logs and runtime errors](debugging.md#find-game-logs-and-runtime-errors) |
 | Learn Lua values, tables, loops, and method calls | [Lua Basics](lua-basics.md) |
 | Learn the language by building a small LOVE project | [Learn Tua](learn.md) |
 | Add Tua to an existing Lua codebase | [Lua Interoperability](lua-interop.md) and [Configuration](configuration.md) |

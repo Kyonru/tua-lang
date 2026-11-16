@@ -121,7 +121,7 @@ suggestions and the local Ollama fallback are separate opt-in features.
 | Task | In VS Code |
 | --- | --- |
 | Play or rebuild | Choose a named Run configuration, then use Run, Stop, Restart, or Hot reload. Use **Tua: Show Run Options in Run and Debug** if the Run and Debug section is collapsed. |
-| Find game logs | Open **Tua Console** in the bottom panel or click **Game Logs** in the status bar after a run. Filter by level or scope; click a `file.tua:line` label to jump to its source. |
+| Find game logs | Open **Tua Console** in the bottom panel or click **Game Logs** in the status bar after a run. Filter by level or scope; click a `file.tua:line` label to jump to its source. Use the optional `Log` API for scoped messages. |
 | Debug | Choose **Debug Tua LOVE Game** from **Run and Debug → Select and Start Debugging**, or use **Tua: Debug LOVE Project**. Install [Second Local Lua Debugger](https://marketplace.visualstudio.com/items?itemName=ismoh-games.second-local-lua-debugger-vscode) for source-mapped breakpoints and stepping. |
 | Test | Discover and run Tua/Busted specs in the Testing view, including file and case runs. Install Busted for the interpreter you use. |
 | Inspect | Enable the development-only Runtime Inspector, then start a new run. Pause or refresh snapshots without pausing the game. |

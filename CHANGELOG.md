@@ -6,6 +6,11 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+### Added
+
+- Add the optional `Log` game API with levels and filterable scopes. Its Lua
+  runtime is bundled only when referenced from Tua source.
+
 ### Fixed
 
 - Link LOVE runtime errors and scoped log messages to their Tua call sites in

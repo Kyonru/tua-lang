@@ -369,6 +369,10 @@ pub fn tuabehavior_runtime_source() -> &'static str {
     builtin_module::BEHAVIOR_TREE.source
 }
 
+pub fn tualog_runtime_source() -> &'static str {
+    builtin_module::LOG.source
+}
+
 pub fn baton_runtime_source() -> &'static str {
     input::runtime_source()
 }

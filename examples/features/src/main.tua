@@ -38,6 +38,7 @@ local Comments = require("comments")
 local Shaders = require("shaders")
 local Localization = require("localization")
 local SaveContracts = require("save_contracts")
+local Logging = require("logging")
 
 return {
   types = Types,
@@ -80,4 +81,5 @@ return {
   shaders = Shaders,
   localization = Localization,
   saveContracts = SaveContracts,
+  logging = Logging,
 }

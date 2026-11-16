@@ -1,0 +1,12 @@
+-- Log is a built-in Tua global. Its small runtime is copied only when used.
+-- In an ordinary .lua file, use local Log = require("tualog") instead.
+local combat = Log.scope("combat")
+
+local function reportDamage(amount: number)
+  combat.info("damage", amount)
+  if amount > 10 then
+    combat.warn("heavy hit", amount)
+  end
+end
+
+return { reportDamage = reportDamage }

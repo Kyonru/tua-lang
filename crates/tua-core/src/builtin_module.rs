@@ -69,6 +69,14 @@ pub(crate) const BEHAVIOR_TREE: BuiltinModule = BuiltinModule {
     documentation: "Create a definition with `BehaviorTree.new(root)`, then call `tree:instance(context)` and `runner:update(dt)` from LOVE's update loop.",
 };
 
+pub(crate) const LOG: BuiltinModule = BuiltinModule {
+    name: "Log",
+    runtime: "tualog",
+    source: include_str!("../../../vendor/runtime/tualog.lua"),
+    summary: "opt-in game logging",
+    documentation: "Write filterable messages with `Log.info(...)`, `Log.warn(...)`, or `Log.error(...)`; use `Log.scope(\"combat\")` to name a subsystem. Debug and trace messages require `Log.setLevel`.",
+};
+
 pub(crate) const AUDIO_DESIGN: BuiltinModule = BuiltinModule {
     name: "AudioDesign",
     runtime: "tua.audio.design",
@@ -77,8 +85,19 @@ pub(crate) const AUDIO_DESIGN: BuiltinModule = BuiltinModule {
     documentation: "Render a short, seeded waveform once to a reusable static LOVE Source.",
 };
 
-pub(crate) const MODULES: &[BuiltinModule] =
-    &[TWEEN, CAMERA, SHADER_SCAN, ROT, BEHAVIOR_TREE, AUDIO_DESIGN];
+// These modules are inferred together and shared by the common type environment.
+// Opt-in APIs below are inferred only for files that mention them.
+pub(crate) const EAGER_MODULES: &[BuiltinModule] =
+    &[TWEEN, CAMERA, SHADER_SCAN, ROT, BEHAVIOR_TREE];
+pub(crate) const MODULES: &[BuiltinModule] = &[
+    TWEEN,
+    CAMERA,
+    SHADER_SCAN,
+    ROT,
+    BEHAVIOR_TREE,
+    LOG,
+    AUDIO_DESIGN,
+];
 
 pub(crate) const TWEEN_INSTANCE_TYPE: &str = "tween.Tween";
 
@@ -89,6 +108,23 @@ pub(crate) fn module(name: &str) -> Option<&'static BuiltinModule> {
 /// The module's export type, inferred once from its LuaDoc with the runtime's
 /// own classes inlined, so no internal type names leak into user code.
 pub(crate) fn module_type(module: &BuiltinModule) -> Type {
+    if module.name == LOG.name {
+        static LOG_TYPE: OnceLock<Type> = OnceLock::new();
+        return LOG_TYPE
+            .get_or_init(|| {
+                std::thread::Builder::new()
+                    .name("tua-log-type".to_owned())
+                    .stack_size(16 * 1024 * 1024)
+                    .spawn(|| {
+                        INFERRING.with(|inferring| inferring.set(true));
+                        infer_module_type(&LOG)
+                    })
+                    .ok()
+                    .and_then(|thread| thread.join().ok())
+                    .unwrap_or(Type::Any)
+            })
+            .clone();
+    }
     if module.name == AUDIO_DESIGN.name {
         static AUDIO_TYPE: OnceLock<Type> = OnceLock::new();
         return AUDIO_TYPE
@@ -117,20 +153,16 @@ pub(crate) fn module_type(module: &BuiltinModule) -> Type {
                 // The runtimes' own environments must not include the modules
                 // being inferred, or inference would wait on itself.
                 INFERRING.with(|inferring| inferring.set(true));
-                MODULES
-                    .iter()
-                    .filter(|module| module.name != AUDIO_DESIGN.name)
-                    .map(infer_module_type)
-                    .collect()
+                EAGER_MODULES.iter().map(infer_module_type).collect()
             })
             .and_then(|thread| {
                 thread
                     .join()
                     .map_err(|_| std::io::Error::other("built-in module inference panicked"))
             })
-            .unwrap_or_else(|_| vec![Type::Any; MODULES.len() - 1])
+            .unwrap_or_else(|_| vec![Type::Any; EAGER_MODULES.len()])
     });
-    let index = MODULES
+    let index = EAGER_MODULES
         .iter()
         .position(|candidate| candidate.name == module.name)
         .expect("module comes from MODULES");
@@ -283,6 +315,7 @@ pub(crate) fn builtin_locals(parsed: &ParsedSource) -> Vec<(String, Type)> {
         .filter(|module| {
             module.name != AUDIO_DESIGN.name || parsed.source.contains(AUDIO_DESIGN.name)
         })
+        .filter(|module| module.name != LOG.name || parsed.source.contains(LOG.name))
         .filter(|module| !declared.contains(module.name))
         .map(|module| (module.name.to_owned(), module_type(module)))
         .collect()
@@ -456,6 +489,13 @@ mod tests {
 
     #[test]
     fn module_types_are_structural_and_carry_their_contracts() {
+        assert!(
+            EAGER_MODULES
+                .iter()
+                .enumerate()
+                .all(|(index, module)| { MODULES[index].name == module.name }),
+            "shared built-in type cache must follow the eager module prefix"
+        );
         let parsed = crate::parse_lua_source(Path::new("tuarot.lua"), ROT.source.to_owned())
             .expect("the Rot runtime parses as Lua");
         crate::types::build_type_environment(&parsed)
@@ -538,6 +578,38 @@ return hit
         )
         .expect("emit local override");
         assert!(!shadowed.contains("tua.audio.design"), "{shadowed}");
+    }
+
+    #[test]
+    fn log_global_is_typed_and_emitted_only_when_used() {
+        let source = "Log.setLevel(\"debug\")\nLog.scope(\"combat\").warn(\"low health\", 2)\n";
+        crate::check_tua_source("src/main.tua", source).expect("typed logging API");
+        for invalid in ["Log.setLevel(\"verbose\")\n", "Log.scope(42)\n"] {
+            assert!(
+                crate::check_tua_source("src/main.tua", invalid).is_err(),
+                "{invalid}"
+            );
+        }
+        let completions = crate::complete_tua_source(
+            "src/main.tua",
+            "local combat = Log.scope(\"combat\")\ncombat.",
+            crate::SourcePosition { line: 2, column: 8 },
+        )
+        .expect("scoped logger completion");
+        assert!(
+            completions.iter().any(|item| item.label == "warn"),
+            "{completions:?}"
+        );
+        let emitted = crate::emit_tua_source("src/main.tua", source).expect("emit logging");
+        assert!(
+            emitted.contains("local Log = require(\"tualog\")"),
+            "{emitted}"
+        );
+        let unused = crate::emit_tua_source("src/main.tua", "print(1)\n").expect("emit");
+        assert!(!unused.contains("tualog"), "{unused}");
+        let shadowed =
+            crate::emit_tua_source("src/main.tua", "local Log = {}\nreturn Log\n").expect("emit");
+        assert!(!shadowed.contains("tualog"), "{shadowed}");
     }
 
     #[test]
