@@ -50,7 +50,8 @@ extension, documentation site, and bundled example projects.
   inlay hints, document/workspace symbols, and more.
 - LOVE-aware helpers, API catalogs, callback guidance, and asset-path
   validation for both Tua helpers and native LOVE constructors.
-- Opt-in built-in helpers such as `Vec2`, `spriteSheet({...})`, Baton-backed
+- Opt-in built-in helpers such as the `vec2(...)` constructor (`Vec2` type),
+  `spriteSheet({...})`, Baton-backed
   typed input, signal buses, state stores, state machines, ECS, and object
   pools, plus `audioSystem({...})` for typed buses, cues, music scenes, and
   cached audio analysis.

@@ -16,9 +16,10 @@ the smallest set that improves the game's code and editing experience.
 - Keep native LÖVE and ordinary Lua when a helper adds no useful type,
   lifecycle, or tooling benefit. Use `.tua` annotations at public boundaries;
   let obvious local values infer their types.
-- In `.tua`, use supported globals such as `ecs`, `tween`, `Camera`, `Rot`,
+- In `.tua`, use preferred globals such as `ECS`, `Tween`, `Camera`, `Rot`,
   `BehaviorTree`, and `AudioDesign` directly. Their imports and bundled Lua
-  modules are included only when referenced. In plain `.lua`, use documented
+  modules are included only when referenced. `ecs` and `tween` remain accepted
+  compatibility spellings. In plain `.lua`, use documented
   explicit runtime imports. Local or project-provided definitions can replace
   built-ins, so do not assume an injected global wins over a real binding.
 
