@@ -20,6 +20,7 @@ const { serverHealthHtml } = require("../../src/health/template");
 const { serverHealthViewModel } = require("../../src/health/view-model");
 const { proceduralPreviewHtml } = require("../../src/procedural/preview");
 const { fontPreviewHtml } = require("../../src/love/assets/font-preview");
+const { localizationHtml } = require("../../src/localization/template");
 
 async function run() {
   const panel = vscode.window.createWebviewPanel("tuaPreviewTest", "Tua Preview Test", vscode.ViewColumn.One, {
@@ -240,6 +241,53 @@ async function run() {
     await screenshot("behavior-tree-narrow");
     await workbench.send("Emulation.clearDeviceMetricsOverride");
     await screenshot("behavior-tree");
+    await load(localizationHtml(panel.webview, "localization-test-nonce"), "Tua Localization");
+    await waitFor(() => messages.some(message => message.type === "ready"), "localization webview ready");
+    await panel.webview.postMessage({ type: "page", page: { enabled: false, locales: [], total: 0, offset: 0, rows: [] } });
+    await waitFor(() => evaluate("document.getElementById('summary').textContent.includes('Enable [i18n]')"), "disabled localization state");
+    const localizationRange = { start: { line: 2, character: 4 }, end: { line: 2, character: 13 } };
+    const localizationCell = (locale, status, preview) => ({ locale, status, preview, forms: [], placeholders: ["name"],
+      uri: `file:///game/locales/${locale}.lua`, range: localizationRange });
+    const localizationRows = Array.from({ length: 100 }, (_, index) => ({
+      key: index === 0 ? "menu.play" : `menu.item${index}`,
+      cells: [localizationCell("en", "translated", "Play %{name}"), localizationCell("fr", "fallback", "Play %{name}")],
+    }));
+    await panel.webview.postMessage({ type: "page", page: { enabled: true, locales: ["en", "fr"], total: 101, offset: 0, rows: localizationRows } });
+    await waitFor(() => evaluate("document.querySelectorAll('#table tbody tr').length === 100"), "populated localization page");
+    assert.equal(await evaluate("document.getElementById('range').textContent"), "1–100 of 101");
+    assert.equal(await evaluate("document.querySelector('#details .sample').textContent"), "Play Ada", "source-text preview substitutes sample arguments");
+    assert.equal(await evaluate("document.querySelector('#table tbody tr:first-child button').getAttribute('type')"), "button", "translation keys are keyboard buttons");
+    await evaluate("(() => { const button = document.querySelector('#details button'); button.focus(); button.click(); })()");
+    await waitFor(() => messages.some(message => message.command === "openLocation" && message.uri === "file:///game/locales/en.lua"), "catalog source navigation");
+    assert.equal(await evaluate("document.activeElement.textContent"), "Open catalog entry", "source navigation remains keyboard focusable");
+    const pageMessageCount = messages.filter(message => message.type === "page").length;
+    await evaluate("document.getElementById('next').click()");
+    await waitFor(() => messages.filter(message => message.type === "page").length > pageMessageCount, "localization next page request");
+    assert.equal(messages.filter(message => message.type === "page").at(-1).offset, 100);
+    await panel.webview.postMessage({ type: "page", page: { enabled: true, locales: ["en", "fr"], total: 101, offset: 100,
+      rows: [{ key: "menu.quit", cells: [localizationCell("en", "translated", "Quit"), localizationCell("fr", "missing", null)] }] } });
+    await waitFor(() => evaluate("document.getElementById('range').textContent === '101–101 of 101'"), "second localization page");
+    assert.equal(await evaluate("document.getElementById('next').disabled"), true);
+    const searchMessageCount = messages.filter(message => message.type === "search").length;
+    await evaluate("(() => { const input = document.getElementById('search'); input.value = 'menu.play'; input.dispatchEvent(new Event('input')); })()");
+    await waitFor(() => messages.filter(message => message.type === "search").length > searchMessageCount, "localization search request");
+    assert.equal(messages.filter(message => message.type === "search").at(-1).value, "menu.play");
+    await panel.webview.postMessage({ type: "page", page: { enabled: true, locales: ["en", "fr"], total: 0, offset: 0, rows: [] } });
+    await waitFor(() => evaluate("document.getElementById('selected').textContent === 'No matching key'"), "empty localization search");
+    assert.equal(await evaluate("document.getElementById('range').textContent"), "No keys");
+    await panel.webview.postMessage({ type: "error", message: "Catalog request failed" });
+    await waitFor(() => evaluate("document.getElementById('summary').textContent === 'Catalog request failed'"), "localization request error");
+    const refreshMessageCount = messages.filter(message => message.type === "refresh").length;
+    await evaluate("document.getElementById('refresh').click()");
+    await waitFor(() => messages.filter(message => message.type === "refresh").length > refreshMessageCount, "localization retry request");
+    await panel.webview.postMessage({ type: "page", page: { enabled: true, locales: ["en", "fr"], total: 1, offset: 0,
+      rows: [{ key: "menu.play", cells: [localizationCell("en", "translated", "Play"), localizationCell("fr", "translated", "Jouer")] }] } });
+    await waitFor(() => evaluate("document.getElementById('summary').textContent === '1 keys · 2 locales'"), "localization recovery");
+    await workbench.send("Emulation.setDeviceMetricsOverride", { width: 640, height: 900, deviceScaleFactor: 1, mobile: false });
+    await waitFor(() => workbench.evaluate("window.innerWidth <= 640"), "narrow localization viewport");
+    assert.equal(await evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1"), true, "localization view fits a narrow editor");
+    await screenshot("localization-narrow");
+    await workbench.send("Emulation.clearDeviceMetricsOverride");
     const emptyExplorers = [
       ["Module Graph", moduleGraphHtml(panel.webview, { analysisRevision: 1, modules: [], edges: [], cycles: [] }), "#filter"],
       ["ECS Explorer", ecsExplorerHtml(panel.webview, { analysisRevision: 1, components: [], systems: [], queries: [], insights: [] }), "#filter"],
@@ -433,7 +481,7 @@ async function run() {
       await screenshot(className);
     }
     assert.deepEqual(browser.errors, [], "preview scripts must not throw");
-    console.log("Preview webviews passed: decoded images, playback focus, replay, restore, error recovery, graph focus, double-click navigation, and selection persistence.");
+    console.log("Preview webviews passed: animation, graphs, localization paging and navigation, error recovery, focus, and selection persistence.");
   } finally {
     workbench.dispose();
     browser.dispose();
