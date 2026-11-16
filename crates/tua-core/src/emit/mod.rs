@@ -1906,7 +1906,6 @@ fn lower_builtin_call_operations(
 ) -> Vec<lowering::LoweringOperation> {
     let output = document.code();
     let mut operations = Vec::new();
-    let mut index = 0;
     let brinevector_span = builtin_constructor_spans
         .get(vector::CONSTRUCTOR_NAME)
         .copied();
@@ -1929,8 +1928,6 @@ fn lower_builtin_call_operations(
         .get(input::CONSTRUCTOR_NAME)
         .copied();
     let mut tuaecs_spans = BTreeMap::<String, SourceSpan>::new();
-    let mut tuai18n_span = None;
-    let mut tuasave_span = None;
     let game_math_helpers = game_math::used_helpers(parsed);
     let scope = crate::scope::scope_map_parsed_source(parsed);
     if ecs_enabled {
@@ -1963,57 +1960,27 @@ fn lower_builtin_call_operations(
             })
         })
         .collect::<Vec<_>>();
-    while index < output.len() {
-        let rest = &output[index..];
-
-        if rest.starts_with("--") {
-            index = consume_comment(&output, index);
-            continue;
+    let builtin_reference_span = |name: &str| {
+        if environment.project_owns_module(name) {
+            return None;
         }
-
-        if let Some(end) = consume_string_literal(&output, index) {
-            index = end;
-            continue;
-        }
-
-        if let Some(identifier_end) = consume_identifier(rest) {
-            let name = &output[index..index + identifier_end];
-
-            if i18n_enabled && name == crate::i18n::MODULE_NAME {
-                let field_start = skip_whitespace(&output, index + identifier_end);
-                if output[field_start..].starts_with('.') {
-                    let source_span = document.source_span_at(index);
-                    if !scope
-                        .has_non_builtin_binding_at(crate::i18n::MODULE_NAME, source_span.start)
-                    {
-                        tuai18n_span.get_or_insert(source_span);
-                    }
-                }
-            }
-
-            if name == crate::save::MODULE_NAME {
-                let field_start = skip_whitespace(&output, index + identifier_end);
-                if output[field_start..].starts_with('.') {
-                    let source_span = document.source_span_at(index);
-                    if !scope
-                        .has_non_builtin_binding_at(crate::save::MODULE_NAME, source_span.start)
-                    {
-                        tuasave_span.get_or_insert(source_span);
-                    }
-                }
-            }
-
-            index += identifier_end;
-            continue;
-        }
-
-        let character = rest
-            .chars()
-            .next()
-            .expect("loop only runs at valid string boundaries");
-
-        index += character.len_utf8();
-    }
+        scope.references().iter().find_map(|reference| {
+            (reference.name == name
+                && matches!(
+                    &reference.resolution,
+                    crate::scope::ScopeResolution::Unresolved
+                        | crate::scope::ScopeResolution::Global(crate::scope::ScopeGlobal {
+                            kind: crate::scope::ScopeGlobalKind::LuaBuiltin,
+                            ..
+                        })
+                ))
+            .then_some(reference.span)
+        })
+    };
+    let tuai18n_span = i18n_enabled
+        .then(|| builtin_reference_span(crate::i18n::MODULE_NAME))
+        .flatten();
+    let tuasave_span = builtin_reference_span(crate::save::MODULE_NAME);
 
     if brinevector_span.is_some()
         || tuasignal_span.is_some()

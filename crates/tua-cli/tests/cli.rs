@@ -4586,6 +4586,66 @@ fn build_does_not_overwrite_project_tuastore_runtime() {
 }
 
 #[test]
+fn save_runtime_follows_module_values_but_not_matching_property_names() {
+    let temp = TempDir::new("build-save-module-value");
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).unwrap();
+    fs::create_dir_all(temp.path().join("src")).unwrap();
+    fs::write(
+        temp.path().join("src/main.tua"),
+        "local serializer = Save\nassert(type(serializer.number) == 'function')\n",
+    )
+    .unwrap();
+    let built = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .unwrap();
+    assert!(
+        built.status.success(),
+        "{}",
+        String::from_utf8_lossy(&built.stderr)
+    );
+    let out = temp.path().join("build");
+    assert!(fs::read_to_string(out.join("main.lua"))
+        .unwrap()
+        .starts_with("local Save = require(\"tuasave\")\n"));
+    assert!(out.join("tuasave.lua").is_file());
+    if let Some(lua) = working_lua_runtime() {
+        let run = Command::new(lua)
+            .arg("main.lua")
+            .current_dir(&out)
+            .output()
+            .unwrap();
+        assert!(
+            run.status.success(),
+            "{}",
+            String::from_utf8_lossy(&run.stderr)
+        );
+    }
+
+    fs::write(
+        temp.path().join("src/main.tua"),
+        "local metadata = {Save = {value = 3}}\nassert(metadata.Save.value == 3)\n",
+    )
+    .unwrap();
+    let built = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .unwrap();
+    assert!(
+        built.status.success(),
+        "{}",
+        String::from_utf8_lossy(&built.stderr)
+    );
+    assert!(!fs::read_to_string(out.join("main.lua"))
+        .unwrap()
+        .contains("tuasave"));
+    assert!(!out.join("tuasave.lua").exists());
+    assert!(!out.join("tuasave_json.lua").exists());
+}
+
+#[test]
 fn build_includes_save_runtime_only_when_used() {
     let temp = TempDir::new("build-save-runtime");
     fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).unwrap();

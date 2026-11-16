@@ -84,6 +84,54 @@ fn localization_build_is_lazy_and_runtime_is_shared_across_modules() {
 }
 
 #[test]
+fn localization_runtime_follows_module_values_but_not_matching_property_names() {
+    let project = configured_project("localization-module-value");
+    fs::write(
+        project.path().join("src/main.tua"),
+        "local translator = I18n\nassert(translator.t('menu.play', {name = 'Ada'}) == 'Play Ada')\n",
+    )
+    .unwrap();
+    let built = run(&project, "build");
+    assert!(
+        built.status.success(),
+        "{}",
+        String::from_utf8_lossy(&built.stderr)
+    );
+    let out = project.path().join("build");
+    assert!(fs::read_to_string(out.join("main.lua"))
+        .unwrap()
+        .starts_with("local I18n = require(\"tuai18n\")\n"));
+    if let Some(lua) = support::lua_executable() {
+        let result = Command::new(lua)
+            .arg("main.lua")
+            .current_dir(&out)
+            .output()
+            .unwrap();
+        assert!(
+            result.status.success(),
+            "{}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+    }
+
+    fs::write(
+        project.path().join("src/main.tua"),
+        "local metadata = {I18n = {value = 3}}\nassert(metadata.I18n.value == 3)\n",
+    )
+    .unwrap();
+    let built = run(&project, "build");
+    assert!(
+        built.status.success(),
+        "{}",
+        String::from_utf8_lossy(&built.stderr)
+    );
+    assert!(!fs::read_to_string(out.join("main.lua"))
+        .unwrap()
+        .contains("tuai18n"));
+    assert!(!out.join("tuai18n.lua").exists());
+}
+
+#[test]
 fn localization_check_reports_catalog_errors_without_executing_catalogs() {
     let project = configured_project("localization-catalog-errors");
     fs::write(

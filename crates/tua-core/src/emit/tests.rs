@@ -2855,6 +2855,23 @@ fn save_runtime_is_injected_only_for_unshadowed_tua_references() {
     );
     assert_eq!(emitted.matches("require(\"tuasave\")").count(), 1);
 
+    let forwarded = emit_tua_source(
+        "src/profile.tua",
+        "local serializer = Save\nreturn serializer.number(0)\n",
+    )
+    .expect("forwarded Save module should emit");
+    assert!(
+        forwarded.starts_with("local Save = require(\"tuasave\")\n"),
+        "{forwarded}"
+    );
+
+    let property = emit_tua_source(
+        "src/profile.tua",
+        "local metadata = {Save = {value = 3}}\nreturn metadata.Save.value\n",
+    )
+    .expect("ordinary Save property should emit");
+    assert!(!property.contains("tuasave"), "{property}");
+
     let shadowed = emit_tua_source(
         "src/profile.tua",
         "local Save = require(\"custom_save\")\nreturn Save.contract({})\n",

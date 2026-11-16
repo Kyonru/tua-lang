@@ -20,6 +20,8 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Import the optional localization and save runtimes when their module values
+  are forwarded, while leaving unrelated table properties out of the build.
 - Avoid rescanning unrelated modules and repeated function declarations when
   resolving a side-effect imported global on hover or navigation.
 - Preserve exported type-alias origins through Tua and Lua forwarding files,

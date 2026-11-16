@@ -9,6 +9,8 @@ data written to a slot; a store binding decides when to write it. In `.tua`,
 using `Save` adds `require("tuasave")` to that file's generated Lua. The build
 includes `tuasave.lua` and its JSON codec only when referenced. Plain `.lua`
 files use `local Save = require("tuasave")`.
+Passing or storing the built-in `Save` value also imports it; a table field
+named `Save` does not.
 
 ```tua title="src/profile.tua"
 local Profile = Save.contract({

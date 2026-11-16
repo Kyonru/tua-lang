@@ -164,6 +164,8 @@ automatic subtitle-to-recording timing.
 When a `.tua` file references the built-in `I18n`, generated Lua imports
 `tuai18n`. The build copies the adapter, its pinned Smiti18n modules and MIT
 notice, a generated configuration module, and the configured Lua catalogs.
+This also applies when passing or storing `I18n` as a value; an unrelated table
+field named `I18n` does not import it.
 Enabled projects that never use `I18n` do not copy the runtime. Disabled
 projects do not gain the built-in or an injected import. A local/imported
 binding named `I18n` takes precedence, and ordinary third-party `require`
