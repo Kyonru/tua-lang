@@ -526,6 +526,7 @@ function inspectDocument(message) {
   log({
     type: "inspect.request",
     uri,
+    position: message.params?.position,
     version: document?.version,
     id: message.id,
   });

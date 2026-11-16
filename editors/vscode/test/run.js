@@ -207,6 +207,8 @@ function spriteSource(imagePath, animations) {
     ...animationLines,
     "  },",
     "})",
+    "local unrelated = 1",
+    "local sameFile = Player",
     "",
   ].join("\n");
 }

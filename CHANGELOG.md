@@ -20,6 +20,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Skip preview inspection requests for unrelated hovers in files containing
+  sprite, state-machine, or behavior-tree declarations while retaining preview
+  links on declarations and same-file references.
 - Preserve imported class instance members and navigation through forwarding
   functions when an upstream provider has a recoverable syntax error.
 - Keep completion, hover, and signature help on healthy later lines when a

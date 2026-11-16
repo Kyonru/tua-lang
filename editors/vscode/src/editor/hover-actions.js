@@ -5,6 +5,7 @@ const { COMMANDS, STATUS_SELECTOR } = require("../constants");
 const { isStaleDocumentResponse } = require("../shared/documents");
 const { formatError } = require("../shared/errors");
 const { lspRangeToVscode } = require("../shared/locations");
+const { maskSource } = require("../inspector/origins");
 
 const WORD_PATTERN = /[A-Za-z_][A-Za-z0-9_]*/;
 const ASSET_PATH_PATTERN =
@@ -37,6 +38,9 @@ const INSPECTION_PREVIEWS = {
 };
 // These are the constructors of the static previews returned by tua/inspect.
 const INSPECTION_SOURCE_PATTERN = /\b(?:spriteSheet|stateMachine|BehaviorTree)\b/;
+const INSPECTION_CALL_PATTERN = /\b(?:spriteSheet|stateMachine)\s*\(|\bBehaviorTree\s*\.\s*new\s*\(/g;
+const INSPECTION_DECLARATION_PATTERN = /\blocal[ \t]+([A-Za-z_]\w*)\s*(?::[^=\n]+)?=\s*(?:spriteSheet|stateMachine|BehaviorTree\s*\.\s*new)\s*\(/g;
+const INSPECTION_UNPARENTHESIZED_PATTERN = /\b(?:spriteSheet|stateMachine)\s*\{|\bBehaviorTree\s*\.\s*new\s*\{/;
 const inspectionSourceCache = new WeakMap();
 
 function registerHoverActions({ getClient, isTuaDocument }) {
@@ -75,7 +79,7 @@ async function hoverActionsAtPosition({ document, getClient, isTuaDocument, posi
   const signalEvent = stringLiteral ? isSignalEventLiteral(document, stringLiteral) : false;
   const [asset, inspectionPreview] = await Promise.all([
     assetAtStringLiteral({ document, getClient, position, stringLiteral }),
-    inspectionPreviewAtPosition({ document, getClient, position }),
+    inspectionPreviewAtPosition({ document, getClient, position, wordRange }),
   ]);
 
   if (!identifierRange && !signalEvent && !asset && !inspectionPreview) {
@@ -128,8 +132,8 @@ async function hoverActionsAtPosition({ document, getClient, isTuaDocument, posi
   );
 }
 
-async function inspectionPreviewAtPosition({ document, getClient, position }) {
-  if (!mayContainInspection(document)) {
+async function inspectionPreviewAtPosition({ document, getClient, position, wordRange }) {
+  if (!mayContainInspection(document, position, wordRange)) {
     return undefined;
   }
   const client = getClient();
@@ -171,17 +175,84 @@ async function inspectionPreviewAtPosition({ document, getClient, position }) {
   return undefined;
 }
 
-function mayContainInspection(document) {
+function mayContainInspection(document, position, wordRange) {
   if (typeof document.getText !== "function") {
     return true;
   }
   const cached = inspectionSourceCache.get(document);
-  if (cached?.version === document.version) {
-    return cached.value;
+  let index = cached?.version === document.version ? cached.index : undefined;
+  if (!index) {
+    index = buildInspectionSourceIndex(document.getText());
+    inspectionSourceCache.set(document, { version: document.version, index });
   }
-  const value = INSPECTION_SOURCE_PATTERN.test(document.getText());
-  inspectionSourceCache.set(document, { version: document.version, value });
-  return value;
+  if (!index.possible) {
+    return false;
+  }
+  if (typeof document.offsetAt !== "function") {
+    return true;
+  }
+  const word = wordRange ? document.getText(wordRange) : undefined;
+  return mayContainInspectionAtOffset(index, document.offsetAt(position), word);
+}
+
+function buildInspectionSourceIndex(source) {
+  if (!INSPECTION_SOURCE_PATTERN.test(source)) {
+    return { possible: false };
+  }
+  // This is only a conservative request filter. The server remains the owner
+  // of declaration identity, including references that resolve to one.
+  const masked = maskSource(source);
+  const names = new Set();
+  const ranges = [];
+  const matchedCalls = new Set();
+  let uncertain = INSPECTION_UNPARENTHESIZED_PATTERN.test(masked);
+  for (const match of masked.matchAll(INSPECTION_DECLARATION_PATTERN)) {
+    const callOffset = match[0].search(/\b(?:spriteSheet|stateMachine|BehaviorTree\s*\.\s*new)\s*\($/);
+    if (callOffset < 0) {
+      uncertain = true;
+      continue;
+    }
+    matchedCalls.add(match.index + callOffset);
+    const end = inspectionCallEnd(masked, match.index + match[0].length - 1);
+    if (end === undefined) {
+      uncertain = true;
+      continue;
+    }
+    // LuaU interpolated strings retain delimiters in the lightweight masker.
+    // An apparent closing parenthesis inside one makes this range uncertain.
+    if (masked.slice(match.index, end).includes("`")) {
+      uncertain = true;
+    }
+    names.add(match[1]);
+    ranges.push({ start: match.index, end });
+  }
+  for (const call of masked.matchAll(INSPECTION_CALL_PATTERN)) {
+    if (!matchedCalls.has(call.index)) {
+      uncertain = true;
+      break;
+    }
+  }
+  return { possible: true, uncertain, names, ranges };
+}
+
+function inspectionCallEnd(masked, open) {
+  let depth = 0;
+  for (let offset = open; offset < masked.length; offset += 1) {
+    if (masked[offset] === "(") {
+      depth += 1;
+    } else if (masked[offset] === ")" && --depth === 0) {
+      return offset + 1;
+    }
+  }
+  return undefined;
+}
+
+function mayContainInspectionAtOffset(index, offset, word) {
+  if (!index.possible) {
+    return false;
+  }
+  return Boolean(index.uncertain || index.names.has(word) ||
+    index.ranges.some(range => range.start <= offset && offset <= range.end));
 }
 
 async function showProviderLocations({ locations: providedLocations, providerCommand, target, title }) {
@@ -387,6 +458,8 @@ function markdownCommandLink(command, title, args = []) {
 }
 
 module.exports = {
+  buildInspectionSourceIndex,
   hoverActionsAtPosition,
+  mayContainInspectionAtOffset,
   registerHoverActions,
 };

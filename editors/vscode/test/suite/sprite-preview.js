@@ -9,6 +9,7 @@ const {
   openFixture,
   positionAfter,
   previewTabs,
+  readEvents,
   waitForEvent,
   waitUntil,
 } = require("./support");
@@ -40,7 +41,7 @@ async function runSpritePreviewTests() {
       "tua.hover.implementations",
     ],
   });
-  const hoverInspection = await waitForEvent(
+  await waitForEvent(
     (event) =>
       event.type === "inspect.request" &&
       event.uri === document.uri.toString() &&
@@ -48,7 +49,32 @@ async function runSpritePreviewTests() {
     "sprite hover inspection at the current document version",
     beforeHover,
   );
-  const beforePreview = hoverInspection.sequence;
+  const unrelatedPosition = positionAfter(document, "unrelated =");
+  const unrelatedStart = eventSequence();
+  await vscode.commands.executeCommand("vscode.executeHoverProvider", document.uri, unrelatedPosition);
+  assert.equal(
+    readEvents().filter(event => event.sequence > unrelatedStart &&
+      event.type === "inspect.request" && event.uri === document.uri.toString() &&
+      event.position?.line === unrelatedPosition.line &&
+      event.position?.character === unrelatedPosition.character).length,
+    0,
+    "an unrelated local should not request preview inspection",
+  );
+
+  const referencePosition = positionAfter(document, "sameFile = Player", "sameFile = Pla");
+  const referenceStart = eventSequence();
+  const referenceHovers = await vscode.commands.executeCommand(
+    "vscode.executeHoverProvider", document.uri, referencePosition,
+  );
+  assert.match(hoverText(referenceHovers), /command:tua\.previewSprites/);
+  assert.equal(
+    readEvents().filter(event => event.sequence > referenceStart &&
+      event.type === "inspect.request" && event.uri === document.uri.toString() &&
+      event.position?.line === referencePosition.line &&
+      event.position?.character === referencePosition.character).length,
+    1,
+    "a same-file preview reference should still request inspection",
+  );
 
   const beforeAssetHover = eventSequence();
   const imagePath = /image\s*=\s*["']([^"']+)/.exec(document.getText())?.[1];
@@ -76,6 +102,7 @@ async function runSpritePreviewTests() {
     beforeAssetHover,
   );
 
+  const beforePreview = eventSequence();
   const opened = await vscode.commands.executeCommand("tua.previewSprites");
   assert.deepEqual(opened, {
     animationCount: 1,
