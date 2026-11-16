@@ -1,6 +1,63 @@
 use super::*;
 
 #[test]
+fn unclosed_comment_does_not_expose_following_text_as_code() {
+    let uri = "file:///tmp/tua-unclosed-comment-scope.tua";
+    let source = "--[[ unfinished\nlocal invented = { secret = 99 }\nprint(invented.secret)\n";
+    let output = run_messages(vec![
+        did_open(uri, source),
+        completion_request(2, uri, source, "invented."),
+        definition_request(3, uri, source, "invented.secret", 0),
+    ]);
+    assert_completion_labels(&output, 2, []);
+    assert!(response_with_id(&output, 3)["result"].is_null());
+}
+
+#[test]
+fn incomplete_function_header_does_not_promote_body_local_to_top_level() {
+    let uri = "file:///tmp/tua-incomplete-function-scope.tua";
+    let source = "local function broken(\n  local leaked = { secret = 99 }\nlocal healthy = { hp = 1 }\nprint(leaked.secret)\nprint(healthy.hp)\n";
+    let output = run_messages(vec![
+        did_open(uri, source),
+        completion_request(2, uri, source, "leaked."),
+        definition_request(3, uri, source, "leaked.secret", 0),
+    ]);
+    assert_completion_labels(&output, 2, []);
+    assert!(response_with_id(&output, 3)["result"].is_null());
+}
+
+#[test]
+fn cold_malformed_line_keeps_later_completion_hover_and_signature() {
+    let prefix = "type Actor = { hp: number, name: string }\nlocal actor: Actor = { hp = 10, name = \"Ada\" }\n";
+    let suffix = "local laterActor: Actor = actor\nlocal read = laterActor.hp\nlocal function damage(target: Actor, amount: number): number return target.hp - amount end\nlocal result = damage(laterActor, 2)\n";
+    for (name, middle) in [
+        ("unclosed-call", "local broken = damage(actor,\n"),
+        ("unclosed-table", "local broken = { hp =\n"),
+        ("stray-closer", "local broken = )\n"),
+        ("broken-string", "local broken = \"unterminated\n"),
+        ("incomplete-params", "local function unfinished(value: \n"),
+    ] {
+        let uri = format!("file:///tmp/tua-cold-recovery-{name}.tua");
+        let source = format!("{prefix}{middle}{suffix}");
+        let output = run_messages(vec![
+            did_open(&uri, &source),
+            completion_request(2, &uri, &source, "laterActor."),
+            hover_request(3, &uri, &source, "read ="),
+            signature_help_request(4, &uri, &source, "damage(laterActor, "),
+        ]);
+        assert_completion_labels(&output, 2, ["hp", "name"]);
+        assert_hover_contains(&output, 3, "read: number");
+        let signature = &response_with_id(&output, 4)["result"]["signatures"][0]["label"];
+        assert!(
+            signature
+                .as_str()
+                .is_some_and(|label| label.contains("damage(target: Actor, amount: number)")),
+            "{name}: {signature:?}"
+        );
+    }
+}
+
+#[test]
 fn malformed_consumer_does_not_report_false_imported_self_mismatch() {
     let temp = TempProject::new("malformed-imported-self");
     temp.write("tua.toml", "source = \"src\"\n");

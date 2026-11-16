@@ -187,12 +187,137 @@ pub(super) fn parse_degraded_analysis_source(
         None
     };
     let source = recovered.unwrap_or(source);
-    match kind {
+    let parsed = match kind {
         AnalysisSourceKind::Tua => {
-            crate::parser::parse_tua_source_for_analysis_recovery(path, source)
+            crate::parser::parse_tua_source_for_analysis_recovery(path, source.clone())
         }
-        AnalysisSourceKind::Lua => parse_analysis_source(path, source, kind),
+        AnalysisSourceKind::Lua => parse_analysis_source(path, source.clone(), kind),
+    };
+    let Err(diagnostics) = parsed else {
+        return parsed;
+    };
+
+    // A cold open has no last-good snapshot. Retry only the lines the parser
+    // identified as broken, leaving intact declarations available to editor
+    // queries. The original source still supplies published diagnostics.
+    let mut recovered = source;
+    let mut errors = diagnostics;
+    for _ in 0..3 {
+        let Some(next) = source_without_diagnostic_error_lines(&recovered, &errors) else {
+            break;
+        };
+        recovered = next;
+        match kind {
+            AnalysisSourceKind::Tua => {
+                match crate::parser::parse_tua_source_for_analysis_recovery(path, recovered.clone())
+                {
+                    Ok(parsed) => return Ok(parsed),
+                    Err(next_errors) => errors = next_errors,
+                }
+            }
+            AnalysisSourceKind::Lua => match parse_analysis_source(path, recovered.clone(), kind) {
+                Ok(parsed) => return Ok(parsed),
+                Err(next_errors) => errors = next_errors,
+            },
+        }
     }
+    Err(errors)
+}
+
+fn source_without_diagnostic_error_lines(source: &str, errors: &[Diagnostic]) -> Option<String> {
+    let lines = source.split_inclusive('\n').collect::<Vec<_>>();
+    let mut masked = std::collections::BTreeSet::new();
+    for error in errors {
+        let line_index = error.line.saturating_sub(1);
+        let Some(line) = lines.get(line_index) else {
+            continue;
+        };
+        let trimmed = line.trim_start();
+        if trimmed.starts_with("local function ") {
+            let next_is_body = lines.get(line_index + 1).is_some_and(|next| {
+                next.chars()
+                    .take_while(|character| character.is_whitespace())
+                    .count()
+                    > line
+                        .chars()
+                        .take_while(|character| character.is_whitespace())
+                        .count()
+            });
+            if !next_is_body
+                && (trimmed.trim_end().ends_with(':') || trimmed.trim_end().ends_with('('))
+            {
+                masked.insert(line_index);
+            }
+        } else if trimmed.starts_with("local ") && local_statement_has_incomplete_shape(trimmed) {
+            // Unclosed blocks and long comments own following lines. Masking
+            // their opener would invent top-level bindings and targets.
+            masked.insert(line_index);
+        }
+    }
+    if masked.is_empty() {
+        return None;
+    }
+    let mut result = String::with_capacity(source.len());
+    for (index, line) in lines.into_iter().enumerate() {
+        if masked.contains(&index) {
+            for character in line.chars() {
+                result.push(if character == '\n' || character == '\r' {
+                    character
+                } else {
+                    ' '
+                });
+            }
+        } else {
+            result.push_str(line);
+        }
+    }
+    Some(result)
+}
+
+fn local_statement_has_incomplete_shape(line: &str) -> bool {
+    let code = code_before_short_line_comment(line).trim_end();
+    code.ends_with(',')
+        || code.ends_with('=')
+        || ["= )", "= ]", "= }"]
+            .iter()
+            .any(|suffix| code.ends_with(suffix))
+        || has_unclosed_short_quote(code)
+}
+
+fn code_before_short_line_comment(line: &str) -> &str {
+    let mut quote = None;
+    let mut escaped = false;
+    for (index, character) in line.char_indices() {
+        if escaped {
+            escaped = false;
+        } else if character == '\\' && quote.is_some() {
+            escaped = true;
+        } else if quote == Some(character) {
+            quote = None;
+        } else if quote.is_none() && (character == '\'' || character == '"') {
+            quote = Some(character);
+        } else if quote.is_none() && line[index..].starts_with("--") {
+            return &line[..index];
+        }
+    }
+    line
+}
+
+fn has_unclosed_short_quote(line: &str) -> bool {
+    let mut quote = None;
+    let mut escaped = false;
+    for character in line.chars() {
+        if escaped {
+            escaped = false;
+        } else if character == '\\' && quote.is_some() {
+            escaped = true;
+        } else if quote == Some(character) {
+            quote = None;
+        } else if quote.is_none() && (character == '\'' || character == '"') {
+            quote = Some(character);
+        }
+    }
+    quote.is_some()
 }
 
 #[cfg(test)]
@@ -230,10 +355,27 @@ fn source_without_recoverable_incomplete_lines_preserving_headers(
         let protected_header = protected_ranges
             .iter()
             .any(|range| line_start < range.end && line_end > range.start);
+        let next_line = source
+            .get(line_start + line.len()..)
+            .and_then(|rest| rest.split('\n').next())
+            .unwrap_or("");
+        let function_header_with_body = (trimmed.starts_with("local function ")
+            || trimmed.starts_with("function "))
+            && next_line
+                .chars()
+                .take_while(|character| character.is_whitespace())
+                .count()
+                > content
+                    .chars()
+                    .take_while(|character| character.is_whitespace())
+                    .count();
         if !protected_header
+            && !function_header_with_body
             && (line_is_recoverable_incomplete_edit(trimmed) || unfinished_argument)
         {
             if trimmed.ends_with(':')
+                && !trimmed.starts_with("local function ")
+                && !trimmed.starts_with("function ")
                 && !content.contains("--")
                 && !class_body_ranges
                     .iter()
@@ -408,4 +550,22 @@ pub(super) fn is_simple_identifier(value: &str) -> bool {
 
 pub(super) fn code_before_line_comment(line: &str) -> &str {
     line.split_once("--").map(|(code, _)| code).unwrap_or(line)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn diagnostic_recovery_only_masks_the_broken_local_statement() {
+        let source = "local broken = call(1,\nlocal healthy = \"x--y\"\n";
+        let error = Diagnostic::error("src/main.tua", 1, 22, "trailing comma");
+        let recovered = source_without_diagnostic_error_lines(source, &[error]).unwrap();
+        assert_eq!(recovered.lines().count(), 2);
+        assert_eq!(recovered.lines().nth(1), Some("local healthy = \"x--y\""));
+        assert!(recovered.lines().next().unwrap().trim().is_empty());
+
+        let next_line_error = Diagnostic::error("src/main.tua", 2, 1, "unexpected token");
+        assert!(source_without_diagnostic_error_lines(source, &[next_line_error]).is_none());
+    }
 }

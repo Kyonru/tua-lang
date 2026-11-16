@@ -658,12 +658,21 @@ impl AnalysisSnapshot {
                 .degraded_semantic_facts(path, file)
                 .and_then(|facts| {
                     crate::signature_help::signature_help_in_source_with_environment_and_signal_index(
-                    &file.source,
+                        &file.source,
                         &facts.parsed,
                         position,
                         &facts.environment,
                         Some(self.usage_index.signal_event_index()),
                     )
+                    .or_else(|| {
+                        crate::signature_help::signature_help_in_source_with_environment_and_signal_index(
+                            &facts.parsed.raw.source,
+                            &facts.parsed,
+                            position,
+                            &facts.environment,
+                            Some(self.usage_index.signal_event_index()),
+                        )
+                    })
                 })
                 .or_else(|| degraded_signature_help_fallback(path, &file.source, position)),
         }
