@@ -1551,20 +1551,9 @@ pub(crate) fn is_valid_event_name(name: &str) -> bool {
 }
 
 fn type_from_type_info(type_info: &TypeInfo) -> Option<Type> {
-    match type_info {
-        TypeInfo::Basic(token) => Some(Type::named(token_text(token))),
-        TypeInfo::String(token) => Some(Type::string_literal(unquote_string(&token_text(token)))),
-        TypeInfo::Optional { base, .. } => {
-            Some(Type::union([type_from_type_info(base)?, Type::nil()]))
-        }
-        TypeInfo::Union(union) => union
-            .types()
-            .iter()
-            .map(type_from_type_info)
-            .collect::<Option<Vec<_>>>()
-            .map(Type::union),
-        _ => Some(Type::named(type_info.to_string())),
-    }
+    Some(crate::types::type_from_tua_type(
+        &crate::parser::tua_type_from_type_info(type_info),
+    ))
 }
 
 fn string_literal_value(token: &TokenReference) -> Option<String> {
@@ -1593,15 +1582,6 @@ fn node_start(node: &impl Node) -> SourcePosition {
 fn node_span(node: &impl Node) -> Option<SourceSpan> {
     node.range()
         .map(|(start, end)| SourceSpan::from_range(start, end))
-}
-
-fn unquote_string(value: &str) -> String {
-    value
-        .trim()
-        .strip_prefix(['"', '\''])
-        .and_then(|value| value.strip_suffix(['"', '\'']))
-        .unwrap_or_else(|| value.trim())
-        .to_owned()
 }
 
 fn resolve_aliases(environment: &TypeEnvironment, ty: &Type, depth: usize) -> Type {

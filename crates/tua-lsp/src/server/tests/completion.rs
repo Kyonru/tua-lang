@@ -1995,6 +1995,40 @@ end)
 }
 
 #[test]
+fn completion_uses_declared_record_payload_after_two_hop_import_and_edit() {
+    let fixture = Fixture::parse(
+        r#"-- file: tua.toml
+source = "src"
+-- file: src/events.tua
+local bus = signal()
+bus:declare("hit", function(payload: { position: { x: number, y: number } }) end)
+return { bus = bus }
+-- file: src/facade.tua
+local Events = require("events")
+return Events
+-- file: src/main.tua
+local Events = require("facade")
+Events.bus:on("hit", function(payload)
+  print(payload.position.x)
+end)
+"#,
+    );
+    let temp = fixture
+        .write_to_temp("declared-event-payload-completion")
+        .unwrap();
+    let main = fixture.source("src/main.tua");
+    let edited = main.replace("payload.position.x", "payload.");
+    let uri = path_uri(&temp.join("src/main.tua"));
+    let output = run_messages(vec![
+        initialize_with_root(1, path_uri(temp.path())),
+        did_open(&uri, main),
+        did_change(&uri, &edited, 2),
+        completion_request(2, &uri, &edited, "payload."),
+    ]);
+    assert_completion_labels(&output, 2, ["position"]);
+}
+
+#[test]
 fn devex_event_field_hover_and_empty_body_edit_preserve_context() {
     let fixture = Fixture::parse(
         r#"-- file: tua.toml

@@ -1344,6 +1344,83 @@ events:emit("duck.hit", player)
 }
 
 #[test]
+fn signal_declared_record_payload_completion_uses_structural_types() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+local bus = signal()
+bus:declare("hit", function(payload: { position: { x: number, y: number }, notes?: string, tags: string[] }, amount: number | string) end)
+bus:on("hit", function(payload, amount)
+  local x: number = payload.position.x
+  print(payload.<|fields|>position.x)
+  print(payload.position.<|nested|>x)
+  print(<|amount|>amount)
+end)
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+    let snapshot = host.snapshot();
+    let fields =
+        completion_labels(&snapshot.completion("src/main.tua", fixture.position("fields")));
+    assert!(fields.contains(&"position".to_owned()), "{fields:?}");
+    assert!(fields.contains(&"notes".to_owned()), "{fields:?}");
+    assert!(fields.contains(&"tags".to_owned()), "{fields:?}");
+    let nested =
+        completion_labels(&snapshot.completion("src/main.tua", fixture.position("nested")));
+    assert!(nested.contains(&"x".to_owned()), "{nested:?}");
+    assert!(nested.contains(&"y".to_owned()), "{nested:?}");
+    let amount_hover = snapshot
+        .hover("src/main.tua", fixture.position("amount"))
+        .expect("declared union payload should be visible in handler hover");
+    assert!(amount_hover.contents.contains("number"), "{amount_hover:?}");
+    assert!(amount_hover.contents.contains("string"), "{amount_hover:?}");
+    assert!(snapshot
+        .pipeline_diagnostics("src/main.tua")
+        .iter()
+        .all(|diagnostic| diagnostic.severity != crate::DiagnosticSeverity::Error));
+}
+
+#[test]
+fn signal_declared_record_payload_completion_crosses_two_module_hops() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/events.tua
+local bus = signal()
+bus:declare("hit", function(payload: { position: { x: number, y: number } }) end)
+return { bus = bus }
+-- file: src/facade.tua
+local Events = require("events")
+return Events
+-- file: src/main.tua
+local Events = require("facade")
+Events.bus:on("hit", function(payload)
+  local x: number = payload.position.x
+  print(payload.<|fields|>position.x)
+  print(payload.position.<|nested|>x)
+end)
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+    let snapshot = host.snapshot();
+    let fields =
+        completion_labels(&snapshot.completion("src/main.tua", fixture.position("fields")));
+    assert!(fields.contains(&"position".to_owned()), "{fields:?}");
+    let nested =
+        completion_labels(&snapshot.completion("src/main.tua", fixture.position("nested")));
+    assert!(nested.contains(&"x".to_owned()), "{nested:?}");
+    assert!(nested.contains(&"y".to_owned()), "{nested:?}");
+    assert!(snapshot
+        .pipeline_diagnostics("src/main.tua")
+        .iter()
+        .all(|diagnostic| diagnostic.severity != crate::DiagnosticSeverity::Error));
+}
+
+#[test]
 fn signal_event_payload_conflicts_are_diagnosed_per_bus() {
     let path = PathBuf::from("src/main.tua");
     let mut host = AnalysisHost::new();

@@ -20,6 +20,8 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Complete fields from declared signal payload records inside unannotated
+  handlers, including nested records through module imports.
 - Keep syntax errors after a class on their original Tua source lines, rather
   than reporting generated parser lines in CLI and editor diagnostics.
 - Link LOVE runtime errors and scoped log messages to their Tua call sites in
